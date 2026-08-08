@@ -76,8 +76,17 @@ function totalStake(validators){
         if(!v || v.source === null || v.source === undefined || String(v.source).trim() === '')
             throw new Error('stake_weighted_quorum.totalStake: blank/missing source would collapse the stake bucket');
         let src = String(v.source);
-        if(!weightBySource.has(src))
-            weightBySource.set(src, (v.weight === null || v.weight === undefined) ? '0' : String(v.weight));
+        if(!weightBySource.has(src)){
+            // Hard error on a missing/nonnumeric weight (#3897). Coercing it to 0 keeps the
+            // source in the dedupe map with no stake, so S is under-counted and every
+            // threshold derived from it is wrong. Same posture as the guards above.
+            if(v.weight === null || v.weight === undefined)
+                throw new Error('stake_weighted_quorum.totalStake: missing weight would silently lower S');
+            let ws = String(v.weight).trim();
+            if(ws === '' || !/^[+-]?(\d+\.?\d*|\.\d+)$/.test(ws))
+                throw new Error('stake_weighted_quorum.totalStake: nonnumeric weight would silently lower S');
+            weightBySource.set(src, ws);
+        }
     }
     let S = mathjs.bignumber(0);
     for(let w of weightBySource.values()){
@@ -101,6 +110,8 @@ function totalStake(validators){
 // its keys signed (DELEGATE v0 is additive). Degenerate cases fall out with no
 // special-casing: single source -> 3S>2S true; empty/zero-stake set -> 0>0 false.
 // A blank/missing source FAILS CLOSED (returns false); it is NOT a single source.
+// A MISSING or nonnumeric weight also FAILS CLOSED (#3897): zeroing it shrinks S and
+// lowers the very bar it is being measured against. A legitimate '0' still passes.
 // A NEGATIVE weight anywhere in the snapshot, or a non-positive total stake S,
 // also FAILS CLOSED: bcnum accepts a leading '-', and a corrupt/malicious snapshot
 // row driving S <= 0 would otherwise let the strict 3*tally > 2*S test hold for an
@@ -128,8 +139,16 @@ function meetsStakeThreshold(validators, signerPubkeys){
         let src = String(v.source);
         let pk  = String(v.pubkey).toLowerCase();
         pubkeyToSource.set(pk, src);
-        if(!weightBySource.has(src))
-            weightBySource.set(src, (v.weight === null || v.weight === undefined) ? '0' : String(v.weight));
+        if(!weightBySource.has(src)){
+            // Fail CLOSED on a missing/nonnumeric weight (#3897). Coercing it to 0 leaves the
+            // source in the dedupe map with no stake, shrinking S and LOWERING the 2/3 bar, so
+            // a sub-quorum finalizes (70/20/missing-100 -> S=90, a lone 70 signer passes
+            // 210>180). Same posture as the blank-source, negative-weight and truncated guards.
+            if(v.weight === null || v.weight === undefined) return false;
+            let ws = String(v.weight).trim();
+            if(ws === '' || !/^[+-]?(\d+\.?\d*|\.\d+)$/.test(ws)) return false;
+            weightBySource.set(src, ws);
+        }
     }
     // S = sum of weight over distinct sources in the snapshot. Fail CLOSED on any
     // negative weight, then on S <= 0 (see the contract comment above): with S

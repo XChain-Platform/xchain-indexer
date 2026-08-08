@@ -563,8 +563,11 @@ describe('runMigrations() checksum heal branch @regression @tier1', function () 
         };
         const db = {
             dbName: 'test_indexer',
+            transactionConnection: null,
             getConnection: async () => conn,
             _ensureMigrationsLedger: Database.prototype._ensureMigrationsLedger,
+            _runMigrationsInner: Database.prototype._runMigrationsInner,
+            _assertPubkeyColumnIsUncompressedWide: Database.prototype._assertPubkeyColumnIsUncompressedWide,
             _migrationMode: Database.prototype._migrationMode,
             splitSqlStatements: Database.prototype.splitSqlStatements,
             stripSqlLineComments: Database.prototype.stripSqlLineComments,
@@ -640,5 +643,162 @@ describe('runMigrations() checksum heal branch @regression @tier1', function () 
             'an unrecognized hash must never be healed away');
         assert.ok(logged.some(l => /content CHANGED/.test(l) && /unique-full-column-index-addresses/.test(l)),
             'a genuine migration edit must still be reported');
+    });
+});
+
+// Per-file scoping (--file / opts.only), ported from the decoder's runner (#3874).
+// A fleet rollout of ONE pending manual migration must not drag in the other ten:
+// three of them are destructive (drop-legacy-escrows-column, drop-orphaned-contract-
+// balances, markets-dedup-unique-pair). Driven against the REAL migrations dir - the
+// indexer resolves it from __dirname, so there is no tmp-dir seam to substitute.
+describe('runMigrations() --file / opts.only scoping @regression @tier1', function () {
+
+    const TARGET = '2026-07-24-pubkeys-widen-uncompressed.sql';
+
+    // Fake conn recording ledger INSERTs and executed migration-body statements.
+    // `pubkeyLen` answers the post-run width assertion (#3875).
+    function makeDb(ledgerRows, pubkeyLen = 130) {
+        const applied  = [];
+        const executed = [];
+        const conn = {
+            async query(sql, params) {
+                if (/GET_LOCK/i.test(sql))                                         return [{ l: '1' }];
+                if (/RELEASE_LOCK/i.test(sql))                                     return [];
+                if (/CREATE TABLE (IF NOT EXISTS )?schema_migrations/i.test(sql))  return [];
+                if (/SELECT name, checksum FROM schema_migrations/i.test(sql))     return ledgerRows.slice();
+                if (/information_schema\.columns/i.test(sql))                      return [{ len: pubkeyLen }];
+                if (/^INSERT INTO schema_migrations/i.test(sql.trim())) { applied.push(params[0]); return []; }
+                if (/^UPDATE schema_migrations/i.test(sql.trim()))                 return [];
+                executed.push(sql);
+                return [];
+            },
+            async release() {},
+        };
+        const db = Object.create(Database.prototype);
+        db.dbName = 'fake_indexer';
+        db.transactionConnection = null;
+        db.getConnection = async () => conn;
+        db._ensureMigrationsLedger = async () => {};
+        return { db, applied, executed };
+    }
+
+    // The runner narrates every skip; keep the suite output readable.
+    async function quietly(fn) {
+        const realLog = console.log, realWarn = console.warn;
+        console.log = console.warn = () => {};
+        try { return await fn(); }
+        finally { console.log = realLog; console.warn = realWarn; }
+    }
+
+    it('applies ONLY the targeted file and leaves every other one pending and untouched', async function () {
+        const { db, applied, executed } = makeDb([]);
+        const res = await quietly(() => db.runMigrations({ includeManual: true, only: TARGET }));
+        assert.deepStrictEqual(applied, [TARGET], 'only the targeted file is recorded as applied');
+        assert.deepStrictEqual(res.applied, [TARGET]);
+        assert.ok(executed.some(s => /ALTER TABLE pubkeys\s+MODIFY pubkey VARCHAR\(130\)/i.test(s)),
+            'the targeted DDL must run');
+        assert.ok(!res.pending.includes(TARGET), 'the applied target is not also pending');
+        assert.ok(res.pending.includes('2026-07-15-markets-dedup-unique-pair.sql'),
+            'untargeted pending work is still reported to the operator');
+        // The three destructive manual files are exactly what a blanket run would drag in.
+        assert.ok(!executed.some(s => /DROP COLUMN|DROP TABLE|DELETE FROM/i.test(s)),
+            'a scoped run must execute no untargeted destructive DDL: ' + executed.join(' | '));
+    });
+
+    it('accepts an array of targets', async function () {
+        const { db, applied } = makeDb([]);
+        const second = '2026-07-10-contract-state-bin-key-index.sql';
+        const res = await quietly(() => db.runMigrations({ includeManual: true, only: [TARGET, second] }));
+        assert.deepStrictEqual(applied.slice().sort(), [TARGET, second].sort());
+        assert.ok(!res.pending.includes(TARGET) && !res.pending.includes(second));
+    });
+
+    it('is idempotent: re-targeting an already-applied file applies nothing', async function () {
+        const dir = path.join(__dirname, '..', '..', 'src', 'sql', 'migrations');
+        const sum = require('crypto').createHash('sha256')
+            .update(fs.readFileSync(path.join(dir, TARGET), 'utf8')).digest('hex');
+        const { db, applied, executed } = makeDb([{ name: TARGET, checksum: sum }]);
+        const res = await quietly(() => db.runMigrations({ includeManual: true, only: TARGET }));
+        assert.deepStrictEqual(applied, [], 'nothing re-applied (target already recorded)');
+        assert.deepStrictEqual(res.applied, []);
+        assert.deepStrictEqual(executed, [], 'no DDL at all on a no-op scoped run');
+    });
+
+    it('fails loudly on an unknown target (typo protection), applying nothing', async function () {
+        const { db, applied } = makeDb([]);
+        await assert.rejects(
+            () => quietly(() => db.runMigrations({ includeManual: true, only: 'nope-not-a-file.sql' })),
+            /target\(s\) not found/);
+        assert.deepStrictEqual(applied, [], 'silently applying nothing would look like a successful no-op run');
+    });
+
+    it('throws when opts.only is an empty array (guards a mis-wired caller)', async function () {
+        const { db } = makeDb([]);
+        await assert.rejects(
+            () => quietly(() => db.runMigrations({ includeManual: true, only: [] })), /empty/);
+    });
+
+    it('a blanket run (no opts.only) still walks the whole tree', async function () {
+        const { db, applied } = makeDb([]);
+        await quietly(() => db.runMigrations({ includeManual: true }));
+        assert.ok(applied.length > 1 && applied.includes(TARGET),
+            'the default path must remain apply-everything');
+    });
+});
+
+// Post-run schema contract (#3875). 2026-07-24-pubkeys-widen-uncompressed.sql is
+// mode=manual, so alterTableForDrift cannot heal it (that reconciler only ADDS
+// columns and RELAXES nullability) and a scoped --file run can leave a fleet
+// half-migrated with no operator signal. runMigrations asserts the width on every
+// normal return so the half-migrated node halts instead of truncating pubkeys.
+describe('runMigrations() pubkey-width assertion @regression @tier1', function () {
+
+    function makeDb(pubkeyLen, { emptyDir = false } = {}) {
+        const conn = {
+            async query(sql) {
+                if (/GET_LOCK/i.test(sql))                                        return [{ l: '1' }];
+                if (/RELEASE_LOCK/i.test(sql))                                    return [];
+                if (/SELECT name, checksum FROM schema_migrations/i.test(sql))    return [];
+                if (/information_schema\.columns/i.test(sql))
+                    return (pubkeyLen === null) ? [] : [{ len: pubkeyLen }];
+                return [];
+            },
+            async release() {},
+        };
+        const db = Object.create(Database.prototype);
+        db.dbName = 'fake_indexer';
+        db.transactionConnection = null;
+        db.getConnection = async () => conn;
+        db._ensureMigrationsLedger = async () => {};
+        // A lock-skip returns early from the inner body; the wrapper must still assert.
+        if (emptyDir) db._runMigrationsInner = async () => ({ applied: [], pending: [], lockSkipped: true });
+        return db;
+    }
+
+    async function quietly(fn) {
+        const realLog = console.log, realWarn = console.warn;
+        console.log = console.warn = () => {};
+        try { return await fn(); }
+        finally { console.log = realLog; console.warn = realWarn; }
+    }
+
+    it('throws with the remedy when pubkeys.pubkey is too narrow for an uncompressed key', async function () {
+        await assert.rejects(
+            () => quietly(() => makeDb(66).runMigrations({ only: '2026-07-24-pubkeys-widen-uncompressed.sql' })),
+            /pubkeys\.pubkey holds 66 chars but VARCHAR\(130\) is required[\s\S]*node src\/migrate\.js/);
+    });
+
+    it('passes at the migrated width', async function () {
+        await quietly(() => makeDb(130).runMigrations({ only: '2026-07-24-pubkeys-widen-uncompressed.sql' }));
+    });
+
+    it('asserts even when the inner run examined nothing (lock skip)', async function () {
+        await assert.rejects(
+            () => quietly(() => makeDb(66, { emptyDir: true }).runMigrations({})),
+            /VARCHAR\(130\) is required/);
+    });
+
+    it('stays silent when the column is absent (table not created yet)', async function () {
+        await quietly(() => makeDb(null, { emptyDir: true }).runMigrations({}));
     });
 });

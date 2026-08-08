@@ -362,9 +362,27 @@ class Database {
     // operator-initiated path (`node src/migrate.js`). The whole run holds a DB-scoped
     // advisory lock so concurrent processes/replicas can't apply the same file twice.
     // Returns { applied:[...], pending:[...] }.
+    //
+    // opts.only (the CLI's --file) scopes a run to named migration files - a targeted
+    // rollout of one manual migration without dragging in every other pending one.
+    //
+    // Fail-closed schema contract the drift reconciler cannot heal (alterTableForDrift
+    // only ADDS columns and RELAXES nullability, never changes width). The widen is
+    // mode=manual, so it never auto-applies; assert on EVERY normal return - including
+    // no-dir, empty-dir, lock-skip and a scoped --file run - so a half-migrated fleet
+    // halts loudly instead of truncating the source_pubkey seam (#3875). If the inner
+    // body throws it is already failing loudly, so the assertion is skipped.
     async runMigrations(opts = {}){
+        const result = await this._runMigrationsInner(opts);
+        await this._assertPubkeyColumnIsUncompressedWide();
+        return result;
+    }
+
+    async _runMigrationsInner(opts = {}){
         const crypto        = require('crypto');
         const includeManual = !!opts.includeManual;
+        const only          = (opts.only == null) ? null
+            : new Set([].concat(opts.only).map(s => String(s).trim()).filter(Boolean));
         const dir           = path.join(__dirname, 'sql', 'migrations');
         const result        = { applied: [], pending: [], lockSkipped: false };
 
@@ -372,6 +390,19 @@ class Database {
         try { files = fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort(); }
         catch(e){ return result; }   // no migrations dir → nothing to do
         if(!files.length) return result;
+
+        // Targeted rollout: a name that matches no committed migration is almost
+        // always a typo. Fail loudly (silently applying nothing would look like a
+        // successful no-op run) and list what IS available.
+        if(only){
+            if(only.size === 0)
+                throw new Error('runMigrations: opts.only was provided but empty; pass at least one migration filename.');
+            const known   = new Set(files);
+            const unknown = [...only].filter(n => !known.has(n));
+            if(unknown.length)
+                throw new Error('runMigrations: --file target(s) not found in ' + dir + ': ' + unknown.join(', ') +
+                    '. Available: ' + files.join(', '));
+        }
 
         const lockName = 'xchain_migrate_' + this.dbName;
         let conn = await this.getConnection();
@@ -406,6 +437,15 @@ class Database {
                 }
 
                 for(const file of files){
+                    // Scoped run (--file): touch ONLY the targeted file(s). Report an
+                    // untargeted-but-unapplied file as pending so the operator still sees
+                    // remaining work, then leave it entirely alone: no dated-prefix check,
+                    // no checksum guard, no apply. A per-file rollout must never be blocked
+                    // by an unrelated migration's state elsewhere in the tree (#3874).
+                    if(only && !only.has(file)){
+                        if(!appliedByName.has(file)) result.pending.push(file);
+                        continue;
+                    }
                     // Freeze the dated-prefix convention in code: apply order is lexical
                     // (readdirSync().sort()), so every migration filename must start with a
                     // YYYY-MM-DD- prefix to apply in authorship order. The three legacy
@@ -516,6 +556,41 @@ class Database {
         if(result.applied.length) console.log('runMigrations: ' + result.applied.length + ' migration(s) applied to ' + this.dbName + '.');
         if(result.pending.length) console.log('runMigrations: ' + result.pending.length + ' manual migration(s) pending for ' + this.dbName + ' - run `node src/migrate.js` to apply.');
         return result;
+    }
+
+    // Assert pubkeys.pubkey is wide enough for an UNCOMPRESSED key (130 hex chars).
+    // 2026-07-24-pubkeys-widen-uncompressed.sql is mode=manual, so the startup drift
+    // reconciler cannot heal it (alterTableForDrift only ADDS columns and RELAXES
+    // nullability, never changes width) and a scoped --file rollout can leave a fleet
+    // half-migrated with no operator signal: too narrow, an uncompressed key is
+    // truncated to 66 chars under non-strict sql_mode or rejected with errno 1406.
+    // Skips silently when the column is absent (table not created yet).
+    async _assertPubkeyColumnIsUncompressedWide(){
+        const UNCOMPRESSED_PUBKEY_HEX_LENGTH = 130;
+        let conn;
+        try {
+            conn = await this.getConnection();
+            const rows = await conn.query(
+                "SELECT CHARACTER_MAXIMUM_LENGTH AS len FROM information_schema.columns WHERE table_schema = ? AND table_name = 'pubkeys' AND column_name = 'pubkey'",
+                [this.dbName]
+            );
+            if(!rows.length) return;  // column absent: table may not exist yet
+            const len = rows[0].len == null ? null : Number(rows[0].len);
+            // A non-character type reports NULL here; that is a schema shape this
+            // guard cannot reason about, so leave it to the column's own contract.
+            if(len == null || Number.isNaN(len)) return;
+            if(len < UNCOMPRESSED_PUBKEY_HEX_LENGTH){
+                throw new Error(
+                    'pubkeys.pubkey holds ' + len + ' chars but VARCHAR(' + UNCOMPRESSED_PUBKEY_HEX_LENGTH + ') is required ' +
+                    'for uncompressed keys; narrower silently NULLs or truncates the source_pubkey seam field. ' +
+                    'Run the pending migration: node src/migrate.js'
+                );
+            }
+        } finally {
+            if(conn && this.transactionConnection == null){
+                try { await conn.release(); } catch(_){}
+            }
+        }
     }
 
     // Read a migration file's `-- xchain:migration mode=auto|manual` header tag.

@@ -193,8 +193,6 @@ class Slash {
             capability = ENGINE_CAPABILITY[engineTag];
             if(!capability)
                 error = 'invalid: ENGINE_TAG (not slashable)';
-            else if(String(data['CAPABILITY']) !== capability)
-                error = 'invalid: CAPABILITY (does not match engine)';
         }
 
         // (3) BOTH signatures verify against OFFENDER_PUBKEY over the FULL signed bytes.
@@ -209,8 +207,19 @@ class Slash {
         if(!error){
             let slot = await this._resolveSlot(engineTag, roundId, msgA.substring(prefix.length), msgB.substring(prefix.length));
             if(slot.error) error = slot.error;
-            else snapshotBlock = slot.snapshotBlock;
+            else {
+                snapshotBlock = slot.snapshotBlock;
+                // One engine tag can host content families locked under DIFFERENT
+                // capabilities: XATTEST's relay legs are verified against `cross_chain`
+                // (attest.js _verifyRelayQuorum), not `attestation` (#3882). The slot
+                // resolver names the governing one, so the derived-CAPABILITY check runs
+                // HERE, after the family is known, rather than off the tag alone.
+                if(slot.capability) capability = slot.capability;
+            }
         }
+        // CAPABILITY is derived, never trusted: the submitter declares it and must match.
+        if(!error && String(data['CAPABILITY']) !== capability)
+            error = 'invalid: CAPABILITY (does not match engine)';
         if(!error){
             // XCONFIG is authorized by the WHOLE federation (getActiveValidators), every other
             // engine by its capability-scoped snapshot. Both return [{pubkey,...}] at the block.
@@ -350,6 +359,26 @@ class Slash {
         // the mirrored request row keyed by the ROUND_ID (= request_id). Deterministic
         // (the request is indexed state present on every BTC indexer).
         if(engineTag === eq.ENGINE_TAGS.ATTEST){
+            // XATTEST carries TWO families ( Phase 5). The relay legs are shaped
+            // like XCALL: pipe-delimited, snapshot_block at index 3, hashed ROUND_ID, and
+            // locked under `cross_chain` (attest.js _verifyRelayQuorum). The base v1
+            // canonical is delimiter-less and starts with the request_id, so its first
+            // '|' segment can never be the literal 'ATTEST'. Both messages must agree on
+            // the family: a matched field across DIFFERENT layouts proves nothing about a
+            // shared slot (#3882).
+            let pa = contentA.split('|'), pb = contentB.split('|');
+            let relayA = pa[0] === 'ATTEST' && (pa[1] === 'RELAY_REQUEST' || pa[1] === 'RELAY_RESPONSE');
+            let relayB = pb[0] === 'ATTEST' && (pb[1] === 'RELAY_REQUEST' || pb[1] === 'RELAY_RESPONSE');
+            if(relayA !== relayB)
+                return { error: 'invalid: ATTEST content family mismatch' };
+            if(relayA){
+                if(pa[1] !== pb[1])
+                    return { error: 'invalid: ATTEST relay phase mismatch' };
+                let fa = pa[3], fb = pb[3];
+                if(this.util.isNull(fa) || fa !== fb || !/^[0-9]+$/.test(String(fa)))
+                    return { error: 'invalid: snapshot_block (mismatch or format)' };
+                return { snapshotBlock: Number(fa), capability: 'cross_chain' };
+            }
             let request = await this.indexerDb.getAttestationRequestById(String(roundId).toLowerCase());
             if(!request || request.block_index == null)
                 return { error: 'invalid: ATTEST request unknown (cannot resolve snapshot_block)' };

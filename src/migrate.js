@@ -22,7 +22,8 @@
  * ones that must not run unattended across a validator fleet). Idempotent and
  * ledger-tracked (schema_migrations), so re-running only applies what's pending.
  *
- *   node src/migrate.js          # or: npm run migrate
+ *   node src/migrate.js                       # or: npm run migrate
+ *   node src/migrate.js --file <name.sql>     # scope the run to named file(s)
  *
  * Reads INDEXER_DB_* from the service environment (.env). Run with the indexer
  * process stopped if a pending migration's header says so.
@@ -36,6 +37,35 @@ const Database = require('./db.js');
 const config   = require('./config.js');
 const Utility  = require('./utility.js');
 
+// Parse `--file <name>` / `--file=<name>` / `-f <name>` occurrences into a list of
+// migration filenames to scope the run to. Values may be comma-separated. Returns []
+// when no targeting flag is present (the default apply-everything behavior).
+function parseFileTargets(argv){
+    const targets = [];
+    const push = (v) => {
+        for(const part of String(v).split(',')){
+            const name = part.trim();
+            if(name) targets.push(name);
+        }
+    };
+    for(let i = 0; i < argv.length; i++){
+        const a = argv[i];
+        if(a === '--file' || a === '-f'){
+            const v = argv[i + 1];
+            if(v === undefined || v.startsWith('-')){
+                console.error('migrate: ' + a + ' requires a migration filename argument.');
+                process.exit(2);
+                return targets;  // (unreachable when exit is real; guards stubbed-exit tests)
+            }
+            push(v);
+            i++;
+        } else if(a.startsWith('--file=')){
+            push(a.slice('--file='.length));
+        }
+    }
+    return targets;
+}
+
 async function main(){
     const host = process.env.INDEXER_DB_HOST;
     const port = process.env.INDEXER_DB_PORT;
@@ -47,6 +77,8 @@ async function main(){
         process.exit(2);
     }
 
+    const only = parseFileTargets(process.argv.slice(2));
+
     // The Database constructor only needs { config, util } off its parent.
     // Share ONE config object between the two (see Utility constructor).
     const cfg = config.getConfig();
@@ -54,8 +86,14 @@ async function main(){
     const db = new Database(host, port, name, user, pass, indexerLike);
 
     try {
-        console.log('migrate: applying pending migrations (auto + manual) to ' + name + ' ...');
-        const res = await db.runMigrations({ includeManual: true });
+        const runOpts = { includeManual: true };
+        if(only.length){
+            runOpts.only = only;
+            console.log('migrate: applying ONLY targeted migration(s) ' + JSON.stringify(only) + ' to ' + name + ' ...');
+        } else {
+            console.log('migrate: applying pending migrations (auto + manual) to ' + name + ' ...');
+        }
+        const res = await db.runMigrations(runOpts);
         if(res.lockSkipped){
             // #3162: a lock-skip examined nothing; do not report it as a completed run.
             console.error('migrate: SKIPPED - another process holds the migration lock (xchain_migrate_' + name + '). Nothing was applied and the schema may still be un-migrated. Re-run once the other migrator finishes.');

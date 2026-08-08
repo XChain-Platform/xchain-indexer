@@ -161,7 +161,16 @@ class NodeProof {
             if(eligible.size === 0){
                 error = 'invalid: no eligible verifiers at epoch (feature dormant)';
             } else {
-                let canonRaw  = challengeId + '|' + epochHeight + '|' + passList.slice().sort().join(',');
+                // Byte comparator, not a bare .sort(): this order is joined into the
+                // ed25519 preimage, so it is consensus, and the default sort is a total
+                // order here only because every element happens to be lowercase 64-hex
+                // (#3859). Pinned in lockstep with the hub PRODUCER's four PASS sorts
+                // (xchain-hub FullNodeChallengeRound.js PASS_CMP); pinning one side alone
+                // would diverge the verifier from the producer on any non-uniform input.
+                let sortedPass = passList.slice().sort(
+                    (a, b) => Buffer.compare(Buffer.from(String(a), 'utf8'),
+                                             Buffer.from(String(b), 'utf8')));
+                let canonRaw  = challengeId + '|' + epochHeight + '|' + sortedPass.join(',');
                 if(eq.isEquivHeaderActive(snapshotBlock, this.config['NETWORK']))
                     canonRaw = eq.buildEquivCanonical(eq.ENGINE_TAGS.NODEPROOF, challengeId, 0, canonRaw);
                 let canonical = Buffer.from(canonRaw, 'utf8');
@@ -198,8 +207,14 @@ class NodeProof {
         // full_node capability at the epoch block (a verdict can't verify a
         // non-staker). Idempotent on (epoch_height, signing_pubkey).
         if(!error){
+            // One batched capability read for the whole PASS list, same fallback rule
+            // as _eligibleVerifierSet: a truncated read re-probes per pubkey (#3873).
+            let capRows = await this.indexerDb.getValidatorsByCapability('full_node', snapshotBlock);
+            let capSet  = (capRows && capRows.truncated === true)
+                        ? null
+                        : new Set((capRows || []).map(v => String(v.pubkey).toLowerCase()));
             for(let pk of passList){
-                if(!await this.indexerDb.hasCapability(pk, 'full_node', snapshotBlock))
+                if(capSet ? !capSet.has(pk) : !await this.indexerDb.hasCapability(pk, 'full_node', snapshotBlock))
                     continue;
                 await this.indexerDb.createNodeProofVerification(
                     pk, challengeId, epochHeight, targetHeight, data['ACTION_INDEX'], blockIndex
@@ -221,11 +236,19 @@ class NodeProof {
                 set.add(String(pk).toLowerCase());
         }
         let verified = await this.indexerDb.getVerifiedFullNodeSet(blockIndex);
+        // Intersect the proof-window set with the live capability set so an
+        // unstaked-since node loses verifier standing. Resolve that set ONCE
+        // (hasCapability is ~5 sequential queries per pubkey). eligible.size is the
+        // quorum divisor, so a truncated capability read falls back to the per-pubkey
+        // probe rather than silently shrinking the divisor (#3873).
+        let capRows = await this.indexerDb.getValidatorsByCapability('full_node', blockIndex);
+        let capSet  = (capRows && capRows.truncated === true)
+                    ? null
+                    : new Set((capRows || []).map(v => String(v.pubkey).toLowerCase()));
         for(let v of verified){
-            // Intersect the proof-window set with the live capability set so an
-            // unstaked-since node loses verifier standing.
-            if(await this.indexerDb.hasCapability(v.pubkey, 'full_node', blockIndex))
-                set.add(String(v.pubkey).toLowerCase());
+            let pk = String(v.pubkey).toLowerCase();
+            if(capSet ? capSet.has(pk) : await this.indexerDb.hasCapability(v.pubkey, 'full_node', blockIndex))
+                set.add(pk);
         }
         return set;
     }

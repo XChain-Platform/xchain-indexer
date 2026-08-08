@@ -616,16 +616,50 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             const data = v1Data({ BLOCK_INDEX: 100 });
             await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
             assert.ok(
-                indexer.indexerDb.hasCapability.calledWith(PUBKEY_A, 'attestation', 90),
-                'hasCapability must be queried at the request snapshot block (90), not the response block (100)'
+                indexer.indexerDb.getValidatorsByCapability.calledWith('attestation', 90),
+                'the capable set must be read at the request snapshot block (90), not the response block (100)'
             );
+        });
+
+        it('resolves the capable set ONCE, never once per signer', async function () {
+            // Pre-fix this ran hasCapability (~5 sequential queries) per signer inside the
+            // per-tx consensus path; the batched read now answers every signer (#3872).
+            indexer.indexerDb.getValidatorsByCapability.resolves([{ pubkey: PUBKEY_A }, { pubkey: PUBKEY_B }]);
+            indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
+            const data = v1Data();
+            await handler.parse(v1Params([
+                { pubkey: PUBKEY_A, sig: SIG_A },
+                { pubkey: PUBKEY_B, sig: SIG_B },
+            ]), data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(
+                indexer.indexerDb.hasCapability.getCalls().filter(c => c.args[1] === 'attestation').length, 0,
+                'no per-signer attestation capability read may survive the batched set');
         });
 
         it('skips a signer lacking the attestation capability at the snapshot block', async function () {
             indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
+            indexer.indexerDb.getValidatorsByCapability.resolves([]);
+            const data = v1Data();
+            await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+            assert.strictEqual(data['VALID_SIGS'], 0);
+            assert.ok(String(data['STATUS']).includes('insufficient'));
+        });
+
+        it('a TRUNCATED capable set falls back to the per-signer capability probe', async function () {
+            // getValidatorsByCapability caps at VALIDATOR_QUERY_LIMIT and hasCapability
+            // does not, so a capped read is not an authoritative membership answer.
+            indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
+            const capped = [{ pubkey: PUBKEY_A }];
+            capped.truncated = true;
+            indexer.indexerDb.getValidatorsByCapability.resolves(capped);
             indexer.indexerDb.hasCapability.resolves(false);
             const data = v1Data();
             await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+            assert.strictEqual(
+                indexer.indexerDb.hasCapability.getCalls()
+                    .filter(c => c.args[0] === PUBKEY_A && c.args[1] === 'attestation').length, 1,
+                'a capped read must be re-probed per signer, not trusted as membership');
             assert.strictEqual(data['VALID_SIGS'], 0);
             assert.ok(String(data['STATUS']).includes('insufficient'));
         });

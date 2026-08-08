@@ -455,11 +455,23 @@ class Attest {
         let validSigs    = 0;
         let verifiedSigs = [];
         if(!error){
+            // Resolve the attestation-capable set ONCE (hasCapability is ~5 sequential
+            // queries per signer). getValidatorsByCapability, NOT the stake-weighted
+            // variant: _stakeWeightsSql gates MIN_STAKE on the SOURCE aggregate while
+            // hasCapability gates on the PUBKEY aggregate, so the weighted set can be
+            // strictly larger and would admit signers this gate rejects today. On a
+            // truncated read fall back per-signer rather than drop a capable co-signer (#3872).
+            let capableRows = await this.indexerDb.getValidatorsByCapability('attestation', snapshotBlock);
+            let capableSet  = (capableRows && capableRows.truncated === true)
+                            ? null
+                            : new Set((capableRows || []).map(v => String(v.pubkey).toLowerCase()));
             let seenPubkey = new Set();
             for(let s of sigs){
                 if(seenPubkey.has(s.pubkey)) continue;
                 seenPubkey.add(s.pubkey);
-                if(!await this.indexerDb.hasCapability(s.pubkey, 'attestation', snapshotBlock))
+                if(capableSet
+                    ? !capableSet.has(s.pubkey)
+                    : !await this.indexerDb.hasCapability(s.pubkey, 'attestation', snapshotBlock))
                     continue;
                 if(!ed25519.verify(canonical, s.sig, s.pubkey))
                     continue;

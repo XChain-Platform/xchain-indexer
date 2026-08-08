@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- PRICE v0, ATTEST v1 and NODEPROOF validation resolve signer capability in one batched query instead of a DB round-trip per signer ().
+- A hub seq or watermark regression now triggers config re-apply instead of being masked by Math.max, unblocking recovery after a hub restart ().
+- NODEPROOF verifier-signing builds its canonical PASS list with the pinned byte comparator rather than a bare Array.sort ().
+- Stake-weighted quorum rejects a validator entry with a missing or non-numeric weight instead of lowering the quorum denominator ().
+- The migration runner accepts a targeted rollout and carries the decoder fail-closed schema-contract assertions ().
+- SLASH resolves ATTEST relay-leg equivocation across both canonical XATTEST families ().
 - Lockfile engines.node now matches the manifest ceiling >=22.0.0 <23, so a reinstall cannot silently resolve on Node 23+.
 - review review-round fixes: ATTEST exempt from fee-quote preflight, migration lock-skip reported honestly, boot fails fast on bad DB creds, action-alias single source with guard, DEPLOY halts as host-fault when the VM is unavailable, pubkeys widen migration, consensus-guard test escalations, reorg seeder format.
 

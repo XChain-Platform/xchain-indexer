@@ -1449,6 +1449,26 @@ class XChainIndexer {
                 // item #2265), so a new-enough hub no longer drops the same-second row, but
                 // an older hub's strict `>` still would - the full-tree fetch is the
                 // deployment-skew-proof choice, so do not thread the delta cursor here.
+                // Hub restart / restore-from-older-snapshot: a REGRESSED seq or watermark
+                // hits none of the three gates below, and the Math.max clamp keeps the stale
+                // high value forever, so config re-apply stops until the hub climbs back past
+                // it (#3884). Treat a regression as a cursor reset: re-merge and adopt the
+                // served values verbatim, the way the startup overlay already does
+                // (_applyHubConfigOverlay assigns seq/watermark unclamped). _mergeHubParams is
+                // idempotent. Alarm loudly rather than self-heal in silence: a hub that lost
+                // config state is an operator event, not a steady-state poll.
+                let hubReset = (seq < (this.lastHubConfigSeq || 0)) ||
+                               (watermark > 0 && watermark < (this.lastHubConfigWatermark || 0));
+                if(hubReset){
+                    console.error('XChainIndexer: HUB CONFIG REGRESSION: hub served seq ' + seq +
+                                  '/watermark ' + watermark + ', below last-seen ' + this.lastHubConfigSeq +
+                                  '/' + this.lastHubConfigWatermark +
+                                  ' (hub restart or restore from an older snapshot); re-applying hub config and resetting the cursor.');
+                    this._mergeHubParams(configs);
+                    this.lastHubConfigSeq       = seq;
+                    this.lastHubConfigWatermark = watermark;
+                    return;
+                }
                 let seqAdvanced       = seq > (this.lastHubConfigSeq || 0);
                 let watermarkAdvanced = watermark > (this.lastHubConfigWatermark || 0);
                 let watermarkRedeliver = watermark > 0 && watermark === (this.lastHubConfigWatermark || 0);

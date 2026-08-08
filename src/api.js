@@ -747,10 +747,18 @@ async function startApi(){
                 // actions/nodeproof.js (_eligibleVerifierSet) and the reward split in
                 // actions/price.js, so the hub sizes quorum over the same set the
                 // chain will accept.
+                // Resolve the capability side ONCE (hasCapability is ~5 sequential
+                // queries per pubkey); a truncated capability read re-probes per pubkey
+                // so the hub's quorum divisor cannot silently shrink (#3873).
                 let raw = await db.getVerifiedFullNodeSet(blk);
+                let capRows = await db.getValidatorsByCapability('full_node', blk);
+                let capSet  = (capRows && capRows.truncated === true)
+                            ? null
+                            : new Set((capRows || []).map(v => String(v.pubkey).toLowerCase()));
                 let validators = [];
                 for(let v of raw){
-                    if(await db.hasCapability(v.pubkey, 'full_node', blk))
+                    let pk = String(v.pubkey).toLowerCase();
+                    if(capSet ? capSet.has(pk) : await db.hasCapability(v.pubkey, 'full_node', blk))
                         validators.push(v);
                 }
                 return {

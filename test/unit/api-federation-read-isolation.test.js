@@ -106,4 +106,22 @@ describe('federation READ connection isolation  @regression @tier1', function ()
             assert.ok(!bareDecoder, name + ' calls a bare indexer.decoderDb.<accessor> - route it through apiView()');
         });
     }
+
+    // #3873: the handler's own comment claims its eligibility rule is byte-identical to
+    // actions/nodeproof.js `_eligibleVerifierSet`, and the hub sizes quorum off this RPC.
+    // Both now resolve the capability side through ONE getValidatorsByCapability read,
+    // re-probing per pubkey only on a truncated result. Guarded as a pair so the api
+    // copy cannot drift back to a per-pubkey loop while nodeproof.js stays batched.
+    it('getfullnodeverifiers intersects via a batched capability read, like nodeproof.js', function () {
+        const handler = bodies['getfullnodeverifiers'];
+        assert.match(handler, /getValidatorsByCapability\('full_node', blk\)/,
+            'getfullnodeverifiers must resolve the capability set in one read');
+        assert.match(handler, /capSet \? capSet\.has\(pk\) : await db\.hasCapability\(/,
+            'the per-pubkey probe must survive ONLY as the truncated-read fallback');
+        const nodeproofSrc = fs.readFileSync(path.join(__dirname, '../../src/actions/nodeproof.js'), 'utf8');
+        assert.match(nodeproofSrc, /getValidatorsByCapability\('full_node', blockIndex\)/,
+            'nodeproof.js _eligibleVerifierSet must use the same batched read');
+        assert.match(nodeproofSrc, /capSet \? capSet\.has\(pk\) : await this\.indexerDb\.hasCapability\(/,
+            'nodeproof.js must keep the same truncated-read fallback');
+    });
 });

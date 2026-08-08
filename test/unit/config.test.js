@@ -463,6 +463,94 @@ describe('XChainIndexer hub config overlay', function () {
         }
     });
 
+    // #3884: a hub restarted from an OLDER snapshot serves a lower seq AND a lower
+    // watermark, which hits none of the three advance gates - and the Math.max clamp
+    // keeps the stale high-water mark forever, so config re-apply stops until the hub
+    // climbs back past it. The startup overlay already adopts the served values
+    // unclamped; the poll was the divergent path.
+    it('poll re-applies and RESETS the cursor when the hub regresses (restore from an older snapshot)', async function () {
+        indexer = makeIndexer();
+        let clock = sinon.useFakeTimers();
+        let mergeSpy = sinon.spy(indexer, '_mergeHubParams');
+        let errStub  = sinon.stub(console, 'error');
+        try {
+            let hubStub = { enabled: true, _call: sinon.stub() };
+            // Startup: seq 40, watermark 9000.
+            hubStub._call.onCall(0).resolves({
+                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 40, watermark: 9000
+            });
+            indexer.hubClient = hubStub;
+            await indexer._applyHubConfigOverlay();
+            assert.strictEqual(indexer.lastHubConfigSeq, 40);
+            assert.strictEqual(indexer.lastHubConfigWatermark, 9000);
+            mergeSpy.resetHistory();
+
+            process.env.HUB_CONFIG_POLL_INTERVAL_MS = '60000';
+            indexer._startHubConfigPolling();
+
+            // Tick 1: the hub comes back from an older snapshot - both cursors regress.
+            hubStub._call.onCall(1).resolves({
+                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 12, watermark: 3000
+            });
+            await clock.tickAsync(60000);
+            assert.strictEqual(mergeSpy.called, true, 'a regressed hub must still re-apply its config');
+            assert.strictEqual(indexer.lastHubConfigSeq, 12, 'the cursor must adopt the served seq, not clamp');
+            assert.strictEqual(indexer.lastHubConfigWatermark, 3000, 'the cursor must adopt the served watermark');
+            assert.ok(errStub.getCalls().some(c => /HUB CONFIG REGRESSION/.test(String(c.args[0]))),
+                'a hub that lost config state is an operator event, not a silent self-heal');
+            mergeSpy.resetHistory();
+
+            // Tick 2: a normal advance past the RESET cursor re-fires; pre-fix this needed
+            // the hub to climb back past the stale 40/9000 high-water mark first.
+            hubStub._call.onCall(2).resolves({
+                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 13, watermark: 3100
+            });
+            await clock.tickAsync(60000);
+            assert.strictEqual(mergeSpy.called, true, 'an advance past the reset cursor must re-apply');
+            assert.strictEqual(indexer.lastHubConfigSeq, 13);
+            assert.strictEqual(indexer.lastHubConfigWatermark, 3100);
+        } finally {
+            if(indexer._hubConfigPollTimer) clearInterval(indexer._hubConfigPollTimer);
+            errStub.restore();
+            mergeSpy.restore();
+            clock.restore();
+            delete process.env.HUB_CONFIG_POLL_INTERVAL_MS;
+        }
+    });
+
+    it('seq-only hub (no watermark): a regressed seq is a cursor reset, not a stall', async function () {
+        indexer = makeIndexer();
+        let clock = sinon.useFakeTimers();
+        let mergeSpy = sinon.spy(indexer, '_mergeHubParams');
+        let errStub  = sinon.stub(console, 'error');
+        try {
+            let hubStub = { enabled: true, _call: sinon.stub() };
+            hubStub._call.onCall(0).resolves({
+                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 40
+            });
+            indexer.hubClient = hubStub;
+            await indexer._applyHubConfigOverlay();
+            assert.strictEqual(indexer.lastHubConfigSeq, 40);
+            mergeSpy.resetHistory();
+
+            process.env.HUB_CONFIG_POLL_INTERVAL_MS = '60000';
+            indexer._startHubConfigPolling();
+
+            hubStub._call.onCall(1).resolves({
+                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 7
+            });
+            await clock.tickAsync(60000);
+            assert.strictEqual(mergeSpy.called, true, 'a regressed seq-only hub must still re-apply');
+            assert.strictEqual(indexer.lastHubConfigSeq, 7, 'the seq cursor must adopt the served value');
+        } finally {
+            if(indexer._hubConfigPollTimer) clearInterval(indexer._hubConfigPollTimer);
+            errStub.restore();
+            mergeSpy.restore();
+            clock.restore();
+            delete process.env.HUB_CONFIG_POLL_INTERVAL_MS;
+        }
+    });
+
     it('older hub without watermark still advances on seq alone (back-compat)', async function () {
         indexer = makeIndexer();
         let clock = sinon.useFakeTimers();

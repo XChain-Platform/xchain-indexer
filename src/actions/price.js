@@ -170,11 +170,17 @@ class Price {
             let verifyFirst = priceSigTally.isPriceSigTallyVerifyFirstActive(
                 data['BTC_BLOCK_HEIGHT'], this.config['NETWORK']);
 
-            // Capability is a pure function of (pubkey, block), so memoize it. Under
-            // verify-first a repeated pubkey is no longer short-circuited by the
-            // dedupe set, and without this cache a list padded with one pubkey would
-            // issue one DB read per entry. Below the gate the first-encounter dedupe
-            // means this is never consulted twice, so it changes nothing there.
+            // Capability is a pure function of (pubkey, block), so resolve the whole
+            // price-capable set ONCE per round rather than a DB round-trip per signer
+            // (hasCapability is ~5 sequential queries). Same effective set: both paths
+            // resolve _effectiveCapabilitySetSql semantics at the same default MIN_STAKE.
+            // getValidatorsByCapability caps at VALIDATOR_QUERY_LIMIT and hasCapability
+            // does not, so a TRUNCATED read falls back to the per-signer path: silently
+            // dropping a qualified signer would under-count the round's quorum (#3871).
+            let capableRows = await this.indexerDb.getValidatorsByCapability('price', data['BLOCK_INDEX']);
+            let capableSet  = (capableRows && capableRows.truncated === true)
+                            ? null
+                            : new Set((capableRows || []).map(v => String(v.pubkey).toLowerCase()));
             let capabilityCache = new Map();
 
             for(let s of sigs){
@@ -185,10 +191,15 @@ class Price {
                 if(!verifyFirst) seenPubkey.add(s.pubkey);
 
                 // Verify the validator's stake qualifies for the `price` capability at this block
-                let capable = capabilityCache.get(s.pubkey);
-                if(capable === undefined){
-                    capable = await this.indexerDb.hasCapability(s.pubkey, 'price', data['BLOCK_INDEX']);
-                    capabilityCache.set(s.pubkey, capable);
+                let capable;
+                if(capableSet){
+                    capable = capableSet.has(s.pubkey);
+                } else {
+                    capable = capabilityCache.get(s.pubkey);
+                    if(capable === undefined){
+                        capable = await this.indexerDb.hasCapability(s.pubkey, 'price', data['BLOCK_INDEX']);
+                        capabilityCache.set(s.pubkey, capable);
+                    }
                 }
                 if(!capable){
                     continue;

@@ -29,15 +29,38 @@ const SIG_A    = '1'.repeat(128);
 const SIG_B    = '2'.repeat(128);
 const SIG_C    = '3'.repeat(128);
 
+// Every pubkey this suite signs with (the byte-repeat forms cover the Sybil
+// fixtures below). The mock DB resolves the BATCHED capability set over this
+// universe, mirroring db.js where getValidatorsByCapability and hasCapability
+// answer from the same _effectiveCapabilitySetSql (#3871).
+const ALL_PUBKEYS = Array.from(new Set(
+    [PUBKEY_A, PUBKEY_B, PUBKEY_C].concat(
+        Array.from({ length: 16 }, (_, i) => i.toString(16).padStart(2, '0').repeat(32)))));
+
 describe('Price (PRICE) @regression @tier3', function () {
     let indexer, actionsCtx, handler;
 
     function addPriceDbStubs(db) {
         db.createPrice                  = sinon.stub().resolves();
-        db.hasCapability                = sinon.stub().resolves(true);
+        db.hasCapability                = sinon.stub();
+        db.getValidatorsByCapability    = sinon.stub();
         db.getActiveCapabilityCount     = sinon.stub().resolves(1);
         db.getStakeWeightsByCapability  = sinon.stub().resolves([]);
         db.createValidatorReward        = sinon.stub().resolves(true);
+        setCapable(db, () => true);
+    }
+
+    // Drive BOTH capability APIs from one predicate, the way db.js does (#3871):
+    // a case that says who qualifies stays honest whichever path the handler takes.
+    function setCapable(db, predicate) {
+        db.hasCapability.callsFake(async (pubkey, cap, blk) => !!(await predicate(pubkey, cap, blk)));
+        db.getValidatorsByCapability.callsFake(async (cap, blk) => {
+            const rows = [];
+            for (const pubkey of ALL_PUBKEYS)
+                if (await predicate(pubkey, cap, blk)) rows.push({ pubkey, amount: '0' });
+            rows.truncated = false;
+            return rows;
+        });
     }
 
     beforeEach(function () {
@@ -138,7 +161,7 @@ describe('Price (PRICE) @regression @tier3', function () {
         });
 
         it('skips a signer without the price capability at this block', async function () {
-            indexer.indexerDb.hasCapability.resolves(false);
+            setCapable(indexer.indexerDb, () => false);
             indexer.indexerDb.getActiveCapabilityCount.resolves(1);
             const data = v0Data();
             await handler.parse(v0Params(ONE_PAIR, [{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
@@ -226,17 +249,38 @@ describe('Price (PRICE) @regression @tier3', function () {
                     'expected a 2-of-3 quorum failure, got: ' + data['STATUS']);
             });
 
-            it('at/above the gate: one capability read per DISTINCT pubkey, not per signature', async function () {
-                // Verify-first no longer short-circuits a repeated pubkey, so without the
-                // memo a list padded with one pubkey would issue one DB read per entry.
+            it('at/above the gate: ONE batched capability read per round, none per signer', async function () {
+                // Verify-first no longer short-circuits a repeated pubkey, so a padded
+                // list used to issue one ~5-query hasCapability read per distinct signer
+                // in the per-tx consensus path (#3871). The set is now resolved once.
                 indexer.indexerDb.getActiveCapabilityCount.resolves(1);
                 const data = v0Data();
                 await handler.parse(v0Params(ONE_PAIR, [
                     { pubkey: PUBKEY_A, sig: BAD_SIG },
-                    { pubkey: PUBKEY_A, sig: BAD_SIG },
+                    { pubkey: PUBKEY_B, sig: BAD_SIG },
                     { pubkey: PUBKEY_A, sig: SIG_A },
                 ]), data, null);
-                assert.strictEqual(indexer.indexerDb.hasCapability.callCount, 1);
+                assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
+                assert.ok(indexer.indexerDb.getValidatorsByCapability
+                    .calledWith('price', data['BLOCK_INDEX']));
+                assert.strictEqual(indexer.indexerDb.getValidatorsByCapability.callCount, 1);
+                assert.strictEqual(
+                    indexer.indexerDb.hasCapability.getCalls().filter(c => c.args[1] === 'price').length, 0,
+                    'the batched set must serve every signer - no per-signer price read');
+            });
+
+            it('a TRUNCATED capability read falls back per-signer rather than dropping a qualified signer', async function () {
+                // getValidatorsByCapability caps at VALIDATOR_QUERY_LIMIT and hasCapability
+                // does not, so a capped read must never be read as "not qualified": that
+                // would under-count the round's quorum (#3871).
+                indexer.indexerDb.getActiveCapabilityCount.resolves(1);
+                const capped = [];
+                capped.truncated = true;
+                indexer.indexerDb.getValidatorsByCapability.resolves(capped);
+                const data = v0Data();
+                await handler.parse(v0Params(ONE_PAIR, [{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+                assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
+                assert.ok(indexer.indexerDb.hasCapability.calledWith(PUBKEY_A, 'price', data['BLOCK_INDEX']));
             });
 
             it('below the gate: the legacy mark-then-verify verdict is preserved verbatim', async function () {
@@ -352,7 +396,7 @@ describe('Price (PRICE) @regression @tier3', function () {
             it('duplicate-pubkey signatures earn one share, unqualified signers earn none', async function () {
                 indexer.indexerDb.getActiveCapabilityCount.resolves(1); // quorum 1
                 // PUBKEY_B lacks the capability; PUBKEY_A appears twice
-                indexer.indexerDb.hasCapability.callsFake(async (pk) => pk !== PUBKEY_B);
+                setCapable(indexer.indexerDb, (pk) => pk !== PUBKEY_B);
                 const data = v0Data();
                 await handler.parse(v0Params(ONE_PAIR, [
                     { pubkey: PUBKEY_A, sig: SIG_A },
@@ -382,7 +426,7 @@ describe('Price (PRICE) @regression @tier3', function () {
             // Only PASS pubkeys in `fullNodeSet` hold the full_node capability; every
             // signer still holds `price`.
             function fullNodeCapability(set) {
-                indexer.indexerDb.hasCapability.callsFake(async (pk, cap) => cap !== 'full_node' ? true : set.has(pk));
+                setCapable(indexer.indexerDb, (pk, cap) => cap !== 'full_node' ? true : set.has(pk));
             }
             // Build a getFullNodeParticipation result from verified-source rows. Each
             // listed source is treated as having passed `passed` of `total` challenge
@@ -538,7 +582,7 @@ describe('Price (PRICE) @regression @tier3', function () {
                 indexer.config.FULLNODE = Object.assign({}, indexer.config.FULLNODE, { REWARD_SHARE: '0.25' });
                 indexer.indexerDb.getFullNodeParticipation = sinon.stub().resolves(PART);
                 indexer.indexerDb.getActiveCapabilityCount.resolves(3); // quorum 2
-                indexer.indexerDb.hasCapability.callsFake(async (pk, cap) =>
+                setCapable(indexer.indexerDb, (pk, cap) =>
                     cap !== 'full_node' ? true : [PUBKEY_A, PUBKEY_B, PUBKEY_C].includes(pk));
             });
             afterEach(function () {
