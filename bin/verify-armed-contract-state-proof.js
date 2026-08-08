@@ -144,9 +144,21 @@ function parseArgs(argv){
                 '  value=' + JSON.stringify(p.state_value) + '  siblings=' + p.smt_proof.compressed.siblings.length);
 
     // THE CHECK: an independent implementation, in another repo, must accept it.
-    const v = light.verifyContractStateProof(p, tr.state_root, opts.chain, opts.network);
+    // The 5th argument binds the proof to the identity we ASKED for, not the one the
+    // server echoed back. Without it a proof for a different key verifies clean, which
+    // the explorer's double-decode did for real ( frontier row 28), so this
+    // harness would have passed while the server answered the wrong question.
+    const asked = { contract_index: row.contract_index, state_key: row.state_key };
+    const v = light.verifyContractStateProof(p, tr.state_root, opts.chain, opts.network, asked);
     console.log('# SDK verifyContractStateProof -> verified=' + v.verified + ' reason=' + v.reason);
     console.log('# returned state_value matches the stored row: ' + (v.state_value === p.state_value));
+
+    // NEGATIVE: the same proof, checked against a key we did NOT ask for, must be
+    // refused. This is the binding proving itself on every run rather than on trust.
+    const misdirected = light.verifyContractStateProof(p, tr.state_root, opts.chain, opts.network,
+                            { contract_index: row.contract_index, state_key: row.state_key + '-not-asked' });
+    console.log('# proof checked against an unrequested key -> verified=' + misdirected.verified +
+                ' reason=' + misdirected.reason);
 
     // And a NEGATIVE: tamper the value, the same verifier must reject it.
     const bad = Object.assign({}, p, { state_value: '"tampered"' });
@@ -162,7 +174,7 @@ function parseArgs(argv){
     }
 
     await conn.end();
-    const ok = v.verified === true && bv.verified === false;
+    const ok = v.verified === true && bv.verified === false && misdirected.verified === false;
     console.log(ok ? '# RESULT: PASS' : '# RESULT: FAIL');
     process.exit(ok ? 0 : 1);
 })().catch(e => { console.error(e); process.exit(1); });
