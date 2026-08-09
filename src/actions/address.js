@@ -193,36 +193,40 @@ class Address {
         // Print status message 
         console.log("\t ADDRESS : " + data['SOURCE'] + ' : ' + data['STATUS']);
 
-        // Persist the action. Format 1 writes address_controllers and must NOT touch the preferences row
-        // (a null-preference write reads back via getAddressPreferences as fee_preference=0). CONTROLLER/
-        // COOLDOWN_BLOCKS stay out of the NUMBER list, remaining raw strings for the BIGINT/INT columns.
-        if(format === 1){
-            if(status === 'valid'){
-                let addressId   = await this.indexerDb.createAddress(data['SOURCE']);
-                let actionClass = String(data['ACTION_CLASS']).toLowerCase();
-                if(String(data['UNBIND']) === '1'){
-                    // effective is non-null + a live bind (validated above); drop schedules at
-                    // block + its committed cooldown.
-                    let effective   = await this.indexerDb.getEffectiveAddressController(addressId, actionClass, data['BLOCK_INDEX'], data['ACTION_INDEX']);
-                    let cooldown    = Number(effective.cooldown_blocks) || 0;
-                    let cooldownEnd = parseInt(data['BLOCK_INDEX']) + cooldown;
-                    await this.indexerDb.recordAddressControllerEvent({
-                        action_index: data['ACTION_INDEX'], address_id: addressId, action_class: actionClass,
-                        contract_index: effective.contract_index, is_unbind: 1,
-                        cooldown_blocks: cooldown, cooldown_end_block: cooldownEnd, block_index: data['BLOCK_INDEX']
-                    });
-                } else {
-                    let cooldown = (this.util.isNull(data['COOLDOWN_BLOCKS'])) ? 0 : parseInt(data['COOLDOWN_BLOCKS']);
-                    await this.indexerDb.recordAddressControllerEvent({
-                        action_index: data['ACTION_INDEX'], address_id: addressId, action_class: actionClass,
-                        contract_index: data['CONTROLLER'], is_unbind: 0,
-                        cooldown_blocks: cooldown, cooldown_end_block: null, block_index: data['BLOCK_INDEX']
-                    });
-                }
+        // Every ADDRESS action writes its `addresses` row, valid or not: that row is the audit trail a
+        // client reads the verdict from, so a refused one reads back its `invalid: ...` reason instead of
+        // being indistinguishable from an action that has not been processed yet . Same contract
+        // as issue.js, which calls createIssue unconditionally. Format 1 carries no preferences, so its
+        // row leaves those columns NULL; getAddressPreferences excludes the format for exactly that
+        // reason (a NULL preference would read back as fee_preference=0).
+        await this.indexerDb.createAddressOption(data);
+
+        // Format 1 additionally appends the bind/unbind event. Only a VALID one is appended:
+        // address_controllers is the enforcement log, so a refused bind must never gate its class.
+        // CONTROLLER/COOLDOWN_BLOCKS stay out of the NUMBER list, remaining raw strings for the
+        // BIGINT/INT columns.
+        if(format === 1 && status === 'valid'){
+            let addressId   = await this.indexerDb.createAddress(data['SOURCE']);
+            let actionClass = String(data['ACTION_CLASS']).toLowerCase();
+            if(String(data['UNBIND']) === '1'){
+                // effective is non-null + a live bind (validated above); drop schedules at
+                // block + its committed cooldown.
+                let effective   = await this.indexerDb.getEffectiveAddressController(addressId, actionClass, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+                let cooldown    = Number(effective.cooldown_blocks) || 0;
+                let cooldownEnd = parseInt(data['BLOCK_INDEX']) + cooldown;
+                await this.indexerDb.recordAddressControllerEvent({
+                    action_index: data['ACTION_INDEX'], address_id: addressId, action_class: actionClass,
+                    contract_index: effective.contract_index, is_unbind: 1,
+                    cooldown_blocks: cooldown, cooldown_end_block: cooldownEnd, block_index: data['BLOCK_INDEX']
+                });
+            } else {
+                let cooldown = (this.util.isNull(data['COOLDOWN_BLOCKS'])) ? 0 : parseInt(data['COOLDOWN_BLOCKS']);
+                await this.indexerDb.recordAddressControllerEvent({
+                    action_index: data['ACTION_INDEX'], address_id: addressId, action_class: actionClass,
+                    contract_index: data['CONTROLLER'], is_unbind: 0,
+                    cooldown_blocks: cooldown, cooldown_end_block: null, block_index: data['BLOCK_INDEX']
+                });
             }
-        } else {
-            // Create record in addresses table
-            await this.indexerDb.createAddressOption(data);
         }
 
         // Store the SOURCE in addresses list

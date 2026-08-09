@@ -40,6 +40,9 @@ const { hubConfigStaleness, stallWedged } = require('./XChainIndexer');
 // back (reorg, or a guard throwing) the advertised height never committed at
 // all, which is a lie about sync position to any monitor or federation client.
 // Falls back to the raw handle for stubs without apiView (unit/smoke doubles).
+// That fallback is a test affordance and not a production path; the rationale,
+// and why it must never spread to a federation read, is stated in full at the
+// indexerReorgView guard in XChainIndexer.js .
 function committedView(db){
     return (db && typeof db.apiView === 'function') ? db.apiView() : db;
 }

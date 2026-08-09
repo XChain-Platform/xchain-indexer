@@ -4906,7 +4906,13 @@ class Database {
             sql += " AND t1.block_index < ?";
             args.push(block_index);
         }
-        // Lookup the address preferences
+        // Lookup the address preferences.
+        //
+        // Format 1 is excluded on purpose: a controller bind writes an `addresses` row so its verdict is
+        // readable , but that row carries no preferences, and Number(NULL) here would read back
+        // as fee_preference=0 (destroy) for every later action by that address. The guard names the one
+        // format rather than filtering on NULL columns, because a format-0 row with a blank preference
+        // has always read back as 0 and must keep doing so.
         let query = `SELECT
                 a1.fee_preference,
                 a1.require_memo,
@@ -4918,6 +4924,7 @@ class Database {
                 INNER JOIN index_statuses s1 ON (s1.id=a1.status_id)
             WHERE
                 t1.source_id=? AND
+                (a2.action_format IS NULL OR a2.action_format!=1) AND
                 s1.status=?` + sql + `
             ORDER BY
                 a1.action_index ASC`;

@@ -45,7 +45,9 @@ class Rollback {
         // doQuery/doQueryStrict draw an independent pooled connection that never adopts a transaction.
         // The rollback's own transaction still uses this.indexerDb (transactionConnection). apiView may
         // be absent on a minimal mock (or indexerDb itself absent in a static drift-guard analyzer), so
-        // fall back to the raw db.
+        // fall back to the raw db. That fallback is a test affordance and not a production path; the
+        // rationale, and why it must never spread to a federation read, is stated in full at the
+        // indexerReorgView guard in XChainIndexer.js .
         this.indexerView = (this.indexerDb && typeof this.indexerDb.apiView === 'function') ? this.indexerDb.apiView() : this.indexerDb;
 
         // Setup alias to the utility class

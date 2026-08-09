@@ -605,6 +605,15 @@ class XChainIndexer {
         // that dry-run rolls back, stranding the reorg. The view draws an independent pooled connection
         // that never adopts a transaction and sees only committed state. apiView may be absent on a
         // minimal test double, so fall back to the raw db.
+        //
+        // That fallback is a TEST AFFORDANCE and NOT a production path . The real Database
+        // always defines apiView(), so against a live indexer the raw-db branch is unreachable; a
+        // production handle without it is a wiring bug to fix, not a case to serve. Do not spread this
+        // shape to the federation READ sites in api.js and stake-source.js: there a silent raw-db
+        // fallback would re-open exactly the dirty read REORG-1 and  exist to prevent. When a
+        // test double trips over a missing apiView, the fix belongs to the DOUBLE (give it
+        // `apiView(){ return this }`), never to the call site. Same reading applies to the two other
+        // guarded sites, rollback.js and health.js, which point back here.
         let indexerReorgView = (typeof this.indexerDb.apiView === 'function') ? this.indexerDb.apiView() : this.indexerDb;
 
         // How often the inner catch-up loop re-checks for a mid-catch-up decoder reorg (REORG-6).

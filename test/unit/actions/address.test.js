@@ -171,4 +171,105 @@ describe('Address action handler @regression @tier3', function () {
         await handler.parse(makeParams(0, 0, ''), data, null);
         assert.ok(indexer.mapper.createMappings.calledOnce);
     });
+
+    /*****************************************************************
+     *  / D-154: a REFUSED format 1 (controller bind) was silent.
+     *
+     * Format 1 used to persist nothing but the address_controllers event, and that
+     * write only runs when the action is valid, so a refused bind wrote no row
+     * anywhere and its verdict existed solely in a console.log line: by every
+     * client it was indistinguishable from an action not yet processed. Format 1
+     * now writes the same `addresses` audit row every other ADDRESS writes (the
+     * contract issue.js has always had), while the enforcement log still takes
+     * valid events only.
+     ****************************************************************/
+    describe('format 1 : controller bind persistence', function () {
+        // VERSION|CONTROLLER|ACTION_CLASS|COOLDOWN_BLOCKS|UNBIND|MEMO
+        function bindParams({ controller = '1500', actionClass = 'transfer', cooldown = '144', unbind = '', memo = '' } = {}) {
+            return ['1', String(controller), String(actionClass), String(cooldown), String(unbind), memo];
+        }
+
+        beforeEach(function () {
+            // A bind validates its CONTROLLER against an existing, active contract.
+            indexer.indexerDb.getContract      = sinon.stub().resolves({ action_index: 1500, status_id: 1 });
+            indexer.indexerDb.getStatusString  = sinon.stub().resolves('valid');
+            indexer.indexerDb.getAddressId     = sinon.stub().resolves(7);
+            indexer.indexerDb.createAddress    = sinon.stub().resolves(7);
+        });
+
+        it('a valid bind writes both the audit row and the controller event', async function () {
+            const data = createBaseData({ ACTION: 'ADDRESS', FORMAT: 1, ACTION_INDEX: 1787 });
+            await handler.parse(bindParams(), data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.ok(indexer.indexerDb.createAddressOption.calledOnce, 'the addresses audit row is written');
+            assert.ok(indexer.indexerDb.recordAddressControllerEvent.calledOnce, 'the binding is appended');
+            const evt = indexer.indexerDb.recordAddressControllerEvent.firstCall.args[0];
+            assert.strictEqual(evt.action_index, 1787);
+            assert.strictEqual(evt.action_class, 'transfer');
+            assert.strictEqual(evt.contract_index, '1500');
+            assert.strictEqual(evt.is_unbind, 0);
+            assert.strictEqual(evt.cooldown_blocks, 144);
+        });
+
+        it('the audit row carries the verdict, not preferences', async function () {
+            const data = createBaseData({ ACTION: 'ADDRESS', FORMAT: 1, ACTION_INDEX: 1787 });
+            await handler.parse(bindParams({ memo: 'gate my transfers' }), data, null);
+            const written = indexer.indexerDb.createAddressOption.firstCall.args[0];
+            assert.strictEqual(written['STATUS'], 'valid');
+            assert.strictEqual(written['MEMO'], 'gate my transfers');
+            // A v1 sets no preferences at all, so every preference column is written NULL.
+            // Number(NULL) is 0, which is why getAddressPreferences excludes the format
+            // outright rather than trusting the columns.
+            assert.strictEqual(written['FEE_PREFERENCE'], null);
+            assert.strictEqual(written['REQUIRE_MEMO'], null);
+            assert.strictEqual(written['DISPENSER_PREFERENCE'], null);
+        });
+
+        it('a REFUSED bind still writes its audit row, and binds nothing', async function () {
+            // A controller already gates this class, which is the exact refusal the
+            // ledger entry names as unreadable.
+            indexer.indexerDb.getEffectiveAddressController.resolves({
+                action_index: 1700, contract_index: 1500, is_unbind: 0, cooldown_blocks: 144, cooldown_end_block: null
+            });
+            const data = createBaseData({ ACTION: 'ADDRESS', FORMAT: 1, ACTION_INDEX: 1790 });
+            await handler.parse(bindParams(), data, null);
+            assert.strictEqual(data['STATUS'], 'invalid: ACTION_CLASS (already bound)');
+            assert.ok(indexer.indexerDb.createAddressOption.calledOnce, 'a refused bind is readable');
+            const written = indexer.indexerDb.createAddressOption.firstCall.args[0];
+            assert.strictEqual(written['STATUS'], 'invalid: ACTION_CLASS (already bound)');
+            assert.ok(indexer.indexerDb.recordAddressControllerEvent.notCalled,
+                'the enforcement log must never carry a refused bind');
+        });
+
+        it('a REFUSED unbind is readable too', async function () {
+            const data = createBaseData({ ACTION: 'ADDRESS', FORMAT: 1, ACTION_INDEX: 1791 });
+            await handler.parse(bindParams({ controller: '', unbind: '1' }), data, null);
+            assert.strictEqual(data['STATUS'], 'invalid: ACTION_CLASS (not bound)');
+            assert.ok(indexer.indexerDb.createAddressOption.calledOnce);
+            assert.ok(indexer.indexerDb.recordAddressControllerEvent.notCalled);
+        });
+
+        it('an unknown ACTION_CLASS is readable rather than silent', async function () {
+            const data = createBaseData({ ACTION: 'ADDRESS', FORMAT: 1, ACTION_INDEX: 1792 });
+            await handler.parse(bindParams({ actionClass: 'teleport' }), data, null);
+            assert.strictEqual(data['STATUS'], 'invalid: ACTION_CLASS (unknown)');
+            const written = indexer.indexerDb.createAddressOption.firstCall.args[0];
+            assert.strictEqual(written['STATUS'], 'invalid: ACTION_CLASS (unknown)');
+            assert.ok(indexer.indexerDb.recordAddressControllerEvent.notCalled);
+        });
+
+        it('a valid unbind appends the drop and its cooldown end block', async function () {
+            indexer.indexerDb.getEffectiveAddressController.resolves({
+                action_index: 1700, contract_index: 1500, is_unbind: 0, cooldown_blocks: 144, cooldown_end_block: null
+            });
+            const data = createBaseData({ ACTION: 'ADDRESS', FORMAT: 1, ACTION_INDEX: 1801, BLOCK_INDEX: 900 });
+            await handler.parse(bindParams({ controller: '', unbind: '1' }), data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.ok(indexer.indexerDb.createAddressOption.calledOnce);
+            const evt = indexer.indexerDb.recordAddressControllerEvent.firstCall.args[0];
+            assert.strictEqual(evt.is_unbind, 1);
+            assert.strictEqual(evt.cooldown_blocks, 144);
+            assert.strictEqual(evt.cooldown_end_block, 1044);
+        });
+    });
 });
