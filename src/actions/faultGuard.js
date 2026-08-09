@@ -23,7 +23,7 @@
  * That is correct ONLY for a deterministic, contract-caused failure. An
  * infrastructure fault handled the same way commits a validator-local,
  * non-deterministic verdict into the block hash and forks the chain, because
- * a healthy peer records the opposite outcome. Two fault classes must instead
+ * a healthy peer records the opposite outcome. Three fault classes must instead
  * HALT block processing so the whole block rolls back and retries:
  *
  *   1. A VM host fault (HostFaultError, code 'EXECUTOR_UNAVAILABLE'): the
@@ -39,6 +39,12 @@
  *      1205, deadlock 1213, killed connection, ...) must propagate. Mirrors the
  *      gate at rollback.js and xchain-sync/src/ClientRollback.js.
  *
+ *   3. The  price-barrier deferral (code 'PRICE_BARRIER_DEFERRED'): this
+ *      block skipped the hub price-mirror barrier and then read the mirror
+ *      anyway, so its read is uncovered on THIS node only. The assertion's
+ *      contract is a rollback plus a retry with the barrier enforced, which a
+ *      swallowing catch cancels.
+ *
  * A genuine deterministic contract failure (a reverted emission, an
  * insufficient-balance emit.send) carries no errno and is NOT re-thrown, so
  * verdict semantics for non-fault inputs are unchanged.
@@ -53,6 +59,13 @@ function rethrowIfInfraFault(e){
     // stranding the assert exists to prevent. Deterministic on every node running
     // the same code, so halting is loud, not forking.
     if(e && e.code === 'EXEC_CONTEXT_TX_HASH_MISSING') throw e;
+    //  price-barrier deferral: db._assertPriceBarrierNotSkipped() fires when this
+    // block skipped the hub price-mirror barrier and then read the mirror anyway. It is a
+    // node-local coverage verdict, not a contract outcome, and its whole contract is that
+    // the block rolls back and retries with the barrier enforced. Swallowing it commits an
+    // uncovered-mirror verdict that healthy peers do not reach (: every XCALL
+    // execution injected on a transaction-less block recorded result_status='error').
+    if(e && e.code === 'PRICE_BARRIER_DEFERRED') throw e;
     if(e && typeof e.errno === 'number' && e.errno !== 1146 && e.errno !== 1054) throw e;
 }
 

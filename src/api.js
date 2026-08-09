@@ -45,6 +45,7 @@ const stateSubtree  = require('./state_subtree_activation');
 const ar            = require('./anchor_reward_activation.js');
 const crypto        = require('crypto');
 const { installObservability } = require('./observability');   // : default-off /metrics + structured log shim
+const { parseCorsOrigin } = require('./corsOrigin.js');
 
 // Constant-time API-key comparison. A plain `!==` short-circuits at the first
 // mismatching byte, leaking the key that guards reward-forging writes through
@@ -186,9 +187,13 @@ async function startApi(){
     // Allow JSON requests
     app.use(bodyParser.json());
 
-    // Allow CORS (restricted to configured origin, defaults to localhost)
+    // Allow CORS (restricted to the configured allowlist, defaults to localhost).
+    // CORS_ORIGIN is comma-separated, not a single origin: handing `cors` the raw
+    // string makes it echo that string verbatim to every caller, a multi-value
+    // header no browser accepts, so every listed origin is blocked while the
+    // header reads as configured. See src/corsOrigin.js .
     app.use(cors({
-        origin: process.env.CORS_ORIGIN || 'http://localhost',
+        origin: parseCorsOrigin(process.env.CORS_ORIGIN || 'http://localhost'),
         methods: ['POST']
     }));
 

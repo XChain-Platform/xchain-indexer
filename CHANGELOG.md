@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- `CORS_ORIGIN` now accepts a comma-separated allowlist matched per-origin, instead of echoing a multi-value header that no browser accepts .
+- Corrected the protocol-constants oracle-federation header, which claimed the mirrored constants were ungated while the hub-side mirror guard covers this copy (, ).
 - PRICE v0, ATTEST v1 and NODEPROOF validation resolve signer capability in one batched query instead of a DB round-trip per signer ().
 - A hub seq or watermark regression now triggers config re-apply instead of being masked by Math.max, unblocking recovery after a hub restart ().
 - NODEPROOF verifier-signing builds its canonical PASS list with the pinned byte comparator rather than a bare Array.sort ().

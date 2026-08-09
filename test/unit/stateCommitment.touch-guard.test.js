@@ -172,8 +172,13 @@ function makeBlockMockDb({ ledgerKeys, touched, nets, seedLeaves }){
             return v ? [v] : [];
         }
         if(/INSERT IGNORE INTO state_tree_nodes/.test(sql)){
-            if(!nodes.has(params[0]))
-                nodes.set(params[0], { left_hash: params[1], right_hash: params[2] });
+            // (hash, left, right) triples: putMany batches a whole path into one
+            // multi-row statement , so consuming only params[0..2] would
+            // drop every node but the first and leave _descend reading the gaps as
+            // empty subtrees.
+            for(let i = 0; i + 2 < params.length; i += 3)
+                if(!nodes.has(params[i]))
+                    nodes.set(params[i], { left_hash: params[i + 1], right_hash: params[i + 2] });
             return [];
         }
         if(/UNION ALL/.test(sql) && /INNER JOIN actions/.test(sql))

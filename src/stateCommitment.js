@@ -47,6 +47,24 @@ const EMPTY0_HEX     = M.toHex(M.EMPTY[0]);
 // ---- Node stores ------------------------------------------------------------
 // Interface: async get(nodeHashHex) -> { left_hash, right_hash } | null ;
 //            async put(nodeHashHex, leftHex, rightHex) -> void  (idempotent / INSERT IGNORE)
+//            async putMany(nodes) -> void  (OPTIONAL fast path: same rows, one
+//                                            statement per chunk)
+//
+// putMany is optional because stores are DECORATED as well as implemented: the
+// bench harness in bin/ wraps an inner store to instrument put, and the subtree
+// unit tests hand in bare {get, put} fakes. Requiring it would break every one of
+// them at a call site far from the edit. PersistentSMT._putBatch is the single
+// place that chooses, and the fallback writes the identical rows in the identical
+// order, so a store without it is slow, never wrong.
+//
+// : putMany exists because ONE key update writes SMT_DEPTH internal nodes
+// and a value leaf's ancestors are never an empty subtree, so the write loop is
+// always a full 256 rows. Issued one statement at a time that is 256 sequential
+// round trips per key, which on the BTC regtest venue (49 stake keys rebuilt from
+// an empty root every block) is 12,544 round trips and 25-66s of wall clock per
+// block against LTC's 3-5s, failing five standing envelope tests as timeouts.
+// The rows written are identical either way; only the statement count changes, so
+// this is a transport fix and not a consensus one.
 
 // MariaDB-backed content-addressed store over `state_tree_nodes`.
 //
@@ -68,6 +86,8 @@ const EMPTY0_HEX     = M.toHex(M.EMPTY[0]);
 //
 // getNetBalance was already loud by accident (it indexes rows[0]); it is strict
 // now by intent rather than by luck.
+const DB_NODE_PUT_CHUNK = 128;
+
 class DbNodeStore {
     constructor(db){ this.db = db; }
     async get(nodeHashHex){
@@ -80,6 +100,21 @@ class DbNodeStore {
             'INSERT IGNORE INTO state_tree_nodes (node_hash, left_hash, right_hash) VALUES (?, ?, ?)',
             [nodeHashHex, leftHex, rightHex]);
     }
+    // Chunked so one statement stays far inside max_allowed_packet: 128 rows is
+    // 384 bound 64-char hex params, ~25KB on the wire against a 16MB default.
+    // Duplicate hashes WITHIN a chunk are safe by the same INSERT IGNORE rule
+    // that makes the single-row form idempotent.
+    async putMany(nodes){
+        for(let i = 0; i < nodes.length; i += DB_NODE_PUT_CHUNK){
+            const chunk  = nodes.slice(i, i + DB_NODE_PUT_CHUNK);
+            const values = new Array(chunk.length).fill('(?, ?, ?)').join(', ');
+            const args   = [];
+            for(const n of chunk) args.push(n.hash, n.left, n.right);
+            await this.db.doQueryStrict(
+                'INSERT IGNORE INTO state_tree_nodes (node_hash, left_hash, right_hash) VALUES ' + values,
+                args);
+        }
+    }
 }
 
 // In-memory store: used by the unit fuzz test and any caller that wants a
@@ -89,6 +124,9 @@ class MemoryNodeStore {
     async get(nodeHashHex){ return this.map.has(nodeHashHex) ? this.map.get(nodeHashHex) : null; }
     async put(nodeHashHex, leftHex, rightHex){
         if(!this.map.has(nodeHashHex)) this.map.set(nodeHashHex, { left_hash: leftHex, right_hash: rightHex });
+    }
+    async putMany(nodes){
+        for(const n of nodes) await this.put(n.hash, n.left, n.right);
     }
     get size(){ return this.map.size; }
 }
@@ -118,12 +156,32 @@ class PersistentSMT {
         return { siblings, oldLeaf: empty ? EMPTY0_HEX : cur };
     }
 
+    // Persist a path's nodes, preferring the store's batch write. The fallback
+    // is the pre- behaviour and exists only for stores that predate
+    // putMany (bare {get, put} fakes and the bin/ instrumentation decorator);
+    // it writes the same rows in the same order at one round trip each.
+    async _putBatch(nodes){
+        if(typeof this.store.putMany === 'function'){
+            await this.store.putMany(nodes);
+            return;
+        }
+        for(const n of nodes) await this.store.put(n.hash, n.left, n.right);
+    }
+
     // Set (leafHex) or delete (null) a key, persisting new internal nodes. Returns
     // the new root hex. Apply keys sequentially: each call threads the updated root
     // so shared-prefix keys see prior inserts.
     async update(rootHex, keyBuf, newLeafHexOrNull){
         const { siblings } = await this._descend(rootHex, keyBuf);
         let cur = (newLeafHexOrNull == null) ? EMPTY0_HEX : newLeafHexOrNull;
+        // Collect the path's nodes and write them in ONE batch after the climb
+        // rather than a round trip per level . Deferring is safe because
+        // the climb reads NOTHING: every parent is hashed from `cur` and the
+        // sibling already captured by _descend, so no node written here is read
+        // back before the flush. The flush is inside update() and not hoisted to
+        // buildFull for exactly that reason in reverse: the NEXT update() descends
+        // the root this one returns, so its nodes must be durable by then.
+        const pending = [];
         for(let d = M.SMT_DEPTH - 1; d >= 0; d--){
             const bit  = M.bitAt(keyBuf, d);
             const sib  = siblings[d];
@@ -132,9 +190,10 @@ class PersistentSMT {
             const parent = M.toHex(M.nodeHash(left, right));
             // Skip storing an all-empty subtree: its hash is an EMPTY constant with no row.
             if(parent !== M.toHex(M.EMPTY[M.SMT_DEPTH - d]))
-                await this.store.put(parent, left, right);
+                pending.push({ hash: parent, left, right });
             cur = parent;
         }
+        if(pending.length) await this._putBatch(pending);
         return cur;
     }
 
@@ -418,6 +477,63 @@ async function gatherStakeEntries(db, blockIndex){
                            M.toHex(M.stakeTotalLeaf(total)) ]);
     }
     return entries;
+}
+
+// Rebuild the stakes tree only when the stake set actually changed .
+//
+// buildFull writes SMT_DEPTH nodes per key, so this tree costs keys x 256 node
+// writes on EVERY BTC block - 12,544 on the regtest venue's 49 keys - and the
+// stake set changes on almost none of them. Every one of those writes is an
+// INSERT IGNORE no-op, but each still probes a primary key far larger than the
+// buffer pool, which is what put BTC regtest block parse at 25-66s against LTC's
+// 3-5s for the same code (LTC commits the empty stakes root and never pays it).
+//
+// The memo is sound because buildFull is a PURE function of its entries: the node
+// store is content-addressed, so the same entry set always yields the same root.
+// stateCommitment.test.js pins both halves of that - equality with the merkle.js
+// reference, and insert-order independence.
+//
+// Every way this can be wrong is a way it rebuilds. It shortcuts ONLY when the
+// entries are identical to those of the block IMMEDIATELY BEFORE it, which this
+// same process built and committed, and whose nodes are therefore already durable
+// (state_tree_nodes is COW and rollback-exempt). Keyed on block CONTINUITY and not
+// on the digest alone, so a reorg, a rollback, or a cold start lands on a block
+// that is not the memo's successor and rebuilds. That direction matters: a cache
+// in a consensus path may only ever fail toward the slow correct answer, and the
+// one that failed the other way here  did so because it was keyed on a
+// MUTABLE dense id rather than on its own inputs.
+let _stakesMemo = null;
+
+function _stakeEntriesDigest(entries){
+    // Sorted, because buildFull is order-independent: an entry set that merely
+    // reordered must still hit. Length-prefixed and separator-joined so no pair
+    // boundary can be forged by a value that happens to contain the separator.
+    const pairs = entries.map(e => String(e[0]) + ':' + String(e[1])).sort();
+    return M.toHex(M.sha256(Buffer.from(pairs.length + '|' + pairs.join('|'), 'utf8')));
+}
+
+// Exported for tests and for any caller that wipes the node store underneath a
+// live process; forgetting the memo only ever costs one rebuild.
+function resetStakesMemo(){ _stakesMemo = null; }
+
+async function buildStakesRoot(smt, chain, network, blockIndex, entries){
+    const digest = _stakeEntriesDigest(entries);
+    const memo   = _stakesMemo;
+    if(memo && memo.chain === chain && memo.network === network
+            && memo.blockIndex === blockIndex - 1 && memo.digest === digest){
+        // One indexed read weighed against 12,544 writes: proves the memoized tree
+        // is still IN the store before trusting it. It does not prove every interior
+        // node survived - only a prune could remove one, and reachability marking
+        // keeps whatever a retained root reaches - so this is a cheap floor, stated
+        // as such rather than sold as verification.
+        if(memo.root === EMPTY_ROOT_HEX || await smt.store.get(memo.root)){
+            _stakesMemo = { chain, network, blockIndex, digest, root: memo.root };
+            return memo.root;
+        }
+    }
+    const root = await smt.buildFull(entries);
+    _stakesMemo = { chain, network, blockIndex, digest, root };
+    return root;
 }
 
 // ---- Block-content Merkle root (§5) -----------------------------------------
@@ -742,7 +858,7 @@ async function computeAndStoreRoots(db, chain, network, blockIndex, isActivation
     let stakesRoot = EMPTY_ROOT_HEX;
     if(chain === 'BTC'){
         const stakeEntries = await gatherStakeEntries(db, blockIndex);
-        stakesRoot = await smt.buildFull(stakeEntries);
+        stakesRoot = await buildStakesRoot(smt, chain, network, blockIndex, stakeEntries);
     }
 
     const extraSubRoots   = SUB.gateSubRoots(await reservedSubRootCandidates(db, chain, network, blockIndex), blockIndex, network, chain);
@@ -796,6 +912,8 @@ module.exports = {
     shadowSubRoots,
     getNetBalance,
     gatherStakeEntries,
+    buildStakesRoot,
+    resetStakesMemo,
     computeBlockMerkleRoot,
     buildFullBalancesRoot,
     computeAndStoreRoots,

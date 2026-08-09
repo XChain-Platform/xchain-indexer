@@ -40,6 +40,7 @@ const Utility                = require('../../src/utility');
 const Database               = require('../../src/db');
 const XChainIndexer          = require('../../src/XChainIndexer');
 const { blockMayReadPrice }  = require('../../src/priceReadPredicate');
+const { rethrowIfInfraFault } = require('../../src/actions/faultGuard');
 
 const INDEXER_SRC = fs.readFileSync(
     path.resolve(__dirname, '../../src/XChainIndexer.js'), 'utf8');
@@ -204,6 +205,26 @@ describe(' action-scoped price barrier', function () {
             });
             // The retry must take the barrier, or the block would skip again and loop.
             assert.strictEqual(db.indexer.priceBarrierForceBlock, 959864);
+        });
+
+        // : the deferral fires INSIDE action catches that swallow deterministic
+        // contract failures (xexec's execution catch, the XCALL/ATTEST callback catches).
+        // Those catches re-throw only what faultGuard classes as infrastructure, and a
+        // thrown string carries neither a code nor an errno, so the deferral was absorbed
+        // as a per-call 'error' verdict and the block committed instead of retrying.
+        it('carries the PRICE_BARRIER_DEFERRED code that faultGuard propagates', function () {
+            const db = makeDb();
+            db.indexer.priceBarrierSkipped = true;
+            let caught = null;
+            db.runInTxEpoch(0, () => {
+                try { db._assertPriceBarrierNotSkipped('getOracleDataForVM'); }
+                catch (e) { caught = e; }
+            });
+            assert.ok(caught instanceof Error, 'the deferral must be an Error, not a bare string');
+            assert.strictEqual(caught.code, 'PRICE_BARRIER_DEFERRED');
+            assert.throws(() => rethrowIfInfraFault(caught), /price barrier skipped/,
+                'every swallowing action catch runs its caught error through this gate, so ' +
+                'the gate is what decides between a block retry and a committed verdict');
         });
 
     });

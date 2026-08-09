@@ -219,7 +219,9 @@ class Database {
         // transaction that would otherwise collide with live block processing on the shared
         // transactionConnection. Simple non-reentrant async mutex: beginTransaction acquires,
         // commit/rollback release. Held only during active processing (barrier stalls happen
-        // before beginTransaction), so it never blocks on a stalled indexer.
+        // before beginTransaction), so it never blocks on a stalled indexer - but it IS held
+        // for the whole of a block's processing, so a waiter behind a slow block waits that
+        // long. Public read-only callers therefore bound the wait (, _acquireTxLock).
         this._txLock = { locked: false, queue: [] };
 
         // Watchdog-fence epoch (M-16). Monotonic counter identifying the current DB
@@ -1257,19 +1259,58 @@ class Database {
 
     // Acquire the transaction mutex (this._txLock). Resolves once the lock is held.
     // Non-reentrant: a single flow must not call this twice before releasing.
-    _acquireTxLock(){
+    //
+    // `timeoutMs` bounds the WAIT . Unset keeps the block loop's unbounded queue,
+    // which is the only correct behaviour for a caller that must eventually run. A public
+    // read-only caller passes a budget instead, because queueing behind a whole block's
+    // processing is what turned a fee quote into a 25-40s hang and then an explorer 502:
+    // the quote's own time box only ever covered the dry-run, never the wait in front of it.
+    // Rejects with code TX_LOCK_BUSY, before any connection work, so the caller can answer
+    // "busy, retry" in milliseconds.
+    _acquireTxLock(timeoutMs){
         if(!this._txLock.locked){
             this._txLock.locked = true;
             return Promise.resolve();
         }
-        return new Promise(resolve => this._txLock.queue.push(resolve));
+        let waiter = { settled: false, grant: null };
+        if(!(Number(timeoutMs) > 0)){
+            return new Promise(resolve => {
+                waiter.grant = resolve;
+                this._txLock.queue.push(waiter);
+            });
+        }
+        return new Promise((resolve, reject) => {
+            let timer = setTimeout(() => {
+                if(waiter.settled) return;
+                // Stays in the queue but marked settled; _releaseTxLock skips it. Splicing
+                // here would be O(n) on every give-up for no benefit.
+                waiter.settled = true;
+                let e = new Error('transaction lock busy: waited ' + Number(timeoutMs) +
+                    'ms for the database transaction mutex (block processing holds it)');
+                e.code = 'TX_LOCK_BUSY';
+                reject(e);
+            }, Number(timeoutMs));
+            // Never let a queued waiter's timer alone hold the process open.
+            if(timer.unref) timer.unref();
+            waiter.grant = () => { clearTimeout(timer); resolve(); };
+            this._txLock.queue.push(waiter);
+        });
     }
 
-    // Release the transaction mutex, handing it to the next waiter (if any).
+    // Release the transaction mutex, handing it to the next LIVE waiter. A waiter that
+    // already timed out  is skipped rather than granted: handing the lock to a
+    // caller that has given up would strand it held with nothing left to release it, which
+    // would wedge block processing permanently - a far worse failure than the slow quote
+    // the budget exists to bound.
     _releaseTxLock(){
-        let next = this._txLock.queue.shift();
-        if(next) next();
-        else this._txLock.locked = false;
+        while(this._txLock.queue.length > 0){
+            let next = this._txLock.queue.shift();
+            if(next.settled) continue;
+            next.settled = true;
+            next.grant();
+            return;
+        }
+        this._txLock.locked = false;
     }
 
     // The DB transaction epoch active right now (M-16). The block loop reads this
@@ -1328,19 +1369,31 @@ class Database {
     // mirror reads run on this exact path). No stored context = an API / healthcheck read,
     // which is free to read whatever the mirror currently holds and is never fenced. That
     // scoping is what stops a concurrent api.js fee quote from tripping a consensus guard.
+    // The deferral is thrown as a typed Error carrying PRICE_BARRIER_DEFERRED, because the
+    // readers this backstop fires on sit INSIDE action catches that swallow deterministic
+    // contract failures (xexec's execution catch, the XCALL/ATTEST callback catches). A bare
+    // string carries no code and no errno, so faultGuard read it as a contract outcome and the
+    // block committed a validator-local 'error' verdict instead of retrying with the barrier
+    // (: every injected XEXEC on a transaction-less block recorded result_status='error'
+    // while healthy peers recorded 'ok'). The code is what makes rethrowIfInfraFault propagate.
     _assertPriceBarrierNotSkipped(site){
         if(txEpochStore.getStore() === undefined) return;
         const ix = this.indexer;
         if(!ix || !ix.priceBarrierSkipped) return;
         // Escalate THIS block: the retry must not skip again, or it loops forever.
         ix.priceBarrierForceBlock = ix.priceBarrierBlock;
-        this.util.throwError('price barrier skipped  but ' + site + ' read the price mirror at block ' +
+        const err = new Error('price barrier skipped  but ' + site + ' read the price mirror at block ' +
             ix.priceBarrierBlock + '; deferring the block so it re-runs with the barrier enforced');
+        err.code = 'PRICE_BARRIER_DEFERRED';
+        this.util.throwError(err);
     }
 
-    // Handle beginning a SQL transaction
-    async beginTransaction(){
-        await this._acquireTxLock();
+    // Handle beginning a SQL transaction.
+    // `opts.acquireTimeoutMs`  time-boxes the wait for the transaction mutex and
+    // throws TX_LOCK_BUSY instead of queueing; unset (every block-loop and reorg caller)
+    // keeps the unbounded wait.
+    async beginTransaction(opts){
+        await this._acquireTxLock(opts && opts.acquireTimeoutMs);
         if(this.transactionConnection != null)
             await this.releaseConnection();
         try {

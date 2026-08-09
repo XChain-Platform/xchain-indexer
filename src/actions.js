@@ -109,6 +109,22 @@ function classifyFeeQuoteAction(action){
     return 'quotable';
 }
 
+// How long a public read-only dry-run waits for the block-processing transaction mutex before
+// giving up . The default is deliberately well under the explorer's own 5s hop cap,
+// because the whole point is that the indexer's structured "busy, retryable" answer wins the
+// race against the proxy's transport timeout: losing it is what turned a block-processing
+// overlap into a bare 502 UPSTREAM_ERROR and a refused compose in the wallet. It is also
+// comfortably above a healthy block's processing time, so on a healthy venue nothing changes.
+// Raising it past the hop cap re-creates the 502 it removes.
+function feeQuoteAcquireBudgetMs(){
+    return parseInt(process.env.INDEXER_FEEQUOTE_ACQUIRE_TIMEOUT_MS, 10) || 2000;
+}
+
+// True for the give-up thrown by a bounded transaction-mutex acquire (db._acquireTxLock).
+function isTxLockBusy(e){
+    return !!(e && e.code === 'TX_LOCK_BUSY');
+}
+
 // Load indexer actions
 const address          = require('./actions/address.js');
 const airdrop          = require('./actions/airdrop.js');
@@ -702,10 +718,16 @@ class Actions {
     // pre-action state inside the same transaction the handler runs in. Advisory only: it
     // never changes the verdict, and it degrades to null rather than failing the run.
     //
+    // `acquireTimeoutMs` (optional, ) time-boxes the WAIT for the transaction mutex,
+    // which `timeoutMs` never covered: it bounds the run only, and the run cannot start until
+    // the block loop hands the mutex over. Set by the public read-only surfaces so they answer
+    // busy-and-retryable rather than queueing behind a whole block; throws TX_LOCK_BUSY, with
+    // no transaction opened and nothing to unwind.
+    //
     // Returns { blockIndex, blockTime, status, error, xchainFee, sourceFeeBalance } where
     // xchainFee is the handler-recorded fee ('0' for a valid zero-fee action, null when the
     // run never got far enough to stage one).
-    async _dryRunAction({ action, params, source, feeOutputs, probeFeeDestination, timeoutMs, label, guardInert, feeProbe, feeBalanceTick }){
+    async _dryRunAction({ action, params, source, feeOutputs, probeFeeDestination, timeoutMs, acquireTimeoutMs, label, guardInert, feeProbe, feeBalanceTick }){
         let blockIndex = await this.indexerDb.getLatestBlockIndex();
         let blockTime  = await this.indexerDb.getBlockTime(blockIndex);
 
@@ -750,7 +772,9 @@ class Actions {
         let status = null, feeRecord = null, dryRunError = null, sourceFeeBalance = null;
         // beginTransaction acquires the db transaction mutex (serializes against block processing
         // and reorgs); the finally guarantees rollback + lock release even on a handler throw.
-        await this.indexerDb.beginTransaction();
+        // Outside the try on purpose: a TX_LOCK_BUSY give-up opened no transaction, so it must
+        // not reach the rollback below.
+        await this.indexerDb.beginTransaction({ acquireTimeoutMs: acquireTimeoutMs });
         // Fence the dry-run's writes to THIS transaction's epoch (M-16), same as the block
         // loop: on watchdog timeout the finally below rolls back and bumps the epoch, but the
         // abandoned processTransaction can still resume and try to write on the shared
@@ -1106,6 +1130,7 @@ class Actions {
                 error: 'fee quote busy (' + maxPending + ' quotes already pending); retry shortly' });
 
         let timeoutMs = parseInt(process.env.INDEXER_FEEQUOTE_TIMEOUT_MS, 10) || 10000;
+        let acquireMs = feeQuoteAcquireBudgetMs();
         this._feeQuotePending = (this._feeQuotePending || 0) + 1;
         let run;
         try {
@@ -1113,6 +1138,7 @@ class Actions {
                 action, params, source,
                 probeFeeDestination: feeDestination,
                 timeoutMs: timeoutMs,
+                acquireTimeoutMs: acquireMs,
                 label: 'feequote ' + action,
                 // Public unauthenticated path: a controller guard must never enter the VM
                 // here (see _invokeController). feequotedryrun deliberately omits this.
@@ -1120,6 +1146,18 @@ class Actions {
                 // No transaction exists yet, so output-matching fee checks are unanswerable.
                 feeProbe: true
             });
+        } catch(e){
+            // Block processing still holds the transaction mutex . The admission cap
+            // above cannot see this: it counts pending QUOTES, so a single quote arriving
+            // during a slow block sailed past it and then waited out the whole block. Answer
+            // the same retryable busy shape, in the budget rather than in block-time, so the
+            // caller retries instead of reading a proxy timeout as an outage.
+            if(isTxLockBusy(e))
+                return Object.assign(base, { valid: false, busy: true, retryable: true,
+                    retryAfterMs: acquireMs,
+                    error: 'fee quote busy (the indexer is processing a block; waited ' + acquireMs +
+                           'ms for the database transaction lock); retry shortly' });
+            throw e;
         } finally {
             this._feeQuotePending--;
         }
@@ -1293,6 +1331,7 @@ class Actions {
                 error: 'pre-flight busy (' + maxPending + ' dry-runs already pending); retry shortly' });
 
         let timeoutMs = parseInt(process.env.INDEXER_FEEQUOTE_TIMEOUT_MS, 10) || 10000;
+        let acquireMs = feeQuoteAcquireBudgetMs();
         this._feeQuotePending = (this._feeQuotePending || 0) + 1;
         let run;
         try {
@@ -1300,6 +1339,7 @@ class Actions {
                 action, params, source,
                 probeFeeDestination: (resolvedMode === 'native') ? probeDest : null,
                 timeoutMs: timeoutMs,
+                acquireTimeoutMs: acquireMs,
                 label: 'preflight ' + action,
                 guardInert: true,
                 // Same reason as computeFeeQuote, and it bites harder here: this surface
@@ -1308,6 +1348,16 @@ class Actions {
                 feeProbe: true,
                 feeBalanceTick: feeTick
             });
+        } catch(e){
+            // Same give-up as computeFeeQuote : block processing holds the mutex, so
+            // answer busy-and-retryable in the budget rather than queueing behind the block.
+            // Never memoized - a busy answer is the absence of a verdict, not a verdict.
+            if(isTxLockBusy(e))
+                return Object.assign(base, { valid: null, busy: true, retryable: true,
+                    retryAfterMs: acquireMs,
+                    error: 'pre-flight busy (the indexer is processing a block; waited ' + acquireMs +
+                           'ms for the database transaction lock); retry shortly' });
+            throw e;
         } finally {
             this._feeQuotePending--;
         }

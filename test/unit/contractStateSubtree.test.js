@@ -130,7 +130,17 @@ class FakeDb {
             throw new Error('injected DB fault');
         if(sql.indexOf('state_tree_nodes') !== -1){
             if(sql.indexOf('INSERT') === 0 || sql.indexOf('INSERT') > -1 && sql.indexOf('SELECT') === -1){
-                if(!this.nodes.has(args[0])) this.nodes.set(args[0], { left_hash: args[1], right_hash: args[2] });
+                // Consume args in (hash, left, right) TRIPLES, not just the first
+                // one: DbNodeStore.putMany batches a whole path into one multi-row
+                // INSERT IGNORE . Reading only args[0..2] would store row
+                // one and silently drop the rest, and a fake that drops writes does
+                // not fail loudly - _descend reads a missing node as an EMPTY
+                // subtree, so the next block emits a truncated root that still
+                // looks like a hash. That is the exact fault this file's own
+                // `smt()` comment warns about, arriving through the DB fake instead.
+                for(let i = 0; i + 2 < args.length; i += 3)
+                    if(!this.nodes.has(args[i]))
+                        this.nodes.set(args[i], { left_hash: args[i + 1], right_hash: args[i + 2] });
                 return [];
             }
             const n = this.nodes.get(args[0]);

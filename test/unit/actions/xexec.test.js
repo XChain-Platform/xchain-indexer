@@ -266,4 +266,40 @@ describe('Xexec (XEXEC) @regression @tier3', function () {
         const [, , , status] = indexer.indexerDb.recordCrossChainCallExecution.firstCall.args;
         assert.strictEqual(status, 'error');
     });
+
+    // . XEXEC is injected by the end-of-block cross-chain pass, so it runs on
+    // blocks that carry no transaction at all: exactly the blocks priceReadPredicate
+    // lets skip the hub price-mirror barrier. The injected EXECUTE then reads the
+    // mirror (native-fee sizing, oracle.getPrice), db._assertPriceBarrierNotSkipped
+    // fires, and the whole point of that assertion is a rollback plus a retry with the
+    // barrier enforced. The catch above must not convert it into a per-call verdict:
+    // on a live isolated regtest venue it did, and all 28 calls of a burst recorded
+    // result_status='error' while the mirror was merely a moment behind.
+    describe('infra faults halt the block instead of recording a verdict', function () {
+
+        const infra = (code, errno) => {
+            const e = new Error(code || ('driver fault ' + errno));
+            if (code)  e.code  = code;
+            if (errno) e.errno = errno;
+            return e;
+        };
+
+        for (const [label, err] of [
+            ['a VM host fault',                     infra('EXECUTOR_UNAVAILABLE')],
+            ['a DB driver fault (deadlock 1213)',   infra(null, 1213)],
+            ['the  price-barrier deferral',   infra('PRICE_BARRIER_DEFERRED')],
+        ]) {
+            it(label + ' PROPAGATES and records no execution', async function () {
+                sinon.stub(ed25519, 'verify').returns(true);
+                executeStub.parse.rejects(err);
+                await assert.rejects(
+                    handler.parse(null, Object.assign(ctx(), { CALL: makeDispatch() }), null),
+                    (e) => e === err);
+                assert.ok(indexer.indexerDb.recordCrossChainCallExecution.notCalled,
+                    'a node-local fault must never become the relayed result of a ' +
+                    'money-bearing call: the block rolls back and retries instead');
+            });
+        }
+
+    });
 });
