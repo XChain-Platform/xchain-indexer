@@ -48,7 +48,9 @@ async function ownerMap() {
 }
 
 describe('Genesis Dump Import @regression', function () {
-    this.timeout(120000);
+    // Three cold indexer inits (verifyTables builds ~60 tables each) put the
+    // byte-identity case at ~125s on a real DB, past the old 120s ceiling.
+    this.timeout(600000);
 
     before(async function () {
         process.env.XCHAIN_GENESIS_BLOCK = String(GENESIS_BLOCK);
