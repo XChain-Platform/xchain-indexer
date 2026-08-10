@@ -69,6 +69,41 @@ const ALLOWED_CHAINS = ['BTC', 'LTC', 'DOGE'];
 // registration in src/protocol_changes.js and _retireUndeliverableResult below.
 const ORPHAN_RETIREMENT_GATE = 'XCALL_RESULT_ORPHAN_RETIREMENT';
 
+// call_id preimage fields, in preimage order. This list is the single in-file
+// source of truth for the ORDER and the COUNT, so a skew against the VM's
+// derivation is one visible edit rather than a miscounted string concatenation
+// (the  fork class). Exported and pinned against the canonical
+// xchain-vm GOLDEN_VECTORS.callId tuple by bin/check-preimage-golden-parity.js.
+const CALL_ID_PREIMAGE_FIELDS = [
+    'NETWORK', 'COIN', 'TX_HASH', 'ROOT_ACTION_INDEX',
+    'CONTRACT_INDEX', 'EMITTER_PATH', 'EMITTER_POSITION', 'TARGET_CHAIN'
+];
+
+// Leading text of the call_id mismatch status. Kept as a stable prefix so the
+// diagnostic tail below can be extended without breaking status matching.
+const CALL_ID_MISMATCH_ERROR = 'invalid: CALL_ID (does not match deterministic derivation)';
+
+// index_statuses.status is VARCHAR(250); an over-long status is cut by MariaDB at
+// a length that varies with sql_mode, so the tail is budgeted here instead.
+const STATUS_MAX_LENGTH = 250;
+
+// Diagnostic tail for a call_id mismatch. The bare error cannot tell a forged
+// call_id from a VM/indexer preimage skew, which is the failure the operator
+// actually needs to distinguish, so the field count, both hash heads and the
+// preimage itself are recorded. Deterministic on every node (all inputs are
+// chain data or node-uniform config) and budget-capped, never DB-truncated.
+function callIdMismatchStatus(values, expected, supplied){
+    const head16 = (h) => String(h == null ? '' : h).toLowerCase().substring(0, 16);
+    const open   = ' [fields=' + values.length +
+                   ' expected=' + head16(expected) +
+                   ' got='      + head16(supplied) +
+                   ' preimage=';
+    const budget   = STATUS_MAX_LENGTH - CALL_ID_MISMATCH_ERROR.length - open.length - 1;
+    const preimage = values.join(':');
+    const shown    = preimage.length <= budget ? preimage : preimage.substring(0, budget - 1) + '~';
+    return CALL_ID_MISMATCH_ERROR + open + shown + ']';
+}
+
 class Xcall {
 
     constructor(action){
@@ -83,6 +118,23 @@ class Xcall {
         this.formats = {};
         this.formats[0] = 'VERSION|CALL_ID|TARGET_CHAIN|TARGET_CONTRACT_INDEX|METHOD|PARAMS_JSON|GAS_LIMIT|CALLBACK_METHOD|CALLBACK_PARAMS_JSON|DEADLINE_BLOCKS|CROSS_HOPS';
         this.formats[2] = 'VERSION|CALL_ID';
+    }
+
+    // Stringified call_id preimage values, in CALL_ID_PREIMAGE_FIELDS order.
+    // NETWORK and COIN come from node config (uniform across the fleet); the rest
+    // are chain data, so every node derives the same bytes.
+    _callIdPreimageValues(data){
+        const src = {
+            NETWORK:           this.config['NETWORK'],
+            COIN:              this.config['COIN'],
+            TX_HASH:           data['TX_HASH'],
+            ROOT_ACTION_INDEX: data['ROOT_ACTION_INDEX'],
+            CONTRACT_INDEX:    data['CONTRACT_INDEX'],
+            EMITTER_PATH:      data['EMITTER_PATH'],
+            EMITTER_POSITION:  data['EMITTER_POSITION'],
+            TARGET_CHAIN:      data['TARGET_CHAIN']
+        };
+        return CALL_ID_PREIMAGE_FIELDS.map((f) => String(src[f]));
     }
 
     // Dispatch on VERSION
@@ -209,14 +261,15 @@ class Xcall {
             } else if(!data['TX_HASH']){
                 error = 'invalid: TX_HASH (required for call_id derivation)';
             } else {
-                let preimage = String(this.config['NETWORK']) + ':' + String(this.config['COIN']) + ':' +
-                               String(data['TX_HASH']) + ':' + String(data['ROOT_ACTION_INDEX']) + ':' +
-                               String(data['CONTRACT_INDEX']) + ':' + String(data['EMITTER_PATH']) + ':' +
-                               String(data['EMITTER_POSITION']) + ':' +
-                               String(data['TARGET_CHAIN']);
+                // Assembled through CALL_ID_PREIMAGE_FIELDS so order and count live in
+                // one declared list; the joined bytes are identical to the former
+                // hand-written concatenation (NETWORK:COIN:TX_HASH:ROOT_ACTION_INDEX:
+                // CONTRACT_INDEX:EMITTER_PATH:EMITTER_POSITION:TARGET_CHAIN).
+                let values   = this._callIdPreimageValues(data);
+                let preimage = values.join(':');
                 let expected = crypto.createHash('sha256').update(preimage).digest('hex');
                 if(expected !== String(data['CALL_ID']).toLowerCase())
-                    error = 'invalid: CALL_ID (does not match deterministic derivation)';
+                    error = callIdMismatchStatus(values, expected, data['CALL_ID']);
             }
         }
 
@@ -658,3 +711,7 @@ module.exports.XCALL_MAX_DEADLINE_BLOCKS = XCALL_MAX_DEADLINE_BLOCKS;
 module.exports.XCALL_MAX_CALLS_PER_BLOCK = XCALL_MAX_CALLS_PER_BLOCK;
 module.exports.XCALL_RESULT_ORPHAN_GRACE_SECONDS = XCALL_RESULT_ORPHAN_GRACE_SECONDS;
 module.exports.ORPHAN_RETIREMENT_GATE           = ORPHAN_RETIREMENT_GATE;
+module.exports.CALL_ID_PREIMAGE_FIELDS          = CALL_ID_PREIMAGE_FIELDS;
+module.exports.CALL_ID_MISMATCH_ERROR           = CALL_ID_MISMATCH_ERROR;
+module.exports.STATUS_MAX_LENGTH                = STATUS_MAX_LENGTH;
+module.exports.callIdMismatchStatus             = callIdMismatchStatus;

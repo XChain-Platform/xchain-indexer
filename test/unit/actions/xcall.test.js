@@ -168,6 +168,61 @@ describe('Xcall (XCALL) @regression @tier3', function () {
             assert.match(data['STATUS'], /CALL_ID \(does not match/);
         });
 
+        // : a bare mismatch cannot tell a forged call_id from a VM/indexer
+        // preimage skew. The status carries the field count, both hash heads and the
+        // preimage, so the operator reads the cause off the rejected row.
+        it('the mismatch status carries the field count, both hash heads and the preimage', async function () {
+            const data = v0Data();
+            await handler.parse(v0Params('e'.repeat(64)), data, null);
+            const status   = data['STATUS'];
+            const expected = goodCallId(data);
+            assert.ok(status.startsWith(Xcall.CALL_ID_MISMATCH_ERROR),
+                'the stable prefix must survive so status matching keeps working');
+            assert.ok(status.includes('fields=' + Xcall.CALL_ID_PREIMAGE_FIELDS.length),
+                'status must name the preimage field count: ' + status);
+            assert.ok(status.includes('expected=' + expected.substring(0, 16)), status);
+            assert.ok(status.includes('got=' + 'e'.repeat(16)), status);
+            assert.ok(status.includes('preimage=regtest:BTC:' + data['TX_HASH'] + ':100:5:0:0:DOGE]'),
+                'status must carry the exact preimage the handler hashed: ' + status);
+        });
+
+        it('the mismatch status fits index_statuses.status without DB truncation', async function () {
+            const data = v0Data();
+            await handler.parse(v0Params('e'.repeat(64)), data, null);
+            assert.ok(data['STATUS'].length <= Xcall.STATUS_MAX_LENGTH,
+                'status is ' + data['STATUS'].length + ' chars, over the VARCHAR(' +
+                Xcall.STATUS_MAX_LENGTH + ') column');
+        });
+
+        it('an over-long preimage truncates deterministically inside the status budget', function () {
+            // A pathological EMITTER_PATH cannot overflow the column: the tail budgets
+            // the preimage itself rather than letting MariaDB cut the string.
+            const values = ['regtest', 'BTC', 'f'.repeat(64), '100', '42', '9'.repeat(400), '0', 'DOGE'];
+            const status = Xcall.callIdMismatchStatus(values, 'a'.repeat(64), 'b'.repeat(64));
+            assert.strictEqual(status.length, Xcall.STATUS_MAX_LENGTH);
+            assert.ok(status.endsWith('~]'), 'a budgeted cut must be marked: ' + status.slice(-24));
+        });
+
+        // The preimage field ORDER and COUNT are the consensus contract with
+        // xchain-vm/src/gateway-emit.js (crossExecute). Pinned literally here, and by
+        // bin/check-preimage-golden-parity.js against the same canonical order, so a
+        // field-count skew fails a suite instead of silently forking the fleet.
+        it('the declared call_id preimage fields match the xchain-vm order exactly', function () {
+            assert.deepStrictEqual(Xcall.CALL_ID_PREIMAGE_FIELDS, [
+                'NETWORK', 'COIN', 'TX_HASH', 'ROOT_ACTION_INDEX',
+                'CONTRACT_INDEX', 'EMITTER_PATH', 'EMITTER_POSITION', 'TARGET_CHAIN'
+            ]);
+            // The golden preimage must split into exactly that many fields; none of the
+            // golden values contains the ':' separator, so the count is unambiguous.
+            const gv = GOLDEN_CALL_ID.input;
+            const preimage = [gv.network, gv.coin, gv.txHash, gv.rootActionIndex,
+                              gv.contractIndex, gv.emitterPath, gv.emitterPosition,
+                              gv.targetChain].map(String).join(':');
+            assert.strictEqual(preimage.split(':').length, Xcall.CALL_ID_PREIMAGE_FIELDS.length);
+            assert.strictEqual(crypto.createHash('sha256').update(preimage).digest('hex'),
+                GOLDEN_CALL_ID.expected);
+        });
+
         it('the derivation binds network + source chain + target chain', async function () {
             const data = v0Data();
             // Same inputs but derived for LTC target; must be rejected for a DOGE call.
