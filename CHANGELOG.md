@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- AIRDROP recipient membership is set-backed instead of two O(n^2) array scans on the synchronous per-block path ().
+- FIAT dispenser settlement batches its historical oracle-price lookups instead of one query per row in a serial await loop ().
+- Dispenser close and expire refunds are gated on a terminal-status predicate that fails open on unknown statuses, so escrow cannot be refunded twice ().
+- Standalone indexes for the bet cancel and resolve tables ship as a new dated migration, since restating them inside the applied one would break every operator migrate run ().
+- A constants header no longer describes three governance params as live-polled when a hub outage silently freezes them ().
 - `CORS_ORIGIN` now accepts a comma-separated allowlist matched per-origin, instead of echoing a multi-value header that no browser accepts .
 - Corrected the protocol-constants oracle-federation header, which claimed the mirrored constants were ungated while the hub-side mirror guard covers this copy (, ).
 - PRICE v0, ATTEST v1 and NODEPROOF validation resolve signer capability in one batched query instead of a DB round-trip per signer ().

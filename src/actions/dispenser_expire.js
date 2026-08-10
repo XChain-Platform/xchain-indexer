@@ -72,8 +72,11 @@ class Dispenser_Expire {
                 let currentEscrow = await this.indexerDb.getTokenEscrow(dispenser['GIVE_TICK']);
                 if(Number(currentEscrow) === Number(dispenser['ACTION_INDEX']))
                     await this.indexerDb.clearTokenEscrow(dispenser['GIVE_TICK']);
-            } else if(this.util.bcgt(dispenser['GIVE_REMAINING'], 0)){
+            } else if(!this.util.isDispenserSettled(dispenser['DISPENSER_STATUS']) &&
+                      this.util.bcgt(dispenser['GIVE_REMAINING'], 0)){
                 // Balance dispenser: debit GIVE_TICK from escrows and credit it to the SOURCE address.
+                // Gated on the dispenser not having settled already: GIVE_REMAINING is derived and no
+                // close/expire reduces it, so a re-settlement would refund it twice (util.isDispenserSettled).
                 // Negate via bcsub, not JS unary minus: -GIVE_REMAINING coerces the 64-precision
                 // bignumber string to a float and silently loses digits past ~15 sig figs, de-syncing
                 // the escrow debit from the full-precision credit below (mirrors dispense.js). Negate

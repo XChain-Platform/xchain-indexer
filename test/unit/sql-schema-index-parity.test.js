@@ -225,6 +225,44 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
             unledgered.join('\n'));
     });
 
+    // #4076: the seam BETWEEN the two carve-outs above. The inverse guard exempts a
+    // ledger-created table because its CREATE TABLE is the ledger record, and the sibling
+    // column-parity case compares that CREATE TABLE body byte-for-byte, so an inline
+    // `KEY` on such a table really is covered. A STANDALONE `CREATE INDEX ... ON` is not:
+    // it sits outside the body the byte compare reads (normalizeCreateBody stops at
+    // `) ENGINE...`) and outside the inverse guard's reach, so it was checked by nothing.
+    // Two migrations then disagreed about it - 2026-07-28-escrow-leaf-journal-table.sql
+    // restated its standalone indexes, 2026-07-26-bet-cancel-resolve-status-tables.sql
+    // omitted all eight of bet_cancels/bet_resolves' and left them to the boot-time
+    // reconciler. The reconciler is a repair path, not the schema contract: it heals only
+    // standalone CREATE INDEX, so it does not generalize, and a shape change to any of
+    // those eight would have landed on the definition path with no test watching.
+    it('a ledger-created table restates its definition\'s STANDALONE indexes in a dated migration', function(){
+        const ledgerCreated  = collectLedgerCreatedTables();
+        const migrationAdded = new Set(collectMigrationIndexes().map(a => a.table + '.' + a.index));
+
+        const missing = [];
+        for(const file of fs.readdirSync(SQL_DIR).filter(f => f.endsWith('.sql'))){
+            const raw = fs.readFileSync(path.join(SQL_DIR, file), 'utf8');
+            for(const m of raw.matchAll(/CREATE\s+(UNIQUE\s+)?INDEX\s+`?(\w+)`?\s+on\s+`?(\w+)`?/gi)){
+                const table = m[3], index = m[2].toLowerCase();
+                if(!ledgerCreated.has(table)) continue;                 // covered by the inverse guard above
+                if(migrationAdded.has(table + '.' + index)) continue;
+                missing.push(`  ${table}.${index}  <- src/sql/${file}`);
+            }
+        }
+
+        assert.deepStrictEqual(missing, [],
+            'These tables are CREATEd by a dated migration, and their definition declares these indexes as ' +
+            'a STANDALONE CREATE INDEX - which the migration-created-table body compare in ' +
+            'sql-schema-column-parity.test.js cannot see (it stops at the ENGINE tail) and the inverse ' +
+            'guard above skips. No parity check covers them, so the two schema paths can diverge on them ' +
+            'unobserved. Restate each one in a dated migration with CREATE INDEX IF NOT EXISTS, matching ' +
+            'the definition\'s name, column list and UNIQUE flag (the shape case above then enforces the ' +
+            'match). Do NOT edit the migration that already created the table: an applied migration is ' +
+            'immutable and its checksum is the ledger - ship a new dated file:\n' + missing.join('\n'));
+    });
+
     it('sanity: the index baseline is neither empty nor stale (guard is not vacuous)', function(){
         const fixture  = JSON.parse(fs.readFileSync(INDEX_BASELINE, 'utf8'));
         const baseline = fixture.baseline || {};

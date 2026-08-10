@@ -29,6 +29,20 @@ const HubDbSync = require('../../src/hub_db_sync.js');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/* Poll `predicate` until it holds or the deadline passes; returns what it last
+ * saw. Use this for a case that asserts an event DID happen: a fixed sleep long
+ * enough to be safe on a loaded box is dead time on every other run, and one
+ * short enough to be quick is the flake. A case asserting an event did NOT
+ * happen has nothing to poll and keeps its fixed settle. */
+async function waitFor(predicate, maxMs = 5000, intervalMs = 25) {
+    const deadline = Date.now() + maxMs;
+    while (Date.now() < deadline) {
+        if (predicate()) return true;
+        await sleep(intervalMs);
+    }
+    return predicate();
+}
+
 describe('HubDbSync watchdog measures transport not processing (ITEM 2477) @regression @tier2', function () {
     this.timeout(15000);
 
@@ -85,7 +99,7 @@ describe('HubDbSync watchdog measures transport not processing (ITEM 2477) @regr
         const terminateSpy = sinon.spy(sync.ws, 'terminate');
 
         // Send NO further frames after 'ready'. Idle grows past the 150ms timeout.
-        await sleep(350);
+        await waitFor(() => terminateSpy.called);
 
         assert.strictEqual(terminateSpy.called, true,
             'a half-open socket that stops delivering frames must still be terminated');

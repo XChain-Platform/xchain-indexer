@@ -166,8 +166,12 @@ class XChainIndexer {
         // startup overlay and every poll tick that gets a response, regardless of whether the
         // committed config actually changed. Stays null until the first success. Surfaced as
         // an age in the health/status endpoints so an operator can tell that a hub outage has
-        // left the live-polled governance params (ACTIVATION_DELAY_BLOCKS, EXPIRATION_FEE_PER_DAY,
-        // STAKING) silently frozen while the indexer keeps reporting healthy.
+        // left the live-applied overlay params (the tunable/display-only ones) stale while the
+        // indexer keeps reporting healthy. This age measures hub reachability, nothing more.
+        // Consensus params (ACTIVATION_DELAY_BLOCKS, EXPIRATION_FEE_PER_DAY, STAKING) are NOT
+        // live-polled at any time: they are read once at boot from the per-chain local config
+        // and change only by a coordinated node upgrade, so a hub outage cannot freeze them
+        // (_mergeHubParams excludes them deliberately; health.js states the same).
         this.lastHubConfigFetchAt = null;
 
         // Last hub-config change signals seen. seq = PBFT-committed change counter (0 on a

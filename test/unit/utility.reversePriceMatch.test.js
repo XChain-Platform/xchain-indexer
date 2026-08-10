@@ -148,17 +148,47 @@ describe('Utility FIAT dispenser price matching @regression', function () {
         it('prices the coin at the ORACLE row effective time, not at block time', async function () {
             // The validator price must be contemporaneous with the oracle quote,
             // otherwise a stale pairing settles at a rate neither side published.
-            const db = fakeDb([snap('15000000', NOW - 600)], [oracle('7.50', NOW - 600)]);
-            await util.reverseOraclePriceMatch(
+            // Asserted on the OUTCOME, not on the query bounds: the validator rows are read
+            // in one batch and paired in memory, so a snapshot NEWER than the oracle row is
+            // present in the batch and must still lose to the contemporaneous one.
+            const db = fakeDb(
+                [snap('99999999', NOW - 10), snap('15000000', NOW - 600)],
+                [oracle('7.50', NOW - 600)]
+            );
+            const r = await util.reverseOraclePriceMatch(
                 '0.001', '1OracleAddr', 'BTC', 'PEPECASH', 'JPY', NOW, WINDOW, db);
-            const call = db.calls.prices[0];
-            assert.strictEqual(call.endTime, NOW - 600, 'coin price is fetched as of the oracle effective_at');
-            assert.strictEqual(call.startTime, NOW - 600 - WINDOW);
+            assert(r, 'expected a match');
+            assert.strictEqual(r.coinFiatPrice, '15000000',
+                'a snapshot newer than the oracle effective_at must never be paired with it');
+        });
+
+        it('reads the validator prices in ONE batched query, not one per oracle row', async function () {
+            // The oracle publisher decides how many PRICE v1 rows land inside the window (each
+            // a cheap wallet broadcast), so a per-row validator query let a counterparty scale
+            // the DB round-trips every later DISPENSE against that oracle costs. Five in-window
+            // oracle rows, none affordable, so the loop runs to exhaustion: still one read.
+            const db = fakeDb(
+                [snap('1', NOW - 700)],
+                [oracle('999999999', NOW - 100, 5), oracle('999999999', NOW - 200, 4),
+                 oracle('999999999', NOW - 300, 3), oracle('999999999', NOW - 400, 2),
+                 oracle('999999999', NOW - 500, 1)]
+            );
+            const r = await util.reverseOraclePriceMatch(
+                '0.001', '1OracleAddr', 'BTC', 'PEPECASH', 'JPY', NOW, WINDOW, db);
+            assert.strictEqual(r, null, 'no oracle row is affordable');
+            assert.strictEqual(db.calls.prices.length, 1,
+                'the validator prices must be read once, not once per oracle row');
+            // The batch has to reach a full priceWindow behind the OLDEST oracle row the loop
+            // can see, or a legitimate pairing at the far edge of the window is silently lost.
+            assert.strictEqual(db.calls.prices[0].startTime, NOW - 2 * WINDOW);
+            assert.strictEqual(db.calls.prices[0].endTime, NOW);
         });
 
         it('skips an oracle row that has no validator price behind it', async function () {
             // First (newest) oracle row has no coin price in its own window; the
-            // loop must continue rather than failing the whole dispense.
+            // loop must continue rather than failing the whole dispense. The batched
+            // read spans two windows, so the NOW-100000 snapshot IS in the fetched set:
+            // this pins that the per-row lower bound still excludes it.
             const db = fakeDb(
                 [snap('15000000', NOW - 100000)],
                 [oracle('7.50', NOW - 10), oracle('7.50', NOW - 90000)]
@@ -166,7 +196,7 @@ describe('Utility FIAT dispenser price matching @regression', function () {
             const r = await util.reverseOraclePriceMatch(
                 '0.001', '1OracleAddr', 'BTC', 'PEPECASH', 'JPY', NOW, WINDOW, db);
             assert.strictEqual(r, null, 'the second row is outside the oracle window, so no match');
-            assert.strictEqual(db.calls.prices.length, 1, 'only the in-window oracle row is priced');
+            assert.strictEqual(db.calls.prices.length, 1, 'one batched validator read');
         });
 
         it('returns the newest affordable oracle quote', async function () {

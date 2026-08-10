@@ -73,9 +73,10 @@ const RETRACTION_COLUMNS = {
 };
 
 // ── Watermark grace margins: frozen protocol constants ( / Package 12) ──
-// The three barrier grace margins (seconds) are NOT operational timeouts: they
+// The four barrier grace margins (seconds) are NOT operational timeouts: they
 // decide WHEN the block-loop consensus barriers open via the stream-watermark
-// escape (_priceSyncSatisfied / _oracleSyncSatisfied / the match+call barriers).
+// escape (_priceSyncSatisfied / _oracleSyncSatisfied / _matchSyncSatisfied /
+// _callSyncSatisfied).
 // A per-node divergence forks settlement: operator A with grace 60 settles a
 // block without a retroactive-effective-time row that lands inside the window
 // while operator B with grace 600 waits and settles it differently. An
@@ -91,6 +92,14 @@ const HUB_SYNC_WATERMARK_GRACE_S = Object.freeze({
     price:  600,
     oracle: 600,
     match:  120,
+    // Calls carry their OWN margin, currently equal to match's, because the two
+    // producers stamp effective_time differently: CrossChainDexEngine stamps the
+    // finalization instant (_nowSeconds()) while CrossChainCallEngine stamps
+    // now + a forward relay margin. Sharing match's value silently coupled a call
+    // barrier to a match producer's timing. Changing this NUMBER is a protocol
+    // change: every node must move in lockstep, reconciled against the hub's
+    // call-stamping path first.
+    call:   120,
 });
 
 // Resolve one grace margin. `frozen` is the pinned protocol constant; `envKey`
@@ -343,12 +352,13 @@ class HubDbSync {
         // price rounds finalize via PBFT some time after their anchor block, and
         // matches are stamped with the hub's wall clock (skew only).
         this.streamWatermark      = 0;
-        // Frozen protocol constants (600/600/120), env-overridable only on regtest;
+        // Frozen protocol constants (600/600/120/120), env-overridable only on regtest;
         // off-regtest the override is ignored with a warning and a bad value throws.
         // See HUB_SYNC_WATERMARK_GRACE_S / resolveWatermarkGrace above .
         this.priceWatermarkGraceS  = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.price,  'HUB_SYNC_PRICE_GRACE_S',  this.network);
         this.oracleWatermarkGraceS = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.oracle, 'HUB_SYNC_ORACLE_GRACE_S', this.network);
         this.matchWatermarkGraceS  = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.match,  'HUB_SYNC_MATCH_GRACE_S',  this.network);
+        this.callWatermarkGraceS   = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.call,   'HUB_SYNC_CALL_GRACE_S',   this.network);
 
         // Watermark advancement is gated on a completed bootstrap: WS heartbeats
         // certify only what was delivered ON THE SOCKET, so until the REST
@@ -1675,13 +1685,18 @@ class HubDbSync {
     _callSyncSatisfied(blockTime) {
         if (this.callBootstrapped && this.callSyncTimestamp === null) return true;
         if (this.callSyncTimestamp !== null && this.callSyncTimestamp >= blockTime) return true;
-        // Stream watermark escape: calls are stamped with the hub's wall clock at
-        // finalization and broadcast immediately (same producer pattern as
-        // matches), so a watermark past this block's time plus the grace means
+        // Stream watermark escape: a relay row is broadcast the moment the hub
+        // finalizes it, so a watermark past this block's time plus the grace means
         // every relay row effective at/before it is already local. Without this
         // the FIRST cross-chain call anywhere would freeze every replica until
         // the next one arrived (the #1984 bug class).
-        if (this.callBootstrapped && this.streamWatermark >= blockTime + this.matchWatermarkGraceS) return true;
+        //
+        // Uses callWatermarkGraceS, NOT the match grace it used to borrow: the two
+        // producers stamp effective_time differently (CrossChainCallEngine stamps
+        // now + a forward relay margin, so a call row lands ahead of the time it
+        // applies at; CrossChainDexEngine stamps the finalization instant), so the
+        // two barriers must be tunable apart even while the values are equal.
+        if (this.callBootstrapped && this.streamWatermark >= blockTime + this.callWatermarkGraceS) return true;
         return false;
     }
 

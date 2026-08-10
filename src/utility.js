@@ -2269,6 +2269,28 @@ class Utility {
         }
     }
 
+    // True when a dispenser's LATEST lifecycle status says a settlement already ran.
+    //
+    // Guards the escrow refund in dispenser_close.js / dispenser_expire.js. GIVE_REMAINING is
+    // DERIVED (give_escrow + edits - valid dispenses) and a close/expire writes no row that
+    // reduces it, so a second settlement of the same dispenser recomputes the identical non-zero
+    // remaining and refunds it AGAIN: the recipient is double-credited and the global escrow sum
+    // goes negative, tripping the supply SanityError in updateAddressBalances and crash-looping
+    // the indexer. No caller reaches that today (getExpiredItems filters 'open',
+    // findCancelledDispensers filters 'cancelling'), so this changes no live path; it moves the
+    // once-only invariant from the callers into the code that actually moves escrow, next to the
+    // ownership branch's getTokenEscrow===ACTION_INDEX guard.
+    //
+    // Stated as terminal states rather than as the live set ('open','cancelling', the pair
+    // findMatchingDispensers uses): a status this list has not heard of must still be REFUNDED,
+    // because skipping a legitimate first refund strands a user's escrow and forks the chain,
+    // while missing a novel terminal state only leaves today's latent hazard in place. Any new
+    // status a settlement handler writes belongs here; dispenser-settlement-idempotency.test.js
+    // pins the four that exist.
+    isDispenserSettled(status){
+        return ['cancelled', 'closed', 'empty', 'expired', 'max_dispenses_reached'].includes(String(status));
+    }
+
     // Reverse price match for user TOKEN/FIAT oracles (PRICE v1)
     // Given a coin payment amount and a user oracle reference, find the most recent oracle
     // price within the window where the buyer can afford at least 1 token unit.
@@ -2307,14 +2329,29 @@ class Utility {
         let oraclePrices = await priceDb.getOraclePricesInTimeRange(oracleAddress, coin, tick, fiat, startTime, blockTime);
         if(!oraclePrices || oraclePrices.length === 0) return null;
 
-        // For each historical oracle price, also fetch the validator's COIN/FIAT price at the same effective time
+        // Fetch the validator's COIN/FIAT prices ONCE, then pair each oracle row in memory.
+        //
+        // One batched read, not one per oracle row: the oracle publisher decides how many PRICE v1
+        // rows land inside the window (each a cheap wallet broadcast), so a per-row query let a
+        // counterparty scale the DB round-trips this settlement path costs on every later DISPENSE.
+        //
+        // The batched window is [startTime - priceWindow, blockTime] because each oracle row's own
+        // lower bound reaches priceWindow behind its effective_at, and the OLDEST row this loop can
+        // see sits at startTime. Consensus-equivalence: the per-row result was this same query
+        // narrowed to [effectiveAt - priceWindow, effectiveAt], i.e. an order-preserving subsequence
+        // of the batched result, so the first batched row inside those bounds IS the row the per-row
+        // query returned at [0]. That holds whatever order the query returns and does not re-derive
+        // "newest", so it cannot fork on an ordering assumption.
         let coinPair = (this.isNull(payCoin) ? coin : payCoin) + '/' + fiat;
+        let validatorPrices = await priceDb.getPricesInTimeRange(coinPair, startTime - priceWindow, blockTime);
+        if(!validatorPrices || validatorPrices.length === 0) return null;
         for(let op of oraclePrices){
-            // Get the validator price at the time this oracle price was effective
-            // (use the earliest available validator price at or before the oracle's effective_at)
-            let validatorPrices = await priceDb.getPricesInTimeRange(coinPair, op.effectiveAt - priceWindow, op.effectiveAt);
-            if(!validatorPrices || validatorPrices.length === 0) continue;
-            let coinFiatPrice = validatorPrices[0].price;
+            // Keep the per-row LOWER bound: a validator price older than effectiveAt - priceWindow
+            // is inside the batched fetch but was never eligible, and settling on it would price the
+            // dispense at a stale rate.
+            let match = validatorPrices.find(p => p.timestamp <= op.effectiveAt && p.timestamp >= op.effectiveAt - priceWindow);
+            if(!match) continue;
+            let coinFiatPrice = match.price;
 
             // Compute: tokens = (coin_amount × coin_fiat_price) / token_fiat_price
             let coinFiatTotal = this.bcmul(coinAmount, coinFiatPrice, 18);

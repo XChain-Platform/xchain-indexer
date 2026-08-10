@@ -13,8 +13,8 @@
  **********************************************************************
  * test/unit/hub_db_sync_grace_resolver.test.js
  *
- * Watermark-grace resolver ( / Package 12). The three barrier grace
- * margins are frozen protocol constants (600/600/120): a per-node divergence
+ * Watermark-grace resolver ( / Package 12). The four barrier grace
+ * margins are frozen protocol constants (600/600/120/120): a per-node divergence
  * forks settlement, and a NaN value wedges the tip via `blockTime + NaN`. The
  * resolver pins the constants, ignores env overrides off-regtest with a loud
  * warning (mirroring resolveFeeDestination), honors them only on regtest for
@@ -30,7 +30,8 @@ const sinon  = require('sinon');
 
 const HubDbSync = require('../../src/hub_db_sync.js');
 
-const GRACE_ENV = ['HUB_SYNC_PRICE_GRACE_S', 'HUB_SYNC_ORACLE_GRACE_S', 'HUB_SYNC_MATCH_GRACE_S'];
+const GRACE_ENV = ['HUB_SYNC_PRICE_GRACE_S', 'HUB_SYNC_ORACLE_GRACE_S', 'HUB_SYNC_MATCH_GRACE_S',
+                   'HUB_SYNC_CALL_GRACE_S'];
 
 function clearGraceEnv() {
     for (const k of GRACE_ENV) delete process.env[k];
@@ -48,12 +49,37 @@ describe('HubDbSync watermark-grace resolver  @regression @tier1', function () {
         sinon.restore();
     });
 
-    it('defaults to the frozen protocol constants 600/600/120 when no env is set', function () {
+    it('defaults to the frozen protocol constants 600/600/120/120 when no env is set', function () {
         clearGraceEnv();
         const sync = makeSync('mainnet');
         assert.strictEqual(sync.priceWatermarkGraceS, 600);
         assert.strictEqual(sync.oracleWatermarkGraceS, 600);
         assert.strictEqual(sync.matchWatermarkGraceS, 120);
+        assert.strictEqual(sync.callWatermarkGraceS, 120);
+    });
+
+    // The call barrier used to borrow matchWatermarkGraceS, which silently coupled it
+    // to a producer that stamps effective_time differently. Moving one must not move
+    // the other, so the barriers stay tunable apart even at equal values.
+    it('the call grace resolves independently of the match grace', function () {
+        clearGraceEnv();
+        process.env.HUB_SYNC_MATCH_GRACE_S = '30';
+        const sync = makeSync('regtest');
+        assert.strictEqual(sync.matchWatermarkGraceS, 30);
+        assert.strictEqual(sync.callWatermarkGraceS, 120, 'the call barrier keeps its own frozen constant');
+    });
+
+    it('the call barrier reads callWatermarkGraceS, not the match grace', function () {
+        clearGraceEnv();
+        const sync = makeSync('mainnet');
+        sync.callBootstrapped  = true;
+        sync.callSyncTimestamp = 500;          // below blockTime, so only the escape can open it
+        sync.matchWatermarkGraceS = 0;         // a match-grace read would open the barrier here
+        sync.callWatermarkGraceS  = 100;
+        sync.streamWatermark      = 1050;
+        assert.strictEqual(sync._callSyncSatisfied(1000), false, 'watermark under blockTime + call grace');
+        sync.streamWatermark      = 1100;
+        assert.strictEqual(sync._callSyncSatisfied(1000), true, 'watermark at blockTime + call grace opens it');
     });
 
     it('regtest honors a valid env override (test tunability)', function () {

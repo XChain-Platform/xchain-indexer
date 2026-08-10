@@ -136,8 +136,12 @@ class Airdrop {
             // Guard gas fee billed to SOURCE for this leg (0 = uncontrolled token)
             let guardFee = 0;
 
-            // Array of addresses that will receive this AIRDROP
-            let recipients = [];
+            // Set of addresses that will receive this AIRDROP. A Set, not an array: membership is
+            // tested once per holder and a list can carry thousands of addresses (see mapper.js), so
+            // an array made dedup O(n^2) on the synchronous per-block path. Set over a plain object
+            // (the dividend.js/callback.js idiom) because insertion order is guaranteed, keeping the
+            // credit order below deterministic for consensus.
+            let recipients = new Set();
 
             // Placeholder for list and list type
             let type = false,
@@ -220,16 +224,14 @@ class Airdrop {
                 for(let tick of list){
                     if(type==1)
                         holders = await this.indexerDb.getHolders(tick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
-                    for(let address in holders){
-                        if(recipients.indexOf(address)==-1)
-                            recipients.push(address);
-                    }
+                    for(let address in holders)
+                        recipients.add(address);   // Set.add is already idempotent, so no membership test
                 }
             }
 
             // Handle ADDRESS LIST by passing forward addresses to recipients list
             if(!error && type==2)
-                recipients = list;
+                recipients = new Set(list);
 
             // Verify TICK action is allowed from SOURCE (allow/block lists)
             if(!error && await this.indexerDb.isActionAllowed(airdrop['SOURCE'], airdrop['TICK']) == false)
@@ -243,7 +245,7 @@ class Airdrop {
 
             // Fetch TICK's allow/block lists ONCE before the recipient loop, then check membership in
             // memory, mirroring isActionAllowed()'s no-block_index decision exactly (approved set unchanged).
-            let approved = [];
+            let approved = new Set();
             let hasAllowList = tokenInfo && !this.util.isNull(tokenInfo['ALLOW_LIST']) && this.util.isNumeric(tokenInfo['ALLOW_LIST']);
             let hasBlockList = tokenInfo && !this.util.isNull(tokenInfo['BLOCK_LIST']) && this.util.isNumeric(tokenInfo['BLOCK_LIST']);
             let recipientAllowList = hasAllowList ? await this.indexerDb.getList(tokenInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : null;
@@ -251,7 +253,7 @@ class Airdrop {
 
             // Verify airdrop is allowed to recipient (allow/block lists)
             for(let address of recipients){
-                if(approved.indexOf(address)!=-1)
+                if(approved.has(address))
                     continue;
                 let allowed = true;
                 // False if we have an ALLOW_LIST and address is NOT on it
@@ -261,26 +263,26 @@ class Airdrop {
                 if(allowed && recipientBlockList && recipientBlockList.includes(address))
                     allowed = false;
                 if(allowed)
-                    approved.push(address);
+                    approved.add(address);
             }
 
             // Update recipients list to only do airdrops to addresses which allow it
             recipients = approved;
 
             // Determine total DEBIT
-            airdrop['DEBIT'] = (!error) ? this.util.bcmul(recipients.length, airdrop['AMOUNT'], tokenInfo['DECIMALS']) : 0;
+            airdrop['DEBIT'] = (!error) ? this.util.bcmul(recipients.size, airdrop['AMOUNT'], tokenInfo['DECIMALS']) : 0;
 
             // Determine total transaction FEE
             let unifiedFees = await this.actions.protocolChanges.isEnabled('UNIFIED_FEES', data['BLOCK_INDEX']);
             if(unifiedFees){
                 // Unified gas schedule: per-recipient gas
-                let result = this.util.getUnifiedTransactionFee(recipients.length, 'AIRDROP_PER_RECIPIENT');
+                let result = this.util.getUnifiedTransactionFee(recipients.size, 'AIRDROP_PER_RECIPIENT');
                 fees['GAS_COST']    = result.gasCost;
                 fees['AMOUNT']      = result.fee;
                 fees['FEE_VERSION'] = 2;
             } else {
                 // Legacy: database hits model
-                let db_hits  = recipients.length * 2;
+                let db_hits  = recipients.size * 2;
                     db_hits += 3;
                 fees['AMOUNT'] = this.util.getTransactionFee(db_hits, fees['TICK']);
             }
