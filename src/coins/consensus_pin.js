@@ -51,10 +51,18 @@ module.exports = {
         // REGENERATED 2026-08-06 (): folding `firstBlock` into
         // consensusSubset() changes every hash by construction, same one-wave rollout
         // rule as the wireFormat fold above. Mainnet stays null (Phase 6 arms it).
+        //
+        // REGENERATED 2026-08-10 (fresh testnet genesis, operator): testnet
+        // `firstBlock` moved to just under the live tip on all three chains
+        // (BTC 138000 -> 147500, LTC 4765000 -> 4855000, DOGE 64800000 -> 67815000),
+        // wiping the old testnet chain state. firstBlock is in consensusSubset, so
+        // all three testnet hashes move and the one-wave rule above applies in full.
+        // Regtest and mainnet are untouched, and their hashes were re-verified
+        // against the canonical files as unchanged by this edit.
         testnet: {
-            BTC:  'a04af39cd9d3d332a6c043c02e0920075857078437cb46c7d07c9da143d1b551',
-            LTC:  '185dddc98eb5c94d9069f006a9acb1b1fd6f2772b0a91a6b68a6e0ceddcba778',
-            DOGE: '860422244b1317a2a125d38a49358fc01d639d9a50c173828235787368884610',
+            BTC:  '1e45a958ff9eb6a88be8684e3801b57e7afcfc9031f7761e4f4b1dcf1c8d42a9',
+            LTC:  '888818a874d6d8acb3363355089f0de601c355b63fc8431a44ef666f91615202',
+            DOGE: 'ea3ee0d1407959f3cb59e4baf66b50dfc2ada9962351e578d7c6d8586e6ff905',
         },
 
         regtest: {

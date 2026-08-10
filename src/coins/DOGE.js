@@ -92,7 +92,13 @@ module.exports = {
                 supportsSegwit:       false,
                 singleOpReturnPolicy: true,
             },
-            firstBlock: 64800000,
+            // Fresh testnet genesis 2026-08-10 (operator): was 64800000, which is
+            // ~3.02M blocks behind the tip and ~21 hours of replay - the single
+            // reason this genesis is worth doing. Raised to just under the live
+            // tip (67819590 at the decision) so replay is minutes. Consensus input
+            // (folded into consensusSubset), so it moves the DOGE testnet pin and
+            // ships in one wave with every other vendoring service.
+            firstBlock: 67815000,
             addresses: {
                 BURN:            'nchainburnaddressXXXXXXXXXXXYKgF7W',
                 GAS:             'ngasn6zHFzJ72zpk3DBKmXhD2XtszujSDW',

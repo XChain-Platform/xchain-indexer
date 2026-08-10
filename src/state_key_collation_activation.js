@@ -71,9 +71,14 @@ const STATE_KEY_COLLATION_ACTIVATION = {
     'BTC:mainnet':  962500,     // ARMED 2026-07-10 at tip 957491 (~Aug 13; ~10 days past Cohort-B 961000)
     'LTC:mainnet':  3160000,    // ARMED 2026-07-10 at tip 3140024 (~Aug 14)
     'DOGE:mainnet': 6335000,    // ARMED 2026-07-10 at tip 6284614 (~Aug 15)
-    'BTC:testnet':  146000,     // ARMED 2026-07-10 at tip 143700 (~Jul 27; after state_commitment 145000)
-    'LTC:testnet':  4890000,    // ARMED 2026-07-10 at tip 4814284 (~Jul 24)
-    'DOGE:testnet': 67500000,   // ARMED 2026-07-10 at tip 66619530 (fast chain; ~Jul 31, after state_commitment 67000000)
+    // Testnet is genesis-active as of the 2026-08-10 fresh testnet genesis. LTC was
+    // the one entry still ahead of the new firstBlock (4890000 > 4855000); BTC and
+    // DOGE were already behind it and are zeroed with it so the map reads as one
+    // rule rather than three coincidences. The documented ordering still holds:
+    // state_commitment is genesis-active too, so this never precedes it.
+    'BTC:testnet':  0,
+    'LTC:testnet':  0,
+    'DOGE:testnet': 0,
     regtest: 0,                 // armed from genesis: fresh regtest stacks exercise the binary path end to end
 };
 

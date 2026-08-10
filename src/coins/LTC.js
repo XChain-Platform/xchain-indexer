@@ -87,7 +87,12 @@ module.exports = {
                 minStandardTxNonWitnessSize: 85,
                 singleOpReturnPolicy:        true,
             },
-            firstBlock: 4765000,
+            // Fresh testnet genesis 2026-08-10 (operator): was 4765000. Raised to
+            // just under the live tip (4855452 at the decision) so the chain
+            // starts effectively empty and replays in seconds. Consensus input
+            // (folded into consensusSubset), so it moves the LTC testnet pin and
+            // ships in one wave with every other vendoring service.
+            firstBlock: 4855000,
             addresses: {
                 BURN:            'mxchainburnaddressXXXXXXXXXXa8EAfp',
                 GAS:             'mgashLN9oSvj2CUJYKWdNxh6VkamPg1Ges',

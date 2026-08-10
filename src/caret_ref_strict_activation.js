@@ -73,9 +73,13 @@ const CARET_REF_STRICT_ACTIVATION = {
     'BTC:mainnet':  963000,     // tip 959,853 (2026-07-27) + 21d @144/day = 962,877
     'LTC:mainnet':  3162000,    // tip 3,149,481 + 21d @576/day = 3,161,577
     'DOGE:mainnet': 6338000,    // tip 6,307,307 + 21d @1440/day = 6,337,547
-    'BTC:testnet':  149500,     // tip 145,963; keeps the wider existing margin
-    'LTC:testnet':  4837000,    // tip 4,824,850 had already PASSED the old 4,823,000
-    'DOGE:testnet': 68000000,   // fast chain, wide margin; tip 67,789,569
+    // Testnet is genesis-active as of the 2026-08-10 fresh testnet genesis: the
+    // chain restarts at firstBlock (BTC 147500 / LTC 4855000 / DOGE 67815000) with
+    // no pre-rule history to preserve, so a mid-chain boundary would gate nothing
+    // and only risk a fleet-split at a height nobody needs.
+    'BTC:testnet':  0,
+    'LTC:testnet':  0,
+    'DOGE:testnet': 0,
     regtest: 0,                 // armed from genesis: fresh regtest stacks exercise the reject end to end
 };
 

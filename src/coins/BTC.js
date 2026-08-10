@@ -138,7 +138,12 @@ module.exports = {
                 minStandardTxNonWitnessSize: 82,
                 singleOpReturnPolicy:        true,
             },
-            firstBlock: 138000,
+            // Fresh testnet genesis 2026-08-10 (operator): was 138000. Raised to
+            // just under the live tip (147799 at the decision) so the chain starts
+            // effectively empty and replays in seconds. Consensus input (folded
+            // into consensusSubset), so it moves the BTC testnet pin and ships in
+            // one wave with every other vendoring service.
+            firstBlock: 147500,
             addresses: {
                 BURN:            'mxchainburnaddressXXXXXXXXXXa8EAfp',
                 GAS:             'mgassdEpzH2AuKGK9W5FZh8drWYKrpXk6D',
