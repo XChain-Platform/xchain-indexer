@@ -367,6 +367,23 @@ class Dispenser {
         if(!error && format!=0 && dispenserInfo['DISPENSER_STATUS']!='open')
             error = 'invalid: DISPENSER_ACTION_INDEX (dispenser not open)';
 
+        // An ownership dispenser never holds balance escrow, on edit as on create.
+        // isOwnershipGive is format-0 only, so a format-2 edit of an ownership
+        // dispenser fell through as an ordinary refill: it debited GIVE_ESCROW
+        // (below) while both terminal paths take the GIVE_OWNERSHIP branch that
+        // credits nothing back (dispenser_close.js / dispenser_expire.js), stranding
+        // the balance and breaking deposit = dispensed + remaining + refunded.
+        // Mirrors the create-time rule verbatim rather than widening
+        // isOwnershipGive, which would route these edits through the create-time
+        // ownership block and wrongly reject expiration-only or list-only edits on
+        // its isOwnershipEscrowed check. Gated with the dispenser-family cohort,
+        // like MAX_REFILLS below, so replay below the flag-day stays byte-identical
+        // ().
+        if(!error && format==2 && Number(dispenserInfo['GIVE_OWNERSHIP']||0)==1 &&
+           !this.util.isNull(data['GIVE_ESCROW']) &&
+           dispenserCaps.isDispenserCapsActive(data['BLOCK_TIME'], this.config['NETWORK']))
+            error = "invalid: GIVE_ESCROW (must be empty when GIVE_OWNERSHIP=1)";
+
         // MAX_REFILLS cap (dispenser_caps_activation.js / ). A refill is a
         // format-2 DISPENSER_EDIT that tops up GIVE_ESCROW; each refill resets the
         // dispense count (derived since the last refill in dispense.js), and the 6th

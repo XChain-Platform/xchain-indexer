@@ -11394,6 +11394,24 @@ class Database {
     // caller can group each logical reward and reconcile the smallest-pubkey winner across a
     // failover double-publish. NOT-EXISTS-scoped so a group already derived is skipped and a
     // reorg that block-scoped-deletes the reward at snapshot_block re-exposes it for replay.
+    //
+    // The exclusion is PUBLISHER-scoped, not round-scoped (). A round-scoped
+    // `NOT EXISTS (... reward_type + round_reference)` drops the WHOLE round the moment any
+    // publisher is derived, so a failover publisher whose attestation mirrors in AFTER that
+    // first derive is never inserted and reconcileAnchorRewardWinner never compares it. The
+    // smallest-pubkey winner rule is then order-dependent: a node (or a from-genesis replay)
+    // that saw both publishers in one fetch keeps MIN(pubkey), while a node that saw the
+    // smaller one late keeps the larger - divergent COLLECT credit with no self-healing path,
+    // since this is the only surviving materialization path at/above the derive flag-day.
+    // Comparing against the already-derived pubkey restores order-independence: an attestation
+    // that would LOSE to (sorts >= ) a derived winner stays excluded, so a settled round never
+    // re-derives, while one that would WIN is re-admitted, inserted, and collapses the round to
+    // the true minimum. Self-terminating - after the promotion the new winner excludes both.
+    // Compared under the shared utf8_general_ci collation, the same one MIN(pk.pubkey) in
+    // reconcileAnchorRewardWinner elects, so the two predicates cannot disagree. Driven
+    // against a real MariaDB in test/integration/anchor-reward-late-publisher.test.js: the
+    // unit tier stubs doQuery, and doQuery swallows a non-transactional query error, so a
+    // shape-only test cannot tell this predicate from one that derives nothing at all.
     async getPendingAnchorRewardAttestations(network, maxSnapshotBlock){
         return await this.doQuery(
             'SELECT ara.chain, ara.network, ara.reward_type, ara.round_reference, ara.snapshot_block, ' +
@@ -11401,8 +11419,10 @@ class Database {
             '  FROM anchor_reward_attestations ara ' +
             ' WHERE ara.network = ? AND ara.snapshot_block <= ? ' +
             '   AND NOT EXISTS (SELECT 1 FROM validator_rewards vr ' +
+            '                     JOIN index_pubkeys pk ON pk.id = vr.signing_pubkey_id ' +
             '                    WHERE vr.reward_type = ara.reward_type ' +
-            '                      AND vr.round_reference = ara.round_reference) ' +
+            '                      AND vr.round_reference = ara.round_reference ' +
+            '                      AND pk.pubkey <= LOWER(ara.publisher)) ' +
             ' ORDER BY ara.reward_type, ara.round_reference, ara.publisher, ara.id',
             [network, maxSnapshotBlock]);
     }

@@ -498,6 +498,60 @@ describe('Dispenser action handler @regression @tier2', function () {
                 assert.strictEqual(data['STATUS'], 'valid', 'below the flag-day the legacy uncapped behavior must run');
             });
         });
+
+        // Ownership dispensers hold no balance escrow, on edit as on create ().
+        // A format-2 refill used to debit GIVE_ESCROW while close/expire took the
+        // GIVE_OWNERSHIP branch that credits nothing back, stranding the balance.
+        // Gated on the same dispenser-family cohort as MAX_REFILLS above.
+        describe('GIVE_ESCROW on an ownership dispenser', function () {
+
+            it('rejects a format-2 refill of an ownership dispenser (cohort active, regtest genesis)', async function () {
+                indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({ GIVE_OWNERSHIP: 1 }));
+                const params = makeParams(`2|50|20|${EXPIRATION + 86400}|||`);   // GIVE_ESCROW=20 top-up
+                const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 2, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+                await dispenser.parse(params, data, false);
+
+                assert.ok(data['STATUS'].includes('GIVE_ESCROW'),
+                    'a refill of an ownership dispenser must be rejected: ' + data['STATUS']);
+                sinon.assert.notCalled(indexer.indexerDb.updateBalances);
+            });
+
+            it('still allows an expiration-only edit of an ownership dispenser', async function () {
+                indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({ GIVE_OWNERSHIP: 1 }));
+                const params = makeParams(`2|50||${EXPIRATION + 86400}|||`);     // GIVE_ESCROW empty
+                const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 2, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+                await dispenser.parse(params, data, false);
+
+                assert.strictEqual(data['STATUS'], 'valid',
+                    'an ownership dispenser must stay editable for expiration and lists');
+            });
+
+            it('leaves a balance-dispenser refill untouched', async function () {
+                indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({ GIVE_OWNERSHIP: 0 }));
+                const params = makeParams(`2|50|20|${EXPIRATION + 86400}|||`);
+                const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 2, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+                await dispenser.parse(params, data, false);
+
+                assert.strictEqual(data['STATUS'], 'valid');
+            });
+
+            it('below the cohort flag-day (mainnet block_time < 1786060800): legacy accept', async function () {
+                actionsCtx.config = Object.assign({}, indexer.config, { NETWORK: 'mainnet', COIN: 'BTC' });
+                dispenser = new Dispenser(actionsCtx);
+                indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({ GIVE_OWNERSHIP: 1 }));
+                const params = makeParams(`2|50|20|${EXPIRATION + 86400}|||`);
+                // BLOCK_TIME 1700000000 < 1786060800 => cohort inactive
+                const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 2, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+                await dispenser.parse(params, data, false);
+
+                assert.strictEqual(data['STATUS'], 'valid',
+                    'below the flag-day historical replay must stay byte-identical');
+            });
+        });
     });
 
     describe('Unknown format', function () {

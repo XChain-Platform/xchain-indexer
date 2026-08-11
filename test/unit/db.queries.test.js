@@ -4219,3 +4219,36 @@ describe('Database.getActiveStakeWeights() @regression @tier1', function () {
         assert.deepStrictEqual(out, []);
     });
 });
+
+// getPendingAnchorRewardAttestations: the derive fetch gate ( Option C).
+// The unit tier stubs the DB, so the predicate itself is the only thing a test at this
+// tier can pin - and the predicate is exactly what decides whether a late failover
+// publisher ever reaches reconcileAnchorRewardWinner ().
+//
+// SHAPE ONLY, deliberately. doQuery is stubbed here, so nothing below proves the SQL
+// parses, joins a column that exists, or actually re-admits a late publisher - and
+// doQuery SWALLOWS a non-transactional query error, so a broken predicate would derive
+// NO anchor rewards on a live node while every assertion here stayed green. The
+// semantics are driven against a real MariaDB in
+// test/integration/anchor-reward-late-publisher.test.js; change one and move the other.
+describe('Database.getPendingAnchorRewardAttestations() @regression @tier1', function () {
+    it('excludes a round PER PUBLISHER, so a smaller-pubkey late arrival is re-admitted', async function () {
+        const db = dbWithDoQuery([]);
+        await db.getPendingAnchorRewardAttestations('regtest', 900);
+        const sql = String(db.doQuery.firstCall.args[0]);
+        // The suppression must compare the candidate publisher against the pubkey already
+        // credited, not merely test the round for any credited row: a round-scoped filter
+        // makes the smallest-pubkey winner rule order-dependent across nodes and replays.
+        assert.match(sql, /JOIN\s+index_pubkeys\s+pk\s+ON\s+pk\.id\s*=\s*vr\.signing_pubkey_id/i);
+        assert.match(sql, /pk\.pubkey\s*<=\s*LOWER\(ara\.publisher\)/i);
+        assert.deepStrictEqual(db.doQuery.firstCall.args[1], ['regtest', 900]);
+    });
+
+    it('still matures only attestations at or below the current block, ordered for grouping', async function () {
+        const db = dbWithDoQuery([]);
+        await db.getPendingAnchorRewardAttestations('mainnet', 961000);
+        const sql = String(db.doQuery.firstCall.args[0]);
+        assert.match(sql, /ara\.snapshot_block\s*<=\s*\?/i);
+        assert.match(sql, /ORDER BY ara\.reward_type, ara\.round_reference, ara\.publisher, ara\.id/i);
+    });
+});

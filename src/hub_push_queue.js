@@ -27,9 +27,12 @@
  * `pending_hub_pushes` table. This poller drains that table on a fixed interval,
  * re-sending each row with exponential backoff until the hub accepts it (the
  * hub's pushpriceround / pushoracleprice handlers dedupe, so a replay the hub
- * already has returns cleanly). A row that keeps failing past the attempt cap is
- * marked `failed`, which stops the retries, and the same drain tick sweeps
- * terminal rows once they pass the retention window so the table stays bounded.
+ * already has returns cleanly). A `price_round` row that keeps failing past the
+ * attempt cap is marked `failed`, which stops the retries, and the same drain tick
+ * sweeps terminal rows once they pass the retention window so the table stays
+ * bounded. `oracle_price` and the `*_retraction` rows carry NO cap: neither is
+ * re-derivable from a later block, so they stay `pending` and retry at the max
+ * backoff until the hub takes them (see _attempt).
  *
  ********************************************************************/
 
@@ -178,17 +181,28 @@ class HubPushQueue {
     // Return aggregate queue stats for the health endpoint. Runs a single
     // pooled query so it is safe to call concurrently with drain(). Returns
     // null when the hub is unconfigured (queue never populated).
+    // pendingOldestAgeSec rides the same grouped scan (item 4280). Now that oracle_price
+    // and the retractions retry without a cap, a stalled rail no longer shows up as a
+    // climbing `failed` count; it shows up as a pending backlog that AGES, and without
+    // this field that is invisible. Computed server-side so no host/DB clock skew folds
+    // into the age. Null when nothing is pending.
     async getStats(){
         if(!this.hubClient || !this.hubClient.enabled) return null;
         let rows = await this.indexerDb._poolQuery(
-            `SELECT status, COUNT(*) AS cnt FROM pending_hub_pushes GROUP BY status`
+            `SELECT status, COUNT(*) AS cnt,
+                    TIMESTAMPDIFF(SECOND, MIN(created_at), NOW()) AS oldest_age_sec
+               FROM pending_hub_pushes GROUP BY status`
         );
-        let pending = 0, failed = 0;
+        let pending = 0, failed = 0, pendingOldestAgeSec = null;
         for(let r of (rows || [])){
-            if(r.status === 'pending') pending = Number(r.cnt);
+            if(r.status === 'pending'){
+                pending = Number(r.cnt);
+                if(r.oldest_age_sec !== undefined && r.oldest_age_sec !== null)
+                    pendingOldestAgeSec = Number(r.oldest_age_sec);
+            }
             else if(r.status === 'failed')  failed  = Number(r.cnt);
         }
-        return { pending, failed };
+        return { pending, failed, pendingOldestAgeSec };
     }
 
     async _attempt(row){
@@ -235,19 +249,34 @@ class HubPushQueue {
             console.log('HubPushQueue: delivered ' + row.push_type + ' row ' + row.id + ' (attempt ' + attemptNo + ')');
         } catch (err){
             let msg = String((err && err.message) || err).slice(0, 480);
-            // Reorg retractions must NOT share the best-effort forward-push attempt cap. A forward
-            // price/oracle push is disposable, so retiring it to 'failed' after maxAttempts is fine.
-            // A '*_retraction' row is the ONLY remaining record that the hub must prune an orphaned
+            // Reorg retractions must NOT share the best-effort forward-push attempt cap. A
+            // `price_round` push is re-derivable, so retiring it to 'failed' after maxAttempts is
+            // fine. A '*_retraction' row is the ONLY remaining record that the hub must prune an orphaned
             // range: retiring it (a hub outage overlapping a reorg exhausts the ~10-attempt backoff
             // in under an hour) permanently strands stale prices and 'finalized' XCALL/DEX rows on
             // the hub and every mirror, eligible for re-injection/settlement, with the evidence
             // parked invisibly in a terminal row. Retractions are idempotent and generation-fenced,
             // so retrying forever at the max backoff is safe; keep them 'pending' indefinitely.
-            let isRetraction = typeof row.push_type === 'string' && row.push_type.endsWith('_retraction');
-            let cap = isRetraction ? Number.MAX_SAFE_INTEGER : this.maxAttempts;
+            //
+            // An `oracle_price` row carries the same property and joins them (item 4280). It is a
+            // user-submitted PRICE v1 action keyed by (source_address, source_chain, action_index)
+            // that no later block re-emits, so actions/price.js states plainly that a lost one is
+            // "never re-derivable" and builds this outbox to guarantee it is not lost. The
+            // ~10-attempt cap defeated that guarantee: a hub outage past ~30 minutes retired the
+            // row to 'failed', out of the poller's reach, and _pruneFailed deleted it a week later.
+            // The hub dedupes on that same action key (actions/price.js), so replaying forever is
+            // as safe as it is for a retraction. `price_round` keeps the cap: price.js says it IS
+            // re-derivable, so it stays disposable.
+            //
+            // Retrying forever is only bounded because HubClient resolves TERMINAL hub rejections
+            // rather than throwing them (item 4279): a payload the hub can never accept leaves the
+            // queue on the delivered path, so nothing immortal accumulates here.
+            let isDurable = typeof row.push_type === 'string' &&
+                (row.push_type.endsWith('_retraction') || row.push_type === 'oracle_price');
+            let cap = isDurable ? Number.MAX_SAFE_INTEGER : this.maxAttempts;
             await this.indexerDb.recordHubPushAttempt(row.id, msg, cap);
             console.warn('HubPushQueue: push failed for row ' + row.id +
-                ' (attempt ' + attemptNo + (isRetraction ? '' : '/' + this.maxAttempts) + '): ' + msg);
+                ' (attempt ' + attemptNo + (isDurable ? '' : '/' + this.maxAttempts) + '): ' + msg);
         }
     }
 }

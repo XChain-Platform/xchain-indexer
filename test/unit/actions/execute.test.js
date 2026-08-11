@@ -76,6 +76,10 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             decoderDb: indexer.decoderDb,
             indexerDb: indexer.indexerDb,
             protocolChanges: indexer.protocolChanges,
+            // EXECUTE now fails CLOSED (EXECUTOR_UNAVAILABLE host fault) without a
+            // VM, so the default ctx carries a permissive stub; the fail-closed
+            // describe below drops it to exercise the gate.
+            vm: makeVm(),
         };
         handler = new Execute(actionsCtx);
         indexer.util.resetLists();
@@ -150,13 +154,38 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
 
     });
 
-    describe('valid execution without VM', function () {
+    describe('no VM configured: fail closed, never a committed no-op', function () {
 
-        it('STATUS is valid when no vm is configured', async function () {
+        // A node whose require('xchain-vm') failed used to record this EXECUTE
+        // 'valid' with base gas and no state changes while the rest of the fleet
+        // applied real ones - a host-condition-induced ledger fork. It must now
+        // halt the block instead, exactly as DEPLOY does.
+        it('throws EXECUTOR_UNAVAILABLE instead of committing a valid no-op', async function () {
+            delete actionsCtx.vm;
+            const data = executeData({ FORMAT: 0 });
+            await assert.rejects(
+                handler.parse(['0', String(CONTRACT), 'run', ''], data, null),
+                (e) => e && e.code === 'EXECUTOR_UNAVAILABLE',
+                'a VM-less EXECUTE must halt the block, not commit a no-op'
+            );
+            assert.ok(indexer.indexerDb.createContractExecution.notCalled,
+                'no execution row may be written when the executor is unavailable');
+        });
+
+        // The gate is scoped to runs that would otherwise reach the VM: an EXECUTE
+        // already rejected by a VM-independent rule still records the same verdict
+        // a healthy node records, so a VM-less node does not halt on it.
+        it('does not fire when the run already failed a VM-independent rule', async function () {
+            delete actionsCtx.vm;
+            indexer.indexerDb.isActionAllowed.resolves(false);
             const data = executeData({ FORMAT: 0 });
             await handler.parse(['0', String(CONTRACT), 'run', ''], data, null);
-            assert.strictEqual(data['STATUS'], 'valid');
+            assert.ok(String(data['STATUS']).includes('sleeping'));
         });
+
+    });
+
+    describe('valid execution commit path', function () {
 
         it('createContractExecution always called', async function () {
             const data = executeData({ FORMAT: 0 });
@@ -556,6 +585,7 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
                 decoderDb: localIndexer.decoderDb,
                 indexerDb: localIndexer.indexerDb,
                 protocolChanges: localIndexer.protocolChanges,
+                vm: makeVm(),   // EXECUTE fails closed without one
             };
             const h = new Execute(ctx);
 

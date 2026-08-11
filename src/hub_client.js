@@ -24,6 +24,34 @@ const http  = require('http');
 const https = require('https');
 const url   = require('url');
 
+// Name the hub rejections a REPLAY can never turn into an acceptance (item 4279).
+// A push can fail INSIDE a successful JSON-RPC envelope: PriceAggregator returns
+// { accepted:false, reason } and api.js returns { error:'...' } as an ordinary method
+// result, and _call rejects on neither. Every pattern here judges the PAYLOAD itself,
+// which a queued row replays byte for byte, so retrying only grows the queue. Anything
+// else is retryable, including a reason this list has never seen: a needless retry costs
+// a queue slot, a wrong drop costs a never-re-derivable oracle price (actions/price.js).
+const TERMINAL_HUB_REJECTIONS = [
+    /^duplicate$/i,                        // the hub already holds this action key
+    /^stale \(retracted generation\)$/i,   // ingest fence; it only ever hardens 
+    /^invalid\b/i,                         // structural reject of the payload's own fields
+    /^insufficient quorum\b/i,             // the sigs ride in the payload and never change
+    /\b(is|are) required$/i,               // api.js missing-field guards
+    /^chain must be one of\b/i             // api.js validateChain
+];
+
+// Read the application-level rejection out of a hub result, or null when the call was
+// accepted. Covers BOTH shapes the hub uses: a check on `accepted` alone misses the
+// api.js { error } path, and that path carries the transient failures (a hub still
+// booting its aggregator, an unexpected exception inside a handler).
+function hubRejectionReason(result){
+    if(!result || typeof result !== 'object') return null;
+    if(result.error) return String((result.error && result.error.message) || result.error);
+    if(result.accepted === false)
+        return (typeof result.reason === 'string' && result.reason) ? result.reason : 'rejected';
+    return null;
+}
+
 class HubClient {
 
     constructor(hubUrl, apiKey){
@@ -59,13 +87,13 @@ class HubClient {
     // The hub deduplicates by round_number into the unified price_snapshots table
     async pushPriceRound(roundData){
         if(!this.enabled) return;
-        return this._call('pushpriceround', roundData);
+        return this._requireHubAccepted('pushpriceround', await this._call('pushpriceround', roundData));
     }
 
     // Push a validated PRICE v1 user oracle price to the hub for cross-chain aggregation
     async pushOraclePrice(priceData){
         if(!this.enabled) return;
-        return this._call('pushoracleprice', priceData);
+        return this._requireHubAccepted('pushoracleprice', await this._call('pushoracleprice', priceData));
     }
 
     // Notify the hub that a reorg rolled back PRICE actions on this chain so it can
@@ -84,7 +112,7 @@ class HubClient {
         let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
         if(toActionIndex !== undefined && toActionIndex !== null) params.to_action_index = toActionIndex;
         if(retractionGeneration !== undefined && retractionGeneration !== null) params.retraction_generation = retractionGeneration;
-        return this._call('pushpricereorg', params, this.reorgApiKey);
+        return this._requireHubAccepted('pushpricereorg', await this._call('pushpricereorg', params, this.reorgApiKey));
     }
 
     // Notify the hub that a reorg rolled back XCALL request actions on this chain so it
@@ -102,7 +130,7 @@ class HubClient {
         let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
         if(toActionIndex !== undefined && toActionIndex !== null) params.to_action_index = toActionIndex;
         if(retractionGeneration !== undefined && retractionGeneration !== null) params.retraction_generation = retractionGeneration;
-        return this._call('pushxcallreorg', params, this.reorgApiKey);
+        return this._requireHubAccepted('pushxcallreorg', await this._call('pushxcallreorg', params, this.reorgApiKey));
     }
 
     // Notify the hub that a reorg rolled back DEX ORDER actions on this chain so it can retract
@@ -120,7 +148,30 @@ class HubClient {
         let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
         if(toActionIndex !== undefined && toActionIndex !== null) params.to_action_index = toActionIndex;
         if(retractionGeneration !== undefined && retractionGeneration !== null) params.retraction_generation = retractionGeneration;
-        return this._call('pushdexreorg', params, this.reorgApiKey);
+        return this._requireHubAccepted('pushdexreorg', await this._call('pushdexreorg', params, this.reorgApiKey));
+    }
+
+    // Throw on an application-level hub rejection a retry could still clear, so the durable
+    // outbox RETAINS the row instead of deleting it (item 4279). _call resolves any
+    // error-free JSON-RPC envelope, so before this every rejection read as a delivery:
+    // HubPushQueue._attempt called markHubPushDelivered and XChainIndexer's post-commit
+    // path did the same, which destroyed the only remaining copy of a price the hub had
+    // just refused for a transient reason (no validator snapshot, a hub DB error, an
+    // aggregator still booting). Returns the result untouched when there is nothing wrong.
+    _requireHubAccepted(method, result){
+        let reason = hubRejectionReason(result);
+        if(reason === null) return result;
+        if(TERMINAL_HUB_REJECTIONS.some(rx => rx.test(reason))){
+            // Terminal: a replay carries the same payload into the same verdict, so keep
+            // today's drop. Never silently, though - a rail stopped by the ingest fence is a
+            // standing condition someone has to clear, and  is the log line that says so.
+            console.warn('HubClient: ' + method + ' rejected terminally by the hub (' +
+                reason + '); dropping the queued row');
+            return result;
+        }
+        let err = new Error('hub rejected ' + method + ': ' + reason);
+        err.hubRejection = reason;
+        throw err;
     }
 
     // Make a JSON-RPC 2.0 call to the hub

@@ -174,6 +174,40 @@ try {
     console.log('WARNING: xchain-vm not available; DEPLOY/EXECUTE will not run contract code', e);
 }
 
+// Consensus-runtime gate: refuse to run contracts on an off-pin JS engine.
+//
+// The VM produces some contract-observable bytes (native V8 error text, ICU-backed
+// locale primitives) that are NOT spec-mandated and have changed across engine
+// versions. A contract can route such a value into hashed state, so a validator on
+// an off-pin V8/ICU commits different bytes for the same contract: divergent
+// contract_hash, chain fork. xchain-vm/src/consensus-runtime.js pins the engine for
+// exactly that reason and requires every validator to be gated against the pin.
+//
+// This used to warn and continue, deferring the hard gate to the CI test. CI runs on
+// a build host, not on the validator, so it never protected a running node: both
+// manifests admit every Node 22 release, and any of them could deploy and execute
+// contracts off-pin. Throwing here aborts Actions construction before a single
+// contract handler is wired up, so the process exits loudly (api.js traps the start()
+// rejection and exits 1) instead of forking the chain. Halting over forking is the
+// same call deploy.js/execute.js (EXECUTOR_UNAVAILABLE) and faultGuard.js already make.
+//
+// No bypass flag: the sanctioned way to move the fleet to a new engine is to re-pin
+// consensus-runtime.js, regenerate the determinism manifests and coordinate an atomic
+// fleet activation (consensus-runtime.js, "RE-PINNING IS A CONSENSUS EVENT"), after
+// which this check passes on the new engine. An override would cover no workflow the
+// re-pin does not, while reintroducing the exact fail-open under one env var.
+//
+// The comparison is engine-level (v8/icu/unicode/cldr/modules), never the Node version
+// string, so a Node patch carrying the same engine does not trip it. Pure and
+// dependency-injected so the gate itself is unit-testable.
+function assertConsensusRuntime(vmModule){
+    if(!vmModule || typeof vmModule.checkConsensusRuntime !== 'function')
+        return;
+    const rt = vmModule.checkConsensusRuntime();
+    if(!rt.ok)
+        throw new Error(vmModule.describeRuntimeMismatch(rt));
+}
+
 // Staking actions
 const stake              = require('./actions/stake.js');
 const unstake            = require('./actions/unstake.js');
@@ -286,19 +320,9 @@ class Actions {
             this.vm = null;
         }
 
-        // Consensus-runtime gate (non-fatal): the VM produces some
-        // contract-observable bytes (native V8 error text, ICU-backed
-        // primitives) that are NOT spec-mandated and vary across engine
-        // versions. A validator on an off-pin V8/ICU can commit different
-        // bytes for the same contract → divergent contract_hash → fork. We
-        // warn loudly rather than refuse to start, so an operator notices the
-        // hazard without an engine mismatch silently halting the chain. The
-        // hard gate is the CI test (xchain-vm consensus-runtime-gate.test.js).
-        if(this.vm && typeof XChainVM.checkConsensusRuntime === 'function'){
-            const rt = XChainVM.checkConsensusRuntime();
-            if(!rt.ok)
-                console.log('WARNING: ' + XChainVM.describeRuntimeMismatch(rt));
-        }
+        // Consensus-runtime gate: fail CLOSED on an off-pin engine.
+        if(this.vm)
+            assertConsensusRuntime(XChainVM);
 
         // VM action instances
         this.actionDeploy           = new deploy(this);
@@ -1471,3 +1495,6 @@ module.exports.classifyFeeQuoteAction = classifyFeeQuoteAction;
 module.exports.getFeeQuoteDenylist    = () => new Set(FEE_QUOTE_DENYLIST);
 module.exports.getFeeQuoteExempt      = () => new Set(FEE_QUOTE_EXEMPT);
 module.exports.getFeeQuoteStatic      = () => new Set(FEE_QUOTE_STATIC);
+// Pure consensus-runtime gate, exported so its fail-closed contract is unit-testable
+// without a real off-pin engine.
+module.exports.assertConsensusRuntime = assertConsensusRuntime;

@@ -256,6 +256,25 @@ class Execute {
         // rolls back (no refunds on a failed tree).
         let nestedGasUnused = 0;
 
+        // Fail CLOSED when the VM executor is unavailable, exactly as DEPLOY
+        // (deploy.js: EXECUTOR_UNAVAILABLE) and the controller guard below
+        // (runControllerGuard throws the same code) already do. Without this, a node whose
+        // optional require('xchain-vm') failed (actions.js sets this.vm=null and
+        // only warns) would SKIP the whole VM block below and record this EXECUTE
+        // 'valid' with base gas, no state changes and no emissions, while the rest
+        // of the fleet applies real ones: a host-condition-induced ledger fork.
+        // Throwing EXECUTOR_UNAVAILABLE writes NO verdict at all - faultGuard and
+        // XChainIndexer.js treat the code as an infra halt, so the block rolls back
+        // and retries without committing until the native VM is rebuilt. Placed at
+        // the VM block rather than earlier so an EXECUTE already rejected by a
+        // VM-independent rule still records the same verdict as a healthy node.
+        // No consensus rule changes, so no flag-day is needed.
+        if(!error && contractInfo && !this.actions.vm){
+            let e = new Error('execute VM executor unavailable');
+            e.code = 'EXECUTOR_UNAVAILABLE';
+            throw e;
+        }
+
         if(!error && this.actions.vm && contractInfo){
             // Load contract state from DB. BLOCK_INDEX drives the state_key collation
             // flag-day (binary-collation reload at/after activation, so case-colliding
@@ -598,8 +617,21 @@ class Execute {
         let contractStatus = await this.indexerDb.getStatusString(contractInfo.status_id);
         if(contractStatus !== 'valid')
             return { allow:false, reason:'controller (not active)', gasBilled:0 };
-        if(!this.actions.vm)
-            return { allow:false, reason:'controller (vm unavailable)', gasBilled:0 };
+        // A missing VM is a HOST condition, not a contract outcome, so it must HALT
+        // rather than deny. The denies above derive from consensus state every node
+        // reads identically; this one derives from whether THIS node's optional
+        // require('xchain-vm') happened to load (actions.js sets this.vm=null and only
+        // warns). Denying on it commits a validator-local verdict into the ledger and
+        // the block hash while a healthy peer runs the guard and allows the action: a
+        // host-condition-induced fork. Throw the same EXECUTOR_UNAVAILABLE host fault
+        // DEPLOY throws and the vm.execute catch below rethrows, so faultGuard and the
+        // block loop roll the block back and retry, writing no verdict at all. No
+        // consensus rule changes, so no flag-day is needed.
+        if(!this.actions.vm){
+            let e = new Error('controller guard VM executor unavailable');
+            e.code = 'EXECUTOR_UNAVAILABLE';
+            throw e;
+        }
 
         // Guard gas ceiling (consensus param, per-chain GAS_SCHEDULE). Validated canonical
         // key resolved once via the shared resolver (throws on missing/mistyped; no silent

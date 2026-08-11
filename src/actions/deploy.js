@@ -341,7 +341,8 @@ class Deploy {
          ****************************************************************/
 
         // Fail CLOSED when the VM executor is unavailable, exactly as the
-        // execute path does (execute.js: `controller (vm unavailable)`).
+        // execute paths do (execute.js: the EXECUTE VM block and
+        // runControllerGuard both throw this same code).
         // Without this, a node whose optional `require('xchain-vm')` failed
         // (actions.js sets this.vm=null and only warns) would SKIP the entire
         // syntax/lint/consensus gate below plus the manifest read and record

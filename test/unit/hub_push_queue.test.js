@@ -472,7 +472,10 @@ describe('HubPushQueue', function(){
             let [id, msg, max] = indexer.indexerDb.recordHubPushAttempt.firstCall.args;
             assert.strictEqual(id, 5);
             assert.match(msg, /oracle error/);
-            assert.strictEqual(max, 3);
+            // Was maxAttempts (3). An oracle_price is never re-derivable (actions/price.js),
+            // so item 4280 moved it to the retraction's unbounded cap; see the dedicated
+            // never-retires test below.
+            assert.strictEqual(max, Number.MAX_SAFE_INTEGER);
         });
 
         it('truncates very long error messages to 480 chars', async function(){
@@ -550,6 +553,24 @@ describe('HubPushQueue', function(){
             await q._attempt(row);
             let cap = indexer.indexerDb.recordHubPushAttempt.firstCall.args[2];
             assert.strictEqual(cap, 3, 'a forward push keeps the finite maxAttempts cap');
+        });
+
+        // ─── oracle_price joins the unbounded set (item 4280) ─────
+        // actions/price.js: a PRICE v1 oracle price is never re-emitted by a later block, so
+        // "a lost oracle_price is never re-derivable" and the outbox exists to guarantee it is
+        // not lost. The ~10-attempt cap retired it to 'failed' after ~30 minutes of hub outage
+        // and _pruneFailed deleted it, defeating that guarantee.
+        it('does NOT retire an oracle_price after maxAttempts failures (never re-derivable)', async function(){
+            let indexer = makeIndexer();
+            indexer.hubClient.pushOraclePrice = sinon.stub().rejects(new Error('hub down'));
+            let q = new HubPushQueue(indexer, { maxAttempts: 3 });
+            let row = makeRow({ id: 12, push_type: 'oracle_price', attempts: 3 });
+            await q._attempt(row);
+            let cap = indexer.indexerDb.recordHubPushAttempt.firstCall.args[2];
+            assert.strictEqual(cap, Number.MAX_SAFE_INTEGER,
+                'an oracle_price must be recorded with an unbounded cap so it never flips to failed');
+            assert.strictEqual(indexer.indexerDb.markHubPushDelivered.callCount, 0,
+                'a failed oracle_price row must stay queued, never be dropped');
         });
     });
 
