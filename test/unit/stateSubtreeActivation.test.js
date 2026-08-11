@@ -212,12 +212,29 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
         assert.strictEqual(SUB.isEscrowLockedLeafActive(11200, 'regtest', 'BTC'), true);
     });
 
-    it('the escrow-leaf SHADOW window is off everywhere too, and ARMED WINS when both maps name a height', function(){
+    it('the escrow-leaf SHADOW window is open on BTC:testnet ONLY, and ARMED WINS when both maps name a height', function(){
+        // The window opened on BTC:testnet at 148000 (2026-08-11, ): the
+        // re-seeded chain's locking ORDERs land above it, so they are journaled by
+        // the ordinary per-block incremental path rather than by the window-start
+        // replay. Every OTHER chain must stay off, and that is the half worth
+        // sweeping: a shadow window is consensus-free but it starts the source's
+        // journal writer, and starting it on a chain nobody meant to is how a
+        // "harmless" map entry becomes fleet-wide work nobody scheduled.
         for(const coin of COINS)
             for(const network of NETWORKS)
-                for(const h of HEIGHTS)
-                    assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(h, network, coin), false);
-        assert.deepStrictEqual(Object.keys(SUB.ESCROW_LOCKED_LEAF_SHADOW), []);
+                for(const h of HEIGHTS){
+                    if(coin === 'BTC' && network === 'testnet') continue;
+                    assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(h, network, coin), false,
+                        coin + ':' + network + ' at ' + h + ' must not shadow');
+                }
+        assert.deepStrictEqual(Object.keys(SUB.ESCROW_LOCKED_LEAF_SHADOW), ['BTC:testnet']);
+        // The one open chain, at its exact boundary, so an off-by-one in the
+        // threshold cannot hide behind the sweep's coarse height list.
+        assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(147999, 'testnet', 'BTC'), false);
+        assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(148000, 'testnet', 'BTC'), true);
+        // A SHADOW is not an arming, and this is the property the whole window
+        // rests on: nothing about BTC:testnet's committed output may change.
+        assert.strictEqual(SUB.isEscrowLockedLeafActive(148000, 'testnet', 'BTC'), false);
         // Scratch-arm both: shadow answers true only BETWEEN its own height and
         // the armed height, so each height uses exactly one column and nothing
         // ever computes twice (spec §7; same contract as isSubtreeShadowActive).
@@ -293,7 +310,17 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
         assert.ok(SUB.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'] >
                   SUB.STATE_SUBTREE_ACTIVATION.contract_state_root['BTC:regtest'],
             'Stage B must not arm below the Stage A height on the same chain');
-        assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_SHADOW, {});
+        // The §7 shadow window, which is deliberately NOT the same kind of entry as
+        // the two maps above: it commits nothing, so it is not a flag day, but it
+        // does start the source's journal writer on the named chain and it must be
+        // registered here for the same reason arming is - so that opening one is a
+        // reviewed code change and never a quiet config edit.
+        assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_SHADOW, { 'BTC:testnet': 148000 });
+        // The window must sit ABOVE the chain's own first indexed block (147500
+        // after the 2026-08-10 re-genesis), or its start block is a height the
+        // chain will never reach going forward and the window never opens at all.
+        assert.ok(SUB.ESCROW_LOCKED_LEAF_SHADOW['BTC:testnet'] > 147500,
+            'the shadow window must start above BTC:testnet\'s post-re-genesis first block');
     });
 
     it('every populated activation key is coin-qualified (<COIN>:<network>)', function(){
