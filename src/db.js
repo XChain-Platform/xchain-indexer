@@ -836,7 +836,11 @@ class Database {
     //      it's skipped with a loud warning rather than aborting startup.)
     //   2. Nullability - only relaxes NOT NULL -> NULL (the safe direction -
     //      never strengthens to NOT NULL since live rows might hold NULLs that
-    //      would block the ALTER).
+    //      would block the ALTER), and only when the bare MODIFY that does it
+    //      would lose nothing: a MODIFY restates the WHOLE column, so a live
+    //      DEFAULT / COMMENT / ON UPDATE / generation expression not named in the
+    //      statement is dropped. A column carrying any of those is skipped with a
+    //      loud warning and left to a dated migration (#4359).
     // Doesn't touch types or defaults of existing columns. Index reconciliation
     // is handled separately by reconcileTableIndexes(). Each applied ALTER is loudly logged.
     //
@@ -870,7 +874,10 @@ class Database {
             return;
         }
         const live = await db.query(
-            "SELECT COLUMN_NAME, IS_NULLABLE, COLUMN_TYPE, COLUMN_KEY, EXTRA FROM information_schema.columns WHERE table_schema = ? AND table_name = ?",
+            // COLUMN_DEFAULT / COLLATION_NAME / COLUMN_COMMENT / GENERATION_EXPRESSION are
+            // read for the nullability branch below: a bare MODIFY drops every attribute it
+            // does not restate, so the reconciler has to see them to know what it would lose.
+            "SELECT COLUMN_NAME, IS_NULLABLE, COLUMN_TYPE, COLUMN_KEY, EXTRA, COLUMN_DEFAULT, COLLATION_NAME, COLUMN_COMMENT, GENERATION_EXPRESSION FROM information_schema.columns WHERE table_schema = ? AND table_name = ?",
             [this.dbName, table]
         );
         const liveByName = new Map(live.map(c => [c.COLUMN_NAME.toLowerCase(), c]));
@@ -915,8 +922,27 @@ class Database {
                     console.log('Schema drift on ' + table + '.' + exp.name + ': live=NOT NULL, source=NULL - SKIPPING relax (' + (isPk ? 'PRIMARY KEY' : 'AUTO_INCREMENT') + ' column; a bare MODIFY would strip attributes).');
                     continue;
                 }
+                // A MODIFY restates the whole column, so anything the statement omits is
+                // dropped - DEFAULT, COMMENT, ON UPDATE, and the generation expression all
+                // vanish, silently diverging an aged DB from a fresh install of the same
+                // source (#4359). Rebuilding those clauses out of information_schema is its
+                // own footgun (DEFAULT quoting, expression defaults, virtual vs stored), so
+                // relax only when there is nothing to lose and surface the rest as drift -
+                // the same skip-and-log posture as the two guards above.
+                const lossy = [];
+                if(cur.COLUMN_DEFAULT !== null && cur.COLUMN_DEFAULT !== undefined) lossy.push('DEFAULT');
+                if(String(cur.COLUMN_COMMENT || '') !== '')                         lossy.push('COMMENT');
+                if(String(cur.GENERATION_EXPRESSION || '') !== '')                  lossy.push('generation expression');
+                if(/on update/i.test(String(cur.EXTRA || '')))                      lossy.push('ON UPDATE');
+                if(lossy.length){
+                    console.warn('Schema drift on ' + table + '.' + exp.name + ': live=NOT NULL, source=NULL - SKIPPING relax (a bare MODIFY would drop ' + lossy.join(', ') + '). Relax it in a dated migration that restates the full column instead.');
+                    continue;
+                }
+                // Restate the live collation: it is a bare identifier (no quoting hazard) and
+                // omitting it re-collates an explicitly-collated column to the table default.
+                const collate = /^[A-Za-z0-9_]+$/.test(String(cur.COLLATION_NAME || '')) ? ' COLLATE ' + cur.COLLATION_NAME : '';
                 console.log('Schema drift on ' + table + '.' + exp.name + ': live=NOT NULL, source=NULL. Relaxing constraint.');
-                await db.query('ALTER TABLE `' + table + '` MODIFY `' + exp.name + '` ' + cur.COLUMN_TYPE + ' NULL');
+                await db.query('ALTER TABLE `' + table + '` MODIFY `' + exp.name + '` ' + cur.COLUMN_TYPE + collate + ' NULL');
             }
         }
     }
@@ -932,16 +958,18 @@ class Database {
         let m;
         while((m = re.exec(sqlData)) !== null){
             if(m[3].toLowerCase() !== table.toLowerCase()) continue;
-            // Split the column list on commas; strip backticks and ASC/DESC. Any (len)
-            // prefix is kept SEPARATELY (prefixes, null = full column) so the
-            // reconciler can detect prefix-width drift instead of treating a
-            // prefixed and a full-column index on the same columns as identical (#2261).
-            const parts = m[4].split(',')
-                .map(c => c.trim().replace(/`/g, '').split(/\s+/)[0])
-                .filter(Boolean);
-            const columns  = parts.map(c => c.replace(/\(\d+\)$/, ''));
-            const prefixes = parts.map(c => { const pm = /\((\d+)\)$/.exec(c); return pm ? Number(pm[1]) : null; });
-            if(columns.length) out.push({ name: m[2], unique: !!m[1], columns, prefixes });
+            // Split the column list on commas and strip backticks. Any (len) prefix is kept
+            // SEPARATELY (prefixes, null = full column) so the reconciler can detect
+            // prefix-width drift instead of treating a prefixed and a full-column index on
+            // the same columns as identical (#2261). Sort direction is kept the same way
+            // (directions) so a rebuilt index carries the declared DESC (#4357); matching
+            // still keys on `columns` alone, which is direction- and width-blind by design.
+            const specs = m[4].split(',').map(c => c.trim().replace(/`/g, '')).filter(Boolean);
+            const parts      = specs.map(c => c.split(/\s+/)[0]);
+            const columns    = parts.map(c => c.replace(/\(\d+\)$/, ''));
+            const prefixes   = parts.map(c => { const pm = /\((\d+)\)$/.exec(c); return pm ? Number(pm[1]) : null; });
+            const directions = specs.map(c => /\sDESC\b/i.test(c) ? 'DESC' : 'ASC');
+            if(columns.length) out.push({ name: m[2], unique: !!m[1], columns, prefixes, directions });
         }
         return out;
     }
@@ -1019,7 +1047,16 @@ class Database {
                         '. Not auto-healed (never DROP an index we did not create); apply a manual migration via node src/migrate.js to converge.');
                     continue;
                 }
-                const colList = idx.columns.map(c => '`' + c + '`').join(', ');
+                // Rebuild the index the way the source DECLARES it. Dropping the (len) prefix
+                // turns UNIQUE tick(200) into a full-column index on a TEXT column, which
+                // MariaDB rejects (errno 1170) and the catch below only logs, so the table
+                // permanently runs without its declared uniqueness; dropping DESC diverges an
+                // auto-healed index from a fresh install of the same definition (#4357).
+                const colList = idx.columns.map((c, i) => {
+                    const prefix = idx.prefixes    && idx.prefixes[i] != null      ? '(' + idx.prefixes[i] + ')' : '';
+                    const dir    = idx.directions  && idx.directions[i] === 'DESC' ? ' DESC'                     : '';
+                    return '`' + c + '`' + prefix + dir;
+                }).join(', ');
 
                 if(!idx.unique){
                     console.log('Schema drift on ' + table + ': missing index ' + idx.name + ' (' + key + '). Adding.');

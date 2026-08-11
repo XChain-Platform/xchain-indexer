@@ -1531,6 +1531,116 @@ describe('Database.parseExpectedIndexes() @regression @tier1', function () {
     });
 });
 
+// #4357: the ADD path built its column list from bare column names, so an index the
+// source declares with a (len) prefix or a DESC column was rebuilt as a different index.
+// index_tickers.tick is TEXT, so the full-column rebuild fails with errno 1170 and the
+// non-fatal catch swallows it, leaving the table without its declared UNIQUE.
+describe('Database.reconcileTableIndexes() prefix/direction-preserving DDL @regression @tier1', function () {
+    let db;
+    beforeEach(function () { db = makeDb(); });
+
+    // Live statistics rows for a table that has NONE of its declared indexes, which is
+    // the only state that reaches the ADD branch.
+    const noIndexes = () => sinon.stub().resolves([]);
+
+    it('recreates a missing prefixed UNIQUE index with its declared width', async function () {
+        const dbc = { query: noIndexes() };
+        await db.reconcileTableIndexes('index_tickers.sql', dbc);
+        const alters = dbc.query.getCalls().map(c => c.args[0]).filter(s => /^ALTER TABLE/i.test(s));
+        const tick   = alters.find(s => /ADD UNIQUE INDEX `tick`/.test(s));
+        assert.ok(tick, 'the declared UNIQUE tick index must be added: ' + alters.join(' | '));
+        assert.match(tick, /\(`tick`\(200\)\)/,
+            'a TEXT column must be indexed at its declared prefix width, not full-column: ' + tick);
+    });
+
+    it('leaves an unprefixed column bare in the same table', async function () {
+        const dbc = { query: noIndexes() };
+        await db.reconcileTableIndexes('index_tickers.sql', dbc);
+        const alters = dbc.query.getCalls().map(c => c.args[0]).filter(s => /^ALTER TABLE/i.test(s));
+        const block  = alters.find(s => /ADD INDEX `block_index`/.test(s));
+        assert.ok(block, 'the secondary index must still be added');
+        assert.match(block, /\(`block_index`\)/, 'no width may be invented for a full-column index: ' + block);
+    });
+
+    it('recreates a missing DESC index with its declared sort direction', async function () {
+        const dbc = { query: noIndexes() };
+        await db.reconcileTableIndexes('escrow_leaf_journal.sql', dbc);
+        const alters = dbc.query.getCalls().map(c => c.args[0]).filter(s => /^ALTER TABLE/i.test(s));
+        const latest = alters.find(s => /ADD INDEX `idx_latest`/.test(s));
+        assert.ok(latest, 'idx_latest must be added: ' + alters.join(' | '));
+        assert.match(latest, /\(`address_id`, `tick_id`, `id` DESC\)/,
+            'the declared DESC must survive into the rebuilt index: ' + latest);
+    });
+
+    it('parses direction alongside the column name rather than instead of it', function () {
+        const sql  = 'CREATE INDEX idx_latest ON t (a, b DESC);';
+        const idxs = db.parseExpectedIndexes(sql, 't');
+        assert.deepStrictEqual(idxs[0].columns, ['a', 'b']);
+        assert.deepStrictEqual(idxs[0].directions, ['ASC', 'DESC']);
+    });
+});
+
+// #4359: relaxing NOT NULL -> NULL with a bare MODIFY restates the whole column, so every
+// attribute the statement omits (DEFAULT, COMMENT, ON UPDATE, generation expression) is
+// dropped and an aged DB silently stops matching a fresh install of the same source.
+describe('Database.alterTableForDrift() lossless nullability relax @regression @tier1', function () {
+    let db;
+    beforeEach(function () { db = makeDb(); });
+
+    // fees.gas_price is declared `VARCHAR(250) DEFAULT '0'` (nullable) in src/sql/fees.sql,
+    // so an aged DB holding it NOT NULL is exactly the drift this branch acts on.
+    function liveFees(overrides) {
+        return sinon.stub().callsFake(async (sql) => {
+            if (!/information_schema\.columns/i.test(sql)) return [];
+            return [Object.assign({
+                COLUMN_NAME: 'gas_price', IS_NULLABLE: 'NO', COLUMN_TYPE: 'varchar(250)',
+                COLUMN_KEY: '', EXTRA: '', COLUMN_DEFAULT: null, COLLATION_NAME: null,
+                COLUMN_COMMENT: '', GENERATION_EXPRESSION: ''
+            }, overrides)];
+        });
+    }
+
+    const modifies = (stub) => stub.getCalls().map(c => c.args[0]).filter(s => /MODIFY/i.test(s));
+
+    it('skips the relax when the live column carries a DEFAULT a bare MODIFY would drop', async function () {
+        const warn = sinon.stub(console, 'warn');
+        try {
+            const dbc = { query: liveFees({ COLUMN_DEFAULT: '0' }) };
+            await db.alterTableForDrift('fees.sql', dbc);
+            assert.deepStrictEqual(modifies(dbc.query), [], 'no attribute-dropping MODIFY may be issued');
+            const warned = warn.getCalls().map(c => c.args.join(' ')).join('\n');
+            assert.match(warned, /SKIPPING relax .*DEFAULT/, 'the skip must be auditable: ' + warned);
+        } finally { warn.restore(); }
+    });
+
+    it('skips the relax for a generated column', async function () {
+        const warn = sinon.stub(console, 'warn');
+        try {
+            const dbc = { query: liveFees({ GENERATION_EXPRESSION: '`gas_cost` * 2' }) };
+            await db.alterTableForDrift('fees.sql', dbc);
+            assert.deepStrictEqual(modifies(dbc.query), [], 'a MODIFY would strip the generation expression');
+        } finally { warn.restore(); }
+    });
+
+    it('skips the relax for an ON UPDATE column', async function () {
+        const warn = sinon.stub(console, 'warn');
+        try {
+            const dbc = { query: liveFees({ EXTRA: 'on update current_timestamp()' }) };
+            await db.alterTableForDrift('fees.sql', dbc);
+            assert.deepStrictEqual(modifies(dbc.query), [], 'a MODIFY would strip ON UPDATE');
+        } finally { warn.restore(); }
+    });
+
+    it('still relaxes an attribute-free column, restating its collation', async function () {
+        const dbc = { query: liveFees({ COLLATION_NAME: 'utf8_bin' }) };
+        await db.alterTableForDrift('fees.sql', dbc);
+        const issued = modifies(dbc.query);
+        assert.strictEqual(issued.length, 1, 'the safe relax must still happen: ' + issued.join(' | '));
+        assert.match(issued[0], /MODIFY `gas_price` varchar\(250\) COLLATE utf8_bin NULL/,
+            'an explicit collation must be restated, not re-defaulted: ' + issued[0]);
+    });
+});
+
 // _migrationMode
 describe('Database._migrationMode() @regression @tier1', function () {
     let db;
