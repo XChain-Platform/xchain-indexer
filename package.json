@@ -36,7 +36,7 @@
     "test:smoke": "mocha --no-config --timeout 5000 'test/smoke/**/*.test.js'",
     "test:smoke:unit": "mocha --no-config --timeout 5000 'test/smoke/unit/**/*.test.js'",
     "test:smoke:connected": "mocha --no-config --timeout 5000 'test/smoke/connected/**/*.test.js'",
-    "test:security": "mocha --no-config --timeout 5000 --recursive 'test/unit/security/**/*.test.js'",
+    "test:security": "mocha --no-config --timeout 5000 --recursive 'test/security/**/*.test.js' 'test/unit/security/**/*.test.js'",
     "test:perf": "mocha --no-config --timeout 0 --exit 'test/perf/scenarios/**/*.test.js'",
     "test:perf:baseline": "mocha --no-config --timeout 0 --exit 'test/perf/scenarios/01-baseline-throughput.test.js'",
     "test:perf:benchmarks": "mocha --no-config --timeout 600000 --exit 'test/perf/scenarios/02-action-benchmarks.test.js'",
