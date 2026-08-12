@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// : the capability MIN_STAKE a validator set was locked at is BLOCK-ANCHORED.
+// the capability MIN_STAKE a validator set was locked at is BLOCK-ANCHORED.
 // xchain-hub resolves it through CapabilityRegistry.getMinStake(capability, blockIndex) and
 // hands it to the indexer, which honours it VERBATIM. Any verifier re-deriving a HISTORICAL
 // set (archive recovery, with no hub left to ask) has to reconstruct the same value from the
@@ -23,7 +23,7 @@ const fs     = require('fs');
 
 const cmsh = require('../../src/capability_min_stake_history.js');
 
-describe('capability MIN_STAKE as-of-block reconstruction  @regression @tier2', function () {
+describe('capability MIN_STAKE as-of-block reconstruction @regression @tier2', function () {
 
     describe('the frozen activation table', function () {
 
@@ -78,7 +78,7 @@ describe('capability MIN_STAKE as-of-block reconstruction  @regression @tier2', 
 
         it('returns null when nothing is resolvable, so the caller passes NO override', function () {
             // Null is load-bearing: recovery passes no minStake, db.js applies its own local
-            // floor, and a handle with no coin config behaves exactly as it did pre-
+            // floor, and a handle with no coin config behaves exactly as it did pre
             // instead of failing on a threshold it cannot know.
             assert.strictEqual(cmsh.minStakeAt('cross_chain', 100, 'mainnet', null), null);
             assert.strictEqual(cmsh.minStakeAt('cross_chain', 100, 'mainnet', undefined), null);

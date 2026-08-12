@@ -31,7 +31,7 @@ CREATE TABLE bet_feeds (
     status_id      BIGINT UNSIGNED,          -- id of record in index_statuses table (parse status of the create tx)
     feed_status_id BIGINT UNSIGNED,          -- id of record in index_statuses table (current feed lifecycle status:
                                              -- open/closed/resolved/resolved_void/cancelled/expired). Stored, not derived:
-                                             -- the bounded latch/expiry passes index on it ( discipline)
+                                             -- the bounded latch/expiry passes index on it
     closed_block   BIGINT UNSIGNED,          -- block_index that latched the feed closed (NULL until latched). In-place
                                              -- mutation stamp: keys the state-hash class, the reorg reset, and the
                                              -- sync updated_rows forward class (polls.resolved_block pattern)
@@ -49,7 +49,7 @@ CREATE        INDEX status_id      ON bet_feeds (status_id);
 -- scans (feed_status='open', deadline <= BLOCK_TIME) ordered deadline ASC, the
 -- expiry step scans (feed_status IN open/closed, expire_at <= BLOCK_TIME)
 -- ordered expire_at ASC. Without them each pass is a full-table scan per block
--- whose cost an attacker sets by creating feeds .
+-- whose cost an attacker sets by creating feeds.
 CREATE        INDEX status_deadline ON bet_feeds (feed_status_id, deadline);
 CREATE        INDEX status_expire   ON bet_feeds (feed_status_id, expire_at);
 -- Stamp columns are range-scanned by the state-hash class (BETWEEN block, block),

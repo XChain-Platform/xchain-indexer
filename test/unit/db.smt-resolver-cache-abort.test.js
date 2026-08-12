@@ -10,7 +10,7 @@
  *
  **********************************************************************
  *
- * A TRANSACTION ABORT must drop the touched-key resolver memos .
+ * A TRANSACTION ABORT must drop the touched-key resolver memos.
  *
  * This is the third mechanism. The first two (a non-canonical address axis, a
  * memo left stale across a REORG) were found and fixed, and the wedge kept

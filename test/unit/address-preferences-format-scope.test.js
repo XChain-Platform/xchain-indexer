@@ -15,7 +15,7 @@
  **********************************************************************
  * test/unit/address-preferences-format-scope.test.js
  *
- * : the preferences read is format-0-only, and this is the guard on it.
+ * The preferences read is format-0-only, and this is the guard on it.
  *
  * An ADDRESS format 1 is a controller bind, not a preferences edit. It now writes an
  * `addresses` audit row like every other ADDRESS action, so a REFUSED bind can be read
@@ -51,7 +51,7 @@ function makeDb() {
     return db;
 }
 
-describe(' getAddressPreferences excludes the controller-bind format @regression', function () {
+describe('getAddressPreferences excludes the controller-bind format @regression', function () {
 
     afterEach(function () { sinon.restore(); });
 

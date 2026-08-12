@@ -43,7 +43,7 @@ const vmDeployLintPkg3 = require('../vm_deploy_lint_pkg3_activation.js');
 // (this.providerDeadlineWindows) from the CONFIGURED registry. A module-scoped
 // snapshot cannot see config.ATTESTATION.PROVIDERS, so the VM enforced DEFAULTS
 // while attest.js validated against the overlay, letting the VM accept a request
-// the indexer then rejects ().
+// the indexer then rejects.
 
 // Maximum smart-contract code size (64 KiB). Vendored single source of truth:
 // ../protocol/constants.js (byte-identical to xchain-documentation/protocol/
@@ -67,9 +67,7 @@ const GAS_CEILING = 1000000;
 
 class Deploy {
 
-    // Handle constructing a class instance
     constructor(action){
-        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -112,10 +110,8 @@ class Deploy {
         this.chunkStore = new DeployChunk(action);
     }
 
-    // Handle parsing the DEPLOY transaction
     async parse(params, data, error){
 
-        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
@@ -136,7 +132,6 @@ class Deploy {
         let isRestCtor = (format === 0 || format === 2);
         let hasStaking = (format === 1 || format === 3);
 
-        // Extract params
         if(isChunked)
             data['CODE_HASH_PARAM'] = params[1];
         else
@@ -147,20 +142,16 @@ class Deploy {
         data['COOLDOWN_BLOCKS']    = hasStaking ? params[4] : null;
         data['SLASH_DESTINATION']  = hasStaking ? params[5] : null;
 
-        // Resolve a compacted ^<id> SLASH_DESTINATION back to its canonical address
-        // (the SDK compacts this field by default). The 'BURN' sentinel and null are
-        // left untouched; a non-resolvable/malformed reference is left as-is. This
-        // also keeps a malformed id off the slash-credit FK path. See resolveAddressRefChecked.
-        // `slashDestExplicit` marks a user-supplied, non-BURN destination: only those
-        // get the isCryptoAddress format reject below (the BURN sentinel and the
-        // default-to-BURN path resolve to the trusted configured burn address).
-        // At/after the  flag-day an unresolvable reference is a hard reject, which
-        // no longer depends on the separate DEPLOY_SLASH_DEST_ADDRESS_VALID gate being
-        // live: below that gate a bogus caret is interned into the IMMUTABLE
-        // contracts.slash_destination and every later slash routes stake nowhere. The
-        // verdict is captured here but APPLIED with the sibling address check further
-        // down, so the existing pairing/cooldown verdicts still win (same ordering the
-        // DEPLOY_SLASH_DEST_ADDRESS_VALID check was written to preserve).
+        // Resolve a compacted ^<id> SLASH_DESTINATION back to its canonical address (the SDK
+        // compacts this field by default). 'BURN' and null pass through untouched; a
+        // non-resolvable/malformed reference is left as-is here (see resolveAddressRefChecked)
+        // and hard-rejected below on its own flag-day, independent of the separate
+        // DEPLOY_SLASH_DEST_ADDRESS_VALID gate: without that reject a bogus caret would intern
+        // into the IMMUTABLE contracts.slash_destination and every later slash would route stake
+        // nowhere. `slashDestExplicit` marks a user-supplied, non-BURN destination: only those
+        // get the isCryptoAddress format reject below (BURN and the default-to-BURN path already
+        // resolve to the trusted configured burn address). The verdict is captured here but
+        // applied further down, so the existing pairing/cooldown verdicts still win.
         let slashDestExplicit = hasStaking && !this.util.isNull(data['SLASH_DESTINATION']) && data['SLASH_DESTINATION'] !== 'BURN';
         let slashDestUnresolvable = false;
         if(!error && slashDestExplicit){
@@ -233,15 +224,14 @@ class Deploy {
             && !this.util.isCryptoAddress(data['SLASH_DESTINATION']))
             error = 'invalid: SLASH_DESTINATION (invalid address)';
 
-        // : the same reject for an unresolvable ^<id>, on its own flag-day and
-        // independent of the gate above (an unresolvable caret is a wire-reference
-        // fault, not merely a badly-formatted address). Same position, so the
-        // pairing/cooldown verdicts and the address-format verdict both still win, and
-        // only while the destination survived the clear-on-no-cooldown path above.
+        // Same reject for an unresolvable ^<id>, on its own flag-day and independent of the
+        // gate above (an unresolvable caret is a wire-reference fault, not merely a
+        // badly-formatted address). Same position, so the pairing/cooldown verdicts and the
+        // address-format verdict both still win, and only while the destination survived the
+        // clear-on-no-cooldown path above.
         if(!error && slashDestUnresolvable && !this.util.isNull(data['SLASH_DESTINATION']))
             error = 'invalid: SLASH_DESTINATION (unresolvable ^id)';
 
-        // Convert NUMBER fields from string value to number value
         if(!error)
             data = this.util.setNumberFormats(data);
 
@@ -335,11 +325,9 @@ class Deploy {
             }
         }
 
-        // Verify code size
         if(!error && Buffer.byteLength(code, 'utf8') > this.MAX_CODE_SIZE)
             error = 'invalid: CODE_ENCODING (exceeds max size)';
 
-        // Verify GAS_LIMIT is provided and valid
         if(!error && (this.util.isNull(data['GAS_LIMIT']) || !this.util.isNumeric(data['GAS_LIMIT'])))
             error = 'invalid: GAS_LIMIT (required)';
 
@@ -376,7 +364,7 @@ class Deploy {
             let enforceBannedAsync = await this.actions.protocolChanges.isEnabled('VM_BANNED_ASYNC', data['BLOCK_INDEX']);
             // The VM_LINT_HARDENING rule set (flag-day Pkg 4) is gated the same
             // way: below its activation a deploy resolves exactly as it did
-            // historically (both gates share the ratified  anchor).
+            // historically (both gates share the same contract-era activation).
             let enforceLintHardening = await this.actions.protocolChanges.isEnabled('VM_LINT_HARDENING', data['BLOCK_INDEX']);
             // banned-generator (29912bd8) + banned-wasm (75190596 deploy half) are the
             // Package 3 deploy-lint legs. They share ONE gate with the VM-side runtime
@@ -421,20 +409,14 @@ class Deploy {
         let declaredMaxTakeBps  = null;   // number   | null
         let hasInitialize       = false;  // contract exports a callable constructor (DEPLOY_INIT_STRICT)
         if(!error && this.actions.vm){
-            // : read the manifest under THIS DEPLOY'S block, not under the
-            // pre-activation defaults. The verdict below hashes into deploy status, so
-            // resolving the VM's activation gates from an absent block context meant the
-            // manifest was read under one sandbox rule set while every later execute()
-            // of the same contract ran under another. Same context shape the constructor
-            // execution below uses, so the two agree by construction.
-            // contractAddress is passed too, and it is load-bearing rather than
-            // cosmetic: the Pkg 3 sandbox gate derives its COIN from this string
-            // (pkg3CoinFromAddress), and with no coin the mainnet threshold lookup
-            // misses and the gate resolves false regardless of height. Passing only
-            // network + height would therefore fix testnet/regtest and silently leave
-            // mainnet on the old pre-activation reading. It is the identical
-            // expression used for the constructor execution further down, and both
-            // inputs are already known here, so the two cannot disagree.
+            // Read the manifest under THIS DEPLOY's block context, not pre-activation defaults:
+            // the verdict hashes into deploy status, so resolving the VM's activation gates from
+            // an absent context would read the manifest under a different sandbox rule set than
+            // every later execute() of the same contract. contractAddress is passed too and is
+            // load-bearing, not cosmetic: the Pkg 3 sandbox gate derives its COIN from this
+            // string, and with no coin the mainnet threshold lookup misses and the gate resolves
+            // false regardless of height. Uses the identical expression as the constructor
+            // execution further down, so the two contexts cannot disagree.
             let manifestRead = await this.actions.vm.readManifest(code, {
                 network:         this.config['NETWORK'],
                 contractAddress: 'C:' + this.config['CHAIN'] + ':' + data['ACTION_INDEX'],
@@ -476,16 +458,15 @@ class Deploy {
         // paid the per-byte component for the bytes it put on-chain, so the assembly does
         // not re-charge per byte (net ≈ a single-shot inline deploy of the same source).
         // Priced through util.vmGasCost, the one arithmetic the static quote also uses, so
-        // the quoted native output cannot drift from this acceptance number ().
+        // the quoted native output cannot drift from this acceptance number.
         let gasCost = this.util.vmGasCost(schedule, isChunked ? 'DEPLOY_CHUNKED' : 'DEPLOY_INLINE', codeBytes);
         let fee = this.util.bcmul(gasCost, this.config['GAS_PRICE'], 8);
 
-        // Get source address balances
         let gas = this.config['GAS'];
         let tokenInfo = await this.indexerDb.getTokenInfo(gas, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
-        // Validate gas fee payment (native coin or XCHAIN balance)
+        // Native coin or XCHAIN balance
         let feePaymentMode = 2; // default: xchain balance
         if(!error && tokenInfo && this.util.bcgt(fee, 0)){
             let pmMode = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']);
@@ -512,11 +493,9 @@ class Deploy {
         if(!error && tokenInfo && feePaymentMode === 2)
             balances = this.util.debitBalances(balances, tokenInfo['TICK_ID'], fee);
 
-        // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
-        // Generate code hash
         let codeHash = crypto.createHash('sha256').update(code).digest('hex');
 
         /*****************************************************************
@@ -609,7 +588,7 @@ class Deploy {
                 network:          this.config['NETWORK'],
                 oracleData:       await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(data['BLOCK_INDEX'], data['BLOCK_TIME'], parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800),
                 crossChainData:   await this.indexerDb.getCrossChainDataForVM(data['BLOCK_INDEX']),
-                // : expose each poll's electorate TICK in the VM snapshot at/after the flag-day.
+                // Expose each poll's electorate TICK in the VM snapshot at/after the flag-day.
                 pollData:         await this.indexerDb.getPollResultsForVM(data['BLOCK_INDEX'], await this.actions.protocolChanges.isEnabled('VOTE_POLL_TICK_VISIBLE', data['BLOCK_INDEX'])),
                 providerDeadlines: this.providerDeadlineWindows
             });
@@ -651,12 +630,10 @@ class Deploy {
             status = 'valid';
         data['STATUS'] = status;
 
-        // Print status message
         console.log("\t DEPLOY : hash=" + codeHash + ' : gas=' + totalGas +
             (floatWarnings.length > 0 ? ' : FLOAT_WARNINGS=' + floatWarnings.length : '') +
             ' : ' + data['STATUS']);
 
-        // Create record in contracts table
         await this.indexerDb.createContract({
             ACTION_INDEX      : data['ACTION_INDEX'],
             SOURCE            : data['SOURCE'],
@@ -669,7 +646,6 @@ class Deploy {
             SLASH_DESTINATION : data['SLASH_DESTINATION']
         });
 
-        // If constructor failed, delete the contract record
         if(constructorError)
             await this.indexerDb.deleteContract(data['ACTION_INDEX']);
 
@@ -788,7 +764,6 @@ class Deploy {
             fee = this.util.bcmul(totalGas, this.config['GAS_PRICE'], 8);
         }
 
-        // Create execution record
         await this.indexerDb.createContractExecution({
             ACTION_INDEX    : data['ACTION_INDEX'],
             CONTRACT_INDEX  : data['ACTION_INDEX'], // contract_index = its own action_index
@@ -803,10 +778,8 @@ class Deploy {
             BLOCK_INDEX     : data['BLOCK_INDEX']
         });
 
-        // Store the SOURCE and GAS tick in addresses list
         this.util.addAddressTicker(data['SOURCE'], gas);
 
-        // Array of credits and debits
         let credits = [],
             debits  = [];
 
@@ -819,18 +792,14 @@ class Deploy {
         if(!error && tokenInfo && feePaymentMode === 2)
             debits.push([gas, fee, data['SOURCE']]);
 
-        // Process any transaction ledger changes (credits / debits)
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
-        // Get a list of tickers & addresses
         let tickers   = this.util.getTickersList(),
             addresses = Object.keys(this.util.getAddressesList());
 
-        // Update address balances and token supply
         await this.indexerDb.updateBalances(addresses);
         await this.indexerDb.updateTokens(tickers);
 
-        // Create action mappings
         await this.mapper.createMappings(data);
     }
 }

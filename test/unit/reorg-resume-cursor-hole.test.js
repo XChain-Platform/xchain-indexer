@@ -15,7 +15,7 @@
  *
  * Regression coverage for the post-rollback RESUME cursor in
  * XChainIndexer.start() - the reorg-hole consensus bug fixed in e2b36c4 and
- * re-audited under .
+ * re-audited under.
  *
  * The bug: start() reads `lastIndexerBlock` BEFORE handling reorgs. rollback()
  * then deletes every `blocks` row >= the reorg point. Resuming from the stale
@@ -97,7 +97,7 @@ function holes(heights) {
     return gaps;
 }
 
-describe('reorg resume cursor - permanent block holes (XChainIndexer.start, e2b36c4 / )', function () {
+describe('reorg resume cursor - permanent block holes (XChainIndexer.start, e2b36c4 /)', function () {
 
     // A depth-1 reorg at 6241887 on a chain indexed through 6241887.
     const TIP            = 6241887;

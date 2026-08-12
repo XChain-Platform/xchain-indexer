@@ -131,15 +131,14 @@ module.exports = {
         // Max MEMO length
         config['MAX_MEMO_LENGTH'] = 250;
 
-        // BET parimutuel betting limits (spec claude/specs/BETTING_SYSTEM_SPEC.md
-        // section 9; CONSENSUS-CRITICAL: these bound validation, settlement work,
-        // and the per-block latch/expiry passes, so every node must agree).
-        // MAX_BET_DETAILS_LENGTH is DECODED bytes and is 4096, NOT 8192: DETAILS
-        // rides the wire base64-encoded (+33%) and shares the single 8192-byte
-        // compiled ACTION ceiling with LABEL/OUTCOMES/TICK/MEMO, so a decoded cap
-        // of 8192 composes un-broadcastable feeds (see spec section 9 arithmetic;
-        // decoder + encoder suites pin the relationship, so re-raising this fails
-        // CI rather than shipping dead feeds)
+        // BET parimutuel betting limits. CONSENSUS-CRITICAL: these bound
+        // validation, settlement work, and the per-block latch/expiry passes, so
+        // every node must agree. MAX_BET_DETAILS_LENGTH is DECODED bytes and is
+        // 4096, NOT 8192: DETAILS rides the wire base64-encoded (+33%) and shares
+        // the single 8192-byte compiled ACTION ceiling with LABEL/OUTCOMES/TICK/
+        // MEMO, so a decoded cap of 8192 composes un-broadcastable feeds. Decoder
+        // and encoder suites pin the relationship, so re-raising this fails CI
+        // rather than shipping dead feeds.
         config['MAX_BET_LABEL_LENGTH']     = 250;
         config['MAX_BET_OUTCOMES']         = 16;
         config['MAX_BET_OUTCOME_LENGTH']   = 64;
@@ -164,7 +163,7 @@ module.exports = {
         config['MAX_BROADCAST_VALUE_LENGTH']    = 25; 
 
         // MAX number of dispenses per dispenser fill (enforced at/after the
-        // dispenser-caps flag-day, dispenser_caps_activation.js / ).
+        // dispenser-caps flag-day, see dispenser_caps_activation.js).
         config['MAX_DISPENSES'] = 1000;
 
         // MAX number of refills (GIVE_ESCROW top-ups) per dispenser; each refill
@@ -229,16 +228,16 @@ module.exports = {
             'CONTROLLER',
             'COOLDOWN_BLOCKS',
             // DEADLINE / FEED_ACTION_INDEX / MIN_AMOUNT / OUTCOME / REFUND_WINDOW:
-            // BET wire fields (spec claude/specs/BETTING_SYSTEM_SPEC.md), numeric-or-
-            // NULL normalized for storage; MIN_AMOUNT additionally in lockstep with
-            // the SDK NUMBER_FIELDS so both sides canonicalize to fixed decimal (a
-            // raw "1e-8" minimum stake would otherwise store verbatim;  class)
+            // BET wire fields, numeric-or-NULL normalized for storage; MIN_AMOUNT
+            // additionally in lockstep with the SDK NUMBER_FIELDS so both sides
+            // canonicalize to fixed decimal (a raw "1e-8" minimum stake would
+            // otherwise store verbatim)
             'DEADLINE',
             'DECIMALS',
             // DEPOSIT / GAS_ESCROW: VOTE v0 poll-creator escrow amounts. Kept in
             // lockstep with the SDK NUMBER_FIELDS so both sides canonicalize the
             // wire value to fixed decimal (a raw "1e-8" would otherwise be stored
-            // verbatim in polls.deposit_amount / gas_escrow; ).
+            // verbatim in polls.deposit_amount / gas_escrow).
             'DEPOSIT',
             'DISPENSER_ACTION_INDEX',
             'EDIT',
@@ -351,24 +350,22 @@ module.exports = {
         // issue.js), the full BTC CSV derivation measured ~124 min on commodity hardware. That
         // path is now the FALLBACK/generator only - normal full-parse nodes import the precomputed
         // state dump (minutes, see genesisDump.js) - but the watchdog must still cover the CSV
-        // fallback on a slower DB, so it is set to 4h. See genesis.js and
-        // claude/reports/launch/GENESIS-LEDGER-BOOTSTRAP.md.
+        // fallback on a slower DB, so it is set to 4h. See genesis.js.
         config['GENESIS_BLOCK']            = 0;     // 0 = disabled; pinned per chain in configs/<COIN>.js
         config['GENESIS_LEDGER_HASH']      = null;  // sha256 hex of the bundled CSV; null = skip verify
         config['GENESIS_LEDGER_PATH']      = process.env.GENESIS_LEDGER_PATH || path.join(__dirname, '..', 'data', 'genesis', coin + '-ledger.csv');
         config['GENESIS_BLOCK_TIMEOUT_MS'] = parseIntMin0(process.env.GENESIS_BLOCK_TIMEOUT_MS, 14400000); // 4 hours
 
-        // XCP/XDP native-token airdrop leg (, GENESIS-LEDGER-BOOTSTRAP.md section 8).
-        // Per-bucket snapshot CSVs (address,quantity as of the snapshot block), sha256 pins,
-        // and XCHAIN bucket amounts, aligned by index: entry N of HASHES/AMOUNTS pins/funds
-        // entry N of PATHS. Empty PATHS = airdrop disabled (the default; the leg is armed by
-        // the launch cut, e.g. PATHS=xcp.csv,xdp.csv AMOUNTS splitting the 30,000,000 CP/DP
-        // allocation from GENESIS-PARAMETERS.md section A). An empty HASHES entry skips the
+        // XCP/XDP native-token airdrop leg. Per-bucket snapshot CSVs (address,quantity as of
+        // the snapshot block), sha256 pins, and XCHAIN bucket amounts, aligned by index: entry
+        // N of HASHES/AMOUNTS pins/funds entry N of PATHS. Empty PATHS = airdrop disabled (the
+        // default; the leg is armed by the launch cut, e.g. PATHS=xcp.csv,xdp.csv AMOUNTS
+        // splitting the 30,000,000 CP/DP allocation). An empty HASHES entry skips the
         // pin for that file (pre-pin dev/regtest only); AMOUNTS entries are mandatory and
         // genesis.js fails closed on a missing/invalid one. SNAPSHOT_BLOCK is informational
         // (announce + log); the CSVs are already cut at that height.
         //
-        // The env surface is REGTEST-ONLY (, ), matching GENESIS_DUMP_HASH
+        // The env surface is REGTEST-ONLY, matching GENESIS_DUMP_HASH
         // below and the hub coin bundle's genesis.$envOverrides gating. These values are
         // consensus: they decide how much XCHAIN each snapshot holder mints and which
         // synthetic tx hash carries the credit, so on mainnet/testnet they come from the

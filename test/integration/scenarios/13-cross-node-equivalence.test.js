@@ -235,7 +235,7 @@ describe('13 – Cross-node equivalence @regression @tier1', function () {
     // orphaned branch minted novel entities. It was skipped 2026-06-12 as a
     // CONFIRMED CONSENSUS FORK (P2a finding #1: getBlockHashes folded raw
     // index_* ids into the hash while rollback never deleted index_* rows;
-    // see claude/reports/2026-06-12_p2a-cross-node-equivalence.md). Both
+    // see). Both
     // consensus-side fixes have since landed - getBlockHashes hashes the
     // RESOLVED address/ticker strings, and rollback.js block-scope-deletes
     // index_addresses/index_tickers - so the guard is live again (re-enabled

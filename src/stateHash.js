@@ -88,7 +88,7 @@ const STATE_HASH_VERSION = 1;
 // no-op on the live fleet - the class is omitted from the preimage below the
 // threshold, leaving state_hash byte-identical to the pre-feature shape. Armed
 // fleet-atomically (real per-chain heights) exactly as WI-2 / state_commitment
-// did; regtest was the last inert key (armed 2026-07-16, ). No
+// did; regtest was the last inert key (armed 2026-07-16). No
 // STATE_HASH_VERSION bump: a block is unambiguously pre- or post-activation on a
 // given network, so the two preimage shapes cannot collide.
 const INDEX_MAP_STATE_HASH_ACTIVATION = {
@@ -100,7 +100,7 @@ const INDEX_MAP_STATE_HASH_ACTIVATION = {
     // xchain-{indexer,sync}/src/stateHash.js twin.
     mainnet: 0,           // ARMED at the genesis launch reindex (folds from genesis, no mid-chain flag-day)
     testnet: 0,           // ARMED at the genesis launch reindex (clean reseed accompanies it)
-    regtest: 0,           // ARMED from genesis 2026-07-16 : fresh stacks exercise the class end to end; pre-existing regtest venues need a clean reseed
+    regtest: 0,           // ARMED from genesis 2026-07-16: fresh stacks exercise the class end to end; pre-existing regtest venues need a clean reseed
 };
 
 // Whether the index-map class is folded into state_hash at `blockIndex` on `network`.
@@ -194,7 +194,7 @@ function isTokenSupplyStateHashActive(blockIndex, network, coin){
     return b >= threshold;
 }
 
-// ── BET status-flip state-hash flag-day ( P4) ──────────────────────────
+// ── BET status-flip state-hash flag-day ───────────────────────────────────────
 // The hash twin of the updated_rows BET replication classes. BET carries THREE
 // in-place mutations on surviving rows, all stamped with the block that made
 // them: the closed latch (bet_feeds.closed_block), the feed terminal flip
@@ -208,18 +208,12 @@ function isTokenSupplyStateHashActive(blockIndex, network, coin){
 // halt a mixed-version fleet instantly. Same per-chain arming model as
 // POLL_FINALIZE/TOKEN_SUPPLY above.
 const BET_STATUS_STATE_HASH_ACTIVATION = {
-    // Heights for the  pre-freeze activation train (~2026-08 deploy window).
-    // RE-PINNED 2026-07-27 against live tips read from the fleet's own indexers and
-    // nodes, replacing values derived from the 2026-07-07 POLL_FINALIZE tips. The
-    // rule, applied per chain: roundUp1000(tip + 21 days x nominal blocks/day), and
-    // never BELOW what was already pinned, since shrinking a margin is what
-    // re-introduces the failure this pass found. That failure was LTC:testnet, whose
-    // 4,823,000 the chain had already passed (tip 4,824,850): a height in the past is
-    // not a flag day at all, because a node replaying from genesis applies the rule
-    // from it while a long-running node never did, and the two diverge at the first
-    // hash comparison. Nothing was live yet (no prod indexer carried this map), so it
-    // cost a re-pin rather than a fork. CONFIRM again at train assembly: these are
-    // only as good as the day they were measured.
+    // Heights pinned via roundUp1000(tip + 21 days x nominal blocks/day), never
+    // lowered once set: a height that falls in the past is not a flag day at all,
+    // since a node replaying from genesis applies the rule from it while a
+    // long-running node never did, and the two diverge at the first hash
+    // comparison (caught once on LTC:testnet, whose first pinned height the chain
+    // had already passed). Re-verify these against live tips before each deploy.
     'BTC:mainnet':  963000,   // tip 959,853 (2026-07-27) + 21d @144/day = 962,877
     'LTC:mainnet':  3162000,   // tip 3,149,481 + 21d @576/day = 3,161,577
     'DOGE:mainnet': 6338000,   // tip 6,307,307 + 21d @1440/day = 6,337,547
@@ -244,11 +238,11 @@ function isBetStatusStateHashActive(blockIndex, network, coin){
     return b >= threshold;
 }
 
-// ── Archive-head anchor versions  ────────────────────────────────────
+// ── Archive-head anchor versions ──────────────────────────────────────────────
 // The anchor_actions versions that carry an archive HEAD (a signed batch header
 // whose v2 continuation chunks reassemble against it): v1 (legacy archive anchor)
-// and v6 (the publisher-bearing archive anchor of the ARCHIVE_REWARD flag-day,
-// ). Every predicate that selects "the archive parent of a v2 chunk" MUST
+// and v6 (the publisher-bearing archive anchor of the ARCHIVE_REWARD flag-day).
+// Every predicate that selects "the archive parent of a v2 chunk" MUST
 // use this set: the invalid_archive stamp, its reorg reset, the forward
 // updated_rows class and the state-hash class below all target the same rows.
 // SINGLE SOURCE OF TRUTH for xchain-indexer rollback.js + this file's class 6,
@@ -258,7 +252,7 @@ const ARCHIVE_HEAD_VERSIONS = [1, 6];
 // SQL fragment form, spliced as `p.version ` + ARCHIVE_HEAD_VERSIONS_SQL.
 const ARCHIVE_HEAD_VERSIONS_SQL = 'IN (' + ARCHIVE_HEAD_VERSIONS.join(', ') + ')';
 
-// ── invalid_archive v6-coverage state-hash flag-day  ─────────────────
+// ── invalid_archive v6-coverage state-hash flag-day ───────────────────────────
 // Widens the anchor_invalid state-hash class (class 6 below) from v1-only
 // parents to the full ARCHIVE_HEAD_VERSIONS set, closing the integrity-hash
 // blind spot where an invalid_archive stamp on a v6 parent was invisible to the
@@ -267,13 +261,13 @@ const ARCHIVE_HEAD_VERSIONS_SQL = 'IN (' + ARCHIVE_HEAD_VERSIONS.join(', ') + ')
 // is gated exactly like POLL_FINALIZE above (per-chain keys on the chain's OWN
 // local block_index) and landed DEFAULT INERT: below the threshold the query
 // keeps the legacy v1-only predicate and the preimage stays byte-identical to
-// the pre-feature shape. Pin real per-chain heights via the  flag-day set
-// (ledger placeholder: mainnet ~983000) and deploy every indexer + sync process
-// BEFORE the earliest chain crosses its height. No STATE_HASH_VERSION bump: a
-// block is unambiguously pre- or post-activation on a given network. Keep
+// the pre-feature shape. Pin real per-chain heights before ARCHIVE_REWARD
+// archives circulate, and deploy every indexer + sync process BEFORE the
+// earliest chain crosses its height. No STATE_HASH_VERSION bump: a block is
+// unambiguously pre- or post-activation on a given network. Keep
 // byte-identical to the xchain-sync twin.
 const ARCHIVE_INVALID_STATE_HASH_ACTIVATION = {
-    'BTC:mainnet':  999999999,  // INERT placeholder; pin via  before ARCHIVE_REWARD archives circulate
+    'BTC:mainnet':  999999999,  // INERT placeholder; pin before ARCHIVE_REWARD archives circulate
     'LTC:mainnet':  999999999,  // INERT placeholder
     'DOGE:mainnet': 999999999,  // INERT placeholder (DOGE is the anchor chain; arm first here)
     'BTC:testnet':  999999999,  // INERT placeholder
@@ -408,7 +402,7 @@ async function buildStateHashData(db, blockIndex, opts){
     //    parent's action_index is in an earlier block, so it is invisible to the
     //    action-scoped consensus hashes and to the per-block stream. Resolved via
     //    the status name (not status_id) to stay id-independent across nodes.
-    //    Version predicate GATED : legacy v1-only below the
+    //    Version predicate GATED: legacy v1-only below the
     //    ARCHIVE_INVALID_STATE_HASH activation, the full ARCHIVE_HEAD_VERSIONS set
     //    at/after it, so the pre-flag preimage stays byte-identical.
     let archiveInvalidActive = isArchiveInvalidStateHashActive(B, network, coin);

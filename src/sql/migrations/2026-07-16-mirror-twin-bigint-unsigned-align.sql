@@ -1,5 +1,5 @@
 -- xchain:migration mode=manual
--- Migration: align mirror-twin BIGINT signedness to the hub source DDLs 
+-- Migration: align mirror-twin BIGINT signedness to the hub source DDLs
 --
 -- Four hub-mirrored twins declared 11 columns as signed BIGINT where the hub
 -- source of truth (xchain-hub/src/sql/<table>.sql) declares BIGINT UNSIGNED:

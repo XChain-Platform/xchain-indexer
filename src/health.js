@@ -21,18 +21,13 @@
  *
  ********************************************************************/
 
-// Assemble the health() response from an indexer instance plus the few
-// values the API server owns (whether start() is still running, the last
-// fatal error, the freshly-read indexed-block height, and the current epoch
-// ms). Async only for the hub_push_queue stats fetch; all other fields are
-// derived synchronously from already-resolved values.
 const { computeArmedMapFingerprint } = require('./armedMapFingerprint');
 const { hubConfigStaleness, stallWedged } = require('./XChainIndexer');
 
-// Committed-only view of a db handle, for any read that ADVERTISES A HEIGHT
-// . A bare read routes through db.getConnection(), which hands back
-// the block loop's open transactionConnection while a block is processing, so
-// it dirty-reads the uncommitted block: health then reports a height that no
+// Committed-only view of a db handle, for any read that ADVERTISES A HEIGHT.
+// A bare read routes through db.getConnection(), which hands back the block
+// loop's open transactionConnection while a block is processing, so it
+// dirty-reads the uncommitted block: health then reports a height that no
 // committed-only reader can answer at. Every federation query guard reads
 // through apiView(), so an advertised in-flight height is deterministically
 // rejected by the very next call ("block_index N not yet indexed (latest:
@@ -42,7 +37,7 @@ const { hubConfigStaleness, stallWedged } = require('./XChainIndexer');
 // Falls back to the raw handle for stubs without apiView (unit/smoke doubles).
 // That fallback is a test affordance and not a production path; the rationale,
 // and why it must never spread to a federation read, is stated in full at the
-// indexerReorgView guard in XChainIndexer.js .
+// indexerReorgView guard in XChainIndexer.js.
 function committedView(db){
     return (db && typeof db.apiView === 'function') ? db.apiView() : db;
 }
@@ -102,7 +97,7 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
         status:           (indexerRunning && !circuitOpen) ? "healthy" : "unhealthy",
         running:          indexerRunning,
         synced:           indexer.isSynced(),
-        // COMMITTED height only : read through apiView(), the same
+        // COMMITTED height only: read through apiView(), the same
         // committed-only pooled connection every federation query guard uses, so
         // a client may poll health and immediately query AT this height. The
         // block being parsed right now is reported separately as inFlightBlock;
@@ -121,14 +116,14 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
         // from a tripped DB circuit breaker (decoderDbCircuit/indexerDbCircuit
         // === 'open') and a healthy catch-up, all of which otherwise present
         // identically as a growing lag.
-        // #2736: when the decoder has halted (durable REORG_HALT marker), attribute the stall to
-        // that rather than reporting ordinary lag/null. A halted decoder cannot advance, so the
+        // When the decoder has halted (durable REORG_HALT marker), attribute the stall to that
+        // rather than reporting ordinary lag/null. A halted decoder cannot advance, so the
         // indexer's lag is a downstream symptom, not an indexer-side stall.
         stallReason:      indexer.decoderReorgHalted
                             ? (indexer.stallReason || 'decoder_reorg_halt: decoder wrote a REORG_HALT marker; full decoder resync required')
                             : (indexer.stallReason || null),
         decoderReorgHalted: !!indexer.decoderReorgHalted,
-        // Advance-recency for the stall discriminator , mirrored from the /status
+        // Advance-recency for the stall discriminator, mirrored from the /status
         // healthcheck so both endpoints tell one story: the epoch-ms of the last successful
         // block commit, and whether a set stallReason is a healthy-degraded barrier defer (the
         // counter is still advancing) rather than a genuine wedge.
@@ -136,7 +131,7 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
         degraded:         !!indexer.stallReason
                             && !stallWedged(indexer.stallReason, indexer.lastBlockCommittedAt,
                                             indexer.healthStallGraceMs, now, indexer.stallClearsAt),
-        // : epoch-ms at which the current time-keyed barrier can first be satisfied,
+        // Epoch-ms at which the current time-keyed barrier can first be satisfied,
         // or null. Non-null means the indexer is waiting on WALL CLOCK (a future-stamped
         // block), which is expected and self-clearing rather than a wedge, and it tells an
         // operator exactly when to expect the chain to move again instead of leaving a
@@ -147,12 +142,12 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
         hubConfigStale:       hubConfigStale,
         hub_push_queue:   hubPushQueue,
         action_counters:  actionCounters,
-        // Reorg/rollback observability (#1813): total processed reorgs and the block
-        // index + epoch-ms timestamp of the most recent one, so the dashboard can meter
-        // the decoder->indexer reorg handshake instead of a frequently-reorging chain
+        // Reorg/rollback observability: total processed reorgs and the block index +
+        // epoch-ms timestamp of the most recent one, so the dashboard can meter the
+        // decoder->indexer reorg handshake instead of a frequently-reorging chain
         // presenting as an ordinary healthy indexer. Null when the API server did not
         // (or could not) read them.
-        // Consensus-gate build fingerprint : one string per process so a
+        // Consensus-gate build fingerprint: one string per process so a
         // fleet sweep can confirm every deployed indexer runs the same armed map
         // before a flag-day height. Per-file hashes live behind computeArmedMapFingerprint.
         armed_map_fingerprint: computeArmedMapFingerprint().fingerprint,

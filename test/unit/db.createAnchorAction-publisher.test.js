@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/db.createAnchorAction-publisher.test.js
  *
- *  (indexer-only): createAnchorAction must persist the v4/v5/v6
+ * (indexer-only): createAnchorAction must persist the v4/v5/v6
  * publisher-attestation tail (data['PUBLISHER'] + data['PUBLISHER_ATTESTATIONS'])
  * into the new nullable publisher / publisher_attestations columns, and leave both
  * NULL for v0-v3. anchor_actions is a derived local table (NOT consensus-visible).
@@ -59,7 +59,7 @@ async function runCreate(db, data) {
 const PUB  = 'ab'.repeat(32); // 64-hex publisher pubkey
 const ATT  = [{ pubkey: 'cd'.repeat(32), sig: 'ef'.repeat(64) }];
 
-describe('createAnchorAction publisher tail ()', function () {
+describe('createAnchorAction publisher tail', function () {
 
     afterEach(() => sinon.restore());
 

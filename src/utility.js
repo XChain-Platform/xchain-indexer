@@ -293,7 +293,7 @@ class Utility {
         return false;
     }
 
-    /* Price the pre-VM protocol fee for a VM action, in gas units ().
+    /* Price the pre-VM protocol fee for a VM action, in gas units.
      *
      * Single-sources arithmetic that used to live at four sites: the three acceptance
      * handlers (deploy.js, deploy_chunk.js, execute.js) and the static quote that sizes
@@ -442,7 +442,7 @@ class Utility {
 
     // floor(A * B / C) at d decimal places, entirely in decimal.js space. Backs the
     // BET parimutuel payout (stake * pot / winning-pool, floored to the tick's
-    // decimals, spec claude/specs/BETTING_SYSTEM_SPEC.md section 7): floor keeps
+    // decimals, betting spec section 7): floor keeps
     // sum(payouts) <= pot exactly, so the escrow-conservation invariant holds and
     // rounding remainders land in the oracle's dust credit rather than minting.
     // Determinism: the product and quotient are computed at the house-wide mathjs
@@ -529,7 +529,7 @@ class Utility {
 
     // bcfloor, but saturating at Number.MAX_SAFE_INTEGER instead of throwing.
     //
-    // For the FIAT dispenser unit counts ONLY . Those are
+    // For the FIAT dispenser unit counts ONLY. Those are
     //   Mode A: coin_amount / (FIAT_AMOUNT / coin_price)
     //   Mode B: (coin_amount * coin_price) / oracle_price
     // so unlike the non-FIAT coin_amount / GET_AMOUNT they scale with an
@@ -618,7 +618,7 @@ class Utility {
         let divisible   = (parseInt(decimals)==0) ? false : true;
         let parts       = String(amount).split('.');
         let [int, sats] = parts;
-        //<MULTI-DOT-REJECT> (item 4310): reject an amount carrying more than one decimal
+        //<MULTI-DOT-REJECT> reject an amount carrying more than one decimal
         // point. Destructuring keeps only the first two segments, so "1.2.3" reads as
         // int="1"/sats="2" and clears the divisible branch below, handing a non-numeric
         // string to the bignumber ledger math. The non-divisible branch already catches it
@@ -629,7 +629,7 @@ class Utility {
         //</MULTI-DOT-REJECT>
         if(!divisible && this.isNumeric(int) && int==amount)
             return true;
-        //<FRACTIONAL-PRECISION-CAP> (item 5346): an amount must not carry more fractional
+        //<FRACTIONAL-PRECISION-CAP> an amount must not carry more fractional
         // digits than the tick's decimals. The ledger normalizes to the tick precision at
         // write time (createLedgerChangeRecord -> bcadd(amount,0,decimals)), so accepting
         // finer precision here would store an unrounded action amount that diverges from the
@@ -647,7 +647,7 @@ class Utility {
     }
 
     // Validate a fiat amount format. Now equivalent to isValidAmountFormat (the precision
-    // cap lives there since item 5346); kept as a named alias so existing callers and the
+    // cap lives there now); kept as a named alias so existing callers and the
     // attest.js FEE_AMOUNT comment remain valid.
     isValidFiatFormat(decimals, amount){
         let valid = this.isValidAmountFormat(decimals, amount);
@@ -676,7 +676,7 @@ class Utility {
     // @param {tokenInfo}       object  Replayed token state, or null when the tick is new
     // @param {data}            object  Parsed ISSUE params carrying the requested lock value
     // @param {lock}            string  Lock field name (LOCK_DESCRIPTION, LOCK_MINT, ...)
-    // @param {nullPriorUnset}  bool     flag-day (LOCK_NULL_PRIOR_UNSET): treat an
+    // @param {nullPriorUnset}  bool    LOCK_NULL_PRIOR_UNSET flag-day: treat an
     //                                  absent/NULL prior as unset. Callers on the consensus
     //                                  path MUST resolve this from protocolChanges.isEnabled
     //                                  against the processing block; it defaults to false so
@@ -1155,7 +1155,7 @@ class Utility {
         return 'rejected';
     }
 
-    // Pure PRICE v1 oracle-usage fee math . Counterparty parity: the address
+    // Pure PRICE v1 oracle-usage fee math. Counterparty parity: the address
     // OPENING a Mode B dispenser pays the oracle operator up front, proportional to the
     // whole escrow's projected proceeds, rather than buyers paying per dispense.
     //
@@ -1210,7 +1210,7 @@ class Utility {
     }
 
     // Consensus check for the PRICE v1 oracle usage fee on a Mode B dispenser open or
-    // refill . Deliberately the same shape as validateNativeCoinFee below: derive
+    // refill. Deliberately the same shape as validateNativeCoinFee below: derive
     // an expected native amount from oracle prices, find the required output in
     // data['TX_OUTPUTS'], reject when it is missing or short of a tolerance band. Sharing
     // the shape (and the FEE_TOLERANCE_* band) is what keeps a payer's output sizing and a
@@ -1346,8 +1346,8 @@ class Utility {
     // every caller must pass a CHAIN-derived time: the consensus caller passes the evaluated
     // block's BLOCK_TIME, the read-only feequote/feeschedule pre-flights pass the quoted (tip)
     // block's time. Anchoring one of those decisions on the operator's wall clock while the
-    // chain anchors on block time is , and it makes a pre-flight disagree with the very
-    // check it exists to predict.
+    // chain anchors on block time is a real hazard: it makes a pre-flight disagree with the
+    // very check it exists to predict.
     async getFeeOraclePrices(db, coin, blockIndex, refTime, maxAgeSeconds){
         let priceDb;
         if(db.indexer && db.indexer.hubDb){
@@ -1893,7 +1893,7 @@ class Utility {
     // Driven by block_index (not block_time) because attestation deadlines are
     // measured in blocks, matching the wire format DEADLINE_BLOCKS.
     async processAttestationExpirations(actions, db, block_index, block_time){
-        // Capped per block (, ATTEST_MAX_EXPIRIES_PER_BLOCK). Overflow needs
+        // Capped per block (ATTEST_MAX_EXPIRIES_PER_BLOCK). Overflow needs
         // no bookkeeping here: the rows this block did not take are still 'pending'
         // with deadline_block < block_index, so the next block's sweep selects them,
         // in the same total order, until the backlog drains.
@@ -1945,7 +1945,7 @@ class Utility {
         let armed = await db.getArmedPolls(block_index);
         for(let poll of armed){
             let pollIndex = poll.action_index;
-            // Watermark short-circuit (): re-tallying every armed poll from full
+            // Watermark short-circuit: re-tallying every armed poll from full
             // ledger/vote/delegation history on every block is the dominant per-block cost here.
             // For a NON-time_weighted poll the tally is a pure function of its input rows (the
             // tick's ledger, the poll's votes, the tick's delegations) plus the immutable poll
@@ -2000,7 +2000,7 @@ class Utility {
             }
         }
 
-        // 3. Timelocked binding callbacks : polls finalized in an earlier
+        // 3. Timelocked binding callbacks: polls finalized in an earlier
         //    block whose CALLBACK_DELAY_BLOCKS window elapses at THIS block fire
         //    their deferred callback EXECUTE now. Runs after the finalization
         //    triggers so a poll finalizing this block can never fire in the same
@@ -2127,11 +2127,11 @@ class Utility {
     }
 
     // BET end-of-block pass: latch feeds closed at DEADLINE, expire feeds at
-    // expire_at (spec claude/specs/BETTING_SYSTEM_SPEC.md sections 4/6). Runs
+    // expire_at (betting spec sections 4/6). Runs
     // AFTER all user txs in the block (call site next to processExpirations),
     // inside the block's atomic write. A deliberate BOUNDED sibling of
     // processExpirations, NOT an extension of it: that pass scans its whole due
-    // set with no cap (the  shape), which is tolerable there only because
+    // set with no cap, which is tolerable there only because
     // orders/dispensers cost real fees to open. Feed creation inside the free
     // window is cheap, so both steps here cap their per-block work; deferral is
     // safe because both predicates are monotone in time and the user-facing
@@ -2190,11 +2190,11 @@ class Utility {
     // Capped at CROSS_SETTLE_MAX_PER_BLOCK, the same discipline the XCALL passes below
     // already carry: each settlement runs a 2f+1 signature verification and an escrow
     // release, so an uncapped mirror backlog would blow BLOCK_PROCESS_TIMEOUT and wedge
-    // every operator of the chain at the identical block (). Overflow carries
+    // every operator of the chain at the identical block. Overflow carries
     // forward in (snapshot_block, match_id) order; nothing is dropped.
     //
-    // The cap is FLAG-DAY GATED on CROSS_SETTLE_PER_BLOCK_CAP (, operator ruling
-    // of 2026-08-11, option b), because deferring a settlement to a later block moves
+    // The cap is FLAG-DAY GATED on CROSS_SETTLE_PER_BLOCK_CAP (operator ruling of
+    // 2026-08-11), because deferring a settlement to a later block moves
     // actions rows, the contract hash and the checkpoint preimage: applying it to blocks
     // the live mainnet chains already settled would fork a from-genesis replay against
     // them. Pre-flag-day the pass drains the full effective backlog exactly as before,
@@ -2275,7 +2275,7 @@ class Utility {
         // result row with invalid signatures - processResult rejects it on every block until it ages
         // out, so if mere presence suppressed expiry the request would stall for that whole window
         // and indexers mirroring different hubs would diverge on whether the
-        // v2 expiry action exists. (Such a row is no longer immortal: 's
+        // v2 expiry action exists. (Such a row is no longer immortal:
         // _retireUndeliverableResult records a 'retired:' callback once _resultAgedOut is true, and
         // getEffectiveUnprocessedCallResults excludes any call_id with a recorded callback, so it
         // then leaves the set. That bounds the backlog to the grace window; it does not make
@@ -2374,7 +2374,7 @@ class Utility {
     // actions/dispenser.js guards BOTH GIVE_COIN and GET_COIN to the indexer's
     // own chain (lines 146-153), so passing one for the other was inert. It was
     // still a trap: cross-chain dispensers are only shelved, not refused forever
-    // (, whose own prerequisites list a fiat-oracle decision), and the day
+    // (shelved behind a fiat-oracle decision of its own), and the day
     // GIVE_COIN != GET_COIN becomes possible, a single `coin` argument would
     // silently price the payment against the wrong validator pair. Mode A already
     // builds its pair from GET_COIN; this makes Mode B agree.
@@ -2415,7 +2415,7 @@ class Utility {
             // Compute: tokens = (coin_amount × coin_fiat_price) / token_fiat_price
             let coinFiatTotal = this.bcmul(coinAmount, coinFiatPrice, 18);
             let rawTokens     = this.bcdiv(coinFiatTotal, op.price, 64);
-            // Saturating, not throwing: a throw here wedges the block loop .
+            // Saturating, not throwing: a throw here wedges the block loop.
             let units         = this.bcfloorSaturating(rawTokens);
             if(units >= 1){
                 return {
@@ -2443,7 +2443,7 @@ class Utility {
             // Calculate how many units the buyer's coin amount covers
             // raw_multiplier = coin_amount / btc_per_token
             let rawMultiplier = this.bcdiv(coinAmount, btcPerToken, 64);
-            // Saturating, not throwing: a throw here wedges the block loop .
+            // Saturating, not throwing: a throw here wedges the block loop.
             let units = this.bcfloorSaturating(rawMultiplier);
             if(units >= 1){
                 return {

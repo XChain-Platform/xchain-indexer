@@ -98,7 +98,7 @@ describe('Hash coverage guard @regression', function () {
             'anchor_actions', // invalid_archive stamp class
             'polls',          // finalization-flip class (flag-day gated; structural binding below)
             'tokens',         // supply-refresh class (F-1 closure; flag-day gated; structural binding below)
-            'bet_feeds',      // BET latch + terminal-flip class ( P4; flag-day gated; structural binding below)
+            'bet_feeds',      // BET latch + terminal-flip class (flag-day gated; structural binding below)
             'bets',           // BET settlement-flip class (same flag-day; structural binding below)
         ]);
         assert.deepStrictEqual(
@@ -194,7 +194,7 @@ describe('Hash coverage guard @regression', function () {
             assert.ok(Number.isFinite(map[key]), `TOKEN_SUPPLY_STATE_HASH_ACTIVATION['${key}'] missing`);
     });
 
-    it('bet_status class: gated selections exist, keyed by the three stamps, armed per chain ( P4)', function () {
+    it('bet_status class: gated selections exist, keyed by the three stamps, armed per chain (P4)', function () {
         // Structural binding for the bet_feeds/bets state_hash declarations: the
         // gathering SQL must select by the stamp columns (the same keys the
         // updated_rows BET forward channel and both rollback resets use) behind
@@ -215,7 +215,7 @@ describe('Hash coverage guard @regression', function () {
                 assert.ok(sel.indexOf(banned) === -1, `bet_status preimage must not hash surrogate id column ${banned}`);
     });
 
-    // ── Advisory content-parity coverage  ──────────────────────────
+    // ── Advisory content-parity coverage ──────────────────────────
     //
     // The registry's CONTENT_PARITY_* block is the coverage contract for the
     // advisory TABLE_CONTENT_PARITY_CHECK that xchain-sync computes and compares.
@@ -256,7 +256,7 @@ describe('Hash coverage guard @regression', function () {
         it('every streamed table is content-parity covered unless it is in one of the two declared classes', function () {
             // The finding in one assertion, from this side of the twin: a replicated
             // table that is neither checked nor knowingly excluded is exactly the
-            // silent gap  was raised for.
+            // silent gap this suite was raised for.
             const topo    = lifecycle.streamTopology();
             const streamed = [].concat(topo.blockScoped, topo.txScoped, topo.actionScoped, topo.index, topo.special);
             const mutable  = new Set(lifecycle.contentParityMutableTables());

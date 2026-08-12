@@ -9,7 +9,7 @@
  * General Public License v3.0 or later; see LICENSE.md.
  *
  **********************************************************************
- * Federation READ isolation ( / H2 residual).
+ * Federation READ isolation.
  *
  * H2 moved the pushvalidatorrewards WRITE off the block's ACID transaction by
  * routing it through indexerDb.apiView() (an independent pooled connection). The
@@ -65,7 +65,7 @@ function extractHandlerBodies(src) {
     return bodies;
 }
 
-describe('federation READ connection isolation  @regression @tier1', function () {
+describe('federation READ connection isolation @regression @tier1', function () {
     const federationReads = parseFederationReadMethods(API_SRC);
     const bodies = extractHandlerBodies(API_SRC);
 

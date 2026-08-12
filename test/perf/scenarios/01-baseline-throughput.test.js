@@ -23,11 +23,11 @@ const { processBlocksInstrumented } = require('../setup/instrumented-processor')
 const ReportGenerator = require('../setup/report-generator');
 
 // ---------------------------------------------------------------------------
-// WHY THIS FILE HAS NO WALL-CLOCK DEADLINE 
+// WHY THIS FILE HAS NO WALL-CLOCK DEADLINE
 //
 // It used to carry `this.timeout(300000)` from the day the perf suite was written,
 // and on 2026-07-29 the heavy scenario blew through it and was read as a possible
-// throughput regression. Measured on the reference venue (devhost, throwaway
+// throughput regression. Measured on the reference venue (, throwaway
 // tmpfs MariaDB 11.4, Node v22.22.3, otherwise idle) the heavy scenario finishes in
 // 279 s and 274 s on two runs, of which 275 s and 274 s are block processing: it was
 // inside the 300 s deadline by 7%, so it does not need a neighbouring container or a

@@ -23,9 +23,7 @@ const dispenserCaps = require('../dispenser_caps_activation.js');
 
 class Dispense {
 
-    // Handle constructing a class instance
     constructor(action){
-        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -34,7 +32,6 @@ class Dispense {
         this.mapper    = action.mapper;
     }
 
-    // Handle parsing the DISPENSE transaction
     async parse(params, data, error){
 
         // Save some details from the dispense request
@@ -78,9 +75,9 @@ class Dispense {
 
             // Unknown dispenser: no dispenserInfo entry exists to settle against, so
             // skip this action_index entirely rather than pushing a dispense record
-            // that references a missing dispenser (no settlement occurs). (#3120: was a
-            // sentinel-string round-trip through `error` with two provably-dead !error
-            // branches; `error` is false here, so this is behavior-identical.)
+            // that references a missing dispenser (no settlement occurs). This replaced
+            // a sentinel-string round-trip through `error` with two provably-dead !error
+            // branches; `error` is false here, so behavior is unchanged.
             if(!dispenser)
                 continue;
 
@@ -173,7 +170,7 @@ class Dispense {
             // scales with an externally-chosen price rather than with GET_AMOUNT, so it
             // can be many orders of magnitude larger: a payment worth ~1e7 units against
             // a nearly-empty dispenser spun ten million bignumber multiplies inside one
-            // block and could blow BLOCK_PROCESS_TIMEOUT .
+            // block and could blow BLOCK_PROCESS_TIMEOUT.
             //
             // Identical by construction, not merely equivalent: the loop stopped at the
             // largest m <= multiplier with m * GIVE_AMOUNT <= GIVE_REMAINING, and that is
@@ -197,7 +194,7 @@ class Dispense {
                 give_amount = this.util.bcmul(multiplier, dispenser['GIVE_AMOUNT'], 64);
             }
 
-            // Verify that GIVE_AMOUNT 
+            // Verify at least one unit can be dispensed (multiplier > 0)
             if(!error && multiplier == 0)
                 error = 'invalid: insufficient funds ';
 
@@ -281,7 +278,7 @@ class Dispense {
             });
         }
 
-        //  flag-day: at/above the activation the auto-close threshold is the
+        // Flag-day gate: at/above the activation the auto-close threshold is the
         // dispenser's PER-UNIT price; below it the legacy aggregate-purchase
         // comparison applies so historical replay stays byte-identical.
         let perUnitClose = await this.actions.protocolChanges.isEnabled('DISPENSER_CLOSE_PER_UNIT', block_index);
@@ -373,7 +370,7 @@ class Dispense {
             // close only when remaining escrow cannot cover one more unit. The
             // legacy comparison used the triggering dispense's aggregate
             // give_amount (multiplier * per-unit), closing early after any large
-            // order; that behavior is preserved below the  flag-day so
+            // order; that behavior is preserved below the gate above so
             // historical blocks replay byte-identically.
             let closeThreshold = perUnitClose ? dispenser['GIVE_AMOUNT'] : dispense['GIVE_AMOUNT'];
             if(status=='valid' && this.util.bclt(dispenser['GIVE_REMAINING'], closeThreshold)){
@@ -387,7 +384,7 @@ class Dispense {
                 data['DISPENSER_STATUS']       = 'empty';
                 await this.actions.processAction(action, null, data, null);
             } else if(status=='valid' && dispenserCaps.isDispenserCapsActive(block_time, this.config['NETWORK'])){
-                // MAX_DISPENSES cap (dispenser_caps_activation.js / ). The dispense
+                // MAX_DISPENSES cap (see dispenser_caps_activation.js). The dispense
                 // that reaches the cap already executed above; now the dispenser auto-closes
                 // and refunds remaining escrow to the owner. DISPENSER_CLOSE routes the refund
                 // sweep > canceller > SOURCE, which resolves to SOURCE for this auto-close (no

@@ -28,7 +28,7 @@ const ReportGenerator = require('../setup/report-generator');
 // (processExpirations -> getExpiredItems, cross-chain settlement, cooldown
 // completion) re-scan a growth-unbounded standing set on EVERY block, so their
 // cost rises with accumulated history rather than with the current block's work.
-// See claude/reports/review/2026-06-24-scale-perf/2026-06-24-deep-review.md (P1-P6).
+// See (P1-P6).
 //
 // This scenario deliberately does NOT reset. It measures block-time on a young
 // database, GROWS the standing set (thousands of still-open DEX orders that the

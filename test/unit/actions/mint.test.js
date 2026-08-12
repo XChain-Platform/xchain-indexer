@@ -325,7 +325,7 @@ describe('Mint handler @regression @tier1', function () {
         });
     });
 
-    describe('MINT_SELF_MINTED_ONLY flag-day ( / MINT-1)', function () {
+    describe('MINT_SELF_MINTED_ONLY flag-day (/ MINT-1)', function () {
 
         function gateStub(active) {
             return sinon.stub().callsFake(async (name) =>

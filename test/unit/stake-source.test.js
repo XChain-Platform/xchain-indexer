@@ -38,7 +38,7 @@ function makeIndexer({ pubkeyId = 7, validId = 1, doQuery } = {}) {
         getStatusId: sinon.stub().resolves(validId),
         doQuery:     doQuery || sinon.stub().resolves([])
     };
-    // getStakeSourceByPubkey resolves through indexer.indexerDb.apiView() ( /
+    // getStakeSourceByPubkey resolves through indexer.indexerDb.apiView() (/
     // H2 residual: a federation read must draw an independent pooled connection, never
     // join the block's open transaction). The fake view returns the same stubbed db so
     // the behaviour assertions below still observe db.doQuery / db.getPubkeyId; the
@@ -157,7 +157,7 @@ describe('getStakeSourceByPubkey()', function () {
         assert.deepStrictEqual(r, { error: 'failed to resolve stake source' });
     });
 
-    //  / H2 residual: a federation read landing mid-block must resolve on an
+    // H2 residual: a federation read landing mid-block must resolve on an
     // independent pooled connection and NEVER on the block's open transaction
     // connection. Drives getStakeSourceByPubkey against a real Database whose
     // transactionConnection is set (simulating mid-block) and asserts every query

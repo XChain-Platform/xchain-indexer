@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/blockhash-conformance-twin.test.js
  *
- * Static drift-lock for the consensus block-hash CONFORMANCE PAIR ,
+ * Static drift-lock for the consensus block-hash CONFORMANCE PAIR,
  * reciprocal side: xchain-sync carries the same test, but that copy only runs
  * in sync CI, so an indexer-side edit to the hashing inputs would ship green
  * here and only redden when sync CI next runs with a sibling checkout (the
@@ -129,7 +129,7 @@ function sqlLiterals(fnSrc){
 function syncFile(rel){ return path.join(SYNC_ROOT, rel); }
 function indexerFile(rel){ return path.join(INDEXER_ROOT, rel); }
 
-describe('consensus block-hash conformance twins (static drift-lock, ) @regression', function(){
+describe('consensus block-hash conformance twins (static drift-lock) @regression', function(){
 
     function loadPair(ctx, syncRel, indexerRel){
         if(!requireSibling(ctx, syncFile(syncRel))) return null;

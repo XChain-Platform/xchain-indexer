@@ -9,7 +9,7 @@
  * General Public License v3.0 or later; see LICENSE.md.
  *
  **********************************************************************
- * The apiView() fallback is a TEST AFFORDANCE, not a production path .
+ * The apiView() fallback is a TEST AFFORDANCE, not a production path.
  *
  * Three sites read through `typeof db.apiView === 'function' ? db.apiView() : db`
  * so a minimal test double without apiView still runs: the reorg driver's
@@ -17,9 +17,9 @@
  * committedView() (health.js). Nothing else may take that shape. apiView() is
  * what gives a read an independent pooled connection that sees only committed
  * state, so a silent raw-db fallback on a federation READ would re-open the
- * dirty read REORG-1  exist to prevent.
+ * dirty read the REORG-1 guards exist to prevent.
  *
- *  is the concrete failure this guards: an e2e double carrying only
+ * The concrete failure this guards: an e2e double carrying only
  * doQuery/getPubkeyId/getStatusId hit stake-source.js and died on
  * "indexer.indexerDb.apiView is not a function". The fix went to the DOUBLE, not
  * to the call site. This suite keeps that decision from eroding: the fallback
@@ -72,7 +72,7 @@ function fallbackSites(source) {
     return hits;
 }
 
-describe('apiView() fallback is a test affordance  @regression @tier1', function () {
+describe('apiView() fallback is a test affordance @regression @tier1', function () {
 
     it('the real Database defines apiView(), so the fallback branch is unreachable in production', function () {
         assert.strictEqual(typeof Database.prototype.apiView, 'function',
@@ -90,20 +90,20 @@ describe('apiView() fallback is a test affordance  @regression @tier1', function
         }
         assert.deepStrictEqual(offenders, [],
             'new apiView() fallback site(s). A read that may silently drop to the raw db is a dirty ' +
-            'read waiting to happen : give the failing test double an ' +
+            'read waiting to happen: give the failing test double an ' +
             '`apiView(){ return this }` instead of guarding the call site.\n  ' + offenders.join('\n  '));
     });
 
     for (const site of ALLOWED_SITES) {
-        it(site + ' still names its fallback a test affordance and points at ', function () {
+        it(site + ' still names its fallback a test affordance, not a production path', function () {
             const source = fs.readFileSync(path.join(SRC_DIR, site), 'utf8');
             const hits = fallbackSites(source);
             assert.ok(hits.length > 0, site + ' no longer has an apiView() fallback; drop it from ALLOWED_SITES');
             for (const hit of hits) {
                 assert.match(hit.comment, /test affordance/i,
                     site + ':' + hit.line + ' must say the fallback is a test affordance, not a production path');
-                assert.match(hit.comment, //,
-                    site + ':' + hit.line + ' must cite , where the reasoning is recorded');
+                assert.match(hit.comment, /not a production path/i,
+                    site + ':' + hit.line + ' must say the raw-db branch is not a production path');
             }
         });
     }

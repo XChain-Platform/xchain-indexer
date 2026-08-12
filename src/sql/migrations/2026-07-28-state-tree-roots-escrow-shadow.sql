@@ -18,9 +18,8 @@
 --
 -- WHY
 -- ---
--- SPV sub-tree spec Stage B (claude/specs/spv-state-subtree-extension.md,
--- ) commits XCHAIN_ESC locked-balance leaves INSIDE balances_root. Its
--- §7 shadow window therefore cannot reuse the committed balances_root column
+-- The SPV sub-tree design commits XCHAIN_ESC locked-balance leaves INSIDE balances_root. Its
+-- shadow window therefore cannot reuse the committed balances_root column
 -- the way no slot's shadow could reuse its committed column: the follower
 -- compares balances_root every block and the explorer reassembles state_root
 -- from it, so a below-arming would-be value there is either a false halt or a

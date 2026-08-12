@@ -33,7 +33,7 @@ CREATE TABLE state_checkpoints (
     -- never retracted. Append-only: a reorged height is superseded by a NEW row
     -- with a higher checkpoint_seq (readers take MAX(checkpoint_seq) per height).
     -- The hub-side anchor_txid audit column is NOT mirrored.
-    --  split-brain fence, mirrored from the hub (). The key is
+    -- Split-brain fence, mirrored from the hub. The key is
     -- (chain, network, checkpoint_seq), NOT the older wider
     -- (chain, network, block_index, checkpoint_seq): checkpoint_seq is derived
     -- deterministically from snapshot_block, so two BTC-tip-skewed leaders cannot

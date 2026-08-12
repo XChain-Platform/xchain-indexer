@@ -32,7 +32,7 @@
  * A mirrored result row that can never deliver here (no local request, a routing
  * mismatch, or signatures that miss the cross_chain quorum) is RETIRED once it has
  * aged out, rather than being re-rejected on every block forever: see
- * _retireUndeliverableResult . Retirement is consensus-visible and
+ * _retireUndeliverableResult. Retirement is consensus-visible and
  * flag-day gated.
  *
  * Spec: xchain-documentation/protocol/actions/XCALL.md
@@ -61,18 +61,18 @@ const XCALL_MAX_HOPS            = PROTO.XCALL_MAX_HOPS;            // user→Y =
 const XCALL_MIN_DEADLINE_BLOCKS = PROTO.XCALL_MIN_DEADLINE_BLOCKS;
 const XCALL_MAX_DEADLINE_BLOCKS = PROTO.XCALL_MAX_DEADLINE_BLOCKS; // generous: must cover both chains' confirmation depths + relay rounds
 const XCALL_MAX_CALLS_PER_BLOCK = PROTO.XCALL_MAX_CALLS_PER_BLOCK; // deterministic per-block injection cap (overflow carries forward; never dropped)
-const XCALL_RESULT_ORPHAN_GRACE_SECONDS = PROTO.XCALL_RESULT_ORPHAN_GRACE_SECONDS; // age-out clock for a result row with no local request 
+const XCALL_RESULT_ORPHAN_GRACE_SECONDS = PROTO.XCALL_RESULT_ORPHAN_GRACE_SECONDS; // age-out clock for a result row with no local request
 
 const ALLOWED_CHAINS = ['BTC', 'LTC', 'DOGE'];
 
-// Flag-day gating the retirement of undeliverable result rows . See the
+// Flag-day gating the retirement of undeliverable result rows. See the
 // registration in src/protocol_changes.js and _retireUndeliverableResult below.
 const ORPHAN_RETIREMENT_GATE = 'XCALL_RESULT_ORPHAN_RETIREMENT';
 
 // call_id preimage fields, in preimage order. This list is the single in-file
 // source of truth for the ORDER and the COUNT, so a skew against the VM's
-// derivation is one visible edit rather than a miscounted string concatenation
-// (the  fork class). Exported and pinned against the canonical
+// derivation is one visible edit rather than a miscounted string concatenation.
+// Exported and pinned against the canonical
 // xchain-vm GOLDEN_VECTORS.callId tuple by bin/check-preimage-golden-parity.js.
 const CALL_ID_PREIMAGE_FIELDS = [
     'NETWORK', 'COIN', 'TX_HASH', 'ROOT_ACTION_INDEX',
@@ -137,7 +137,6 @@ class Xcall {
         return CALL_ID_PREIMAGE_FIELDS.map((f) => String(src[f]));
     }
 
-    // Dispatch on VERSION
     async parse(params, data, error){
 
         let format = data['FORMAT'];
@@ -411,10 +410,10 @@ class Xcall {
     // otherwise processResult rejects that row every block while the expiry gate saw
     // only its presence and suppressed expiry forever - deadlocking the requester's
     // callback and diverging indexers that mirror different hubs on whether the v2
-    // expiry action exists. (Since  processResult also RETIRES such a row once
-    // the request's deadline_block has passed, which is downstream of this gate: the
-    // request must reach that deadline in the first place, and it only does because
-    // this returns false.)
+    // expiry action exists. (processResult also RETIRES such a row once the request's
+    // deadline_block has passed, which is downstream of this gate: the request must
+    // reach that deadline in the first place, and it only does because this returns
+    // false.)
     // Mirrors processResult's exact delivery gates (network, local request, routing,
     // quorum) so the two paths agree byte-for-byte on deliverability.
     async resultSuppressesExpiry(r){
@@ -430,7 +429,7 @@ class Xcall {
     }
 
     // Has an undeliverable result row aged out, i.e. can it no longer become
-    // deliverable on any branch this chain could still adopt? 
+    // deliverable on any branch this chain could still adopt?
     //
     // Two clocks, both node-invariant, both read only from consensus inputs (the
     // block being processed and the quorum-signed mirror row), never wall-clock:
@@ -471,7 +470,7 @@ class Xcall {
     }
 
     // Retire a result row this chain can never deliver, so it stops being re-selected
-    // by the capped delivery pass every block . Returns true when the row was
+    // by the capped delivery pass every block. Returns true when the row was
     // retired (the caller must then stop processing it).
     //
     // Without this, an undeliverable row is rejected on every block and pruned by
@@ -479,8 +478,8 @@ class Xcall {
     // record none. getEffectiveUnprocessedCallResults orders by (snapshot_block,
     // call_id) and the pass takes only XCALL_MAX_CALLS_PER_BLOCK rows, so as few as 25
     // such rows at a low snapshot_block hold the head of the queue forever and starve
-    // every legitimate result behind them ( test-host: 229 rows, head slice 25/25
-    // unmatched, blocking the drill's own result at the tail).
+    // every legitimate result behind them (observed live: 229 undeliverable rows ahead
+    // of a real one starved it at the tail of a 25-row head slice).
     //
     // CONSENSUS-VISIBLE, deliberately. Retirement mints an actions row and frees a slot
     // in a capped per-block pass, which decides which block a real callback EXECUTE
@@ -524,7 +523,7 @@ class Xcall {
     // processing in cross_chain_call_callbacks (idempotency + rollback anchor).
     // Every exit that is NOT a deferral records something in that table, so no row can
     // sit in the capped queue forever: delivery and the interlock record their outcome,
-    // and the three undeliverable exits retire the row once it has aged out .
+    // and the three undeliverable exits retire the row once it has aged out.
     async processResult(r, data){
         let callId = String(r.call_id || '').toLowerCase();
 
@@ -545,7 +544,7 @@ class Xcall {
             return;
         }
 
-        // ── Verify the cross_chain quorum over the result canonical ──────────────
+        // Verify the cross_chain quorum over the result canonical.
         let q = await this._verifyResultQuorum(r);
         if(!q.synced){
             // Snapshot not mirrored yet; defer (the barriers front-stop this; see xexec.js).
@@ -570,7 +569,7 @@ class Xcall {
         try { resultPayload = Buffer.from(String(r.return_payload_b64 || ''), 'base64').toString('utf8'); }
         catch(_){ resultPayload = ''; }
 
-        // ── Exactly-once interlock vs the deadline-expiry path ──────────────────
+        // Exactly-once interlock vs the deadline-expiry path.
         // Both paths are block-height-driven and share request_status: whichever
         // reaches terminal first wins; the loser records itself as skipped so the
         // result row is never re-evaluated (idempotency row below) but the contract
@@ -665,8 +664,8 @@ class Xcall {
         }, true);
 
         // SOURCE = contract address (ATTEST callback precedent). The synthetic TX_HASH
-        // ('XCALLCB' tag, live consensus, byte-identical to the pre- inline
-        // synthesis) is chain/network-namespaced so anything the callback itself emits
+        // ('XCALLCB' tag, live consensus, byte-identical to the legacy inline
+        // synthesis it replaced) is chain/network-namespaced so anything the callback itself emits
         // (ATTEST, emit.execute, crossExecute) derives collision-free ids. CROSS_HOPS
         // carries the call's hop count into the callback context so a contract reacting
         // to a callback by calling out again stays inside the hop budget.

@@ -42,7 +42,7 @@
  *   v3 - v0 checkpoint + STATE_ROOT|STATE_ROOT_VERSION|BLOCK_MERKLE_ROOT|BLOCK_MERKLE_VERSION appended before SIG_COUNT (SPV Phase 2)
  *   v4 - v0 checkpoint + PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|... appended after the root signature list (anchor-reward re-derivation)
  *   v5 - v3 checkpoint + PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|... appended after the root signature list (anchor-reward re-derivation)
- *   v6 - v1 archive anchor + PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|... appended after the root signature list (archive-reward re-derivation, )
+ *   v6 - v1 archive anchor + PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|... appended after the root signature list (archive-reward re-derivation)
  *
  ********************************************************************/
 
@@ -66,7 +66,6 @@ class Anchor {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
-        // Per-version format strings
         this.formats = {};
         this.formats[0] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...';
         this.formats[1] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|MATCH_BATCH_SEQ|MATCH_COUNT|BATCH_CRC32|TOTAL_CHUNKS|ARCHIVE_B64|SIG_COUNT|PUBKEY|SIG|...';
@@ -83,7 +82,7 @@ class Anchor {
         // indexer re-derives the reward from these bytes, so the trusted hub push is retired.
         this.formats[4] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...|PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|...';
         this.formats[5] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|STATE_ROOT|STATE_ROOT_VERSION|BLOCK_MERKLE_ROOT|BLOCK_MERKLE_VERSION|SIG_COUNT|PUBKEY|SIG|...|PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|...';
-        // v6 (archive-reward re-derivation flag-day, ): the v1 archive anchor PLUS the
+        // v6 (archive-reward re-derivation flag-day): the v1 archive anchor PLUS the
         // elected archive-leader PUBLISHER pubkey and a 2f+1 oracle_publish attestation over
         // the 'anchor_archive' XANCPUB canonical, appended AFTER the wrapper signature list.
         // The indexer re-derives the anchor_archive reward from these bytes, retiring the
@@ -133,7 +132,7 @@ class Anchor {
     // the checkpoint root canonical and this reward attestation in the same round is never
     // falsely slashable (same R-4 reasoning as the v0/v1 roundId split above).
     _rewardCanonical(d){
-        // Archive leg (v6, ): the attested tuple is the anchor_archive reward, keyed on
+        // Archive leg (v6): the attested tuple is the anchor_archive reward, keyed on
         // MATCH_BATCH_SEQ (the archive round number) with the frozen ARCHIVE amount. MUST
         // byte-match the hub's StateAnchorPublisher._archiveAttestationCanonical. The
         // 'XANCPUB|archive|...' roundId is disjoint from every per-chain roundId
@@ -159,7 +158,6 @@ class Anchor {
         return base;
     }
 
-    // Dispatch on VERSION
     async parse(params, data, error){
         let format = data['FORMAT'];
         if(!error && (format === null || this.formats[format] === undefined))
@@ -204,7 +202,7 @@ class Anchor {
             sigBase = 14;
         }
 
-        // ── Structural validation ─────────────────────────────────────────────
+        // Structural validation
         if(!error && ALLOWED_CHAINS.indexOf(data['CHAIN']) === -1)
             error = 'invalid: CHAIN (unknown)';
         if(!error && String(data['NETWORK']) !== String(this.config['NETWORK'] || ''))
@@ -254,7 +252,7 @@ class Anchor {
                 error = 'invalid: STATE_ROOT_VERSION / BLOCK_MERKLE_VERSION (format)';
         }
 
-        // ── Parse the signature list ──────────────────────────────────────────
+        // Parse the signature list
         let sigs = [];
         let sigCount = 0;
         if(!error){
@@ -274,8 +272,8 @@ class Anchor {
             }
         }
 
-        // ── v4/v5: PUBLISHER pubkey + the publisher-attestation sig list, appended AFTER
-        //    the root sig list (located by sigBase + 1 + 2*sigCount). ────────────────────
+        // v4/v5: PUBLISHER pubkey + the publisher-attestation sig list, appended AFTER
+        // the root sig list (located by sigBase + 1 + 2*sigCount).
         let publisherSigs = [];
         if(!error && (format === 4 || format === 5 || format === 6)){
             try {
@@ -297,40 +295,33 @@ class Anchor {
             }
         }
 
-        // ── Replay guards: never accept a seq BELOW the recorded max. Equal is
-        // allowed: a v0 and its v1 share the same checkpoint_seq by design
-        // (same wrapper), and an exact replay is signature-bound to identical
-        // content, so it can only produce a harmless duplicate row. ──────────
+        // Replay guards: never accept a seq BELOW the recorded max. Equal is allowed: a v0
+        // and its v1 share the same checkpoint_seq by design (same wrapper), and an exact
+        // replay is signature-bound to identical content, so it can only produce a harmless
+        // duplicate row.
         if(!error){
             let maxSeq = await this.indexerDb.getMaxAnchorCheckpointSeq(data['CHAIN'], data['NETWORK']);
             if(maxSeq !== null && Number(data['CHECKPOINT_SEQ']) < maxSeq)
                 error = 'invalid: CHECKPOINT_SEQ (stale; replay of an older checkpoint)';
         }
-        // The archive half of the guard needs a second condition, and  is why:
-        // MATCH_BATCH_SEQ is a DENSE counter the hub allocates from its own tables
-        // (StateAnchorPublisher._getNextBatchSeq: MAX(batch_seq)+1 over
-        // cross_chain_matches / cross_chain_calls / validator_rewards), and those
-        // tables are reset by a wipe-and-replay rebase while THIS watermark, read
-        // from replayed anchor_actions, returns to the pre-rebase maximum. Seq alone
-        // therefore cannot tell "the hub's counter restarted" from "someone is
-        // replaying an old archive", and reading it alone fails the first case
-        // closed: every post-rebase archive indexes invalid, the invalid row does not
-        // advance the watermark, and the rail stays down for as many batches as
-        // history had while paying real DOGE for each attempt.
+        // The archive half of the guard needs a second condition: MATCH_BATCH_SEQ is a dense
+        // counter the hub allocates from its own tables, and those tables are reset by a
+        // wipe-and-replay rebase while this watermark (read from replayed anchor_actions)
+        // returns to the pre-rebase maximum. Seq alone cannot tell "the hub's counter
+        // restarted" from "someone is replaying an old archive", and reading it alone fails
+        // closed: every post-rebase archive indexes invalid and the rail stays down for as
+        // many batches as history had, while paying real DOGE for each attempt.
         //
-        // The wrapper checkpoint seq settles it, because CHECKPOINT_SEQ is NOT dense:
-        //  made it = snapshot_block, a chain value that keeps advancing across
-        // any wipe. A genuine replay is signature-bound to its original canonical and
-        // so carries the OLD checkpoint seq; a post-rebase archive carries a strictly
-        // higher one. So a low batch seq is stale only when the checkpoint is ALSO
-        // behind the newest archive's.
+        // The wrapper checkpoint seq settles it: CHECKPOINT_SEQ is NOT dense, it equals
+        // snapshot_block, a chain value that keeps advancing across any wipe. A genuine
+        // replay is signature-bound to its original canonical and so carries the OLD
+        // checkpoint seq; a post-rebase archive carries a strictly higher one. So a low
+        // batch seq is stale only when the checkpoint is ALSO behind the newest archive's.
         //
-        // Deliberately "behind", not "not ahead": two archives can legitimately ride
-        // ONE checkpoint (a second batch draining leftover rows in the same cadence),
-        // and the equal case is already the tolerated one everywhere else in this
-        // guard - an exact re-broadcast is signature-bound to identical content, so it
-        // can only produce a duplicate row, which the archive-head pick is already
-        // required to handle deterministically.
+        // Deliberately "behind", not "not ahead": two archives can legitimately ride ONE
+        // checkpoint, and the equal case is already tolerated elsewhere in this guard since
+        // an exact re-broadcast is signature-bound to identical content and can only produce
+        // a duplicate row.
         if(!error && (format === 1 || format === 6)){
             let wm = await this.indexerDb.getArchiveReplayWatermarks();
             let batchStale      = (wm.batchSeq !== null && Number(data['MATCH_BATCH_SEQ']) < wm.batchSeq);
@@ -339,15 +330,15 @@ class Anchor {
                 error = 'invalid: MATCH_BATCH_SEQ (stale; replay of an older archive batch)';
         }
 
-        // ── v1 archive integrity (single-chunk batches verify inline; chunked
-        //    batches verify at reassembly when the last v2 arrives) ────────────
+        // v1 archive integrity (single-chunk batches verify inline; chunked batches verify
+        // at reassembly when the last v2 arrives)
         if(!error && (format === 1 || format === 6) && Number(data['TOTAL_CHUNKS']) === 1){
             let crc = this._archiveCrc(data['ARCHIVE_B64']);
             if(crc === null)                          error = 'invalid: ARCHIVE_B64 (not gzip)';
             else if(crc !== data['BATCH_CRC32'])      error = 'invalid: BATCH_CRC32 (archive mismatch)';
         }
 
-        // ── Verify 2f+1 oracle_publish signatures over the canonical ─────────
+        // Verify 2f+1 oracle_publish signatures over the canonical.
         // SNAPSHOT_BLOCK comes from the wire payload (a BTC height), NOT from
         // the DOGE block this ANCHOR landed in.
         // Hoisted so the v4/v5 publisher-attestation check below can REUSE the same
@@ -392,18 +383,18 @@ class Anchor {
             }
         }
 
-        // ── v4/v5: verify the PUBLISHER-attestation quorum (a SECOND 2f+1 over the XANCPUB
-        //    canonical) and DERIVE the anchor reward from chain, retiring the trusted hub push.
-        //    The attestation reuses the SAME oracle_publish set + weighting resolved for the root
-        //    quorum. The reward is credited only when the root quorum passed (error still null,
-        //    snapshot present), the attestation quorum is met, and PUBLISHER is in the snapshot
-        //    set. A degraded or forged attestation NEVER fails the anchor: the checkpoint still
-        //    records as 'valid'; only the reward is skipped, and every indexer reaches the same
-        //    verdict deterministically. amount is the FROZEN consensus constant; reconcile keeps
-        //    the smallest-pubkey winner on a failover double-publish, identical to the retired
-        //    push path + recovery, so the COLLECT rail stays single-winner fleet-wide. ─────────
-        //    v6  rides the identical rails for the ARCHIVE leg: reward type
-        //    anchor_archive, round = MATCH_BATCH_SEQ, frozen ARCHIVE_REWARD_AMOUNT.
+        // v4/v5: verify the PUBLISHER-attestation quorum (a SECOND 2f+1 over the XANCPUB
+        // canonical) and DERIVE the anchor reward from chain, retiring the trusted hub push.
+        // The attestation reuses the SAME oracle_publish set + weighting resolved for the root
+        // quorum. The reward is credited only when the root quorum passed (error still null,
+        // snapshot present), the attestation quorum is met, and PUBLISHER is in the snapshot
+        // set. A degraded or forged attestation NEVER fails the anchor: the checkpoint still
+        // records as 'valid'; only the reward is skipped, and every indexer reaches the same
+        // verdict deterministically. amount is the FROZEN consensus constant; reconcile keeps
+        // the smallest-pubkey winner on a failover double-publish, so the COLLECT rail stays
+        // single-winner fleet-wide.
+        // v6 rides the identical rails for the ARCHIVE leg: reward type anchor_archive,
+        // round = MATCH_BATCH_SEQ, frozen ARCHIVE_REWARD_AMOUNT.
         if(!error && (format === 4 || format === 5 || format === 6) && snapPubkeys && oracleN > 0){
             let rewardCanonical = this._rewardCanonical(data);
             let attSigners = [], attSeen = new Set();
@@ -423,13 +414,12 @@ class Anchor {
                 ? swq.meetsStakeThreshold(validators, attSigners)
                 : (attSigners.length >= ((oracleN <= 1) ? 1 : Math.max(2 * Math.floor((oracleN - 1) / 3) + 1, Math.ceil((oracleN + 1) / 2))));
             if(ar.isAnchorRewardDeriveActive(Number(data['SNAPSHOT_BLOCK']), data['NETWORK'])){
-                //  Option C: at/above the derive-relocation flag-day the reward is
-                // materialized by the BTC indexer from the mirrored anchor_reward_attestations
-                // row (where the stake source resolves; ANCHOR is DOGE-only, capability staking
-                // is BTC-only). This DOGE-side write always silently dropped (no local stake), so
-                // stopping it is byte-neutral to the DOGE ledger and removes the wasted lookup.
-                // The attestation-quorum verification above still runs (anchor validity is
-                // unaffected); only the createValidatorReward/reconcile write is relocated.
+                // At/above the derive-relocation flag-day, the reward is materialized by the
+                // BTC indexer from the mirrored anchor_reward_attestations row (where the stake
+                // source resolves; ANCHOR is DOGE-only, capability staking is BTC-only). This
+                // DOGE-side write always silently dropped (no local stake), so stopping it is
+                // byte-neutral to the DOGE ledger. The attestation-quorum check above still
+                // runs; only the createValidatorReward/reconcile write is relocated.
             } else if(attQuorumMet && snapPubkeys.has(String(data['PUBLISHER']))){
                 let rewardType  = (format === 6) ? 'anchor_archive' : 'anchor_' + data['CHAIN'];
                 let rewardRound = (format === 6) ? Number(data['MATCH_BATCH_SEQ']) : Number(data['CHECKPOINT_SEQ']);
@@ -447,10 +437,10 @@ class Anchor {
         }
 
         data['VALIDATOR_SIGNATURES'] = JSON.stringify(sigs);
-        // v4/v5/v6 publisher-attestation tail (#2486): persist the RAW wire publisher
-        // signature list (publisherSigs, hex-shape-checked only at parse time) so
-        // createAnchorAction can store it in anchor_actions.publisher_attestations.
-        // NOTE (#3076): this is UNVERIFIED transport, NOT the quorum-verified subset.
+        // v4/v5/v6 publisher-attestation tail: persist the RAW wire publisher signature list
+        // (publisherSigs, hex-shape-checked only at parse time) so createAnchorAction can
+        // store it in anchor_actions.publisher_attestations.
+        // NOTE: this is UNVERIFIED transport, NOT the quorum-verified subset.
         // The Ed25519/oracle_publish-snapshot verification above builds a separate
         // attSigners array that is not persisted; the reward-skipped path still lands
         // here, so the stored JSON can include sigs that failed verification, signers
@@ -469,22 +459,18 @@ class Anchor {
 
         await this.indexerDb.createAnchorAction(data);
 
-        // ── Head-side archive reassembly gate : the chunk-side gate in
-        //    _parseContinuation only fires when the parent v1/v6 head already
-        //    exists, so when the completing continuation chunk is broadcast
-        //    BEFORE its head every stored chunk is 'orphan' and the reassembly
-        //    CRC is never checked. Re-run the completeness + CRC check here when
-        //    the head lands last, so the signed BATCH_CRC32 is verified for that
-        //    arrival order too. Byte-identical to the chunk-side reassembly
-        //    (head blob + chunks sorted by index), hence deterministic across
-        //    nodes. Safe without a flag-day: in this ordering the stamped head
-        //    has no 'valid' v2 child (all completing chunks are 'orphan'), so
-        //    the invalid_archive stamp is invisible to the block state hash
-        //    (stateHash.js §6 requires a v2 child with status 'valid'). ─────────
+        // Head-side archive reassembly gate: the chunk-side gate in _parseContinuation only
+        // fires when the parent v1/v6 head already exists, so when the completing
+        // continuation chunk is broadcast BEFORE its head every stored chunk is 'orphan' and
+        // the reassembly CRC is never checked. Re-run the completeness + CRC check here when
+        // the head lands last, byte-identical to the chunk-side reassembly, so results stay
+        // deterministic across nodes. Safe without a flag-day: in this ordering the stamped
+        // head has no 'valid' v2 child, so the invalid_archive stamp is invisible to the
+        // block state hash (which requires a v2 child with status 'valid').
         if(!error && (format === 1 || format === 6) && data['STATUS'] === 'valid' &&
            Number(data['TOTAL_CHUNKS']) > 1){
-            // : at/after the flag day the head reassembles its OWN publisher's
-            // chunks. Below it, the canonical-head rule (whatever it selects) is kept.
+            // At/after the publisher-scoped-archive flag day, the head reassembles its OWN
+            // publisher's chunks. Below it, the canonical-head rule (whatever it selects) is kept.
             let scope = await this._archiveAuthorScope(data['MATCH_BATCH_SEQ'], data['SOURCE']);
             let chunks = await this.indexerDb.getAnchorChunks(Number(data['MATCH_BATCH_SEQ']), scope);
             if(chunks.length === Number(data['TOTAL_CHUNKS']) - 1){
@@ -501,7 +487,7 @@ class Anchor {
         await this.mapper.createMappings(data);
     }
 
-    // The author an archive batch's chunk set is scoped to , or null when the
+    // The author an archive batch's chunk set is scoped to, or null when the
     // publisher-scoped flag day is not active for this batch, in which case every
     // caller keeps the legacy canonical-head behavior.
     //
@@ -538,8 +524,8 @@ class Anchor {
         // The parent v1 must exist with matching chunk geometry; its absence makes
         // this an orphan (stored, but recovery ignores batches that never assemble).
         let parent = null;
-        // : the author the batch's chunk set is scoped to, or null while the
-        // publisher-scoped flag day is inert (legacy canonical-head rule).
+        // The author the batch's chunk set is scoped to, or null while the publisher-scoped
+        // flag day is inert (legacy canonical-head rule).
         let scope  = null;
         if(!error){
             // The canonical head (earliest v1/v6 row for the seq, status-agnostic) is
@@ -564,30 +550,30 @@ class Anchor {
                 data['STATUS'] = 'orphan';
             else if(Number(parent.total_chunks) !== Number(data['TOTAL_CHUNKS']))
                 error = 'invalid: TOTAL_CHUNKS (does not match parent v1)';
-            // Authorship (#3075): "authenticated by its parent v1" now MEANS it. A chunk
-            // is valid only when its author is the canonical archive head's author, so a
-            // slot can only be occupied by the publisher whose batch it is. Without this,
-            // the duplicate guard below turned first-broadcast-wins into permanent denial:
+            // Authorship: "authenticated by its parent v1" now MEANS it. A chunk is valid
+            // only when its author is the canonical archive head's author, so a slot can
+            // only be occupied by the publisher whose batch it is. Without this, the
+            // duplicate guard below turned first-broadcast-wins into permanent denial:
             // anyone could fill a slot with junk and the real chunk was rejected as a
             // duplicate. parent.source comes from actions.source_id (authoritative for
             // auth); a null one means the head's author cannot be resolved at all, which
             // fails closed rather than waving the chunk through unauthenticated.
-            // Under a publisher-scoped batch  both verdicts are unreachable by
-            // construction - the parent was SELECTED by this chunk's author - so they are
-            // skipped rather than dead-checked, and a chunk with no head of its own author
-            // is an 'orphan' (no head to authenticate against) instead of a rejection.
+            // Under a publisher-scoped batch both verdicts are unreachable by construction
+            // (the parent was SELECTED by this chunk's author), so they are skipped rather
+            // than dead-checked, and a chunk with no head of its own author is an 'orphan'
+            // (no head to authenticate against) instead of a rejection.
             else if(scope === null && !parent.source)
                 error = 'invalid: SOURCE (archive head author unresolvable)';
             else if(scope === null && String(data['SOURCE'] || '') !== String(parent.source))
                 error = 'invalid: SOURCE (not the archive head publisher)';
         }
 
-        // Duplicate chunk guard (same batch + index already stored). Since #3075 the
-        // occupancy set getAnchorChunks returns is author-bound, so a junk chunk that
-        // landed BEFORE the head (status 'orphan', no verdict of its own) no longer
-        // counts as occupying the slot and can no longer get the real chunk rejected here.
-        // Under  the occupancy set is this publisher's own, so a slot filled in
-        // someone else's batch at the same seq does not collide either.
+        // Duplicate chunk guard (same batch + index already stored). The occupancy set
+        // getAnchorChunks returns is author-bound, so a junk chunk that landed BEFORE the
+        // head (status 'orphan', no verdict of its own) no longer counts as occupying the
+        // slot and can no longer get the real chunk rejected here. The occupancy set is
+        // this publisher's own, so a slot filled in someone else's batch at the same seq
+        // does not collide either.
         if(!error && parent){
             let existing = await this.indexerDb.getAnchorChunks(Number(data['MATCH_BATCH_SEQ']), scope);
             if(existing.some(c => Number(c.chunk_index) === Number(data['CHUNK_INDEX'])))

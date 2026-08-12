@@ -20,9 +20,7 @@
 
 class Dispenser_Expire {
 
-    // Handle constructing a class instance
     constructor(action){
-        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -31,7 +29,6 @@ class Dispenser_Expire {
         this.mapper    = action.mapper;
     }
 
-    // Handle expiring a dispenser
     async parse(params, data, error){
 
         // Get info on the dispenser

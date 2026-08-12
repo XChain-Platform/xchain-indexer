@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Execute-time consensus source-lint enforcement flag-day (, ).
+ * Execute-time consensus source-lint enforcement flag-day.
  *
  * Indexer-side registration of the activation the VM enforces at EXECUTE time.
  *

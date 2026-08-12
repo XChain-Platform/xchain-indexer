@@ -16,7 +16,7 @@
  *
  * Canonicalization for the reward_type of an inbound pushvalidatorrewards RPC.
  * Extracted from the api.js handler so the case-normalization that guards the
- * #5311 anchor-reward forge gate is unit-testable without the Express stack.
+ * anchor-reward forge gate is unit-testable without the Express stack.
  *
  ********************************************************************/
 
@@ -28,15 +28,15 @@
 // WHY (consensus-safety): the deterministic on-chain derivation writes
 // 'anchor_' + CHAIN.toUpperCase() (actions/anchor.js), and the validator_rewards
 // column is utf8_general_ci (case-insensitive). A mixed-case pushed variant would
-// therefore (a) slip the case-SENSITIVE #5311 flag-day gate
+// therefore (a) slip the case-SENSITIVE flag-day gate
 // (/^anchor_(BTC|LTC|DOGE)$/) and get written post-flag-day, and (b) collation-
 // collide with the derived winner inside reconcileAnchorRewardWinner's
 // `WHERE reward_type=?` + MIN(pubkey) collapse, deleting the legitimate derived
 // row and forking that node from the fleet. Canonicalizing at the ingest boundary
 // forecloses both: no lowercase form can slip the gate or create a colliding
 // duplicate. anchor_archive is canonicalized to full lowercase for the same
-// reason: its  flag-day gate compares case-sensitively while the derived
-// row is written as 'anchor_archive', so a mixed-case push (e.g. 'Anchor_Archive')
+// reason: its flag-day gate also compares case-sensitively while the derived row
+// is written as 'anchor_archive', so a mixed-case push (e.g. 'Anchor_Archive')
 // would otherwise slip the gate and collation-collide with the derived winner.
 // Other reward types (oracle_round, ...) pass through unchanged.
 function canonicalizeRewardType(type){

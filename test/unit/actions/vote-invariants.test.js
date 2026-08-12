@@ -199,7 +199,7 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
             assert.strictEqual(actionParams[4], 'failed_quorum');
         });
 
-        //  footgun pin: the binding-poll callback EXECUTE is emitted as a
+        // footgun pin: the binding-poll callback EXECUTE is emitted as a
         // fee-skipped, protocol-ceiling run whose gas is NOT drawn from or bounded
         // by the poll's GAS_ESCROW. The emission carries IS_EMISSION (execute.js
         // skipFee) and deliberately omits VM_GAS_LIMIT, so execute.js falls back to
@@ -245,7 +245,7 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
         });
     });
 
-    describe('VOTE_POLL_TICK_VISIBLE flag-day ( / poll electorate TICK to callback)', function () {
+    describe('VOTE_POLL_TICK_VISIBLE flag-day (/ poll electorate TICK to callback)', function () {
 
         function bindingPoll(overrides = {}) {
             return poll({
@@ -324,7 +324,7 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
         });
     });
 
-    describe('VOTE_BINDING_MINIMUMS flag-day ( / BonkDAO-class guard)', function () {
+    describe('VOTE_BINDING_MINIMUMS flag-day (/ BonkDAO-class guard)', function () {
 
         // Drives the real v0 create path (parse FORMAT 0). Format:
         // VERSION|TICK|END_BLOCK|OPTIONS|MAX_SELECTIONS|TALLY_MODE|WEIGHT_MODE|QUORUM|
@@ -394,7 +394,7 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
         });
     });
 
-    describe('VOTE_CALLBACK_TIMELOCK flag-day ( / finalize→callback timelock)', function () {
+    describe('VOTE_CALLBACK_TIMELOCK flag-day (/ finalize→callback timelock)', function () {
 
         function createParams({ delay = '' } = {}) {
             // VERSION|TICK|END_BLOCK|OPTIONS|MAX_SELECTIONS|TALLY_MODE|WEIGHT_MODE|QUORUM|

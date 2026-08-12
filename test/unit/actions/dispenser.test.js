@@ -289,7 +289,7 @@ describe('Dispenser action handler @regression @tier2', function () {
         // contract the recognition-only decoder mirrors when it resolves a cancel/edit by
         // acting address (it has no action_index of its own), so both arms are pinned
         // here: a decoder that keys on only one of them keeps a cancelled dispenser in its
-        // open view and keeps proposing DISPENSE triggers the indexer drops .
+        // open view and keeps proposing DISPENSE triggers the indexer drops.
         it('a delegated dispenser can be cancelled by its original creator', async function () {
             indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
                 SOURCE:      OWNER_ADDR,   // opened the dispenser
@@ -447,7 +447,7 @@ describe('Dispenser action handler @regression @tier2', function () {
             sinon.assert.calledWith(indexer.indexerDb.updateActionIndex, sinon.match.any, 'DISPENSER_EDIT');
         });
 
-        // ── MAX_REFILLS cap (dispenser_caps_activation.js / ). A refill is a
+        // ── MAX_REFILLS cap (dispenser_caps_activation.js). A refill is a
         //    format-2 edit that tops up GIVE_ESCROW; the 6th is rejected. Gated on the
         //    dispenser-family cohort (mainnet block_time 1786060800, testnet/regtest genesis).
         describe('MAX_REFILLS cap', function () {
@@ -499,7 +499,7 @@ describe('Dispenser action handler @regression @tier2', function () {
             });
         });
 
-        // Ownership dispensers hold no balance escrow, on edit as on create ().
+        // Ownership dispensers hold no balance escrow, on edit as on create.
         // A format-2 refill used to debit GIVE_ESCROW while close/expire took the
         // GIVE_OWNERSHIP branch that credits nothing back, stranding the balance.
         // Gated on the same dispenser-family cohort as MAX_REFILLS above.
@@ -888,13 +888,13 @@ describe('Dispenser action handler @regression @tier2', function () {
         });
     });
 
-    // : Counterparty parity. A Mode B dispenser (ORACLE_ADDRESS set) pays the
+    // Counterparty parity. A Mode B dispenser (ORACLE_ADDRESS set) pays the
     // oracle operator UP FRONT as a real native-coin output, charged to the address
     // opening it. These pin the wiring: that the charge fires only for Mode B, only
     // when escrow is added, only under the gate, and that it rejects the create when
     // the output is missing. The fee arithmetic and every branch of the check itself
     // are covered in utility.computeOracleFee / utility.validateOracleFee tests.
-    describe('Format 0 - oracle usage fee ', function () {
+    describe('Format 0 - oracle usage fee', function () {
         const ORACLE_ADDR = OTHER_ADDR;   // any valid address that is not the opener
 
         function modeBParams(escrow = '1000') {

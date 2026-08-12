@@ -13,9 +13,9 @@
  **********************************************************************
  * test/unit/crossChainSettlementCapGate.test.js
  *
- * : the flag-day gate on the CROSS_SETTLE per-block cap.
+ * the flag-day gate on the CROSS_SETTLE per-block cap.
  *
- * The cap itself (CROSS_SETTLE_MAX_PER_BLOCK, ) is consensus-visible:
+ * The cap itself (CROSS_SETTLE_MAX_PER_BLOCK) is consensus-visible:
  * deferring a settlement to a later block moves actions rows, the contract hash
  * and the checkpoint preimage. CROSS_CHAIN_DEX is genesis-active on every
  * network and the fresh-genesis restart of 816d1e1 covered the three TESTNET
@@ -24,7 +24,7 @@
  * it (which is the only reason the sibling ATTEST_MAX_EXPIRIES_PER_BLOCK could
  * ship ungated). The operator ruled on 2026-08-11, option (b): the cap lands
  * behind CROSS_SETTLE_PER_BLOCK_CAP in protocol_changes.js, not ungated under
- * the  §0 wipe-and-replay route.
+ * the §0 wipe-and-replay route.
  *
  * This suite pins both halves of that ruling:
  *   - the REGISTRATION: a time-keyed 2.0.0 change, genesis-active on testnet and
@@ -52,7 +52,7 @@ const PROTO                 = require('../../src/protocol/constants.js');
 const GATE = 'CROSS_SETTLE_PER_BLOCK_CAP';
 
 // A far-future instant no real chain will reach before the operator arms the
-// gate deliberately: 2100-01-01, the same boundary the sibling  suite
+// gate deliberately: 2100-01-01, the same boundary the sibling suite
 // uses to tell a scheduled date from an UNARMED sentinel.
 const YEAR_2100 = 4102444800;
 
@@ -101,7 +101,7 @@ async function runPass(gateOn, backlog){
     return { asked, seen, actions, all };
 }
 
-describe('CROSS_SETTLE per-block cap flag day  @regression @tier1', function(){
+describe('CROSS_SETTLE per-block cap flag day @regression @tier1', function(){
 
     afterEach(() => sinon.restore());
 

@@ -10,7 +10,7 @@
  *
  **********************************************************************
  *
- * A rollback must drop the light-client touched-key resolver caches .
+ * A rollback must drop the light-client touched-key resolver caches.
  *
  * `_smtTickNameCache` and `_smtAddressNameCache` memoise surrogate id -> canonical
  * name for the connection's lifetime. That is safe WITHIN a chain segment and

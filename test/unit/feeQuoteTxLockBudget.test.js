@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// . The public fee quote used to time-box only its dry-run, never the wait in front
+// The public fee quote used to time-box only its dry-run, never the wait in front
 // of it: beginTransaction queues on the block-processing transaction mutex, so a quote that
 // arrived during a slow block waited out the whole block (25-40s measured on the BTC regtest
 // venue), blew the explorer's 5s hop and came back to the wallet as a bare 502. These tests
@@ -86,7 +86,7 @@ function makeQuoteCtx({ dryRunThrows = null } = {}){
     return { ctx, calls };
 }
 
-describe('fee-quote transaction-lock budget ', function () {
+describe('fee-quote transaction-lock budget', function () {
 
     describe('_acquireTxLock() bounded wait', function () {
 

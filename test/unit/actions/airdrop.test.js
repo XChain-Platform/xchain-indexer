@@ -341,11 +341,11 @@ describe('Airdrop @regression @tier2', function () {
 
     });
 
-    //  / AIRDROP-1: a leg that fails AFTER its TICK debit (e.g. at the fee
+    // AIRDROP-1: a leg that fails AFTER its TICK debit (e.g. at the fee
     // check) must not leave that debit applied to the shared balances, or the next
     // leg airdropping the same tick is measured against an under-counted balance
     // and wrongly rejected with insufficient TICK instead of its real verdict.
-    describe('multi-leg staged-balance rollback ', function () {
+    describe('multi-leg staged-balance rollback', function () {
 
         it('a fee-failed leg does not consume TICK balance from the next leg', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
@@ -633,11 +633,11 @@ describe('Airdrop @regression @tier2', function () {
 
     });
 
-    // : the recipient allow/block gates are Set membership probes, not array
+    // the recipient allow/block gates are Set membership probes, not array
     // scans. These pin the observable behaviour the conversion must not move: which
     // addresses survive the gates, and the order the surviving credits are built in
     // (recipient iteration order, never the list's own order).
-    describe('recipient allow/block list membership ', function () {
+    describe('recipient allow/block list membership', function () {
 
         const ADDR_A = 'mmqFL1hiu2RDuyS69KS9ko6uaMryhANwsz';
         const ADDR_B = 'mk7MdP3qzVkgyjaYNR2sUY8Ggn4DWxt2KS';

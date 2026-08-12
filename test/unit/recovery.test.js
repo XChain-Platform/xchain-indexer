@@ -45,7 +45,7 @@ const AUTHOR   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const OUTSIDER = 'mzBc4XEFSdzCDcTxAgf6EZXgsZWpztRhef';
 
 // DOGE height a fixture archive head landed at (anchor_actions.block_index_doge). Only
-// the  cases set it: the publisher-scoped rule is armed on regtest from genesis,
+// the cases set it: the publisher-scoped rule is armed on regtest from genesis
 // so a head that carries one is judged under it while the older fixtures - which model
 // batches with a single publisher, where both rules select the same head - stay on the
 // canonical-head path and keep asserting exactly what they always did.
@@ -71,7 +71,7 @@ function memDb(v1s, v2s, opts) {
             // row's optional `status` property drives the filter (absent = 'valid', so the
             // pre-existing fixtures are unaffected). A row parsed as invalid is excluded, exactly
             // as the INNER JOIN + status set drops it against the real schema.
-            // Matched on the leading `SELECT a.*` rather than a literal prefix: 
+            // Matched on the leading `SELECT a.*` rather than a literal prefix
             // LEFT-joined the head's author into the driver's select list (recovery must
             // reassemble the same publisher-scoped chunk set the live path did), which a
             // literal prefix match would have silently stopped recognizing.
@@ -81,7 +81,7 @@ function memDb(v1s, v2s, opts) {
                     return st === 'valid' || st === 'unverified';
                 }).map(v => Object.assign({ source: AUTHOR }, v));
             }
-            //  flag-day anchor: the batch's CANONICAL head (earliest v1/v6 row for
+            // flag-day anchor: the batch's CANONICAL head (earliest v1/v6 row for
             // the seq, status-agnostic), reduced to the DOGE height that decides whether
             // the batch is publisher-scoped. That is block_index_doge (where the ANCHOR
             // landed), never block_index (the CHECKPOINTED height on the checkpointed
@@ -101,7 +101,7 @@ function memDb(v1s, v2s, opts) {
             // default to AUTHOR on both sides, so pre-#3075 fixtures are unaffected.
             // Whitespace-normalized: the query is no longer a local one-liner but the
             // shared ARCHIVE_CHUNK_SET_SQL constant, which is indented across lines.
-            //  added a second shape with the SAME select list: the author is a bound
+            // added a second shape with the SAME select list: the author is a bound
             // parameter (publisher-scoped batch) instead of the canonical-head subquery,
             // so the two are told apart by the predicate, not the prefix.
             if (String(sql).replace(/\s+/g, ' ').trim()
@@ -221,7 +221,7 @@ function memDb(v1s, v2s, opts) {
 //                    own. Stage 2 runs only for keys the direct query rejected, so with no
 //                    `effective` override the resolver is never reached for existence.
 //   anything else -> REC-SUBSET-1 completeness (_verifyCompleteness): the qualifying set at
-//                    the threshold recovery reconstructed as of the snapshot block ,
+// the threshold recovery reconstructed as of the snapshot block
 //                    or null when this handle carries no coin config, in which case db.js
 //                    applies its own local floor. Backed by
 //                    opts.capSets = { <capability>: [{pubkey, source, weight}] }.
@@ -235,7 +235,7 @@ function memDb(v1s, v2s, opts) {
 // the resolver behave like db.js, filtering capSets by the threshold actually in force
 // (caller override when supplied, local floor otherwise) instead of returning every row.
 // opts.slashRestores = [{source, restored}] answers the as-of-block capability_slash_debits
-// reconstruction : stake burned AFTER the snapshot block, which the archived weight
+// reconstruction: stake burned AFTER the snapshot block, which the archived weight
 // must be judged with, not without.
 function btcDbStub(staked, opts) {
     opts = opts || {};
@@ -500,12 +500,12 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         assert.strictEqual(db.matches[0].match_id, 'm5');
     });
 
-    // : a junk head at the same batch seq used to CAPTURE the batch. It is the
+    // a junk head at the same batch seq used to CAPTURE the batch. It is the
     // earliest v1/v6 row, the head pick is status-agnostic (it must be, or mirrored and
     // unmirrored nodes fork), so its author became the only author whose chunks counted
     // and the real batch reassembled from nothing: 'incomplete batch', forever. Under
     // publisher-scoped batches each head reassembles its own publisher's chunks.
-    it('a junk head squatting the batch seq no longer denies the real archive ', async function () {
+    it('a junk head squatting the batch seq no longer denies the real archive', async function () {
         let multi = buildBatch(5, [rawMatch('m6')], oracleKeys, crossKeys, { chunkSize: 200 });
         assert.ok(multi.v2s.length >= 1, 'batch should actually chunk');
         // The capture: broadcast first (lowest action_index), signatures that do not
@@ -527,7 +527,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
     // Teeth: the junk head's own (unpublished) batch still fails on its own merits, so
     // the case above is not "authorship stopped being checked". Same seq, same rows,
     // but the head under test is the outsider's and it has no chunks of its own.
-    it('a junk head reassembles only its own chunks, so it still fails ', async function () {
+    it('a junk head reassembles only its own chunks, so it still fails', async function () {
         let multi = buildBatch(6, [rawMatch('m7')], oracleKeys, crossKeys, { chunkSize: 200 });
         // status 'valid', so the driver replays it too.
         let junkHead = Object.assign({}, multi.v1, { action_index: 1, source: OUTSIDER, block_index_doge: ARMED_DOGE_BLOCK });
@@ -578,7 +578,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             Object.assign({ btcDb: btcDbStub(directOnly, { effective: allKeys }), verifyStakes: true }, quiet)).run();
         assert.strictEqual(report.verified, 1);
         assert.strictEqual(report.failed.length, 0);
-        // ... and a key that is neither staked nor delegated is still a forge.
+        // and a key that is neither staked nor delegated is still a forge.
         let ghost = makeKeypair();
         let bad = await new AnchorRecovery(memDb([v1], []),
             Object.assign({ btcDb: btcDbStub(directOnly, { effective: directOnly.concat([ghost.pubkey]) }), verifyStakes: true }, quiet)).run();
@@ -727,10 +727,10 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
                       'no archive-derived threshold may reach the resolver');
         });
 
-        // : the bar and the weights are reconstructed AS OF the snapshot block instead
+        // the bar and the weights are reconstructed AS OF the snapshot block instead
         // of being read off this node's live local config, which is neither the bar the archive
         // was built at nor the weights it was built from.
-        describe('as-of-block threshold + weight reconstruction ', function () {
+        describe('as-of-block threshold + weight reconstruction', function () {
 
             // The frozen table in capability_min_stake_history.js ships EMPTY on every network
             // (arming an entry is a coordinated flag day, not a test fixture), so a ratified
@@ -773,7 +773,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             it('false-rejects that same archive when the threshold falls back to the local floor', async function () {
                 // The control for the test above: with no governance history to reconstruct
                 // from, the bar is this node's floor and the honest archive is condemned. This
-                // is the exact failure  removes, kept as a live demonstration.
+                // is the exact failure removes, kept as a live demonstration.
                 let { v1, capSets, staked } = highThresholdArchive();
                 let btcDb = btcDbStub(staked, { capSets, localFloor: '1' });
                 let report = await new AnchorRecovery(memDb([v1], []),
@@ -831,7 +831,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
                 // The control for the test above: without the capability_slash_debits
                 // reconstruction the post-slash weight is all there is, so the honest archived
                 // weight reads as forged - which is exactly why the archived amount had to be
-                // taken on trust before .
+                // taken on trust before.
                 let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
                 let staked = oracleKeys.concat(crossKeys).map(k => k.pubkey);
                 let cross = capSetFromKeys(crossKeys);
@@ -922,7 +922,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             let byType = Object.fromEntries(btcDb.rewards.map(r => [r.reward_type, r]));
             // anchor_BTC is v4/v5-derived at/above the flag: pinned to the frozen constant.
             assert.strictEqual(byType['anchor_BTC'].amount, '10.00000000');
-            // anchor_archive is v6-derived at/above ITS flag-day (, regtest = genesis):
+            // anchor_archive is v6-derived at/above ITS flag-day (, regtest = genesis)
             // pinned to the frozen ARCHIVE constant for the same recovered==live reason.
             assert.strictEqual(byType['anchor_archive'].amount, '10.00000000');
         });
@@ -1194,9 +1194,9 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         });
     });
 
-    // Pkg 13 / : the recovery tally marks a pubkey into the dedupe set only
+    // Pkg 13 / the recovery tally marks a pubkey into the dedupe set only
     // after its signature verifies. This is the consumer twin of the hub finalizer
-    // (StateAnchorPublisher._quorumVerified, pinned by its own  test), so
+    // (StateAnchorPublisher._quorumVerified, pinned by its own test), so
     // the two must agree on the same crafted list or a rebuilt node and a live hub
     // would reach opposite verdicts on the same archived batch.
     describe('_quorumVerified verify-then-mark ordering (Pkg 13 twin parity)', function () {

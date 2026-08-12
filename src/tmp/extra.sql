@@ -14,37 +14,6 @@
 
 -- Extra SQL queries to fake transactions which do not exist on the blockchain
 
--- -- Address 99570 1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev
-
--- -- Create transaction hash and transaction (example)
--- INSERT INTO index_transactions (id, hash) values (5423216, 'cd9f6b71c9d43ef66147cba878a015d0b042005fb3aedc05d7a3171bf9e92a9c');
--- INSERT INTO transactions (tx_index, tx_hash_id, block_index, source_id, data) values (75351, 5423216, 862605, 99570 , 'BATCH|0|MINT|0|GAS|60;ISSUE|0|JDOGTEST');
-
--- -- Create callback and reward tokens (non-divisible)
--- ISSUE|0|CBTEST1|100||0|Callback Token 
--- ISSUE|0|CBTEST2|100||0|Callback Reward Token
-
--- -- Update callback token with reward info
--- ISSUE|4|CBTEST1|862200|CBTEST2|1
-
--- -- Send callback token to a few users
--- SEND|1|CBTEST1|1|17YCEZgooP2jJ1gPM6ffKzBLkhxreuLJS8|2|12a9KsYiLg3nHNpKTbQ9oJ3dxHK3kL4tnS|3|bc1q0u35a3x3ee692myk7gjx3f57rxzthsxa72p28u|Sending callback token
-
--- -- Callback Token and hand out reward token
--- CALLBACK|0|CBTEST1|Callback on CBTEST1
-
--- -- ISSUE
--- VERSION|TICK|MAX_SUPPLY|MAX_MINT|DECIMALS|DESCRIPTION|MINT_SUPPLY|TRANSFER|TRANSFER_SUPPLY|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|LOCK_RUG|LOCK_SLEEP|LOCK_CALLBACK|CALLBACK_BLOCK|CALLBACK_TICK|CALLBACK_AMOUNT|ALLOW_LIST|BLOCK_LIST|MINT_ADDRESS_MAX|MINT_START_BLOCK|MINT_STOP_BLOCK|LOCK_MINT|LOCK_MINT_SUPPLY
-
--- -- ISSUE - Callback Info
--- VERSION|TICK|CALLBACK_BLOCK|CALLBACK_TICK|CALLBACK_AMOUNT
-
--- -- Send (Multiple)
--- VERSION|TICK|AMOUNT|DESTINATION|AMOUNT|DESTINATION|MEMO
-
--- -- CALLBACK
--- VERSION|TICK|MEMO
-
 DELETE FROM index_transactions where id>=5423217;
 DELETE FROM transactions where tx_hash_id>=5423217;
 DELETE FROM transactions where block_index>=862600;
@@ -318,10 +287,6 @@ INSERT INTO transactions (tx_hash_id, block_index, source_id, data) values(54232
 INSERT INTO index_transactions (id, hash) values (5423292, 'cd9f6b71c9d43ef66147cba878a015d0b042005fb3aedc05d7a3171bf9e92a76');
 INSERT INTO transactions (tx_hash_id, block_index, source_id, data) values(5423292, 862661, 99570, 'DISPENSER|2|75000|||74838|1152|changing allow/block lists (valid)');
 
--- Cancel dispenser
--- INSERT INTO index_transactions (id, hash) values (5423293, 'cd9f6b71c9d43ef66147cba878a015d0b042005fb3aedc05d7a3171bf9e92a77');
--- INSERT INTO transactions (tx_hash_id, block_index, source_id, data) values(5423293, 862662, 99570, 'DISPENSER|1|75000|closing dispenser');
-
 -- Create ticker dispensers
 INSERT INTO index_transactions (id, hash) values (5423294, 'cd9f6b71c9d43ef66147cba878a015d0b042005fb3aedc05d7a3171bf9e92a78');
 INSERT INTO index_transactions (id, hash) values (5423295, 'cd9f6b71c9d43ef66147cba878a015d0b042005fb3aedc05d7a3171bf9e92a79');
@@ -402,27 +367,12 @@ INSERT INTO index_transactions (id, hash) values (5423313, 'cd9f6b71c9d43ef66147
 INSERT INTO transactions (tx_hash_id, block_index, source_id, data) values(5423313, 862674, 99570, 'SEND|0|GAS|1.00000001|bc1qgy3257sj405sw9y9l6sj0k2q3rlz9mx6m3svj4|testing memo requirement');
 
 
--- DELETE FROM index_transactions where id>=5423302;
--- DELETE FROM transactions where tx_hash_id>=5423302;
--- DELETE FROM transactions where block_index>=862673;
-
--- Send payment to dispenser address that triggers multiple dispensers
--- INSERT INTO index_transactions (id, hash) values (5423298, 'cd9f6b71c9d43ef66147cba878a015d0b042005fb3aedc05d7a3171bf9e92a82');
--- INSERT INTO transactions (tx_hash_id, block_index, source_id, data) values(5423298, 862663, 99570, 'DISPENSER|0|BTC|SAT|1.2345678|2|BTC|||1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|USD|FOO||||Creating SAT dispensers for 10.00 USD');
-
-
-
-
 DELETE FROM index_transactions where id>=5423294;
 DELETE FROM transactions where tx_hash_id>=5423294;
 DELETE FROM transactions where block_index>=862666;
 
 -- Create an airdrop
 INSERT INTO index_transactions (id, hash) values (5423294, 'cd9f6b71c9d43ef66147cba878a015d0b042005fb3aedc05d7a3171bf9e92a78');
--- INSERT INTO transactions (tx_hash_id, block_index, source_id, data) values(5423294, 862666, 99570, 'AIRDROP|0|USD|1|1191|airdrop test format 0');
--- INSERT INTO transactions (tx_hash_id, block_index, source_id, data) values(5423294, 862666, 99570, 'AIRDROP|1|1191|USD|1|SAT|1|airdrop test format 1');
--- INSERT INTO transactions (tx_hash_id, block_index, source_id, data) values(5423294, 862666, 99570, 'AIRDROP|2|USD|1|1191|SAT|1|1191|airdrop test format 2');
--- INSERT INTO transactions (tx_hash_id, block_index, source_id, data) values(5423294, 862666, 99570, 'AIRDROP|3|USD|1|1191|memo1|SAT|1|1191|memo2');
 
 
 

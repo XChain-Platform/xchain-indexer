@@ -10,15 +10,15 @@
  *
  **********************************************************************
  *
- * : action-scoped price-sync barrier.
+ * Action-scoped price-sync barrier.
  *
  * The price/oracle mirror barriers in XChainIndexer wait on EVERY block, so on
  * mainnet every tip block burns the full HUB_PRICE_SYNC_TIMEOUT_MS (60s) waiting
  * for a mirror it never reads: the hub finalizes one price round per 600s, the
  * same cadence as a BTC block, so a tip block can essentially never be covered
- * by a round anchored at or after it. Measured 2026-07-27 on node-host-a: BTC 11
- * timeouts, DOGE 12, LTC 7 in one 15-minute window, with LTC still reporting
- * healthy, so the health check does not even detect it.
+ * by a round anchored at or after it. Measured on production nodes: dozens of
+ * timeouts per chain in a 15-minute window, with the health check still
+ * reporting healthy, so it does not even detect the stall.
  *
  * A block that reads no price is byte-identical whether the mirror is current or
  * a week stale, so waiting on it is pure cost. This predicate decides whether a

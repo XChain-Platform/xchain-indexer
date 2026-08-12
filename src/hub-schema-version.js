@@ -26,16 +26,16 @@
  *
  ********************************************************************/
 
-// v2 : capability_snapshots.uq_cap_snap gained `source`, so the hub now
+// v2: capability_snapshots.uq_cap_snap gained `source`, so the hub now
 // mirrors both (source, pubkey) rows for a multi-source key. Lockstep with
 // xchain-hub/src/hub-schema-version.js (already at v2); a v1 indexer must reject
 // the v2 stream until its own uq_cap_snap is widened (2026-07-20 migration).
 //
-// v3 : the mirror set gained anchor_reward_attestations (HUB_STATE_TABLES
+// v3: the mirror set gained anchor_reward_attestations (HUB_STATE_TABLES
 // in hub_db_sync.js). It carries the hub's XANCPUB publisher-attestation quorum,
 // from which this indexer derives the COLLECT-spendable anchor/archive reward, so
 // an indexer predating the table under-derives a money rail rather than merely
-// missing history. That table shipped under an unbumped v2, so a pre-
+// missing history. That table shipped under an unbumped v2, so a pre
 // indexer accepted a current hub instead of failing closed; v3 restores the gate.
 // A v2 indexer must reject the v3 stream until it has applied the 2026-07-21
 // anchor-reward-attestations migration.

@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// Bounded BET latch+expire pass (spec claude/specs/BETTING_SYSTEM_SPEC.md
+// Bounded BET latch+expire pass (spec
 // sec 6; Utility.processBetPasses). The pass is a deliberate BOUNDED sibling
 // of processExpirations, doubly capped: feed rows (latch AND expiry, or a
 // zero-bet feed flood makes the credit budget alone unbounded) and refund

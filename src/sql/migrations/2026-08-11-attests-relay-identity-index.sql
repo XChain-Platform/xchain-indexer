@@ -1,6 +1,6 @@
 -- xchain:migration mode=auto
--- Migration: attests.origin_relay_identity, the lookup index behind the  relay's
--- exactly-once admission guard ().
+-- Migration: attests.origin_relay_identity, the lookup index behind the cross-chain relay's
+-- exactly-once admission guard.
 --
 -- WHY
 -- ---

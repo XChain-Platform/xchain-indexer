@@ -14,7 +14,7 @@
 // or above it is accepted only when every leg address re-encodes to GET_COIN
 // (Utility.canReencodeAddress). Same-chain listings and leg-less cross-chain
 // listings are unaffected either side of the flag.
-// Design: claude/reports/2026-07-07_cross-chain-royalty-design.md
+// Design
 
 process.env.INDEXER_COIN    = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';

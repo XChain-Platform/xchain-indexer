@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 
-//  / : the genesis airdrop set is bundle data, not node environment.
+// the genesis airdrop set is bundle data, not node environment.
 //
 // config.js used to read GENESIS_AIRDROP_PATHS / _HASHES / _AMOUNTS from the environment
 // on EVERY network, while its sibling GENESIS_DUMP_HASH was already regtest-only. Those
@@ -35,7 +35,7 @@ const AIRDROP_ENV = {
 const COINS    = ['BTC', 'LTC', 'DOGE'];
 const NETWORKS = ['mainnet', 'testnet', 'regtest'];
 
-describe('genesis airdrop config pinning  @regression', function () {
+describe('genesis airdrop config pinning @regression', function () {
 
     const saved = {};
 

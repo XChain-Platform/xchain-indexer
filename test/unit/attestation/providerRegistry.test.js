@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/attestation/providerRegistry.test.js
  *
- * : the indexer provider registry is DEFAULTS (http_get, llm) overlaid
+ * the indexer provider registry is DEFAULTS (http_get, llm) overlaid
  * with an optional consensus-versioned config block (config.ATTESTATION.PROVIDERS).
  * These tests pin two consensus-critical properties:
  *   1. With NO config the effective set is byte-identical to the built-in DEFAULTS
@@ -29,7 +29,7 @@ const assert = require('assert');
 const ProviderRegistry = require('../../../src/attestation/providerRegistry.js');
 const DEFAULTS         = ProviderRegistry.PROVIDERS;
 
-describe('ProviderRegistry  @regression @tier2', function () {
+describe('ProviderRegistry @regression @tier2', function () {
 
     describe('DEFAULTS (no config) matches the historical hard-coded map', function () {
 

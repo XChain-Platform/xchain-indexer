@@ -591,7 +591,7 @@ describe('Order_Match action handler @regression @tier2', function () {
         sinon.assert.calledOnce(indexer.indexerDb.createCoinpayObligation);
     });
 
-    // : findOrderMatches NULL-relaxes the reverse leg, so a token-for-COIN order
+    // findOrderMatches NULL-relaxes the reverse leg, so a token-for-COIN order
     // (GET_TICK null) can pair with a token-for-token maker whose GIVE_TICK is a real token.
     // That is not a coin trade (no side gives native coin against the coin-wanting side), and
     // settling it would mint a bogus COINPay obligation and mis-assign the coin/seller roles.
@@ -1044,14 +1044,14 @@ describe('Order_Match action handler @regression @tier2', function () {
         sinon.assert.calledOnce(indexer.indexerDb.createOrderMatch);
     });
 
-    // : the GET_TICK-null routing branches (order_match native cases 3/4) only ever fire
+    // The GET_TICK-null routing branches (order_match native cases 3/4) only ever fire
     // for a MIS-PAIRED match - one side has a null GET_TICK (wants native coin) while the
     // counterparty's GIVE_TICK is a real token, so no side actually gives native coin against
     // the coin-wanting side. findOrderMatches' NULL-relaxed reverse leg lets the first shape
     // through; the second is not even reachable (its forward leg fails). With
     // COINPAY_NATIVE_RECIPROCITY active the reciprocity gate rejects both, so no bogus COINPay
     // obligation is minted and the coin/seller roles are never mis-assigned downstream.
-    describe('native coin routing via GET_TICK null is rejected as mis-paired ', function () {
+    describe('native coin routing via GET_TICK null is rejected as mis-paired', function () {
 
         it('orderInfo GET_TICK null but matchInfo GIVES a real token (not coin) → skipped, no obligation', async function () {
             const orderWantsNative = makeOrderInfo({

@@ -20,7 +20,7 @@
  * These tests pin the split math: basis-point cuts of the actual fill, exact conservation
  * (seller remainder + legs == proceeds), and the fail-closed fallbacks (malformed / over-cap
  * legs → seller keeps everything). Pure (no DB/VM) so they run on any Node version. The
- * end-to-end match settlement is exercised on Node 22 / test-host.
+ * end-to-end match settlement is exercised on a separate regtest venue.
  *
  * Spec: xchain-documentation/protocol/Controller_Bound_Tokens.md
  ********************************************************************/

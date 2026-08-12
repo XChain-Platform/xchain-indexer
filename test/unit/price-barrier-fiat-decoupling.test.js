@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/price-barrier-fiat-decoupling.test.js
  *
- * . The time-keyed price_snapshots sync barrier must run on every
+ * The time-keyed price_snapshots sync barrier must run on every
  * non-BTC chain whenever hub-db sync is enabled, NOT only at/after the
  * NATIVE_FEE_PRICE_TIME_GATE flag-day.
  *
@@ -66,25 +66,25 @@ function barrierBlock() {
     return INDEXER_SRC.slice(start, end);
 }
 
-describe(' price barrier decoupled from the fee flag-day @regression @tier1', function () {
+describe('price barrier decoupled from the fee flag-day @regression @tier1', function () {
 
     it('the non-BTC time barrier is not guarded by isNativeFeePriceTimeGateActive', function () {
         const block = barrierBlock();
         assert.ok(!/isNativeFeePriceTimeGateActive/.test(block),
             'the time-keyed barrier must run on every non-BTC chain regardless of the ' +
             'NATIVE_FEE_PRICE_TIME_GATE flag-day: FIAT dispenser settlement reads ' +
-            'price_snapshots time-keyed on every chain from day one ');
+            'price_snapshots time-keyed on every chain from day one');
     });
 
     it('the time barrier gates only on hub-db sync being enabled', function () {
         const block = barrierBlock();
         // Was pinned as `} else if(this.hubDbSync){` when the time barrier was the
-        // non-BTC ALTERNATIVE to the height barrier.  made the two additive
+        // non-BTC ALTERNATIVE to the height barrier. made the two additive
         // (BTC needs both; see the barrier comment in XChainIndexer.js), so the
         // condition is now a bare `if`. The property this test exists for is
         // unchanged and strictly stronger: the barrier runs whenever a mirror is in
         // play, and is a no-op only on single-host stacks.
-        //  added the mayReadPrice conjunct: a block that reads no price is
+        // added the mayReadPrice conjunct: a block that reads no price is
         // byte-identical against a current mirror and a stale one, so the wait is
         // pure cost. The property this test exists for is unchanged: the guard
         // still carries NO chain term and NO flag-day term, so the barrier runs on
@@ -94,14 +94,14 @@ describe(' price barrier decoupled from the fee flag-day @regression @tier1', fu
             'unguarded by chain or flag-day, so it runs whenever a mirror is in play');
         assert.ok(!/if\(this\.hubDbSync[^)]*COIN[^)]*\)/.test(block),
             'the time barrier must never regain a chain term: FIAT settlement reads ' +
-            'price_snapshots time-keyed on every chain ');
+            'price_snapshots time-keyed on every chain');
         assert.ok(!/else if\(this\.hubDbSync\)/.test(block),
             'the time barrier must NOT be an else-branch of the BTC height barrier: on ' +
-            'BTC the height check does not imply time coverage ');
+            'BTC the height check does not imply time coverage');
     });
 
     it('the flag-day predicate itself is retained for the fee-side query', function () {
-        // Guards against "fixing"  by deleting the gate outright, which
+        // Guards against "fixing" by deleting the gate outright, which
         // would change getLatestPrice's historical round selection and fork a
         // from-genesis replay.
         assert.strictEqual(typeof changes.isNativeFeePriceTimeGateActive, 'function');

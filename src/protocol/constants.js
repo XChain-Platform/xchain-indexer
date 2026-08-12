@@ -99,7 +99,7 @@ const XCALL_MAX_CALLS_PER_BLOCK = 25;
 
 // Age-out window (seconds of consensus block time, measured from a mirrored
 // result row's quorum-signed effective_time) past which the SOURCE chain retires
-// a result row it can never deliver .
+// a result row it can never deliver.
 //
 // A result row whose call_id matches no local XCALL v0 request is rejected on
 // every block and pruned by nothing (pruning is keyed on a recorded callback),
@@ -124,7 +124,7 @@ const XCALL_MAX_CALLS_PER_BLOCK = 25;
 const XCALL_RESULT_ORPHAN_GRACE_SECONDS = 3600;
 
 // ── ATTEST expiry sweep ─────────────────────────────────────────────────────
-// Deterministic per-block cap on the ATTEST v0 deadline-expiry sweep ().
+// Deterministic per-block cap on the ATTEST v0 deadline-expiry sweep.
 // Each expired request synthesizes an ATTEST v2 action that flips the request to
 // 'expired' and fires its callback, so an unbounded sweep lets a single block
 // inherit an arbitrary backlog: one block's processing time (and its actions
@@ -139,11 +139,11 @@ const XCALL_RESULT_ORPHAN_GRACE_SECONDS = 3600;
 //
 // CONSENSUS-VISIBLE: the cap decides which block an expiry lands in, which moves
 // actions rows, the contract hash and the checkpoint preimage. It ships ungated
-// under the  batch because the fleet-wide replay recomputes all of it.
+// because a fleet-wide replay batch recomputes all of it.
 const ATTEST_MAX_EXPIRIES_PER_BLOCK = 25;
 
 // ── Cross-chain settlement pass ─────────────────────────────────────────────
-// Deterministic per-block cap on the CROSS_SETTLE pass (). It was the
+// Deterministic per-block cap on the CROSS_SETTLE pass. It was the
 // one cross-chain pass without one: processCrossChainSettlements looped every
 // finalized, effective, unsettled match the hub mirror carried, so a hub backlog
 // (or a hub the indexer had been disconnected from for a while) injected an
@@ -160,9 +160,9 @@ const ATTEST_MAX_EXPIRIES_PER_BLOCK = 25;
 // lands in, so it moves actions rows, the contract hash and the checkpoint
 // preimage. Unlike both siblings it is therefore NOT applied unconditionally.
 //
-// OPERATOR RULING, 2026-08-11 (, option b): the cap lands behind an
+// OPERATOR RULING, 2026-08-11: the cap lands behind an
 // operator-ratified FLAG-DAY gate in protocol_changes.js
-// (CROSS_SETTLE_PER_BLOCK_CAP), and NOT ungated under the  §0
+// (CROSS_SETTLE_PER_BLOCK_CAP), and NOT ungated under the fleet-wide
 // wipe-and-replay route. What the ruling settled: CROSS_CHAIN_DEX is
 // genesis-active on every network (protocol_changes.js, all-zero thresholds) and
 // the fresh-genesis restart of 816d1e1 moved the three TESTNET chains only, that
@@ -171,7 +171,7 @@ const ATTEST_MAX_EXPIRIES_PER_BLOCK = 25;
 // there only if no mainnet block ever held more than the cap of effective
 // unsettled matches, a chain-state question no file in this repo can answer. The
 // ATTEST_MAX_EXPIRIES_PER_BLOCK precedent above does not carry it: that one
-// shipped ungated only because the  fleet-wide replay recomputed the
+// shipped ungated only because a fleet-wide replay recomputed the
 // history it reinterpreted, a vehicle this cap does not have.
 //
 // The number below is the cap's VALUE; the gate decides WHEN it applies.
@@ -218,7 +218,7 @@ const MAX_DEPLOYCHUNK_PART_BYTES = 7800;
 // Consensus-critical activation: at/above this BTC-anchored snapshot_block the
 // federation quorum becomes stake-WEIGHTED (signers' summed source stake must
 // exceed 2/3 of total active snapshot stake) instead of count-based (2f+1 of the
-// pubkey COUNT). Spec: claude/reports/2026-06-14_cross-chain-quorum-security-spec.md.
+// pubkey COUNT).
 //
 // Keyed on the BTC `snapshot_block` carried by every settlement/checkpoint
 // canonical (NOT each chain's local processing height) so the hub and the BTC,
@@ -306,7 +306,7 @@ const STATE_COMMITMENT_ACTIVATION = {
 // (2026-07-07; BTC anchor ~2026-08-04), not a disabled placeholder.
 const CHECKPOINT_COMMITMENT_ACTIVATION = {
     mainnet: 961000,      // ARMED 2026-07-07: BTC anchor ~2026-08-04; deploy hub + ALL indexers (+ sdk/explorer/sync copies) before this height
-    testnet: 146000,      // ARMED 2026-07-22 ( lead 0e418c8c): first BTC-testnet anchor past all three STATE_COMMITMENT testnet thresholds; was 0, which forced the SPV root suffix from testnet genesis before the indexer computes roots, so the hub refused to sign every testnet checkpoint
+    testnet: 146000,      // ARMED 2026-07-22: first BTC-testnet anchor past all three STATE_COMMITMENT testnet thresholds; was 0, which forced the SPV root suffix from testnet genesis before the indexer computes roots, so the hub refused to sign every testnet checkpoint
     regtest: 0,
 };
 
@@ -333,7 +333,7 @@ const ANCHOR_REWARD_ACTIVATION = {
 // by the hub and re-derived by the indexer (never from the wire). Changing it is itself a flag-day.
 const ANCHOR_REWARD_AMOUNT = '10.00000000';
 
-// ARCHIVE_REWARD_ACTIVATION (archive-reward re-derivation, ): the flag-day at/above which the
+// ARCHIVE_REWARD_ACTIVATION (archive-reward re-derivation): the flag-day at/above which the
 // anchor_archive reward stops riding the key-authenticated `pushvalidatorrewards` rail and is instead
 // DERIVED by every indexer from the on-chain ANCHOR v6 bytes (the v1 archive anchor plus the same
 // PUBLISHER + 2f+1 XANCPUB attestation tail as v4/v5, attested over an 'anchor_archive' canonical
@@ -343,7 +343,7 @@ const ANCHOR_REWARD_AMOUNT = '10.00000000';
 // ANCHOR_REWARD_ACTIVATION; kept byte-identical to the local copies in
 // xchain-{hub,indexer}/src/anchor_reward_activation.js by the cross-service regression suite.
 const ARCHIVE_REWARD_ACTIVATION = {
-    mainnet: 963000,      // ARMED 2026-07-16 , RE-PINNED 2026-08-12  off 969500 onto the  pre-freeze train boundary (tip 959,853 on 07-27 at ~144 blocks/day + 21d); deploy every consumer before this era
+    mainnet: 963000,      // ARMED 2026-07-16, RE-PINNED 2026-08-12 off 969500 onto the pre-freeze train boundary (tip 959,853 on 07-27 at ~144 blocks/day + 21d); deploy every consumer before this era
     testnet: 0,
     regtest: 0,
 };
@@ -394,9 +394,9 @@ const GAS_TICK = 'XCHAIN';
 // two are NOT in the GOLDEN/GATED set of this repo's
 // test/unit/xcall-constants-cross-repo.test.js, which pins only MAX_CODE_SIZE,
 // XCALL_MAX_GAS, XCALL_MAX_HOPS and XCALL_MIN_DEADLINE_BLOCKS; the guard that diffs
-// this copy against the canonical lives in xchain-hub/test/unit (#3886, corrected
-// here per #3888), so a drift reddens hub CI rather than this repo's. Nothing in
-// this repo reads either one; they are re-exports for consumers.
+// this copy against the canonical lives in xchain-hub/test/unit, so a drift
+// reddens hub CI rather than this repo's. Nothing in this repo reads either
+// one; they are re-exports for consumers.
 
 // Coarse global sanity ceiling on an ingested price_snapshots value (pre-scale,
 // covers pairs like BTC/KRW up to ~$7M BTC with headroom); rejects

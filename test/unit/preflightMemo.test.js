@@ -1,7 +1,7 @@
 // Copyright © 2025–2026 Dankest, LLC
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// PreflightMemo LRU unit suite : bounded, height-keyed, LRU
+// PreflightMemo LRU unit suite: bounded, height-keyed, LRU
 // eviction, and key construction. Pure - no DB, no dlopen.
 
 const assert = require('assert');

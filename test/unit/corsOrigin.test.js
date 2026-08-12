@@ -23,7 +23,7 @@
  * every listed shell is blocked while `curl -D -` shows a populated header.
  * Asserting on the parse function alone would not have caught that; asserting
  * on what a caller receives is the only thing that does. Twin of the encoder,
- * hub, and utxo-tracker suites .
+ * hub, and utxo-tracker suites.
  *
  **********************************************************************/
 

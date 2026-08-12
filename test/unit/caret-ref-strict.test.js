@@ -15,7 +15,7 @@
 /*********************************************************************
  * test/unit/caret-ref-strict.test.js
  *
- * : strict `^<id>` address-reference rejection flag-day.
+ * strict `^<id>` address-reference rejection flag-day.
  *
  * db.resolveAddressRef states no verdict on a malformed or dangling reference
  * (it returns the value unchanged), so rejection has always depended on each of
@@ -23,7 +23,7 @@
  * sites do not (DISPENSER.ORACLE_ADDRESS off the oracle path,
  * DEPLOY.SLASH_DESTINATION below DEPLOY_SLASH_DEST_ADDRESS_VALID, ISSUE's two
  * transfer fields on the genesis path), which is the same fail-open shape that
- * cost  on SEND.
+ * cost on SEND.
  *
  * These tests pin, in order:
  *   1. the activation predicate (per-chain heights, coin-less fallback, junk
@@ -68,7 +68,7 @@ function makeDb(onQuery, overrides) {
     return db;
 }
 
-describe(' caret-ref strict activation predicate @regression @tier1', function () {
+describe('caret-ref strict activation predicate @regression @tier1', function () {
 
     it('is off below the per-chain height and on at/above it', function () {
         const h = CARET_REF_STRICT_ACTIVATION['BTC:mainnet'];
@@ -106,7 +106,7 @@ describe(' caret-ref strict activation predicate @regression @tier1', function (
     });
 
     it('rides the same train as LIST_EDIT_RESOLUTION_ACTIVATION (value-identical map)', function () {
-        // Both are execution-path validity changes on the  pre-freeze train, so
+        // Both are execution-path validity changes on the pre-freeze train, so
         // a re-pin has to move both or this fails rather than silently splitting the
         // boundary operators were told to reason about.
         const listEdit = require('../../src/list_edit_resolution_activation').LIST_EDIT_RESOLUTION_ACTIVATION;
@@ -114,7 +114,7 @@ describe(' caret-ref strict activation predicate @regression @tier1', function (
     });
 });
 
-describe(' isUnresolvedCaretRef @regression @tier1', function () {
+describe('isUnresolvedCaretRef @regression @tier1', function () {
 
     it('is true only for a value that still carries the ^ reference prefix', function () {
         for (const v of ['^1', '^abc', '^007', '^0x10', '^', '^-1'])
@@ -127,7 +127,7 @@ describe(' isUnresolvedCaretRef @regression @tier1', function () {
     });
 });
 
-describe(' db.resolveAddressRefChecked @regression @tier1', function () {
+describe('db.resolveAddressRefChecked @regression @tier1', function () {
 
     it('returns the resolved address with no rejection when the reference resolves', async function () {
         const db = makeDb(() => [{ address: REAL_ADDR }]);
@@ -178,7 +178,7 @@ describe(' db.resolveAddressRefChecked @regression @tier1', function () {
     });
 });
 
-describe(' handler-level hard reject @regression @tier1', function () {
+describe('handler-level hard reject @regression @tier1', function () {
 
     const Mint = require('../../src/actions/mint.js');
 

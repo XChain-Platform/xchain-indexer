@@ -19,8 +19,7 @@
  *
  * The protocol does not assign tiers. Capabilities (price, cross_chain,
  * oracle_publish, attestation) auto-qualify when stake amount meets the
- * governance-configured min_stake for each. See:
- *   claude/reports/specs/2026-05-24_capability-staking-model.md
+ * governance-configured min_stake for each.
  *
  * FORMATS:
  *   v1 - VERSION|AMOUNT|SIGNING_PUBKEY                                              (create new capability stake)
@@ -39,7 +38,6 @@
 
 class Stake {
 
-    // Handle constructing a class instance
     constructor(action){
         this.actions   = action;
         this.config    = action.config;
@@ -48,17 +46,14 @@ class Stake {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
-        // Define list of known FORMATS
         this.formats = {};
         this.formats[1] = 'VERSION|AMOUNT|SIGNING_PUBKEY';                                       // create new capability stake
         this.formats[2] = 'VERSION|AMOUNT|SIGNING_PUBKEY';                                       // top-up existing capability stake
         this.formats[3] = 'VERSION|AMOUNT|SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK';            // contract-targeted stake (any token)
     }
 
-    // Handle parsing the STAKE transaction
     async parse(params, data, error){
 
-        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
@@ -68,25 +63,15 @@ class Stake {
             return await this._parseContractStake(params, data, error);
         }
 
-        // Extract params (v1/v2 capability staking)
         data['AMOUNT']         = params[1];
         data['SIGNING_PUBKEY'] = params[2];
 
-        // Convert NUMBER fields from string value to number value
         if(!error)
             data = this.util.setNumberFormats(data);
-
-        /*****************************************************************
-         * Chain Restriction
-         ****************************************************************/
 
         // STAKE is BTC-only
         if(!error && data['COIN'] !== 'BTC')
             error = 'invalid: ACTION (BTC only)';
-
-        /*****************************************************************
-         * AMOUNT Validations
-         ****************************************************************/
 
         // AMOUNT must be a positive 8-decimal string
         if(!error && (this.util.isNull(data['AMOUNT']) || !/^[0-9]+(\.[0-9]{1,8})?$/.test(String(data['AMOUNT']))))
@@ -94,21 +79,12 @@ class Stake {
         if(!error && !this.util.bcgt(data['AMOUNT'], '0'))
             error = 'invalid: AMOUNT (must be greater than 0)';
 
-        /*****************************************************************
-         * SIGNING_PUBKEY Validations
-         ****************************************************************/
-
-        // Verify SIGNING_PUBKEY is provided
         if(!error && this.util.isNull(data['SIGNING_PUBKEY']))
             error = 'invalid: SIGNING_PUBKEY (required)';
 
         // Verify SIGNING_PUBKEY is 64 hex characters (Ed25519)
         if(!error && !/^[0-9a-fA-F]{64}$/.test(String(data['SIGNING_PUBKEY'])))
             error = 'invalid: SIGNING_PUBKEY (format)';
-
-        /*****************************************************************
-         * Format-Specific Stake Validation
-         ****************************************************************/
 
         if(!error && format === 1){
             // v1 (new stake): pubkey must NOT already have any valid stake row
@@ -143,10 +119,6 @@ class Stake {
             }
         }
 
-        /*****************************************************************
-         * Balance Validations
-         ****************************************************************/
-
         let gas = this.config['GAS'];
         let tokenInfo = await this.indexerDb.getTokenInfo(gas, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let balances  = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
@@ -159,49 +131,35 @@ class Stake {
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
-        /*****************************************************************
-         * Activation Calculation
-         ****************************************************************/
-
         let staking = this.config['STAKING'];
         let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
         data['ACTIVATION_BLOCK'] = parseInt(data['BLOCK_INDEX']) + activationDelay;
         data['VERSION'] = format;
 
-        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
-        // Print status message
         let label = (format === 2) ? 'STAKE topup' : 'STAKE';
         console.log("\t " + label + " : amount=" + data['AMOUNT'] + ' : pubkey=' + String(data['SIGNING_PUBKEY']).substring(0, 16) + '... : ' + data['STATUS']);
 
-        // Create record in stakes table
         await this.indexerDb.createStake(data);
 
-        // Store the SOURCE and GAS tick in addresses list
         this.util.addAddressTicker(data['SOURCE'], gas);
 
-        // Array of credits and debits
         let credits = [],
             debits  = [];
 
-        // If valid, debit the stake amount from SOURCE
         if(status == 'valid')
             debits.push([gas, data['AMOUNT'], data['SOURCE']]);
 
-        // Process any transaction ledger changes (credits / debits)
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
-        // Get a list of tickers & addresses
         let tickers   = this.util.getTickersList(),
             addresses = Object.keys(this.util.getAddressesList());
 
-        // Update address balances and token supply
         await this.indexerDb.updateBalances(addresses);
         await this.indexerDb.updateTokens(tickers);
 
-        // Create action mappings
         await this.mapper.createMappings(data);
     }
 
@@ -209,7 +167,6 @@ class Stake {
     // staking; writes to contract_stakes table and supports any token (not just XCHAIN).
     async _parseContractStake(params, data, error){
 
-        // Extract params
         data['AMOUNT']                = params[1];
         data['SIGNING_PUBKEY']        = params[2];
         data['TARGET_CONTRACT_INDEX'] = params[3];
@@ -218,7 +175,6 @@ class Stake {
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        // Basic field presence
         if(!error && (this.util.isNull(data['AMOUNT'])))
             error = 'invalid: AMOUNT (required)';
         if(!error && this.util.isNull(data['SIGNING_PUBKEY']))
@@ -228,13 +184,12 @@ class Stake {
         if(!error && this.util.isNull(data['TICK']))
             error = 'invalid: TICK (required)';
 
-        // SIGNING_PUBKEY format
         if(!error && !/^[0-9a-fA-F]{64}$/.test(String(data['SIGNING_PUBKEY'])))
             error = 'invalid: SIGNING_PUBKEY (format)';
 
-        // TARGET_CONTRACT_INDEX must be a positive integer. STAKE-1 (gated by CONTRACT_INDEX_CANONICAL):
-        // at/after the flag-day reject non-canonical leading zeros (/^[1-9]\d*$/, matching
-        // deposit/withdraw); below it the legacy /^[0-9]+$/ is preserved for replay/fleet consistency.
+        // TARGET_CONTRACT_INDEX must be a positive integer. At/after the CONTRACT_INDEX_CANONICAL
+        // flag-day reject non-canonical leading zeros (/^[1-9]\d*$/, matching deposit/withdraw);
+        // below it the legacy /^[0-9]+$/ is preserved for replay/fleet consistency.
         let idxRe = (await this.actions.protocolChanges.isEnabled('CONTRACT_INDEX_CANONICAL', data['BLOCK_INDEX'])) ? /^[1-9]\d*$/ : /^[0-9]+$/;
         if(!error && (!idxRe.test(String(data['TARGET_CONTRACT_INDEX'])) || Number(data['TARGET_CONTRACT_INDEX']) <= 0))
             error = 'invalid: TARGET_CONTRACT_INDEX (format)';
@@ -254,7 +209,6 @@ class Stake {
             }
         }
 
-        // Look up the tick (must exist)
         let tickTokenInfo = null;
         if(!error){
             tickTokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
@@ -294,12 +248,10 @@ class Stake {
             }
         }
 
-        // Balance check: source must hold the TICK amount
         let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         if(!error && tickTokenInfo && !this.util.hasBalance(balances, tickTokenInfo['TICK_ID'], data['AMOUNT']))
             error = 'invalid: insufficient funds (TICK)';
 
-        // Source must not be sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
@@ -352,13 +304,10 @@ class Stake {
             ' : tick=' + data['TICK'] +
             ' : ' + data['STATUS']);
 
-        // Write the contract_stakes row
         await this.indexerDb.createContractStake(data);
 
-        // Track tickers/addresses for balance reconciliation
         this.util.addAddressTicker(data['SOURCE'], data['TICK']);
 
-        // Debit the stake amount from SOURCE
         let credits = [],
             debits  = [];
         if(status === 'valid'){

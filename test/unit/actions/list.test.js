@@ -149,7 +149,7 @@ describe('List @regression @tier3', function () {
             assert.ok(data['STATUS'].includes('invalid'));
         });
 
-        // : the edit must be built on the list's CURRENT membership (the head
+        // the edit must be built on the list's CURRENT membership (the head
         // of its edit chain), not on the create-time item set, and the parent it
         // stores must be the CREATE that roots the chain so the next edit finds it.
         it('reads the parent membership with block context so the flag day can gate it', async function () {

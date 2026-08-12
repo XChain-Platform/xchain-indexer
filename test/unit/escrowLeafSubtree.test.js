@@ -11,7 +11,7 @@
  **********************************************************************
  *
  * XCHAIN_ESC locked-balance leaf conformance (SPV sub-tree spec §3 Stage B,
- *  stage B1).
+ * stage B1).
  *
  * The load-bearing assertion is INERTNESS, and it matters more here than it did
  * for Stage A. Stage A lit a top-level slot that was EMPTY on every chain, so a

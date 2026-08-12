@@ -29,8 +29,7 @@ CREATE INDEX idx_block  ON escrow_leaf_journal (block_index);
 CREATE INDEX idx_latest ON escrow_leaf_journal (address_id, tick_id, id DESC);
 
 --********************************************************************
--- WHY THIS TABLE EXISTS (design: claude/specs/spv-state-subtree-extension.md
--- §3 Stage B, decided by the B0 run 2026-07-28, ).
+-- WHY THIS TABLE EXISTS:
 --
 -- The `escrows` ledger cannot answer "how much does this address have locked".
 -- It is a per-tick CONSERVATION ledger, not a per-address lock ledger: of the 26

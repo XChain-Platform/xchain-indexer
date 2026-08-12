@@ -24,7 +24,7 @@
  *   3. SWEEP: a DENY on any swept tick fails the WHOLE sweep (fail-closed); an ALLOW commits
  *      and the block passes sanity.
  *
- * Run (disposable MariaDB, e.g. the devhost integration venue):
+ * Run (disposable MariaDB, e.g. the integration venue):
  *   TEST_DB_HOST=127.0.0.1 TEST_DB_PORT=<port> TEST_DB_USER=<u> TEST_DB_PASS=<pw> \
  *   TEST_DECODER_DB=cv_bt_decoder TEST_INDEXER_DB=cv_bt_indexer TEST_INDEXER_DB_B=cv_bt_indexer_b \
  *   XCHAIN_DECODER_SQL_PATH=<xchain-decoder/src/sql> INDEXER_COIN=BTC INDEXER_NETWORK=regtest \

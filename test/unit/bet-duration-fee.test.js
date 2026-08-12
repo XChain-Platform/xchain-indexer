@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// Decision-F fee arithmetic (spec claude/specs/BETTING_SYSTEM_SPEC.md sec 10).
+// Decision-F fee arithmetic (spec sec 10).
 // Pins: (1) getUnifiedDurationFee is BYTE-IDENTICAL to the historical ORDER
 // format-0 arithmetic (the extraction was a pure transplant); (2) the day
 // count ROUNDS TO NEAREST (90.5d -> 91), the shipped mathjs fixed-precision

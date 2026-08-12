@@ -87,7 +87,7 @@ async function captureDriverSql() {
     let captured = null;
     const db = {
         async doQuery(sql) {
-            // Leading `SELECT a.*`, not a literal prefix:  LEFT-joined the head's
+            // Leading `SELECT a.*`, not a literal prefix: LEFT-joined the head's
             // author into this select list, and a prefix match would have gone silently
             // blind to the driver query it exists to pin.
             if (/^SELECT a\.\*/.test(String(sql).replace(/\s+/g, ' ').trim())) { captured = sql; return []; }

@@ -22,7 +22,7 @@
 --   version 4: v0 checkpoint + publisher-attestation tail (elected PUBLISHER pubkey +
 --              a SECOND 2f+1 oracle_publish attestation, for anchor-reward re-derivation)
 --   version 5: v3 checkpoint + publisher-attestation tail
---   version 6: v1 archive anchor + publisher-attestation tail (archive-reward, )
+--   version 6: v1 archive anchor + publisher-attestation tail (archive-reward)
 -- The v4/v5/v6 publisher tail is persisted here in the nullable `publisher` and
 -- `publisher_attestations` columns; v0-v3 leave both NULL.
 --

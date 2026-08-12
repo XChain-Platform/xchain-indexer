@@ -435,7 +435,7 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
             assert.strictEqual(st, 'fulfilled');
         });
 
-        // : role detection keys on which side actually GIVES native coin, checking BOTH
+        // role detection keys on which side actually GIVES native coin, checking BOTH
         // orders. A malformed obligation where NEITHER order gives native coin (both GIVE_TICK
         // are real tokens) is ambiguous - the pre-fix single-side check silently picked getOrder
         // as the coin side and released the wrong escrow. With COINPAY_NATIVE_RECIPROCITY active

@@ -20,7 +20,7 @@
  * binding: ISSUE format 7, ADDRESS format 1, the action-class taxonomy, and the field
  * classifications the handlers rely on. They are PURE: handlers are built with a stub
  * context (no DB, no VM) so they run on any Node version. The db-layer bind/unbind/
- * cooldown-sweep behavior is consensus-critical and exercised on Node 22 / test-host regtest
+ * cooldown-sweep behavior is consensus-critical and exercised on Node 22 / regtest
  * (this Mac is Node 24, where isolated-vm / mariadb cannot load).
  *
  * Spec: xchain-documentation/protocol/Controller_Bound_Tokens.md

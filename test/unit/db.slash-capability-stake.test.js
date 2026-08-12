@@ -85,7 +85,7 @@ describe('slashCapabilityStake burn-pending gate (SLASH-1) @regression @tier1', 
 });
 
 /*********************************************************************
- * : an equivocating DELEGATED key must burn the stake behind it.
+ * an equivocating DELEGATED key must burn the stake behind it.
  *
  * A delegated key signs for a staker but owns no stake: the `stakes` rows carry
  * the OWNER's source_id. Burning by signing_pubkey_id therefore matched zero

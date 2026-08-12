@@ -1,4 +1,4 @@
-# Shared observability module 
+# Shared observability module
 
 A dependency-free Prometheus `/metrics` exporter plus a structured log shim,
 vendored byte-identically into every `xchain-*` service.
@@ -81,5 +81,5 @@ observations are dropped and counted, never buffered).
 
 ## Not in scope
 
-Alerting and watchdogs , and the actual fleet rollout of a
-Prometheus server and a log collector, which is an ops step.
+Alerting and watchdogs, and the actual fleet rollout of a Prometheus server
+and a log collector, which is an ops step.

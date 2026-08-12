@@ -11,7 +11,7 @@
  **********************************************************************
  *
  * escrow_leaf_journal writer conformance (SPV sub-tree spec §3 Stage B,
- *  stage B1, ledger-attribution design).
+ * stage B1, ledger-attribution design).
  *
  * THE ATTRIBUTION VECTORS ARE THE IMPORTANT TESTS HERE. The writer's totals are
  * the ledger's own rows re-keyed to their locker, so per-tick sums are conserved
@@ -410,7 +410,7 @@ describe('escrow journal writer: change-log semantics @regression', function(){
         assert.strictEqual(db.inserted[0].locked_amount, M.canonicalAmount('5'));
     });
 
-    // The batched INSERT () is why this is a test rather than a column
+    // The batched INSERT is why this is a test rather than a column
     // constraint. The per-key form bound address_id as a sub-select and let the NOT NULL
     // column throw on an unresolvable key; a MULTI-row INSERT on a server without
     // STRICT_ALL_TABLES turns that same NULL into a warning and writes id 0, which

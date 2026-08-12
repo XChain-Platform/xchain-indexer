@@ -8,13 +8,13 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// : an archive batch could be CAPTURED by a junk head row.
+// an archive batch could be CAPTURED by a junk head row.
 //
 // getAnchorV1ByBatchSeq picks the earliest v1/v6 row for a match_batch_seq and is
 // status-agnostic by design (a status filter would fork mirrored vs unmirrored
 // nodes, which is worse), so a permissionless ANCHOR whose signatures do not verify
 // could be that earliest row. It then governed BOTH consensus-visible verdicts for
-// the batch: the TOTAL_CHUNKS geometry gate, and - since  P5/#3075 - the
+// the batch: the TOTAL_CHUNKS geometry gate, and - since P5/#3075 - the
 // authorship rule, whose effect was that the real publisher's own chunks were
 // filtered out and the archive never reassembled.
 //
@@ -93,7 +93,7 @@ function makeStore(indexer, heads, chunks) {
     });
 }
 
-describe('ANCHOR archive batch capture by a junk head  @regression @tier1', function () {
+describe('ANCHOR archive batch capture by a junk head @regression @tier1', function () {
     let indexer, handler, heads, chunks;
 
     beforeEach(function () {
@@ -182,7 +182,7 @@ describe('ANCHOR archive batch capture by a junk head  @regression @tier1', func
             'the real head reassembles against its own CRC, so nothing is flagged invalid_archive');
     });
 
-    // The head-lands-last ordering  has the same exposure from the other side:
+    // The head-lands-last ordering has the same exposure from the other side
     // the real head reassembled whatever chunk set the CANONICAL head's author owned, so
     // a junk head plus a couple of junk chunks got the REAL head stamped invalid_archive.
     it('a head landing last reassembles its own chunks, not the junk head\'s', async function () {

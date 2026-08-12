@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * XChain shared observability - Prometheus text-format metrics registry 
+ * XChain shared observability - Prometheus text-format metrics registry
  *
  * A dependency-free implementation of the Prometheus exposition format
  * (text/plain; version=0.0.4). It exists instead of prom-client because every

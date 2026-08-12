@@ -11,7 +11,7 @@
  **********************************************************************
  * test/unit/db.weightless-stake-row.test.js
  *
- * : a weightless row must never leave a stake-weight producer.
+ * a weightless row must never leave a stake-weight producer.
  *
  * stake_weighted_quorum already fails closed on a row whose weight is missing -
  * a coerced zero keeps the source in the quorum's dedupe map carrying no stake,
@@ -86,7 +86,7 @@ const MISSING = [
 
 afterEach(function () { sinon.restore(); });
 
-describe('weightless stake-weight rows fail closed  @regression @tier1', function () {
+describe('weightless stake-weight rows fail closed @regression @tier1', function () {
 
     describe('Database.requireStakeWeight', function () {
 

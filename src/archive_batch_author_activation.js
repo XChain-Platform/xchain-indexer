@@ -12,55 +12,39 @@
  *
  **********************************************************************
  *
- * Publisher-scoped archive batches flag-day .
+ * Publisher-scoped archive batches flag-day.
  *
  * THE PROBLEM. An ANCHOR archive batch was identified by MATCH_BATCH_SEQ alone,
- * and its head was "the earliest v1/v6 row carrying that seq" - deliberately
- * STATUS-AGNOSTIC, because a node with no mirrored oracle_publish snapshot stores
- * an unverifiable head 'unverified' where a mirrored node stores 'valid' /
- * 'invalid: ...', so a status-filtered pick would fork mirrored and unmirrored
- * nodes (see  P5). MATCH_BATCH_SEQ is not unique (the replay guard admits an
- * EQUAL seq, for re-broadcast and failover double-publish), so anyone could
- * broadcast a junk head at the next batch seq and CAPTURE the batch:
+ * with its head defined as "the earliest row carrying that seq" (deliberately
+ * status-agnostic, since a mirrored node and an unmirrored node disagree on a
+ * head's verified status, and a status-filtered pick would fork them).
+ * MATCH_BATCH_SEQ is not unique (replay and failover double-publish both admit
+ * an equal seq), so anyone could broadcast a junk head at the next seq and
+ * capture the batch: its bogus TOTAL_CHUNKS became the geometry gate every
+ * legitimate chunk was measured against, and its SOURCE became the only
+ * author whose chunks counted, so the real publisher's chunks were filtered
+ * out and the archive never reassembled.
  *
- *   - its bogus TOTAL_CHUNKS became the geometry gate every legitimate chunk was
- *     measured against (this half predates #3075), and
- *   - since #3075 its SOURCE became the only author whose chunks counted, so the
- *     real publisher's chunks were filtered out of the read set and the archive
- *     never reassembled.
+ * THE FIX. The batch key becomes (MATCH_BATCH_SEQ, HEAD AUTHOR): a chunk is
+ * judged against the earliest head for that seq authored by the SAME address,
+ * so a head governs only its own publisher's chunks. This is the only
+ * discriminator that stays status-agnostic, needs no schema change, and is
+ * decidable at parse time. A junk head can then only ever head its own junk
+ * batch; honest operation is bit-identical, since a seq published by exactly
+ * one author still resolves to the same head.
  *
- * THE DISCRIMINATOR. The batch key becomes (MATCH_BATCH_SEQ, HEAD AUTHOR): a v2
- * continuation chunk is judged against the earliest head for that seq authored by
- * the SAME address, and a head governs only the chunks of its own publisher. This
- * is the only discriminator available that is status-agnostic (no mirrored /
- * unmirrored fork), needs no schema change, and is decidable at parse time -
- * "which head's CRC actually reassembles" is not known when a chunk is parsed, and
- * "the head the archive-leader election picked" needs the mirrored snapshot, i.e.
- * exactly the mirror dependence that forbids a status filter. Authorship comes from
- * actions.source_id, authoritative for auth (never re-derived from the transaction).
+ * WHY GATED. This changes consensus-visible chunk-status verdicts (feeding
+ * the class-6 anchor_invalid state-hash preimage), so it lands default inert:
+ * below the threshold the legacy canonical-head rule runs and historical
+ * replay is byte-identical. Pin real heights on the coordinated mainnet
+ * activation train and deploy every indexer (and any recovery host) before
+ * the network crosses its height.
  *
- * A junk head is then only ever the head of its OWN (junk) batch: it can deny
- * nothing, and it reassembles against its own CRC or not at all. The liveness cost
- * recorded for #3075 is unchanged - within one publisher the earliest head still
- * wins - and honest operation is bit-identical, because a batch seq published by
- * exactly one author resolves to the same head under both rules.
- *
- * WHY GATED. It changes consensus-visible verdicts: a chunk that was
- * 'invalid: TOTAL_CHUNKS ...' / 'invalid: SOURCE ...' under a captured batch is
- * 'valid' (or 'orphan') under its own publisher's head, and chunk status feeds the
- * class-6 anchor_invalid state-hash preimage. So it lands DEFAULT INERT: below the
- * threshold the legacy canonical-head rule runs and historical replay is
- * byte-identical. Pin real heights via the  flag-day set and deploy every
- * indexer (and any recovery host) BEFORE the network crosses its height.
- *
- * KEYED ON THE DOGE BLOCK INDEX OF THE BATCH'S CANONICAL HEAD, per network. Not on
- * SNAPSHOT_BLOCK like the anchor-reward family: a v2 chunk carries no snapshot
- * block (VERSION|MATCH_BATCH_SEQ|CHUNK_INDEX|TOTAL_CHUNKS|ARCHIVE_B64_CHUNK), and
- * not on the chunk's own block either, because head and chunks of one batch must
- * never straddle two rules. The canonical (earliest, status-agnostic) head is the
- * one row every node agrees on for a batch seq without looking at status, so it is
- * the gate anchor in the parse path, the read path and recovery alike. No per-chain
- * keys: ANCHOR is valid only on DOGE, so the network alone identifies the venue.
+ * KEYED ON THE DOGE BLOCK INDEX OF THE BATCH'S CANONICAL HEAD, per network,
+ * not on SNAPSHOT_BLOCK like the anchor-reward family: a v2 chunk carries no
+ * snapshot block, and gating on the chunk's own block would let a head and
+ * its chunks straddle two rules. No per-chain keys: ANCHOR is valid only on
+ * DOGE.
  *
  ********************************************************************/
 
@@ -70,7 +54,7 @@
 // canonical archive head. Placeholders are INERT (no live network can reach them);
 // regtest is armed from genesis so fresh regtest stacks exercise the rule end to end.
 const ARCHIVE_BATCH_AUTHOR_ACTIVATION = {
-    mainnet: 999999999,   // INERT placeholder; pin via the  flag-day set before arming
+    mainnet: 999999999,   // INERT placeholder; pin to a real height on the coordinated mainnet activation train before arming
     testnet: 999999999,   // INERT placeholder
     regtest: 0,           // armed from genesis
 };

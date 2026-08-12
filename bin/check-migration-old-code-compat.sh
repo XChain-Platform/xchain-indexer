@@ -18,11 +18,11 @@
 # old-code-compatible, against a throwaway MariaDB. The assertions live in
 # bin/check-migration-old-code-compat.js; this script is the venue.
 #
-#  §7 gate: "every pre-window migration proven additive and
-# old-code-compatible". The gate is per HOST, not per repo, because mainnet
-# indexers deliberately do not run master , so each host's pending set
-# is whatever it is behind by. Run this once per distinct deployed ref recorded
-# in §8 step 1, not once for the fleet.
+# The migration-compatibility gate (spec §7) requires "every pre-window migration
+# proven additive and old-code-compatible". The gate is per HOST, not per repo,
+# because mainnet indexers deliberately do not run the latest commit, so each
+# host's pending set is whatever it is behind by. Run this once per distinct
+# deployed ref, not once for the fleet.
 #
 # USAGE
 #   bin/check-migration-old-code-compat.sh <deployed-ref>
@@ -44,7 +44,7 @@ OLD_REF="${1:-}"
 if [[ -z "$OLD_REF" ]]; then
     echo "usage: bin/check-migration-old-code-compat.sh <deployed-ref>" >&2
     echo "       the ref is the commit the target host is ACTUALLY running, read from the" >&2
-    echo "       running artifact (image digest or commit SHA), never from git ." >&2
+    echo "       running artifact (image digest or commit SHA), never from git." >&2
     exit 64
 fi
 git rev-parse --verify "$OLD_REF^{commit}" >/dev/null 2>&1 || {

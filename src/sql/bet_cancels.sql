@@ -14,7 +14,7 @@
 
 -- Typed row for BET format 1 (cancel feed), the order_cancels / dispenser_cancels
 -- pattern. Written for EVERY cancel action whatever its parse status, which is the
--- whole point of the table : before it existed a cancel wrote nothing but a
+-- whole point of the table: before it existed a cancel wrote nothing but a
 -- lifecycle history row, and only on the VALID path, so a chain-REJECTED cancel left
 -- no status anywhere. The explorer served that action with a NULL status and the SDK
 -- could only report statusKnown:false / statusSource:assumed - it could not tell a

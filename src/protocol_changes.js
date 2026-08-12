@@ -31,7 +31,7 @@ const VM_BANNED_ASYNC_MAINNET_TIME = 1786060800;
 // fleet on the first fee-bearing LTC/DOGE action after the earlier timestamp.
 const NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME = 1786060800;
 
-// : mainnet arm for UNCAPPED_MAX_SUPPLY_ZERO. 9999999999 (year 2286) is the
+// Mainnet arm for UNCAPPED_MAX_SUPPLY_ZERO. 9999999999 (year 2286) is the
 // house UNARMED sentinel, the same one price_pair_activation.js uses: the operator
 // ratified the PRODUCT direction (MAX_SUPPLY=0 stays the uncapped sentinel) on
 // 2026-08-11 but has NOT yet minted the mainnet flag-day the rule switches on, and a
@@ -42,11 +42,11 @@ const NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME = 1786060800;
 // replay accept mints the live fleet rejected.
 const UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME = 9999999999;
 
-// : mainnet arm for CROSS_SETTLE_PER_BLOCK_CAP. Same house UNARMED sentinel
+// Mainnet arm for CROSS_SETTLE_PER_BLOCK_CAP. Same house UNARMED sentinel
 // as the constant above (9999999999, year 2286): the operator ruled on 2026-08-11
 // that the CROSS_SETTLE per-block cap lands behind a flag day rather than ungated
-// under the  §0 wipe-and-replay route, and ratifying the anchor is a separate
-// act that has not happened yet. Arming it is a one-line edit of this constant.
+// under the pre-launch wipe-and-replay route, and ratifying the anchor is a
+// separate act that has not happened yet. Arming it is a one-line edit here.
 // Until then the cap is inert on mainnet (the pass runs uncapped exactly as the
 // live chains have always run it) and live from genesis on testnet/regtest.
 // Do NOT arm it at the 2026-08-07 contract-era anchor: that date is already past,
@@ -55,7 +55,7 @@ const UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME = 9999999999;
 // prevent.
 const CROSS_SETTLE_CAP_MAINNET_TIME = 9999999999;
 
-// Consensus protocol version, COMPILED IN ().
+// Consensus protocol version, COMPILED IN.
 //
 // isEnabled() compares this against the version registered on every protocol
 // change, so it decides WHICH consensus rules this node applies. It used to be
@@ -86,7 +86,7 @@ function isNativeFeePriceTimeGateActive(network, blockTime){
     return Number.isFinite(Number(blockTime)) && Number(blockTime) >= NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME;
 }
 
-// No-op proof for the #3087 consensus-version pin (spec §7 pre-window gate).
+// No-op proof for the consensus-version pin (spec §7 pre-window gate).
 //
 // Called at indexer boot. Asserts that pinning the consensus version changed
 // nothing on THIS host, by comparing the compiled pin against the value the
@@ -129,7 +129,7 @@ class ProtocolChanges {
         this.decoderDb = indexer.decoderDb;
         this.indexerDb = indexer.indexerDb;
 
-        // Consensus version: the compiled pin, never npm metadata (#3087, see
+        // Consensus version: the compiled pin, never npm metadata (see
         // CONSENSUS_VERSION). The override exists so the activation suites can
         // drive isEnabled() across version boundaries without reaching through
         // the environment; it is an explicit argument precisely so no ambient
@@ -202,7 +202,7 @@ class ProtocolChanges {
         // timestamp can. testnet/regtest activate at genesis (base64-native; no pre-base64
         // history to preserve, and the e2e/regtest stack deploys base64 from block 0).
         // The mainnet timestamp below is the coordinated contract-era flag-day:
-        // 1786060800 == 2026-08-07 00:00:00 UTC (repinned by ), aligned with
+        // 1786060800 == 2026-08-07 00:00:00 UTC, aligned with
         // the SDK base64 rollout. It must stay equal to every other 2.0.0
         // contract-era entry in this file and to xchain-vm's
         // ASYNC_SURFACE_GATE_BLOCK_TIME; a wrong value is a second fork.
@@ -251,10 +251,8 @@ class ProtocolChanges {
         // (See xchain-documentation/protocol/actions/NODEPROOF.md)
         this.addChange('NODEPROOF',          '2.0.0',0,0,0,0,0,0);
 
-        // Define protocol changes (ALL LOWER Case)
-        // this.addChange('name','1.0.0',0,0,0,0,0,0);
         this.addChange('UNIFIED_FEES',   '2.0.0',0,0,0,0,0,0);
-        // INVENTORY-ONLY, gates nothing (). Nothing calls
+        // INVENTORY-ONLY, gates nothing. Nothing calls
         // isEnabled('VM_ACTIONS'): the VM actions it nominally covered
         // (DEPLOY/EXECUTE/DEPOSIT/WITHDRAW) are gated by their own '2.0.0' action
         // registrations above and dispatched directly from actions.processAction.
@@ -299,8 +297,8 @@ class ProtocolChanges {
         // now rather than later: any future correction to the matching algorithm
         // needs a gate to hang a height off, and once a mainnet FIAT dispenser
         // exists that retrofit costs a cohort height plus a replay-compatibility
-        // branch. Doing it while the set is empty costs nothing ( already
-        // demonstrated the shape of correction this will need).
+        // branch. Doing it while the set is empty costs nothing (an earlier
+        // dispenser-unit correction already demonstrated the shape this will need).
         this.addChange('FIAT_DISPENSER_PRICING','2.0.0',0,0,0,0,0,0);
         // Issuance fee activation. Mainnet turns on at the historical block 862633;
         // testnet/regtest charge from block 0 so the fee path is exercisable there.
@@ -382,7 +380,7 @@ class ProtocolChanges {
         // controller guards from block 0).
         this.addChange('CONTROLLER_GUARD', '2.0.0',1786060800,0,0,0,0,0);
 
-        // MINT-1 : per-address mint allowance counts SELF-MINTED supply only.
+        // MINT-1: per-address mint allowance counts SELF-MINTED supply only.
         // Below this activation the MINT_ADDRESS_MAX check measures MINT-action
         // credits to SOURCE (the original behaviour), which also counts tokens the
         // address merely RECEIVED as another mint's DESTINATION, so a griefer can
@@ -393,41 +391,34 @@ class ProtocolChanges {
         // rejected ('mint exceeds MINT_ADDRESS_MAX' because of received supply)
         // becomes valid under the new measure, so an ungated flip forks a
         // heterogeneous fleet on the first such mint and breaks from-genesis replay
-        // byte-identity. Keyed on block_TIME (not block_index), mirroring
-        // DEPLOY_BASE64_CODE: MINT runs on BTC, LTC and DOGE whose heights diverge
-        // by millions of blocks, so no single shared block height names one cutover
-        // across all three chains, but a single timestamp can. The mainnet timestamp
-        // is ARMED 2026-07-16  to the ratified coordinated anchor
-        // 1786060800 (2026-08-07 00:00:00 UTC), joining the confirmed 2.0.0
-        // contract-era cohort; a divergent value is a fork.
+        // byte-identity. Keyed on block_TIME and armed at the ratified coordinated
+        // anchor 1786060800 (2026-08-07 00:00:00 UTC), the confirmed 2.0.0
+        // contract-era cohort, for the reasons stated at DEPLOY_BASE64_CODE above;
+        // a divergent value is a fork.
         // testnet/regtest activate at genesis (no history to preserve; the
         // e2e/regtest stack exercises the corrected measure from block 0).
         this.addChange('MINT_SELF_MINTED_ONLY', '2.0.0',1786060800,0,0,0,0,0);
 
-        //  (BonkDAO-class guard): a BINDING poll (VOTE v0 that names a
+        // BonkDAO-class guard: a BINDING poll (VOTE v0 that names a
         // CALLBACK_CONTRACT, so its finalization can move contract-held value)
         // must set its own turnout floor: QUORUM required, MIN_VOTERS >= 1
         // required. Without them a treasury-binding poll with the default
         // 'balance' weighting is exactly the 2026-07 BonkDAO drain: an attacker
         // buys a sliver of supply, proposes, and passes it alone while nobody
-        // is watching (see claude/reports/learned-knowledge/2026-07-07_bonkdao-
-        // governance-attack-low-turnout-treasury-drain.md). Signaling polls
+        // is watching. Signaling polls
         // (blank CALLBACK_CONTRACT) stay permissive. Gated as its own consensus
         // rule because the requirement is a validity TIGHTENING: a v0 create
         // that historical processing accepted becomes invalid, so an ungated
         // flip forks a heterogeneous fleet on the first such poll and breaks
-        // from-genesis replay byte-identity. Keyed on block_TIME (not
-        // block_index), mirroring DEPLOY_BASE64_CODE: VOTE runs on BTC, LTC and
-        // DOGE whose heights diverge by millions of blocks, so no single shared
-        // block height names one cutover across all three chains, but a single
-        // timestamp can. The mainnet timestamp is ARMED 2026-07-16  to
+        // from-genesis replay byte-identity. Keyed on block_TIME and armed at
         // the ratified coordinated anchor 1786060800 (2026-08-07 00:00:00 UTC),
-        // joining the confirmed 2.0.0 contract-era cohort; a divergent value is
+        // the confirmed 2.0.0 contract-era cohort, for the reasons stated at
+        // DEPLOY_BASE64_CODE above; a divergent value is
         // a fork. testnet/regtest activate at genesis (no history to preserve;
         // the e2e/regtest stack exercises the requirement from block 0).
         this.addChange('VOTE_BINDING_MINIMUMS', '2.0.0',1786060800,0,0,0,0,0);
 
-        //  (BonkDAO lesson 3): optional timelock between poll finalization
+        // BonkDAO lesson 3: optional timelock between poll finalization
         // and the binding callback's execution. v0 gains a trailing
         // CALLBACK_DELAY_BLOCKS field: when set (> 0), the v2 finalize freezes
         // the tally and settles the deposit as always but DEFERS the callback
@@ -441,18 +432,15 @@ class ProtocolChanges {
         // WHICH BLOCK the callback EXECUTE lands in (different actions rows,
         // contract_hash, checkpoint preimage): an ungated flip forks a
         // heterogeneous fleet on the first delayed poll. Keyed on block_TIME
-        // (not block_index), mirroring DEPLOY_BASE64_CODE: VOTE runs on BTC,
-        // LTC and DOGE whose heights diverge by millions of blocks, so no
-        // single shared block height names one cutover across all three
-        // chains, but a single timestamp can. The mainnet timestamp is ARMED
-        // 2026-07-16  to the ratified coordinated anchor 1786060800
-        // (2026-08-07 00:00:00 UTC), joining the confirmed 2.0.0 contract-era
-        // cohort; a divergent value is a fork. testnet/regtest activate at
+        // and armed at the ratified coordinated anchor 1786060800
+        // (2026-08-07 00:00:00 UTC), the confirmed 2.0.0 contract-era cohort,
+        // for the reasons stated at DEPLOY_BASE64_CODE above; a divergent
+        // value is a fork. testnet/regtest activate at
         // genesis (no history to preserve; the e2e/regtest stack exercises the
         // timelock from block 0).
         this.addChange('VOTE_CALLBACK_TIMELOCK', '2.0.0',1786060800,0,0,0,0,0);
 
-        //  (VOTE-SLEEP-1): VOTE respects the self-sleep gate. SLEEP v0
+        // VOTE-SLEEP-1: VOTE respects the self-sleep gate. SLEEP v0
         // freezes an address ("pauses actions on an ADDRESS") and every sibling
         // governance/content handler (list/link/broadcast/message/file/address)
         // rejects a sleeping SOURCE via isActionAllowed, but VOTE never checked
@@ -474,7 +462,7 @@ class ProtocolChanges {
         // testnet/regtest activate at genesis.
         this.addChange('VOTE_RESPECTS_SLEEP', '2.0.0',1786060800,0,0,0,0,0);
 
-        //  (BonkDAO lesson 4): expose a poll's electorate TICK to
+        // BonkDAO lesson 4: expose a poll's electorate TICK to
         // contracts so a binding-poll callback can verify WHICH token decided
         // it (the treasury template's arm() pins poll.tick === its governing
         // govTick, defeating a "raid a throwaway token's poll to drain an
@@ -491,17 +479,14 @@ class ProtocolChanges {
         // adding a snapshot key changes what a contract observes via the poll
         // accessor - an ungated flip forks a heterogeneous fleet on the first
         // binding-poll callback or tick-reading contract. Keyed on block_TIME
-        // (not block_index), mirroring the sibling VOTE flag-days: VOTE runs on
-        // BTC, LTC and DOGE whose heights diverge by millions of blocks, so no
-        // single shared block height names one cutover across all three chains,
-        // but a single timestamp can. The mainnet timestamp joins the ratified
-        // coordinated anchor 1786060800 (2026-08-07 00:00:00 UTC), the confirmed
-        // 2.0.0 contract-era cohort; a divergent value is a fork. testnet/regtest
+        // and armed at the ratified coordinated anchor 1786060800 (2026-08-07
+        // 00:00:00 UTC), the confirmed 2.0.0 contract-era cohort, for the reasons
+        // stated at DEPLOY_BASE64_CODE above; a divergent value is a fork. testnet/regtest
         // activate at genesis (no history to preserve; the e2e/regtest stack
         // exercises the visible tick from block 0).
         this.addChange('VOTE_POLL_TICK_VISIBLE', '2.0.0',1786060800,0,0,0,0,0);
 
-        // : ATTEST v1 canonical id-case normalization. Below this activation
+        // ATTEST v1 canonical id-case normalization. Below this activation
         // the canonical signing bytes (and the EQUIV ROUND_ID) use the RAW wire
         // REQUEST_ID case, the original behaviour: a case-mutated replay of a
         // pending v1 fails ed25519 verification because the hub signed the
@@ -512,21 +497,17 @@ class ProtocolChanges {
         // consensus rule because the switch is a validity LOOSENING: wire bytes a
         // legacy node rejects (uppercase id, lowercase-signed sigs) verify on an
         // upgraded node, so an ungated flip lets any attacker split a
-        // heterogeneous fleet with a single case-mutated replay (the reason the
-        // 2026-07-13 inline fix was deferred to this flag-day; see review item
-        // #1979). Keyed on block_TIME (not block_index), mirroring
-        // DEPLOY_BASE64_CODE: ATTEST rides EXECUTE emissions on BTC, LTC and
-        // DOGE, whose heights diverge by millions of blocks, so no single shared
-        // block height names one cutover across all three chains, but a single
-        // timestamp can. The mainnet timestamp is ARMED 2026-07-16  to
-        // the ratified coordinated anchor 1786060800 (2026-08-07 00:00:00 UTC),
-        // joining the confirmed 2.0.0 contract-era cohort; a divergent value is
+        // heterogeneous fleet with a single case-mutated replay (which is why the
+        // inline fix was deferred to this flag-day). Keyed on block_TIME and
+        // armed at the ratified coordinated anchor 1786060800 (2026-08-07
+        // 00:00:00 UTC), the confirmed 2.0.0 contract-era cohort, for the reasons
+        // stated at DEPLOY_BASE64_CODE above; a divergent value is
         // a fork. testnet/regtest activate at genesis (no history to preserve;
         // the e2e/regtest stack exercises the self-contained canonical from
         // block 0).
         this.addChange('ATTEST_CANONICAL_LOWERCASE_ID', '2.0.0',1786060800,0,0,0,0,0);
 
-        //  (attestation Phase 5, spec §12): the origin-side half of the
+        // Attestation Phase 5 (spec §12): the origin-side half of the
         // cross-chain relay. Below this activation an ATTEST v0 emitted by an
         // LTC or DOGE contract is REJECTED at admission, because
         // Attest._computeResponsibleSet returns [] on any non-BTC chain (the
@@ -546,14 +527,14 @@ class ProtocolChanges {
         // carrying a BTC value would already be satisfied there and would ship
         // the rule live instead of inert (the ATTEST_ADMISSION_ACTIVATION plane
         // trap, documented in attest_admission_activation.js). The mainnet
-        // timestamp is ARMED to the same ratified  cohort anchor
+        // timestamp is ARMED to the same ratified contract-era cohort anchor
         // 1786060800; a divergent value is a fork. The BTC-anchored half of
         // Phase 5 (accepting v3/v4 on the wire) rides ATTEST_RELAY_ACTIVATION in
         // attest_relay_activation.js; either order of the two is safe, see the
         // note there. testnet/regtest activate at genesis.
         this.addChange('ATTEST_RELAY_ORIGIN', '2.0.0',1786060800,0,0,0,0,0);
 
-        // : VM xchain.attestation.getResponse(requestId) reader. Below this
+        // VM xchain.attestation.getResponse(requestId) reader. Below this
         // activation the VM snapshot's attestationData is always null, so
         // getResponse() returns null for every request (the pre-reader behaviour);
         // the callback EXECUTE remains the only channel a contract observes a
@@ -566,17 +547,15 @@ class ProtocolChanges {
         // and a populated object on an upgraded node, forking a heterogeneous fleet
         // (and the per-block contract_hash, since the divergent branch writes
         // different state) on the first getResponse-reading contract. Keyed on
-        // block_TIME (not block_index), mirroring VM_BALANCE_TOKENINFO: EXECUTE runs
-        // on BTC, LTC and DOGE whose heights diverge by millions of blocks, so no
-        // single shared block height names one cutover across all three chains, but
-        // a single timestamp does. The mainnet timestamp joins the ratified
-        // coordinated anchor 1786060800 (2026-08-07 00:00:00 UTC), the confirmed
-        // 2.0.0 contract-era cohort; a divergent value is a fork. testnet/regtest
+        // block_TIME and armed at the ratified coordinated anchor 1786060800
+        // (2026-08-07 00:00:00 UTC), the confirmed 2.0.0 contract-era cohort, for
+        // the reasons stated at DEPLOY_BASE64_CODE above; a divergent value is a
+        // fork. testnet/regtest
         // activate at genesis (no pre-reader history to preserve; the e2e/regtest
         // stack exercises getResponse from block 0).
         this.addChange('VM_ATTESTATION_GETRESPONSE', '2.0.0',1786060800,0,0,0,0,0);
 
-        // : synthesized-execution TX_HASH on the injected-callback seam. Four
+        // Synthesized-execution TX_HASH on the injected-callback seam. Four
         // sites inject a system EXECUTE that runs a contract callback (attest.js v1
         // response + v2 expiry, vote.js poll-finalize, xcall.js result); two of them
         // historically omitted TX_HASH, so a contract emitting ATTEST/XCALL from
@@ -592,18 +571,16 @@ class ProtocolChanges {
         // validity LOOSENING: an ATTEST/XCALL emission every legacy node rejects
         // becomes valid on an upgraded node, so an ungated flip forks a
         // heterogeneous fleet on the first contract that emits from such a callback.
-        // Keyed on block_TIME (not block_index), mirroring the sibling VM flag-days:
-        // these callbacks run on BTC, LTC and DOGE whose heights diverge by millions
-        // of blocks, so no single shared block height names one cutover across all
-        // three chains, but a single timestamp can. The mainnet timestamp joins the
-        // ratified coordinated anchor 1786060800 (2026-08-07 00:00:00 UTC), the
-        // confirmed 2.0.0 contract-era cohort ; a divergent value is a fork.
+        // Keyed on block_TIME and armed at the ratified coordinated anchor
+        // 1786060800 (2026-08-07 00:00:00 UTC), the confirmed 2.0.0 contract-era
+        // cohort, for the reasons stated at DEPLOY_BASE64_CODE above; a divergent
+        // value is a fork.
         // testnet/regtest activate at genesis (no hashless-callback history to
         // preserve; the e2e/regtest stack exercises the synthesized hash from
         // block 0).
         this.addChange('SYNTH_EXEC_TX_HASH', '2.0.0',1786060800,0,0,0,0,0);
 
-        // : dispenser auto-close compares remaining inventory against the
+        // Dispenser auto-close compares remaining inventory against the
         // PER-UNIT price, not a buyer's aggregate purchase. The legacy check
         // closes the dispenser when GIVE_REMAINING drops below the triggering
         // dispense's total give_amount (multiplier * GIVE_AMOUNT), so a large
@@ -617,12 +594,9 @@ class ProtocolChanges {
         // different consensus block hashes): an ungated flip forks a
         // heterogeneous fleet on the first multi-unit dispense that empties
         // below the aggregate but not the per-unit threshold. Keyed on
-        // block_TIME (not block_index), mirroring DEPLOY_BASE64_CODE: DISPENSE
-        // runs on BTC, LTC and DOGE whose heights diverge by millions of
-        // blocks, so no single shared block height names one cutover across
-        // all three chains, but a single timestamp can. The mainnet timestamp
-        // joins the ratified coordinated anchor 1786060800 (2026-08-07
-        // 00:00:00 UTC), the confirmed 2.0.0 contract-era cohort ; a
+        // block_TIME and armed at the ratified coordinated anchor 1786060800
+        // (2026-08-07 00:00:00 UTC), the confirmed 2.0.0 contract-era cohort,
+        // for the reasons stated at DEPLOY_BASE64_CODE above; a
         // divergent value is a fork. testnet/regtest activate at genesis (no
         // early-close history to preserve; the e2e/regtest stack exercises the
         // per-unit close from block 0).
@@ -687,7 +661,7 @@ class ProtocolChanges {
         // rule live, so genesis activation preserves its current behaviour).
         this.addChange('VM_BANNED_ASYNC', '2.0.0',VM_BANNED_ASYNC_MAINNET_TIME,0,0,0,0,0);
 
-        // VM deploy-linter hardening (flag-day Pkg 4 / ): one gate for the
+        // VM deploy-linter hardening: one gate for the
         // six hardened lint-core rules (exponentiation `**`/`**=` ban, reserved
         // CONTRACT_WRAPPER control bindings, SAFE_MATH-complement Math ban,
         // dynamic import() rejection, shorthand `{ Promise }` rejection, and the
@@ -696,7 +670,7 @@ class ProtocolChanges {
         // consensus: below the activation a deploy resolves exactly as it did
         // historically; deploy.js threads the resolved activation into
         // vm.validateSyntax(code, {enforceLintHardening}). Armed at the ratified
-        //  anchor, the SAME instant VM_BANNED_ASYNC activates (zero
+        // contract-era anchor, the SAME instant VM_BANNED_ASYNC activates (zero
         // partially-hardened window); the literal timestamp is pinned by
         // test/unit/flagdayPlaceholderGuard.test.js. testnet/regtest activate at
         // genesis (no pre-activation history to preserve). A divergent value is
@@ -715,7 +689,7 @@ class ProtocolChanges {
         // from-genesis replay. testnet/regtest activate at genesis (all zeros).
         this.addChange('LOCK_MAX_SUPPLY_EXACT', '2.0.0',1786060800,0,0,0,0,0);
 
-        // ISSUE validity : a NULL/absent prior lock value counts as UNSET.
+        // ISSUE validity: a NULL/absent prior lock value counts as UNSET.
         // getTokenInfo rebuilds token state by replaying the `issues` rows and SKIPS a
         // column that is NULL, so a token whose genesis ISSUE simply omitted the lock
         // fields (the create-time "don't lock anything" path, and 108 of 109 ticks on the
@@ -731,7 +705,7 @@ class ProtocolChanges {
         // supply/description/mint after launch. Locking stays one-way: a prior of 1 is
         // still refused a move to 0 on both sides of the gate.
         //
-        // UNGATED as of the  redesign (spec §0). This rule was built under the
+        // UNGATED as of the pre-launch redesign (spec §0). This rule was built under the
         // v1 three-key train and registered on its Key A block TIME (1796083200 =
         // 2026-12-01), because it CHANGES WHICH ACTIONS ARE VALID: an ungated flip on a
         // LIVE network would accept an ISSUE that peers on the old binary reject, forking
@@ -946,7 +920,7 @@ class ProtocolChanges {
         // deposit/withdraw tightening (ungated - a leading-zero deposit was ALREADY a stranded-funds
         // bug, so rejecting forked nothing valid), a leading-zero contract stake currently produces a
         // VALID, correct row, so tightening it is a live validity change and MUST be gated.
-        // EXEC-1 () joins the same flag-day: EXECUTE's CONTRACT_ACTION_INDEX was also
+        // EXEC-1 joins the same flag-day: EXECUTE's CONTRACT_ACTION_INDEX was also
         // /^\d+$/, and there a leading-zero index is NOT benign - the VM hashes Number(index)
         // into the attestation request_id preimage while the host re-hashes the raw EMITTER
         // string, so '007' makes the two disagree and the host rejects an ATTEST the VM
@@ -967,7 +941,7 @@ class ProtocolChanges {
         // so this is not a byte-locked twin.
         this.addChange('SLASH_BURNS_PENDING_STAKE', '2.0.0',0,0,0,961000,0,0);
 
-        // SLASH-2 (): an XORACLE equivocation proof must agree on the ORACLE ROUND
+        // SLASH-2: an XORACLE equivocation proof must agree on the ORACLE ROUND
         // carried in the signed JSON, not just on the BTC height in the EQUIV key. Oracle
         // rounds advance on wall-clock while the captured BTC tip can stand still, so an
         // honest validator signing rounds N and N+1 at one tip produced two messages sharing
@@ -1013,7 +987,7 @@ class ProtocolChanges {
         // flag), so not a byte-locked twin; the VM readManifest change ships alongside.
         this.addChange('DEPLOY_INIT_STRICT', '2.0.0',1786060800,0,0,0,0,0);
 
-        // BATCH sub-action normalization : the top-level dispatcher
+        // BATCH sub-action normalization: the top-level dispatcher
         // (actions.js) rewrites ACTION aliases (TRANSFER->SEND, ADDR->ADDRESS,
         // DROP->AIRDROP, CAST->BROADCAST, MSG->MESSAGE) and injects the implied
         // legacy VERSION 0 for BTNS-style ISSUE/MINT/SEND params, but batch.js
@@ -1029,11 +1003,11 @@ class ProtocolChanges {
         // invalid BATCH becoming valid changes actions/ledger state hashed
         // into the checkpoint preimage; an ungated flip forks a skewed fleet
         // on the first aliased or legacy-format sub-action). Keyed on block
-        // TIME with the ratified 2026-08-07 contract-era cohort (
-        // batch); testnet/regtest activate at genesis (all zeros).
+        // TIME with the ratified 2026-08-07 contract-era cohort;
+        // testnet/regtest activate at genesis (all zeros).
         this.addChange('BATCH_SUBACTION_NORMALIZATION', '2.0.0',1786060800,0,0,0,0,0);
 
-        //  (flag-day Pkg 11): numeric legacy-fee db_hits accumulation. The legacy
+        // Numeric legacy-fee db_hits accumulation. The legacy
         // (non-UNIFIED_FEES) transaction-fee model in dividend.js / callback.js / sweep.js
         // accumulates a db_hits count and prices it via getTransactionFee. The original
         // accumulators used `db_hits += this.util.bcmul(count, N, 0)`; bcmul returns a
@@ -1059,7 +1033,7 @@ class ProtocolChanges {
         // no pre-activation fee-bearing blocks remain to replay).
         this.addChange('LEGACY_FEE_NUMERIC_DBHITS', '2.0.0',1786060800,0,0,0,0,0);
 
-        // : partial claim + partial unstake. UNSTAKE v0/v1 and COLLECT v0 gain a
+        // Partial claim + partial unstake. UNSTAKE v0/v1 and COLLECT v0 gain a
         // trailing OPTIONAL AMOUNT field (no new action versions):
         //   UNSTAKE v0: VERSION|SIGNING_PUBKEY[|AMOUNT]
         //   UNSTAKE v1: VERSION|SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK[|AMOUNT]
@@ -1080,24 +1054,22 @@ class ProtocolChanges {
         // fleet on the first early-broadcast partial. Gated because honoring the field
         // changes consensus-visible state (unstakes/stakes/reward_claims rows, balances,
         // stake weights, all hashed): an ungated flip forks a heterogeneous fleet on the
-        // first partial action. Keyed on block_TIME (not block_index), mirroring
-        // DEPLOY_BASE64_CODE: UNSTAKE v1 runs on BTC, LTC and DOGE whose heights diverge
-        // by millions of blocks, so no single shared block height names one cutover, but a
-        // single timestamp does. The mainnet timestamp joins the ratified coordinated
+        // first partial action. Keyed on block_TIME for the reasons stated at
+        // DEPLOY_BASE64_CODE above. The mainnet timestamp joins the ratified coordinated
         // contract-era anchor 1786060800 (2026-08-07 00:00:00 UTC); a divergent value is a
         // fork. testnet/regtest activate at genesis (no partial-era history to preserve;
         // the e2e/regtest stack exercises partials from block 0).
         this.addChange('PARTIAL_UNSTAKE_COLLECT', '2.0.0',1786060800,0,0,0,0,0);
 
-        // : retirement of XCALL result rows the source chain can never deliver.
+        // Retirement of XCALL result rows the source chain can never deliver.
         // A mirrored, finalized result row that matches no local XCALL v0 request (or
         // whose request routes to a different target chain, or whose signatures do not
         // meet the cross_chain quorum) is rejected by processResult on every block and
         // pruned by nothing, because pruning is keyed on a recorded callback and those
         // paths record none. The delivery pass is capped at XCALL_MAX_CALLS_PER_BLOCK,
         // so as few as 25 such rows at a low snapshot_block occupy the whole per-block
-        // slice permanently and starve every real result behind them (measured on the
-        //  test-host venue: 229 rows, head slice 25/25 unmatched, re-fetched every
+        // slice permanently and starve every real result behind them (measured on a
+        // drill venue: 229 rows, head slice 25/25 unmatched, re-fetched every
         // block forever). At/above this activation such a row is retired once it can no
         // longer become deliverable: past the request's deadline_block where a request
         // exists, or XCALL_RESULT_ORPHAN_GRACE_SECONDS of block time past the row's
@@ -1109,15 +1081,14 @@ class ProtocolChanges {
         // row (hashed), and freeing a capped delivery slot moves which block a real
         // result's callback EXECUTE lands in (contract hash, action indices). An ungated
         // flip would fork a heterogeneous fleet on the first orphaned result row. Keyed
-        // on block_TIME, mirroring the other multi-chain gates: XCALL runs on BTC, LTC
-        // and DOGE whose heights diverge by millions of blocks, so no single height names
-        // one cutover but a single timestamp does. The mainnet timestamp joins the
-        // ratified coordinated contract-era anchor 1786060800 (2026-08-07 00:00:00 UTC);
-        // testnet/regtest activate at genesis (no orphaned-result history worth
-        // preserving there, and the  drill venue needs the rule from block 0).
+        // on block_TIME for the reasons stated at DEPLOY_BASE64_CODE above. The mainnet
+        // timestamp joins the ratified coordinated contract-era anchor 1786060800
+        // (2026-08-07 00:00:00 UTC); testnet/regtest activate at genesis (no
+        // orphaned-result history worth preserving there, and the drill venue needs the
+        // rule from block 0).
         this.addChange('XCALL_RESULT_ORPHAN_RETIREMENT', '2.0.0',1786060800,0,0,0,0,0);
 
-        // : MAX_SUPPLY=0 is the UNCAPPED sentinel, so the supply ceiling is not
+        // MAX_SUPPLY=0 is the UNCAPPED sentinel, so the supply ceiling is not
         // applied at all on a token that declares no cap. MAX_SUPPLY is stored as 0 when
         // the ISSUE omits it (createToken / db.js) and the protocol documents such a token
         // as unlimited, but mint.js applied `SUPPLY + AMOUNT > MAX_SUPPLY` with no
@@ -1138,10 +1109,8 @@ class ProtocolChanges {
         // Gated as its own consensus rule because the change is a validity LOOSENING: a
         // MINT (or ISSUE) that every legacy node rejects becomes valid on an upgraded node,
         // so an ungated flip forks a heterogeneous fleet on the first mint of an uncapped
-        // token and breaks from-genesis replay byte-identity. Keyed on block_TIME (not
-        // block_index), mirroring MINT_SELF_MINTED_ONLY: MINT and ISSUE run on BTC, LTC and
-        // DOGE whose heights diverge by millions of blocks, so no single shared block height
-        // names one cutover across all three chains, but a single timestamp can.
+        // token and breaks from-genesis replay byte-identity. Keyed on block_TIME for the
+        // reasons stated at DEPLOY_BASE64_CODE above.
         //
         // MAINNET IS UNARMED (see UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME above): the
         // operator's 2026-08-11 ruling settled the product direction, not the flag day.
@@ -1149,8 +1118,8 @@ class ProtocolChanges {
         // block 0 there and in the unit/e2e suites.
         this.addChange('UNCAPPED_MAX_SUPPLY_ZERO', '2.0.0',UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME,0,0,0,0,0);
 
-        // : per-block cap on the CROSS_SETTLE pass
-        // (CROSS_SETTLE_MAX_PER_BLOCK in protocol/constants.js, ). With the
+        // Per-block cap on the CROSS_SETTLE pass
+        // (CROSS_SETTLE_MAX_PER_BLOCK in protocol/constants.js). With the
         // gate ON, processCrossChainSettlements settles at most the cap of finalized,
         // effective, unsettled matches per block and carries the remainder forward in
         // (snapshot_block, match_id) order; with it OFF the pass drains the whole
@@ -1162,7 +1131,7 @@ class ProtocolChanges {
         // (all-zero thresholds below) and the fresh-genesis restart of 816d1e1 covered
         // the three TESTNET chains only, so mainnet carries settled history that an
         // ungated cap would reinterpret on any from-genesis replay. The sibling
-        // ATTEST_MAX_EXPIRIES_PER_BLOCK could ship ungated only because the 
+        // ATTEST_MAX_EXPIRIES_PER_BLOCK could ship ungated only because the pre-launch
         // fleet-wide replay recomputed the history it reinterpreted; this cap has no
         // such vehicle. Operator ruling of 2026-08-11, option (b).
         //
@@ -1322,14 +1291,14 @@ module.exports.VM_BANNED_ASYNC_MAINNET_TIME = VM_BANNED_ASYNC_MAINNET_TIME;
 // H-3 price-selection flag-day + its shared gate predicate (see registration).
 module.exports.NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME = NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME;
 module.exports.isNativeFeePriceTimeGateActive = isNativeFeePriceTimeGateActive;
-// Compiled consensus-version pin (#3087) and its no-op proof. Exported for the
+// Compiled consensus-version pin and its no-op proof. Exported for the
 // boot path (XChainIndexer) and for test/unit/protocol_changes.test.js, which
 // pins the constant against package.json so the two cannot drift.
 module.exports.CONSENSUS_VERSION = CONSENSUS_VERSION;
 module.exports.assertConsensusVersionPin = assertConsensusVersionPin;
-//  UNARMED mainnet sentinel, exported so the suite can assert the gate is still
-// waiting on the operator's flag day rather than silently armed at a guessed value.
+// UNARMED mainnet sentinel for UNCAPPED_MAX_SUPPLY_ZERO, exported so the suite can assert
+// the gate is still waiting on the operator's flag day rather than armed at a guessed value.
 module.exports.UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME = UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME;
-//  UNARMED mainnet sentinel, exported for the same reason: the suite asserts the
+// UNARMED mainnet sentinel for the CROSS_SETTLE cap, exported for the same reason: the suite asserts the
 // CROSS_SETTLE cap is still waiting on the operator's anchor, never armed at a guess.
 module.exports.CROSS_SETTLE_CAP_MAINNET_TIME = CROSS_SETTLE_CAP_MAINNET_TIME;

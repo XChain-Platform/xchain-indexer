@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// : in the per-leg SEND loop the SOURCE sleeping check
+// in the per-leg SEND loop the SOURCE sleeping check
 // isActionAllowed(SOURCE, null, BLOCK) is byte-identical every leg, and the TICK
 // sleeping check isActionAllowed(null, TICK, BLOCK) repeats per leg for the same
 // tick. The SOURCE check is now hoisted once before the loop and the TICK check is
@@ -31,7 +31,7 @@ const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const DEST1  = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs';
 const DEST2  = 'n2j7X44Gm6P4E9cs2H13EkBAotYbjPZW17';
 
-describe('Send isActionAllowed memoization @regression ()', function () {
+describe('Send isActionAllowed memoization @regression', function () {
     let indexer, actionsCtx, handler;
 
     beforeEach(function () {

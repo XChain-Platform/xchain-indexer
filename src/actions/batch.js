@@ -28,9 +28,7 @@
 
 class Batch {
 
-    // Handle constructing a class instance
     constructor(action){
-        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -38,14 +36,12 @@ class Batch {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
-        // Setup alias to protocol changes class
         this.protocolChanges = action.protocolChanges;
 
-        // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|COMMAND';
 
-        // Define list of ACTIONS and usage limits
+        // Per-BATCH usage cap for each ACTION (0 = disallowed inside a BATCH).
         this.actionLimits = {};
         this.actionLimits['BATCH'] = 0;
         this.actionLimits['MINT']  = 1;
@@ -70,34 +66,28 @@ class Batch {
         return action;
     }
 
-    // Handle parsing the BATCH transaction
     async parse(params, data, error){
-        // BATCH_SUBACTION_NORMALIZATION flag-day : when active,
-        // sub-actions get the same alias rewrite + legacy VERSION-0 injection
-        // as top-level actions. Resolved once per BATCH so every scan below
-        // gates identically.
+        // BATCH_SUBACTION_NORMALIZATION flag-day: when active, sub-actions get the same
+        // alias rewrite + legacy VERSION-0 injection as top-level actions. Resolved once
+        // per BATCH so every scan below gates identically.
         let normalize = await this.protocolChanges.isEnabled('BATCH_SUBACTION_NORMALIZATION', data['BLOCK_INDEX']);
-        // Clone the raw data for storage in batches table
+        // Clone before mutation: this raw copy is what gets stored in the batches table.
         let batch = structuredClone(data);
 
-        // Define list of ACTIONS and count of usage within BATCH
         let actions = {};
 
-        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
-        // Get list of commands
         let commands = String(data['TX_DATA']).split(';');
         if(!error && (this.util.isNull(commands) || commands.length < 1)){
             error = 'invalid: COMMAND (unknown)';
         } else {
-            // Trim BATCH and format VERSION from first command
+            // The first command still carries the BATCH|VERSION prefix; strip it.
             commands[0] = commands[0].replace('BATCH|' + format + '|','');
         }
 
-        // Build out array of ACTIONs and count of times used in BATCH
         for(let command of commands){
             let action = String(command).split('|')[0];
             if(normalize)
@@ -107,11 +97,6 @@ class Batch {
             actions[action]++;
         }
 
-        /*****************************************************************
-         * General Validations
-         ****************************************************************/
-
-        // Verify all ACTION commands are valid
         for(let command of commands){
             let action = String(command).split('|')[0];
             if(normalize)
@@ -120,33 +105,25 @@ class Batch {
                 error = 'invalid: ACTION (unknown)';
         }
 
-        // Verify ACTION command limits
         for(let action in actions){
             if(!error && Object.keys(this.actionLimits).includes(action) && actions[action] > this.actionLimits[action])
                 error = 'invalid: ' + action  + ' (limit)';
         }
 
-        // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
-        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = batch['STATUS'] = status;
 
-        // Print status message 
         console.log("\t BATCH : " + data['SOURCE'] + ' : ' + data['STATUS']);
 
-        // Create record in batches table
         await this.indexerDb.createBatch(batch);
 
-        // Store the SOURCE in addresses list
         this.util.addAddressTicker(data['SOURCE']);
 
-        // Create action mappings
         await this.mapper.createMappings(data);
-        
-        // Handle processing the specific ACTION commands
+
         if(status=='valid'){
 
             // Pre-parse all sibling commands so child handlers can inspect them
@@ -172,11 +149,7 @@ class Batch {
             let baseKeys = new Set(Object.keys(data));
 
             for(let command of commands){
-
-                // Parse command into params
                 params = String(command).split('|');
-
-                // Extract ACTION from params
                 let action = String(params.shift()).toUpperCase();
 
                 // Normalize the sub-action like a top-level action would be
@@ -195,10 +168,9 @@ class Batch {
                 data['TX_DATA'] = command;
                 data['FORMAT']  = this.util.getFormatVersion(params[0]);
 
-                // Increase the action index for every command and create a record of this action in the actions table
+                // Each command gets its own ACTION_INDEX.
                 data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(data, true);
 
-                // Process the specific ACTION commands
                 await this.actions.processAction(action, params, data, error);
             }
         }

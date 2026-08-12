@@ -15,27 +15,22 @@
  * XChain Indexer - Provider Registry
  *
  * The consensus-authoritative allow-list of attestation providers the indexer
- * uses to validate ATTEST v0 (request) actions (provider_id known, redundancy in
- * allowed list, payload within max, deadline within window). Structural validation
- * only: the hub side does the actual fetch + consensus.
+ * uses to validate ATTEST v0 (request) actions: provider_id known, redundancy
+ * in the allowed list, payload within max, deadline within window. Structural
+ * validation only; the hub side does the actual fetch and consensus.
  *
- * Effective set = built-in DEFAULTS (`http_get`, `llm`) OVERLAID with an optional
- * governance/operator config block (`config.ATTESTATION.PROVIDERS`). This mirrors
- * how STAKING.CAPABILITIES[*].MIN_STAKE is a versioned, consensus-shipped config
- * input rather than a hard-coded literal: the DEFAULTS are the shipped floor, and a
- * provider added/tuned via config takes effect only through the same coordinated
- * config rollout every node applies in lockstep. When no config block is present
- * (the shipping state today) the effective set is byte-identical to DEFAULTS, so
- * this stays a no-op consensus-wise until governance registers a provider.
+ * Effective set = built-in DEFAULTS (`http_get`, `llm`) overlaid with an optional
+ * governance/operator config block (`config.ATTESTATION.PROVIDERS`), the same
+ * pattern used for STAKING.CAPABILITIES[*].MIN_STAKE: DEFAULTS are the shipped
+ * floor, and any config-added/tuned provider takes effect only through a
+ * coordinated rollout every node applies in lockstep, so behavior stays
+ * consensus-safe with no config block present.
  *
- * Note on the fuller design (spec §16, Phase 6): a fully DYNAMIC on-chain
- * governance-load (reading ATTESTATION_PROVIDER:{id} configs whose activation is
- * block-anchored, like the llm approved_models ladder) is deferred. It needs a
- * deterministic block-anchored provider-config read so a mid-history provider
- * change replays identically; until that lands, the DEFAULTS-plus-static-config
- * overlay here is the consensus-safe seam.
- *
- * Spec: claude/reports/specs/2026-05-24_external-attestation-framework.md
+ * A fully dynamic on-chain governance load (reading provider configs whose
+ * activation is block-anchored, like the llm approved_models ladder, spec §16
+ * Phase 6) is deferred: it needs a deterministic, block-anchored config read so
+ * a mid-history provider change replays identically. Until that lands, this
+ * DEFAULTS-plus-static-config overlay is the consensus-safe seam.
  *
  ********************************************************************/
 
@@ -49,10 +44,8 @@ const PROVIDERS = {
         allowed_redundancy:     [1, 3, 5],
         deadline_window_blocks: 100
     },
-    // Spec: claude/reports/specs/2026-05-24_llm-attestation-provider.md §3.
-    // The indexer's job here is structural validation only: provider_id
-    // is in the registry, the payload fits, redundancy is allowed, deadline
-    // is within window. The hub side does the actual LLM API call + consensus.
+    // Hub performs the actual LLM API call and consensus judgment; this entry
+    // only sets the structural bounds the indexer checks.
     llm: {
         provider_id:            'llm',
         version:                1,
@@ -93,32 +86,27 @@ class ProviderRegistry {
         this.providers = buildEffectiveProviders(config);
     }
 
-    // Whether a provider id is known and currently enabled
     isKnown(providerId) {
         return Object.prototype.hasOwnProperty.call(this.providers, providerId);
     }
 
-    // Get the full provider definition, or null
     getProvider(providerId) {
         return this.providers[providerId] || null;
     }
 
-    // Check whether a redundancy value is allowed for this provider
     isRedundancyAllowed(providerId, redundancy) {
         let p = this.providers[providerId];
         if (!p) return false;
         return Array.isArray(p.allowed_redundancy) && p.allowed_redundancy.indexOf(Number(redundancy)) !== -1;
     }
 
-    // Validate a payload size against the provider's max_request_bytes
     isPayloadSizeAllowed(providerId, payloadByteLength) {
         let p = this.providers[providerId];
         if (!p) return false;
         return Number(payloadByteLength) <= Number(p.max_request_bytes);
     }
 
-    // Validate a deadline against the provider's deadline_window_blocks
-    // Caller passes (currentBlock, deadlineBlock); we check 0 < (deadlineBlock - currentBlock) <= window
+    // Caller passes (currentBlock, deadlineBlock); checks 0 < (deadlineBlock - currentBlock) <= window.
     isDeadlineAllowed(providerId, currentBlock, deadlineBlock) {
         let p = this.providers[providerId];
         if (!p) return false;
@@ -126,7 +114,6 @@ class ProviderRegistry {
         return delta > 0 && delta <= Number(p.deadline_window_blocks);
     }
 
-    // List all provider ids known to the registry
     listProviderIds() {
         return Object.keys(this.providers);
     }

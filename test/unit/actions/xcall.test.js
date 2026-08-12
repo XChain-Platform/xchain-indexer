@@ -107,7 +107,7 @@ describe('Xcall (XCALL) @regression @tier3', function () {
             decoderDb:     indexer.decoderDb,
             indexerDb:     indexer.indexerDb,
             actionExecute: executeStub,
-            // : the undeliverable-result retirement paths consult the flag-day
+            // the undeliverable-result retirement paths consult the flag-day
             // gate. Open here (the mock models regtest, genesis-active), so the
             // "nothing recorded" assertions below prove the AGE-OUT clock holds them
             // back, not a closed gate: the request's deadline_block (300) is ahead of
@@ -168,7 +168,7 @@ describe('Xcall (XCALL) @regression @tier3', function () {
             assert.match(data['STATUS'], /CALL_ID \(does not match/);
         });
 
-        // : a bare mismatch cannot tell a forged call_id from a VM/indexer
+        // a bare mismatch cannot tell a forged call_id from a VM/indexer
         // preimage skew. The status carries the field count, both hash heads and the
         // preimage, so the operator reads the cause off the rejected row.
         it('the mismatch status carries the field count, both hash heads and the preimage', async function () {
@@ -239,7 +239,7 @@ describe('Xcall (XCALL) @regression @tier3', function () {
             // so a 'valid' STATUS proves the real derivation still produces the pinned
             // hex. This does NOT route through the local deriveCallId lambda, so a
             // lockstep field-reorder of BOTH the real handler and the lambda cannot
-            // pass silently (attest.test.js twin; closes  for XCALL).
+            // pass silently (attest.test.js twin; closes for XCALL).
             const gv   = GOLDEN_CALL_ID.input;
             const data = v0Data({
                 TX_HASH: gv.txHash, ROOT_ACTION_INDEX: gv.rootActionIndex,

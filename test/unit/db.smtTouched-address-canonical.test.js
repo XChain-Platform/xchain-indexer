@@ -10,7 +10,7 @@
  *
  **********************************************************************
  *
- * The light-client touched-key set must be canonical on BOTH axes .
+ * The light-client touched-key set must be canonical on BOTH axes.
  *
  * `createLedgerChangeRecord` resolves the tick through tick_id before recording
  * the touched key, because a "^<id>" or case-variant tick reference would

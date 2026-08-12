@@ -19,8 +19,9 @@
  * These queries decide consensus-visible archive verdicts and none of them is
  * reachable from the unit tier, which stubs the DB: a column that does not exist
  * fails at runtime on a real MariaDB, and a column that exists but MEANS something
- * else fails silently and forever.  hit the second kind while it was being
- * built - `anchor_actions.block_index` is the CHECKPOINTED height on the
+ * else fails silently and forever. This suite exists because that second kind was
+ * hit while the archive replay guard was being built:
+ * `anchor_actions.block_index` is the CHECKPOINTED height on the
  * checkpointed chain (NULL on a v2 chunk), while the DOGE height the ANCHOR itself
  * landed at, which is what a flag day is keyed on, is `block_index_doge`. The
  * stubs were perfectly happy with either.
@@ -106,7 +107,7 @@ describe('archive query column references exist in the canonical schema @regress
         });
     });
 
-    // The  mix-up, pinned by name so it cannot come back as a "cleanup".
+    // The block_index / block_index_doge mix-up, pinned by name so it cannot come back as a "cleanup".
     it('the flag-day gate reads the ANCHOR chain height, not the checkpointed height', function () {
         assert.ok(defs['anchor_actions'].has('block_index_doge'));
         assert.ok(defs['anchor_actions'].has('block_index'));

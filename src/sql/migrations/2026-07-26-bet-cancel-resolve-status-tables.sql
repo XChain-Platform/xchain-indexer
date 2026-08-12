@@ -1,5 +1,5 @@
 -- xchain:migration mode=auto
--- Migration: create the bet_cancels and bet_resolves tables .
+-- Migration: create the bet_cancels and bet_resolves tables.
 --
 -- WHY
 -- ---
@@ -9,8 +9,8 @@
 -- of their own: they only appended a bet_feed_statuses history row, and only on the
 -- VALID path. A chain-REJECTED cancel or resolve therefore left no status anywhere in
 -- the DB, the explorer served the action with a NULL status, and the SDK could not tell
--- a rejection from a success (it reports statusKnown:false / statusSource:assumed, the
---  honesty fix, which is the best a consumer can do with no record to read).
+-- a rejection from a success (it reports statusKnown:false / statusSource:assumed, an
+-- honest-uncertainty fallback, which is the best a consumer can do with no record to read).
 -- These two tables give both legs the typed row the ORDER (order_cancels/order_edits)
 -- and DISPENSER (dispenser_cancels) legs already have.
 --

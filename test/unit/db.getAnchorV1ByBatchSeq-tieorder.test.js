@@ -152,11 +152,11 @@ describe('Database.getAnchorV1ByBatchSeq() head-selection determinism @regressio
         assert.strictEqual(wrong.action_index, 9);
     });
 
-    // ── : publisher-scoped head pick ───────────────────────────────────────
+    // ── publisher-scoped head pick ───────────────────────────────────────
     // With an author supplied the candidate set narrows to that publisher's heads, so a
     // junk head squatting the batch seq is the head of its own batch and of nothing
     // else. Everything that made the pick deterministic must survive the narrowing.
-    describe('author-scoped pick ', function () {
+    describe('author-scoped pick', function () {
 
         it('binds the author as a parameter and keeps the deterministic order', async function () {
             const db = makeDb();

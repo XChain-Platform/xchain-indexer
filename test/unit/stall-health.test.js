@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Unit: stallWedged() /status healthcheck discriminator 
+ * Unit: stallWedged() /status healthcheck discriminator
  *
  * The height-keyed BTC price-sync barrier defers the newest block on almost
  * every poll, so a healthy BTC-mainnet indexer is nearly always mid-barrier
@@ -25,7 +25,7 @@
 const assert = require('assert');
 const { stallWedged } = require('../../src/XChainIndexer');
 
-describe('stallWedged() healthcheck discriminator ', function () {
+describe('stallWedged() healthcheck discriminator', function () {
     const GRACE = 120000; // 2 min
     const NOW   = 1_000_000_000;
 
@@ -56,14 +56,14 @@ describe('stallWedged() healthcheck discriminator ', function () {
 });
 
 /*
- * : a block stamped in the FUTURE (Bitcoin permits ~2h ahead of median-time-past,
+ * a block stamped in the FUTURE (Bitcoin permits ~2h ahead of median-time-past,
  * and miner clocks routinely run minutes fast) defers behind the time-keyed barriers until
  * wall clock reaches its timestamp. Nothing commits for the whole skew, so against a 120s
  * grace the indexer crossed the wedge threshold in two minutes and reported 503/unhealthy
  * over an entirely valid block, fleet-wide and simultaneously, with a restart achieving
  * nothing. Observed live on BTC testnet4 block 146590 (stamped 116.5 minutes ahead).
  */
-describe('stallWedged() future-stamped-block deadline ', function () {
+describe('stallWedged() future-stamped-block deadline', function () {
     const GRACE = 120000;
     const NOW   = 1_000_000_000;
     const LONG_STALL = NOW - 600000;   // 10 min with no commit: wedged under the old rule

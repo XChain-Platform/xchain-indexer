@@ -516,10 +516,10 @@ describe('Unstake handler @regression @tier2', function () {
     });
 
     // -----------------------------------------------------------------------
-    //  : partial unstake (trailing optional AMOUNT, PARTIAL_UNSTAKE_COLLECT)
+    // partial unstake (trailing optional AMOUNT, PARTIAL_UNSTAKE_COLLECT)
     // -----------------------------------------------------------------------
 
-    describe('v0 : partial unstake ', function () {
+    describe('v0: partial unstake', function () {
 
         function activationDelay() {
             const staking = indexer.config['STAKING'];
@@ -613,7 +613,7 @@ describe('Unstake handler @regression @tier2', function () {
         });
     });
 
-    describe('v1 : partial contract unstake ', function () {
+    describe('v1: partial contract unstake', function () {
 
         const CONTRACT_INDEX = '5';
         const TICK           = 'TEST';

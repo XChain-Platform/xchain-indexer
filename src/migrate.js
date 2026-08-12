@@ -95,7 +95,7 @@ async function main(){
         }
         const res = await db.runMigrations(runOpts);
         if(res.lockSkipped){
-            // #3162: a lock-skip examined nothing; do not report it as a completed run.
+            // A lock-skip examined nothing; do not report it as a completed run.
             console.error('migrate: SKIPPED - another process holds the migration lock (xchain_migrate_' + name + '). Nothing was applied and the schema may still be un-migrated. Re-run once the other migrator finishes.');
             process.exitCode = 2;
         } else {

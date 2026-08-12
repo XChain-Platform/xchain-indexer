@@ -133,7 +133,7 @@ describe('getCapabilitySnapshotValidators() NULL-amount guard @regression @tier1
         assert.strictEqual(out[1].amount, '500');
     });
 
-    it('diverges from the sibling weight reader, which now REFUSES a null weight ', async function () {
+    it('diverges from the sibling weight reader, which now REFUSES a null weight', async function () {
         // The two readers deliberately part company here. This one feeds the COUNT
         // quorum, where the amount is informational and rendering it as '0' beats
         // rendering it as the literal 'null'. The sibling feeds the stake-weighted
@@ -237,7 +237,7 @@ describe('getOpenCrossChainOffers() UNION + cursor + expiration hardening (XCC-2
 });
 
 /*********************************************************************
- *  : the capability_snapshots reads must be ORDERED.
+ * the capability_snapshots reads must be ORDERED.
  *
  * Both feed stake-weighted quorum / the cross_chain validator set on off-BTC
  * indexers. An unordered SELECT hands row order to the storage engine, so two

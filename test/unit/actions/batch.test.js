@@ -247,7 +247,7 @@ describe('Batch @regression @tier3', function () {
 
     });
 
-    describe('sub-action normalization (BATCH_SUBACTION_NORMALIZATION, )', function () {
+    describe('sub-action normalization (BATCH_SUBACTION_NORMALIZATION)', function () {
 
         const ADDR = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
 

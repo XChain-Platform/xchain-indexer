@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/crossChainSettlementCap.test.js
  *
- * : the CROSS_SETTLE pass was the one cross-chain pass with no
+ * the CROSS_SETTLE pass was the one cross-chain pass with no
  * per-block cap. getEffectiveUnsettledMatches selected every finalized,
  * effective, unsettled match with no LIMIT and processCrossChainSettlements
  * looped all of them, so a hub backlog injected an unbounded number of
@@ -25,7 +25,7 @@
  * exclusion (so it counts real work, not history), and the carry-forward: the
  * overflow is never dropped, it is simply the next block's prefix.
  *
- * The cap's flag-day gate (CROSS_SETTLE_PER_BLOCK_CAP, ) lives in its own
+ * The cap's flag-day gate (CROSS_SETTLE_PER_BLOCK_CAP) lives in its own
  * suite, crossChainSettlementCapGate.test.js. Here the gate is simply ON, which
  * is its genesis state on regtest and testnet, so these keep testing the capped
  * behavior itself.
@@ -61,7 +61,7 @@ function matches(n, from){
     return out;
 }
 
-describe('cross-chain settlement per-block cap ()', function(){
+describe('cross-chain settlement per-block cap', function(){
 
     afterEach(() => sinon.restore());
 
@@ -124,7 +124,7 @@ describe('cross-chain settlement per-block cap ()', function(){
             }
         };
         const actions = {
-            // Gate ON: its genesis state on regtest/testnet .
+            // Gate ON: its genesis state on regtest/testnet.
             protocolChanges: { async isEnabled(){ return true; } },
             async processAction(name, _k, data){
                 assert.strictEqual(name, 'CROSS_SETTLE');

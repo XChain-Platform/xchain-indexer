@@ -212,14 +212,14 @@ describe('14 – Multi-chain full-state parity @regression @tier1', function () 
         // The hub-signed consensus triple (ledger/actions/contracts) resolves every
         // surrogate id to a canonical string before hashing, so it is genuinely
         // coin-agnostic and stays fully compared. The replication-integrity STATE hash
-        // is the one that does not: since P4 (05d6056, "fold index-map into state_hash",
-        //  ^id compaction) its preimage folds the index map in RAW - stateHash.js
+        // is the one that does not: since the id-determinism P4 change ("fold index-map
+        // into state_hash", ^id compaction) its preimage folds the index map in RAW - stateHash.js
         // selects `id, address FROM index_addresses WHERE block_index = ?` - so the
         // address STRING itself reaches the digest.
         //
         // The index map is coin-bound BY CONSTRUCTION: DONATE1, GAS and FEE_DESTINATION
         // are per-coin constants, so any corpus that pays a fee interns a different
-        // address on each chain. Measured : of the fourteen block-100 preimage
+        // address on each chain. Measured: of the fourteen block-100 preimage
         // keys exactly one differs across BTC/LTC/DOGE, `index_addresses_new`, and it
         // differs only in the address string (id 5 on all three) - each coin's DONATE1,
         // the artifact this suite's header already documents as normalized for the TABLE

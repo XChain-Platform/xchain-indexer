@@ -12,18 +12,17 @@
  *
  **********************************************************************
  *
- * VM deploy-lint Package 3 flag-day (29912bd8 generator ban + 75190596
- * WebAssembly ban, deploy half).
+ * VM deploy-lint Package 3 flag-day (generator ban + WebAssembly ban, deploy half).
  *
  * deploy.js runs the VM's validateSyntax over a contract's source and records the
  * verdict in the hashed ledger (it decides the DEPLOY action's validity). Two new
  * consensus deploy-lint rules ship in the unshipped VM CONSENSUS_VERSION 3 bundle:
  *   - banned-generator: rejects generator functions (function*, generator methods,
  *     yield). An undrained suspended generator leaks __stackDepth toward the 512 cap
- *     and trips a spurious deterministic out_of_stack (29912bd8);
+ *     and trips a spurious deterministic out_of_stack;
  *   - banned-wasm: rejects a reference to the global WebAssembly, the deploy-lint
- *     half of the runtime WebAssembly strip (75190596). wasm bodies run native code
- *     that carries no __gas metering and are a consensus-fork surface.
+ *     half of the runtime WebAssembly strip. wasm bodies run native code that
+ *     carries no __gas metering and are a consensus-fork surface.
  * Both are error-severity CONSENSUS_RULES the deploy validator blocks on. Because
  * arming them changes which contracts the chain accepts, each MUST be height-gated:
  * below the activation the rule is dropped from the deploy-blocking set (validateSyntax

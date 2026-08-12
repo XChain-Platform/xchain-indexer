@@ -56,7 +56,7 @@ describe('canonicalizeRewardType() forge-gate normalization @regression @tier1',
         assert.strictEqual(canonicalizeRewardType('anchor_DOGE'), 'anchor_DOGE');
     });
 
-    it('lowercases anchor_archive to its canonical form (the  gate is case-sensitive)', function () {
+    it('lowercases anchor_archive to its canonical form (the gate is case-sensitive)', function () {
         assert.strictEqual(canonicalizeRewardType('anchor_archive'), 'anchor_archive');
         assert.strictEqual(canonicalizeRewardType('Anchor_Archive'), 'anchor_archive');
         assert.strictEqual(canonicalizeRewardType('ANCHOR_ARCHIVE'), 'anchor_archive');

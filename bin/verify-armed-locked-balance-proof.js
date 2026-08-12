@@ -12,7 +12,7 @@
  **********************************************************************
  *
  * End-to-end LOCKED-BALANCE proof against an ARMED chain's real committed data
- * (SPV sub-tree spec §3 Stage B, ). The sibling of
+ * (SPV sub-tree spec §3 Stage B). The sibling of
  * `verify-armed-contract-state-proof.js`, which does the same job for Stage A.
  *
  * WHY IT EXISTS. Stage A's live-chain harness closes the last link its unit

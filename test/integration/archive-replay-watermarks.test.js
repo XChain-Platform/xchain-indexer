@@ -13,7 +13,7 @@
  **********************************************************************
  * test/integration/archive-replay-watermarks.test.js
  *
- * Runs db.getArchiveReplayWatermarks() against a REAL MariaDB .
+ * Runs db.getArchiveReplayWatermarks() against a REAL MariaDB.
  *
  * Its unit sibling (test/unit/db.getArchiveReplayWatermarks.test.js) stubs
  * doQuery and asserts the query's SHAPE: one statement, the shared version
@@ -86,7 +86,7 @@ const INSERT = `INSERT INTO anchor_actions
      match_batch_seq, block_index_doge, status_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
-describe('getArchiveReplayWatermarks() against a real MariaDB  @tier3', function () {
+describe('getArchiveReplayWatermarks() against a real MariaDB @tier3', function () {
     this.timeout(60000);
 
     let db, status;

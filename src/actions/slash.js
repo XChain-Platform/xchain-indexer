@@ -95,7 +95,7 @@ const ENGINE_CAPABILITY = {
     [eq.ENGINE_TAGS.CONFIG]:     CONFIG_CAPABILITY,
 };
 
-// Read the (round, btc_block_height) pair out of an XORACLE signed content ().
+// Read the (round, btc_block_height) pair out of an XORACLE signed content.
 // The content is ed25519.buildPriceV0Payload's JSON.stringify output, so a parse failure
 // or a non-integer field means "this content does not declare the value" (null), never a
 // zero: coercing an absent round to 0 would make two absent rounds compare EQUAL and
@@ -126,12 +126,10 @@ class Slash {
 
     async parse(params, data, error){
 
-        // Validate format
         let format = data['FORMAT'];
         if(!error && (format === null || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
 
-        // Extract fields
         data['CAPABILITY']      = params[1];
         data['OFFENDER_PUBKEY'] = params[2];
         let msgAb64 = params[3], sigA = params[4], msgBb64 = params[5], sigB = params[6];
@@ -140,13 +138,11 @@ class Slash {
         if(!error && data['COIN'] !== 'BTC')
             error = 'invalid: ACTION (BTC only)';
 
-        // Field presence
         if(!error && (this.util.isNull(data['OFFENDER_PUBKEY']) ||
                       this.util.isNull(msgAb64) || this.util.isNull(sigA) ||
                       this.util.isNull(msgBb64) || this.util.isNull(sigB) || this.util.isNull(data['CAPABILITY'])))
             error = 'invalid: missing field';
 
-        // OFFENDER_PUBKEY format
         let offender = String(data['OFFENDER_PUBKEY'] || '').toLowerCase();
         if(!error && !/^[0-9a-fA-F]{64}$/.test(offender))
             error = 'invalid: OFFENDER_PUBKEY (format)';
@@ -218,7 +214,7 @@ class Slash {
         // confirm OFFENDER_PUBKEY was in CAPABILITY's locked snapshot at that block.
         let snapshotBlock = null;
         if(!error){
-            // SLASH-2 (): at/after SLASH_ORACLE_ROUND_DISCRIMINATED, an XORACLE pair
+            // SLASH-2: at/after SLASH_ORACLE_ROUND_DISCRIMINATED, an XORACLE pair
             // must agree on the oracle round carried in-content. Gated, not unconditional,
             // because narrowing which proofs burn a bond is a consensus acceptance rule.
             let oracleRoundGate = await this.actions.protocolChanges.isEnabled('SLASH_ORACLE_ROUND_DISCRIMINATED', data['BLOCK_INDEX']);
@@ -228,7 +224,7 @@ class Slash {
                 snapshotBlock = slot.snapshotBlock;
                 // One engine tag can host content families locked under DIFFERENT
                 // capabilities: XATTEST's relay legs are verified against `cross_chain`
-                // (attest.js _verifyRelayQuorum), not `attestation` (#3882). The slot
+                // (attest.js _verifyRelayQuorum), not `attestation`. The slot
                 // resolver names the governing one, so the derived-CAPABILITY check runs
                 // HERE, after the family is known, rather than off the tag alone.
                 if(slot.capability) capability = slot.capability;
@@ -276,7 +272,7 @@ class Slash {
             // stakes too, so an equivocator's just-submitted top-up can't survive the burn.
             let burnPending = await this.actions.protocolChanges.isEnabled('SLASH_BURNS_PENDING_STAKE', data['BLOCK_INDEX']);
 
-            // : if the offender was a DELEGATED signing key, the bond is held by
+            // If the offender was a DELEGATED signing key, the bond is held by
             // the source that delegated to it, not by rows keyed on the delegated pubkey.
             // Burning by signing_pubkey_id matched nothing and burned ZERO while still
             // writing a valid slash event, so equivocating through a delegated key cost
@@ -347,7 +343,7 @@ class Slash {
         };
         if(FIELD[engineTag] !== undefined){
             let i  = FIELD[engineTag];
-            // The CHECKPOINT engine tag carries TWO content families : the checkpoint
+            // The CHECKPOINT engine tag carries TWO content families: the checkpoint
             // root canonical (XCHECKPOINT|...) and the reward-attestation canonical
             // (XANCPUB|scope|seq|snapshot_block|publisher|amount, both the per-chain and
             // archive legs; see anchor.js _rewardCanonical). Dispatch the field index on the
@@ -370,7 +366,7 @@ class Slash {
         if(engineTag === eq.ENGINE_TAGS.ORACLE){
             if(!/^[0-9]+$/.test(String(roundId)))
                 return { error: 'invalid: ORACLE round (not a block)' };
-            // The BTC height alone does NOT name the slot (). Oracle rounds
+            // The BTC height alone does NOT name the slot. Oracle rounds
             // advance on wall-clock (hub OracleRound.js), so a run of rounds can capture
             // the SAME BTC tip; ed25519.buildPriceV0Payload keys the EQUIV header on that
             // height with VIEW=0 and leaves the round counter inside the signed JSON. Two
@@ -402,13 +398,13 @@ class Slash {
         // the mirrored request row keyed by the ROUND_ID (= request_id). Deterministic
         // (the request is indexed state present on every BTC indexer).
         if(engineTag === eq.ENGINE_TAGS.ATTEST){
-            // XATTEST carries TWO families ( Phase 5). The relay legs are shaped
+            // XATTEST carries TWO families (base v1 and relay). The relay legs are shaped
             // like XCALL: pipe-delimited, snapshot_block at index 3, hashed ROUND_ID, and
             // locked under `cross_chain` (attest.js _verifyRelayQuorum). The base v1
             // canonical is delimiter-less and starts with the request_id, so its first
             // '|' segment can never be the literal 'ATTEST'. Both messages must agree on
             // the family: a matched field across DIFFERENT layouts proves nothing about a
-            // shared slot (#3882).
+            // shared slot.
             let pa = contentA.split('|'), pb = contentB.split('|');
             let relayA = pa[0] === 'ATTEST' && (pa[1] === 'RELAY_REQUEST' || pa[1] === 'RELAY_RESPONSE');
             let relayB = pb[0] === 'ATTEST' && (pb[1] === 'RELAY_REQUEST' || pb[1] === 'RELAY_RESPONSE');

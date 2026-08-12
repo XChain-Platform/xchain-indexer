@@ -183,7 +183,7 @@ describe('Price (PRICE) @regression @tier3', function () {
                 'gate must receive the round BTC anchor (799000), not the local BLOCK_INDEX (5700000)');
         });
 
-        // . The tally keeps at most one signature per pubkey. WHERE the pubkey
+        // The tally keeps at most one signature per pubkey. WHERE the pubkey
         // enters the dedupe set is consensus: marking on first encounter (the legacy
         // ordering) lets a garbage signature carrying a qualified oracle's pubkey,
         // placed AHEAD of that oracle's real one, consume the slot, so the real
@@ -192,7 +192,7 @@ describe('Price (PRICE) @regression @tier3', function () {
         // list; the sigs are public. Gated because PRICE is genesis-active on mainnet
         // with live history, so below the gate the legacy ordering must survive
         // verbatim or a from-genesis reindex diverges.
-        describe('signature-tally ordering flag-day ', function () {
+        describe('signature-tally ordering flag-day', function () {
 
             const BAD_SIG = '9'.repeat(128);
 

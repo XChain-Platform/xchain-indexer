@@ -173,7 +173,7 @@ describe('Address action handler @regression @tier3', function () {
     });
 
     /*****************************************************************
-     *  / D-154: a REFUSED format 1 (controller bind) was silent.
+     * A REFUSED format 1 (controller bind) was silent.
      *
      * Format 1 used to persist nothing but the address_controllers event, and that
      * write only runs when the action is valid, so a refused bind wrote no row

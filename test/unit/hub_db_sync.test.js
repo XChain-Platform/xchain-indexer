@@ -748,7 +748,7 @@ describe('HubDbSync _applyRow cross_chain_matches convergence upgrade @regressio
     //     as a DELETE); the same crossing re-forms at the same snapshot_block, so
     //     _deriveMatchId yields the identical match_id and the hub revives the row with a
     //     NEW effective_time / finalizing_view / validator_signatures. A mirror that missed
-    //     the deletion (disconnected, or the / guards refused the event) kept
+    //     the deletion (disconnected, or the fence/co-signature guards refused the event) kept
     //     the pre-reorg row, and an anchor_txid-only ODKU could never converge it - not on
     //     the live re-broadcast and not on the FULL_REPAGE bootstrap, which re-delivers
     //     through this same path. effective_time GATES the settlement block, so the mirror
@@ -1363,16 +1363,16 @@ describe('HubDbSync._applyRetraction closed-range parity @regression @tier3', fu
         assert.deepStrictEqual(calls[0].args, ['LTC', 1, 9]);
     });
 
-    // : quorum-class tables refuse unfenced deletions outright (every current
-    // source stamps the item-5308 fence); the fenced variants below stay the
+    // Quorum-class tables refuse unfenced deletions outright (every current
+    // source stamps the retraction-generation fence); the fenced variants below stay the
     // closed-range parity coverage for these two tables.
-    it('REFUSES an unfenced delete for cross_chain_calls ', async function () {
+    it('REFUSES an unfenced delete for cross_chain_calls', async function () {
         const { sync, calls } = makeApply();
         await sync._applyRetraction({ table: 'cross_chain_calls', source_chain: 'BTC', from_action_index: 10, to_action_index: 20 });
         assert.strictEqual(calls.length, 0, 'no DELETE may run for an unfenced quorum-class retraction');
     });
 
-    it('REFUSES an unfenced delete for cross_chain_matches ', async function () {
+    it('REFUSES an unfenced delete for cross_chain_matches', async function () {
         const { sync, calls } = makeApply();
         await sync._applyRetraction({ table: 'cross_chain_matches', source_chain: 'BTC', from_action_index: 10, to_action_index: 20 });
         assert.strictEqual(calls.length, 0, 'no DELETE may run for an unfenced quorum-class retraction');
@@ -1413,13 +1413,13 @@ describe('HubDbSync._applyRetraction closed-range parity @regression @tier3', fu
 });
 
 // ---------------------------------------------------------------------------
-// XCALL-RETRACT-1 receive-side guards . row:deleted events are unsigned
+// XCALL-RETRACT-1 receive-side guards. row:deleted events are unsigned
 // and the hub's push*reorg RPCs forward the caller's claim verbatim, so the
 // mirror must not treat them as ground truth: retractions claiming a reorg of
 // OUR OWN chain are checked against our own push_generations authority, and
 // per-chain generation monotonicity drops stale replays.
 // ---------------------------------------------------------------------------
-describe('HubDbSync._applyRetraction receive-side guards  @regression @tier1', function () {
+describe('HubDbSync._applyRetraction receive-side guards @regression @tier1', function () {
     function makeApply(ownGeneration) {
         const calls = [];
         const doQuery = sinon.stub().callsFake(async (sql, args) => { calls.push({ sql, args }); return []; });
@@ -1832,7 +1832,7 @@ describe('HubDbSync heartbeat-timeout watchdog @regression @tier2', function () 
 });
 
 // ---------------------------------------------------------------------------
-//  full fix: signed quorum-class retractions. Once this mirror's own
+// Full fix: signed quorum-class retractions. Once this mirror's own
 // capability_snapshots high-water mark crosses the RETRACTION_SIGNING era
 // (regtest: genesis), a cross_chain_calls / cross_chain_matches deletion must
 // carry a 2f+1 `cross_chain` co-signature set over the XRETRACTV1 canonical,
@@ -1841,7 +1841,7 @@ describe('HubDbSync heartbeat-timeout watchdog @regression @tier2', function () 
 // RetractionConsensus.test.js: a signature minted over the literal must verify
 // against this module's independent rebuild, proving producer/consumer parity.
 // ---------------------------------------------------------------------------
-describe('HubDbSync._applyRetraction signed retractions  @regression @tier1', function () {
+describe('HubDbSync._applyRetraction signed retractions @regression @tier1', function () {
     const nodeCrypto = require('crypto');
     const GOLDEN_CANONICAL = 'XRETRACTV1|cross_chain_calls|DOGE|42|99|7|5000';
     const SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
@@ -1949,7 +1949,7 @@ describe('HubDbSync._applyRetraction signed retractions  @regression @tier1', fu
         assert.strictEqual(deletes.length, 0);
     });
 
-    it('legacy tier: without a wired network the  fences stand alone and unsigned events apply', async function () {
+    it('legacy tier: without a wired network the fences stand alone and unsigned events apply', async function () {
         const { sync, deletes } = makeSigned({ snapRows: [], network: null });
         const evt = signedEvent(undefined);
         delete evt.retraction_signatures;
@@ -1973,7 +1973,7 @@ describe('HubDbSync._applyRetraction signed retractions  @regression @tier1', fu
         assert.strictEqual(deletes.length, 1, 'pre-bootstrap there is no signer set to verify against');
     });
 
-    // Pkg 13 /  twin parity: the tally marks a pubkey into the dedupe set only
+    // Twin parity: the tally marks a pubkey into the dedupe set only
     // AFTER its signature verifies, exactly as the hub producer twin
     // (RetractionConsensus._handleFinalized) and the sibling tallies in anchor.js,
     // recovery.js and StateAnchorPublisher already do. Pre-fix this consumer marked on

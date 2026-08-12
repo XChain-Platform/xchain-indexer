@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * : PersistentSMT node writes are BATCHED, and the batching changes
+ * PersistentSMT node writes are BATCHED, and the batching changes
  * nothing but the statement count.
  *
  * The defect this pins was a throughput one with a correctness-shaped symptom.
@@ -80,7 +80,7 @@ class PerNodeStore extends CountingStore {
     constructor(){ super(); this.putMany = undefined; }
 }
 
-describe('stateCommitment: batched SMT node writes  @regression', function(){
+describe('stateCommitment: batched SMT node writes @regression', function(){
 
     it('a key update costs ONE store write call, not one per tree level', async function(){
         const store = new CountingStore();
@@ -94,7 +94,7 @@ describe('stateCommitment: batched SMT node writes  @regression', function(){
             'a single key still persists one internal node per level');
         assert.strictEqual(store.writeCalls, 1,
             'one key update must cost ONE store write call; got ' + store.writeCalls +
-            ' (the pre- engine cost ' + M.SMT_DEPTH + ', which is 25-66s per block on the BTC regtest venue)');
+            ' (the pre-batch engine cost ' + M.SMT_DEPTH + ', which is 25-66s per block on the BTC regtest venue)');
         assert.strictEqual(store.putCalls, 0, 'the batched path must not fall back to single-row writes');
     });
 
@@ -175,7 +175,7 @@ describe('stateCommitment: batched SMT node writes  @regression', function(){
         // The fallback exists for decorators and fakes. If it ever became the
         // path the indexer actually runs, block parse would silently return to
         // 25-66s with every conformance test still green - which is precisely
-        // how  survived. This is the gate on that.
+        // how survived. This is the gate on that.
         assert.strictEqual(typeof SC.DbNodeStore.prototype.putMany, 'function',
             'DbNodeStore must implement the batch write; without it the block path is 256 round trips per key');
         assert.strictEqual(typeof SC.MemoryNodeStore.prototype.putMany, 'function',
@@ -198,7 +198,7 @@ describe('stateCommitment: batched SMT node writes  @regression', function(){
     });
 });
 
-describe('stateCommitment: stakes subtree rebuilds only on change  @regression', function(){
+describe('stateCommitment: stakes subtree rebuilds only on change @regression', function(){
 
     const CHAIN = 'BTC', NETWORK = 'regtest';
     // 49 keys is the live figure the BTC regtest venue reports
@@ -344,7 +344,7 @@ describe('stateCommitment: stakes subtree rebuilds only on change  @regression',
     });
 });
 
-describe('stateCommitment: DbNodeStore.putMany SQL shape  @regression', function(){
+describe('stateCommitment: DbNodeStore.putMany SQL shape @regression', function(){
 
     // Records what would go to MariaDB without needing one.
     function fakeDb(){

@@ -10,7 +10,7 @@
  *
  **********************************************************************
  *
- * The touched-set guard : a block whose ledger moved keys the
+ * The touched-set guard: a block whose ledger moved keys the
  * commitment did not apply must be REFUSED, not committed.
  *
  * Balance leaves have gone missing on every regtest venue (BTC 15 of 1531
@@ -53,7 +53,7 @@ const SRC = fs.readFileSync(path.resolve(__dirname, '../../src/stateCommitment.j
 // reviewer would otherwise have to eyeball. Stated plainly so nobody mistakes
 // this for execution coverage.
 //
-//  is why the second suite in this file EXECUTES instead. Nine source-shape
+// is why the second suite in this file EXECUTES instead. Nine source-shape
 // cases all passed a guard that could not detect the fault class it was added
 // for, because every one of them pinned set semantics and not one asserted that
 // a leaf was written. Shape tests cannot catch that; a driven block can.
@@ -139,11 +139,11 @@ describe('touched-set guard @regression', function(){
         assert.ok(/block ' \+ blockIndex/.test(body), 'the operator needs the height');
         assert.ok(/keys=' \+ detail/.test(body),
             'and the keys, which are unrecoverable once the block is past');
-        assert.ok(//.test(body), 'and a pointer to the investigation');
+        assert.ok(/leaf-completeness guard/.test(body), 'and a pointer to the guard that failed');
     });
 });
 
-// ---- : the leaf-presence half, driven ---------------------------------
+// ---- the leaf-presence half, driven
 
 const CHAIN   = 'LTC';        // LTC keeps the BTC-only stakes path out, and neither
 const NETWORK = 'regtest';    // contract_state_root nor the escrow leaf arms here
@@ -155,7 +155,7 @@ const HEIGHT  = 500;
 // joins `actions`, so it must be matched first or the block sees phantom keys.
 //
 // `nets` maps an (address, tick) key to the net that getNetBalance will report.
-// An ARRAY is the  fault injection: the read is answered in sequence and
+// An ARRAY is the fault injection: the read is answered in sequence and
 // the last value sticks, so ['0','1000'] models exactly the observed fault, a
 // commit-time resolution that answered zero for a key whose authoritative net is
 // not zero. That is the shape no set comparison can see, because the key is
@@ -173,7 +173,7 @@ function makeBlockMockDb({ ledgerKeys, touched, nets, seedLeaves }){
         }
         if(/INSERT IGNORE INTO state_tree_nodes/.test(sql)){
             // (hash, left, right) triples: putMany batches a whole path into one
-            // multi-row statement , so consuming only params[0..2] would
+            // multi-row statement, so consuming only params[0..2] would
             // drop every node but the first and leave _descend reading the gaps as
             // empty subtrees.
             for(let i = 0; i + 2 < params.length; i += 3)
@@ -232,10 +232,10 @@ async function leafPresent(smt, rootHex, address, tick){
     return proof.leaf_value != null;
 }
 
-describe('leaf-presence assertion  @regression', function(){
+describe('leaf-presence assertion @regression', function(){
 
     it('REFUSES the block when a touched key resolves to a null leaf and its leaf never lands', async function(){
-        // The  signature: the key is in the ledger AND in the touched set,
+        // The signature: the key is in the ledger AND in the touched set
         // so the set guard is satisfied in both directions, yet no leaf exists.
         const h = makeBlockMockDb({
             ledgerKeys: [['addr1', 'TICK']],
@@ -252,7 +252,7 @@ describe('leaf-presence assertion  @regression', function(){
                 assert.match(err.message, /addr1/, 'the operator needs the key');
                 assert.match(err.message, /TICK/);
                 assert.match(err.message, /1000/, 'and the net that proves it was not a delete');
-                assert.match(err.message, //);
+                assert.match(err.message, /leaf-presence guard/);
                 return true;
             });
 

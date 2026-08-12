@@ -10,11 +10,11 @@
  *
  **********************************************************************
  *
- * The DRY-RUN ENGINE must be the thing that drops the SMT name memos .
+ * The DRY-RUN ENGINE must be the thing that drops the SMT name memos.
  *
  * `db.smt-resolver-cache-abort.test.js` pins the db half: `rollbackTransaction()`
  * clears `_smtTickNameCache` / `_smtAddressNameCache`, because an abort un-assigns
- * every dense id the transaction handed out . It proves that by calling
+ * every dense id the transaction handed out. It proves that by calling
  * `rollbackTransaction()` directly.
  *
  * That leaves the COUPLING untested, and the coupling is the whole defect. The
@@ -29,9 +29,9 @@
  * `Database`, stubbing only what needs a live pool, so the invalidation has to
  * actually happen on the path the field evidence used.
  *
- * THE FIELD SHAPE THIS RE-CREATES (, LTC regtest, 2026-08-03). A watcher
+ * THE FIELD SHAPE THIS RE-CREATES (LTC regtest, 2026-08-03). A watcher
  * composed an ISSUE that MINTS its supply. The action parsed `valid`, then the
- *  touched-set guard refused the block ("the ledger moved 1 key(s) the
+ * touched-set guard refused the block ("the ledger moved 1 key(s) the
  * commitment did not apply", key [address, TICK]), rolled it back, and retried it
  * forever: the indexer sat at block 5204 with the decoder at 5304 and every read
  * stale. Restarting only the indexer container cleared it and the same block then
@@ -151,7 +151,7 @@ describe('the fee-quote dry run drops the SMT name memos it poisoned @regression
         assert.strictEqual(db._smtTickNameCache, null);
     });
 
-    it(' end to end: quote a tick, abandon it, then MINT another onto its id', async function(){
+    it('end to end: quote a tick, abandon it, then MINT another onto its id', async function(){
         // The venue sequence, through the real dry-run engine and the real ledger
         // choke point. `live` is the database row the freed dense id resolves to:
         // the quoted tick holds it during the quote, the broadcast one afterwards.

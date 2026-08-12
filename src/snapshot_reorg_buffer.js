@@ -10,7 +10,7 @@
  *
  **********************************************************************
  *
- * XChain Platform: Capability-snapshot reorg buffer 
+ * XChain Platform: Capability-snapshot reorg buffer
  *
  * A hub NEVER resolves a validator set at the height it was handed. Every
  * CapabilitySnapshot lookup subtracts CANONICAL_REORG_BUFFER first
@@ -90,8 +90,8 @@ const CANONICAL_REORG_BUFFER = 6;
 // reading. Regtest is active from genesis (no history to preserve; the regtest
 // suites exercise the buried resolution from block 0).
 const SNAPSHOT_BURIAL_ACTIVATION = {
-    mainnet: null,        // INERT placeholder: operator-ratify a BTC snapshot_block before arming 
-    testnet: null,        // INERT placeholder: operator-ratify a BTC snapshot_block before arming 
+    mainnet: null,        // INERT placeholder: operator-ratify a BTC snapshot_block before arming
+    testnet: null,        // INERT placeholder: operator-ratify a BTC snapshot_block before arming
     regtest: 0,
 };
 

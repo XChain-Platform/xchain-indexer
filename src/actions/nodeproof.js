@@ -163,8 +163,8 @@ class NodeProof {
             } else {
                 // Byte comparator, not a bare .sort(): this order is joined into the
                 // ed25519 preimage, so it is consensus, and the default sort is a total
-                // order here only because every element happens to be lowercase 64-hex
-                // (#3859). Pinned in lockstep with the hub PRODUCER's four PASS sorts
+                // order here only because every element happens to be lowercase 64-hex.
+                // Pinned in lockstep with the hub PRODUCER's four PASS sorts
                 // (xchain-hub FullNodeChallengeRound.js PASS_CMP); pinning one side alone
                 // would diverge the verifier from the producer on any non-uniform input.
                 let sortedPass = passList.slice().sort(
@@ -208,7 +208,7 @@ class NodeProof {
         // non-staker). Idempotent on (epoch_height, signing_pubkey).
         if(!error){
             // One batched capability read for the whole PASS list, same fallback rule
-            // as _eligibleVerifierSet: a truncated read re-probes per pubkey (#3873).
+            // as _eligibleVerifierSet: a truncated read re-probes per pubkey.
             let capRows = await this.indexerDb.getValidatorsByCapability('full_node', snapshotBlock);
             let capSet  = (capRows && capRows.truncated === true)
                         ? null
@@ -240,7 +240,7 @@ class NodeProof {
         // unstaked-since node loses verifier standing. Resolve that set ONCE
         // (hasCapability is ~5 sequential queries per pubkey). eligible.size is the
         // quorum divisor, so a truncated capability read falls back to the per-pubkey
-        // probe rather than silently shrinking the divisor (#3873).
+        // probe rather than silently shrinking the divisor.
         let capRows = await this.indexerDb.getValidatorsByCapability('full_node', blockIndex);
         let capSet  = (capRows && capRows.truncated === true)
                     ? null

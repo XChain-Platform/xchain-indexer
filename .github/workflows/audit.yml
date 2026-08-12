@@ -1,4 +1,4 @@
-# Scheduled production-dependency vulnerability audit .
+# Scheduled production-dependency vulnerability audit.
 #
 # The shared CI gate (ci.yml -> XChain-Platform/.github ci-reusable.yml) runs the
 # test suite, not `npm audit`. A CVE can be disclosed against a dependency we
@@ -10,9 +10,8 @@
 # user, and failing on low/moderate trains people to ignore the gate. A red run
 # means a high/critical advisory now affects a production dependency.
 #
-# Triage convention when this goes red: claude/DEPENDENCY-AUDIT.md in the
-# XChain-Platform monorepo (bump / override / replace, or a documented
-# accept-with-justification). Pre-launch, no high/critical prod advisory ships
+# Triage convention when this goes red: bump, override, replace, or document an
+# accept-with-justification. Pre-launch, no high/critical prod advisory ships
 # unresolved.
 name: audit
 

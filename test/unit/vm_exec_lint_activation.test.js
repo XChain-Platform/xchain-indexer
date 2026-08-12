@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/vm_exec_lint_activation.test.js
  *
- * Execute-time consensus source-lint enforcement flag-day (, ).
+ * Execute-time consensus source-lint enforcement flag-day.
  *
  * The VM re-lints stored contract code at EXECUTE time at/after this activation and
  * fails the execution when a now-banned construct is present, so the activation flips
@@ -32,7 +32,7 @@ const assert = require('assert');
 const { isVmExecLintActive, VM_EXEC_LINT_ACTIVATION } =
     require('../../src/vm_exec_lint_activation.js');
 
-describe('VM execute-time lint activation predicate  @regression @tier1', function () {
+describe('VM execute-time lint activation predicate @regression @tier1', function () {
 
     it('mainnet is UNARMED for every coin: inert at every height', function () {
         for (const coin of ['BTC', 'LTC', 'DOGE']) {

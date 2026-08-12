@@ -11,7 +11,7 @@
  **********************************************************************
  * test/unit/db.list-edit-resolution.test.js
  *
- * : a LIST edit writes its resulting items under the EDIT's own
+ * a LIST edit writes its resulting items under the EDIT's own
  * action_index and never touches the parent's list_items rows. Every consumer
  * pins a list by its CREATE action_index (bet_feeds.allow_list/block_list,
  * tokens.allow_list/block_list, orders/swaps/dispensers, AIRDROP), so
@@ -85,7 +85,7 @@ function dbWithLists(rows, items) {
 }
 
 // The canonical fixture: create 2020 holds [A], edit 2021 REMOVEs A (the exact
-// shape probed live on BTC regtest in the  report).
+// shape probed live on BTC regtest in the report).
 function removeFixture() {
     return dbWithLists(
         [
@@ -98,7 +98,7 @@ function removeFixture() {
 
 afterEach(function () { sinon.restore(); });
 
-describe('db.getList() LIST edit resolution  @regression @tier1', function () {
+describe('db.getList() LIST edit resolution @regression @tier1', function () {
 
     it('legacy path (no block context) still reads the create index verbatim', async function () {
         const db = removeFixture();
@@ -200,7 +200,7 @@ describe('db.getList() LIST edit resolution  @regression @tier1', function () {
 
 });
 
-describe('list_edit_resolution_activation flag day  @regression @tier1', function () {
+describe('list_edit_resolution_activation flag day @regression @tier1', function () {
 
     it('regtest is armed from genesis', function () {
         assert.strictEqual(activation.isListEditResolutionActive(0, 'regtest', 'BTC'), true);
@@ -233,7 +233,7 @@ describe('list_edit_resolution_activation flag day  @regression @tier1', functio
 
 });
 
-describe('getList() call sites carry block context ( ratchet) @regression @tier1', function () {
+describe('getList() call sites carry block context (ratchet) @regression @tier1', function () {
 
     it('no getList() call in src/ omits the block_index argument', function () {
         const fs   = require('fs');

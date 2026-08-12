@@ -26,7 +26,7 @@
 --
 -- This is the pure-index leg of the scan-bounding work; pushing the expiration<?
 -- predicate into SQL and the latest-status denormalization are deliberately left
--- to the consensus-trap follow-up .
+-- to a follow-up consensus-trap fix.
 --
 -- Idempotent (ADD/DROP INDEX IF [NOT] EXISTS) and additive. The InnoDB secondary-
 -- index build is online (INPLACE) and does not block DML. On a freshly reindexed DB

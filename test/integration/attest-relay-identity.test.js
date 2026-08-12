@@ -13,8 +13,8 @@
  **********************************************************************
  * test/integration/attest-relay-identity.test.js
  *
- * Runs the  relay-identity exactly-once lookup against a REAL MariaDB
- * (), and applies its migration to a real schema.
+ * Runs the relay-identity exactly-once lookup against a REAL MariaDB
+ * and applies its migration to a real schema.
  *
  * WHY THIS FILE EXISTS. getRelayRequestByOrigin() is a NEW raw SQL predicate, and
  * it is the entire mechanism of #4141: its return value decides whether an ATTEST
@@ -25,7 +25,7 @@
  * proves the CALL happened; it cannot prove the predicate parses, that the novel
  * `request_status <> 'rejected'` exclusion selects the rows the guard's safety
  * argument assumes, or that a JS Number binds to a BIGINT UNSIGNED without
- * silently matching a neighbouring row. This is the same gap  already
+ * silently matching a neighbouring row. This is the same gap already
  * paid for once (commit 94f1a8f); anchor-reward-late-publisher.test.js next door
  * is its remediation and this file follows its conventions deliberately.
  *
@@ -90,7 +90,7 @@ function makeDb() {
     return new Database(DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS, { config, util });
 }
 
-describe(' relay-identity lookup against a real MariaDB () @tier3', function () {
+describe('relay-identity lookup against a real MariaDB @tier3', function () {
     this.timeout(60000);
 
     let db;

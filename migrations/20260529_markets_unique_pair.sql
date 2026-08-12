@@ -25,10 +25,9 @@
 -- The indexer reconciles its own schema on startup (src/db.js verifyTables) but
 -- that reconciliation only adds missing COLUMNS, never indexes, and does not run
 -- on replica/validator databases bootstrapped from a SQL snapshot. Run this once
--- on any database created before the unique key shipped.
---
--- Step 1 removes existing duplicate pairs, keeping the lowest id for each pair.
--- Step 2 adds the unique key. IF NOT EXISTS makes step 2 safe to re-run.
+-- on any database created before the unique key shipped. Existing duplicate pairs
+-- are removed first, keeping the lowest id; IF NOT EXISTS makes the index add safe
+-- to re-run.
 
 DELETE m FROM markets m
 JOIN (

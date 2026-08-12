@@ -10,7 +10,7 @@
  *
  **********************************************************************
  *
- * XChain Platform: Stake-Weighted Quorum (STAKE_WEIGHTED_QUORUM / WI-1)
+ * XChain Platform: Stake-Weighted Quorum (STAKE_WEIGHTED_QUORUM)
  *
  * THE single, CONSENSUS-CRITICAL implementation of the stake-weighted quorum
  * predicate. The canonical source of record is
@@ -77,7 +77,7 @@ function totalStake(validators){
             throw new Error('stake_weighted_quorum.totalStake: blank/missing source would collapse the stake bucket');
         let src = String(v.source);
         if(!weightBySource.has(src)){
-            // Hard error on a missing/nonnumeric weight (#3897). Coercing it to 0 keeps the
+            // Hard error on a missing/nonnumeric weight. Coercing it to 0 keeps the
             // source in the dedupe map with no stake, so S is under-counted and every
             // threshold derived from it is wrong. Same posture as the guards above.
             if(v.weight === null || v.weight === undefined)
@@ -110,7 +110,7 @@ function totalStake(validators){
 // its keys signed (DELEGATE v0 is additive). Degenerate cases fall out with no
 // special-casing: single source -> 3S>2S true; empty/zero-stake set -> 0>0 false.
 // A blank/missing source FAILS CLOSED (returns false); it is NOT a single source.
-// A MISSING or nonnumeric weight also FAILS CLOSED (#3897): zeroing it shrinks S and
+// A MISSING or nonnumeric weight also FAILS CLOSED: zeroing it shrinks S and
 // lowers the very bar it is being measured against. A legitimate '0' still passes.
 // A NEGATIVE weight anywhere in the snapshot, or a non-positive total stake S,
 // also FAILS CLOSED: bcnum accepts a leading '-', and a corrupt/malicious snapshot
@@ -140,7 +140,7 @@ function meetsStakeThreshold(validators, signerPubkeys){
         let pk  = String(v.pubkey).toLowerCase();
         pubkeyToSource.set(pk, src);
         if(!weightBySource.has(src)){
-            // Fail CLOSED on a missing/nonnumeric weight (#3897). Coercing it to 0 leaves the
+            // Fail CLOSED on a missing/nonnumeric weight. Coercing it to 0 leaves the
             // source in the dedupe map with no stake, shrinking S and LOWERING the 2/3 bar, so
             // a sub-quorum finalizes (70/20/missing-100 -> S=90, a lone 70 signer passes
             // 210>180). Same posture as the blank-source, negative-weight and truncated guards.

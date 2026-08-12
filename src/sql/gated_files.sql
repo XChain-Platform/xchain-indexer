@@ -21,7 +21,7 @@ CREATE TABLE gated_files (
     gate_ticker         VARCHAR(250) NOT NULL,    -- Token ticker that gates this file
     encryption_method   TINYINT UNSIGNED NOT NULL,-- 1 = AES-256-GCM
     key_hash            CHAR(64) NOT NULL,        -- hex sha256(K), groups pack members
-    -- PC-29 /  P9: the publishing SOURCE, and the unlock threshold.
+    -- Publisher-scoped unlock: the publishing SOURCE, and the unlock threshold.
     --
     -- publisher_address is NOT bookkeeping. A "pack" is keyed
     -- (publisher_address, gate_ticker, key_hash), not the older

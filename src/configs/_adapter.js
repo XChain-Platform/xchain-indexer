@@ -68,7 +68,7 @@ function toIndexerConfig(tick, network){
     config['GENESIS_LEDGER_HASH'] = c.genesis.ledgerHash;
     if('dumpHash' in c.genesis) config['GENESIS_DUMP_HASH'] = c.genesis.dumpHash;
 
-    // XCP/XDP airdrop leg . The armed bucket set is bundle data resolved by
+    // XCP/XDP airdrop leg. The armed bucket set is bundle data resolved by
     // coins/index.js, which reads the GENESIS_AIRDROP_* env vars on regtest ONLY, so
     // these values override config.js's env-derived ones for every network. That is the
     // whole point of the registration: before it, a mainnet replay node took its bucket

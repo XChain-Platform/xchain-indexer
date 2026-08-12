@@ -13,7 +13,7 @@
  **********************************************************************
  * test/integration/anchor-reward-late-publisher.test.js
  *
- * Runs the anchor-reward derive fetch gate against a REAL MariaDB ().
+ * Runs the anchor-reward derive fetch gate against a REAL MariaDB.
  *
  * getPendingAnchorRewardAttestations() decides which mirrored attestations ever
  * reach reconcileAnchorRewardWinner(), and its whole content is a correlated
@@ -85,7 +85,7 @@ function makeDb() {
     return new Database(DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS, { config, util });
 }
 
-describe('anchor-reward derive fetch gate against a real MariaDB () @tier3', function () {
+describe('anchor-reward derive fetch gate against a real MariaDB @tier3', function () {
     this.timeout(60000);
 
     let db, pubkeyId = {};

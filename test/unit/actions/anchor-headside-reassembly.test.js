@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// Regression for : the archive reassembly CRC check must fire when the
+// Regression for the archive reassembly CRC check must fire when the
 // v1/v6 head lands AFTER its continuation chunks (chunks-before-head ordering),
 // not only from the chunk side. Before the head-side gate, a corrupt multi-chunk
 // batch whose completing chunk arrives first leaves the head 'valid' with the
@@ -57,7 +57,7 @@ function v1HeadParams(f) {
 
 const ARCHIVE_JSON = JSON.stringify({ v: 1, network: 'regtest', batch_seq: 9, matches: [{ match_id: 'm1' }], capability_snapshots: [] });
 
-describe('Anchor head-side reassembly gate  @regression', function () {
+describe('Anchor head-side reassembly gate @regression', function () {
     let indexer, handler, verifyStub, swqStub;
     let b64, headSlice, chunk1, chunk2;
 

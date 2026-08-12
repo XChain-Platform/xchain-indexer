@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// : the snapshot height a hub SIGNS is not the height it RESOLVED the
+// the snapshot height a hub SIGNS is not the height it RESOLVED the
 // validator set at. CapabilitySnapshot buries every height it is handed by
 // CANONICAL_REORG_BUFFER, while the wire (checkpoint.snapshot_block, the
 // mirrored capability_snapshots rows, an ATTEST request's block_index) keeps the
@@ -79,7 +79,7 @@ function setAt(h){
         .map(s => s.pubkey);
 }
 
-describe(' capability-snapshot reorg burial @regression @tier1', function () {
+describe('capability-snapshot reorg burial @regression @tier1', function () {
 
     // ── The shared constant + gate ───────────────────────────────────────────
     describe('shared snapshot_reorg_buffer module', function () {

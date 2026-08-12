@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * DISPENSER lifetime caps flag-day ( / Package 14, 1679).
+ * DISPENSER lifetime caps flag-day.
  *
  * DISPENSER.md documents two lifetime caps that the engine did NOT enforce:
  *   - MAX_DISPENSES = 1000: a dispenser may serve at most 1000 dispenses per fill.
@@ -30,21 +30,17 @@
  * gated: below the flag-day the legacy uncapped behavior runs (historical replay
  * byte-identical); at/after it the caps are enforced.
  *
- * GATED WITH THE EXISTING DISPENSER-FAMILY COHORT. Keyed on the block's consensus
- * timestamp (data['BLOCK_TIME']) at the coordinated 2.0.0 flag-day (mainnet
- * 1786060800, testnet/regtest genesis), byte-for-byte the shape of its siblings
- * dispense_cancelling_match_activation.js and dispenser_ownership_cancel_activation.js,
- * so ONE fleet deploy-by date governs the whole dispenser-family flip and the
- * family stays calendar-coherent. (The pre-961000 train HEIGHT gate would fit the
- * mechanics too, but splitting the dispenser family across two flag-days is worse
- * than one coherent cohort: nodes would have to reason about two boundaries for
- * one subsystem.  measured zero live mainnet dispensers, so there is no
- * divergent history to replay either way; the cohort is the right home.)
+ * Gated with the existing dispenser-family cohort (keyed on the block's consensus
+ * timestamp, mainnet at the coordinated 2.0.0 flag-day, testnet/regtest from
+ * genesis) so one fleet deploy-by date governs the whole dispenser-family flip
+ * rather than splitting it across two boundaries nodes would have to reason about
+ * separately. No live mainnet dispensers existed when this gate was added, so
+ * there was no divergent history to replay either way; the shared cohort is still
+ * the right home for it.
  *
- * EXECUTION-PATH gate (acceptance + auto-close during action processing), NOT a
- * hashing-path change, so INDEXER-ONLY with no xchain-sync twin (xchain-sync reads
- * materialized rows and does not run action handlers), exactly like
- * dispense_cancelling_match / dispenser_ownership_cancel.
+ * Execution-path gate (acceptance + auto-close during action processing), not a
+ * hashing-path change, so indexer-only with no xchain-sync twin (xchain-sync reads
+ * materialized rows and does not run action handlers).
  *
  ********************************************************************/
 

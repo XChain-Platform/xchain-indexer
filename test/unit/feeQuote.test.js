@@ -107,7 +107,7 @@ describe('native coin fee quote @regression @tier1', function () {
         });
     });
 
-    // #2693 / : every time-sensitive decision in getFeeOraclePrices (flag-day gate, non-BTC
+    // #2693 / every time-sensitive decision in getFeeOraclePrices (flag-day gate, non-BTC
     // round selection, staleness) anchors on the SINGLE chain-derived refTime the caller passes.
     // There is no separate wall-clock anchor to disagree with it.
     describe('getFeeOraclePrices() single chain-time anchor', function () {
@@ -153,7 +153,7 @@ describe('native coin fee quote @regression @tier1', function () {
             let util = mainnetUtil();
             let { db, seen } = makeCapturingDb();
             // A stale caller still threading the removed gateTime must not resurrect the split
-            // anchor that  removed: the gate follows refTime and ignores the extra arg.
+            // anchor that removed: the gate follows refTime and ignores the extra arg.
             await util.getFeeOraclePrices(db, 'DOGE', 100, GATE + 1000, 1800, GATE - 1000);
             assert.strictEqual(seen.opts.selectByTime, true);
             assert.strictEqual(seen.opts.blockTime, GATE + 1000);
@@ -203,7 +203,7 @@ describe('native coin fee quote @regression @tier1', function () {
         });
     });
 
-    // : the pre-flight exists to predict validateNativeCoinFee, which reads prices as of
+    // the pre-flight exists to predict validateNativeCoinFee, which reads prices as of
     // the evaluated BLOCK's time. Anchoring the pre-flight on the operator's wall clock instead
     // made it disagree with the chain in both directions. These cases pin the anchor.
     describe('_priceFeeQuote() chain-time anchoring', function () {
@@ -289,7 +289,7 @@ describe('native coin fee quote @regression @tier1', function () {
             assert.strictEqual(q.requiredFeeSats, 2000);
             assert.strictEqual(seen.opts[0].blockTime, tipTime);
             // Anchored on a wall clock 2000s past the drought's last block, the same store reports
-            // the pair stale: the false negative  describes.
+            // the pair stale: the false negative describes.
             let stale = await util.getFeeOraclePrices(db, 'BTC', 100, tipTime + 2000, 1800);
             assert.ok(/missing or stale/.test(stale.error), stale.error);
         });
@@ -398,7 +398,7 @@ describe('native coin fee quote @regression @tier1', function () {
             }
         });
 
-        // : DEPLOY/EXECUTE stage their protocol fee from the gas schedule BEFORE entering
+        // DEPLOY/EXECUTE stage their protocol fee from the gas schedule BEFORE entering
         // the VM, and that pre-VM number is what validateNativeCoinFee judges the native output
         // against. So they get a payable, verdict-free quote instead of the old `supported:false`
         // + "pay the fee in XCHAIN", which was unfollowable on LTC/DOGE (no XCHAIN fee lane) and

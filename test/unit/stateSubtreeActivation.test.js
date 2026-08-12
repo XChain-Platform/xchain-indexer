@@ -11,7 +11,7 @@
  **********************************************************************
  *
  * Reserved state_root sub-tree gate conformance (SPV spec §4.1, §10 D1; design
- * in claude/specs/spv-state-subtree-extension.md).
+ * in).
  *
  * The load-bearing assertion here is the INERTNESS one: the three-argument
  * assembleStateRoot must produce a state_root byte-identical to the old
@@ -213,7 +213,7 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
     });
 
     it('the escrow-leaf SHADOW window is open on BTC:testnet ONLY, and ARMED WINS when both maps name a height', function(){
-        // The window opened on BTC:testnet at 148000 (2026-08-11, ): the
+        // The window opened on BTC:testnet at 148000 (2026-08-11): the
         // re-seeded chain's locking ORDERs land above it, so they are journaled by
         // the ordinary per-block incremental path rather than by the window-start
         // replay. Every OTHER chain must stay off, and that is the half worth

@@ -12,7 +12,7 @@
  **********************************************************************
  *
  * Verify a reserved sub-tree ARMING BOUNDARY against a chain's own committed
- * rows (SPV sub-tree spec §7,  / ).
+ * rows (SPV sub-tree spec §7).
  *
  * WHY THIS EXISTS. Both armings so far were verified by hand: someone read
  * state_tree_roots either side of the height, reassembled the roots in a

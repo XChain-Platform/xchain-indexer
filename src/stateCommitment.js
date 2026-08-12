@@ -57,11 +57,11 @@ const EMPTY0_HEX     = M.toHex(M.EMPTY[0]);
 // place that chooses, and the fallback writes the identical rows in the identical
 // order, so a store without it is slow, never wrong.
 //
-// : putMany exists because ONE key update writes SMT_DEPTH internal nodes
-// and a value leaf's ancestors are never an empty subtree, so the write loop is
-// always a full 256 rows. Issued one statement at a time that is 256 sequential
-// round trips per key, which on the BTC regtest venue (49 stake keys rebuilt from
-// an empty root every block) is 12,544 round trips and 25-66s of wall clock per
+// putMany exists because ONE key update writes SMT_DEPTH internal nodes and a
+// value leaf's ancestors are never an empty subtree, so the write loop is always
+// a full 256 rows. Issued one statement at a time that is 256 sequential round
+// trips per key, which on the BTC regtest venue (49 stake keys rebuilt from an
+// empty root every block) is 12,544 round trips and 25-66s of wall clock per
 // block against LTC's 3-5s, failing five standing envelope tests as timeouts.
 // The rows written are identical either way; only the statement count changes, so
 // this is a transport fix and not a consensus one.
@@ -157,7 +157,7 @@ class PersistentSMT {
     }
 
     // Persist a path's nodes, preferring the store's batch write. The fallback
-    // is the pre- behaviour and exists only for stores that predate
+    // is the pre-batch behaviour and exists only for stores that predate
     // putMany (bare {get, put} fakes and the bin/ instrumentation decorator);
     // it writes the same rows in the same order at one round trip each.
     async _putBatch(nodes){
@@ -175,7 +175,7 @@ class PersistentSMT {
         const { siblings } = await this._descend(rootHex, keyBuf);
         let cur = (newLeafHexOrNull == null) ? EMPTY0_HEX : newLeafHexOrNull;
         // Collect the path's nodes and write them in ONE batch after the climb
-        // rather than a round trip per level . Deferring is safe because
+        // rather than a round trip per level. Deferring is safe because
         // the climb reads NOTHING: every parent is hashed from `cur` and the
         // sibling already captured by _descend, so no node written here is read
         // back before the flush. The flush is inside update() and not hoisted to
@@ -332,8 +332,7 @@ async function reportOrphanStats(query, chain, network, opts){
 }
 
 // Assemble the top-level state_root from the two v1 sub-roots plus any RESERVED
-// slot that its flag-day has armed (SPV spec §4.1; design in
-// claude/specs/spv-state-subtree-extension.md).
+// slot that its flag-day has armed (SPV spec §4.1, state-subtree extension design).
 //
 // `extraSubRoots` is the forward-compatible carrier for ownership_root /
 // tokens_root / contract_state_root and MUST be the output of
@@ -436,8 +435,8 @@ async function getNetBalance(db, address, tick){
 }
 
 // Locked-escrow leaf (XCHAIN_ESC): BUILT and gated, no longer deferred (SPV
-// sub-tree spec §3 Stage B, ). The 2026-06-18 finding that killed the
-// naive derivation still stands and is why the journal exists: the escrows
+// sub-tree spec §3 Stage B). The finding that killed the naive derivation
+// still stands and is why the journal exists: the escrows
 // table keys a lock (+amount) to the order SOURCE but keys nine release sites
 // to the recipient, so SUM(escrows) per (address, tick) does NOT net per key
 // and only the per-tick GLOBAL sum nets to zero. The journal writer
@@ -479,7 +478,7 @@ async function gatherStakeEntries(db, blockIndex){
     return entries;
 }
 
-// Rebuild the stakes tree only when the stake set actually changed .
+// Rebuild the stakes tree only when the stake set actually changed.
 //
 // buildFull writes SMT_DEPTH nodes per key, so this tree costs keys x 256 node
 // writes on EVERY BTC block - 12,544 on the regtest venue's 49 keys - and the
@@ -499,8 +498,8 @@ async function gatherStakeEntries(db, blockIndex){
 // (state_tree_nodes is COW and rollback-exempt). Keyed on block CONTINUITY and not
 // on the digest alone, so a reorg, a rollback, or a cold start lands on a block
 // that is not the memo's successor and rebuilds. That direction matters: a cache
-// in a consensus path may only ever fail toward the slow correct answer, and the
-// one that failed the other way here  did so because it was keyed on a
+// in a consensus path may only ever fail toward the slow correct answer, and an
+// earlier cache that failed the other way here did so because it was keyed on a
 // MUTABLE dense id rather than on its own inputs.
 let _stakesMemo = null;
 
@@ -587,7 +586,7 @@ async function buildFullBalancesRoot(db, chain, network, blockIndex, opts){
     return root;
 }
 
-// ---- Touched-set guard  ---------------------------------------------
+// ---- Touched-set guard ------------------------------------------------------
 //
 // ON BY DEFAULT, and it refuses to commit the block rather than committing a
 // balances_root known to be incomplete.
@@ -658,7 +657,8 @@ async function _enforceTouchedSet(db, blockIndex, touched){
     const detail = JSON.stringify(missing.map(k => k.split('\t')));
     const msg = 'balances touched-set guard FAILED at block ' + blockIndex +
         ': the ledger moved ' + missing.length + ' key(s) the commitment did not apply, so ' +
-        'balances_root would be committed incomplete. keys=' + detail + ' ';
+        'balances_root would be committed incomplete. keys=' + detail +
+        ' (balances-root leaf-completeness guard)';
     if(process.env.INDEXER_TOUCH_GUARD === 'warn'){
         console.error(msg + ' [INDEXER_TOUCH_GUARD=warn: COMMITTING ANYWAY, this node will ' +
             'diverge from any node that full-rebuilds]');
@@ -697,14 +697,14 @@ async function _ledgerKeysForBlock(db, blockIndex){
     return keys;
 }
 
-// ---- Post-commit leaf-presence assertion  ---------------------------
+// ---- Post-commit leaf-presence assertion -------------------------------------
 //
 // The touched-set guard above compares SET MEMBERSHIP in both directions, and
-// the  fault class is not a membership failure. The key IS touched and IS
-// in `applied`; getNetBalance then answers 0 for it, _leafOrNull maps 0 to null,
-// and the commitment DELETES a key that never existed. `missing` is empty,
-// nothing throws, nothing logs, and the leaf never lands. That was PROVEN on the
-//  replay venue: with the guard live and the audit armed, block 103
+// the missing-leaf fault class is not a membership failure. The key IS touched
+// and IS in `applied`; getNetBalance then answers 0 for it, _leafOrNull maps 0 to
+// null, and the commitment DELETES a key that never existed. `missing` is empty,
+// nothing throws, nothing logs, and the leaf never lands. That was PROVEN on a
+// replay venue: with the guard live and the audit armed, block 103
 // neither threw nor logged, while the per-key probe reported that same block's
 // key absent from the committed tree. The guard asks "was the key touched" and
 // the probe asks "did the leaf land"; only the second question is the one that
@@ -719,7 +719,7 @@ async function _ledgerKeysForBlock(db, blockIndex){
 // delete-on-zero), which is exactly why a healthy block can leave the root
 // untouched, so treating absence alone as a fault would halt healthy chains.
 // Judging by anything other than the net AS OF THIS HEIGHT invents faults too:
-// the  per-key sweep produced four spurious hits from today's balance and
+// the after-the-fact per-key sweep produced four spurious hits from today's balance and
 // zero from the block's own. Inside the block transaction getNetBalance IS the
 // as-of-height net, which is what makes an in-block assertion both cheap and
 // exact where an after-the-fact one is neither.
@@ -751,7 +751,7 @@ async function _assertCommittedLeaves(db, smt, chain, network, blockIndex, balan
     const msg = 'balances leaf-presence assertion FAILED at block ' + blockIndex + ': ' +
         absent.length + ' key(s) the ledger moved have NO leaf in the committed balances_root ' +
         'while their net is non-zero, so balances_root would be committed incomplete. ' +
-        'keys=' + JSON.stringify(absent) + ' ';
+        'keys=' + JSON.stringify(absent) + ' (leaf-presence guard)';
     if(process.env.INDEXER_TOUCH_GUARD === 'warn'){
         console.error(msg + ' [INDEXER_TOUCH_GUARD=warn: COMMITTING ANYWAY, this node will ' +
             'diverge from any node that full-rebuilds]');
@@ -791,8 +791,8 @@ async function computeAndStoreRoots(db, chain, network, blockIndex, isActivation
     // replays too, so the dry run covers positions opened long before it.
     const escArmed  = SUB.isEscrowLockedLeafActive(blockIndex, network, chain);
     const escShadow = SUB.isEscrowLockedLeafShadowActive(blockIndex, network, chain);
-    // Hoisted out of the journal-write block below: the balances gate needs it too
-    // (). See the full-build gate for why.
+    // Hoisted out of the journal-write block below: the balances gate needs it
+    // too. See the full-build gate for why.
     const armingBlock = escArmed && !SUB.isEscrowLockedLeafActive(blockIndex - 1, network, chain);
     if(escArmed || escShadow){
         const windowStart = escShadow && !SUB.isEscrowLockedLeafShadowActive(blockIndex - 1, network, chain);
@@ -810,7 +810,7 @@ async function computeAndStoreRoots(db, chain, network, blockIndex, isActivation
     const prior = isActivationBlock ? [] : await db.doQueryStrict(
         'SELECT balances_root FROM state_tree_roots WHERE chain=? AND network=? AND block_index=? LIMIT 1',
         [chain, network, blockIndex - 1]);
-    // The ARMING BLOCK full-builds too (). The incremental branch applies
+    // The ARMING BLOCK full-builds too. The incremental branch applies
     // escrow leaves from touchedEscrowKeys(armingBlock), i.e. only journal rows
     // stamped at THIS height, while the arming replay deliberately writes no row for
     // a key whose total is unchanged (escrowJournalWriter.js `if(eq(prior,next))
@@ -865,7 +865,7 @@ async function computeAndStoreRoots(db, chain, network, blockIndex, isActivation
         }
         balancesRoot = root;
         await _enforceTouchedSet(db, blockIndex, touched);
-        // Set membership cannot see a leaf that never landed , so the
+        // Set membership cannot see a leaf that never landed, so the
         // block's own ledger keys are proved against the root that is about to
         // be committed. It runs AFTER the escrow leaves, on the exact value that
         // goes into the row, because a root nobody proved against is the thing

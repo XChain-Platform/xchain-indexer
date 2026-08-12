@@ -339,7 +339,7 @@ describe('File action handler @regression @tier3', function () {
     });
 
     // ------------------------------------------------------------------
-    // COMPRESSION ( Part B), the tenth optional field.
+    // COMPRESSION, the tenth optional field.
     //
     // The whole point of these tests is a NEGATIVE: the field is parsed and
     // stored and can never, under any value, change a validity verdict.
@@ -347,7 +347,7 @@ describe('File action handler @regression @tier3', function () {
     // malformed code while shipped indexers ignored it would fork validity
     // across the fleet.
     // ------------------------------------------------------------------
-    describe('COMPRESSION field ( Part B)', function () {
+    describe('COMPRESSION field (Part B)', function () {
         const BASE = ['0', 'doc.txt', 'text/plain', 'Doc', 'memo'];
         // Local copies: the gated-content block's fixtures are scoped to it, and
         // these assertions must stand on their own.

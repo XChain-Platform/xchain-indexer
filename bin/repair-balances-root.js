@@ -12,7 +12,7 @@
  **********************************************************************
  *
  * Repair a chain whose committed `balances_root` has drifted BELOW a full
- * rebuild of its own ledger .
+ * rebuild of its own ledger.
  *
  * WHY THIS EXISTS. `db._smtTickName` used to cache an ABSENT ticker name, and a
  * cached absence made `createLedgerChangeRecord` skip every later touch for that

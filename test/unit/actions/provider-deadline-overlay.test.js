@@ -19,7 +19,7 @@ const { getTestConfig } = require('../../fixtures/config');
 const Execute = require('../../../src/actions/execute.js');
 const Deploy  = require('../../../src/actions/deploy.js');
 
-// : the deadline-window map injected into the VM gateway was built from an
+// the deadline-window map injected into the VM gateway was built from an
 // UNCONFIGURED ProviderRegistry, so it only ever carried the built-in DEFAULTS while
 // attest.js validated the same deadlines against the CONFIGURED registry. Under an
 // ATTESTATION.PROVIDERS overlay the VM would accept an attestation.request() the

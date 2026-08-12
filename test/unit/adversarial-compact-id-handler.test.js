@@ -88,7 +88,7 @@ async function runMint({ destination }) {
         // reference that EXISTS resolves to its canonical address; anything else
         // (dangling, malformed, or a full address) is returned unchanged.
         resolveAddressRef: async (v) => (v === '^123' ? REAL_DEST : v),
-        //  gated companion the handler actually calls. `rejected` is the
+        // Flag-day-gated companion the handler actually calls. `rejected` is the
         // flag-day verdict; this suite proves the LEGACY (pre-flag-day) contract, so it
         // stays false and rejection must still come from the handler's own format check.
         resolveAddressRefChecked: async (v) => ({ value: (v === '^123' ? REAL_DEST : v), rejected: false })

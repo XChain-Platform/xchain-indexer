@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// : SWEEP resolved tick_id -> ticker with one getTicker query per held
+// SWEEP resolved tick_id -> ticker with one getTicker query per held
 // ticker TWICE over the same balance set (the controller-guard loop and the
 // settlement balance-transfer loop). Resolution is now memoized per run, so each
 // distinct held tick_id is resolved at most once across both passes. tick_id ->
@@ -29,7 +29,7 @@ const Sweep = require('../../../src/actions/sweep.js');
 const SOURCE      = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const DESTINATION = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
 
-describe('Sweep tick_id->ticker memoization @regression ()', function () {
+describe('Sweep tick_id->ticker memoization @regression', function () {
     let indexer, actionsCtx, handler;
 
     beforeEach(function () {

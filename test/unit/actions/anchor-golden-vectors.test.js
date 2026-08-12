@@ -94,7 +94,7 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
         // Pin the legacy COUNT quorum path (regtest stake-weighted quorum is active at
         // every block); the fixture sigs carry no source/weight.
         swqStub = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
-        // : pin the derive-relocation gate OFF so these vectors exercise the legacy
+        // pin the derive-relocation gate OFF so these vectors exercise the legacy
         // DOGE-side reward write (the below-gate / mainnet behavior).
         deriveGateStub = sinon.stub(arMod, 'isAnchorRewardDeriveActive').returns(false);
     });

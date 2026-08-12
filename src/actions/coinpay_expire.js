@@ -26,9 +26,7 @@
 
 class Coinpay_Expire {
 
-    // Handle constructing a class instance
     constructor(action){
-        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -37,24 +35,19 @@ class Coinpay_Expire {
         this.mapper    = action.mapper;
     }
 
-    // Handle expiring a COINPay obligation
     async parse(params, data, error){
 
-        // Get info on the COINPay obligation
         let obligationInfo = await this.indexerDb.getCoinpayObligationInfo(data['ACTION_INDEX']);
 
         // Bail out if obligation no longer exists (already fulfilled/expired or rolled back)
         if(!obligationInfo)
             return;
 
-        // Get the ORDER_MATCH order action_indexes
         let matchOrders = await this.indexerDb.getOrderMatchOrders(obligationInfo['ACTION_INDEX']);
         if(!matchOrders)
             return;
 
-        // Get info on both orders involved in the match
-        // give_action_index = the matching order (counter-party)
-        // get_action_index  = the original order
+        // give_action_index = the matching order (counter-party); get_action_index = the original order
         let giveOrderInfo = await this.indexerDb.getOrderInfo(this.config['COIN'], matchOrders.give_action_index);
         let getOrderInfo  = await this.indexerDb.getOrderInfo(this.config['COIN'], matchOrders.get_action_index);
         if(!giveOrderInfo || !getOrderInfo)
@@ -82,11 +75,9 @@ class Coinpay_Expire {
                 return;
             }
         } else if(this.util.isNull(giveOrderInfo['GIVE_TICK']) || giveOrderInfo['GIVE_TICK'] == this.config['COIN']){
-            // giveOrder is offering native coin
             coinOrder   = giveOrderInfo;
             sellerOrder = getOrderInfo;
         } else {
-            // getOrder is offering native coin
             coinOrder   = getOrderInfo;
             sellerOrder = giveOrderInfo;
         }
@@ -110,24 +101,18 @@ class Coinpay_Expire {
             }
         }
 
-        // Add addresses to the addresses list
         this.util.addAddressTicker(sellerOrder['SOURCE'], sellerOrder['GIVE_TICK']);
 
-        // Define COINPAY_EXPIRE action
         let action = {};
         action['ACTION']      = 'COINPAY_EXPIRE';
         action['BLOCK_INDEX'] = data['BLOCK_INDEX'];
 
-        // Create a record of this COINPAY_EXPIRE action in the actions table
         data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
 
-        // Set the status to valid
         data['STATUS'] = 'valid';
 
-        // Print status message
         console.log("\t COINPAY_EXPIRE : " + this.config['COIN'] + ':' + obligationInfo['ACTION_INDEX'] + ' : ' + data['STATUS']);
 
-        // Array of credits, debits, and escrows
         let credits = [],
             debits  = [],
             escrows = [];
@@ -159,24 +144,18 @@ class Coinpay_Expire {
             credits.push([sellerOrder['GIVE_TICK'],  releaseAmount, refundTo]);
         }
 
-        // Create record in the coinpay_expires table
         await this.indexerDb.createCoinpayExpire(data['ACTION_INDEX'], obligationInfo['ACTION_INDEX'], data['STATUS']);
 
-        // Update coinpay obligation status to 'expired'
         await this.indexerDb.createCoinpayStatus(data['ACTION_INDEX'], obligationInfo['ACTION_INDEX'], 'expired');
 
-        // Update ORDER_MATCH status to 'expired'
         await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], obligationInfo['ACTION_INDEX'], 'expired');
 
         // The coin-offering party's order stays open; it can match with other sellers.
         // Only the ORDER_MATCH is expired, not the order itself.
-
-        // Check if the seller's order is in a transitional state and can be finalized
         let sellerStatus = sellerOrder['ORDER_STATUS'];
         if(sellerStatus == 'cancelling' || sellerStatus == 'expiring'){
             let pendingObligations = await this.indexerDb.getPendingCoinpayObligationsByOrder(sellerOrder['ACTION_INDEX']);
             if(pendingObligations.length == 0){
-                // No more pending obligations. Finalize the seller's order.
                 let finalStatus = (sellerStatus == 'cancelling') ? 'cancelled' : 'expired';
                 await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], sellerOrder['ACTION_INDEX'], finalStatus);
 
@@ -198,18 +177,14 @@ class Coinpay_Expire {
             }
         }
 
-        // Process any transaction ledger changes (credits / debits / escrows)
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
 
-        // Get a list of tickers & addresses
         let tickers   = this.util.getTickersList(),
             addresses = Object.keys(this.util.getAddressesList());
 
-        // Update address balances and token supply
         await this.indexerDb.updateBalances(addresses);
         await this.indexerDb.updateTokens(tickers);
 
-        // Create action mappings
         await this.mapper.createMappings(data);
     }
 }

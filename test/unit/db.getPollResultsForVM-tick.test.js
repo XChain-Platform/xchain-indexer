@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/db.getPollResultsForVM-tick.test.js
  *
- * CONSENSUS REGRESSION GUARD for the  VOTE_POLL_TICK_VISIBLE flag-day.
+ * CONSENSUS REGRESSION GUARD for the VOTE_POLL_TICK_VISIBLE flag-day.
  *
  * getPollResultsForVM() builds the finalized-poll snapshot a contract observes through
  * xchain.getPollResult(). Exposing the poll's electorate TICK is a consensus change:

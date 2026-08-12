@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/utility.validateOracleFee.test.js
  *
- * PRICE v1 oracle usage fee verification . Counterparty parity: the
+ * PRICE v1 oracle usage fee verification. Counterparty parity: the
  * address OPENING a Mode B dispenser pays the oracle operator up front, as a
  * real native-coin output, and the create is invalid when that output is missing
  * or short.
@@ -58,7 +58,7 @@ function fakeDb({ oracleRow = { value: '0.05', fee: '0.01' }, snapshots = [{ pri
 
 const withOutputs = (outputs) => ({ BLOCK_TIME, TX_OUTPUTS: outputs });
 
-describe('Utility.validateOracleFee() -  @regression @tier1', function () {
+describe('Utility.validateOracleFee() - @regression @tier1', function () {
     let util;
     beforeEach(function () { util = new Utility(); });
 

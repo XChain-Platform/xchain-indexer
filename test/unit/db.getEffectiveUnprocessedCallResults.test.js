@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/db.getEffectiveUnprocessedCallResults.test.js
  *
- * : the callback-delivery query had no SQL LIMIT and the caller passed
+ * the callback-delivery query had no SQL LIMIT and the caller passed
  * Number.MAX_SAFE_INTEGER, materializing the full effective result set every tick
  * and dropping already-delivered rows in JS. When the hub mirror IS the local DB
  * the exclusion, ordering, and cap now push into one SQL statement (NOT EXISTS +
@@ -43,7 +43,7 @@ function makeDb(hubDb) {
     return new Database('127.0.0.1', 3306, 'xchain_btc_regtest', 'u', 'p', indexer);
 }
 
-describe('getEffectiveUnprocessedCallResults ()', function () {
+describe('getEffectiveUnprocessedCallResults', function () {
 
     afterEach(() => sinon.restore());
 

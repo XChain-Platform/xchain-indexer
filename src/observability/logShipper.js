@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * XChain shared observability - structured log shim and shipper 
+ * XChain shared observability - structured log shim and shipper
  *
  * The fleet logs to per-box stdout with no aggregation, so an incident means
  * SSHing to each host. This shim is the in-tree half of the fix: it turns log

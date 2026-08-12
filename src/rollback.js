@@ -47,7 +47,7 @@ class Rollback {
         // be absent on a minimal mock (or indexerDb itself absent in a static drift-guard analyzer), so
         // fall back to the raw db. That fallback is a test affordance and not a production path; the
         // rationale, and why it must never spread to a federation read, is stated in full at the
-        // indexerReorgView guard in XChainIndexer.js .
+        // indexerReorgView guard in XChainIndexer.js.
         this.indexerView = (this.indexerDb && typeof this.indexerDb.apiView === 'function') ? this.indexerDb.apiView() : this.indexerDb;
 
         // Setup alias to the utility class
@@ -490,7 +490,7 @@ class Rollback {
                 args  = [block_index];
                 await this.indexerDb.doQuery(query, args);
 
-                // BET in-place flip resets ( P4; the polls/attests pattern
+                // BET in-place flip resets (P4; the polls/attests pattern
                 // applied to all three BET stamps). A feed row created in an
                 // EARLIER block survives the bulk delete below, but its
                 // feed_status_id was flipped in place by the latch pass
@@ -545,7 +545,7 @@ class Rollback {
                 args  = [block_index];
                 await this.indexerDb.doQuery(query, args);
 
-                //  timelock: a DEFERRED binding-callback fire whose due block is
+                // timelock: a DEFERRED binding-callback fire whose due block is
                 // orphaned while the finalization itself survives (resolved_block below
                 // the reorg point, callback_due_block at/above it). The injected EXECUTE
                 // is deleted generically with the orphaned range; re-NULL the fired
@@ -741,7 +741,7 @@ class Rollback {
                 // restores above where prev_amount can differ across repeated slashes of one row).
                 //
                 // The surviving-earn-block test alone is NOT sufficient once a reward can be
-                // MATERIALIZED later than it is earned . An  derived anchor reward
+                // MATERIALIZED later than it is earned. An derived anchor reward
                 // carries block_index = the checkpoint's SNAPSHOT_BLOCK but is written while the
                 // BTC indexer processes a much later block, recorded here as
                 // reward_derive_block_index. A loser materialized INSIDE the orphaned range has a
@@ -810,7 +810,7 @@ class Rollback {
                     // snapshot catch-up (it cannot intern locally without diverging the replicated
                     // id, and anchor status_id is in no block-hash projection).
                     //
-                    // Version predicate : the parent is any ARCHIVE_HEAD version (v1
+                    // Version predicate: the parent is any ARCHIVE_HEAD version (v1
                     // legacy, v6 publisher-bearing post-ARCHIVE_REWARD), shared constant from
                     // stateHash.js. Unconditionally widened: a v6 parent's stamp is exactly as
                     // un-re-derivable after the chunk delete as a v1's, and this reset is not a
@@ -920,10 +920,10 @@ class Rollback {
                 await this.indexerDb.doQuery(query, args);
             }
 
-            // Second scoping key for validator_rewards: the MATERIALIZATION block (,
-            // ). The loop above deletes on block_index, which for a reward is its
-            // EARN block. That is the same block for every writer except the  BTC-side
-            // anchor/archive derivation, which earns at the checkpoint's SNAPSHOT_BLOCK S but
+            // Second scoping key for validator_rewards: the MATERIALIZATION block. The
+            // loop above deletes on block_index, which for a reward is its EARN block.
+            // That is the same block for every writer except the BTC-side anchor/archive
+            // derivation, which earns at the checkpoint's SNAPSHOT_BLOCK S but
             // creates the row while processing a later BTC block B (stamped derive_block_index).
             // A reorg to any H in (S, B] orphans the block that MINTED the reward while leaving
             // block_index = S below the delete's scope, so the row survived as a COLLECT-
@@ -1147,8 +1147,8 @@ class Rollback {
             // ClientRollback.js (drift-guarded by the markers below), and deliberately NOT
             // to hub_db_sync.js _applyRetraction: that path additionally carries the bounded
             // to_action_index clause and the item-5308 push_generation fence, and for these
-            // two quorum-class tables the fence is MANDATORY ( refuses an unfenced
-            // retraction outright), so its emitted SQL is always stricter than this one.
+            // two quorum-class tables the fence is MANDATORY (an unfenced retraction is
+            // refused outright), so its emitted SQL is always stricter than this one.
             // The asymmetry is the point. This delete is our own authoritative rollback of
             // our own chain, so it is unbounded from the orphan point up; the hub-driven
             // delete acts on untrusted input and must be fenced to a generation we produced.
@@ -1250,12 +1250,12 @@ class Rollback {
             // without this a depth-1 reorg replay of the same height would hit a stale cache and
             // drive the block with the orphaned chain's timestamp (a unilateral consensus fork on
             // any straddling time gate). Clearing after commit guarantees the forward replay
-            // re-reads the new chain's block_time. See .
+            // re-reads the new chain's block_time.
             if(this.decoderDb && typeof this.decoderDb.clearBlockTimeCache === 'function') this.decoderDb.clearBlockTimeCache();
             if(this.indexerDb && typeof this.indexerDb.clearBlockTimeCache === 'function') this.indexerDb.clearBlockTimeCache();
 
-            // Same reorg, same class of stale memo, same place for the same reason
-            // : drop the light-client touched-key resolver caches. They map a
+            // Same reorg, same class of stale memo, same place for the same reason:
+            // drop the light-client touched-key resolver caches. They map a
             // surrogate id to its canonical name and were cached for the connection
             // lifetime on the premise that the mapping is immutable. A rollback is
             // exactly where that premise fails, because it deletes index_tickers /
@@ -1283,9 +1283,9 @@ class Rollback {
             }
             // Still needed on its own after db.clearSmtNameCaches() was wired into
             // every transaction ABORT: this frees ids by COMMITTING deletes, an abort
-            // frees them by un-assigning them, and neither implies the other .
+            // frees them by un-assigning them, and neither implies the other.
 
-            // Invalidate the early-decide tally watermark (). This reorg may have deleted
+            // Invalidate the early-decide tally watermark. This reorg may have deleted
             // and re-added ledger, vote, and delegation rows at or above block_index (and reused
             // action_index values), so any cached poll fingerprint could now match spuriously and
             // wrongly skip a re-tally on the replay. Drop them all; the forward replay re-tallies
@@ -1577,7 +1577,7 @@ class Rollback {
                 let reqBlock = Number(req.block_index);
                 let cached   = validatorsByBlock.get(reqBlock);
                 if(cached === undefined){
-                    // , mirroring actions/attest.js _computeResponsibleSet: the SWQ
+                    // Mirroring actions/attest.js _computeResponsibleSet (#3233): the SWQ
                     // gate is BTC-anchored, and `reqBlock` is the request's LOCAL height, so
                     // off BTC it is already past the 961000 anchor and would resolve
                     // `weighted` TRUE out of band. This function's header requires

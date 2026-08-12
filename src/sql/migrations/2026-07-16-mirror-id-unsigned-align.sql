@@ -1,5 +1,5 @@
 -- xchain:migration mode=auto
--- Migration: mirror id cursors to BIGINT UNSIGNED, matching the hub DDLs 
+-- Migration: mirror id cursors to BIGINT UNSIGNED, matching the hub DDLs
 --
 -- Companion of 2026-07-16-mirror-twin-bigint-unsigned-align.sql (which carries
 -- the manual-mode retypes of the 8 non-id mirror columns). The three id

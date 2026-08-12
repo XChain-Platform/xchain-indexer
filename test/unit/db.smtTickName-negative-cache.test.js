@@ -10,7 +10,7 @@
  *
  **********************************************************************
  *
- * `_smtTickName` must never cache an ABSENCE .
+ * `_smtTickName` must never cache an ABSENCE.
  *
  * It resolves tick_id -> canonical tick name for the light-client touched-key
  * set. `createLedgerChangeRecord` skips the touch when the name comes back null,

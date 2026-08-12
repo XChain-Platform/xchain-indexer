@@ -12,11 +12,11 @@
  **********************************************************************
  *
  * Verify a STAGE B (escrow locked-balance leaf) ARMING BOUNDARY against a
- * chain's own committed rows (SPV sub-tree spec §7, ).
+ * chain's own committed rows (SPV sub-tree spec §7).
  *
  * WHY THIS EXISTS, AND WHY IT IS A SECOND TOOL RATHER THAN A FLAG ON THE FIRST.
- * `bin/verify-arming-boundary.js` names  in its header and cannot serve
- * it: it hardcodes `contract_state_root` and every one of its assertions reads
+ * `bin/verify-arming-boundary.js` cannot serve Stage B:
+ * it hardcodes `contract_state_root` and every one of its assertions reads
  * a reserved SLOT COLUMN. Stage B has no slot and no column. It changes the
  * CONTENTS of `balances_root` under a second key domain (`XCHAIN_ESC`), so
  * "the slot went from NULL to non-NULL" has no analogue here, and the Stage A

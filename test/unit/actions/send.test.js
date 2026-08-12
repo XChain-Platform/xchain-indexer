@@ -467,7 +467,7 @@ describe('Send handler @regression @tier1', function () {
 });
 
 /*********************************************************************
- * PC-29 /  §5.4: the key-handoff requirement is CONDITIONAL.
+ * PC-29 / §5.4: the key-handoff requirement is CONDITIONAL.
  *
  * Before this, ANY gated FILE on a tick made EVERY send of that tick require a
  * paired MESSAGE handoff. Now a pack only compels one when the recipient will

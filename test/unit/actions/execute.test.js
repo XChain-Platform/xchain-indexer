@@ -121,7 +121,7 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             assert.ok(String(data['STATUS']).includes('CONTRACT_ACTION_INDEX (format)'));
         });
 
-        // : a leading-zero index passed the old /^\d+$/ gate, resolved to the same
+        // a leading-zero index passed the old /^\d+$/ gate, resolved to the same
         // contract through the integer-coercing DB lookup, then hashed two different ways:
         // the VM Number()s it into the attestation request_id preimage while the host
         // re-hashes the raw EMITTER string, so the host rejected an ATTEST the VM accepted.
@@ -458,7 +458,7 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
 
         // All four throw before buildActionParams, so minimal emission params suffice.
 
-        //  / VM-EMIT-1: only VOTE v0 (create) / v1 (ballot) are emittable. v2
+        // VM-EMIT-1: only VOTE v0 (create) / v1 (ballot) are emittable. v2
         // (finalize) and v3 (delegate) are gateway-rejected; re-blocked host-side as
         // defense in depth against an older/compromised bundled VM.
         it('throws on an emitted VOTE v2 (finalize) - host-side re-block', async function () {
@@ -701,7 +701,7 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             assert.ok(indexer.indexerDb.createCredit.notCalled);
         });
 
-        //  seam pin. The VM's new '|' guard on contract.slash's token is
+        // seam pin. The VM's new '|' guard on contract.slash's token is
         // defense-in-depth precisely because this handler reads the emission by
         // NAMED field; if it ever pipe-splits instead, a '|'-bearing token would
         // shift fields and the guard stops being optional. Assert the property.

@@ -11,7 +11,7 @@
 // contact legal@dankest.llc.
 
 /*
- * : MAX_SUPPLY=0 is the UNCAPPED sentinel.
+ * MAX_SUPPLY=0 is the UNCAPPED sentinel.
  *
  * A token issued with no MAX_SUPPLY stores 0 (createToken / db.js) and the protocol
  * documents it as unlimited, but mint.js applied the supply ceiling with no
@@ -95,7 +95,7 @@ function makeIssueParams(overrides = {}) {
         m.MEMO];
 }
 
-describe(' MAX_SUPPLY=0 is the uncapped sentinel @regression @tier1', function () {
+describe('MAX_SUPPLY=0 is the uncapped sentinel @regression @tier1', function () {
 
     afterEach(function () {
         sinon.restore();

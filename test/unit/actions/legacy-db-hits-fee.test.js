@@ -8,14 +8,14 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 
-//  (DIVIDEND-1) regression: the legacy db-hits fee accumulators in
+// (DIVIDEND-1) regression: the legacy db-hits fee accumulators in
 // dividend.js / callback.js / sweep.js used `db_hits += this.util.bcmul(...)`.
 // bcmul returns a Decimal, so `+=` string-concatenated instead of adding
 // (e.g. 3 + "4" -> "34"), massively inflating the fee passed to
 // getTransactionFee. These tests capture the db_hits argument and assert it
 // is a real integer Number with the correct additive value.
 //
-//  (flag-day Pkg 11): the numeric fix is now gated behind the
+// (flag-day Pkg 11): the numeric fix is now gated behind the
 // LEGACY_FEE_NUMERIC_DBHITS flag-day so pre-activation replay stays
 // byte-identical. At/above the flag-day (default in these tests) db_hits
 // accumulates numerically; BELOW it the code reproduces the original
@@ -32,7 +32,7 @@ const Dividend = require('../../../src/actions/dividend.js');
 const Callback = require('../../../src/actions/callback.js');
 const Sweep    = require('../../../src/actions/sweep.js');
 
-describe('Legacy db-hits fee accumulation  @regression @tier3', function () {
+describe('Legacy db-hits fee accumulation @regression @tier3', function () {
     let indexer, actionsCtx, feeStub;
 
     const SOURCE      = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
@@ -133,7 +133,7 @@ describe('Legacy db-hits fee accumulation  @regression @tier3', function () {
         assert.ok(Number.isInteger(dbHits) && dbHits >= 1);
     });
 
-    // : BELOW the LEGACY_FEE_NUMERIC_DBHITS flag-day the pre-activation
+    // BELOW the LEGACY_FEE_NUMERIC_DBHITS flag-day the pre-activation
     // string-concatenation behaviour must be reproduced byte-for-byte so a
     // from-genesis replay commits the identical (inflated) fee.
 

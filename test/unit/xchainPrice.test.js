@@ -34,7 +34,7 @@ const { deriveXchainRate, referenceRateFromUsd, toUsd } = require('../../src/xch
 const fill = (xchainAmount, coinAmount, venue = 'dex') => ({ xchainAmount, coinAmount, venue });
 
 // The reference the band is anchored on: 0.00001 BTC per XCHAIN, which at
-// 200,000 USD/BTC is the $2.00  D2 bootstrap.
+// 200,000 USD/BTC is the $2.00 D2 bootstrap.
 const REF = '0.00001';
 
 describe('XCHAIN price derivation from realized fills @regression', function () {

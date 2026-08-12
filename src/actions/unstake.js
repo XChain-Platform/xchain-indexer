@@ -22,7 +22,7 @@
  *   v0 - VERSION|SIGNING_PUBKEY[|AMOUNT]                                    (capability stake, all rows for pubkey)
  *   v1 - VERSION|SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK[|AMOUNT]         (contract-targeted stake, per (target, tick))
  *
- * The trailing AMOUNT is OPTIONAL (, gated by PARTIAL_UNSTAKE_COLLECT):
+ * The trailing AMOUNT is OPTIONAL (gated by PARTIAL_UNSTAKE_COLLECT):
  * absent = full sweep (the historical behavior, byte-identical); present = move
  * only AMOUNT into cooldown, the residual stays staked via a synthetic re-stake
  * row that activates exactly when the swept rows deactivate. Below the flag-day
@@ -33,7 +33,6 @@
 
 class Unstake {
 
-    // Handle constructing a class instance
     constructor(action){
         this.actions   = action;
         this.config    = action.config;
@@ -42,16 +41,12 @@ class Unstake {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
-        // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|SIGNING_PUBKEY|AMOUNT';                                   // capability unstake (AMOUNT optional)
         this.formats[1] = 'VERSION|SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK|AMOUNT';        // contract-targeted unstake (AMOUNT optional)
     }
 
-    // Handle parsing the UNSTAKE transaction
     async parse(params, data, error){
-
-        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
@@ -61,26 +56,14 @@ class Unstake {
             return await this._parseContractUnstake(params, data, error);
         }
 
-        // Extract params (v0 capability unstake)
         data['SIGNING_PUBKEY'] = params[1];
 
-        // Convert NUMBER fields from string value to number value
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        /*****************************************************************
-         * Chain Restriction
-         ****************************************************************/
-
-        // UNSTAKE is BTC-only
         if(!error && data['COIN'] !== 'BTC')
             error = 'invalid: ACTION (BTC only)';
 
-        /*****************************************************************
-         * SIGNING_PUBKEY Validations
-         ****************************************************************/
-
-        // Verify SIGNING_PUBKEY is provided
         if(!error && this.util.isNull(data['SIGNING_PUBKEY']))
             error = 'invalid: SIGNING_PUBKEY (required)';
 
@@ -88,17 +71,12 @@ class Unstake {
         if(!error && !/^[0-9a-fA-F]{64}$/.test(String(data['SIGNING_PUBKEY'])))
             error = 'invalid: SIGNING_PUBKEY (format)';
 
-        /*****************************************************************
-         * Stake Existence Validations
-         ****************************************************************/
-
-        // Verify the pubkey has an active stake owned by SOURCE
         let totalAmount = '0';
         if(!error){
             // undeactivatedOnly: an UNSTAKE may only target stake that is not already
             // being unstaked. A second UNSTAKE inside the activation-delay window would
             // otherwise re-read the same still-"active" rows and write a duplicate
-            // cooldown credit (double-credit, item 4617).
+            // cooldown credit.
             let aggregate = await this.indexerDb.getActiveStakeByPubkey(data['SIGNING_PUBKEY'], data['BLOCK_INDEX'], {undeactivatedOnly: true});
             if(!aggregate){
                 error = 'invalid: SIGNING_PUBKEY (no active stake or unstake already in progress)';
@@ -111,15 +89,11 @@ class Unstake {
             }
         }
 
-        // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
-        /*****************************************************************
-         * Optional partial AMOUNT (, gated by PARTIAL_UNSTAKE_COLLECT)
-         ****************************************************************/
-
-        // A present-but-full AMOUNT falls through with requestedAmount null so the
+        // Optional partial AMOUNT, gated by PARTIAL_UNSTAKE_COLLECT. A present-but-full
+        // AMOUNT falls through with requestedAmount null so the
         // resulting state is byte-identical to the absent-amount form. Over-ask and
         // malformed amounts REJECT (never clamp). Below the flag-day the field is
         // never read, preserving the legacy ignore-extra-params behavior exactly.
@@ -136,24 +110,17 @@ class Unstake {
                 requestedAmount = this.util.bcformat(amountStr, 8);
         }
 
-        /*****************************************************************
-         * Cooldown / Deactivation Calculation
-         ****************************************************************/
-
         let staking         = this.config['STAKING'];
         let cooldownBlocks  = (staking && staking['COOLDOWN_BLOCKS'])         ? staking['COOLDOWN_BLOCKS']         : 1000;
         let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
         data['COOLDOWN_END_BLOCK'] = parseInt(data['BLOCK_INDEX']) + cooldownBlocks;
         data['AMOUNT']             = (requestedAmount !== null) ? requestedAmount : totalAmount;
 
-        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
-        // Print status message
         console.log("\t UNSTAKE : pubkey=" + String(data['SIGNING_PUBKEY']).substring(0, 16) + '... : amount=' + data['AMOUNT'] + ' : ' + data['STATUS']);
 
-        // Create record in unstakes table
         await this.indexerDb.createUnstake(data);
 
         // Mark all active stake rows for this pubkey with deactivation_block
@@ -173,7 +140,7 @@ class Unstake {
         // over the instant the old rows drop out: stake weight is continuous, with no
         // double-count window and no gap. During the handoff window a second UNSTAKE on
         // this pubkey rejects (the residual is still pending activation), matching the
-        // existing full-unstake re-unstake guard (item 4617).
+        // existing full-unstake re-unstake guard.
         if(status === 'valid' && requestedAmount !== null){
             let residual = this.util.bcformat(this.util.bcsub(totalAmount, requestedAmount, 8), 8);
             await this.indexerDb.createStake({
@@ -188,26 +155,20 @@ class Unstake {
             });
         }
 
-        // Store the SOURCE and GAS tick in addresses list
         let gas = this.config['GAS'];
         this.util.addAddressTicker(data['SOURCE'], gas);
 
-        // Array of credits and debits
         let credits = [],
             debits  = [];
 
-        // Process any transaction ledger changes (credits / debits)
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
-        // Get a list of tickers & addresses
         let tickers   = this.util.getTickersList(),
             addresses = Object.keys(this.util.getAddressesList());
 
-        // Update address balances and token supply
         await this.indexerDb.updateBalances(addresses);
         await this.indexerDb.updateTokens(tickers);
 
-        // Create action mappings
         await this.mapper.createMappings(data);
     }
 
@@ -215,8 +176,6 @@ class Unstake {
     // sets deactivation_block on the matching contract_stakes rows, uses the contract's
     // own cooldown_blocks (vs. the global 1000 used for capability staking).
     async _parseContractUnstake(params, data, error){
-
-        // Extract params
         data['SIGNING_PUBKEY']        = params[1];
         data['TARGET_CONTRACT_INDEX'] = params[2];
         data['TICK']                  = params[3];
@@ -230,14 +189,13 @@ class Unstake {
             error = 'invalid: SIGNING_PUBKEY (format)';
         if(!error && this.util.isNull(data['TARGET_CONTRACT_INDEX']))
             error = 'invalid: TARGET_CONTRACT_INDEX (required)';
-        // STAKE-1 (gated by CONTRACT_INDEX_CANONICAL): reject non-canonical leading zeros at/after the flag-day.
+        // Gated by CONTRACT_INDEX_CANONICAL: reject non-canonical leading zeros at/after the flag-day.
         let idxRe = (await this.actions.protocolChanges.isEnabled('CONTRACT_INDEX_CANONICAL', data['BLOCK_INDEX'])) ? /^[1-9]\d*$/ : /^[0-9]+$/;
         if(!error && (!idxRe.test(String(data['TARGET_CONTRACT_INDEX'])) || Number(data['TARGET_CONTRACT_INDEX']) <= 0))
             error = 'invalid: TARGET_CONTRACT_INDEX (format)';
         if(!error && this.util.isNull(data['TICK']))
             error = 'invalid: TICK (required)';
 
-        // Load the contract to fetch its cooldown_blocks
         let contractInfo = null;
         if(!error){
             contractInfo = await this.indexerDb.getContract(data['TARGET_CONTRACT_INDEX']);
@@ -248,7 +206,6 @@ class Unstake {
             }
         }
 
-        // Verify the (target, pubkey, tick) has an active contract-stake owned by SOURCE
         let totalAmount = '0';
         if(!error){
             let aggregate = await this.indexerDb.getActiveContractStakeByPubkey(
@@ -268,7 +225,7 @@ class Unstake {
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
-        // Optional partial AMOUNT (, gated by PARTIAL_UNSTAKE_COLLECT). Same
+        // Optional partial AMOUNT, gated by PARTIAL_UNSTAKE_COLLECT. Same
         // semantics as the v0 lane; precision is bounded by the staked token's own
         // decimals (mirroring STAKE v3's AMOUNT validation), and a present-but-full
         // amount falls through as a full sweep for byte-identity with the absent form.
@@ -299,19 +256,18 @@ class Unstake {
         let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
         data['AMOUNT']             = (requestedAmount !== null) ? requestedAmount : totalAmount;
 
-        // Pkg6 / 048fdea9 + ce6a484f (gated UNSTAKE_CONTRACT_COOLDOWN_STRICT): the cooldown is
-        // the target contract's own validated stake parameter (DEPLOY enforces an integer in
-        // [1,100000]). The legacy ternary fell back to the capability global 1000 whenever the
-        // contract cooldown_blocks was falsy - a DEAD branch on the valid path (195-197 already
-        // rejects a null/non-stakeable cooldown) that nonetheless FIRED on every ERROR path
-        // (unknown target / not-stakeable / no-active-stake -> contractInfo null/absent),
-        // persisting a phantom BLOCK_INDEX+1000 cooldown_end_block into the INVALID
-        // contract_unstakes row (a replicated, state_hash-covered column). At/after the flag-day:
-        // reject a non-positive-integer contract cooldown outright (closes the latent cross-file
-        // trap) and compute COOLDOWN_END_BLOCK only on the valid path, leaving error rows at 0.
-        // The valid-path value is unchanged. Below it: byte-identical to the legacy ternary so a
-        // from-genesis replay / heterogeneous fleet reproduces the historic (phantom-1000)
-        // error-row values.
+        // Gated by UNSTAKE_CONTRACT_COOLDOWN_STRICT: the cooldown is the target contract's own
+        // validated stake parameter (DEPLOY enforces an integer in [1,100000]). The legacy
+        // ternary fell back to the capability global 1000 whenever the contract cooldown_blocks
+        // was falsy, a dead branch on the valid path (the checks above already reject a
+        // null/non-stakeable cooldown) that nonetheless fired on every error path (unknown
+        // target / not-stakeable / no-active-stake), persisting a phantom BLOCK_INDEX+1000
+        // cooldown_end_block into the invalid contract_unstakes row (a replicated,
+        // state_hash-covered column). At/after the flag-day: reject a non-positive-integer
+        // contract cooldown outright and compute COOLDOWN_END_BLOCK only on the valid path,
+        // leaving error rows at 0. The valid-path value is unchanged. Below it: byte-identical
+        // to the legacy ternary so a from-genesis replay reproduces the historic error-row
+        // values.
         if(await this.actions.protocolChanges.isEnabled('UNSTAKE_CONTRACT_COOLDOWN_STRICT', data['BLOCK_INDEX'])){
             if(!error){
                 let cb = Number(contractInfo.cooldown_blocks);
@@ -333,7 +289,6 @@ class Unstake {
             ' : amount=' + data['AMOUNT'] +
             ' : ' + data['STATUS']);
 
-        // Write the contract_unstakes row
         await this.indexerDb.createContractUnstake(data);
 
         // Mark all active contract_stakes rows for (target, pubkey, tick) with deactivation_block

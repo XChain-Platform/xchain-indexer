@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/poll-early-decide-watermark.test.js
  *
- * : processVoteFinalizations step 2 re-tallied every armed poll from
+ * processVoteFinalizations step 2 re-tallied every armed poll from
  * full ledger/vote/delegation history on EVERY block. For a non-time_weighted
  * poll the tally is a pure function of its input rows, so if none of the input
  * tables (votes for the poll, delegations for the tick, the tick's credits/debits)
@@ -52,7 +52,7 @@ function nonCrossingTally() {
     return { options: [{ weight: '10' }, { weight: '5' }], supply: '100', quorum_met: true, min_voters_met: true };
 }
 
-describe('early-decide tally watermark ()', function () {
+describe('early-decide tally watermark', function () {
 
     afterEach(() => sinon.restore());
 

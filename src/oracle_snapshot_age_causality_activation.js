@@ -38,27 +38,22 @@
  * activation height the uncapped legacy query runs (historical replay stays
  * byte-identical); at/after it the causal cap applies.
  *
- * Gate semantics MIRROR state_key_collation_activation.js: keyed on the
- * processing chain's OWN local `block_index`, '<COIN>:<network>' lookup first,
- * then the bare network key; unknown -> inert/off (legacy uncapped path, which
- * preserves deployed behavior).
+ * Gate semantics mirror the sibling causality-gate modules in this repo: keyed
+ * on the processing chain's OWN local `block_index`, '<COIN>:<network>' lookup
+ * first, then the bare network key; unknown -> inert/off (legacy uncapped path,
+ * which preserves deployed behavior).
  *
  * EXECUTION-PATH gate (a VM read), NOT a hashing-path change: getOracleDataForVM
  * runs the oracle read during block processing; xchain-sync's BlockHasher reads
  * the already-materialized contract rows and never re-runs the VM, so this gate
- * is INDEXER-ONLY and has no xchain-sync twin (exactly like
- * dispense_cancelling_match_activation.js, which is also absent from sync).
+ * is INDEXER-ONLY and has no xchain-sync twin.
  *
- * *** ARMED 2026-07-22 (ratified pre-961000 deploy train,  Package 5
- * leg C). *** mainnet is gated per coin at the ratified train heights (BTC
- * 961000, LTC 3154250, DOGE 6319000); testnet and regtest are genesis-active
- * (both pre-launch, so every node deploys together and the capped path is
- * exercised end to end), matching the PKG3_SANDBOX_ACTIVATION template in
- * xchain-vm/src/index.js. Below a chain's height the uncapped legacy query runs
- * (historical replay stays byte-identical); at/after it the causal cap applies.
- * This is an EXECUTION-PATH (VM read) gate with no xchain-sync twin, so the
- * both-repos-deploy-before-any-armed-height rule does not apply; the indexer
- * fleet must simply be deployed before BTC 961000.
+ * ARMED 2026-07-22 (ratified pre-961000 deploy train). mainnet is gated per
+ * coin at the ratified train heights (BTC 961000, LTC 3154250, DOGE 6319000);
+ * testnet and regtest are genesis-active (both pre-launch, so every node deploys
+ * together and the capped path is exercised end to end), matching the
+ * PKG3_SANDBOX_ACTIVATION template in xchain-vm/src/index.js. The indexer fleet
+ * must be deployed before BTC 961000.
  *
  ********************************************************************/
 

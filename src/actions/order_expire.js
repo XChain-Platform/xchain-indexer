@@ -20,9 +20,7 @@
 
 class Order_Expire {
 
-    // Handle constructing a class instance
     constructor(action){
-        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -31,7 +29,6 @@ class Order_Expire {
         this.mapper    = action.mapper;
     }
 
-    // Handle expiring a order
     async parse(params, data, error){
 
         // Get info on the order by action_index. Pass null coin (not the local COIN) so a
@@ -45,7 +42,6 @@ class Order_Expire {
         // Add SOURCE address and GIVE_TICK to addresses list
         this.util.addAddressTicker(orderInfo['SOURCE'], orderInfo['GIVE_TICK']);
 
-        // Define ORDER_EXPIRE action
         let action = {}
         action['ACTION']      = 'ORDER_EXPIRE';
         action['BLOCK_INDEX'] = data['BLOCK_INDEX'];
@@ -56,10 +52,8 @@ class Order_Expire {
         // Set the status to valid
         data['STATUS'] = 'valid';
 
-        // Print status message
         console.log("\t ORDER_EXPIRE : " + this.config['COIN'] + ':' + orderInfo['ACTION_INDEX'] + ' : ' + data['STATUS']);
 
-        // Array of credits, debits, and escrows
         let credits = [],
             debits  = [],
             escrows = [];
@@ -80,7 +74,7 @@ class Order_Expire {
             } else if(!this.util.isNull(orderInfo['GIVE_TICK'])){
                 // Debit GIVE_TICK from escrows and credit it to the SOURCE address (skip for native coin GIVE).
                 // Negate in BigNumber space, not JS unary minus: the float round-trip truncates
-                // past ~15 sig figs, de-syncing the escrow release from the credit below (#3736).
+                // past ~15 sig figs, de-syncing the escrow release from the credit below.
                 escrows.push([orderInfo['GIVE_TICK'], this.util.bcsub(0, orderInfo['GIVE_REMAINING'], 64), orderInfo['SOURCE']]);
                 credits.push([orderInfo['GIVE_TICK'],  orderInfo['GIVE_REMAINING'], orderInfo['SOURCE']]);
             }
@@ -92,18 +86,14 @@ class Order_Expire {
             await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], orderInfo['ACTION_INDEX'], 'expired');
         }
 
-        // Process any transaction ledger changes (credits / debits / escrows)
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
 
-        // Get a list of tickers & addresses
         let tickers   = this.util.getTickersList(),
             addresses = Object.keys(this.util.getAddressesList());
 
-        // Update address balances and token supply
         await this.indexerDb.updateBalances(addresses);
         await this.indexerDb.updateTokens(tickers);
 
-        // Create action mappings
         await this.mapper.createMappings(data);
     }
 }

@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/hub_db_sync_grace_resolver.test.js
  *
- * Watermark-grace resolver ( / Package 12). The four barrier grace
+ * Watermark-grace resolver (/ Package 12). The four barrier grace
  * margins are frozen protocol constants (600/600/120/120): a per-node divergence
  * forks settlement, and a NaN value wedges the tip via `blockTime + NaN`. The
  * resolver pins the constants, ignores env overrides off-regtest with a loud
@@ -42,7 +42,7 @@ function makeSync(network) {
     return new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test', network });
 }
 
-describe('HubDbSync watermark-grace resolver  @regression @tier1', function () {
+describe('HubDbSync watermark-grace resolver @regression @tier1', function () {
 
     afterEach(function () {
         clearGraceEnv();

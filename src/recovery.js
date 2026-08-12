@@ -101,7 +101,7 @@ class AnchorRecovery {
         // stake-weighted quorum predicate. Required when replaying archives whose
         // snapshot_block is at/above STAKE_WEIGHTED_QUORUM.
         this.util   = opts.util || null;
-        // : operator-supplied block-anchored governance MIN_STAKE history
+        // Operator-supplied block-anchored governance MIN_STAKE history
         // ({ <capability>: [{activation_block, value}] }), overriding the frozen
         // per-network table in capability_min_stake_history.js. For a DR run replaying a
         // federation whose ratified history is not in this build. OPERATOR input only -
@@ -131,9 +131,9 @@ class AnchorRecovery {
         // overwrite per (call_id,phase)), so equal-seq heads MUST replay in a deterministic total
         // order or two nodes persist divergent finalized content. Break the tie on action_index
         // ASC - unique + consensus-visible on this single-network table - mirroring the live head
-        // pick (db.getAnchorV1ByBatchSeq) and the chunk-assembly query below. #2695
+        // pick (db.getAnchorV1ByBatchSeq) and the chunk-assembly query below.
         // The head's AUTHOR rides along (LEFT joined, so the row set is unchanged): under
-        // the  publisher-scoped flag day a head reassembles its own publisher's
+        // the publisher-scoped flag day a head reassembles its own publisher's
         // chunks, and recovery has to reassemble the same set the live path did or a
         // recovery-fed node diverges from a mirror-fed one. Resolved through
         // actions.source_id, authoritative for auth, exactly like the live head pick.
@@ -184,7 +184,7 @@ class AnchorRecovery {
 
     // ── Per-batch verification ──────────────────────────────────────────────────
 
-    // The author this head's chunk set is scoped to , or null while the
+    // The author this head's chunk set is scoped to, or null while the
     // publisher-scoped flag day is inert for the batch. `network` comes off the anchor
     // row itself, never a process-level default: the parse path rejects an ANCHOR whose
     // NETWORK is not this indexer's ('invalid: NETWORK (not this network)'), so every
@@ -202,19 +202,19 @@ class AnchorRecovery {
         let totalChunks = Number(v1.total_chunks) || 1;
         let b64 = String(v1.archive_b64 || '');
         if(totalChunks > 1){
-            // The SAME query the live path uses, imported rather than hand-copied
-            // (#3075): recovery holds only a doQuery handle, so the shape used to be
+            // The SAME query the live path uses, imported rather than hand-copied:
+            // recovery holds only a doQuery handle, so the shape used to be
             // inlined here with a "keep the two in step" note, and the authorship term
             // is exactly the kind of addition that would have drifted. Rejected
             // 'invalid: ...' rows are excluded so one permissionless junk v2 tx cannot
-            // inflate the count and block the batch forever ('incomplete batch',
-            // finding #2269); 'orphan' rows are KEPT (a chunk that landed before its
+            // inflate the count and block the batch forever ('incomplete
+            // batch'); 'orphan' rows are KEPT (a chunk that landed before its
             // parent head carries legitimate archive bytes) and are exactly why the
             // authorship filter must be in the read path; and only chunks authored by
             // the canonical archive head count at all. Lowest action_index wins per
             // index, deterministically. Mirrors the v1 status join above and
             // rollback.js's valid-chunk self-join; do NOT loosen to unfiltered.
-            // : at/after the publisher-scoped flag day the batch key is
+            // At/after the publisher-scoped flag day the batch key is
             // (match_batch_seq, head author), so THIS head reassembles the chunks of its
             // own publisher and a junk head squatting the seq can no longer filter them
             // out. Gated on the batch's canonical head (earliest v1/v6 row, the one row
@@ -368,7 +368,7 @@ class AnchorRecovery {
     // keys stage 1 answers for. Qualification is _verifyCompleteness's job; this stays an
     // existence guard.
     //
-    // : BOTH stages re-derive at the DECLARED snapshot_block buried by
+    // BOTH stages re-derive at the DECLARED snapshot_block buried by
     // CANONICAL_REORG_BUFFER, never at the declared height itself. The hub that wrote
     // this archive resolved its set through CapabilitySnapshot, which subtracts the
     // buffer from every height it is handed while the archived row keeps the raw label,
@@ -412,7 +412,7 @@ class AnchorRecovery {
     // never treated as a rejection on its own.
     //
     // `atBlock` is the height the probe actually runs at: the archived snapshot_block
-    // buried by the reorg buffer at/above the  flag-day, the declared height
+    // buried by the reorg buffer at/above that flag-day, the declared height
     // below it. It is passed in rather than re-derived here so stage 1 and stage 2
     // can never probe two different heights for the same group.
     async _hasDirectStake(s, atBlock){
@@ -441,7 +441,7 @@ class AnchorRecovery {
     // reaches the threshold. A truncated resolution cannot be trusted complete, so it fails
     // closed (mirrors meetsStakeThreshold + XHUB-TRUNC-2).
     //
-    //  replaces the interim bar (this node's LOCAL coin-config MIN_STAKE, applied by
+    // This replaces an interim bar (this node's LOCAL coin-config MIN_STAKE, applied by
     // db.js when no override is passed) with an AS-OF-BLOCK reconstruction of the two things
     // the hub actually built the archive from:
     //
@@ -467,9 +467,9 @@ class AnchorRecovery {
     //      resolve block, so the archived weight is compared to the weight as of the snapshot.
     //      A forged archive can no longer deflate other sources' weights to shrink S.
     //
-    // Both reconstructions degrade to the pre- behaviour rather than failing closed
-    // when their inputs are absent (a handle with no coin config, a schema with no
-    // capability_slash_debits): a DR tool that refuses to run is the failure mode this item
+    // Both reconstructions degrade to the earlier local-floor behaviour rather than failing
+    // closed when their inputs are absent (a handle with no coin config, a schema with no
+    // capability_slash_debits): a DR tool that refuses to run is the failure mode this
     // exists to remove, and check 1 - resolved ⊆ archived - is unaffected either way.
     async _verifyCompleteness(snaps, network){
         for(let g of this._groupSnaps(snaps)){
@@ -477,7 +477,7 @@ class AnchorRecovery {
             // any other archived group (none today, but future-proof against a new snapshot kind).
             if(!QUORUM_CAPABILITIES.has(g.capability))
                 continue;
-            // : re-resolve at the DECLARED block buried by CANONICAL_REORG_BUFFER,
+            // Re-resolve at the DECLARED block buried by CANONICAL_REORG_BUFFER,
             // the height the hub's CapabilitySnapshot actually resolved this archived set
             // at. At the raw height a source whose stake ACTIVATED inside
             // (declared - 6, declared] appears in the re-resolution but not in the archive,
@@ -485,7 +485,7 @@ class AnchorRecovery {
             // The stake-weighted flag-day keeps keying on the DECLARED block: moving a
             // cutover boundary by the buffer is its own fork.
             let resolveBlock = srb.buriedSnapshotBlock(g.block, network);
-            // The bar the ARCHIVE was built at, reconstructed as of that block .
+            // The bar the ARCHIVE was built at, reconstructed as of that block.
             // null = nothing resolvable (no coin config on this handle), in which case no
             // override is passed and db.js applies its own local floor exactly as before.
             let minStake = this._minStakeAt(g.capability, resolveBlock, network);
@@ -514,7 +514,7 @@ class AnchorRecovery {
         }
     }
 
-    // Stake-weighted half of REC-SUBSET-1, at as-of-block weights . Two checks, in
+    // Stake-weighted half of REC-SUBSET-1, at as-of-block weights. Two checks, in
     // this order because the second is only meaningful on sources the first admitted:
     //
     //   1. every source the re-resolution reports must be in the archive (the original
@@ -524,7 +524,7 @@ class AnchorRecovery {
     //      bar a forged signature set has to clear.
     //
     // Check 2 needs the slash-debit reconstruction; when it is unavailable the check is
-    // skipped and check 1 stands alone, which is exactly the pre- behaviour.
+    // skipped and check 1 stands alone, which is exactly the earlier behaviour.
     //
     // KNOWN RESIDUAL, deliberately not closed here: a source whose weight the re-resolution
     // cannot report AT ALL because a post-snapshot slash took it under the threshold is
@@ -596,7 +596,7 @@ class AnchorRecovery {
     // debit; every other source's resolved weight already IS its as-of-block weight.
     // Degrades to an empty map (with a loud operator warning) when the query cannot run - an
     // older schema without the table, or a bare doQuery handle - because the check it feeds is
-    // an ADDITION: skipping it leaves the pre- completeness check intact, where failing
+    // an ADDITION: skipping it leaves the earlier completeness check intact, where failing
     // closed would refuse an honest recovery outright.
     async _slashRestoresAfter(atBlock){
         let out = new Map();
@@ -622,7 +622,7 @@ class AnchorRecovery {
         } catch(e){
             this.log('recovery: WARNING as-of-block stake-weight reconstruction unavailable (' +
                      ((e && e.message) || e) + '); archived per-source weights go UNCHECKED' +
-                     ' for this batch ');
+                     ' for this batch');
             return out;
         }
         for(let r of (rows || [])){
@@ -634,7 +634,7 @@ class AnchorRecovery {
     }
 
     // The capability MIN_STAKE effective at `atBlock` - the bar the hub that wrote the
-    // archive resolved its qualifying set at . Genesis floor comes from the BTC
+    // archive resolved its qualifying set at. Genesis floor comes from the BTC
     // handle's own coin config, the frozen constant XChainHub asserts its genesis governance
     // value against at boot; null when this handle carries no config, which leaves db.js
     // applying its local floor exactly as it did before.
@@ -674,8 +674,8 @@ class AnchorRecovery {
 
     // Begin a transaction on a DB handle when it supports one. Recovery is also driven
     // by raw doQuery stubs (unit fixtures, and any embedder holding only a query handle),
-    // so a handle without the transaction API degrades to the pre-#3213 autocommit
-    // behavior instead of throwing. Returns whether a transaction is actually open.
+    // so a handle without the transaction API degrades to autocommit behavior instead
+    // of throwing. Returns whether a transaction is actually open.
     async _begin(handle){
         if(!handle || typeof handle.beginTransaction !== 'function') return false;
         await handle.beginTransaction();
@@ -692,7 +692,7 @@ class AnchorRecovery {
         }
     }
 
-    // Rebuild ONE verified batch atomically (#3213). Every write of a batch lands or none
+    // Rebuild ONE verified batch atomically. Every write of a batch lands or none
     // does: before this, a batch that threw part-way (a malformed reward row, a DB error on
     // the third of ten matches) left its earlier rows committed while run() reported the
     // batch FAILED, so the operator's "N/M verified" line understated what the DB actually
@@ -718,8 +718,9 @@ class AnchorRecovery {
     async _rebuild(archive, report, network, anchorTxid = null){
         let rewards = archive.rewards || [];
         // Hoisted ahead of every write: a batch that cannot restore its rewards must fail
-        // before it half-writes its matches, which is the exact partial-batch shape #3213
-        // is about (and the only shape a non-transactional handle can still hit).
+        // before it half-writes its matches, which is the exact partial-batch shape the
+        // per-batch transaction is about (and the only shape a non-transactional handle
+        // can still hit).
         if(rewards.length > 0 && !this.btcDb)
             throw new Error('archive carries ' + rewards.length + ' reward rows but no BTC indexer DB handle was provided (set BTC_INDEXER_DB_NAME); restoring without them would corrupt COLLECT replay');
 
@@ -752,7 +753,7 @@ class AnchorRecovery {
         // capability_snapshots is rebuilt WITHOUT an id, deliberately. The archive
         // cannot carry one (hub ids are hub-local; every hub persists these rows
         // independently), so the table is a NATURAL-KEY mirror on uq_cap_snap and
-        // hub_db_sync strips wire ids + bootstraps it from since_id=0 (#2270).
+        // hub_db_sync strips wire ids + bootstraps it from since_id=0.
         // Local AUTO_INCREMENT numbering here is therefore harmless by design.
         for(let s of (archive.capability_snapshots || [])){
             await this.db.doQuery(
@@ -774,7 +775,7 @@ class AnchorRecovery {
                 // both leg refs, so neither read observes the difference; the row-presence gap is
                 // benign and intentional, not a replay divergence.
                 if(m.status === 'finalized'){
-                    // REVIVE content upgrade (#3208), mirroring the hub's own revive UPDATE
+                    // REVIVE content upgrade, mirroring the hub's own revive UPDATE
                     // (CrossChainDexEngine._insertMatchRow: status/validator_signatures/
                     // finalizing_view/effective_time WHERE status='retracted'). A match is NOT
                     // content-immutable per match_id: when a source-chain reorg retracts a
@@ -871,7 +872,7 @@ class AnchorRecovery {
                 // inflated anchor_<chain> amount that recovery would stage COLLECT-spendable
                 // while a live node credits only the frozen amount -> recovered/live divergence
                 // + over-credit on the COLLECT rail. anchor_archive gets the same pinning at/above
-                // its own ARCHIVE_REWARD flag-day (: derived from the ANCHOR v6 attestation
+                // its own ARCHIVE_REWARD flag-day (derived from the ANCHOR v6 attestation
                 // with the frozen ARCHIVE_REWARD_AMOUNT); below each flag-day the legacy
                 // operator-tunable amount is kept as archived (matches the live push path).
                 let derivedChainReward   = /^anchor_(BTC|LTC|DOGE)$/.test(String(r.reward_type)) &&

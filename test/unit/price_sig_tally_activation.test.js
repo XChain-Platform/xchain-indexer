@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/price_sig_tally_activation.test.js
  *
- * PRICE v0 signature-tally ordering flag-day , predicate-level pins.
+ * PRICE v0 signature-tally ordering flag-day, predicate-level pins.
  *
  * The predicate decides which of two consensus tally rules a PRICE round is
  * judged under, so its edge cases are consensus surface in their own right: a
@@ -28,7 +28,7 @@
 const assert = require('assert');
 const gate   = require('../../src/price_sig_tally_activation.js');
 
-describe('PRICE v0 signature-tally flag-day  @regression', function () {
+describe('PRICE v0 signature-tally flag-day @regression', function () {
 
     describe('activation map', function () {
         it('mainnet is armed to the ratified 963000 BTC anchor, not the shipped 961000 train', function () {

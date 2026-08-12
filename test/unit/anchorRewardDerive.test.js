@@ -11,7 +11,7 @@
  **********************************************************************
  * test/unit/anchorRewardDerive.test.js
  *
- *  Option C: BTC-side anchor/archive reward derivation from the hub-mirrored
+ * Option C: BTC-side anchor/archive reward derivation from the hub-mirrored
  * anchor_reward_attestations rows. Covers XANCPUB re-verification (accept valid, reject
  * forged / insufficient / non-member publisher), the derived reward shape (type/round/
  * amount/block_index=snapshot_block, upsert + winner-reconcile), the failover double-
@@ -63,7 +63,7 @@ function stubDb(validators, pending) {
     };
 }
 
-describe('anchor_reward_derive ( BTC-side derivation) @regression @tier2', function () {
+describe('anchor_reward_derive (BTC-side derivation) @regression @tier2', function () {
     let swqStub;
     beforeEach(function () { swqStub = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false); });
     afterEach(function () { sinon.restore(); });
@@ -120,7 +120,7 @@ describe('anchor_reward_derive ( BTC-side derivation) @regression @tier2', funct
             assert.ok(db.reconcileAnchorRewardWinner.calledOnceWith(7, 'anchor_BTC', 100, null));
         });
 
-        //  / . The reward is EARNED at snapshot_block but MATERIALIZED at the
+        // The reward is EARNED at snapshot_block but MATERIALIZED at the
         // BTC block being processed, and rollback deletes on block_index, so without the second
         // stamp a reorg to any height in (snapshot_block, blockIndex] orphans the block that
         // minted the row yet leaves it spendable, forking the COLLECT rail against a replay.

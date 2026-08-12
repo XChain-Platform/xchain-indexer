@@ -50,12 +50,12 @@
 -- ever produced a nine-field FILE (the SDK dropped unknown positional fields), so
 -- every pre-existing row is genuinely unconditional and NULL is correct.
 --
--- publisher_address defaults to '' rather than being backfilled here. Under the
---  rebase every indexer DB is rebuilt from the base schema and replayed, so
+-- publisher_address defaults to '' rather than being backfilled here. Under a
+-- fleet-wide rebase every indexer DB is rebuilt from the base schema and replayed, so
 -- the column is populated from each FILE's SOURCE during replay and the default
 -- is never observed. A DB that was NOT rebuilt keeps '' on its historical rows,
 -- which collapses them into a single legacy pack per (gate_ticker, key_hash):
--- exactly the pre-PC-29 behaviour, so such a DB degrades to what it already did
+-- exactly the prior behaviour, so such a DB degrades to what it already did
 -- rather than mis-scoping anything. Backfilling it correctly would require
 -- joining every gated FILE back to its action SOURCE, which the replay does for
 -- free and which a live migration should not attempt.

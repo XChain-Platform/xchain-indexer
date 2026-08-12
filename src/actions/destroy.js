@@ -31,9 +31,7 @@
 
 class Destroy {
 
-    // Handle constructing a class instance
     constructor(action){
-        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -48,9 +46,7 @@ class Destroy {
         this.formats[2] = 'VERSION|TICK|AMOUNT|MEMO|TICK|AMOUNT|MEMO';
     }
 
-    // Handle parsing the DESTROY transaction
     async parse(params, data, error){
-        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
@@ -156,25 +152,13 @@ class Destroy {
             // Get information on token
             let tokenInfo = ticks[destroy['TICK']];
 
-            /*****************************************************************
-             * TICK Validations
-             ****************************************************************/
-
             // Validate TICK exists
             if(!error && !tokenInfo)
                 error = 'invalid: TICK (unknown)';
 
-            /*************************************************************
-             * FORMAT Validations
-             ************************************************************/
-
             // Verify AMOUNT format
             if(!error && !this.util.isNull(destroy['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], destroy['AMOUNT']))
                 error = "invalid: AMOUNT (format)";
-
-            /*************************************************************
-             * General Validations
-             ************************************************************/
 
             // Verify SOURCE is not sleeping
             if(!error && await this.indexerDb.isActionAllowed(destroy['SOURCE'], null, destroy['BLOCK_INDEX']) == false)

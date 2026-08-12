@@ -13,7 +13,7 @@
  **********************************************************************/
 
 /*
- * Service-specific Prometheus metrics for xchain-indexer (item 9bee49e8).
+ * Service-specific Prometheus metrics for xchain-indexer.
  *
  * Lives outside src/observability/ on purpose: that directory is vendored
  * byte-identically from xchain-hub and bin/check-observability-parity.js fails

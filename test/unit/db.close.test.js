@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/db.close.test.js
  *
- * : every bin/ harness ends with `if(db.close) await db.close()` and there
+ * every bin/ harness ends with `if(db.close) await db.close()` and there
  * was no such method, so the guard silently did nothing, the pool's idle sockets
  * kept the event loop alive, and each tool hung after printing its results. The
  * damage was not the hang itself but what it did to the numbers: a benchmark run
@@ -44,7 +44,7 @@ function makeDb() {
     return new Database('127.0.0.1', 3306, 'xchain_btc_regtest', 'u', 'p', { config, util });
 }
 
-describe('db.close (: the bin/ harnesses could not exit)', function () {
+describe('db.close (the bin/ harnesses could not exit)', function () {
 
     afterEach(() => sinon.restore());
 

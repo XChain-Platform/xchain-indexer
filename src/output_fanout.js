@@ -17,7 +17,7 @@
  * getDecoderBlockData (db.js) LEFT JOINs transaction_outputs and emits ONE row
  * per stored native-coin output, each row carrying the SAME transaction `data`.
  * The block loop (XChainIndexer.processTransaction) then runs once per row, and
- * createActionIndex dedupes on a per-row tx_vout — so a data-bearing action whose
+ * createActionIndex dedupes on a per-row tx_vout, so a data-bearing action whose
  * transaction also pays a dispenser and/or a native fee-destination output would
  * be executed once per output row, producing duplicate credits/debits for a
  * single on-chain transaction.
@@ -31,7 +31,7 @@
  * activation (protocol_changes.js). Below activation (`enabled === false`) the
  * historical per-row behaviour is preserved UNCHANGED, except that a data-bearing
  * non-COINPAY transaction that fanned out to more than one row is treated as a
- * consensus-critical fault and throws — converting any live or historical
+ * consensus-critical fault and throws, converting any live or historical
  * occurrence of the double-execution bug into a visible, deterministic block halt
  * (the watchdog/rollback path retries the block) instead of a silent doubled
  * ledger effect.
@@ -93,7 +93,7 @@ function collapseOutputFanout(blockTransactions, enabled, logError){
                 logError(msg);
             throw new Error(msg);
         }
-        // Activation active: keep exactly ONE row — the lowest-vout row, chosen
+        // Activation active: keep exactly ONE row, the lowest-vout row, chosen
         // deterministically so every node collapses to the identical row. Every
         // emitted row already carries the full tx_outputs set (built in
         // getDecoderBlockData), so native-coin fee validation is unaffected by

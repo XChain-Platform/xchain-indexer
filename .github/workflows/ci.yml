@@ -12,7 +12,7 @@ on:
 
 jobs:
   ci:
-    uses: XChain-Platform/.github/.github/workflows/ci-reusable.yml@aae44352361242d334234593c39d88be007d2ed3 # pin: XChain-Platform/.github @ master 2026-07-08; bump deliberately 
+    uses: XChain-Platform/.github/.github/workflows/ci-reusable.yml@aae44352361242d334234593c39d88be007d2ed3 # pin: XChain-Platform/.github @ master 2026-07-08; bump deliberately
     # Override the Node version for a repo if ever needed:
     # with:
     #   node-version: "20"
@@ -83,7 +83,7 @@ jobs:
           XCHAIN_SDK_PATH: ${{ github.workspace }}/.xchain-sdk
         run: npm run test:integration:ci
 
-  # Perf regression gate : the scaling/throughput perf scenarios each
+  # Perf regression gate: the scaling/throughput perf scenarios each
   # reset the DB between measurement points, so every sample runs on a young,
   # nearly-empty database and none can see the dominant scale risk here -- the
   # per-block sweeps (getExpiredItems, cross-chain settlement, cooldown) re-scan a
@@ -139,7 +139,7 @@ jobs:
           XCHAIN_DECODER_SQL_PATH: ${{ github.workspace }}/.xchain-decoder/src/sql
         run: npm run test:perf:grown
 
-      # Load-regime coverage . Every other perf scenario drives a
+      # Load-regime coverage. Every other perf scenario drives a
       # BTC-shaped chain: 600-second blocks, with load dialed up by putting more
       # transactions into a block. Two regimes that bite in production look
       # nothing like that and were unmodelled -- DOGE's fast sparse chain (60s
@@ -169,7 +169,7 @@ jobs:
           PERF_FEESPIKE_SENDERS: "200"
         run: npm run test:perf:regimes
 
-  # Cross-repo drift guards (SD-1 / ): this repo vendors the canonical
+  # Cross-repo drift guards (SD-1): this repo vendors the canonical
   # coin registry from xchain-hub, and per-repo CI cannot see sibling repos, so
   # a drifted vendored copy previously shipped green (the byte-identity checks
   # ran only in the monorepo's manual bin/ci-all.sh). This job recreates the
@@ -232,7 +232,7 @@ jobs:
           XCHAIN_INDEXER_PATH: ${{ github.workspace }}/xchain-indexer
         run: node xchain-sdk/bin/check-preflight-drift.js
 
-  # Coverage ratchet : re-run the unit suite under c8 and fail if line or
+  # Coverage ratchet: re-run the unit suite under c8 and fail if line or
   # branch coverage drops below this repo's floor in bin/coverage-thresholds.json
   # (mirrored into the `coverage:check` npm script). Catches silent coverage
   # regression the pass/fail gate cannot see: a change that keeps every test green

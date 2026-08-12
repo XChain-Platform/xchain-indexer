@@ -1,5 +1,5 @@
 -- xchain:migration mode=auto
--- Migration: create the anchor_reward_attestations table (, Option C).
+-- Migration: create the anchor_reward_attestations table (Option C: derive on the BTC side).
 --
 -- WHY
 -- ---

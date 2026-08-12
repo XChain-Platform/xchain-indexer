@@ -59,9 +59,7 @@
 
 class Issue {
 
-    // Handle constructing a class instance
     constructor(action){
-        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -69,7 +67,6 @@ class Issue {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
-        // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|TICK|MAX_SUPPLY|MAX_MINT|DECIMALS|DESCRIPTION|MINT_SUPPLY|TRANSFER|TRANSFER_SUPPLY|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|LOCK_SLEEP|LOCK_CALLBACK|CALLBACK_BLOCK|CALLBACK_TICK|CALLBACK_AMOUNT|ALLOW_LIST|BLOCK_LIST|MINT_ADDRESS_MAX|MINT_START_BLOCK|MINT_STOP_BLOCK|LOCK_MINT|LOCK_MINT_SUPPLY|MEMO';
         this.formats[1] = 'VERSION|TICK|DESCRIPTION|MEMO';
@@ -91,24 +88,21 @@ class Issue {
         this.fieldList['LOCK']   = ['LOCK_MAX_SUPPLY', 'LOCK_MINT', 'LOCK_MINT_SUPPLY', 'LOCK_MAX_MINT', 'LOCK_DESCRIPTION', 'LOCK_SLEEP', 'LOCK_CALLBACK'];
     }
 
-    // Handle parsing the ISSUE transaction
     async parse(params, data, error){
-        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
-        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
         // Resolve compacted ^<id> TRANSFER / TRANSFER_SUPPLY references back to their
         // canonical addresses before the clone-for-storage and validation below, so the
         // SDK's default ^<id> wire form validates and is stored/credited identically to
-        // the full address. At/after the  flag-day an unresolvable reference is a
-        // hard reject here; below it the value is left as-is and rejected by the
-        // isCryptoAddress checks (which the IS_GENESIS path skips, so those two fields
-        // had no rejection at all on that path). See resolveAddressRefChecked.
+        // the full address. At/after the address-ref resolution flag-day an unresolvable
+        // reference is a hard reject here; below it the value is left as-is and rejected
+        // by the isCryptoAddress checks (which the IS_GENESIS path skips, so those two
+        // fields had no rejection at all on that path). See resolveAddressRefChecked.
         if(!error){
             let transferRef = await this.indexerDb.resolveAddressRefChecked(data['TRANSFER'], data['BLOCK_INDEX']);
             data['TRANSFER'] = transferRef.value;
@@ -120,10 +114,8 @@ class Issue {
                 error = 'invalid: TRANSFER_SUPPLY (unresolvable ^id)';
         }
 
-        // Clone the raw data for storage in issues table
         let issue = Object.assign({}, data);
 
-        // Convert NUMBER fields from string value to number value so comparisons are mathematical 
         if(!error)
             data = this.util.setNumberFormats(data);
 
@@ -148,9 +140,7 @@ class Issue {
         // Create the fees object 
         let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
 
-        /*****************************************************************
-         * TICK Validations
-         ****************************************************************/
+        // TICK Validations
 
         // Verify TICK is not null/empty
         if(!error && this.util.isNull(data['TICK']))
@@ -250,11 +240,9 @@ class Issue {
         if(data['CALLBACK_TICK'])
             cbInfo = await this.indexerDb.getTokenInfo(data['CALLBACK_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
-        /*****************************************************************
-         * FORMAT Validations
-         ****************************************************************/
+        // FORMAT Validations
 
-        // Set decimal precision for TICK and CALLBACK_TICK 
+        // Set decimal precision for TICK and CALLBACK_TICK
         let tick_decimals     = (!this.util.isNull(tokenInfo) && !this.util.isNull(tokenInfo['DECIMALS'])) ? tokenInfo['DECIMALS'] : data['DECIMALS'],
             callback_decimals = (!this.util.isNull(cbInfo) && !this.util.isNull(cbInfo['DECIMALS'])) ? cbInfo['DECIMALS'] : 0;
 
@@ -273,9 +261,7 @@ class Issue {
                 error = "invalid: " + name + " (format)";
         };
 
-        /*****************************************************************
-         * General Validations
-         ****************************************************************/
+        // General Validations
 
         // Verify SOURCE is not sleeping. GAS is never put to sleep and there are no lists at
         // genesis, so isActionAllowed is always true during bootstrap; skip the read.
@@ -296,7 +282,7 @@ class Issue {
 
         // Verify LOCK fields cannot be changed once enabled/locked.
         //
-        // Gate: LOCK_NULL_PRIOR_UNSET  makes isValidLock read an absent/NULL prior
+        // Gate: LOCK_NULL_PRIOR_UNSET makes isValidLock read an absent/NULL prior
         // as unset instead of falling through to "locked". getTokenInfo skips NULL columns
         // when it replays the `issues` rows, so a token whose genesis ISSUE omitted the lock
         // fields arrived here with an undefined prior and every later LOCK was refused with
@@ -367,21 +353,19 @@ class Issue {
         if(!error && !this.util.isNull(data['MINT_SUPPLY']) && tokenInfo && tokenInfo['LOCK_MINT_SUPPLY']==1)
             error = 'invalid: MINT_SUPPLY (locked)';
 
-        // : resolve the uncapped-supply exemption ONCE for the three cross-checks
-        // below that compare another field against MAX_SUPPLY. MAX_SUPPLY is stored as 0
-        // when the ISSUE omits it (createToken / db.js) and 0 is the documented UNCAPPED
-        // sentinel, so on such a token there is no ceiling for MINT_SUPPLY or
-        // MINT_ADDRESS_MAX to exceed and the comparisons reject an uncapped token's own
-        // genesis parameters. At/after the UNCAPPED_MAX_SUPPLY_ZERO flag-day they are
-        // skipped when no positive cap is declared, matching the bcgt(MAX_SUPPLY,0)
-        // pre-condition the MAX_SUPPLY min/max and MAX_SUPPLY<SUPPLY guards above already
-        // carry, and matching mint.js's ceiling. Resolved once, not per check: the gate must
-        // not be able to differ between two comparisons inside one action. Below the
-        // flag-day every verdict is unchanged, so a from-genesis replay stays byte-identical.
-        // LOCK_MAX_SUPPLY is deliberately NOT covered: locking a cap that does not exist is
-        // still refused by the unchanged guard above.
-        // Resolved only on the still-valid path with no cap declared, so an already-rejected
-        // action never spends a decoder-DB read on an activation it cannot use.
+        // Resolve the uncapped-supply exemption ONCE for the three cross-checks below that
+        // compare another field against MAX_SUPPLY. MAX_SUPPLY is stored as 0 when the ISSUE
+        // omits it (createToken / db.js) and 0 is the documented UNCAPPED sentinel, so on such
+        // a token there is no ceiling for MINT_SUPPLY or MINT_ADDRESS_MAX to exceed, and the
+        // comparisons would otherwise reject an uncapped token's own genesis parameters.
+        // At/after the UNCAPPED_MAX_SUPPLY_ZERO flag-day the checks are skipped when no
+        // positive cap is declared (matching the bcgt(MAX_SUPPLY,0) guards above and mint.js's
+        // ceiling); below it every verdict is unchanged, so a from-genesis replay stays
+        // byte-identical. Resolved once, not per check, since the gate must not differ between
+        // comparisons inside one action, and only on the still-valid path, so a rejected action
+        // never spends a decoder-DB read it cannot use. LOCK_MAX_SUPPLY is deliberately not
+        // covered: locking a cap that does not exist is still refused by the unchanged guard
+        // above.
         let uncappedSupply = !error && !this.util.bcgt(data['MAX_SUPPLY'], 0) &&
             await this.actions.protocolChanges.isEnabled('UNCAPPED_MAX_SUPPLY_ZERO', data['BLOCK_INDEX']);
 
@@ -397,8 +381,9 @@ class Issue {
         // cap, not minting. Enforce the cap against SUPPLY + MINT_SUPPLY, mirroring mint.js's
         // cumulative invariant. getTokenSupply reflects earlier same-block mints/issues; this
         // action's own MINT_SUPPLY is credited later, so it is not yet counted. Gated (tightens
-        // validity): flips fleet-wide at one coordinated block; pre-launch chains activate at genesis.
-        // (: the cumulative cap is likewise inapplicable to an uncapped token.)
+        // validity): flips fleet-wide at one coordinated block; pre-launch chains activate at
+        // genesis. The cumulative cap is likewise inapplicable to an uncapped token, for the
+        // same reason as the checks above.
         if(!error && !uncappedSupply && !this.util.isNull(data['MINT_SUPPLY']) && this.util.bcgt(data['MINT_SUPPLY'], 0)
            && await this.actions.protocolChanges.isEnabled('ISSUE_MINT_SUPPLY_CUMULATIVE_CAP', data['BLOCK_INDEX'])){
             let currentSupply = await this.indexerDb.getTokenSupply(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
@@ -407,7 +392,7 @@ class Issue {
                 error = 'invalid: MINT_SUPPLY exceeds MAX_SUPPLY';
         }
 
-        // Verify MINT_ADDRESS_MAX is less than MAX_SUPPLY (: not on an uncapped token)
+        // Verify MINT_ADDRESS_MAX is less than MAX_SUPPLY (skipped on an uncapped token, see uncappedSupply above)
         if(!error && !uncappedSupply && !this.util.isNull(data['MINT_ADDRESS_MAX']) && this.util.bcgt(data['MINT_ADDRESS_MAX'], 0) && this.util.bcgt(data['MINT_ADDRESS_MAX'], data['MAX_SUPPLY']))
             error = 'invalid: MINT_ADDRESS_MAX > MAX_SUPPLY';
 
@@ -610,27 +595,20 @@ class Issue {
         if(!error && (!fees['PAYMENT_MODE'] || fees['PAYMENT_MODE'] === 2))
             balances = this.util.debitBalances(balances, fees['TICK_ID'], fees['AMOUNT']);
 
-        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = issue['STATUS'] = status;
 
-        // Print status message 
         console.log("\t ISSUE : " + data['TICK'] + ' : ' + data['STATUS']);
 
-        // Create record in issues table
         await this.indexerDb.createIssue(issue);
 
-        // Store the SOURCE and TICK in addresses list
         this.util.addAddressTicker(data['SOURCE'], data['TICK']);
 
-        // Store the TRANSFER_SUPPLY and TICK in addresses list
         if(!this.util.isNull(data['TRANSFER_SUPPLY']))
             this.util.addAddressTicker(data['TRANSFER_SUPPLY'], data['TICK']);
 
-        // If this was a valid transaction, then create the token record, and perform any additional actions
         if(status=='valid'){
 
-            // Array of credits and debits
             let credits = [],
                 debits  = [];
 
@@ -644,7 +622,7 @@ class Issue {
             // Support token ownership transfers
             data['OWNER']  = (!this.util.isNull(data['TRANSFER'])) ? data['TRANSFER'] : data['SOURCE'];
 
-            // Create/Update record in tokens table
+            // Create/update record in tokens table
             await this.indexerDb.createToken(data);
 
             // Programmable policy layer: append the token controller bind/unbind event (format 6).
@@ -676,29 +654,23 @@ class Issue {
                 }
             }
 
-            // Credit MINT_SUPPLY to source address
             if(data['MINT_SUPPLY'])
                 credits.push([data['TICK'], data['MINT_SUPPLY'], data['SOURCE']]);
 
-            // Transfer MINT_SUPPLY to TRANSFER_SUPPLY address
             if(data['MINT_SUPPLY'] && data['TRANSFER_SUPPLY']){
                 debits.push([data['TICK'],  data['MINT_SUPPLY'], data['SOURCE']]);
                 credits.push([data['TICK'], data['MINT_SUPPLY'], data['TRANSFER_SUPPLY']]);
             }
 
-            // Process any transaction ledger changes (credits / debits)
             await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
-            // Get a list of tickers & addresses
             let tickers   = this.util.getTickersList(),
                 addresses = Object.keys(this.util.getAddressesList());
 
-            // Update address balances and token supply
             await this.indexerDb.updateBalances(addresses);
             await this.indexerDb.updateTokens(tickers);
         }
 
-        // Create action mappings
         await this.mapper.createMappings(data);
 
     }

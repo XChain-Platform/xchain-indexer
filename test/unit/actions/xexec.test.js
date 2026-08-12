@@ -267,7 +267,7 @@ describe('Xexec (XEXEC) @regression @tier3', function () {
         assert.strictEqual(status, 'error');
     });
 
-    // . XEXEC is injected by the end-of-block cross-chain pass, so it runs on
+    // XEXEC is injected by the end-of-block cross-chain pass, so it runs on
     // blocks that carry no transaction at all: exactly the blocks priceReadPredicate
     // lets skip the hub price-mirror barrier. The injected EXECUTE then reads the
     // mirror (native-fee sizing, oracle.getPrice), db._assertPriceBarrierNotSkipped
@@ -287,7 +287,7 @@ describe('Xexec (XEXEC) @regression @tier3', function () {
         for (const [label, err] of [
             ['a VM host fault',                     infra('EXECUTOR_UNAVAILABLE')],
             ['a DB driver fault (deadlock 1213)',   infra(null, 1213)],
-            ['the  price-barrier deferral',   infra('PRICE_BARRIER_DEFERRED')],
+            ['a price-barrier deferral',   infra('PRICE_BARRIER_DEFERRED')],
         ]) {
             it(label + ' PROPAGATES and records no execution', async function () {
                 sinon.stub(ed25519, 'verify').returns(true);

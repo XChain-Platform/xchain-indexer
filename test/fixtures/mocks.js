@@ -55,7 +55,7 @@ function createMockDb() {
         // keeps existing handler-validation outcomes. Override per-test to exercise
         // ^<id> resolution.
         resolveAddressRef: sinon.stub().callsFake(async (v) => v),
-        //  gated companion: same identity resolution, verdict OFF by default so
+        // gated companion: same identity resolution, verdict OFF by default so
         // existing handler expectations (reject via the field's own isCryptoAddress
         // check) are unchanged. Override per-test to exercise the strict flag-day.
         resolveAddressRefChecked: sinon.stub().callsFake(async (v) => ({ value: v, rejected: false })),
@@ -119,7 +119,7 @@ function createMockDb() {
         getAddressBalances: sinon.stub().resolves({}),
         // VM gateway ledger snapshot (getBalance / getTokenInfo backing)
         buildVmBalancesAndTokenInfo: sinon.stub().resolves({ balances: {}, tokenInfo: {} }),
-        // VM attestation-response snapshot (xchain.attestation.getResponse backing, ).
+        // VM attestation-response snapshot (xchain.attestation.getResponse backing).
         // Default empty; suites asserting getResponse behaviour override per-test.
         getAttestationDataForVM: sinon.stub().resolves({ responses: {} }),
         // Chunked DEPLOY (v4 carrier storage + DEPLOY v2/v3 assembly)
@@ -138,13 +138,13 @@ function createMockDb() {
         isValidList: sinon.stub().resolves(false),
         getListType: sinon.stub().resolves(false),
         getList: sinon.stub().resolves([]),
-        //  edit-chain resolution: armed on regtest, so the mock answers true
+        // edit-chain resolution: armed on regtest, so the mock answers true
         // and getListRootIndex is identity unless a test overrides it.
         isListEditResolutionActive: sinon.stub().returns(true),
         getListRootIndex: sinon.stub().callsFake(async (action_index) => action_index),
         getListHeadIndex: sinon.stub().callsFake(async (action_index) => action_index),
 
-        // BET parimutuel betting ( P4)
+        // BET parimutuel betting (P4)
         getBetFeedInfo: sinon.stub().resolves(false),
         getOpenBetsByFeed: sinon.stub().resolves([]),
         countOpenBetsByFeed: sinon.stub().resolves(0),

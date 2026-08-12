@@ -959,7 +959,7 @@ describe('Issue handler @regression @tier1', function () {
         });
     });
 
-    // : the wallet's COLLECTIBLE and MEME wizard templates promise a supply that can
+    // the wallet's COLLECTIBLE and MEME wizard templates promise a supply that can
     // never grow. ISSUE-1's cumulative cap keeps that promise, but it is GATED - at genesis on
     // testnet/regtest, on a flag day on mainnet - so a token that leans on it is only fixed
     // where the flag has already flipped. LOCK_MINT_SUPPLY is the token's own version of the
@@ -967,7 +967,7 @@ describe('Issue handler @regression @tier1', function () {
     // that ordering with the gate deliberately OFF: the refusal has to survive a chain where
     // the protocol change has not activated, because that is the whole reason the templates
     // write the flag.
-    describe(': LOCK_MINT_SUPPLY refuses re-ISSUE inflation without the flag day @regression @security', function () {
+    describe('LOCK_MINT_SUPPLY refuses re-ISSUE inflation without the flag day @regression @security', function () {
 
         const source = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 

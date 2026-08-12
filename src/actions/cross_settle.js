@@ -79,8 +79,7 @@ class Cross_Settle {
 
         let coin = this.config['COIN'];
 
-        // ── Network scope ─────────────────────────────────────────────────────
-        // A match is bound to the network it was matched + signed on (also in the
+        // Network scope: a match is bound to the network it was matched + signed on (also in the
         // canonical below). Refuse any match not for THIS indexer's network so a
         // regtest/testnet-signed match can never settle on a mainnet indexer even if
         // its row is mirrored in. getEffectiveUnsettledMatches already filters on
@@ -90,7 +89,7 @@ class Cross_Settle {
             return;
         }
 
-        // ── Verify the cross_chain quorum signatures over the canonical match ──
+        // Verify the cross_chain quorum signatures over the canonical match.
         // At/above STAKE_WEIGHTED_QUORUM (keyed on the BTC snapshot_block + network)
         // the bar is summed signer STAKE > 2/3 of S, deduped by staking source;
         // below it, the legacy 2f+1 signer COUNT. Both verify against the SAME locked
@@ -148,8 +147,7 @@ class Cross_Settle {
             return;
         }
 
-        // ── Identify this chain's leg ────────────────────────────────────────
-        // a = canonical-lower. On a's chain release a's escrow to b's payout (b_payout_addr);
+        // Identify this chain's leg: a = canonical-lower. On a's chain release a's escrow to b's payout (b_payout_addr);
         // on b's chain release b's escrow to a's payout (a_payout_addr).
         let isA = (m.a_chain === coin);
         if(!isA && m.b_chain !== coin) return;                  // not our match
@@ -186,7 +184,7 @@ class Cross_Settle {
             return;
         }
 
-        // ── Settle: mint an internal action and release escrow → counterparty ──
+        // Settle: mint an internal action and release escrow to the counterparty.
         let action = { ACTION: 'CROSS_SETTLE', BLOCK_INDEX: data['BLOCK_INDEX'] };
         data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
         data['STATUS'] = 'valid';
@@ -291,7 +289,7 @@ class Cross_Settle {
             return;
         }
 
-        // Escrow-authoritative clamp ( / XDEX-COMMIT-TOCTOU): the hub's
+        // Escrow-authoritative clamp (XDEX-COMMIT-TOCTOU): the hub's
         // committed-fill reservation updates only on match finalization, so two
         // matches finalized concurrently for the same offer can carry fills whose
         // sum exceeds the order's escrow. The match row is quorum-signed but the

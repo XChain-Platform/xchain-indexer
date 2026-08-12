@@ -15,7 +15,7 @@
  **********************************************************************
  * test/unit/lock-null-prior-unset.test.js
  *
- * : the LOCK action could not lock anything.
+ * the LOCK action could not lock anything.
  *
  * getTokenInfo rebuilds token state by replaying the `issues` rows and SKIPS any
  * column that is NULL, so a token whose genesis ISSUE simply omitted the lock
@@ -31,8 +31,8 @@
  * NULL).
  *
  * The fix treats an unset prior as unlocked, which CHANGES WHICH ACTIONS ARE VALID.
- * It was originally built behind a LOCK_NULL_PRIOR_UNSET flag-day on the v1 
- * three-key train (Key A / shared mainnet block TIME 1796083200). The 
+ * It was originally built behind a LOCK_NULL_PRIOR_UNSET flag-day on the v1
+ * three-key train (Key A / shared mainnet block TIME 1796083200). The
  * REDESIGN (spec §0) retired that activation surface: the platform has not launched,
  * all derived state is operator-owned, and the batch ships ungated behind one
  * mandatory fleet-wide wipe-and-replay rebase instead. So the rule is now
@@ -85,7 +85,7 @@ function tokenInfoWithUnsetLocks(overrides = {}) {
 }
 
 
-describe(' LOCK_NULL_PRIOR_UNSET @regression @tier1', function () {
+describe('LOCK_NULL_PRIOR_UNSET @regression @tier1', function () {
 
     /*****************************************************************
      * 1. Root cause: NULL lock columns replay to an ABSENT key
@@ -260,7 +260,7 @@ describe(' LOCK_NULL_PRIOR_UNSET @regression @tier1', function () {
 
         afterEach(function () { sinon.restore(); });
 
-        // The registration is UNGATED after the  redesign, so the gate-off branch is
+        // The registration is UNGATED after the redesign, so the gate-off branch is
         // no longer reachable in production. It is still pinned here on purpose: it is the
         // pre-batch verdict the §3.1 snapshot diff compares replayed state against, so it
         // has to stay reproducible to adjudicate any LOCK whose validity flips.
@@ -330,16 +330,16 @@ describe(' LOCK_NULL_PRIOR_UNSET @regression @tier1', function () {
             assert.strictEqual(makeChanges().isDefined('LOCK_NULL_PRIOR_UNSET'), true);
         });
 
-        // Was: "it arms on the  train anchor (2026-12-01)". The  redesign
+        // Was: "it arms on the train anchor (2026-12-01)". The redesign
         // (spec §0) replaced the v1 three-key activation surface with a mandatory
         // fleet-wide wipe-and-replay rebase, so this rule ships ungated and the Key A
         // anchor is retired. Reintroducing a flag day here is a divergence window,
         // because a node replaying before the date and one replaying after would
         // compute different validity for the same historical LOCK.
-        it('it ships UNGATED on every network ( redesign, spec §0)', function () {
+        it('it ships UNGATED on every network (redesign, spec §0)', function () {
             const change = makeChanges().changes['LOCK_NULL_PRIOR_UNSET'];
             assert.strictEqual(change.mainnet_time, 0,
-                'the  batch carries no activation dates; mainnet_time must be 0');
+                'the redesign batch carries no activation dates; mainnet_time must be 0');
             assert.strictEqual(ProtocolChanges.XC637_TRAIN_TIME, undefined,
                 'the v1 Key A anchor must be retired, not left dangling for a gate to re-adopt');
         });

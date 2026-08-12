@@ -31,17 +31,14 @@
 
 class List {
 
-    // Handle constructing a class instance
     constructor(action){
-        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
         this.indexerDb = action.indexerDb;
         this.util      = action.util;
         this.mapper    = action.mapper;
-        
-        // Define list of known FORMATS
+
         this.formats = {};
         this.formats[0] = 'VERSION|TYPE|ITEM';
         this.formats[1] = 'VERSION|EDIT|LIST_ACTION_INDEX|ITEM';
@@ -53,30 +50,23 @@ class List {
         this.editTypes = [1,2];
     }
 
-    // Handle parsing the LIST transaction
     async parse(params, data, error){
-        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
-        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
-        // Convert NUMBER fields from string value to number value so comparisons are mathematical 
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        // Define some placeholders
         let type    = null;
         let edit    = {};
         let list    = [];
         let invalid = {};
 
-        /*****************************************************************
-         * FORMAT Validations
-         ****************************************************************/
+        // FORMAT Validations
 
         // Validate TYPE
         if(!error && format==0 && !this.listTypes.includes(Number(data['TYPE'])))
@@ -99,13 +89,13 @@ class List {
         // Lookup list information
         if(!error && format==1){
             data['TYPE'] = type;
-            // : normalize LIST_ACTION_INDEX to the CREATE that roots the edit
-            // chain, so every edit of a list hangs off the same parent and the
-            // "newest valid edit" lookup in getList is exact. Without it an edit
-            // naming an earlier EDIT's index would start a side chain that
-            // getList(createIndex) never sees, and the change would be silently
-            // lost. Flag-day gated with the resolution change itself: below the
-            // height the wire value is stored verbatim, as it always was.
+            // Normalize LIST_ACTION_INDEX to the CREATE that roots the edit chain,
+            // so every edit of a list hangs off the same parent and the "newest
+            // valid edit" lookup in getList is exact. Without it an edit naming an
+            // earlier EDIT's index would start a side chain that getList(createIndex)
+            // never sees, and the change would be silently lost. Flag-day gated with
+            // the resolution change itself: below the height the wire value is
+            // stored verbatim, as it always was.
             if(this.indexerDb.isListEditResolutionActive(data['BLOCK_INDEX']))
                 data['LIST_ACTION_INDEX'] = await this.indexerDb.getListRootIndex(data['LIST_ACTION_INDEX']);
             // Reads the CURRENT membership (the head of the edit chain), so edits
@@ -114,15 +104,12 @@ class List {
             list = await this.indexerDb.getList(data['LIST_ACTION_INDEX'], data['BLOCK_INDEX']);
         }
 
-        /*****************************************************************
-         * General Validations
-         ****************************************************************/
+        // General Validations
 
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
-        // Handle building out some data arrays using list items
         if(!error){
 
             // Build out array of edit items and status for each
@@ -171,17 +158,13 @@ class List {
 
         }
 
-        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
-        // Print status message 
         console.log("\t LIST : " + data['STATUS']);
 
-        // Create record in lists table
         await this.indexerDb.createList(data);
 
-        // Store the SOURCE in addresses list
         this.util.addAddressTicker(data['SOURCE']);
 
         // If this was a valid transaction, then create the list and edit records
@@ -200,7 +183,6 @@ class List {
                 await this.indexerDb.createListItemInvalid(data, item, invalid[item]);
         }
 
-        // Create action mappings
         await this.mapper.createMappings(data);
 
     }

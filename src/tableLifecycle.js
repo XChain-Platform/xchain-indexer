@@ -31,8 +31,8 @@
  *                     test/unit/hash-coverage.test.js bind the declarations
  *                     to the actual hashing code.
  *
- * A fourth artifact, the advisory TABLE_CONTENT_PARITY_CHECK coverage set
- * , is DERIVED from those three rather than declared per entry: see
+ * A fourth artifact, the advisory TABLE_CONTENT_PARITY_CHECK coverage set,
+ * is DERIVED from those three rather than declared per entry: see
  * the CONTENT_PARITY_* block below the registry.
  *
  * Adding a table: create src/sql/<table>.sql, then add ONE entry here
@@ -148,7 +148,7 @@ const TABLES = [
     // LIST create + edits. Every row is owned by the action that wrote it and is
     // NEVER mutated in place: a valid edit writes a COMPLETE new membership
     // snapshot under its OWN action_index, and getList resolves a list reference
-    // to the newest valid action in its edit chain (,
+    // to the newest valid action in its edit chain (see
     // list_edit_resolution_activation.js). That is deliberately NOT the BET-latch
     // shape - remapping an edit's item rows onto the parent's action_index would
     // mutate rows written in an earlier block and would then need a block stamp, a
@@ -189,7 +189,7 @@ const TABLES = [
     { table: 'sweeps', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'tokens', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', alsoRecomputed: true,
       hashed: { classes: ['state_hash'],
-                note: 'The in-place supply mutation on a surviving token row (carried forward by the updated_rows tokens-supply class) is covered by the state_hash token_supply class: (tick, supply) per ledger-touched tick, flag-day gated per chain (TOKEN_SUPPLY_STATE_HASH_ACTIVATION, armed 2026-07-07 at tip + margin). Supply is also recomputed and sanity-checked against credits/debits/escrows each block; new rows are otherwise action-derived. This closed the F-1 supply-forward gap.' } },
+                note: 'The in-place supply mutation on a surviving token row (carried forward by the updated_rows tokens-supply class) is covered by the state_hash token_supply class: (tick, supply) per ledger-touched tick, flag-day gated per chain (TOKEN_SUPPLY_STATE_HASH_ACTIVATION, armed 2026-07-07 at tip + margin). Supply is also recomputed and sanity-checked against credits/debits/escrows each block; new rows are otherwise action-derived. This closes a supply-forward gap that would otherwise exist.' } },
     { table: 'stakes', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror',
       hashed: { classes: ['state_hash', 'state_commitment'],
                 note: 'state_hash covers the in-place deactivation_block stamps and capability SLASH amount cuts; the light-client state commitment covers active BTC stake weights.' } },
@@ -239,7 +239,7 @@ const TABLES = [
       hashed: { classes: ['state_hash'],
                 note: 'The in-place finalization flip on a surviving polls row (updated_rows POLL_FINALIZE channel) is covered by the state_hash poll_finalize class, flag-day gated per chain (POLL_FINALIZE_STATE_HASH_ACTIVATION, armed 2026-07-07 at tip + margin; fleet must deploy before the earliest height). New rows are otherwise action-derived.' } },
 
-    // ── BET parimutuel betting ( P4) ─────────────────────────────
+    // ── BET parimutuel betting ─────────────────────────────
     { table: 'bet_feeds', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror',
       hashed: { classes: ['state_hash'],
                 note: 'Three in-place flips on surviving rows, each block-stamped: the closed latch (closed_block, written by the end-of-block pass with NO causing action) and the terminal flip (terminal_block: resolved/resolved_void/cancelled/expired). Covered by the state_hash bet_feed_status class (BET_STATUS_STATE_HASH_ACTIVATION, per-chain flag-day) and the updated_rows BET channel; rollback.js resets both stamps explicitly (closed/open two-step). New rows are otherwise action-derived.' } },
@@ -256,7 +256,7 @@ const TABLES = [
     // format 1 cancel / format 3 resolve), the order_cancels / dispenser_cancels
     // pattern. One row per action, written whatever the parse status, so a
     // chain-rejected cancel or resolve persists a readable status instead of
-    // vanishing . Pure reporting: no validation or settlement path reads
+    // vanishing. Pure reporting: no validation or settlement path reads
     // them, so they are action-derived for hashing like the other BET projections.
     { table: 'bet_cancels',       owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'bet_resolves',      owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
@@ -274,7 +274,7 @@ const TABLES = [
     { table: 'validator_rewards', owner: 'indexer', replication: 'stream:block', rollback: 'block', replicaRollback: 'mirror',
       hashed: { classes: [],
                 note: 'Oracle/attest rewards derive deterministically during block processing; anchor_* rounds arrive via hub push but are quorum-verified before persistence. Reward credits they mint are ledger-hashed.' },
-      note: 'TWO block-scoped rollback keys, not one . block_index is the EARN block; derive_block_index is the MATERIALIZATION block, non-NULL only for the  BTC-side anchor/archive derivation, which earns at the checkpoint SNAPSHOT_BLOCK but writes the row while processing a later BTC block. rollback() deletes on BOTH, or a reorg into the gap between them leaves a COLLECT-spendable reward a from-genesis replay has not derived yet.' },
+      note: 'TWO block-scoped rollback keys, not one. block_index is the EARN block; derive_block_index is the MATERIALIZATION block, non-NULL only for the BTC-side anchor/archive derivation, which earns at the checkpoint SNAPSHOT_BLOCK but writes the row while processing a later BTC block. rollback() deletes on BOTH, or a reorg into the gap between them leaves a COLLECT-spendable reward a from-genesis replay has not derived yet.' },
     { table: 'contract_state', owner: 'indexer', replication: 'stream:block', rollback: 'block', replicaRollback: 'mirror',
       hashed: { classes: ['contracts'], note: 'Latest value per state key written in the block.' } },
     { table: 'escrow_leaf_journal', owner: 'indexer', replication: 'stream:block', rollback: 'block', replicaRollback: 'mirror',
@@ -285,12 +285,12 @@ const TABLES = [
       hashed: DERIVED,
       note: 'Per-row slash debit log (pre-slash prev_amount per in-place stake reduction). Rollback reads it to restore slashed amounts BEFORE the generic block delete drops the orphaned rows; replicas must replicate it for the same restore.' },
     { table: 'capability_slash_events', owner: 'indexer', replication: 'stream:block', rollback: 'block', replicaRollback: 'mirror',
-      hashed: DERIVED, note: 'WI-2 bump 2 capability-stake twin of slash_events.' },
+      hashed: DERIVED, note: 'Capability-stake twin of slash_events.' },
     { table: 'capability_slash_debits', owner: 'indexer', replication: 'stream:block', rollback: 'block', replicaRollback: 'mirror',
-      hashed: DERIVED, note: 'WI-2 bump 2 capability-stake twin of contract_slash_debits, with the same reorg-restore requirement.' },
+      hashed: DERIVED, note: 'Capability-stake twin of contract_slash_debits, with the same reorg-restore requirement.' },
     { table: 'anchor_reward_reconcile_log', owner: 'indexer', replication: 'stream:block', rollback: 'block', replicaRollback: 'mirror',
       hashed: DERIVED,
-      note: 'Pre-image log of validator_rewards loser rows an anchor reconcile DELETEd (RB-ANCHOR). Same reorg-restore requirement as the slash-debit logs: rollback re-INSERTs the deleted losers whose earn-block survives the reorg BEFORE the generic block delete drops the log rows; replicas must replicate it for the same restore. The pre-image carries reward_derive_block_index as well as reward_block_index , so a loser MATERIALIZED inside the orphaned range is left deleted rather than restored as an orphan the replay never mints.' },
+      note: 'Pre-image log of validator_rewards loser rows an anchor reconcile DELETEd. Same reorg-restore requirement as the slash-debit logs: rollback re-INSERTs the deleted losers whose earn-block survives the reorg BEFORE the generic block delete drops the log rows; replicas must replicate it for the same restore. The pre-image carries reward_derive_block_index as well as reward_block_index, so a loser MATERIALIZED inside the orphaned range is left deleted rather than restored as an orphan the replay never mints.' },
     { table: 'state_tree_roots', owner: 'indexer', replication: 'follower-derived', rollback: 'block', replicaRollback: 'mirror',
       hashed: { classes: ['state_commitment'], note: 'The per-block light-client SMT roots themselves (SPV spec sec.4).' },
       note: 'Not streamed and excluded from snapshots (OPERATOR_LOCAL): each follower recomputes the roots apply-time (VERIFY_STATE_COMMITMENT) and halts on divergence vs source. Block-scoped rollback on both sides drops orphaned-fork roots so forward threading re-seeds from the fork point.' },
@@ -312,7 +312,7 @@ const TABLES = [
       note: 'Derived aggregate of credits/debits. No action_index column, so it cannot stream per block; both sides rebuild it (source updateBalances, replica rebuildBalances). Only the SOURCE additionally orphan-sweeps rows whose address/tick id was rolled out of the index (zombie rows would otherwise trip sanityCheck); the replica needs no mirrored sweep because rebuildBalances recomputes wholesale.' },
     { table: 'markets', owner: 'indexer', replication: 'snapshot', rollback: 'recomputed', replicaRollback: 'special',
       hashed: { classes: [], note: 'Derived OHLCV display aggregate keyed by tick pair; no consensus reader.' },
-      note: 'Source recomputes affected pairs on rollback; the thin replica cannot recompute OHLCV, so it refreshes values via the snapshot upsert. It mirrors BOTH source deletes: the orphaned-tick sweep (id-reclaim protection) and the pair-scoped IDX-2 delete of a market whose pair kept no surviving orders/order_matches, which the upsert-only snapshot could never remove. The IDX-2 mirror is skipped on a truncated replica, whose partial orders history cannot distinguish a never-traded pair from one traded below its join floor.' },
+      note: 'Source recomputes affected pairs on rollback; the thin replica cannot recompute OHLCV, so it refreshes values via the snapshot upsert. It mirrors BOTH source deletes: the orphaned-tick sweep (id-reclaim protection) and the pair-scoped delete of a market whose pair kept no surviving orders/order_matches, which the upsert-only snapshot could never remove. That second delete is skipped on a truncated replica, whose partial orders history cannot distinguish a never-traded pair from one traded below its join floor.' },
     { table: 'attest_validator_stats', owner: 'indexer', replication: 'snapshot', rollback: 'recomputed', replicaRollback: 'special',
       hashed: { classes: [], note: 'Display accountability rollup. PHASE-4 GATE: before quality_score drives live responsible-set selection or slashing, this needs hash coverage and a replica strategy better than drop-and-resnapshot.' },
       note: 'Running per-validator counters with no block/action key. Source drops rows last touched in the orphaned range and rebuilds them from surviving signatures + expired requests; the thin replica (no capability machinery) drops and waits for the next full snapshot.' },
@@ -335,13 +335,13 @@ const TABLES = [
       note: 'Append-only operational audit log; it records the REORG event itself, so rolling it back would erase the evidence of the rollback.' },
     { table: 'recovery_pending_rewards', owner: 'indexer', replication: 'local', rollback: 'exempt', replicaRollback: 'local',
       hashed: { classes: [], note: 'Recovery-local staging scratch, not chain truth and not consensus-hashed.' },
-      note: 'F1a id-determinism staging: archived validator rewards keyed by raw address string, drained into validator_rewards by the createAddress apply hook. rollback() RE-ARMs it (applied=0 reset) so re-materialization happens on the canonical chain, but that is a parity convenience, not an index-keyed delete.' },
+      note: 'Id-determinism staging: archived validator rewards keyed by raw address string, drained into validator_rewards by the createAddress apply hook. rollback() RE-ARMs it (applied=0 reset) so re-materialization happens on the canonical chain, but that is a parity convenience, not an index-keyed delete.' },
     { table: 'cross_chain_call_rejections', owner: 'indexer', replication: 'local', rollback: 'exempt', replicaRollback: 'local',
       hashed: { classes: [], note: 'Node-local XEXEC refusal diagnostics; signature sets are per-hub so nodes mirroring different hubs legitimately differ. Never a consensus reader.' },
       note: 'Observability-only upsert log of refused dispatch injections (XDISP-1 quorum starvation). Never gates retry; the row is deleted when the call eventually executes, and post-reorg retries repopulate it, so rolling it back would only erase the starvation evidence.' },
     { table: 'push_generations', owner: 'indexer', replication: 'snapshot', rollback: 'exempt', replicaRollback: 'local',
       hashed: { classes: [], note: 'Hub-replication metadata stamped onto hub rows only; not chain truth.' },
-      note: 'Source-chain reorg fence counter (item 5308): one monotonic generation per coin, bumped at the START of every rollback so re-published rows outrank orphaned ones. Rolling it back is exactly the bug it fixes.' },
+      note: 'Source-chain reorg fence counter: one monotonic generation per coin, bumped at the START of every rollback so re-published rows outrank orphaned ones. Rolling it back is exactly the bug it fixes.' },
     { table: 'cross_chain_matches', owner: 'indexer', replication: 'hub-mirror', rollback: 'exempt', replicaRollback: 'special',
       hashed: { classes: ['quorum'], note: 'Hub-federation co-signed match rows.' },
       note: 'Hub-mirrored two-sided DEX state, not produced by local block processing. Both sides locally pre-delete the orphaned range (CROSS-CHAIN-MIRROR-REORG-DELETE markers, byte-identical predicates) to close the hub-blip window; hub retraction is the idempotent backstop. Exempt = not a generic-list delete.' },
@@ -359,7 +359,7 @@ const TABLES = [
       note: 'Hub-mirrored, never retracted: a reorged height is superseded by a re-broadcast row with a higher checkpoint_seq. The on-chain ANCHOR record (anchor_actions) rolls back normally as a dataTable.' },
     { table: 'anchor_reward_attestations', owner: 'indexer', replication: 'hub-mirror', rollback: 'exempt', replicaRollback: 'exempt',
       hashed: { classes: [], note: 'Not hashed: transport for the XANCPUB quorum. The BTC indexer re-verifies the sigs and derives validator_rewards, which itself is not in the state-hash preimage (COLLECT-mediated only).' },
-      note: ' hub-mirrored, append-only, never retracted: written only after the XANCPUB quorum resolves for a FINALIZED checkpoint, so there is no un-finalize to retract. The derived validator_rewards row (block_index = snapshot_block) rolls back normally as a dataTable and re-derives idempotently on replay; a DOGE reorg cannot un-quorum an already-attested publish.' },
+      note: 'Hub-mirrored, append-only, never retracted: written only after the XANCPUB quorum resolves for a FINALIZED checkpoint, so there is no un-finalize to retract. The derived validator_rewards row (block_index = snapshot_block) rolls back normally as a dataTable and re-derives idempotently on replay; a DOGE reorg cannot un-quorum an already-attested publish.' },
     { table: 'state_tree_nodes', owner: 'indexer', replication: 'snapshot', rollback: 'exempt', replicaRollback: 'exempt',
       hashed: { classes: ['state_commitment'], note: 'Content-addressed SMT node store; nodes are keyed by their own hash.' },
       note: 'Copy-on-write: a node surviving a reorg is harmless (re-apply INSERT-IGNOREs the same hashes) and the surviving fork-point root in state_tree_roots anchors the correct tree. Orphans await a mark-and-sweep pruner; per-block deletion is impossible (no block_index, nodes shared across blocks).' },
@@ -408,7 +408,7 @@ const TABLES = [
 // rollback-coverage guard derives its assertion set from
 // ORPHAN_SWEEPS.filter(s => s.replica) and requires a matching
 // DELETE ... NOT IN (SELECT id FROM ...) in ClientRollback, so flipping the
-// flag without shipping (or removing) the replica sweep fails CI (#2273).
+// flag without shipping (or removing) the replica sweep fails CI.
 // balances stays replica:false on both rows: the replica recomputes it
 // wholesale (rebuildBalances), so no mirrored sweep exists there; only the
 // source orphan-sweeps balances.
@@ -420,7 +420,7 @@ const ORPHAN_SWEEPS = [
     { table: 'pubkeys',  index: 'index_addresses', replica: true  },
 ];
 
-// ── Advisory content-parity coverage  ──────────────────────────
+// ── Advisory content-parity coverage ──────────────────────────
 //
 // What was missing. The three consensus block hashes commit the ledger /
 // actions / contract projections, the light-client STATE_SUBTREES commit
@@ -428,8 +428,7 @@ const ORPHAN_SWEEPS = [
 // the id->address map, and the /status per-table row counts commit cardinality
 // and nothing else. The large majority of the per-block replicated tables were
 // therefore covered by NO content commitment at all: an equal-COUNT content
-// substitution in one of them passed every check a follower runs (review
-// xchain-platform #4486).
+// substitution in one of them passed every check a follower runs.
 //
 // What closes it. TABLE_CONTENT_PARITY_CHECK, an advisory, never-halting
 // per-table content checksum over a bounded block window: xchain-sync computes
@@ -560,7 +559,7 @@ function hashClassTables(cls){
     return tablesWhere(t => t.hashed && t.hashed.classes.indexOf(cls) !== -1);
 }
 
-// ── Content-parity derivation helpers  ─────────────────────────
+// ── Content-parity derivation helpers ─────────────────────────
 
 // The operator carve-out reason for a table on a dbType, or null when the table
 // is not carved out there. dbType matters: the DECODER dispensers table is the

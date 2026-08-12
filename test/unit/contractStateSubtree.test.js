@@ -11,7 +11,7 @@
  **********************************************************************
  *
  * contract_state_root derivation conformance (SPV sub-tree spec §3 Stage A;
- * design in claude/specs/spv-state-subtree-extension.md).
+ * design in).
  *
  * Four jobs, in descending order of what they would cost if they failed:
  *
@@ -132,7 +132,7 @@ class FakeDb {
             if(sql.indexOf('INSERT') === 0 || sql.indexOf('INSERT') > -1 && sql.indexOf('SELECT') === -1){
                 // Consume args in (hash, left, right) TRIPLES, not just the first
                 // one: DbNodeStore.putMany batches a whole path into one multi-row
-                // INSERT IGNORE . Reading only args[0..2] would store row
+                // INSERT IGNORE. Reading only args[0..2] would store row
                 // one and silently drop the rest, and a fake that drops writes does
                 // not fail loudly - _descend reads a missing node as an EMPTY
                 // subtree, so the next block emits a truncated root that still
@@ -379,9 +379,9 @@ describe('contract_state_root: key derivation @regression', function(){
         assert.strictEqual(asBigInt, asNumber);
     });
 
-    it('a 0x00-bearing state_key still throws, and that is the known  surface', function(){
+    it('a 0x00-bearing state_key still throws, and that is the known surface', function(){
         // The encoding route that would have made this total was closed by operator
-        // decision ( repins the VM NUL rejection instead), so this throw is
+        // decision (repins the VM NUL rejection instead), so this throw is
         // load-bearing documentation: Stage A may not arm until those gates are
         // ARMED, because the arming block's full build reads the whole table.
         assert.throws(() => M.contractStateKey(CHAIN, NETWORK, 7, 'a\u0000b'), /0x00/);

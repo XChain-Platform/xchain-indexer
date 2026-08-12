@@ -12,17 +12,17 @@
  *
  **********************************************************************
  *
- * Deployed-process armed-map fingerprint .
+ * Deployed-process armed-map fingerprint.
  *
  * Services install from release tarballs with no .git and stale package
  * versions, so nothing a process reports says WHICH consensus-gate build it
  * actually runs; before a flag-day height the operator must confirm every
  * deployed process carries the same armed map or a straggler forks/halts at
- * the boundary (this exact mode halted LTC:testnet at 4805000 on 2026-07-10).
- * This module hashes the byte content of the consensus-gate source files in
- * the RUNNING build - the same byte-identity standard the twin-parity CI
- * gates use - and the health endpoint exposes it, so a fleet sweep can
- * compare one string per process instead of docker-cp'ing files around
+ * the boundary (this exact mode has previously halted a testnet chain at a
+ * flag-day height). This module hashes the byte content of the consensus-gate
+ * source files in the RUNNING build, the same byte-identity standard the
+ * twin-parity CI gates use, and the health endpoint exposes it, so a fleet
+ * sweep can compare one string per process instead of copying files around
  * (bin/check-flagday-deploy.sh remains the deep/manual variant).
  *
  * Exposes per-file sha256 hashes too: gate files that are byte-identical

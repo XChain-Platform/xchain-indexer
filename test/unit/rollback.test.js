@@ -136,14 +136,14 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(restoreIdx >= 0 && deleteIdx >= 0 && restoreIdx < deleteIdx, 'reconcile restore must run before the validator_rewards delete');
     });
 
-    // ───  / : materialization-block scoping ───────────
+    // ─── / materialization-block scoping ───────────
     //
-    // An  derived anchor reward is EARNED at the checkpoint's snapshot_block S but
+    // An derived anchor reward is EARNED at the checkpoint's snapshot_block S but
     // MATERIALIZED while the BTC indexer processes a later block B. Scoping the reorg delete
     // on block_index alone leaves the row alive for any reorg height in (S, B], i.e. a
     // COLLECT-spendable credit a from-genesis replay to that height has not derived yet.
 
-    it('deletes validator_rewards by derive_block_index too, so a reward materialized in the orphaned range goes ', async function () {
+    it('deletes validator_rewards by derive_block_index too, so a reward materialized in the orphaned range goes', async function () {
         indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]); // firstActionIndex
         indexer.indexerDb.doQuery.resolves([]);
         await rollback.rollback(100);
@@ -159,7 +159,7 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(delIdx < indexIdx, 'the derive-block delete must precede the index-lookup deletes');
     });
 
-    it('does NOT restore a reconcile loser that was itself materialized inside the orphaned range ', async function () {
+    it('does NOT restore a reconcile loser that was itself materialized inside the orphaned range', async function () {
         indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]); // firstActionIndex
         indexer.indexerDb.doQuery.resolves([]);
         await rollback.rollback(100);
@@ -931,7 +931,7 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(internCall.calledBefore(anchorUpdate), "createStatus('unverified') must run before the UPDATE");
     });
 
-    // ─── : the anchor invalid_archive reset covers BOTH archive-head versions (v1 + v6) ─────
+    // ─── the anchor invalid_archive reset covers BOTH archive-head versions (v1 + v6) ─────
     it('widens the anchor invalid_archive reset predicate to the archive-head version set IN (1, 6)', async function () {
         const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../../src/stateHash.js');
         assert.deepStrictEqual(ARCHIVE_HEAD_VERSIONS, [1, 6], 'shared archive-head set must be [1, 6]');

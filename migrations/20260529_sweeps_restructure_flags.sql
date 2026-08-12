@@ -19,16 +19,12 @@
 -- open ORDERs, SWAPs and DISPENSERs separately rather than a single combined
 -- escrow flag). See src/sql/sweeps.sql for the canonical definition.
 --
--- The indexer reconciles its own schema on startup (src/db.js verifyTables)
--- and will auto-add any column declared in src/sql/sweeps.sql but missing from
--- the live table. However it never DROPs the now-unused `escrows` column, and
--- the reconciliation does not run on replica/validator databases that are
--- bootstrapped from a SQL snapshot rather than created by the indexer. Run this
--- once on any database created before the restructure to bring it fully in line.
---
--- Column types/nullability mirror src/sql/sweeps.sql exactly (nullable
--- BIGINT UNSIGNED, no DEFAULT). IF EXISTS / IF NOT EXISTS make it safe to run
--- on a database that has already been partially reconciled.
+-- The indexer's startup schema reconciliation (src/db.js verifyTables) auto-adds
+-- missing columns but never DROPs the now-unused `escrows` column, and does not run
+-- on replica/validator databases bootstrapped from a SQL snapshot. Run this once on
+-- any database created before the restructure. Column types/nullability mirror
+-- src/sql/sweeps.sql exactly; IF EXISTS / IF NOT EXISTS make it safe to re-run on a
+-- partially-reconciled database.
 
 ALTER TABLE sweeps
   ADD COLUMN IF NOT EXISTS orders     BIGINT UNSIGNED,

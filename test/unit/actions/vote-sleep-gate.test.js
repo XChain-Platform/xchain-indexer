@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/actions/vote-sleep-gate.test.js
  *
- *  (VOTE-SLEEP-1): VOTE respects the self-sleep gate. All three
+ * (VOTE-SLEEP-1): VOTE respects the self-sleep gate. All three
  * user-broadcast versions (v0 create, v1 ballot, v3 delegate) must reject a
  * sleeping SOURCE at/after the VOTE_RESPECTS_SLEEP flag-day and preserve the
  * legacy (permissive) acceptance below it; v2 finalize is system-synthesized
@@ -36,7 +36,7 @@ const Vote = require('../../../src/actions/vote.js');
 const SOURCE_ADDR   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const DELEGATE_ADDR = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
 
-describe('VOTE self-sleep gate + DELEGATE_TO validation  @regression @tier1', function () {
+describe('VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1', function () {
     let indexer, actionsCtx, handler;
 
     beforeEach(function () {

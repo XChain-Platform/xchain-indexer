@@ -56,7 +56,7 @@ class HubPushQueue {
         // How long a terminal `failed` row survives before the drain sweeps it, and
         // how often that sweep runs. A retired row is out of the poller's reach but
         // still in the table, so without the sweep a long hub outage grows an
-        // operational table with no ceiling (item 3462). The window is wide enough
+        // operational table with no ceiling. The window is wide enough
         // that the failed count getStats publishes still describes recent reality.
         // Set HUB_PUSH_FAILED_RETENTION_SECONDS=0 to keep terminal rows forever.
         let retentionEnv = parseInt(process.env.HUB_PUSH_FAILED_RETENTION_SECONDS);
@@ -71,7 +71,7 @@ class HubPushQueue {
         // pause() await an in-flight drain instead of returning while it is still mid-batch.
         this._drainDone = null;
         // Set by rollback.js around its post-commit retraction block so a deferred drain cannot
-        // re-issue a stale open-ended retraction against the just-rolled-back range (item 5297).
+        // re-issue a stale open-ended retraction against the just-rolled-back range.
         // Independent of `draining` (which only prevents overlapping drains).
         this.paused   = false;
     }
@@ -135,9 +135,9 @@ class HubPushQueue {
             // no lifecycle: the throttle below is what keeps it off every 30s tick.
             await this._pruneFailed();
             // The due-time predicate is pushed into SQL (db.js getPendingHubPushes) so
-            // parked-in-backoff rows no longer occupy the LIMIT batch slots (review
-            // finding 01178748: head-of-line blocking). Pass the SAME backoff params
-            // used below by _isDue, which stays as a cheap belt-and-braces re-check.
+            // parked-in-backoff rows no longer occupy the LIMIT batch slots (they used to
+            // cause head-of-line blocking). Pass the SAME backoff params used below by
+            // _isDue, which stays as a cheap belt-and-braces re-check.
             let rows = await this.indexerDb.getPendingHubPushes(this.batchSize, {
                 baseBackoffMs: this.baseBackoffMs,
                 maxBackoffMs:  this.maxBackoffMs
@@ -181,7 +181,7 @@ class HubPushQueue {
     // Return aggregate queue stats for the health endpoint. Runs a single
     // pooled query so it is safe to call concurrently with drain(). Returns
     // null when the hub is unconfigured (queue never populated).
-    // pendingOldestAgeSec rides the same grouped scan (item 4280). Now that oracle_price
+    // pendingOldestAgeSec rides the same grouped scan. Now that oracle_price
     // and the retractions retry without a cap, a stalled rail no longer shows up as a
     // climbing `failed` count; it shows up as a pending backlog that AGES, and without
     // this field that is invisible. Computed server-side so no host/DB clock skew folds
@@ -227,9 +227,9 @@ class HubPushQueue {
                 // Reorg retraction parked by rollback.js when the live RPC failed.
                 // pushpricereorg is idempotent over a replayed range. A deferred drain bounds the
                 // delete to the CLOSED range [action_index, last_action_index] so a row re-published
-                // at A' inside the original open-ended range is not wiped (item 5296). Old queued
-                // rows (no last_action_index) fall back to open-ended via undefined. retraction_generation
-                // (item 5308) fences the delete to push_generation <= it; absent on old queued rows.
+                // at A' inside the original open-ended range is not wiped. Old queued rows (no
+                // last_action_index) fall back to open-ended via undefined. retraction_generation
+                // fences the delete to push_generation <= it; absent on old queued rows.
                 await this.hubClient.retractPriceRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
             } else if(row.push_type === 'xcall_retraction'){
                 // Reorg XCALL relay retraction parked by rollback.js when the live RPC
@@ -258,7 +258,7 @@ class HubPushQueue {
             // parked invisibly in a terminal row. Retractions are idempotent and generation-fenced,
             // so retrying forever at the max backoff is safe; keep them 'pending' indefinitely.
             //
-            // An `oracle_price` row carries the same property and joins them (item 4280). It is a
+            // An `oracle_price` row carries the same property and joins them. It is a
             // user-submitted PRICE v1 action keyed by (source_address, source_chain, action_index)
             // that no later block re-emits, so actions/price.js states plainly that a lost one is
             // "never re-derivable" and builds this outbox to guarantee it is not lost. The
@@ -269,7 +269,7 @@ class HubPushQueue {
             // re-derivable, so it stays disposable.
             //
             // Retrying forever is only bounded because HubClient resolves TERMINAL hub rejections
-            // rather than throwing them (item 4279): a payload the hub can never accept leaves the
+            // rather than throwing them: a payload the hub can never accept leaves the
             // queue on the delivered path, so nothing immortal accumulates here.
             let isDurable = typeof row.push_type === 'string' &&
                 (row.push_type.endsWith('_retraction') || row.push_type === 'oracle_price');

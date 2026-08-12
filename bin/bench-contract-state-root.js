@@ -11,8 +11,7 @@
  *
  **********************************************************************
  *
- * Arming-block cost for contract_state_root (SPV sub-tree spec §3 Stage A item 6,
- *  stage A3).
+ * Arming-block cost for contract_state_root (SPV sub-tree spec §3 Stage A item 6).
  *
  * WHAT IS BEING MEASURED AND WHY IT MATTERS. The first block at an armed height
  * runs buildFullContractStateRoot over the WHOLE live contract-state set, on the

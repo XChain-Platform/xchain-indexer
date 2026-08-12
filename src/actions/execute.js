@@ -34,7 +34,7 @@ const ProviderRegistry = require('../attestation/providerRegistry.js');
 // (this.providerDeadlineWindows) from the CONFIGURED registry. A module-scoped
 // snapshot cannot see config.ATTESTATION.PROVIDERS, so the VM enforced DEFAULTS
 // while attest.js validated against the overlay, letting the VM accept a request
-// the indexer then rejects ().
+// the indexer then rejects.
 
 // Gas ceiling for a top-level EXECUTE. Must match the gasCeiling the VM is
 // constructed with in actions.js. (Previously a function-local const in
@@ -63,7 +63,7 @@ const { rethrowIfInfraFault } = require('./faultGuard.js');
 const { SYNTH_EXEC_TX_HASH } = require('./execContext.js');
 
 // Amount-bearing fields of every emittable action, mapping each amount param to the param
-// that names the tick it is denominated in (item 5346). processEmission normalizes each to
+// that names the tick it is denominated in. processEmission normalizes each to
 // that tick's decimals before dispatch, so a contract that computes an over-precise amount
 // (e.g. an AMM's 64-digit bignum payout) emits a tick-precise amount that passes
 // isValidAmountFormat and matches what the ledger stores. ISSUE declares the new tick's
@@ -91,9 +91,7 @@ const EMISSION_AMOUNT_FIELDS = {
 
 class Execute {
 
-    // Handle constructing a class instance
     constructor(action){
-        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -123,10 +121,9 @@ class Execute {
         this.formats[0] = 'VERSION|CONTRACT_ACTION_INDEX|METHOD|PARAMS...';
     }
 
-    // Handle parsing the EXECUTE transaction
     async parse(params, data, error){
 
-        //  host-side assert: post-SYNTH_EXEC_TX_HASH every injected/emitted
+        // Host-side assert: post-SYNTH_EXEC_TX_HASH every injected/emitted
         // execution context MUST carry a TX_HASH (real or synthesized via
         // actions/execContext.js). A hashless context reaching the VM silently
         // strands anything the contract emits (the VM derives a request_id, gas is
@@ -158,10 +155,6 @@ class Execute {
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        /*****************************************************************
-         * Contract Validations
-         ****************************************************************/
-
         // Verify CONTRACT_ACTION_INDEX is provided
         if(!error && this.util.isNull(data['CONTRACT_ACTION_INDEX']))
             error = 'invalid: CONTRACT_ACTION_INDEX (required)';
@@ -175,7 +168,7 @@ class Execute {
         // request_id preimage (xchain-vm/gateway.js) while the host re-hashes the raw EMITTER
         // string (attest.js), so a non-canonical index makes the two disagree and the host
         // rejects an ATTEST the VM already accepted. Below the flag-day the legacy /^\d+$/ is
-        // preserved so historical blocks replay byte-identically. .
+        // preserved so historical blocks replay byte-identically.
         if(!error){
             let idxRaw    = String(data['CONTRACT_ACTION_INDEX']);
             let canonical = await this.actions.protocolChanges.isEnabled('CONTRACT_INDEX_CANONICAL', data['BLOCK_INDEX']);
@@ -205,13 +198,9 @@ class Execute {
                 error = 'invalid: contract (not active)';
         }
 
-        /*****************************************************************
-         * Gas Fee Calculation
-         ****************************************************************/
-
         let schedule = this.config['GAS_SCHEDULE'];
         // Base execution gas (actual VM gas will be metered during execution), priced through
-        // util.vmGasCost, the one arithmetic the static quote also uses ().
+        // util.vmGasCost, the one arithmetic the static quote also uses.
         let gasCost = this.util.vmGasCost(schedule, 'EXECUTE', 0);
         let fee = this.util.bcmul(gasCost, this.config['GAS_PRICE'], 8);
 
@@ -255,10 +244,6 @@ class Execute {
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
-
-        /*****************************************************************
-         * VM Execution
-         ****************************************************************/
 
         let gasUsed = gasCost;
         let emittedCount = 0;
@@ -306,11 +291,11 @@ class Execute {
             // Load read-only data for gateway (price data lives in local hub DB when configured)
             let oracleData = await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(data['BLOCK_INDEX'], data['BLOCK_TIME'], parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800);
             let crossChainData = await this.indexerDb.getCrossChainDataForVM(data['BLOCK_INDEX']);
-            // : expose each poll's electorate TICK in the VM snapshot at/after the flag-day.
+            // Expose each poll's electorate TICK in the VM snapshot at/after the flag-day.
             let pollTickVisible = await this.actions.protocolChanges.isEnabled('VOTE_POLL_TICK_VISIBLE', data['BLOCK_INDEX']);
             let pollData       = await this.indexerDb.getPollResultsForVM(data['BLOCK_INDEX'], pollTickVisible);
 
-            // : attestation-response snapshot backing xchain.attestation.getResponse().
+            // Attestation-response snapshot backing xchain.attestation.getResponse().
             // Gated on the VM_ATTESTATION_GETRESPONSE flag-day: below activation the gateway
             // sees attestationData:null (getResponse returns null, the pre-reader behaviour),
             // so a heterogeneous fleet never forks on the first getResponse-reading contract.
@@ -395,7 +380,7 @@ class Execute {
                 oracleData:        oracleData,
                 crossChainData:    crossChainData,
                 pollData:          pollData,
-                attestationData:   attestationData, // : null pre-flag; populated at/after VM_ATTESTATION_GETRESPONSE
+                attestationData:   attestationData, // null pre-flag; populated at/after VM_ATTESTATION_GETRESPONSE
                 contractStakeData: contractStakeData,
                 providerDeadlines: this.providerDeadlineWindows
             });
@@ -665,7 +650,7 @@ class Execute {
         let contractState = await this.indexerDb.getContractState(contractIndex, hostData['BLOCK_INDEX']);
         let oracleData = await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(hostData['BLOCK_INDEX'], hostData['BLOCK_TIME'], parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800);
         let crossChainData = await this.indexerDb.getCrossChainDataForVM(hostData['BLOCK_INDEX']);
-        // : expose each poll's electorate TICK in the VM snapshot at/after the flag-day.
+        // Expose each poll's electorate TICK in the VM snapshot at/after the flag-day.
         let pollTickVisible = await this.actions.protocolChanges.isEnabled('VOTE_POLL_TICK_VISIBLE', hostData['BLOCK_INDEX']);
         let pollData       = await this.indexerDb.getPollResultsForVM(hostData['BLOCK_INDEX'], pollTickVisible);
         let contractStakeData = await this.indexerDb.getContractStakeDataForVM(contractIndex, hostData['BLOCK_INDEX']);
@@ -726,7 +711,7 @@ class Execute {
                 // native action; it has no attestation-request surface (the gateway also
                 // disables attestation.request under isGuard), so it never reads responses.
                 // Keep attestationData:null here to avoid widening the guard's consensus
-                // read surface .
+                // read surface.
                 attestationData:   null,
                 contractStakeData: contractStakeData,
                 providerDeadlines: this.providerDeadlineWindows
@@ -1007,7 +992,7 @@ class Execute {
         let contractAddress = 'C:' + this.config['CHAIN'] + ':' + executionData['CONTRACT_ACTION_INDEX'];
 
         // Normalize emitted amounts to their tick's decimals BEFORE building params and
-        // dispatching (item 5346). Contracts compute with 64-digit bignum precision, so an
+        // dispatching. Contracts compute with 64-digit bignum precision, so an
         // emitted amount can carry more fractional digits than the tick; left unnormalized it
         // would be rejected by isValidAmountFormat (reverting e.g. every AMM swap) or stored
         // unrounded while the ledger rounds it (supply desync). This applies the SAME
@@ -1025,7 +1010,7 @@ class Execute {
         // (delegate) has no emission param mapping, so buildActionParams would hand
         // _parseDelegate a mis-mapped v0 layout. The VM gateway already rejects both
         // at emit time; re-check host-side as defense in depth against an older
-        // bundled VM, matching the guard-emission checks above ( / VM-EMIT-1).
+        // bundled VM, matching the guard-emission checks above (VM-EMIT-1).
         if(action === 'VOTE' && Number(params.version) > 1)
             throw new Error('emitted VOTE version ' + params.version + ' is not emittable (only v0 create / v1 ballot)');
         let emissionFormat = (action === 'VOTE') ? (Number(params.version) || 0) : 0;
@@ -1196,7 +1181,7 @@ class Execute {
                 // silently unconditional while the wire format says otherwise. The arity guard
                 // in test/unit/emission-params-arity.test.js is what caught this.
                 //
-                //  Part B added COMPRESSION as the tenth, and it is PINNED EMPTY here,
+                // A later change added COMPRESSION as the tenth field, and it is PINNED EMPTY here,
                 // not passed through from params. COMPRESSION describes rawData payload bytes,
                 // and an emitted action has no rawData: the VM emission path carries an action
                 // string only. Letting a contract assert COMPRESSION=1 over a payload that does
@@ -1253,8 +1238,8 @@ class Execute {
         }
     }
 
-    // Normalize every amount-bearing field of an emitted action to its tick's decimals
-    // (item 5346), using the SAME normalization the ledger applies at write time
+    // Normalize every amount-bearing field of an emitted action to its tick's decimals,
+    // using the SAME normalization the ledger applies at write time
     // (createLedgerChangeRecord -> util.bcadd(amount, 0, decimals)). This makes a contract's
     // over-precise computed amount tick-precise before it reaches the action handler, so it
     // passes isValidAmountFormat and the stored action amount matches the ledger row. Mutates

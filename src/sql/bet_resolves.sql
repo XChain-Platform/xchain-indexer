@@ -13,7 +13,7 @@
 --********************************************************************
 
 -- Typed row for BET format 3 (resolve feed), the sibling of bet_cancels and the same
---  reason: the resolve leg is stored for EVERY resolve action whatever its parse
+-- reason: the resolve leg is stored for EVERY resolve action whatever its parse
 -- status, so a chain-REJECTED resolve (wrong oracle, pre-deadline, out-of-range
 -- OUTCOME, refund window already expired) persists a readable status instead of
 -- vanishing. `outcome` is the winning outcome the oracle CLAIMED; on an invalid row it

@@ -10,7 +10,7 @@
  *
  **********************************************************************
  *
- * PRICE v0 signature-tally ordering flag-day .
+ * PRICE v0 signature-tally ordering flag-day.
  *
  * WHAT CHANGES. The PRICE v0 tally walks the round's signature list, keeps at
  * most one signature per pubkey, and counts the survivors toward quorum. Below
@@ -26,12 +26,13 @@
  * rejected on chain. Anyone who can see a round before it is broadcast can mint
  * that list; the sigs are public. Every other tally site in the platform
  * (nodeproof, xcall, xexec, cross_settle, anchor, recovery, hub_db_sync, and
- * their hub twins) is verify-then-mark already; PRICE was the last pair, found
- * by the  Pkg 13 twin-parity audit 2026-07-27.
+ * their hub twins) is verify-then-mark already; PRICE was the last one found
+ * still using the old ordering, by a twin-parity audit across tally sites on
+ * 2026-07-27.
  *
- * WHY IT NEEDS A GATE AT ALL, when the Pkg 13 sites shipped ungated. Those sites
- * were provably dormant on mainnet (empty capability sets, no history, or a
- * flag-day still in the future), so a from-genesis reindex could not observe the
+ * WHY IT NEEDS A GATE AT ALL, when the other sites shipped this fix ungated.
+ * Those sites were provably dormant on mainnet (empty capability sets, no
+ * history, or a flag-day still in the future), so a from-genesis reindex could not observe the
  * change. PRICE is the opposite: genesis-active on mainnet with a NON-EMPTY
  * price-capability validator set and live rounds already on chain. Changing the
  * tally without a gate would change which historical PRICE actions tally quorate
@@ -84,14 +85,14 @@
 // BTC_BLOCK_HEIGHT, NOT the landing chain's local height, so the hub and the BTC,
 // LTC and DOGE indexers all flip on the same anchor.
 //
-// mainnet is ARMED to 963000, the one BTC-height boundary the whole 
-// cohort now shares (RETRACTION_SIGNING, ARCHIVE_REWARD, ATTEST_RELAY and the
-// hub's GOV_SNAPSHOT), so operators reason about one boundary rather than five.
-// That cohort was RE-PINNED 2026-08-12 by off 969500: 969500 was derived
-// alongside a TIME anchor that has since been repinned twice and now sits at
-// 1786060800 (2026-08-07), which left the height half ~8 weeks behind the time
-// half of the same ratified flag-day set. 963000 is the  pre-freeze train
-// boundary already armed for BTC:mainnet in stateHash.js,
+// mainnet is ARMED to 963000, the one BTC-height boundary a whole family of
+// cross-chain-verdict gates now shares (retraction signing, archive reward,
+// attest relay and the hub's governance snapshot), so operators reason about
+// one boundary rather than five. That cohort was RE-PINNED 2026-08-12 off an
+// earlier 969500 pin: 969500 was derived alongside a TIME anchor that has since
+// been repinned twice and now sits at 1786060800 (2026-08-07), which left the
+// height half ~8 weeks behind the time half of the same ratified flag-day set.
+// 963000 is the pre-freeze train boundary already armed for BTC:mainnet in stateHash.js,
 // caret_ref_strict_activation.js and list_edit_resolution_activation.js (tip
 // 959,853 on 2026-07-27 at ~144 blocks/day + 21 days), so this reuses a ratified
 // boundary rather than minting a new one. Deliberately NOT the nearer 961000
@@ -103,7 +104,7 @@
 // STAKE_WEIGHTED_QUORUM_ACTIVATION and ATTEST_ADMISSION_ACTIVATION, which are
 // also verdict-changing): the test venues run the corrected tally from block 0.
 const PRICE_SIG_TALLY_ACTIVATION = {
-    mainnet: 963000,      // ARMED , RE-PINNED 2026-08-12  off 969500 onto the  train boundary shared with RETRACTION_SIGNING; deploy ALL indexers + hubs before this height
+    mainnet: 963000,      // ARMED, RE-PINNED 2026-08-12 off 969500 onto the shared pre-freeze train boundary; deploy ALL indexers + hubs before this height
     testnet: 0,
     regtest: 0,
 };

@@ -8,25 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- AIRDROP recipient membership is set-backed instead of two O(n^2) array scans on the synchronous per-block path ().
-- FIAT dispenser settlement batches its historical oracle-price lookups instead of one query per row in a serial await loop ().
-- Dispenser close and expire refunds are gated on a terminal-status predicate that fails open on unknown statuses, so escrow cannot be refunded twice ().
-- Standalone indexes for the bet cancel and resolve tables ship as a new dated migration, since restating them inside the applied one would break every operator migrate run ().
-- A constants header no longer describes three governance params as live-polled when a hub outage silently freezes them ().
-- `CORS_ORIGIN` now accepts a comma-separated allowlist matched per-origin, instead of echoing a multi-value header that no browser accepts .
-- Corrected the protocol-constants oracle-federation header, which claimed the mirrored constants were ungated while the hub-side mirror guard covers this copy (, ).
-- PRICE v0, ATTEST v1 and NODEPROOF validation resolve signer capability in one batched query instead of a DB round-trip per signer ().
-- A hub seq or watermark regression now triggers config re-apply instead of being masked by Math.max, unblocking recovery after a hub restart ().
-- NODEPROOF verifier-signing builds its canonical PASS list with the pinned byte comparator rather than a bare Array.sort ().
-- Stake-weighted quorum rejects a validator entry with a missing or non-numeric weight instead of lowering the quorum denominator ().
-- The migration runner accepts a targeted rollout and carries the decoder fail-closed schema-contract assertions ().
-- SLASH resolves ATTEST relay-leg equivocation across both canonical XATTEST families ().
+- AIRDROP recipient membership is set-backed instead of two O(n^2) array scans on the synchronous per-block path.
+- FIAT dispenser settlement batches its historical oracle-price lookups instead of one query per row in a serial await loop.
+- Dispenser close and expire refunds are gated on a terminal-status predicate that fails open on unknown statuses, so escrow cannot be refunded twice.
+- Standalone indexes for the bet cancel and resolve tables ship as a new dated migration instead of being folded into the already-applied one.
+- A constants header no longer describes three governance params as live-polled when a hub outage silently freezes them.
+- `CORS_ORIGIN` now accepts a comma-separated allowlist matched per-origin, instead of echoing a multi-value header that no browser accepts.
+- Corrected the protocol-constants oracle-federation header, which claimed the mirrored constants were ungated while the hub-side mirror guard covers this copy.
+- PRICE v0, ATTEST v1 and NODEPROOF validation resolve signer capability in one batched query instead of a DB round-trip per signer.
+- A hub seq or watermark regression now triggers config re-apply instead of being masked by Math.max, unblocking recovery after a hub restart.
+- NODEPROOF verifier-signing builds its canonical PASS list with the pinned byte comparator rather than a bare Array.sort.
+- Stake-weighted quorum rejects a validator entry with a missing or non-numeric weight instead of lowering the quorum denominator.
+- The migration runner accepts a targeted rollout and carries the decoder fail-closed schema-contract assertions.
+- SLASH resolves ATTEST relay-leg equivocation across both canonical XATTEST families.
 - Lockfile engines.node now matches the manifest ceiling >=22.0.0 <23, so a reinstall cannot silently resolve on Node 23+.
-- review review-round fixes: ATTEST exempt from fee-quote preflight, migration lock-skip reported honestly, boot fails fast on bad DB creds, action-alias single source with guard, DEPLOY halts as host-fault when the VM is unavailable, pubkeys widen migration, consensus-guard test escalations, reorg seeder format.
+- Miscellaneous review-round fixes: ATTEST exempt from fee-quote preflight, migration lock-skip reported honestly, boot fails fast on bad DB creds, action-alias single source with guard, DEPLOY halts as host-fault when the VM is unavailable, pubkeys widen migration, consensus-guard test escalations, reorg seeder format.
 
 ### Added
-- The table-lifecycle registry twin declares advisory content-parity coverage, so every replicated table is committed by a hash or a knowingly-declared exclusion .
-- `src/dispenserDivergenceMetrics.js` observability counters (log-only, no state change): sizes where the indexer's full DISPENSER lifecycle (cancel format 1, EXPIRATION edit format 2) diverges from the create-only upstream decoder view. Counts cancels applied, EXPIRATION edits (shortened vs lengthened), and DISPENSE triggers dropped because the target dispenser was already cancelled or expired, emitted per-block and cumulatively under a stable `DISPENSER_DIVERGENCE` log prefix. Adds the read-only `getClosedDispenserAtAddress` db helper to resolve the reason tag; changes no validation, accept/reject, or persisted state.
+- The table-lifecycle registry twin declares advisory content-parity coverage, so every replicated table is committed by a hash or a knowingly-declared exclusion.
+- `src/dispenserDivergenceMetrics.js` adds log-only observability counters tracking where the indexer's full DISPENSER lifecycle diverges from the create-only upstream decoder view, plus a read-only `getClosedDispenserAtAddress` helper, with no change to validation or persisted state.
 - `DISPENSER_ORIGIN_STANDING` (genesis-activated): the SOURCE of a prior valid dispenser create on an address may open additional dispensers on it without freshness or `DISPENSER_PREFERENCE=2`.
 - Armed the contract-era (Cohort A) flag-day at 2026-10-01 00:00 UTC (was the 2027-01-01 placeholder) across all six block_TIME gates, re-anchored the CROSS_CHAIN_ROYALTY create-side date to 2027-01-01 (one quarter after), and armed the four remaining BTC-anchored gates (checkpoint commitment, EQUIV header, stake-weighted quorum, anchor reward) at BTC 961000.
 - `STATE_COMMITMENT_ACTIVATION` armed mid-chain with per-chain '<COIN>:<network>' keys (same heights as the state-hash gates); the twin module and its call sites now take the coin, mirroring stateHash.js.
@@ -37,18 +37,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `hub_db_sync.js` exports `ensureTables()` for non-indexer mirror consumers and is now the canonical copy vendored into xchain-explorer via `bin/sync-hub-mirror-client.sh`; indexer runtime behavior is unchanged.
 
 ### Fixed
-- `/status` (and `/health`) report the container unhealthy (503) only on a genuine wedge, so a BTC-mainnet indexer perpetually deferring the newest block behind an advancing price mirror no longer reads docker-unhealthy; a `degraded` flag plus `lastBlockCommittedAt` mark an advancing barrier defer apart from a real stall, with the no-progress grace tunable via `INDEXER_HEALTH_STALL_GRACE_MS` .
-- `getDecoderBlockData`'s per-output fan-out no longer double-executes a data-bearing action: the reader LEFT JOINs `transaction_outputs` and emits one row per native-coin output, each carrying the same tx data, so a transaction (e.g. a SEND) that also pays a dispenser and/or a fee-destination output was processed once per output row — `createActionIndex` keyed on a per-row `tx_vout`, so every pass minted a fresh actions row and re-ran the handler, doubling the credits/debits for one on-chain transaction. `src/output_fanout.js` now collapses those rows to exactly one (lowest vout, deterministic across nodes) for every non-COINPAY, non-empty-data transaction, gated on the new `FIX_OUTPUT_FANOUT` contract-era flag-day (2026-10-01 00:00 UTC; testnet/regtest genesis-active). COINPAY payment settlement and empty-data DISPENSE triggers keep their per-output fan-out. Below the flag-day the historical per-row behaviour is preserved except that such a multi-output data-bearing transaction aborts the block loudly (watchdog/rollback retry) instead of silently double-executing.
-- PRICE v0 stake-weighted-quorum activation now gates on the round's signed BTC anchor (`data['BTC_BLOCK_HEIGHT']`, bound in the ed25519 payload) instead of the local landing height; keying on `BLOCK_INDEX` made the comparison vacuously true on LTC/DOGE (heights far past 961000), arming stake-weighting months early there while BTC still used count quorum, so the same signed round resolved under two rules. The hub and every chain now flip on the same anchor. (The identical wrong-anchor pattern in the ATTEST/EQUIV family and the PRICE set-derivation queries is tracked separately as a coordinated fix.) ().
-- The public unauthenticated `feequote` dry-run no longer enters the controller-guard VM: a `GUARD_INERT` marker (set only on computeFeeQuote's synthetic tx, never a decoded block tx or the API-key-gated `feequotedryrun`) refuses at the shared `_invokeController` chokepoint, closing the caller-influenced VM-compute reachable on guarded actions (SEND/ORDER/SWAP/... under CONTROLLER_GUARD) while keeping uncontrolled tokens fully quotable ().
-- `LOCK_MAX_SUPPLY_EXACT` (the strict ISSUE `LOCK_MAX_SUPPLY` guard) now pins its mainnet activation to the coordinated 2026-10-01 00:00 UTC contract-era flag-day instead of `0`; an unpinned mainnet time flipped the verdict on binary version alone, forking a heterogeneous fleet on any ISSUE carrying an explicit `LOCK_MAX_SUPPLY=0` and diverging a from-genesis replay from the committed ledger hash. testnet/regtest stay genesis-active, matching the sibling ISSUE/SLEEP validity gates.
+- `/status` (and `/health`) report the container unhealthy only on a genuine wedge, so an indexer deferring the newest block behind an advancing price mirror no longer reads docker-unhealthy, with a `degraded` flag and a tunable no-progress grace period distinguishing that from a real stall.
+- `getDecoderBlockData`'s per-output fan-out no longer double-executes a data-bearing action that also pays a dispenser or fee-destination output; `src/output_fanout.js` now collapses such multi-output transactions to one deterministic row, gated by the new `FIX_OUTPUT_FANOUT` contract-era flag-day.
+- PRICE v0 stake-weighted-quorum activation now gates on the round's signed BTC anchor instead of the local landing height, since keying on block index armed stake-weighting months early on LTC/DOGE while BTC still used count quorum; the hub and every chain now flip on the same anchor.
+- The public unauthenticated `feequote` dry-run no longer enters the controller-guard VM: a `GUARD_INERT` marker refuses at the shared `_invokeController` chokepoint, closing caller-influenced VM-compute on guarded actions while keeping uncontrolled tokens fully quotable.
+- `LOCK_MAX_SUPPLY_EXACT` now pins its mainnet activation to the coordinated contract-era flag-day instead of block 0, preventing a fleet fork on ISSUE actions carrying an explicit `LOCK_MAX_SUPPLY=0` (testnet/regtest stay genesis-active).
 - `order_match.js` subtracts the running remaining at precision 64 (was bcsub's default 0, which rounded a fractional remaining to an integer, prematurely completing orders with escrow stranded or filling past exhaustion).
 - All 12 remaining escrow-release sites (order/swap/coinpay expire+cancel, sweep, cross_settle) negate via `bcsub(0, amount, 64)` instead of JS unary minus, which float-truncated high-decimal amounts and desynced the release from the paired credit; a source-scan regression guards the whole family.
 - `pushvalidatorrewards` writes through the new `db.apiView()` pooled-connection view, so a hub push landing mid-block no longer joins the block's open transaction and can't be rolled back after the API acked it.
 - `tick_id` is now nullable on the five invalid-tolerant detail tables (`deposits`, `withdrawals`, `contract_stakes`, `contract_unstakes`, `contract_delegations`) via an auto migration, closing a fleet-halt wedge where an invalid DEPOSIT/WITHDRAW/STAKE/UNSTAKE/DELEGATE carrying an unresolvable TICK (empty, or a `^<id>` reference to a non-existent ticker) wrote its row with a NULL `tick_id` and threw `ER_BAD_NULL_ERROR`, hard-looping block processing (F-18 sibling; found by the flag-day transition drill).
 - `hub_db_sync.js _applyRow` upgrades mirrored `cross_chain_matches.anchor_txid` in place (first-stamp-wins), so the hub's ANCHOR back-fill re-broadcast lands instead of being dropped by INSERT IGNORE.
 - `hub_db_sync.js ensureTables()` gates each SQL file on table existence (probed inside the retry loop), so a mirror consumer restarting against an already-built schema no longer fails with ER_TABLE_EXISTS_ERROR.
-- Pin `decimal.js` to `10.4.3` in the indexer's own `overrides` (mirroring the bundled VM): the deployed consensus process pulls the precision-64 BigNumber backend transitively via `mathjs` (caret `^10.4.3`), and npm honors `overrides` only from the top-level package, so a fresh install or `npm update` could otherwise float the backend within 10.x and silently change contract math roots. A new freeze-guard assertion pins the installed `decimal.js` (10.4.3) and `mathjs` (15.2.0) versions where consensus actually runs.
+- Pin `decimal.js` to `10.4.3` in the indexer's own `overrides` (mirroring the bundled VM) so a fresh install or `npm update` can't silently float the consensus-critical bignumber backend pulled in transitively via `mathjs`, backed by a new freeze-guard assertion on both versions.
 - `DISPENSER_EXPIRE` and `DISPENSER_CLOSE` return escrow via `bcsub(0, GIVE_REMAINING, 64)` instead of JS unary minus, which coerced an 18-decimal remaining balance to a float and desynced the escrow debit from the full-precision credit (mirrors the `dispense.js` pattern).
 - The orphaned `contract_balances` drop migration is tagged `mode=manual` so its destructive `DROP TABLE` no longer auto-runs at indexer startup across the fleet; it now applies only via an explicit operator migrate run.
 - CI integration scenarios 11/14 boot LTC/DOGE test indexers with real fee destinations and pin the xchain fee path post-init (`withCoin` `xchainFeeMode`), replacing the placeholder env override the startup guard now fails closed on.
@@ -58,7 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - VOTE ballots are stored append-only (unique key gains `action_index`; tally reads each voter's latest set), so a reorg orphaning a re-vote restores the voter's prior ballot instead of losing it forever.
 - Amount strings are rendered in normal notation everywhere (`Utility.bcstr`): sub-1e-7 amounts previously stringified exponentially ("3e-8"), which the SMT leaf encoder rejects, hard-wedging the indexer at that block.
 - VM-emitted VOTE deposits/gas escrows are classified in the emission amount-truncation map (fixed GAS denomination).
-- `getcrosschaincall` now stamps `push_generation`, restoring XCALL dispatch quorum on any source chain that has reorged ().
+- `getcrosschaincall` now stamps `push_generation`, restoring XCALL dispatch quorum on any source chain that has reorged.
 
 ### Added
 - `recovery_pending_rewards` staging table: recovery-local scratch for archived validator rewards, not consensus-hashed, rollback-exempt, and excluded from replication.
@@ -78,14 +78,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.7.14] - 2026-07-16
 
 ### Fixed
-- ANCHOR replay-guard watermark parameterized from shared ANCHOR_CHECKPOINT_VERSIONS instead of a hand-copied literal ().
-- getAnchorChunks excludes invalid chunks and dedupes to the lowest action_index per chunk_index, so junk ANCHOR v2 chunks can no longer block disaster-recovery rebuilds; recovery inlines the same shape ().
-- capability_snapshots hub mirror converted to a natural-key mirror (wire id stripped, bootstrap pages from since_id=0) closing silent permanent mirror holes ().
-- Hub-config poll gains a reentrancy guard released in finally, mirroring _startStateTreeMetric ().
-- DEPLOY COOLDOWN_BLOCKS strict-integer gate, consensus-gated via new COOLDOWN_BLOCKS_INTEGER protocol change in the 2.0.0 contract-era cohort ().
-- reconcileTableIndexes keeps per-column prefixes and warns on prefix-width drift (deliberately no DDL) ().
-- New manual migration repositions state_key_bin so aged and fresh table tails converge ().
-- tableLifecycle ORPHAN_SWEEPS icons sweep marked replica-mirrored with flag semantics documented ().
+- ANCHOR replay-guard watermark parameterized from shared ANCHOR_CHECKPOINT_VERSIONS instead of a hand-copied literal.
+- getAnchorChunks excludes invalid chunks and dedupes to the lowest action_index per chunk_index, so junk ANCHOR v2 chunks can no longer block disaster-recovery rebuilds.
+- capability_snapshots hub mirror converted to a natural-key mirror, closing silent permanent mirror holes.
+- Hub-config poll gains a reentrancy guard released in finally.
+- DEPLOY COOLDOWN_BLOCKS strict-integer gate, consensus-gated via a new protocol change in the 2.0.0 contract-era cohort.
+- reconcileTableIndexes keeps per-column prefixes and warns on prefix-width drift.
+- New manual migration repositions state_key_bin so aged and fresh table tails converge.
+- tableLifecycle ORPHAN_SWEEPS icons sweep marked replica-mirrored with flag semantics documented.
 
 
 ## [2.7.11] - 2026-06-20
@@ -282,56 +282,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.6.0] - 2026-04-24
 
 ### Added
-- `actions/address.js`: `DISPENSER_PREFERENCE` field on `ADDRESS` format `0` (`1`=owner only default, `2`=anyone). Numeric + valid-value validation. Persisted via `createAddressOption()`; defaulted to `1` on first lookup for addresses that have never set the field.
-- `actions/dispenser.js`: authorization gate for opening a dispenser on a non-`SOURCE` `GET_ADDRESS`: allowed only when the target has `DISPENSER_PREFERENCE=2` or is a fresh address (`utxo-tracker get_first_seen` returns null or a height `>= BLOCK_INDEX`). Rejected with `invalid: GET_ADDRESS (dispenser not permitted)` otherwise. `GET_ADDRESS == SOURCE` bypasses the check (owner self-open).
-- `UtxoTracker.js`: new thin JSON-RPC client for `xchain-utxo-tracker`. Exposes `getFirstSeen(address)` used by the DISPENSER fresh-address check. `enabled` flag gated on `UTXO_TRACKER_URL` / `UTXO_TRACKER_API_PORT` env vars; when disabled, all non-owner dispensers on non-preference-open addresses are rejected (logged at startup).
+- `actions/address.js` adds a `DISPENSER_PREFERENCE` field on `ADDRESS` format `0` (1=owner only default, 2=anyone), validated and persisted via `createAddressOption()`, defaulting to 1 on first lookup.
+- `actions/dispenser.js` gates opening a dispenser on a non-`SOURCE` `GET_ADDRESS` to targets with `DISPENSER_PREFERENCE=2` or no prior on-chain activity, rejecting otherwise (owner self-open via `GET_ADDRESS == SOURCE` bypasses the check).
+- `UtxoTracker.js` is a new thin JSON-RPC client for `xchain-utxo-tracker` exposing `getFirstSeen(address)` for the DISPENSER fresh-address check, gated on `UTXO_TRACKER_URL`/`UTXO_TRACKER_API_PORT` and rejecting non-owner dispensers when disabled.
 - `XChainIndexer.js` / `api.js`: plumb `UTXO_TRACKER_URL` and `UTXO_TRACKER_API_PORT` env vars through to the new `UtxoTracker` client; startup warning when the client is disabled.
 - `db.js getDispenserCanceller()`: returns the address recorded on the most recent `cancelling` status row for a dispenser, used by `dispenser_close` to route escrow per spec.
 - `sql/dispenser_statuses.sql`: new `cancelled_by_id` column (FK to `index_addresses`) recording the address that triggered a cancel; indexed for lookup.
 
 ### Changed
 - `actions/dispenser.js` (format 1 cancel) and `actions/sweep.js` (dispenser cancel branch), now pass `SOURCE` as the canceller when writing the `cancelling` status row, so `dispenser_close` has the canceller identity available.
-- `actions/dispenser_close.js`: escrow destination now resolves in this priority order: (1) `SWEEP` destination if the cancel came from a `SWEEP`, (2) recorded canceller (`GET_ADDRESS` or `SOURCE`) per `DISPENSER.md`, (3) dispenser `SOURCE` fallback. Matches the spec's close-path escrow rules.
+- `actions/dispenser_close.js` resolves the escrow destination in priority order: SWEEP destination, recorded canceller, then dispenser SOURCE, matching the spec's close-path escrow rules.
 - `db.js createDispenserStatus()`: accepts optional `cancelled_by` address; writes/updates the new `cancelled_by_id` column.
-- `db.js createAddressOption()` / `getAddressPreferences()`: read/write the new `dispenser_preference` column. Defaults to `1` (owner only) when the address has no prior non-null value.
+- `db.js createAddressOption()` / `getAddressPreferences()` read/write the new `dispenser_preference` column, defaulting to 1 (owner only) when unset.
 - `sql/addresses.sql`: added `dispenser_preference BIGINT UNSIGNED` column.
 - `test/unit/actions/address.test.js` / `test/fixtures/mocks.js`: parameter helper and `makeParams()` signature updated for the new `DISPENSER_PREFERENCE` field position; `getDispenserCanceller` stub added to the mock DB.
 
 ## [2.5.0] - 2026-04-08
 
 ### Added
-- `actions/price.js`: new PRICE action handler supporting both v0 (validator COIN/FIAT snapshots) and v1 (user TOKEN/FIAT oracles). v0 parses variable-length PBFT signatures, verifies each signer has an active Tier 1 stake, validates Ed25519 signatures against the canonical payload, and checks PBFT quorum (`2*floor((tier1_count-1)/3)+1`). v1 validates COIN/TICK/FIAT/VALUE/FEE fields. After validation, pushes to `xchain-hub` for cross-chain aggregation.
-- `sql/prices.sql`: new action table for on-chain PRICE actions. Stores v0 fields (`round_number`, `pairs_json`, `sigs_json`) and v1 fields (`coin_id`, `tick_id`, `fiat_id`, `value`, `fee`). One row per processed PRICE transaction.
-- `ed25519.js`: lightweight Ed25519 verification helper using Node.js built-in `crypto` (no external deps). Provides `pubkeyFromHex()`, `verify()`, and `buildPriceV0Payload()` for canonical sortable JSON payload construction matching the xchain-hub signer format.
-- `hub_client.js`: dependency-free JSON-RPC client for pushing data to `xchain-hub` (`pushChainTip`, `pushPriceRound`, `pushOraclePrice`). Uses Node's built-in `http`/`https` modules.
-- `hub_db_sync.js`: WebSocket sync client that maintains a local copy of the hub's `price_snapshots` and `oracle_prices` tables for geographic distribution. Bootstraps via REST snapshot (`GET /hub-db/snapshot/...`) then subscribes to `/hub-db/subscribe` for live row updates. Applies rows via `INSERT IGNORE` (idempotent). Falls back to periodic polling if the `ws` package isn't available. Opt-in via `HUB_DB_SYNC_ENABLED=true`.
-- Third database connection in `XChainIndexer.js`: new `hubDb` connection points at a local read-only copy of hub cross-chain infrastructure tables. Created when `HUB_DB_HOST` / `HUB_DB_NAME` env vars are set.
+- `actions/price.js` is a new PRICE action handler supporting v0 (validator COIN/FIAT snapshots with PBFT-quorum-verified Ed25519 signatures) and v1 (user TOKEN/FIAT oracles), pushing validated results to `xchain-hub` for cross-chain aggregation.
+- `sql/prices.sql` is a new action table storing one row per PRICE transaction, covering both v0 (`round_number`, `pairs_json`, `sigs_json`) and v1 (`coin_id`, `tick_id`, `fiat_id`, `value`, `fee`) fields.
+- `ed25519.js` is a lightweight Ed25519 verification helper on Node's built-in `crypto`, providing `pubkeyFromHex()`, `verify()`, and `buildPriceV0Payload()` for canonical payload construction matching the hub signer format.
+- `hub_client.js` is a dependency-free JSON-RPC client (Node's built-in `http`/`https`) for pushing chain-tip, price-round, and oracle-price data to `xchain-hub`.
+- `hub_db_sync.js` is a WebSocket sync client that bootstraps and maintains a local, idempotent copy of the hub's `price_snapshots`/`oracle_prices` tables, falling back to polling when `ws` is unavailable and opt-in via `HUB_DB_SYNC_ENABLED=true`.
+- Adds a third database connection in `XChainIndexer.js` (`hubDb`), a local read-only copy of hub cross-chain infrastructure tables, created when `HUB_DB_HOST`/`HUB_DB_NAME` are set.
 - Tier 3 oracle publisher staking support in `configs/BTC.js`: `STAKING.TIERS[3]` = 500 XCHAIN, `STAKING.ACTIVATION_DELAY_BLOCKS` = 6.
-- `DOGE_ADDRESS` field on Tier 3 STAKE actions, validates D-prefix + 34-char base58 format. Recorded on-chain in `stakes.doge_address` column.
-- 6-block activation delay for all validator state changes (STAKE, UNSTAKE, DELEGATE, REVOKE_DELEGATION). Tracked via new `activation_block` and `deactivation_block` columns on the `stakes` and `delegations` tables. Active-stake queries filter by `activation_block <= current_block AND (deactivation_block IS NULL OR deactivation_block > current_block)`: eliminates BTC reorg edge cases for reorgs of ≤5 blocks.
-- `createValidatorReward()` in `db.js`: resolves a signing pubkey to the staking source address via the `stakes → index_pubkeys` join and inserts into the indexer's `validator_rewards` table. Called by the new `pushvalidatorrewards` JSON-RPC endpoint when xchain-hub's RewardTracker pushes reward records.
+- `DOGE_ADDRESS` field on Tier 3 STAKE actions validates D-prefix, 34-char base58 format and is recorded in `stakes.doge_address`.
+- Adds a 6-block activation delay for all validator state changes (STAKE, UNSTAKE, DELEGATE, REVOKE_DELEGATION) via new `activation_block`/`deactivation_block` columns, filtering active-stake queries by both to eliminate reorg edge cases up to 5 blocks.
+- `createValidatorReward()` in `db.js` resolves a signing pubkey to its staking source address and writes to `validator_rewards`, called by the new `pushvalidatorrewards` JSON-RPC endpoint when the hub's RewardTracker pushes reward records.
 - `getActiveStakeCount(tier, blockIndex)` in `db.js`: counts active stakes at a given tier for PBFT quorum calculation in PRICE v0 signature validation.
 - `getOraclePrice()` and `getOraclePricesInTimeRange()` in `db.js`: query helpers for `oracle_prices` with `effective_at` gating (enforces the 24-hour price lock window).
-- `reverseOraclePriceMatch()` in `utility.js`: user oracle reverse price matching for FIAT dispensers. Combines PRICE v1 user oracle (TOKEN/FIAT) with PRICE v0 validator oracle (COIN/FIAT) for cross-conversion. Walks historical oracle prices newest-first within a 24-hour window.
-- `ORACLE_ADDRESS` field on DISPENSER action (format 0), references a user PRICE v1 oracle for TOKEN/FIAT pricing. When set, `FIAT_AMOUNT` is ignored and the oracle provides the price. `dispense.js` branches between `reversePriceMatch` (validator path) and `reverseOraclePriceMatch` (user oracle path).
+- `reverseOraclePriceMatch()` in `utility.js` performs user-oracle reverse price matching for FIAT dispensers, combining PRICE v1 (TOKEN/FIAT) with PRICE v0 (COIN/FIAT) and walking historical prices newest-first within a 24-hour window.
+- `ORACLE_ADDRESS` field on DISPENSER (format 0) references a user PRICE v1 oracle for TOKEN/FIAT pricing, making `FIAT_AMOUNT` optional and routing `dispense.js` to the oracle price-match path when set.
 - `oracle_address_id` column on `dispensers` table (FK to `index_addresses`).
-- `pushvalidatorrewards` JSON-RPC endpoint on indexer `api.js`: receives reward push from xchain-hub's `RewardTracker`, writes to the indexer's `validator_rewards` table. Requires `INDEXER_API_KEY` for auth.
+- New `pushvalidatorrewards` JSON-RPC endpoint on indexer `api.js` (requires `INDEXER_API_KEY`) receives reward pushes from the hub's `RewardTracker` and writes to `validator_rewards`.
 - `HubClient.pushChainTip()` called after every successful block commit in `XChainIndexer.js`: anchors oracle rounds to BTC chain tip (fire-and-forget, never blocks indexing).
 - `EUR` and `KRW` added to `config.FIATS` and `sql/index_fiats.sql`: 12 supported FIAT currencies total.
 - `PRICE` action registered in `protocol_changes.js`, `actions.js`, and decoder `VALID_ACTION_NAMES`.
 
 ### Changed
-- `getLatestPrice(coinPair, blockHeight)` in `db.js`: now accepts an optional `blockHeight` parameter and filters `reference_block <= blockHeight`. Gates price lookups by the current block so two independent nodes processing the same block always see the same price (cross-node determinism fix).
+- `getLatestPrice(coinPair, blockHeight)` in `db.js` now filters `reference_block <= blockHeight`, so two nodes processing the same block always see the same price.
 - `utility.js validateNativeCoinFee()`: passes `data['BLOCK_INDEX']` to `getLatestPrice()` and prefers the local hub DB connection (`db.indexer.hubDb`) when available.
 - `utility.js reversePriceMatch()`: same hub DB preference for price snapshots.
 - `db.js` `Database` constructor, now stores `this.indexer` reference so dependent code can resolve `db.indexer.hubDb` automatically.
-- `actions/stake.js`: format expanded to `VERSION|TIER|CHAINS|SIGNING_PUBKEY|DOGE_ADDRESS`. Accepts tier 3. Tier 3 rules: CHAINS must be empty, DOGE_ADDRESS required with format validation. Tier 1/2 rules: DOGE_ADDRESS must be empty. Calculates `ACTIVATION_BLOCK = BLOCK_INDEX + 6`.
-- `actions/unstake.js`: accepts tier 3. Active-stake lookup gated by block index. Sets `deactivation_block = BLOCK_INDEX + 6` on the parent stake when valid.
-- `actions/delegate.js`: accepts new delegation with 6-block activation delay. Active-stake lookup gated by block index.
-- `actions/revoke_delegation.js`: sets `deactivation_block = BLOCK_INDEX + 6` on the parent delegation when valid. Active-delegation lookup gated by block index.
+- `actions/stake.js` format expands to `VERSION|TIER|CHAINS|SIGNING_PUBKEY|DOGE_ADDRESS`, adding tier 3 (empty CHAINS, required DOGE_ADDRESS; tiers 1/2 require empty DOGE_ADDRESS) and computing `ACTIVATION_BLOCK = BLOCK_INDEX + 6`.
+- `actions/unstake.js` accepts tier 3 with a block-gated active-stake lookup, setting `deactivation_block = BLOCK_INDEX + 6` on the parent stake when valid.
+- `actions/delegate.js` accepts new delegations with a 6-block activation delay and a block-gated active-stake lookup.
+- `actions/revoke_delegation.js` sets `deactivation_block = BLOCK_INDEX + 6` on the parent delegation when valid, with a block-gated active-delegation lookup.
 - `actions/claim_rewards.js`: active-stake lookup gated by block index.
 - `actions/dispense.js`: FIAT dispenser flow now branches on `dispenser.ORACLE_ADDRESS`: uses `reverseOraclePriceMatch()` (user oracle path) when set, otherwise uses existing `reversePriceMatch()` (validator path).
-- `actions/dispenser.js`: added `ORACLE_ADDRESS` parser and validation. Requires `FIAT_CODE` when set; makes `FIAT_AMOUNT` optional when set.
+- `actions/dispenser.js` adds an `ORACLE_ADDRESS` parser and validation, requiring `FIAT_CODE` and making `FIAT_AMOUNT` optional when set.
 - `actions/deploy.js` and `actions/execute.js`: `getOracleDataForVM()` calls now prefer `actions.hubDb || indexerDb`.
 - `sql/stakes.sql`: added `doge_address`, `activation_block`, `deactivation_block` columns with indexes.
 - `sql/delegations.sql`: added `activation_block`, `deactivation_block` columns with indexes.
@@ -339,8 +339,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `sql/index_fiats.sql`: added EUR and KRW rows; fixed spelling (Australian, Britain, Brazilian).
 - `db.js createStake()` / `setStakeDeactivation()` / `createDelegation()` / `setDelegationDeactivation()`: write and update the new activation/deactivation block columns.
 - `db.js createDispenser()` / `getDispenserInfo()`: write and return `oracle_address_id` / `oracle_address`.
-- `XChainIndexer.js` constructor, accepts hub DB connection parameters (`hubDbHost`, `hubDbPort`, `hubDbName`, `hubDbUser`, `hubDbPass`). Creates `HubClient` for fire-and-forget pushes to xchain-hub. Creates `HubDbSync` (opt-in) for WebSocket-based local hub DB maintenance.
-- `api.js`: added `pushvalidatorrewards` write endpoint with optional `INDEXER_API_KEY` auth. Passes hub DB env vars through to `XChainIndexer`.
+- `XChainIndexer.js` constructor accepts hub DB connection parameters and creates a `HubClient` for fire-and-forget pushes plus an opt-in `HubDbSync` for local hub DB maintenance.
+- `api.js` adds the `pushvalidatorrewards` write endpoint (optional `INDEXER_API_KEY` auth) and passes hub DB env vars through to `XChainIndexer`.
 - `actions.js`: `Actions` class now exposes `hubDb` and `hubClient` to action instances via the constructor.
 
 ## [2.4.0] - 2026-04-07
@@ -493,7 +493,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - npm scripts: test:regression (all tiers), test:regression:fast (tier1+tier4 only, <60s), test:regression:full (all tiers with extended timeout)
 - 958 unit-level regression tests passing across all four tiers
 - 442 fast regression tests (tier1+tier4) passing in ~2 seconds
-- Comprehensive regression testing plan in claude/reports/INDEXER_REGRESSION_TESTING_PLAN.md
+- Comprehensive regression testing plan documented separately
 
 ## [1.11.0] - 2026-04-01
 

@@ -36,7 +36,7 @@
  * Determinism is consensus-critical: the same manifest, applied in the same order
  * with deterministic synthetic tx hashes, produces identical ledger/state hashes
  * on every node. The manifest is pinned by sha256 (GENESIS_LEDGER_HASH); a
- * mismatch halts the node. See claude/reports/launch/GENESIS-LEDGER-BOOTSTRAP.md.
+ * mismatch halts the node.
  *
  ********************************************************************/
 
@@ -128,7 +128,7 @@ class Genesis {
             if(ancestors.has(rows[i].tick) && rows[i].owner !== gas)
                 await this._issue(gas, rows[i].tick, rows[i].owner, blockToParse, blockTime, 2);
 
-        // Airdrop pass : credit the XCP/XDP native-token allocation to snapshot
+        // Airdrop pass: credit the XCP/XDP native-token allocation to snapshot
         // holders. Runs after the name passes so the whole genesis block stays one
         // deterministic action sequence: gas token, creates, ancestor transfers, credits.
         await this._injectAirdrops(gas, blockToParse, blockTime);
@@ -275,8 +275,8 @@ class Genesis {
         if(buckets.length === 0){
             // A pinned set with nothing armed is the DISARMED half of the same divergence:
             // this node would derive a genesis with no airdrop actions at all while its
-            // peers mint the pinned set. Halt rather than quietly skip an allocation
-            // ; the pin is the operator's own statement that a set exists.
+            // peers mint the pinned set. Halt rather than quietly skip an allocation:
+            // the pin is the operator's own statement that a set exists.
             if(pin)
                 throw new Error('GENESIS FATAL: an airdrop set-hash is pinned (' + pin + ') but no airdrop buckets are '
                     + 'configured. The pinned coin bundle (src/coins/' + this.config['COIN'] + '.js, genesis.airdrop*) '
@@ -287,11 +287,11 @@ class Genesis {
         let snapshot = this.config['GENESIS_AIRDROP_SNAPSHOT_BLOCK'] || 'unpinned';
         // Combined set-hash over the canonical bucket order (name:hash:amount per line):
         // operators on different nodes compare this one line to prove they armed the
-        // identical airdrop set before any consensus action is derived .
+        // identical airdrop set before any consensus action is derived.
         let setHash = this._airdropSetHash(buckets);
         console.log('GENESIS: airdrop set-hash ' + setHash + ' (' + buckets.length + ' buckets, canonical order '
             + buckets.map(b => b.name).join(',') + ')');
-        // ENFORCE it (, ). Until this check the set-hash was a log line and
+        // ENFORCE it. Until this check the set-hash was a log line and
         // nothing else: the per-bucket GENESIS_AIRDROP_HASHES pin each snapshot FILE, so two
         // nodes with byte-identical CSVs still passed every check while minting different
         // XCHAIN amounts (the amounts were pinned nowhere) or deriving different synthetic tx
@@ -367,14 +367,14 @@ class Genesis {
                 throw new Error('GENESIS FATAL: duplicate airdrop bucket name ' + name);
             names.add(name);
             let hash = hashes[i] || null;
-            // Mainnet CSV fallback fails closed : the expected mainnet path is the
+            // Mainnet CSV fallback fails closed: the expected mainnet path is the
             // pinned genesis dump; a CSV-derived mainnet genesis is only tolerated when every
             // bucket carries a sha256 pin, so unpinned content can never enter consensus.
             if(this.config['NETWORK'] === 'mainnet' && !/^[0-9a-fA-F]{64}$/.test(String(hash || '')))
                 throw new Error('GENESIS FATAL: mainnet airdrop bucket ' + name + ' has no sha256 pin (GENESIS_AIRDROP_HASHES); mainnet CSV genesis requires every bucket pinned (expected path is the genesis dump)');
             buckets.push({ name: name, file: paths[i], hash: hash, amount: amount });
         }
-        // Canonical order : action_index is a hashed consensus field, so bucket
+        // Canonical order: action_index is a hashed consensus field, so bucket
         // iteration order must not depend on the operator's env-var CSV order. Bucket names
         // are unique (checked above), so a byte-order sort on name is total + deterministic.
         buckets.sort((a, b) => a.name < b.name ? -1 : 1);

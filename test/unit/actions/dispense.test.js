@@ -158,11 +158,11 @@ describe('Dispense action handler @regression @tier2', function () {
             `give_amount ${dispenseRecord['GIVE_AMOUNT']} exceeds GIVE_REMAINING 3`);
     });
 
-    // : the give-remaining walk (multiplier--, one bignumber multiply per
+    // The give-remaining walk (multiplier--, one bignumber multiply per
     // iteration) is now a closed-form clamp to min(multiplier, floor(GIVE_REMAINING
-    // / GIVE_AMOUNT)). These pin the identity of the rewrite on the edges that a
+    // GIVE_AMOUNT)). These pin the identity of the rewrite on the edges that a
     // loop and a division disagree on, plus the DoS the loop enabled.
-    it(' clamp: lands exactly on capacity, not merely under it', async function () {
+    it('clamp: lands exactly on capacity, not merely under it', async function () {
         // Payment covers 5 units, only 3 in escrow: the loop stopped at 3, so the
         // clamp must too. Asserted exactly rather than <= 3, which a broken clamp
         // returning 0 or 1 would also satisfy.
@@ -176,7 +176,7 @@ describe('Dispense action handler @regression @tier2', function () {
         assert.strictEqual(String(rec['GIVE_AMOUNT']), '3');
     });
 
-    it(' clamp: floors a fractional capacity', async function () {
+    it('clamp: floors a fractional capacity', async function () {
         // GIVE_AMOUNT 2 with 5 remaining: capacity is floor(5/2) = 2, giving 4.
         // A clamp that forgot to floor would try 2.5 units and overspend escrow.
         indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
@@ -191,7 +191,7 @@ describe('Dispense action handler @regression @tier2', function () {
         assert.strictEqual(String(rec['GIVE_AMOUNT']), '4');
     });
 
-    it(' clamp: skipped for an ownership dispenser with no GIVE_AMOUNT', async function () {
+    it('clamp: skipped for an ownership dispenser with no GIVE_AMOUNT', async function () {
         // Ownership dispensers carry empty GIVE_AMOUNT/GIVE_ESCROW. bcmul() coerced
         // that to 0, so `0 > GIVE_REMAINING` was false and the loop never ran; the
         // clamp must skip rather than divide by zero.
@@ -208,7 +208,7 @@ describe('Dispense action handler @regression @tier2', function () {
         sinon.assert.called(indexer.indexerDb.clearTokenEscrow);
     });
 
-    it(': a saturated FIAT unit count settles promptly instead of spinning', async function () {
+    it('a saturated FIAT unit count settles promptly instead of spinning', async function () {
         // The DoS: a FIAT multiplier is bounded by an externally-chosen price, not
         // by GET_AMOUNT. At MAX_SAFE_INTEGER units the old loop would have run 9e15
         // bignumber multiplies to walk down to capacity, so the block never
@@ -319,7 +319,7 @@ describe('Dispense action handler @regression @tier2', function () {
         sinon.assert.notCalled(actionsCtx.processAction);
     });
 
-    // : per-unit auto-close threshold under the DISPENSER_CLOSE_PER_UNIT gate
+    // Per-unit auto-close threshold under the DISPENSER_CLOSE_PER_UNIT gate
     it('gate active: large aggregate purchase does NOT close while a per-unit remains', async function () {
         // GIVE_REMAINING=10, per-unit GIVE_AMOUNT=1, buyer pays 0.05 (5 units).
         // After dispensing 5, remaining=5 >= per-unit 1 → must stay open.
@@ -559,7 +559,7 @@ describe('Dispense action handler @regression @tier2', function () {
         sinon.assert.notCalled(indexer.indexerDb.createEscrow);   // no balance escrow move
     });
 
-    // FIAT_DISPENSER_PRICING gate ( follow-on, operator decision 2026-07-24).
+    // FIAT_DISPENSER_PRICING gate (follow-on to the give-remaining fix, operator decision 2026-07-24).
     // Genesis-active everywhere today, retrofitted while every mainnet chain held
     // zero dispensers, so it is byte-identical to the ungated code. Registered so
     // the settlement path is in the activation inventory with its siblings and so a
@@ -751,7 +751,7 @@ describe('Dispense action handler @regression @tier2', function () {
     // Regression for the dead 'invalid: Dispenser unknown' branch: getDispenserInfo
     // returning falsy for a matched action_index must not throw a TypeError out of
     // the settlement loop (dispenserInfo[...] is never populated for it). See
-    // review finding uuid:78e3de16.
+    // AML finding uuid:78e3de16.
     it('unknown dispenser (getDispenserInfo returns false): does not throw, no dispense recorded for it', async function () {
         indexer.indexerDb.findMatchingDispensers.resolves([10]);
         indexer.indexerDb.getDispenserInfo.resolves(false);
@@ -794,7 +794,7 @@ describe('Dispense action handler @regression @tier2', function () {
         assert.strictEqual(rec['DISPENSER_ACTION_INDEX'], 11);
     });
 
-    // ── MAX_DISPENSES cap (dispenser_caps_activation.js / ). The dispense that
+    // ── MAX_DISPENSES cap (dispenser_caps_activation.js). The dispense that
     //    reaches the cap still executes; then the dispenser auto-closes with reason
     //    'max_dispenses_reached' and refunds remaining escrow (DISPENSER_CLOSE routes to
     //    SOURCE for an auto-close). Count is derived since the last refill. Gated on the

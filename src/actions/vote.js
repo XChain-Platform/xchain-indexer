@@ -36,9 +36,7 @@ const { buildInjectedExecContext, SYNTH_EXEC_TX_HASH, SYNTH_TAGS } = require('./
 
 class Vote {
 
-    // Handle constructing a class instance
     constructor(action){
-        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -46,8 +44,8 @@ class Vote {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
-        // Define list of known FORMATS. v0 create + v1 ballot are user actions;
-        // v2 finalize is system-injected only (the per-block sweep synthesizes it).
+        // v0 create + v1 ballot are user actions; v2 finalize is system-injected only
+        // (the per-block sweep synthesizes it).
         this.formats = {};
         this.formats[0] = 'VERSION|TICK|END_BLOCK|OPTIONS|MAX_SELECTIONS|TALLY_MODE|WEIGHT_MODE|QUORUM|MIN_VOTERS|MIN_VOTE_BALANCE|DECIDE_THRESHOLD|QUESTION|DEPOSIT|CALLBACK_CONTRACT|CALLBACK_METHOD|CALLBACK_PARAMS|CALLBACK_ON|GAS_ESCROW|CALLBACK_DELAY_BLOCKS';
         this.formats[1] = 'VERSION|POLL_REF|BALLOT|MEMO';
@@ -55,18 +53,14 @@ class Vote {
         this.formats[3] = 'VERSION|TICK|DELEGATE_TO|MEMO';
     }
 
-    // Handle parsing the VOTE transaction
     async parse(params, data, error){
-        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
 
-        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
-        // Dispatch to the version-specific handler
         if(format===0)
             await this._parseCreate(data, error);
         else if(format===1)
@@ -77,9 +71,7 @@ class Vote {
             await this._parseDelegate(data, error);
     }
 
-    /*****************************************************************
-     * VOTE v0 - create poll
-     ****************************************************************/
+    // VOTE v0 - create poll
     async _parseCreate(data, error){
         // Apply poll defaults before validation/storage
         if(this.util.isNull(data['MAX_SELECTIONS'])) data['MAX_SELECTIONS'] = '1';
@@ -89,9 +81,9 @@ class Vote {
         let block_index  = parseInt(data['BLOCK_INDEX']);
         let action_index = data['ACTION_INDEX'];
 
-        // : reject a sleeping SOURCE (v0 moves GAS into escrow while the
-        // address is supposedly frozen). Flag-day gated: see VOTE_RESPECTS_SLEEP
-        // in protocol_changes.js for why this validity tightening is gated.
+        // Reject a sleeping SOURCE (v0 moves GAS into escrow while the address is
+        // supposedly frozen). Flag-day gated: see VOTE_RESPECTS_SLEEP in
+        // protocol_changes.js for why this validity tightening is gated.
         if(!error && await this.actions.protocolChanges.isEnabled('VOTE_RESPECTS_SLEEP', data['BLOCK_INDEX'])
                   && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
@@ -240,8 +232,8 @@ class Vote {
             if(this.util.isNull(data['CALLBACK_ON'])) data['CALLBACK_ON'] = 'pass';
             if(!error && !['pass','always'].includes(data['CALLBACK_ON']))
                 error = 'invalid: CALLBACK_ON (pass|always)';
-            //  (BonkDAO-class guard): at/after the VOTE_BINDING_MINIMUMS
-            // flag-day a binding poll must set its own turnout floor. QUORUM and
+            // At/after the VOTE_BINDING_MINIMUMS flag-day a binding poll must set its
+            // own turnout floor (closes a low-turnout-hijack class of guard). QUORUM and
             // MIN_VOTERS >= 1 are required so a callback that can move
             // contract-held value can never finalize off a handful of ballots
             // by omission; their magnitudes stay the creator's policy call.
@@ -253,7 +245,7 @@ class Vote {
                 else if(this.util.isNull(data['MIN_VOTERS']) || Number(data['MIN_VOTERS']) < 1)
                     error = 'invalid: MIN_VOTERS (>= 1 required for a binding poll)';
             }
-            // : CALLBACK_DELAY_BLOCKS (optional timelock). Honored only
+            // CALLBACK_DELAY_BLOCKS (optional timelock). Honored only
             // at/after the VOTE_CALLBACK_TIMELOCK flag-day; below it the field
             // is nulled so acceptance and callback timing match a legacy node,
             // whose parser drops params beyond its format. See
@@ -294,7 +286,6 @@ class Vote {
         data['GAS_ESCROW']       = binding ? gasEscrow : '0';
         data['IS_BINDING']       = binding;
 
-        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
@@ -326,17 +317,14 @@ class Vote {
         await this.mapper.createMappings(data);
     }
 
-    /*****************************************************************
-     * VOTE v1 - cast ballot
-     ****************************************************************/
+    // VOTE v1 - cast ballot
     async _parseBallot(data, error){
         let block_index  = parseInt(data['BLOCK_INDEX']);
         let action_index = data['ACTION_INDEX'];
         let selections   = [];
 
-        // : reject a sleeping SOURCE (a frozen address must not cast or
-        // mutate ballots). Flag-day gated: see VOTE_RESPECTS_SLEEP in
-        // protocol_changes.js.
+        // Reject a sleeping SOURCE (a frozen address must not cast or mutate
+        // ballots). Flag-day gated: see VOTE_RESPECTS_SLEEP in protocol_changes.js.
         if(!error && await this.actions.protocolChanges.isEnabled('VOTE_RESPECTS_SLEEP', data['BLOCK_INDEX'])
                   && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
@@ -409,7 +397,6 @@ class Vote {
         if(!error && !this.util.isNull(data['MEMO']) && String(data['MEMO']).length > this.config['MAX_MESSAGE_LENGTH'])
             error = 'invalid: MEMO (length)';
 
-        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
@@ -424,15 +411,12 @@ class Vote {
         await this.mapper.createMappings(data);
     }
 
-    /*****************************************************************
-     * VOTE v2 - finalize poll (system-injected only)
-     *
-     * Freezes a poll's tally on-chain at its effective close. Triggered by the
-     * per-block sweep (util.processVoteFinalizations), never by a user tx: a poll
-     * result is a pure deterministic function of already-agreed on-chain state
-     * (the votes ledger + getHolders at the close block), so every node computes
-     * the same result locally with no consensus round.
-     ****************************************************************/
+    // VOTE v2 - finalize poll (system-injected only). Freezes a poll's tally
+    // on-chain at its effective close. Triggered by the per-block sweep
+    // (util.processVoteFinalizations), never by a user tx: a poll result is a
+    // pure deterministic function of already-agreed on-chain state (the votes
+    // ledger + getHolders at the close block), so every node computes the same
+    // result locally with no consensus round.
     async _parseFinalize(data, error){
         // System-synthesized only. The decoder accepts VOTE in VALID_ACTION_NAMES,
         // but a user-broadcast VOTE|2 cannot legitimately finalize a poll; reject it
@@ -475,7 +459,7 @@ class Vote {
             let fires = (poll.callback_on === 'always') ||
                         (result.poll_status === 'finalized' && !this.util.isNull(result.winning_option));
             if(fires){
-                //  timelock: a poll created with CALLBACK_DELAY_BLOCKS > 0
+                // Timelock: a poll created with CALLBACK_DELAY_BLOCKS > 0
                 // (only storable at/after the VOTE_CALLBACK_TIMELOCK flag-day)
                 // freezes its tally and settles its deposit now, but the callback
                 // EXECUTE is deferred to this block + delay; the per-block sweep
@@ -504,16 +488,13 @@ class Vote {
         await this.mapper.createMappings(data);
     }
 
-    /*****************************************************************
-     * Release a poll's creation deposit at finalization.
-     *
-     * Refunds the escrowed GAS to the creator on a real outcome ('finalized'), or
-     * forfeits it to the DONATE1 treasury when the poll dies for lack of
-     * participation ('failed_quorum'). A negative escrow row releases the hold (the
-     * order_expire / attest_settle idiom); the matching credit routes the funds.
-     * No-op when the poll carried no deposit. deposit_resolved records the outcome
-     * so a reprocessed finalize cannot double-release.
-     ****************************************************************/
+    // Release a poll's creation deposit at finalization. Refunds the escrowed GAS to
+    // the creator on a real outcome ('finalized'), or forfeits it to the DONATE1
+    // treasury when the poll dies for lack of participation ('failed_quorum'). A
+    // negative escrow row releases the hold (the order_expire / attest_settle
+    // idiom); the matching credit routes the funds. No-op when the poll carried no
+    // deposit. deposit_resolved records the outcome so a reprocessed finalize
+    // cannot double-release.
     async _settleDeposit(poll, data, terminalStatus){
         let deposit   = String((poll && poll.deposit_amount) || '0');
         let gasEscrow = String((poll && poll.gas_escrow) || '0');
@@ -555,22 +536,16 @@ class Vote {
                     ' (deposit ' + deposit + (refunded ? ' refund' : ' forfeit') + ', gas_escrow ' + gasEscrow + ' refund)');
     }
 
-    /*****************************************************************
-     *  timelock: fire deferred binding callbacks that come due at this
-     * block. Called by the per-block sweep (util.processVoteFinalizations).
-     *
-     * A timelocked poll's v2 stamped callback_due_block = resolved_block +
-     * CALLBACK_DELAY_BLOCKS; here the frozen result is reconstructed from the
-     * terminal polls row and the callback EXECUTE injected exactly as the
-     * immediate path would have at finalize (same EMITTER = the v2's
-     * action_index, same savepoint isolation). Fires exactly once: the due
-     * query matches only callback_due_block = block, mirroring the
-     * immediate path's fire-once-at-v2 semantics (a deterministic callback
-     * failure is final on both paths; only a reorg re-fires via the rollback
-     * reset). Reorg-safe: rolling back the due block deletes the EXECUTE
-     * generically and rollback.js re-NULLs callback_execute_action_index, so
-     * replaying the due block re-fires deterministically.
-     ****************************************************************/
+    // Timelock: fire deferred binding callbacks that come due at this block. Called
+    // by the per-block sweep (util.processVoteFinalizations). A timelocked poll's
+    // v2 stamped callback_due_block = resolved_block + CALLBACK_DELAY_BLOCKS; here
+    // the frozen result is reconstructed from the terminal polls row and the
+    // callback EXECUTE injected exactly as the immediate path would have at
+    // finalize (same EMITTER = the v2's action_index, same savepoint isolation).
+    // Fires exactly once: the due query matches only callback_due_block = block. A
+    // deterministic callback failure is final on both paths; only a reorg re-fires,
+    // since rolling back the due block deletes the EXECUTE generically and
+    // rollback.js re-NULLs callback_execute_action_index.
     async processDueCallbacks(block_index, block_time){
         let due = await this.indexerDb.getDueCallbackPolls(block_index);
         for(let poll of due){
@@ -595,18 +570,15 @@ class Vote {
         }
     }
 
-    /*****************************************************************
-     * Binding poll: inject the system EXECUTE that runs the poll's callback.
-     *
-     * Mirrors ATTEST's synthetic-v2 callback injection. The poll's own result is
-     * NOT yet visible to xchain.getPollResult inside the callback (the visibility
-     * gate is resolved_block < block, and this fires AT the finalization block), so
-     * the result is delivered as positional EXECUTE params the contract reads via
-     * xchain.getInputParam(i). The callback runs as the target contract itself
-     * (SOURCE = contract address). A callback that reverts, runs out of gas, or
-     * throws does NOT un-finalize the poll: the savepoint isolates its effects and
-     * the recorded poll result stands.
-     ****************************************************************/
+    // Binding poll: inject the system EXECUTE that runs the poll's callback. Mirrors
+    // ATTEST's synthetic-v2 callback injection. The poll's own result is NOT yet
+    // visible to xchain.getPollResult inside the callback (the visibility gate is
+    // resolved_block < block, and this fires AT the finalization block), so the
+    // result is delivered as positional EXECUTE params the contract reads via
+    // xchain.getInputParam(i). The callback runs as the target contract itself
+    // (SOURCE = contract address). A callback that reverts, runs out of gas, or
+    // throws does NOT un-finalize the poll: the savepoint isolates its effects and
+    // the recorded poll result stands.
     async _injectCallbackExecute(poll, data, result){
         if(!this.actions.actionExecute) return null;
 
@@ -616,7 +588,7 @@ class Vote {
             catch(e){ callbackParams = []; }
         }
 
-        // : at/after the VOTE_POLL_TICK_VISIBLE flag-day the poll's
+        // At/after the VOTE_POLL_TICK_VISIBLE flag-day the poll's
         // electorate TICK is delivered to the callback (inserted after
         // min_voters_met, before the developer params) so a binding-poll
         // contract can verify WHICH token decided it (e.g. treasury.arm()
@@ -658,7 +630,7 @@ class Vote {
             SOURCE:      'C:' + chain + ':' + poll.callback_contract_index
         }, true);
 
-        // : the finalize/timelock callback has no real tx behind it (VOTE v2
+        // The finalize/timelock callback has no real tx behind it (VOTE v2
         // is system-synthesized). Post-SYNTH_EXEC_TX_HASH the context gets a
         // deterministic synthetic TX_HASH (namespaced by the poll's action_index,
         // unique per poll since the callback fires exactly once), so an ATTEST/XCALL
@@ -702,22 +674,19 @@ class Vote {
         }
     }
 
-    /*****************************************************************
-     * VOTE v3 - set/clear vote delegation (liquid democracy)
-     *
-     * A standing, per-token delegation of voting weight to another address. Set
-     * once, it applies to every poll governed by TICK until changed or cleared
-     * (last-write-wins). A blank DELEGATE_TO clears it. Delegation is resolved at
-     * each poll's close (db.getPollTally): one hop, a direct vote overrides it,
-     * and the delegator must still hold TICK at close for their weight to flow.
-     ****************************************************************/
+    // VOTE v3 - set/clear vote delegation (liquid democracy). A standing, per-token
+    // delegation of voting weight to another address. Set once, it applies to every
+    // poll governed by TICK until changed or cleared (last-write-wins). A blank
+    // DELEGATE_TO clears it. Delegation is resolved at each poll's close
+    // (db.getPollTally): one hop, a direct vote overrides it, and the delegator
+    // must still hold TICK at close for their weight to flow.
     async _parseDelegate(data, error){
         let block_index  = parseInt(data['BLOCK_INDEX']);
         let action_index = data['ACTION_INDEX'];
 
-        // : reject a sleeping SOURCE (a frozen address must not set or
-        // clear delegations). Gated with the v3 DELEGATE_TO format check below:
-        // see VOTE_RESPECTS_SLEEP in protocol_changes.js.
+        // Reject a sleeping SOURCE (a frozen address must not set or clear
+        // delegations). Gated with the v3 DELEGATE_TO format check below: see
+        // VOTE_RESPECTS_SLEEP in protocol_changes.js.
         let tightened = !error && await this.actions.protocolChanges.isEnabled('VOTE_RESPECTS_SLEEP', data['BLOCK_INDEX']);
         if(!error && tightened && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
@@ -740,7 +709,7 @@ class Vote {
         if(!error && !clearing && String(data['DELEGATE_TO']).trim() === String(data['SOURCE']).trim())
             error = 'invalid: DELEGATE_TO (cannot delegate to self)';
 
-        // : a set (non-clearing) DELEGATE_TO must be a real address on this
+        // A set (non-clearing) DELEGATE_TO must be a real address on this
         // chain, matching MESSAGE/DISPENSER handling. Before the flag-day a
         // malformed target was accepted and just resolved to no holder at tally
         // time, so the check shares the VOTE_RESPECTS_SLEEP gate above.

@@ -33,7 +33,7 @@ CREATE TABLE capability_snapshots (
     -- Presence of a row = that pubkey QUALIFIED for `capability` at `snapshot_block`
     -- (the hub only mirrors pubkeys already filtered by min_stake). Lets a non-BTC
     -- indexer verify cross-chain match signatures without local capability stakes.
-    -- `source` is part of the key : at/above STAKE_WEIGHTED_QUORUM a key
+    -- `source` is part of the key: at/above STAKE_WEIGHTED_QUORUM a key
     -- delegated by two sources yields one row per (source, pubkey); a 3-column key
     -- collapses them on INSERT IGNORE and silently drops the second source.
     UNIQUE KEY uq_cap_snap (snapshot_block, capability, signing_pubkey, source),

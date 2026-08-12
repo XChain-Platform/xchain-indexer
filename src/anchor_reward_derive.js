@@ -10,7 +10,7 @@
  *
  **********************************************************************
  *
- *  Option C: BTC-side anchor/archive reward derivation.
+ * Option C: BTC-side anchor/archive reward derivation.
  *
  * ANCHOR is DOGE-only, but the reward is a COLLECT-spendable validator_rewards row and
  * COLLECT is BTC-only, and capability staking (hence the stake source createValidatorReward
@@ -19,19 +19,19 @@
  * publishes the XANCPUB publisher-attestation quorum to the append-only, hub-mirrored
  * `anchor_reward_attestations` table; the BTC indexer keys derivation on those mirrored rows.
  *
- * The mirror is TRANSPORT, not trust: this pass re-verifies each row's XANCPUB signatures
- * against the BTC indexer's OWN locally-computed oracle_publish set at snapshot_block (the same
+ * The mirror is transport, not trust: this pass re-verifies each row's XANCPUB signatures
+ * against the BTC indexer's own locally-computed oracle_publish set at snapshot_block (the same
  * set + weighting anchor.js uses on DOGE), rebuilds the reward canonical byte-identically to
  * anchor.js._rewardCanonical / the hub's StateAnchorPublisher, and only then materializes
  * validator_rewards at block_index = snapshot_block. A forged or short-quorum row credits
- * nothing. Idempotent + reorg-safe: the reward upserts on (reward_type, round_reference) and a
+ * nothing. Idempotent and reorg-safe: the reward upserts on (reward_type, round_reference) and a
  * failover double-publish is collapsed to the smallest-pubkey winner by reconcileAnchorRewardWinner;
  * a BTC reorg that block-scoped-deletes the reward at snapshot_block re-exposes the group for replay.
  *
- * Two block heights, both persisted . block_index = snapshot_block is the reward's EARN
- * block: it is where the stake source resolves and where a from-genesis replay must credit it.
- * derive_block_index = the BTC block being processed is the reward's MATERIALIZATION block, which
- * is strictly later. Rollback needs both, because the row must disappear when EITHER height is
+ * Two block heights are persisted. block_index = snapshot_block is the reward's earn block: it
+ * is where the stake source resolves and where a from-genesis replay must credit it.
+ * derive_block_index = the BTC block being processed is the reward's materialization block, which
+ * is strictly later. Rollback needs both, because the row must disappear when either height is
  * orphaned: scoping on the earn-block alone leaves a COLLECT-spendable reward alive after a reorg
  * to any height in (snapshot_block, blockIndex], a reward a clean replay to that height has not
  * derived yet.
@@ -141,10 +141,10 @@ async function deriveAnchorRewards(indexerDb, config, blockIndex){
             if(!await verifyAttestation(indexerDb, row)) continue;
             let amount = (String(row.reward_type) === 'anchor_archive') ? ar.ARCHIVE_REWARD_AMOUNT : ar.ANCHOR_REWARD_AMOUNT;
             // block_index = snapshot_block (the earn-block, where the stake source resolves);
-            // derive_block_index = the CURRENT BTC block, which is where the row is actually
+            // derive_block_index = the current BTC block, which is where the row is actually
             // minted. Without the second stamp a reorg to any height in (snapshot_block,
             // blockIndex] orphans the minting block yet leaves the reward in place, because the
-            // rollback delete only scopes on block_index ( / ).
+            // rollback delete only scopes on block_index.
             let ok = await indexerDb.createValidatorReward(
                 String(row.publisher).toLowerCase(), Number(row.round_reference), String(row.reward_type),
                 amount, Number(row.snapshot_block), true, Number(blockIndex));

@@ -1,5 +1,5 @@
 -- xchain:migration mode=auto
--- Migration: restate the standalone indexes on bet_cancels / bet_resolves ().
+-- Migration: restate the standalone indexes on bet_cancels / bet_resolves.
 --
 -- WHY
 -- ---

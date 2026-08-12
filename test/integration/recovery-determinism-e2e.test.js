@@ -35,8 +35,7 @@
  * Pre-F1a this forked: recovery's out-of-band pre-seed offset node B's whole id
  * map, so (1) and (2) diverged. Needs a real MariaDB; set TEST_DB_HOST/PORT/USER/
  * PASS (self-skips without TEST_DB_PASS). Runs in CI via the integration tier's
- * test/integration/** glob , which provides the DB service.
- * See claude/reports/2026-06-19_id-determinism-F1-implementation-plan.md.
+ * test/integration/** glob, which provides the DB service.
  *
  ********************************************************************/
 'use strict';
@@ -104,7 +103,7 @@ const VALIDATOR = makeKeypair();   // the reward's signing validator (independen
 // chunk are authored by it, which is what binds the chunks to the head since #3075.
 const ARCHIVE_PUBLISHER = 'DArchivePublisher0000000000000000';
 
-// ── Contract-heavy recovery leg  ────────────────────────────────────
+// ── Contract-heavy recovery leg ────────────────────────────────────
 // The launch bundle deploys contracts via chunked DEPLOY: a run of v4 carriers each
 // carrying one ordered base64 slice of the source, then a v2/v3 that reassembles the
 // slices (keyed on CODE_HASH), sha256-verifies, and creates the contract. This leg
@@ -159,7 +158,7 @@ function sharedVm() {
     } catch (e) {
         // xchain-vm is a file: dependency whose vendored directory is untracked, so a tree
         // assembled without it cannot run this leg. Skip that leg loudly rather than
-        // reporting a venue gap as a consensus failure (the trap  records twice);
+        // reporting a venue gap as a consensus failure (the trap records twice)
         // bin/run-db-tiers.sh refuses to start a tier at all in that state.
         vmLoadFailed = true;
         console.log('WARNING: xchain-vm unavailable; SKIPPING the chunked-DEPLOY recovery leg ' +
@@ -381,7 +380,7 @@ describe('Recovery-determinism e2e (consensus) @integration', function () {
         assert.strictEqual(report.rewards, 1, 'recovery must stage exactly 1 reward');
         await replayChain(Bbtc);
 
-        // Contract-heavy leg : deploy the SAME chunked contract on both nodes, across
+        // Contract-heavy leg: deploy the SAME chunked contract on both nodes, across
         // the recovery boundary. Node A (from-genesis) records carriers in position order; node B
         // (recovered) records them in a DIFFERENT order, so the byte-identity below also proves
         // the assembler is independent of chunk delivery/storage order on a real engine.
@@ -457,7 +456,7 @@ describe('Recovery-determinism e2e (consensus) @integration', function () {
         }
     });
 
-    // : contract-heavy re-confirm on the chunked-DEPLOY launch bundle. The v4-carrier +
+    // contract-heavy re-confirm on the chunked-DEPLOY launch bundle. The v4-carrier +
     // v2-assembly deploy must reindex byte-identically across the recovery boundary.
     it('(5) chunked-DEPLOY contract is byte-identical A vs B across the recovery boundary', async function () {
         if (!contractLegRan) return this.skip();

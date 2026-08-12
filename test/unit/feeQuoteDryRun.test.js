@@ -50,7 +50,7 @@ function makeCtx({ status = 'valid', actionIndex = 55, feeAmount = '1.00000000',
             // mirrors the real Database contract (fixed epoch, pass-through run).
             currentTxEpoch:      () => 0,
             runInTxEpoch:        (epoch, fn) => fn(),
-            // Fee-balance surface . getAddressId is the READ-ONLY id lookup (null for
+            // Fee-balance surface. getAddressId is the READ-ONLY id lookup (null for
             // an address the ledger has never seen); createAddress is stubbed only so the test
             // can prove the balance read never reaches it.
             getAddressId:        async (addr) => { calls.order.push('getAddressId:' + addr); return addressId; },
@@ -122,7 +122,7 @@ describe('_dryRunAction (shared dry-run engine)', () => {
     });
 
     it('marks a probe run so output-matching fee checks know there is no transaction', async () => {
-        // The oracle usage fee  is checked by matching an OUTPUT, exactly like the
+        // The oracle usage fee is checked by matching an OUTPUT, exactly like the
         // native fee - but it cannot be served by the probe output above, because
         // ORACLE_ADDRESS may be a ^id the handler only resolves later. So the run is
         // MARKED instead, and dispenser.js checks the knowable half only. Without this,
@@ -186,7 +186,7 @@ describe('_dryRunAction (shared dry-run engine)', () => {
         assert.strictEqual(r.status, 'invalid: insufficient funds', 'handler judged it');
     });
 
-    // : the fee-token balance the pre-flight needs to tell a payer WHY an XCHAIN-settled
+    // The fee-token balance the pre-flight needs to tell a payer WHY an XCHAIN-settled
     // fee would fail. Read inside the same transaction as the handler, and read-only.
     describe('payer fee-token balance (feeBalanceTick)', () => {
 

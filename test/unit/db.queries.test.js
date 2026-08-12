@@ -1744,7 +1744,7 @@ describe('Database.apiView() @regression @tier1', function () {
         assert.ok(txConn.query.calledOnce, 'block-loop queries must keep joining the transaction');
     });
 
-    //  / H2 residual: federation READ methods (not just the pushvalidatorrewards
+    // H2 residual: federation READ methods (not just the pushvalidatorrewards
     // write) must resolve on a pooled connection. A read accessor invoked through the
     // view routes its internal doQuery calls off the open block transaction, so a hub
     // never reads validator-set rows the block may still roll back.
@@ -2110,7 +2110,7 @@ describe('Database.getExpiredAttestationRequests() @regression @tier1', function
         assert.strictEqual(result.length, 1);
     });
 
-    // . Unbounded, one block could inherit an arbitrary backlog of
+    // Unbounded, one block could inherit an arbitrary backlog of
     // expiries (each synthesizing an ATTEST v2 and firing a callback), so block
     // processing time was attacker-selectable by batching a common deadline.
     describe('per-block cap (#3078)', function () {
@@ -3879,8 +3879,8 @@ describe('Database.createValidatorReward() @regression @tier1', function () {
         assert.ok(!sql.includes('INSERT IGNORE'));
     });
 
-    //  / : a reward whose EARN block is not its MATERIALIZATION block (the
-    //  BTC-side anchor derivation) must persist both, or the reorg delete has no key
+    // a reward whose EARN block is not its MATERIALIZATION block (the
+    // BTC-side anchor derivation) must persist both, or the reorg delete has no key
     // that names the block which actually minted the row.
     it('persists the materialization block when the caller passes one, and NULL otherwise', async function () {
         const db = makeDb();
@@ -3955,7 +3955,7 @@ describe('Database.getExpiredItems() @regression @tier1', function () {
         assert.deepStrictEqual(result, []);
     });
 
-    // : the expiration cut is applied in SQL, so exactly ONE query runs and
+    // the expiration cut is applied in SQL, so exactly ONE query runs and
     // only the rows actually expiring this block come back. Previously the whole
     // open book was fetched, overlaid by a second batched edits query per type,
     // and filtered in JS. (Supersedes the uuid:4fe690ab N+1 regression, whose
@@ -4352,10 +4352,10 @@ describe('Database.getActiveStakeWeights() @regression @tier1', function () {
     });
 });
 
-// getPendingAnchorRewardAttestations: the derive fetch gate ( Option C).
+// getPendingAnchorRewardAttestations: the derive fetch gate (Option C).
 // The unit tier stubs the DB, so the predicate itself is the only thing a test at this
 // tier can pin - and the predicate is exactly what decides whether a late failover
-// publisher ever reaches reconcileAnchorRewardWinner ().
+// publisher ever reaches reconcileAnchorRewardWinner.
 //
 // SHAPE ONLY, deliberately. doQuery is stubbed here, so nothing below proves the SQL
 // parses, joins a column that exists, or actually re-admits a late publisher - and

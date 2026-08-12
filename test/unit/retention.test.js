@@ -12,7 +12,7 @@
 //
 //********************************************************************
 //
-// State-retention scaffold . Covers config gating (default off), the
+// State-retention scaffold. Covers config gating (default off), the
 // phase-1 root-prune window, phase-2 orphan reachability + reclaim, dry-run,
 // runExclusive serialization, and the fork-safety invariant (a node reachable
 // from a surviving root is never deleted even when it was also under a pruned
@@ -59,7 +59,7 @@ function makeDb(){
             const cutoff = args[2];
             return [{ c: db.roots.filter(r => r.block_index <= cutoff).length }];
         }
-        // Phase 2's pre-flight cap check counts before it loads ().
+        // Phase 2's pre-flight cap check counts before it loads.
         if(sql.includes('COUNT(*)') && sql.includes('state_tree_nodes'))
             return [{ c: db.nodes.length }];
         if(sql.startsWith('DELETE FROM state_tree_roots')){

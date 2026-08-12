@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * DISPENSER fresh-address verdict causality flag-day ( / b7ecae51).
+ * DISPENSER fresh-address verdict causality flag-day.
  *
  * dispenser.js decides whether SOURCE may open a dispenser on a GET_ADDRESS it
  * does not own. One of the three admitting conditions is FRESHNESS: the
@@ -35,29 +35,26 @@
  * replay preserved); at/after it the local query governs and the tracker is never
  * consulted for this verdict.
  *
- * Gate semantics MIRROR state_key_collation_activation.js / oracle_snapshot_age_
- * causality_activation.js: keyed on the processing chain's OWN local block_index,
- * '<COIN>:<network>' lookup first, then the bare network key; unknown -> inert/off
- * (legacy tracker path, which preserves deployed behavior).
+ * Gate semantics mirror the sibling causality-gate modules in this repo: keyed on
+ * the processing chain's OWN local block_index, '<COIN>:<network>' lookup first,
+ * then the bare network key; unknown -> inert/off (legacy tracker path, which
+ * preserves deployed behavior).
  *
- * EXECUTION-PATH gate (an acceptance decision during action processing), NOT a
+ * Execution-path gate (an acceptance decision during action processing), NOT a
  * hashing-path change: xchain-sync's BlockHasher reads the already-materialized
- * action rows and never re-runs dispenser validation, so this gate is INDEXER-ONLY
- * and has NO xchain-sync twin (exactly like dispense_cancelling_match_activation.js
- * and oracle_snapshot_age_causality_activation.js).
+ * action rows and never re-runs dispenser validation, so this gate is indexer-only
+ * and has no xchain-sync twin.
  *
- * *** ARMED 2026-07-22 (ratified pre-961000 deploy train). *** mainnet is gated
- * per coin at the ratified train heights (BTC 961000, LTC 3154250, DOGE 6319000);
- * testnet and regtest are genesis-active (both pre-launch, so every node deploys
- * together and the local path is exercised end to end), matching the
- * PKG3_SANDBOX_ACTIVATION template in xchain-vm/src/index.js. The indexer fleet
- * must be deployed before BTC 961000.
+ * ARMED 2026-07-22. mainnet is gated per coin at the ratified train heights
+ * (BTC 961000, LTC 3154250, DOGE 6319000); testnet and regtest are genesis-active
+ * (both pre-launch, so every node deploys together and the local path is exercised
+ * end to end). The indexer fleet must be deployed before BTC 961000.
  *
  * No backfill concern: below the gate the legacy tracker path still governs, so
  * historical index_addresses.block_index accuracy is irrelevant there; at/after
  * the gate index_addresses.block_index is populated going forward for every
- * address interned during indexing (it is load-bearing for ^<id> id determinism),
- * so no historical rows need backfilling.
+ * address interned during indexing (it is load-bearing for id determinism), so no
+ * historical rows need backfilling.
  *
  ********************************************************************/
 
@@ -65,7 +62,7 @@
 // block_index. At/after the height the indexer-local freshness query governs;
 // below it the legacy utxo-tracker getFirstSeen HTTP path runs. ARMED 2026-07-22
 // at the ratified deploy-train heights; testnet + regtest genesis-active
-// (pre-launch), matching PKG3_SANDBOX_ACTIVATION.
+// (pre-launch).
 const DISPENSER_FRESHNESS_ACTIVATION = {
     'BTC:mainnet':  961000,
     'LTC:mainnet':  3154250,

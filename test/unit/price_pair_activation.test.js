@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/price_pair_activation.test.js
  *
- * PRICE v0 pair-name widening flag-day . This gate decides which pair
+ * PRICE v0 pair-name widening flag-day. This gate decides which pair
  * names the CHAIN accepts, so the cases below are about the fork surface rather
  * than about regex mechanics: what is accepted either side of the boundary, that
  * the boundary itself is inclusive, that an un-evaluatable gate falls to the
@@ -36,7 +36,7 @@ describe('PRICE v0 pair-name widening flag-day @regression', function () {
     describe('the activation map', function () {
         it('is still UNARMED on mainnet', function () {
             // The moment this becomes a real timestamp it is a consensus commitment,
-            // so it must not drift in by accident.  D6 arms it deliberately.
+            // so it must not drift in by accident. D6 arms it deliberately.
             assert.strictEqual(PRICE_PAIR_WIDEN_ACTIVATION.mainnet, 9999999999);
             assert.strictEqual(isPricePairWideningActive(Math.floor(Date.now() / 1000), 'mainnet'), false);
         });
@@ -65,7 +65,7 @@ describe('PRICE v0 pair-name widening flag-day @regression', function () {
         });
 
         it('rejects XCHAIN/USD below the gate and accepts it above', function () {
-            // The whole point of : the gas ticker is six characters.
+            // The whole point of the gas ticker is six characters.
             assert.strictEqual(PRICE_PAIR_RE_LEGACY.test('XCHAIN/USD'), false);
             assert.strictEqual(PRICE_PAIR_RE_WIDE.test('XCHAIN/USD'), true);
         });

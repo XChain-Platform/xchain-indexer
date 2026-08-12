@@ -49,9 +49,7 @@ const dispenserCaps = require('../dispenser_caps_activation.js');
 
 class Dispenser {
 
-    // Handle constructing a class instance
     constructor(action){
-        // Setup short aliases
         this.actions     = action;
         this.config      = action.config;
         this.decoderDb   = action.decoderDb;
@@ -70,9 +68,7 @@ class Dispenser {
         this.listTypes = [2];
     }
 
-    // Handle parsing the DISPENSER transaction
     async parse(params, data, error){
-        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
@@ -87,7 +83,7 @@ class Dispenser {
 
         // Resolve compacted ^<id> address references (GET_ADDRESS, ORACLE_ADDRESS)
         // back to their canonical address strings before validation/use. At/after the
-        //  flag-day an unresolvable reference is a hard reject here; below it the
+        // flag-day an unresolvable reference is a hard reject here; below it the
         // value is left as-is and rejected by the isCryptoAddress checks lower down.
         // ORACLE_ADDRESS is exactly why the resolver has to state the verdict: its
         // format check only runs when `usingOracle` is true, so a malformed reference
@@ -141,10 +137,6 @@ class Dispenser {
         // Clone the raw data for storage in dispensers table
         let dispenser = Object.assign({}, data);
 
-        /*****************************************************************
-         * TICK / COIN / FIAT Validations
-         ****************************************************************/
-
         // Validate GIVE_COIN is valid
         if(!error && format==0 && !this.config['COINS'].includes(data['GIVE_COIN']))
             error = 'invalid: GIVE_COIN (unsupported COIN network)';
@@ -187,10 +179,6 @@ class Dispenser {
             error = 'invalid: FIAT_CODE (required when ORACLE_ADDRESS is set)';
         if(!error && format==0 && usingOracle && !this.util.isCryptoAddress(data['ORACLE_ADDRESS']))
             error = 'invalid: ORACLE_ADDRESS (format)';
-
-        /*****************************************************************
-         * FORMAT Validations
-         ****************************************************************/
 
         // Verify GIVE_AMOUNT format
         if(!error && format==0 && !this.util.isNull(data['GIVE_AMOUNT']) && giveTokenInfo && !this.util.isValidAmountFormat(giveTokenInfo['DECIMALS'], data['GIVE_AMOUNT']))
@@ -243,7 +231,7 @@ class Dispenser {
         if(!error && format==0 && !this.util.isNull(data['FIAT_CODE']) && !this.util.isNull(data['FIAT_AMOUNT']) && !this.util.isValidFiatFormat(2, data['FIAT_AMOUNT']))
             error = 'invalid: FIAT_AMOUNT (format)';
 
-        // PRICE v1 oracle usage fee , Counterparty parity: a Mode B dispenser
+        // PRICE v1 oracle usage fee, Counterparty parity: a Mode B dispenser
         // pays the oracle operator UP FRONT, as a real native-coin output, charged to the
         // address opening (or refilling) it rather than to buyers per dispense. The fee
         // scales with the escrow this action adds, so a refill pays for what it adds and
@@ -287,10 +275,6 @@ class Dispenser {
         }
 
 
-        /*****************************************************************
-         * General Validations
-         ****************************************************************/
-
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
@@ -331,8 +315,8 @@ class Dispenser {
             let getPrefs = await this.indexerDb.getAddressPreferences(data['GET_ADDRESS'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
             if(Number(getPrefs['DISPENSER_PREFERENCE']) !== 2){
                 let isFresh = false;
-                // Freshness causality flag-day (dispenser_freshness_activation.js /
-                // b7ecae51 / ). At/after the gate the verdict derives from
+                // Freshness causality flag-day (see dispenser_freshness_activation.js).
+                // At/after the gate the verdict derives from
                 // deterministic indexer-local chain state (no XChain activity strictly
                 // before BLOCK_INDEX); the external utxo-tracker is NEVER consulted. Below
                 // the gate the legacy tracker HTTP path runs byte-identically so historical
@@ -377,14 +361,13 @@ class Dispenser {
         // isOwnershipGive, which would route these edits through the create-time
         // ownership block and wrongly reject expiration-only or list-only edits on
         // its isOwnershipEscrowed check. Gated with the dispenser-family cohort,
-        // like MAX_REFILLS below, so replay below the flag-day stays byte-identical
-        // ().
+        // like MAX_REFILLS below, so replay below the flag-day stays byte-identical.
         if(!error && format==2 && Number(dispenserInfo['GIVE_OWNERSHIP']||0)==1 &&
            !this.util.isNull(data['GIVE_ESCROW']) &&
            dispenserCaps.isDispenserCapsActive(data['BLOCK_TIME'], this.config['NETWORK']))
             error = "invalid: GIVE_ESCROW (must be empty when GIVE_OWNERSHIP=1)";
 
-        // MAX_REFILLS cap (dispenser_caps_activation.js / ). A refill is a
+        // MAX_REFILLS cap (see dispenser_caps_activation.js). A refill is a
         // format-2 DISPENSER_EDIT that tops up GIVE_ESCROW; each refill resets the
         // dispense count (derived since the last refill in dispense.js), and the 6th
         // refill is rejected (Counterparty parity). Rate/give-quantity are inherently
@@ -486,7 +469,7 @@ class Dispenser {
         // below; the guard's payoutLegs are intentionally discarded here.
         // SOURCE pays the bounded guard gas (reserved up front).
         //
-        // KNOWN GAP (#1806): unlike ORDER and SWAP sales of a controller-bound token
+        // KNOWN GAP: unlike ORDER and SWAP sales of a controller-bound token
         // (which persist payout_legs at create and apply the royalty split at match
         // time via applyProceedsSplit), DISPENSER sales apply NO royalty/proceeds
         // split. dispense.js has no royalty path: it credits the give token to the

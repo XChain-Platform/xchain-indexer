@@ -12,7 +12,7 @@
  **********************************************************************
  *
  * End-to-end contract-state proof against an ARMED chain's real committed data
- * (SPV sub-tree spec §3 Stage A items 4-5, ).
+ * (SPV sub-tree spec §3 Stage A items 4-5).
  *
  * WHAT THIS PROVES, and it is the last link the unit suites cannot close: that
  * the explorer's proof server, running over a REAL armed chain's
@@ -146,7 +146,7 @@ function parseArgs(argv){
     // THE CHECK: an independent implementation, in another repo, must accept it.
     // The 5th argument binds the proof to the identity we ASKED for, not the one the
     // server echoed back. Without it a proof for a different key verifies clean, which
-    // the explorer's double-decode did for real ( frontier row 28), so this
+    // is a real bug class the explorer's double-decode hit before, so this
     // harness would have passed while the server answered the wrong question.
     const asked = { contract_index: row.contract_index, state_key: row.state_key };
     const v = light.verifyContractStateProof(p, tr.state_root, opts.chain, opts.network, asked);

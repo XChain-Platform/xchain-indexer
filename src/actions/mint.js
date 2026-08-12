@@ -29,9 +29,7 @@
 
 class Mint {
 
-    // Handle constructing a class instance
     constructor(action){
-        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -39,31 +37,26 @@ class Mint {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
-        // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|TICK|AMOUNT|DESTINATION|MEMO';
     }
 
-    // Handle parsing the MINT transaction
     async parse(params, data, error){
-        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
-        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
-        // Convert NUMBER fields from string value to number value so comparisons are mathematical 
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        // Resolve a compacted ^<id> DESTINATION back to its canonical address
-        // before validation/use, so the SDK's default ^<id> wire form validates
-        // and credits identically to the full address. At/after the  flag-day
-        // an unresolvable reference is a hard reject here; below it the value is left
-        // as-is and the isCryptoAddress check below rejects it (see
+        // Resolve a compacted ^<id> DESTINATION back to its canonical address before
+        // validation/use, so the SDK's default ^<id> wire form validates and credits
+        // identically to the full address. At/after the address-ref resolution
+        // flag-day an unresolvable reference is a hard reject here; below it the
+        // value is left as-is and the isCryptoAddress check below rejects it (see
         // caret_ref_strict_activation.js).
         if(!error){
             let destRef = await this.indexerDb.resolveAddressRefChecked(data['DESTINATION'], data['BLOCK_INDEX']);
@@ -72,10 +65,8 @@ class Mint {
                 error = 'invalid: DESTINATION (unresolvable ^id)';
         }
 
-        // Clone the raw data for storage in mints table
         let mint = Object.assign({}, data);
 
-        // Get information on token
         let tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // Get total token minted from this address for the MINT_ADDRESS_MAX check.
@@ -102,7 +93,6 @@ class Mint {
         if(data['DESTINATION'] == data['SOURCE'])
             delete data['DESTINATION'];
 
-        // Update transaction object with basic token details and ensure the values are numbers and not strings
         if(tokenInfo){
             data['SUPPLY']           = (tokenInfo && !this.util.isNull(tokenInfo['SUPPLY']))           ? this.util.bcnum(tokenInfo['SUPPLY']) : 0;
             data['DECIMALS']         = (tokenInfo && !this.util.isNull(tokenInfo['DECIMALS']))         ? this.util.bcnum(tokenInfo['DECIMALS']) : 0;
@@ -113,17 +103,13 @@ class Mint {
             data['MINT_STOP_BLOCK']  = (tokenInfo && !this.util.isNull(tokenInfo['MINT_STOP_BLOCK']))  ? this.util.bcnum(tokenInfo['MINT_STOP_BLOCK']) : 0;
         }
 
-        /*****************************************************************
-         * ACTION Validations
-         ****************************************************************/
+        // ACTION Validations
 
         // Verify MINT is allowed
         if(!error && !this.util.isNull(tokenInfo['LOCK_MINT']) && tokenInfo['LOCK_MINT']==1)
             error = "invalid: LOCK_MINT";
 
-        /*****************************************************************
-         * FORMAT Validations
-         ****************************************************************/
+        // FORMAT Validations
 
         // Verify AMOUNT format
         if(!error && !this.util.isNull(data['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], data['AMOUNT']))
@@ -133,9 +119,7 @@ class Mint {
         if(!error && !this.util.isNull(data['DESTINATION']) && !this.util.isCryptoAddress(data['DESTINATION']))
             error = "invalid: DESTINATION (format)";
 
-        /*****************************************************************
-         * General Validations
-         ****************************************************************/
+        // General Validations
 
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
@@ -183,8 +167,8 @@ class Mint {
         // exactly like the sibling MAX_MINT / MINT_ADDRESS_MAX / MINT_START_BLOCK /
         // MINT_STOP_BLOCK optional-cap checks. Below it the legacy behaviour stands, where
         // bcgt(SUPPLY+AMOUNT, 0) is true for any positive AMOUNT, so every mint on an uncapped
-        // token is rejected and the token is unmintable . Gated because the fix is a
-        // validity LOOSENING; see protocol_changes.js for why an ungated flip forks the fleet.
+        // token is rejected and the token is unmintable. Gated because the fix is a validity
+        // LOOSENING; see protocol_changes.js for why an ungated flip forks the fleet.
         // Resolved only on the still-valid path with no cap declared, so an already-rejected
         // action never spends a decoder-DB read on an activation it cannot use.
         let uncappedSupply = !error && !this.util.bcgt(data['MAX_SUPPLY'], 0) &&
@@ -237,35 +221,26 @@ class Mint {
                 guardFee = result.guardFee;
         }
 
-        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = mint['STATUS'] = status;
 
-        // Print status message 
         console.log("\t MINT : " + data['TICK'] + ' : '  +  data['AMOUNT'] + ' : ' + data['STATUS']);
 
-        // Create record in mints table
         await this.indexerDb.createMint(mint);
 
-        // Store the SOURCE and TICK in addresses list
         this.util.addAddressTicker(data['SOURCE'], data['TICK']);
 
-        // Store the DESTINATION and TICK in addresses list
         if(!this.util.isNull(data['DESTINATION']))
             this.util.addAddressTicker(data['DESTINATION'], data['TICK']);
 
-        // If this was a valid transaction, then mint any actual supply
         if(status=='valid'){
 
-            // Array of credits and debits
             let credits = [],
                 debits  = [];
 
-            // Credit MINT_SUPPLY to source address
             if(data['AMOUNT']){
                 credits.push([data['TICK'], data['AMOUNT'], data['SOURCE']]);
 
-                // Transfer AMOUNT to DESTINATION address
                 if(data['DESTINATION']){
                     debits.push([data['TICK'],  data['AMOUNT'], data['SOURCE']]);
                     credits.push([data['TICK'], data['AMOUNT'], data['DESTINATION']]);
@@ -279,19 +254,15 @@ class Mint {
                 this.util.addAddressTicker(data['SOURCE'], this.config['GAS']);
             }
 
-            // Process any transaction ledger changes (credits / debits)
             await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
-            // Get a list of tickers & addresses
             let tickers   = this.util.getTickersList(),
                 addresses = Object.keys(this.util.getAddressesList());
 
-            // Update address balances and token supply
             await this.indexerDb.updateBalances(addresses);
             await this.indexerDb.updateTokens(tickers);
         }
 
-        // Create action mappings
         await this.mapper.createMappings(data);
 
     }

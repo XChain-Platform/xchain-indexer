@@ -12,7 +12,7 @@
 -- re-open reset (rollback.js) unconditionally SETs
 -- callback_execute_action_index and throws ER_BAD_FIELD_ERROR, crash-looping
 -- block processing (found 2026-07-05 when the LTC-regtest actions sweep's first
--- reorg test wedged the devhost LTC indexer; DOGE had the same drift).
+-- reorg test wedged the LTC indexer; DOGE had the same drift).
 --
 -- Additive + idempotent: ADD COLUMN IF NOT EXISTS re-runs as a no-op, and the
 -- definitions + placement match polls.sql exactly so a migrated table and a

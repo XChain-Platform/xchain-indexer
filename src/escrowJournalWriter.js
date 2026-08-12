@@ -10,7 +10,7 @@
  *
  **********************************************************************
  *
- * escrow_leaf_journal WRITER (SPV sub-tree spec §3 Stage B, ).
+ * escrow_leaf_journal WRITER (SPV sub-tree spec §3 Stage B).
  *
  * SOURCE-ONLY, and deliberately NOT a twin. xchain-sync REPLICATES the rows this
  * writes (`stream:block`) rather than recomputing them. The follower still
@@ -263,7 +263,7 @@ function placeholders(list){ return list.map(() => '?').join(','); }
 // per-key `ORDER BY j.id DESC LIMIT 1` returned: id is the AUTO_INCREMENT primary
 // key, so it orders the append-only journal exactly.
 //
-// Set-based rather than one SELECT per key (): the tail of
+// Set-based rather than one SELECT per key: the tail of
 // writeEscrowJournal ran 2 serial round-trips per changed key inside the block
 // transaction, and the arming replay attributes the WHOLE ledger, so that tail
 // scaled with ledger size. The id lookups narrow the grouped scan to the keys in
@@ -273,7 +273,7 @@ function placeholders(list){ return list.map(() => '?').join(','); }
 // Resolve a set of address and tick STRINGS to their index-table ids, in two set
 // queries rather than one per key. Shared by the prior-total read and the INSERT.
 //
-// The INSERT needs it for a correctness reason, not a speed one (). The
+// The INSERT needs it for a correctness reason, not a speed one. The
 // per-key INSERTs this file used to run bound the ids as `(SELECT id FROM
 // index_addresses WHERE address = ?)` sub-selects, and leaned on the NOT NULL column
 // to throw when one resolved to nothing. That guarantee does not survive batching:

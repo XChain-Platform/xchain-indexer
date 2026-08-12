@@ -38,7 +38,7 @@ describe('Security: remediated dependency advisories @regression @tier4', functi
     // authority delimiter. Affects >=3.0.0 <=3.1.3; fixed in 3.1.4. Reaches
     // this tree dev-only via ajv. GHSA-7p8r-x3mc-p8w7 then reopened the same
     // backslash-authority confusion over a wider range, >=3.0.0 <3.1.5, so
-    // 3.1.4 is no longer a floor and the pin moves to 3.1.5 ().
+    // 3.1.4 is no longer a floor and the pin moves to 3.1.5.
     //
     // GHSA-mh99-v99m-4gvg (CVE-2026-14257): brace-expansion expand() bounds the
     // number of results but not their total length, so a few KB of chained brace
@@ -83,7 +83,7 @@ describe('Security: remediated dependency advisories @regression @tier4', functi
     // IPv4-mapped / NAT64 IPv6 addresses (GHSA-22jq-vg5j-6vgg). It is a runtime
     // reach here, not dev-only: express-rate-limit and geoip-lite both parse the
     // client request IP, so a padded or mapped form could key a different
-    // rate-limit bucket than its canonical address ().
+    // rate-limit bucket than its canonical address.
     const advisories = [
         { name: 'fast-uri', minSafe: [3, 1, 5], majorSeries: 3 },
         { name: 'brace-expansion', minSafe: [5, 0, 8], majorSeries: 5 },

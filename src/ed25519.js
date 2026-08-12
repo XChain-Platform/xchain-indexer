@@ -56,7 +56,7 @@ function verify(payload, sigHex, pubkeyHex) {
 // value the hub captured in OracleConsensus.finalizeRound). It is part of the
 // signed content AND the on-chain wire (PRICE|0|ROUND|TIMESTAMP|BTC_BLOCK_HEIGHT|...)
 // so the indexer reconstructs the exact bytes the validators signed and gates the
-// EQUIV header on the IDENTICAL BTC height every other engine uses (#4232 fix). The
+// EQUIV header on the IDENTICAL BTC height every other engine uses. The
 // EQUIV ROUND_ID is the BTC height (the real activation anchor), not the wall-clock
 // round counter; the round counter stays in the signed JSON for round identity.
 function buildPriceV0Payload(round, timestamp, pairs, network, btcBlockHeight) {
@@ -71,10 +71,10 @@ function buildPriceV0Payload(round, timestamp, pairs, network, btcBlockHeight) {
         btc_block_height: parseInt(btcBlockHeight),
         pairs:            sortedPairs
     });
-    // EQUIV header (WI-2 bump 2): gated on the round's BTC block HEIGHT + network,
-    // identical to every other engine and to the hub, so all services flip on the
-    // same anchor (#4232). XORACLE has no view change → VIEW=0. Below the flag-day,
-    // the bare JSON (regression-safe; the height still rides in the signed content).
+    // EQUIV header: gated on the round's BTC block HEIGHT + network, identical to
+    // every other engine and to the hub, so all services flip on the same anchor.
+    // XORACLE has no view change -> VIEW=0. Below the flag-day, the bare JSON
+    // (regression-safe; the height still rides in the signed content).
     if (eq.isEquivHeaderActive(btcBlockHeight, network))
         return eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE, parseInt(btcBlockHeight), 0, raw);
     return raw;

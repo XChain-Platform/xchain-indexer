@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/db.createToken-lock-mint-supply.test.js
  *
- * : createToken() wrote six of the seven token locks and silently dropped
+ * createToken() wrote six of the seven token locks and silently dropped
  * LOCK_MINT_SUPPLY, so tokens.lock_mint_supply sat at its column default on every
  * chain and every read API (explorer/SDK `locks.mint_supply`, and through it the
  * wallet mint form and lock matrix) reported the seventh lock unset even where the
@@ -111,7 +111,7 @@ afterEach(function () {
     sinon.restore();
 });
 
-describe('Database.createToken() token locks  @regression @tier1', function () {
+describe('Database.createToken() token locks @regression @tier1', function () {
 
     it('INSERT writes all seven locks, each bound to its own column', async function () {
         const { sql, args } = await runCreateToken(ALL_SET, []);
@@ -176,7 +176,7 @@ describe('Database.createToken() token locks  @regression @tier1', function () {
     });
 });
 
-describe('tokens.lock_mint_supply backfill migration  @regression @tier1', function () {
+describe('tokens.lock_mint_supply backfill migration @regression @tier1', function () {
     const FILE = '2026-07-26-tokens-backfill-lock-mint-supply.sql';
     const MIG  = path.join(__dirname, '..', '..', 'src', 'sql', 'migrations', FILE);
 

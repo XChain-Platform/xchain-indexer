@@ -10,7 +10,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 
-// : the health endpoint exposes a fingerprint of the consensus-gate
+// the health endpoint exposes a fingerprint of the consensus-gate
 // source files in the running build so a fleet sweep can confirm every
 // deployed process carries the same armed map before a flag-day height.
 
@@ -20,7 +20,7 @@ const fs     = require('fs');
 const path   = require('path');
 const { computeArmedMapFingerprint } = require('../../src/armedMapFingerprint');
 
-describe('armedMapFingerprint ', function () {
+describe('armedMapFingerprint', function () {
 
     it('covers every *_activation.js gate file plus the fixed carriers', function () {
         const { files } = computeArmedMapFingerprint();

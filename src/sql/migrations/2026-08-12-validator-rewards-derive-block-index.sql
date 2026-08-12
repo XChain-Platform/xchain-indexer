@@ -1,10 +1,10 @@
 -- xchain:migration mode=manual
 -- Migration: validator_rewards.derive_block_index +
---            anchor_reward_reconcile_log.reward_derive_block_index (, ).
+--            anchor_reward_reconcile_log.reward_derive_block_index.
 --
 -- WHY
 -- ---
--- An  derived anchor/archive reward is stamped block_index = the checkpoint's
+-- A derived anchor/archive reward is stamped block_index = the checkpoint's
 -- SNAPSHOT_BLOCK S (that is where its stake source resolves and where a replay must
 -- credit it), but the row is CREATED while the BTC indexer processes a later block B.
 -- rollback.js deletes validator_rewards on block_index >= H, so a reorg to any H in

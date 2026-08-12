@@ -10,7 +10,7 @@
  *
  **********************************************************************
  *
- * attest_relay_activation twin parity .
+ * attest_relay_activation twin parity.
  *
  * The hub decides WHEN to broadcast an ATTEST v3/v4 relay leg and the indexers
  * decide whether to ACCEPT one. If the two copies of the gate disagree, the hub
@@ -38,7 +38,7 @@ const HUB_SRC     = path.resolve(__dirname, '..', '..', '..', 'xchain-hub', 'src
 
 describe('attest_relay_activation twin parity @regression @tier1', function () {
 
-    it('is armed on the ratified  BTC anchor, genesis-on off mainnet', function () {
+    it('is armed on the ratified BTC anchor, genesis-on off mainnet', function () {
         assert.strictEqual(indexer.ATTEST_RELAY_ACTIVATION.mainnet, 963000);
         assert.strictEqual(indexer.ATTEST_RELAY_ACTIVATION.testnet, 0);
         assert.strictEqual(indexer.ATTEST_RELAY_ACTIVATION.regtest, 0);

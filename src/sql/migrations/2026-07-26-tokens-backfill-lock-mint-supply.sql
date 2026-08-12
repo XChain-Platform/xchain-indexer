@@ -24,8 +24,8 @@
 -- ---
 -- createToken() derived and wrote six of the seven token locks and omitted
 -- lock_mint_supply entirely, so tokens.lock_mint_supply stayed at its column default (0)
--- on every chain, for every token, even where the lock was set and the chain enforces it
--- . db.js now writes the column, but only tokens re-touched by a later ISSUE
+-- on every chain, for every token, even where the lock was set and the chain enforces it.
+-- db.js now writes the column, but only tokens re-touched by a later ISSUE
 -- would heal on their own, so every already-issued token needs this one-time repair.
 --
 -- CONSENSUS IS NOT AFFECTED. The enforcement path (issue.js "Verify MINT_SUPPLY is

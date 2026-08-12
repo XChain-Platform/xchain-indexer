@@ -33,10 +33,8 @@ class Mapper {
             action_index = data['ACTION_INDEX'],
             status       = data['STATUS'];
 
-        // Get a list of address->tickers mappings
         let list = this.util.getAddressesList();
 
-        // List to store items that have been successfully mapped
         let mapped = {
             address: [],
             tick   : []
@@ -60,20 +58,16 @@ class Mapper {
         await this.indexerDb.createActionMappings(action_index, 'address', mapped.address);
         await this.indexerDb.createActionMappings(action_index, 'tick', mapped.tick);
 
-        // Handle creating link mappings 
-        // TODO : Add support for verifying links across multiple COIN networks in xchain-hub
+        // TODO: Add support for verifying links across multiple COIN networks in xchain-hub
         if(action=='LINK' && status=='valid'){
-            // Get information on the actions if it is on the local COIN network
             let action1 = (data['COIN1']==this.config['COIN']) ? await this.indexerDb.getActionData(data['COIN1_ACTION_INDEX']) : false;
             let action2 = (data['COIN2']==this.config['COIN']) ? await this.indexerDb.getActionData(data['COIN2_ACTION_INDEX']) : false;
             if(action1 && action2){
-                // Process any FILE->ISSUE links
                 if((action1.action=='FILE' && action2.action=='ISSUE')||(action2.action=='FILE' && action1.action=='ISSUE')){
-                    // Get ACTION_INDEX of FILE we are linking as well as TICK and current token information
                     let tick  = (action1.action=='ISSUE') ? action1.tick : action2.tick;
                     let index = (action1.action=='FILE') ? action1.action_index : action2.action_index;
                     let token = await this.indexerDb.getTokenInfo(tick);
-                    // Create TICK<->FILE mapping if LINK action was created by current token owner address
+                    // Only link the FILE if the LINK's SOURCE is the token's current owner.
                     if(token && data['SOURCE']==token['OWNER'])
                         await this.indexerDb.createFileMapping(index, 'tick', tick);
                 }

@@ -23,9 +23,7 @@ const ownershipCancelGate = require('../dispenser_ownership_cancel_activation.js
 
 class Dispenser_Close {
 
-    // Handle constructing a class instance
     constructor(action){
-        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -34,7 +32,6 @@ class Dispenser_Close {
         this.mapper    = action.mapper;
     }
 
-    // Handle closing a dispenser
     async parse(params, data, error){
 
         // Get info on the dispenser
@@ -94,7 +91,7 @@ class Dispenser_Close {
                 // a non-SOURCE destination. The legacy path transferred to the computed
                 // `destination` (sweep > canceller > SOURCE), and cancel authority
                 // includes GET_ADDRESS, so a GET_ADDRESS/SOURCE canceller acquired the
-                // token's ownership for free (1678). Gated
+                // token's ownership for free. Gated
                 // (dispenser_ownership_cancel_activation.js): below the flag-day the
                 // legacy canceller-takes-ownership routing runs so historical replay is
                 // byte-identical; at/after it only the SWEEP path transfers ownership and

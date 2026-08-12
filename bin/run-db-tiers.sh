@@ -22,7 +22,7 @@
 # directory is UNTRACKED. `git archive HEAD` therefore yields a tree where
 # require('xchain-vm') fails, and every DEPLOY/EXECUTE suite then fails for a reason
 # that has nothing to do with the code under test. The diagnosis had already been
-# written down before the discrepancy surfaced. See .
+# written down before the discrepancy surfaced.
 #
 # So the preflight below is the point of this script, more than the database is:
 #
@@ -83,7 +83,7 @@ command -v docker >/dev/null 2>&1 || {
 
 # The vendored VM. Checked by LOADING it, not by testing for the directory: the
 # node_modules entry is a symlink to ./xchain-vm, so the path can exist while the
-# require fails, which is exactly how the false findings in  happened.
+# require fails, which is exactly how false findings like this happened before.
 if ! node -e "require('xchain-vm')" >/dev/null 2>&1; then
     cat >&2 <<'VMERR'
 run-db-tiers: require('xchain-vm') FAILS, so this run would report false failures.

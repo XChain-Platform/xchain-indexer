@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Light-client / SPV Merkle primitives (spec: claude/reports/SPV-LIGHT-CLIENT-SPEC.md §3-§5)
+ * Light-client / SPV Merkle primitives (spec: §3-§5)
  *
  * Pure, deterministic, DB-free cryptographic primitives for the additive state
  * commitment (balance/state SMT), the per-block content Merkle root, and the
@@ -143,7 +143,7 @@ function stakeKey(pubkey, capability){
 //
 // state_key enters RAW. joinFields still throws on a 0x00-bearing key, which is
 // deliberate: that is the same surface block_merkle_root has carried all along,
-// and the fix is the VM-side NUL rejection ( -> ), which must be
+// and the fix is the VM-side NUL rejection (->), which must be
 // ARMED before any Stage A height arms. The encoding route that would have made
 // this total was considered and closed by operator decision.
 function contractStateKey(chain, network, contractIndex, stateKey){

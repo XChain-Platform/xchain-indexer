@@ -18,8 +18,7 @@
 --
 -- WHY
 -- ---
--- SPV sub-tree spec Stage B (claude/specs/spv-state-subtree-extension.md, )
--- commits a locked-balance leaf per (address, tick) inside balances_root under the
+-- The SPV sub-tree design commits a locked-balance leaf per (address, tick) inside balances_root under the
 -- XCHAIN_ESC key domain. The `escrows` ledger cannot answer "how much does this
 -- address have locked": it is a per-tick conservation ledger whose releases key to
 -- whoever RECEIVES the funds (nine of the 26 escrow write sites), so a per-key sum

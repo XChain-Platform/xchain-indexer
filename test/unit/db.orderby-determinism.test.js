@@ -13,10 +13,10 @@
  **********************************************************************
  * test/unit/db.orderby-determinism.test.js
  *
- * CONSENSUS REGRESSION GUARD (hotspot invariant, ): every ORDER BY in
+ * CONSENSUS REGRESSION GUARD (hotspot invariant): every ORDER BY in
  * src/db.js must impose a deterministic total order.
  *
- * WHY THIS EXISTS: src/db.js is the platform's #1 fix-commit hotspot (the review
+ * WHY THIS EXISTS: src/db.js is the platform's #1 fix-commit hotspot (the AML
  * defect-recurrence monitor flagged ~55 distinct fixes in 90 days). The single
  * most-repeated defect shape in that history is a consensus read whose ORDER BY
  * ranks rows by a NON-unique column with no unique tiebreaker, so MariaDB is free

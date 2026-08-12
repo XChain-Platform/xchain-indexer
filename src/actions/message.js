@@ -35,17 +35,14 @@
 
 class Message {
 
-    // Handle constructing a class instance
     constructor(action){
-        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
         this.indexerDb = action.indexerDb;
         this.util      = action.util;
         this.mapper    = action.mapper;
-        
-        // Define list of known FORMATS
+
         this.formats = {};
         this.formats[0] = 'VERSION|COIN|DESTINATION|ENCRYPTION_METHOD|ENCRYPTION_KEY';
         this.formats[1] = 'VERSION|COIN|DESTINATION|ENCRYPTION_METHOD|ENCRYPTION_KEY';
@@ -53,25 +50,21 @@ class Message {
         this.formats[3] = 'VERSION|COIN|DESTINATION|PLAINTEXT_MESSAGE';
     }
 
-    // Handle parsing the ADDRESS transaction
     async parse(params, data, error){
-        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
-        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
-        // Convert NUMBER fields from string value to number value so comparisons are mathematical
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        // Resolve a compacted ^<id> DESTINATION back to its canonical address
-        // before validation/use (see resolveAddressRefChecked). At/after the 
-        // flag-day an unresolvable reference is a hard reject; below it the value is
-        // left as-is and rejected by isCryptoAddress.
+        // Resolve a compacted ^<id> DESTINATION back to its canonical address before
+        // validation/use (see resolveAddressRefChecked). At/after the address-ref
+        // resolution flag-day an unresolvable reference is a hard reject; below it
+        // the value is left as-is and rejected by isCryptoAddress.
         if(!error){
             let destRef = await this.indexerDb.resolveAddressRefChecked(data['DESTINATION'], data['BLOCK_INDEX']);
             data['DESTINATION'] = destRef.value;
@@ -88,9 +81,7 @@ class Message {
 
         // TODO : Make sure that ENCRYPTION_METHOD is a numeric value or null (stop storing 'u' in database when undefined)
 
-        /*****************************************************************
-         * FORMAT Validations
-         ****************************************************************/
+        // FORMAT Validations
 
         // Verify COIN is a valid coin
         if(!error && !this.util.isNull(data['COIN']) && !this.config['COINS'].includes(String(data['COIN']).toUpperCase()))
@@ -110,9 +101,7 @@ class Message {
         if(!error && !this.util.isNull(data['ENCRYPTION_METHOD']) && !this.util.isNumeric(data['ENCRYPTION_METHOD']))
             error = 'invalid: ENCRYPTION_METHOD (format)';
 
-        /*****************************************************************
-         * General Validations
-         ****************************************************************/
+        // General Validations
 
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
@@ -134,20 +123,15 @@ class Message {
         if(!error && String(data['PLAINTEXT_MESSAGE']).length > this.config['MAX_MESSAGE_LENGTH'])
             error = 'invalid: PLAINTEXT_MESSAGE (length)';
 
-        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
-        // Print status message 
         console.log("\t MESSAGE : " + data['DESTINATION'] + ' : ' + data['STATUS']);
 
-        // Create record in messages table
         await this.indexerDb.createMessage(data);
 
-        // Store the SOURCE in addresses list
         this.util.addAddressTicker(data['SOURCE']);
 
-        // Create action mappings
         await this.mapper.createMappings(data);
 
     }

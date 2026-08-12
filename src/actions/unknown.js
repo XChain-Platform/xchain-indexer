@@ -20,9 +20,7 @@
 
 class Unknown {
 
-    // Handle constructing a class instance
     constructor(action){
-        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -31,10 +29,7 @@ class Unknown {
         this.mapper    = action.mapper;
     }
 
-    // Handle parsing the UNKNOWN transactions
     async parse(params, data, error){
-
-        // Determine final status
         // The dispatcher always sets `error` before routing here ('UNKNOWN' is never
         // a defined action), so the fallback is defensive only.
         // 'invvalid' is a historical misspelling that is load-bearing: deployed
@@ -43,15 +38,11 @@ class Unknown {
         let status = (error) ? error : 'invvalid';
         data['STATUS'] = status;
 
-        // Print status message 
         console.log("\t UNKNOWN : " + data['STATUS']);
 
-        // Store the SOURCE in addresses list
         this.util.addAddressTicker(data['SOURCE']);
 
-        // Create action mappings
         await this.mapper.createMappings(data);
-
     }
 }
 

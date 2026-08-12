@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/priceReadPredicate.test.js
  *
- * : the price/oracle mirror barriers waited on EVERY block, so every
+ * the price/oracle mirror barriers waited on EVERY block, so every
  * mainnet tip block burned the full 60s timeout waiting for a mirror it never
  * read. The barrier is now skipped for blocks that provably cannot reach a price
  * read.
@@ -79,7 +79,7 @@ function makeDb() {
     return db;
 }
 
-describe(' action-scoped price barrier', function () {
+describe('action-scoped price barrier', function () {
 
     afterEach(() => sinon.restore());
 
@@ -207,7 +207,7 @@ describe(' action-scoped price barrier', function () {
             assert.strictEqual(db.indexer.priceBarrierForceBlock, 959864);
         });
 
-        // : the deferral fires INSIDE action catches that swallow deterministic
+        // the deferral fires INSIDE action catches that swallow deterministic
         // contract failures (xexec's execution catch, the XCALL/ATTEST callback catches).
         // Those catches re-throw only what faultGuard classes as infrastructure, and a
         // thrown string carries neither a code nor an errno, so the deferral was absorbed

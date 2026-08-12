@@ -15,7 +15,7 @@
  **********************************************************************
  * Integration tests: characterization of the expiry-sweep SQL push-down.
  *
- * . db.getExpiredItems used to fetch the ENTIRE open order/swap/dispenser
+ * db.getExpiredItems used to fetch the ENTIRE open order/swap/dispenser
  * book every block, resolve the edits overlay with a second batched query per
  * type, and apply the expiration cut in JS. The cut now lives in SQL, so only
  * the rows actually expiring this block come back.

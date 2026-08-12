@@ -13,37 +13,34 @@
  **********************************************************************
  *
  * XChain Platform Action - SEND
- * 
+ *
  * This action sends one or more `TICK` to an `ADDRESS`.
- * 
+ *
  * PARAMS:
- * - VERSION     - Format Version        
+ * - VERSION     - Format Version
  * - TICK        - Ticker name or Ticker ID
- * - AMOUNT      - Amount of `tokens` to send      
- * - DESTINATION - Address to transfer `tokens` to 
- * - MEMO        - An optional memo to include     
- * 
+ * - AMOUNT      - Amount of `tokens` to send
+ * - DESTINATION - Address to transfer `tokens` to
+ * - MEMO        - An optional memo to include
+ *
  * FORMATS:
  * - 0 = Single Send
  * - 1 = Multi-Send (Brief)
  * - 2 = Multi-Send (Full)
  * - 3 = Multi-Send (Full) with Multiple Memos
- * 
+ *
  ********************************************************************/
 
 class Send {
 
-    // Handle constructing a class instance
     constructor(action){
-        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
         this.indexerDb = action.indexerDb;
         this.util      = action.util;
         this.mapper    = action.mapper;
-        
-        // Define list of known FORMATS
+
         this.formats = {};
         this.formats[0] = 'VERSION|TICK|AMOUNT|DESTINATION|MEMO';
         this.formats[1] = 'VERSION|TICK|AMOUNT|DESTINATION|AMOUNT|DESTINATION|MEMO';
@@ -51,15 +48,13 @@ class Send {
         this.formats[3] = 'VERSION|TICK|AMOUNT|DESTINATION|MEMO|TICK|AMOUNT|DESTINATION|MEMO';
     }
 
-    // Handle parsing the SEND transaction
     async parse(params, data, error){
-        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
         // Array of sends [TICK, AMOUNT, DESTINATION, MEMO]
-        let sends = []; 
+        let sends = [];
 
         // Extract memo
         let memo = null;
@@ -72,10 +67,9 @@ class Send {
         if(error)
             sends.push([params[0], params[1], memo]);
 
-        // Build out array of sends
-        let lastIdx = params.length - 1;        
+        let lastIdx = params.length - 1;
         for(let idx in params){
-            // Force index to integer value
+            // Force index to integer value (for-in yields string keys)
             idx = parseInt(idx);
 
             // Single Send
@@ -133,7 +127,6 @@ class Send {
             keys[key] = [tick, amount, destination, memo];
         }
 
-        // Update sends using consolidated info
         sends = [];
         for(let key in keys)
             sends.push(keys[key]);
@@ -157,7 +150,6 @@ class Send {
                 destination, null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         }
 
-        // Get source address balances
         let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // Controller-bound token gas context. A SEND of a token whose `transfer` class is bound to
@@ -168,7 +160,6 @@ class Send {
         let gasInfo      = await this.indexerDb.getTokenInfo(gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let gasBalances  = await this.indexerDb.getAddressBalances(data['SOURCE'], gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
-        // Store original error value
         let origError = error;
 
         // SOURCE sleeping-state check is byte-identical for every leg (same SOURCE, same
@@ -192,61 +183,42 @@ class Send {
         // (Brief) to N recipients was paying up to 3N round-trips for one answer.
         let sourceTickAllowed = {};
 
-        // Array of credits and debits
         let credits = [],
             debits  = [];
 
-        // Loop through sends and process each
         for(let idx in sends){
 
-            // Parse in the send information
             let info = sends[idx];
 
-            // Reset error to the original value
+            // Reset error to the original value (per-leg validation restarts from origError)
             error = origError;
 
             // Guard gas fee billed to SOURCE for this leg (0 = uncontrolled token)
             let guardFee = 0;
 
-            // Copy base transaction data object
+            // `send` aliases `data`: mutating it below also mutates the shared transaction
+            // object, which the multi-leg loop relies on for each leg's downstream calls.
             let send = data;
 
-            // Update transaction data object with send values
             send['TICK']        = info[0];
             send['AMOUNT']      = info[1];
             send['DESTINATION'] = info[2];
             send['MEMO']        = info[3];
 
-            // Convert NUMBER fields from string value to number value so comparisons are mathematical 
+            // Convert NUMBER fields from string value to number value so comparisons are mathematical
             if(!error)
                 send = this.util.setNumberFormats(send);
 
-            // Get information on token
             let tokenInfo = ticks[send['TICK']];
 
-            /*****************************************************************
-             * TICK Validations
-             ****************************************************************/
-
-            // Validate TICK exists
             if(!error && !tokenInfo)
                 error = 'invalid: TICK (unknown)';
 
-            /*************************************************************
-             * FORMAT Validations
-             ************************************************************/
-
-            // Verify AMOUNT format
             if(!error && !this.util.isNull(send['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], send['AMOUNT']))
                 error = "invalid: AMOUNT (format)";
 
-            // Verify DESTINATION address format
             if(!error && !this.util.isNull(send['DESTINATION']) && !this.util.isCryptoAddress(send['DESTINATION']))
                 error = "invalid: DESTINATION (format)";
-
-            /*************************************************************
-             * General Validations
-             ************************************************************/
 
             // Verify SOURCE is not sleeping (hoisted, byte-identical across legs)
             if(!error && sourceActionAllowed == false)
@@ -280,15 +252,12 @@ class Send {
             if(!error && String(send['MEMO']).indexOf(';')!=-1)
                 error = 'invalid: MEMO (semicolon)';
 
-            // Verify MEMO is shorter than MAX_MEMO_LENGTH
             if(!error && String(send['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
                 error = 'invalid: MEMO (length)';
 
-            // Verify MEMO if destination address preferences require a memo
             if(!error && preferences[send['DESTINATION']]['REQUIRE_MEMO']==1 && this.util.isNull(send['MEMO']))
                 error = 'invalid: MEMO (required)';
 
-            // Verify SOURCE has enough balances to cover send AMOUNT
             if(!error && !this.util.hasBalance(balances, tokenInfo['TICK_ID'], send['AMOUNT']))
                 error = 'invalid: insufficient funds';
 
@@ -301,33 +270,18 @@ class Send {
             if(!error){
                 let packs = gatedPacks[send['TICK']] || [];
                 if(packs.length > 0){
-                    /*********************************************************
-                     * PC-29 rule 3-5: the handoff is now CONDITIONAL.
-                     *
-                     * Previously ANY gated FILE on a tick made EVERY send of it
-                     * require a handoff. Now a pack only compels one when the
-                     * recipient will actually end up able to unlock it.
-                     *
-                     * POST-SEND balance, not the amount sent: a recipient who
-                     * already holds enough crosses the threshold on any transfer,
-                     * and one who holds nothing may not cross it even on a large
-                     * one. Both halves matter, so the comparison is
-                     * (pre-send balance + everything this action sends them).
-                     *
-                     * The "everything this action sends them" half is already
-                     * exact here and it is worth saying why, because it looks
-                     * like a gap: legs were CONSOLIDATED by (DESTINATION, TICK)
-                     * further up, so send['AMOUNT'] is the TOTAL for this pair,
-                     * not one leg. That consolidation is what closes the
-                     * split-120-into-two-60s bypass; it is structural rather
-                     * than something this block re-derives, and a vector pins it
-                     * so a future de-consolidation cannot silently reopen it.
-                     *
-                     * Self-send (DESTINATION === SOURCE) is deliberately NOT
-                     * special-cased: the rule applies literally, the resulting
-                     * overcount is accepted for determinism, and the MESSAGE the
-                     * sender addresses to itself satisfies the requirement.
-                     *********************************************************/
+                    // PC-29 rule 3-5: the handoff is now CONDITIONAL. Previously ANY gated FILE
+                    // on a tick made EVERY send of it require a handoff; now a pack only compels
+                    // one when the recipient will actually end up able to unlock it, judged on
+                    // POST-SEND balance (pre-send balance + everything this action sends them),
+                    // since a recipient who already holds enough crosses the threshold on any
+                    // transfer and one who holds nothing may not cross it even on a large one.
+                    // send['AMOUNT'] is already the TOTAL for this (DESTINATION, TICK) pair
+                    // (legs were CONSOLIDATED further up), which is what closes the
+                    // split-into-many-small-sends bypass; a test vector pins that consolidation
+                    // so it cannot silently regress. Self-send is deliberately NOT special-cased:
+                    // the rule applies literally, the resulting overcount is accepted for
+                    // determinism, and a sender's self-addressed MESSAGE satisfies the requirement.
                     let destBal = destBalances[send['DESTINATION']] || {};
                     let held    = destBal[tokenInfo['TICK_ID']];
                     if(this.util.isNull(held)) held = '0';
@@ -462,33 +416,24 @@ class Send {
                     guardFee = this.util.bcadd(guardFee, recip.guardFee, 8);
             }
 
-            // Adjust balances to reduce by SEND AMOUNT
             if(!error)
                 balances = this.util.debitBalances(balances, tokenInfo['TICK_ID'], send['AMOUNT']);
 
-            // Determine final status
             let status = (error) ? error : 'valid';
             data['STATUS'] = send['STATUS'] = status;
-    
-            // Print status message 
+
             console.log("\t SEND : " + send['TICK'] + ' : ' + send['AMOUNT'] + ' : ' + send['DESTINATION'] + ' : '+ data['STATUS']);
-    
-            // Create record in sends table
+
             await this.indexerDb.createSend(send);
-    
-            // Store the SOURCE and TICK in addresses list
+
             this.util.addAddressTicker(data['SOURCE'], send['TICK']);
 
-            // If this was a valid transaction, then add records to the credits and debits array
             if(status=='valid'){
 
-                // Store the DESTINATION and TICK in addresses list
                 this.util.addAddressTicker(send['DESTINATION'], send['TICK']);
 
-                // Add ticker and amount to debits array
                 debits.push([send['TICK'], send['AMOUNT'], send['SOURCE']]);
 
-                // Add ticker, amount, and destination to credits array
                 credits.push([send['TICK'], send['AMOUNT'], send['DESTINATION']]);
 
                 // Bill the controller-guard gas to SOURCE (in GAS). Reduce the
@@ -499,8 +444,8 @@ class Send {
                     this.util.addAddressTicker(send['SOURCE'], gasTick);
                     if(gasInfo){
                         // When the sent tick IS the gas tick, debit the guard fee out of the same
-                        // `balances` snapshot that AMOUNT was already debited from above (line ~349),
-                        // so AMOUNT + guardFee together are enforced against one balance. Otherwise
+                        // `balances` snapshot that AMOUNT was already debited from above, so
+                        // AMOUNT + guardFee together are enforced against one balance. Otherwise
                         // (unchanged) debit the independent `gasBalances` snapshot.
                         if(sameTick)
                             balances = this.util.debitBalances(balances, gasInfo['TICK_ID'], guardFee);
@@ -511,10 +456,8 @@ class Send {
             }
         }
 
-        // Process any transaction ledger changes (credits / debits)
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
-        // Get a list of tickers & addresses
         let tickers   = this.util.getTickersList(),
             addresses = Object.keys(this.util.getAddressesList());
 
@@ -526,10 +469,8 @@ class Send {
         await this.indexerDb.updateBalances(addresses);
         await this.indexerDb.updateTokens(tickers);
 
-        // Create action mappings
         await this.mapper.createMappings(data);
 
-        // Check if any sends triggered dispensers
         await this.util.processDispenserSends(this.actions, this.indexerDb, data);
 
     }

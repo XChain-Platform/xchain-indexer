@@ -17,7 +17,6 @@
  * literals; any drift reddens here. A real change must bump the VM's
  * CONSENSUS_VERSION + a new golden in BOTH repos and, post-launch, a
  * protocol_changes.js block-height activation.
- * See claude/reports/launch/CONSENSUS-ACTIVATION-RUNBOOK.md.
  ********************************************************************/
 
 const assert = require('assert');
@@ -35,7 +34,7 @@ const GOLDEN_GAS_SCHEDULE = {
     OWNERSHIP_ESCROW:   50000,
     AIRDROP_PER_RECIPIENT: 100,
     DIVIDEND_PER_RECIPIENT: 100,
-    // BET ( P4, decision F): duration-metered feed creation (own key so the
+    // BET (P4, decision F): duration-metered feed creation (own key so the
     // betting and order-book families re-price independently) + per-credit place
     // pre-funding. Landed pre-freeze with the BET action itself; the coins-registry
     // consensus_pin regenerated in the same change.

@@ -429,7 +429,7 @@ describe('Cross_Settle action handler @regression @tier1', function () {
             assert.ok(indexer.indexerDb.recordCrossChainSettlement.calledOnce);
         });
 
-        it(': clamps a TOCTOU over-stamped fill to the order\'s give remaining', async function () {
+        it('clamps a TOCTOU over-stamped fill to the order\'s give remaining', async function () {
             const { match } = signMatch(orderMatch(), 1);   // a_amount (fill) = '10'
             indexer.indexerDb.getValidatorsByCapability.resolves(snapFor(match, 1));
             indexer.indexerDb.getOrderInfo.resolves({ SOURCE: '1SrcOrderXXXXXXXXXXXXXXXXXXXXYs6gYt', ORDER_STATUS: 'open', GIVE_REMAINING: '4' });
@@ -440,7 +440,7 @@ describe('Cross_Settle action handler @regression @tier1', function () {
             assert.strictEqual(f[2], '4');   // released/recorded give clamped to escrow, not the stamped 10
         });
 
-        it(': records a NO-OP settlement when nothing remains to give', async function () {
+        it('records a NO-OP settlement when nothing remains to give', async function () {
             const { match } = signMatch(orderMatch(), 1);
             indexer.indexerDb.getValidatorsByCapability.resolves(snapFor(match, 1));
             indexer.indexerDb.getOrderInfo.resolves({ SOURCE: '1SrcOrderXXXXXXXXXXXXXXXXXXXXYs6gYt', ORDER_STATUS: 'open', GIVE_REMAINING: '0' });

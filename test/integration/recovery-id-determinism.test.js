@@ -29,7 +29,6 @@
  *
  * This drill exercises the REAL createAddress / getNextAddressId / apply hook against a real
  * DB. Needs a real MariaDB. Set TEST_DB_HOST/PORT/USER/PASS; the suite self-skips if absent.
- * See claude/reports/2026-06-19_id-determinism-F1-implementation-plan.md.
  *
  ********************************************************************/
 'use strict';

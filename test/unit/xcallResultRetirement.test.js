@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/xcallResultRetirement.test.js
  *
- * : undeliverable XCALL result rows must age out.
+ * undeliverable XCALL result rows must age out.
  *
  * getEffectiveUnprocessedCallResults selects effective, finalized result rows in
  * (snapshot_block, call_id) order and the delivery pass takes only
@@ -22,7 +22,7 @@
  * recorded nothing at all (no local request, routing mismatch, quorum not met), so
  * those rows were re-selected on every block forever: 25 of them at a low
  * snapshot_block hold the head of the queue permanently and starve every real
- * result behind them (measured on the  test-host venue at 229 rows).
+ * result behind them (measured on the venue at 229 rows).
  *
  * These tests pin the retirement rule and, just as importantly, everything it must
  * NOT retire: a row still inside its age-out window, a deferral waiting on the
@@ -106,7 +106,7 @@ function recorded(indexer) {
     return { action_index: a[0], call_id: a[1], result_status: a[2], block_index: a[3] };
 }
 
-describe('XCALL undeliverable result retirement  @regression', function () {
+describe('XCALL undeliverable result retirement @regression', function () {
 
     afterEach(() => sinon.restore());
 

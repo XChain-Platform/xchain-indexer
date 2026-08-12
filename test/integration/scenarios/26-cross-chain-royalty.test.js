@@ -12,7 +12,7 @@
  *
  **********************************************************************
  * Integration: cross-chain DEX royalty enforcement (finding B), real MariaDB + real
- * isolated-vm guard. Design: claude/reports/2026-07-07_cross-chain-royalty-design.md
+ * isolated-vm guard. Design:
  *
  * Proves, over real DB rows + a real guard VM + a real Ed25519-signed match:
  *   1. CREATE (propagate): a cross-chain ORDER of a trade-controlled token whose guard

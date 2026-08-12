@@ -15,8 +15,7 @@
 /*********************************************************************
  * test/unit/adversarial-compact-id.test.js
  *
- * ADVERSARIAL SUITE (Cat 2 of the ^<id> compaction test brief,
- * claude/reports/2026-06-19_address-token-id-adversarial-test-brief.md).
+ * ADVERSARIAL SUITE (Cat 2 of the ^<id> compaction test brief).
  *
  * Goal: try to fork or crash the indexer through malformed / dangling
  * compact-ID (`^<id>`) wire references on the RESOLUTION path
@@ -26,7 +25,7 @@
  *
  * These tests stub the DB pool (no MariaDB needed; runs on Node 22), so
  * they probe the PARSE/RESOLVE layer only. DB-coercion and real-collation
- * behaviour for the float/overflow cases is the test-host/VM leg (Cat 1/6).
+ * behaviour for the float/overflow cases is a separate VM-integration leg (Cat 1/6).
  *
  * The canonicalization + existence fix (#4900/#4901/#4902) is now APPLIED:
  * getAddressId / getTickerId accept ONLY a canonical `^[1-9][0-9]*` that

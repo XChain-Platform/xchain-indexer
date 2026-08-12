@@ -12,7 +12,7 @@
  **********************************************************************
  *
  * Arming-block cost AND real-venue attribution conformance for the XCHAIN_ESC
- * locked-balance leaf (SPV sub-tree spec §3 Stage B / §7 step 4,  stage B3).
+ * locked-balance leaf (SPV sub-tree spec §3 Stage B / §7 step 4).
  *
  * WHAT THE ARMING BLOCK ACTUALLY DOES, which is why this exists. At the first
  * armed height the source runs writeEscrowJournal(full:true): a from-genesis

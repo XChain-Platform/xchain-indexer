@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/crossChainCallId-case-insensitive.test.js
  *
- * : a hub-mirrored call_id can arrive uppercase while every LOCAL write
+ * a hub-mirrored call_id can arrive uppercase while every LOCAL write
  * lowercases. The case-insensitive collation lets the SQL prefilter match, but the
  * returned rows are lowercase, so an unnormalized JS Set.has()/Map.get() misses and
  * the same depth-0 call re-executes every block. These tests pin the both-sides
@@ -43,7 +43,7 @@ function makeDb(hubDb) {
     return new Database('127.0.0.1', 3306, 'xchain_btc_regtest', 'u', 'p', indexer);
 }
 
-describe('cross-chain call_id case-insensitive dedup ()', function () {
+describe('cross-chain call_id case-insensitive dedup', function () {
 
     afterEach(() => sinon.restore());
 

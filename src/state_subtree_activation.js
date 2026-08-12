@@ -11,7 +11,7 @@
  **********************************************************************
  *
  * Reserved state_root sub-tree flag-days (SPV spec §4.1, §10 D1; design in
- * claude/specs/spv-state-subtree-extension.md).
+ * ).
  *
  * merkle.STATE_SUBTREES freezes FIVE named slots:
  *
@@ -95,7 +95,7 @@ const RESERVED_SUBTREES = ['ownership_root', 'tokens_root', 'contract_state_root
 // *** ARMED: contract_state_root on BTC:regtest at 10000 (2026-07-28) and on
 // *** BTC:testnet at 146500 (2026-07-30).
 // Everything else is still inert, on every chain and network. MAINNET IS UNARMED
-// for every slot, and stays that way until  arms on 2026-08-17.
+// for every slot, and stays that way until arms on 2026-08-17.
 //
 // Regtest armed FIRST and alone, and only once the derivation existed. The
 // earlier rule here ("a slot stays off even on regtest, because an armed slot
@@ -114,7 +114,7 @@ const RESERVED_SUBTREES = ['ownership_root', 'tokens_root', 'contract_state_root
 //   2. NUL keys: isStateKeyNulRejectActive returns true unconditionally for
 //      testnet AND regtest (xchain-vm), so on neither network can a contract
 //      plant a key that throws in joinFields and halts the arming block's
-//      buildFull. Mainnet is a DATE (2026-08-17, ) and is why no mainnet
+// buildFull. Mainnet is a DATE (2026-08-17) and is why no mainnet
 //      height may be set here yet.
 //
 // Why BTC:testnet and not the other two testnet chains, which is a measurement
@@ -123,7 +123,7 @@ const RESERVED_SUBTREES = ['ownership_root', 'tokens_root', 'contract_state_root
 //     4,890,000) and at its measured ~4.7 blocks/hour will not reach it for
 //     roughly 575 days, so precondition 1 forbids it outright today.
 //   - DOGE:testnet is eligible (tip ~67.79M over a 67.5M collation height) but
-//     has NO follower: it is SYNC_EXCLUDE'd on the origin-host sync client, so
+// has NO follower: it is SYNC_EXCLUDE'd on the sync client, so
 //     arming it exercises the source alone. BTC:testnet is the only testnet
 //     chain with a live source-plus-follower pair, which makes it the only one
 //     whose arming boundary gets a cross-twin check.

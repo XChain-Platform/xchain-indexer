@@ -35,7 +35,7 @@ const stateKeyCollation = require('./state_key_collation_activation');
 const snapshotAgeCausality = require('./oracle_snapshot_age_causality_activation');
 const listEditResolution = require('./list_edit_resolution_activation');
 const caretRefStrict = require('./caret_ref_strict_activation');
-// Per-block cap on the ATTEST deadline-expiry sweep (). Vendored
+// Per-block cap on the ATTEST deadline-expiry sweep. Vendored
 // byte-identical from xchain-documentation/protocol/constants.js, same convention
 // as the XCALL_MAX_CALLS_PER_BLOCK sibling it mirrors.
 const { ATTEST_MAX_EXPIRIES_PER_BLOCK,
@@ -50,7 +50,7 @@ const { rethrowIfInfraFault } = require('./actions/faultGuard');
 // predicate then has to fail closed on.
 const STAKE_WEIGHT_NUMERIC = /^[+-]?(\d+\.?\d*|\.\d+)$/;
 
-// Fail CLOSED on a weightless stake-weight row . Every source-keyed weight
+// Fail CLOSED on a weightless stake-weight row. Every source-keyed weight
 // producer routes through here instead of resolving a missing weight to '0'. The '0'
 // looks harmless and is not: the source stays in the quorum's dedupe map carrying no
 // stake, so the denominator S shrinks while a signer keeps the full numerator, and a
@@ -220,7 +220,7 @@ class Database {
         // to one decoder-DB lookup per block.
         this._blockTimeCache = { block_index: null, block_time: null };
 
-        // Early-decide tally watermark (). processVoteFinalizations step 2 re-tallies
+        // Early-decide tally watermark. processVoteFinalizations step 2 re-tallies
         // every armed poll from full ledger/vote/delegation history on EVERY block, uncapped. A
         // non-time_weighted poll's tally is a pure function of {the tick's credits/debits, the
         // poll's votes, the tick's delegations, the (immutable) poll definition}; if none of
@@ -526,7 +526,7 @@ class Database {
                                 // MIGRATION_STRICT_CHECKSUM has no effect there - telling the operator to
                                 // clear it just loops them back to the same error. Only the passive
                                 // startup path opted into strict mode via MIGRATION_STRICT_CHECKSUM=1 can
-                                // actually be downgraded by clearing it. ()
+                                // actually be downgraded by clearing it.
                                 const hint = includeManual
                                     ? ' This operator run always fails closed (MIGRATION_STRICT_CHECKSUM has no' +
                                       ' effect here). Either revert ' + file + ' to the content matching the' +
@@ -1362,7 +1362,7 @@ class Database {
     // Acquire the transaction mutex (this._txLock). Resolves once the lock is held.
     // Non-reentrant: a single flow must not call this twice before releasing.
     //
-    // `timeoutMs` bounds the WAIT . Unset keeps the block loop's unbounded queue,
+    // `timeoutMs` bounds the WAIT. Unset keeps the block loop's unbounded queue
     // which is the only correct behaviour for a caller that must eventually run. A public
     // read-only caller passes a budget instead, because queueing behind a whole block's
     // processing is what turned a fee quote into a 25-40s hang and then an explorer 502:
@@ -1400,7 +1400,7 @@ class Database {
     }
 
     // Release the transaction mutex, handing it to the next LIVE waiter. A waiter that
-    // already timed out  is skipped rather than granted: handing the lock to a
+    // already timed out is skipped rather than granted: handing the lock to a
     // caller that has given up would strand it held with nothing left to release it, which
     // would wedge block processing permanently - a far worse failure than the slow quote
     // the budget exists to bound.
@@ -1454,7 +1454,7 @@ class Database {
                 ' after teardown (current epoch ' + this._txEpoch + '); zombie write rejected');
     }
 
-    //  fail-closed backstop for the action-scoped price barrier. The block loop skips
+    // fail-closed backstop for the action-scoped price barrier. The block loop skips
     // the price/oracle mirror barriers when priceReadPredicate proved the block carries no
     // transaction-borne price reader. That predicate cannot see the end-of-block passes:
     // processCrossChainCalls injects XEXEC actions and runs XCALL callback isolates from
@@ -1476,7 +1476,7 @@ class Database {
     // contract failures (xexec's execution catch, the XCALL/ATTEST callback catches). A bare
     // string carries no code and no errno, so faultGuard read it as a contract outcome and the
     // block committed a validator-local 'error' verdict instead of retrying with the barrier
-    // (: every injected XEXEC on a transaction-less block recorded result_status='error'
+    // (every injected XEXEC on a transaction-less block recorded result_status='error'
     // while healthy peers recorded 'ok'). The code is what makes rethrowIfInfraFault propagate.
     _assertPriceBarrierNotSkipped(site){
         if(txEpochStore.getStore() === undefined) return;
@@ -1484,14 +1484,14 @@ class Database {
         if(!ix || !ix.priceBarrierSkipped) return;
         // Escalate THIS block: the retry must not skip again, or it loops forever.
         ix.priceBarrierForceBlock = ix.priceBarrierBlock;
-        const err = new Error('price barrier skipped  but ' + site + ' read the price mirror at block ' +
+        const err = new Error('price barrier skipped but ' + site + ' read the price mirror at block ' +
             ix.priceBarrierBlock + '; deferring the block so it re-runs with the barrier enforced');
         err.code = 'PRICE_BARRIER_DEFERRED';
         this.util.throwError(err);
     }
 
     // Handle beginning a SQL transaction.
-    // `opts.acquireTimeoutMs`  time-boxes the wait for the transaction mutex and
+    // `opts.acquireTimeoutMs` time-boxes the wait for the transaction mutex and
     // throws TX_LOCK_BUSY instead of queueing; unset (every block-loop and reorg caller)
     // keeps the unbounded wait.
     async beginTransaction(opts){
@@ -1529,7 +1529,7 @@ class Database {
                 this._txEpoch++;
                 // The abort just un-assigned every dense index id this transaction handed
                 // out, so the id -> name memos it filled are now lies about ids the next
-                // caller will be given . In the finally, beside the epoch bump, for
+                // caller will be given. In the finally, beside the epoch bump, for
                 // the same reason: a throw out of rollback() must not be able to skip it.
                 this.clearSmtNameCaches();
                 this._releaseTxLock();
@@ -1556,7 +1556,7 @@ class Database {
                     await this.transactionConnection.release();
                     this.transactionConnection = null;
                     this._txEpoch++;
-                    // A failed commit aborts, so its id assignments are gone too .
+                    // A failed commit aborts, so its id assignments are gone too.
                     this.clearSmtNameCaches();
                     this._releaseTxLock();
                 }
@@ -1815,7 +1815,7 @@ class Database {
         // state. Throwing instead aborts the pass with no block committed; the loop retries
         // on the next tick. Mirrors the throwing sibling read on the indexer side.
         let results = await this.doQueryStrict(query, args);
-        // Incarnation guard ( / RE-1): the cursor is a decoder events.id, and the
+        // Incarnation guard (/ RE-1): the cursor is a decoder events.id, and the
         // decoder never deletes events rows, so a cursor ABOVE the decoder's newest REORG
         // id can only mean the decoder DB was rebuilt or restored out-of-band (AUTO_INCREMENT
         // reset). With the old behavior that stranded cursor made this query return [] forever,
@@ -2153,7 +2153,7 @@ class Database {
     // caller. A reorg is one way (rollback.js deletes rows and commits, and clears
     // these there). A TRANSACTION ROLLBACK is the other, and it was missed for three
     // investigations: the ids an aborted transaction assigned are un-assigned by the
-    // abort, while the id -> name memo it filled survives in process memory .
+    // abort, while the id -> name memo it filled survives in process memory.
     //
     // The rolled-back writer that matters is not the block loop, it is the READ-ONLY
     // dry run behind /feequote and /preflight (actions.js computeDryRun): it runs the
@@ -2176,7 +2176,7 @@ class Database {
         this._smtAddressNameCache = null;
     }
 
-    // Early-decide watermark helpers (). See the _pollTallyWatermark comment in the
+    // Early-decide watermark helpers. See the _pollTallyWatermark comment in the
     // constructor and processVoteFinalizations step 2. The fingerprint is the highest
     // action_index present in each of the poll's three tally-input tables (votes for the poll,
     // delegations for the tick, and the tick's credits/debits ledger). All three are append-only
@@ -2610,7 +2610,7 @@ class Database {
         return id;
     }
 
-    // XChain-local dispenser fresh-address verdict (b7ecae51 / ; gated by
+    // XChain-local dispenser fresh-address verdict (b7ecae51 /; gated by
     // dispenser_freshness_activation.js). Returns true iff `address` has PRIOR
     // XChain-tagged activity as of `blockIndex`: an index_addresses row assigned a
     // block_index STRICTLY before blockIndex (BLOCK_INDEX-1 semantics). Used, at/after
@@ -2816,7 +2816,7 @@ class Database {
     // verbatim (never via Number()), so a large id keeps full precision and an
     // out-of-range id simply matches no row.
     //
-    // : returning the value unchanged states no verdict, so rejection depends on
+    // returning the value unchanged states no verdict, so rejection depends on
     // the caller's own format check. Prefer resolveAddressRefChecked below, which
     // resolves identically and additionally reports the activation-gated hard-invalid
     // verdict; this raw form stays for callers with no block context.
@@ -2835,14 +2835,14 @@ class Database {
         // resolving a ^id to one would fork. A non-deterministic / nonexistent id leaves
         // the value unchanged, so the caller's isCryptoAddress check rejects it the same
         // way on every node. No-op on current data (no out-of-band ids exist outside
-        // dormant recovery). See claude/reports/2026-06-19_id-determinism-gap-scoping.md.
+        // dormant recovery). See.
         let results = await this.doQuery("SELECT address FROM index_addresses WHERE id=? AND block_index IS NOT NULL LIMIT 1", [pid]);
         if(results.length > 0 && !this.util.isNull(results[0].address))
             return String(results[0].address);
         return value;
     }
 
-    // Whether the  strict `^<id>` rejection is in effect at `block_index` on
+    // Whether the strict `^<id>` rejection is in effect at `block_index` on
     // this indexer's chain. Wrapper so handlers gate on the same predicate
     // resolveAddressRefChecked uses without re-deriving network/coin.
     // @param {block_index}  integer  block being processed
@@ -2855,7 +2855,7 @@ class Database {
     // malformed/dangling reference only by leaving the value untouched, which is safe
     // solely while every caller remembers to format-check the field afterwards (see
     // caret_ref_strict_activation.js for the three call sites where that does not
-    // hold, and  for what the same omission cost on SEND).
+    // hold, and for what the same omission cost on SEND).
     //
     // Returns { value, rejected }:
     //   value    - the resolved address, or the input unchanged when resolution failed.
@@ -3127,10 +3127,10 @@ class Database {
     // cached; it is NOT immutable across a reorg, because a rollback deletes
     // index_tickers rows above the reorg point and frees their dense ids for
     // createTicker to reassign. rollback.js therefore drops this cache on
-    // completion . A stale entry here keys the touched set to the OLD
+    // completion. A stale entry here keys the touched set to the OLD
     // tick name, which commits no leaf at all and moves no root.
     //
-    // AN ABSENCE IS NOT CACHED, and that distinction is the whole point .
+    // AN ABSENCE IS NOT CACHED, and that distinction is the whole point.
     // The immutability argument covers names only: an id with no row *right now*
     // can have one moments later, because tickers are interned during block
     // processing, and a rollback can delete an id that is then re-interned. If a
@@ -3151,7 +3151,7 @@ class Database {
     // cached, the read is STRICT so a transient fault throws instead of being
     // indistinguishable from "no such address", and the cache is only valid
     // WITHIN a chain segment. A rollback frees dense ids for reuse, so
-    // rollback.js drops this cache when it completes . Do not restore the
+    // rollback.js drops this cache when it completes. Do not restore the
     // old "the mapping is immutable" justification: it is true only until a
     // reorg reassigns the id.
     async _smtAddressName(address_id){
@@ -3662,7 +3662,7 @@ class Database {
         return type;
     }
 
-    // Whether the  LIST edit-chain resolution is in effect at `block_index`
+    // Whether the LIST edit-chain resolution is in effect at `block_index`
     // on this indexer's chain. Wrapper so action handlers gate on the same
     // predicate getList uses without re-deriving network/coin.
     // @param {block_index}  integer  block being processed
@@ -3724,7 +3724,7 @@ class Database {
         let type = await this.getListType(action_index);
         let list = [];
         if(type){
-            // : a LIST edit writes its resulting items under the EDIT's own
+            // a LIST edit writes its resulting items under the EDIT's own
             // action_index and never touches the parent's rows, so reading the
             // pinned (create) index returned create-time membership forever and
             // on-chain lists were immutable. Resolve the edit chain's head
@@ -4077,7 +4077,7 @@ class Database {
         // block's action_index, so a block-range query would miss them). Active
         // only while the indexer has installed a per-block set.
         // BOTH axes must be canonical, and for a long time only the tick one was
-        // . The address argument has the SAME hazards the tick argument
+        // The address argument has the SAME hazards the tick argument
         // has: getAddressId accepts a wire "^<id>" reference and resolves it to a
         // row whose stored `address` is the real address, so a handler passing
         // "^123" wrote a correct credit row and then recorded the touched key as
@@ -5011,7 +5011,7 @@ class Database {
         // Lookup the address preferences.
         //
         // Format 1 is excluded on purpose: a controller bind writes an `addresses` row so its verdict is
-        // readable , but that row carries no preferences, and Number(NULL) here would read back
+        // readable, but that row carries no preferences, and Number(NULL) here would read back
         // as fee_preference=0 (destroy) for every later action by that address. The guard names the one
         // format rather than filtering on NULL columns, because a format-0 row with a blank preference
         // has always read back as 0 and must keep doing so.
@@ -5902,7 +5902,7 @@ class Database {
         let cb_params        = binding ? (this.util.isNull(data['CALLBACK_PARAMS']) ? null : String(data['CALLBACK_PARAMS'])) : null;
         let cb_on            = binding ? (data['CALLBACK_ON'] || 'pass') : null;
         let gas_escrow       = binding ? (this.util.isNull(data['GAS_ESCROW']) ? '0' : String(data['GAS_ESCROW'])) : null;
-        // CALLBACK_DELAY_BLOCKS timelock : _parseCreate nulls the field below
+        // CALLBACK_DELAY_BLOCKS timelock: _parseCreate nulls the field below
         // the VOTE_CALLBACK_TIMELOCK flag-day, so a stored value is always gate-legal.
         let cb_delay         = (binding && !this.util.isNull(data['CALLBACK_DELAY_BLOCKS'])) ? parseInt(data['CALLBACK_DELAY_BLOCKS']) : null;
         // deposit_address_id is the escrow PAYER (= creator), stored whenever any GAS
@@ -5968,14 +5968,14 @@ class Database {
         await this.doQuery(`UPDATE polls SET callback_execute_action_index=? WHERE action_index=?`, [executeActionIndex, pollIndex]);
     }
 
-    //  timelock: stamp the block a deferred binding callback fires at
+    // timelock: stamp the block a deferred binding callback fires at
     // (resolved_block + CALLBACK_DELAY_BLOCKS). Written by VOTE v2 in place of the
     // immediate injection; cleared by the rollback re-open reset.
     async setPollCallbackDue(pollIndex, dueBlock){
         await this.doQuery(`UPDATE polls SET callback_due_block=? WHERE action_index=?`, [dueBlock, pollIndex]);
     }
 
-    //  timelock: terminal polls whose deferred callback comes due exactly at
+    // timelock: terminal polls whose deferred callback comes due exactly at
     // block_index and has not fired. Equality (not <=) mirrors the immediate path's
     // fire-once-at-v2 semantics; the IS NULL guard makes a same-block reprocess
     // idempotent. Returns the full row (the sweep reconstructs the frozen result
@@ -6282,7 +6282,7 @@ class Database {
     async getArmedPolls(block_index){
         // tick_id / weight_mode / decide_threshold are returned alongside action_index so the
         // sweep can compute the tally watermark and evaluate the threshold without a second
-        // getPoll() round-trip per armed poll per block (). These are immutable poll
+        // getPoll() round-trip per armed poll per block. These are immutable poll
         // definition columns, so carrying them here is equivalent to the prior separate fetch.
         return await this.doQuery(
             `SELECT action_index, tick_id, weight_mode, decide_threshold FROM polls
@@ -6353,7 +6353,7 @@ class Database {
         let poll = await this.getPoll(pollIndex);
         if(this.util.isNull(poll)) return null;
         let options = JSON.parse(poll.options || '[]');
-        // Resolve the poll's electorate ticker : the read/explorer path
+        // Resolve the poll's electorate ticker: the read/explorer path
         // always carries it; the consensus VM snapshot gates it (getPollResultsForVM).
         let tick = this.util.isNull(poll.tick_id) ? null : await this.getTicker(poll.tick_id);
         let rows = await this.doQuery(
@@ -7151,7 +7151,7 @@ class Database {
     // local order by index and cannot assume its get_coin is local (that assumption is
     // exactly what hid cross-chain offers from the cancel/expire paths).
     /*
-     * BET parimutuel betting (spec claude/specs/BETTING_SYSTEM_SPEC.md, )
+     * BET parimutuel betting
      */
 
     // Create/Update record in `bet_feeds` table
@@ -7262,8 +7262,8 @@ class Database {
     }
 
     // Create/Update record in `bet_cancels` table (BET format 1). Written for every
-    // cancel action whatever its parse status - that is the table's reason to exist
-    // : a rejected cancel used to write nothing at all, so no API consumer
+    // cancel action whatever its parse status - that is the table's reason to exist:
+    // a rejected cancel used to write nothing at all, so no API consumer
     // could distinguish it from a successful one. `status_id` is the PARSE status;
     // the feed's lifecycle status lives in bet_feed_statuses / bet_feeds
     async createBetCancel(data){
@@ -8497,12 +8497,12 @@ class Database {
     //
     // Capped per block, mirroring getEffectiveUndispatchedCalls (overflow carries
     // forward; never dropped). Without it a hub backlog injected an unbounded number
-    // of escrow-releasing CROSS_SETTLE actions into one block transaction ().
+    // of escrow-releasing CROSS_SETTLE actions into one block transaction.
     // The slice lands AFTER the settled-set exclusion so the cap counts real work, and
     // the ORDER BY above is a total order on quorum-agreed content, so every operator
     // takes the identical prefix. See CROSS_SETTLE_MAX_PER_BLOCK in protocol/constants.js
     // for why the cap is consensus-visible and why it lands behind the
-    // CROSS_SETTLE_PER_BLOCK_CAP flag day (, operator ruling of 2026-08-11).
+    // CROSS_SETTLE_PER_BLOCK_CAP flag day (operator ruling of 2026-08-11).
     //
     // The `limit` is the CALLER's decision because that caller (processCrossChainSettlements)
     // is the one holding the block index the flag day is evaluated against: it passes the
@@ -9777,7 +9777,7 @@ class Database {
 
     // Lookup items that need to be expired and return a list
     //
-    // The expiration cut is applied IN SQL . It used to pull the ENTIRE
+    // The expiration cut is applied IN SQL. It used to pull the ENTIRE
     // open order/swap/dispenser book back to the client every block, resolve the
     // edits overlay with a second batched query per type, and only then apply the
     // cutoff in JS, so per-block row transfer and memory scaled with the whole
@@ -10857,7 +10857,7 @@ class Database {
         return remaining;
     }
 
-    // DISPENSER caps (dispenser_caps_activation.js / ). Both counts are
+    // DISPENSER caps (dispenser_caps_activation.js). Both counts are
     // DERIVED from existing rollback-covered tables (dispenses / dispenser_edits),
     // matching the house pattern that recomputes GIVE_REMAINING rather than storing
     // a mutable counter: a reorg that deletes those rows automatically corrects the
@@ -11512,7 +11512,7 @@ class Database {
         return (rows && rows.length > 0) ? rows[0].source_id : null;
     }
 
-    //  Option C (derive-on-BTC-side): mirrored anchor_reward_attestations rows whose
+    // Option C (derive-on-BTC-side): mirrored anchor_reward_attestations rows whose
     // reward has NOT yet been derived into validator_rewards, matured to `maxSnapshotBlock`
     // (the current BTC block, so the reward's block_index = snapshot_block is never in the
     // future). Returned flat, ordered by (reward_type, round_reference, publisher) so the
@@ -11520,7 +11520,7 @@ class Database {
     // failover double-publish. NOT-EXISTS-scoped so a group already derived is skipped and a
     // reorg that block-scoped-deletes the reward at snapshot_block re-exposes it for replay.
     //
-    // The exclusion is PUBLISHER-scoped, not round-scoped (). A round-scoped
+    // The exclusion is PUBLISHER-scoped, not round-scoped. A round-scoped
     // `NOT EXISTS (... reward_type + round_reference)` drops the WHOLE round the moment any
     // publisher is derived, so a failover publisher whose attestation mirrors in AFTER that
     // first derive is never inserted and reconcileAnchorRewardWinner never compares it. The
@@ -11556,10 +11556,10 @@ class Database {
     //         always wins over a best-effort hub push that raced them - the
     //         derived row is the consensus row (replay produces it byte-equal)
     // deriveBlockIndex: the block that MATERIALIZED the row, when that differs from the
-    //         reward's earn-block (blockIndex). Only the  BTC-side anchor/archive
+    // reward's earn-block (blockIndex). Only the BTC-side anchor/archive
     //         derivation passes it: that path earns at the checkpoint's SNAPSHOT_BLOCK but
     //         writes while processing a much later BTC block, so rollback needs the creating
-    //         block to know the row must disappear . Every other writer earns and
+    // block to know the row must disappear. Every other writer earns and
     //         writes in the same block and leaves it NULL.
     async createValidatorReward(pubkeyHex, roundReference, rewardType, amount, blockIndex, upsert, deriveBlockIndex){
         let pubkey_id = await this.getPubkeyId(String(pubkeyHex).toLowerCase());
@@ -11622,7 +11622,7 @@ class Database {
         if(reconcileBlockIndex !== null && reconcileBlockIndex !== undefined){
             // Same loser predicate as the DELETE (pubkey > min_pubkey), capturing each
             // row's verbatim pre-image + its ORIGINAL earn-block (reward_block_index).
-            // reward_derive_block_index carries the loser's MATERIALIZATION block :
+            // reward_derive_block_index carries the loser's MATERIALIZATION block
             // the earn-block alone cannot tell the restore whether a replay to reorg-1 would
             // have minted this loser at all, because a derived reward's earn-block is the far
             // earlier SNAPSHOT_BLOCK. NULL for a loser written by a same-block writer.
@@ -12508,7 +12508,7 @@ class Database {
 
     // Read the hub-mirrored SOURCE-KEYED weights for a capability at a snapshot block
     // (non-BTC chains). Carries `source` so the verifier can dedupe by staking address.
-    // ORDER BY is CONSENSUS-CRITICAL here ( / ). This feeds
+    // ORDER BY is CONSENSUS-CRITICAL here. This feeds
     // stake-weighted quorum for off-BTC chains, and an unordered SELECT hands the
     // row order to the storage engine, so two nodes can return the same rows in
     // different sequences. That is harmless only for as long as every consumer is
@@ -12542,7 +12542,7 @@ class Database {
             // reading r.amount (undefined) collapsed EVERY weight to '0', which made
             // stake-weighted quorum fail closed (S=0) for off-BTC chains (DOGE/LTC).
             // capability_snapshots.amount is NOT NULL, so a missing weight here means
-            // the mirror is corrupt, not that a source has no stake: THROW 
+            // the mirror is corrupt, not that a source has no stake: THROW
             // rather than resolve it to '0', which would keep the source in the dedupe
             // map with no stake and quietly shrink the quorum denominator S.
             weight: requireStakeWeight(r.weight, 'getCapabilitySnapshotWeights(' + capability + ')')
@@ -12774,7 +12774,7 @@ class Database {
     // snapshot block. Presence in capability_snapshots = qualified (the hub only mirrors
     // pubkeys already past min_stake). Lets a non-BTC indexer resolve the cross_chain set.
     // Ordered for the same reason as the sibling getCapabilitySnapshotWeights
-    // (): this resolves the cross_chain validator set on non-BTC indexers,
+    // this resolves the cross_chain validator set on non-BTC indexers,
     // so an engine-dependent row order is a fork waiting for the first consumer that
     // dedupes or truncates. Same natural-key ordering, and `source` is ordered on
     // even though it is not selected: a pubkey delegated by two sources produces two
@@ -12894,7 +12894,7 @@ class Database {
     // (chain, network, block_index, checkpoint_seq), joined to its status. Only
     // checkpoint-bearing versions (0/1/3/4/5/6, per the ANCHOR_CHECKPOINT_VERSIONS
     // constant below; version 2 is an archive continuation chunk with no checkpoint
-    // identity of its own, and v6 is the publisher-bearing archive anchor  that
+    // identity of its own, and v6 is the publisher-bearing archive anchor that
     // DOES carry a checkpoint identity). Returns the highest action_index
     // match (a reorg-replayed re-anchor supersedes an earlier one) or null. Read path
     // for the getanchoraction RPC: it lets the hub confirm an announced anchor actually
@@ -12923,7 +12923,7 @@ class Database {
     // set so they cannot disagree: the highest archive batch seq recorded, and the
     // highest wrapper checkpoint seq among those same archive-head rows.
     //
-    // : they are returned together deliberately. The guard rejects a stale
+    // They are returned together deliberately. The guard rejects a stale
     // batch seq only when the wrapper checkpoint is ALSO not advancing, so two
     // independently-read watermarks could describe row sets that never coexisted
     // (one stubbed, one live; one filtered on a drifted version list) and the guard
@@ -12975,7 +12975,7 @@ class Database {
     // PICK is unchanged from the pre-#3075 query (an inner join would skip an unlinked
     // head and select a different one, moving a consensus-visible geometry verdict); an
     // unresolvable author arrives as null and anchor.js fails the chunk closed.
-    // : `author`, when supplied, narrows the candidates to heads authored by
+    // `author`, when supplied, narrows the candidates to heads authored by
     // that address, i.e. the batch key becomes (match_batch_seq, head author). The
     // caller (anchor.js, gated on the flag day) passes it so a junk head broadcast at
     // another publisher's batch seq can no longer be the parent that governs that
@@ -13023,7 +13023,7 @@ class Database {
     // count, which is what stops a junk chunk broadcast BEFORE the head (stored
     // 'orphan', so it carries no rejection verdict of its own) from squatting a
     // slot and denying the batch permanently.
-    // : `author`, when supplied, replaces "authored by the canonical head" with
+    // `author`, when supplied, replaces "authored by the canonical head" with
     // "authored by THIS address", the read-path half of publisher-scoped archive
     // batches. anchor.js supplies it (gated) so the chunk set a head reassembles - and
     // the occupancy set the duplicate guard reads - belong to that head's own
@@ -13350,7 +13350,7 @@ class Database {
         return { stakeByPubkeyTick, totalByTick, stakersByTick };
     }
 
-    // : build the read-only attestation-response snapshot the VM exposes through
+    // Build the read-only attestation-response snapshot the VM exposes through
     // xchain.attestation.getResponse(requestId). Scoped to fulfilled requests emitted by
     // THIS contract (the v0 request row's contract_index), visible as-of blockIndex.
     // Returns a SERIALIZABLE snapshot { responses: { [request_id]: { status, payload,
@@ -13525,7 +13525,7 @@ class Database {
     // set) AND its tokens are mirrored into a cooldown `unstakes` row, so Pass 1 must skip that
     // phantom copy (Pass 2 burns the cooldown row) - each token burned exactly once. The
     // (pubkey,capability) dedup that makes a first slash idempotent lives in the SLASH handler.
-    // ownerSourceId (): when the offender is a DELEGATED signing key, the bond
+    // ownerSourceId: when the offender is a DELEGATED signing key, the bond
     // lives on the OWNING source's stakes, not on rows keyed by the delegated pubkey.
     // Callers resolve it with getStakeSourceForDelegatedPubkey() AT THE EQUIVOCATION
     // HEIGHT and pass it here; null keeps the original signing_pubkey_id targeting for
@@ -13918,7 +13918,7 @@ class Database {
         // verbatim instead of re-deriving it against the CURRENT mutable stakes.amount. NULL for
         // rejected/feeless-legacy rows (the recompute falls back to the live re-derive).
         let responsible_set  = !this.util.isNull(data['RESPONSIBLE_SET_JSON']) ? String(data['RESPONSIBLE_SET_JSON']) : null;
-        //  cross-chain relay: NULL on every native single-chain request, so a
+        // Cross-chain relay: NULL on every native single-chain request, so a
         // pre-activation replay writes exactly the columns it wrote before. Set to the
         // origin chain on a relay-eligible LTC/DOGE v0 (what the hub's relay poll keys
         // on) and on the BTC v3 row that materializes it (where it also suppresses the
@@ -14058,11 +14058,11 @@ class Database {
         return rows.length > 0 ? rows[0] : null;
     }
 
-    //  relay: look up the ATTEST v0 row that already materialized a given relay
+    // Cross-chain relay: look up the ATTEST v0 row that already materialized a given relay
     // identity (origin_chain, origin_action_index) on this chain. This is the exactly-once
     // key the v3 admission guard needs and request_id cannot supply: request_id derives
     // from the ORIGIN tx_hash, so a reorg that re-emits the same origin action from a
-    // different transaction yields a new request_id for the same identity ().
+    // different transaction yields a new request_id for the same identity.
     //
     // 'rejected' rows are excluded deliberately. A rejected row never enters the pending
     // pool, is never fulfilled and spends no fee, so it consumed no exactly-once slot;
@@ -14161,14 +14161,14 @@ class Database {
             fee_tick_id:    typeof r.fee_tick_id    === 'bigint' ? Number(r.fee_tick_id)    : r.fee_tick_id,
             deadline_block: typeof r.deadline_block === 'bigint' ? Number(r.deadline_block) : r.deadline_block,
             status_id:      typeof r.status_id      === 'bigint' ? Number(r.status_id)      : r.status_id,
-            // : NULL on every native request. Non-null marks the row as one leg of a
+            // NULL on every native request. Non-null marks the row as one leg of a
             // cross-chain relay, which is what the hub's relay driver filters on.
             origin_action_index: typeof r.origin_action_index === 'bigint' ? Number(r.origin_action_index) : r.origin_action_index,
             block_index:    typeof r.block_index    === 'bigint' ? Number(r.block_index)    : r.block_index
         }));
     }
 
-    //  relay: every ATTEST v0 request this chain holds only as a MATERIALIZED
+    // Cross-chain relay: every ATTEST v0 request this chain holds only as a MATERIALIZED
     // relay leg, i.e. whose row carries an origin_chain that is some OTHER chain, with
     // its terminal response attached when one exists. On BTC that is exactly the set of
     // v3-materialized requests, at any lifecycle status. The predicate is
@@ -14256,7 +14256,7 @@ class Database {
     // Find ATTEST v0 (request) rows whose deadline_block has passed without a response.
     // Returns full rows so the expiry handler doesn't have to refetch.
     //
-    // CAPPED per block at ATTEST_MAX_EXPIRIES_PER_BLOCK (). Unbounded, one
+    // CAPPED per block at ATTEST_MAX_EXPIRIES_PER_BLOCK. Unbounded, one
     // block could inherit an arbitrary backlog of expiries, each of which synthesizes
     // an ATTEST v2 and fires a contract callback, so block processing time became a
     // function of how many deadlines happened to coincide: an attacker picks that
@@ -14288,8 +14288,7 @@ class Database {
         await this.doQuery(query, [callbackExecuteActionIndex, responseActionIndex]);
     }
 
-    // Resolve an equivocating DELEGATED signing key to the stake source that backs it
-    // ().
+    // Resolve an equivocating DELEGATED signing key to the stake source that backs it.
     //
     // A delegated key signs on behalf of a staker but owns no stake itself: the
     // `stakes` rows carry the OWNER's source_id and (for delegation-only stakers) a
@@ -15182,7 +15181,7 @@ Database.MIGRATION_CHECKSUM_REBASELINES = {
         from: '04656bbe931851e254f51c2f4552e8e0ab2c47067cb7eb39dcbb7f4695d38dd1',
         to:   '15599a2f13a372767468cd72ec05b7dff50d03e095e77cd40ee16bcba52754c6',
     },
-    // . Two of the three renamed legacy migrations carry their own filename inside
+    // Two of the three renamed legacy migrations carry their own filename inside
     // the "HOW TO RUN" comment block, so 81960e2 (the rename) had to update that comment
     // line as well. The ledger rename heal re-keys the ROW NAME but deliberately carries
     // the recorded checksum over unchanged, so every DB migrated before 2026-07-12 (the

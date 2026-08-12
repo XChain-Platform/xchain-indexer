@@ -72,7 +72,7 @@ const RETRACTION_COLUMNS = {
     oracle_prices:   'action_index'
 };
 
-// ── Watermark grace margins: frozen protocol constants ( / Package 12) ──
+// ── Watermark grace margins: frozen protocol constants (/ Package 12) ──
 // The four barrier grace margins (seconds) are NOT operational timeouts: they
 // decide WHEN the block-loop consensus barriers open via the stream-watermark
 // escape (_priceSyncSatisfied / _oracleSyncSatisfied / _matchSyncSatisfied /
@@ -125,7 +125,7 @@ function resolveWatermarkGrace(frozen, envKey, network){
     return parseInt(String(override).trim(), 10);
 }
 
-// ──  signed-retraction verification helpers ───────────────────────────
+// ── signed-retraction verification helpers ───────────────────────────
 
 // Rebuild the retraction canonical from the wire event. MUST byte-match the
 // producer in xchain-hub/src/RetractionConsensus.js canonicalRetraction():
@@ -205,7 +205,7 @@ const FULL_REPAGE_TABLES = ['capability_snapshots', 'price_snapshots', 'cross_ch
 // state-hash commitments (the explorer/SDK verification source). Append-only,
 // never retracted. A reorged height is superseded by a new row with a higher
 // checkpoint_seq. Not on any settlement-critical path (no block-loop barrier).
-// anchor_reward_attestations  carries the hub's XANCPUB publisher-attestation
+// anchor_reward_attestations carries the hub's XANCPUB publisher-attestation
 // quorum per attested reward tuple; the BTC indexer derives the COLLECT-spendable
 // anchor/archive reward from it (mirror is transport, not trust: it re-verifies the
 // sigs against its own local oracle_publish set). Append-only, id-parity INSERT IGNORE,
@@ -296,7 +296,7 @@ class HubDbSync {
         // barrier to matches this chain will actually settle. See waitForSnapshotSync.
         this.coin = options.coin || null;
 
-        // Receive-side retraction guards (XCALL-RETRACT-1, ). row:deleted events
+        // Receive-side retraction guards (XCALL-RETRACT-1). row:deleted events
         // arrive unsigned over the hub stream, and the hub's push*reorg RPCs forward the
         // caller's claim verbatim, so a compromised HUB_API_KEY could fabricate reorg
         // retractions and have every mirror durably delete valid quorum-signed rows.
@@ -316,13 +316,13 @@ class HubDbSync {
             ? options.getOwnRollbackGeneration : null;
         this.trackedRollbackGeneration = {};
 
-        //  signed retractions: the network this mirror serves (mainnet |
+        // signed retractions: the network this mirror serves (mainnet |
         // testnet | regtest), used to key the RETRACTION_SIGNING flag-day and the
         // stake-weighted-quorum activation when verifying a quorum-class
         // retraction's co-signature set. The gate itself is judged from the local
         // mirrored capability_snapshots high-water mark, NEVER from a wire field.
         // Absent (explorer's vendored display mirror, older wiring) the gate never
-        // arms and the  fences above stand alone, as before.
+        // arms and the fences above stand alone, as before.
         this.network = options.network || null;
 
         // Pending waitForSnapshotSync() resolvers. Unlike the match barrier (a cached
@@ -343,7 +343,7 @@ class HubDbSync {
         // watermarks (MAX(effective_at)/MAX(effective_time)) could not make that
         // distinction: the first sparse row armed the barrier and the tip deferred
         // forever until the NEXT row arrived (review items #1984/#1986, live-repro'd
-        // on the origin-host/test-host testbed 2026-06-09).
+        // on the / testbed 2026-06-09).
         //
         // Grace margins (seconds) cover rows whose effective time can precede their
         // insertion into the stream: oracle first-publishes are effective at their
@@ -354,7 +354,7 @@ class HubDbSync {
         this.streamWatermark      = 0;
         // Frozen protocol constants (600/600/120/120), env-overridable only on regtest;
         // off-regtest the override is ignored with a warning and a bad value throws.
-        // See HUB_SYNC_WATERMARK_GRACE_S / resolveWatermarkGrace above .
+        // See HUB_SYNC_WATERMARK_GRACE_S / resolveWatermarkGrace above.
         this.priceWatermarkGraceS  = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.price,  'HUB_SYNC_PRICE_GRACE_S',  this.network);
         this.oracleWatermarkGraceS = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.oracle, 'HUB_SYNC_ORACLE_GRACE_S', this.network);
         this.matchWatermarkGraceS  = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.match,  'HUB_SYNC_MATCH_GRACE_S',  this.network);
@@ -829,7 +829,7 @@ class HubDbSync {
     // filters those rows out (`status <> 'retracted'`) so a bootstrapping mirror matches a
     // streamed one. That works only while the mirror SAW the deletion. A mirror that was
     // disconnected across the retraction - or that legitimately refused the event under the
-    //  /  receive-side guards - holds a finalized row the hub has retracted, and
+    // receive-side guards - holds a finalized row the hub has retracted, and
     // no later delivery can fix it: the row is absent from every bootstrap page, so the
     // convergence ODKU never gets a version to compare against. The mirror keeps settling a
     // match the hub retracted, which is a money-bearing fork from a streamed peer.
@@ -1166,7 +1166,7 @@ class HubDbSync {
         let cols = Object.keys(row).filter(c => allowed.has(c));
         // capability_snapshots is a NATURAL-KEY mirror (uq_cap_snap: snapshot_block,
         // capability, signing_pubkey, source; no reader keys on id). `source` is the
-        // fourth key column on purpose : a key delegated by two sources yields
+        // fourth key column on purpose: a key delegated by two sources yields
         // one row per source, and a 3-column key collapses them on INSERT IGNORE and
         // drops the second source. Hub ids are hub-LOCAL
         // (every hub persists these rows independently via an id-less INSERT IGNORE)
@@ -1271,7 +1271,7 @@ class HubDbSync {
         //      IDENTICAL match_id and CrossChainDexEngine._insertMatchRow revives the row
         //      with THIS round's effective_time / finalizing_view / validator_signatures,
         //      then re-broadcasts it. A mirror that missed either half - disconnected over
-        //      the deletion, or the / receive-side guards legitimately refused
+        // the deletion, or the receive-side guards legitimately refused
         //      an unfenced/unsigned retraction - kept the pre-reorg row, and an anchor_txid-
         //      only ODKU could NEVER converge it: neither the live re-broadcast nor the
         //      FULL_REPAGE bootstrap (which re-delivers the row through this same path)
@@ -1398,7 +1398,7 @@ class HubDbSync {
         let gen = (event.retraction_generation !== undefined && event.retraction_generation !== null)
                   ? Number(event.retraction_generation) : null;
         let fenced = (gen !== null && Number.isFinite(gen) && gen >= 0);
-        // Receive-side guards (XCALL-RETRACT-1, ; see the constructor note).
+        // Receive-side guards (XCALL-RETRACT-1,; see the constructor note).
         // 1. Quorum-class tables (their insertions carry 2f+1 proof) never accept an
         //    unfenced open delete: every current source stamps the item-5308 fence, so
         //    an unfenced event is either a pre-5308 relic or a fabricated wipe. The
@@ -1409,7 +1409,7 @@ class HubDbSync {
         if ((quorumClass || ownChain) && !fenced) {
             console.error('HubDbSync: refusing UNFENCED retraction of ' + event.table +
                 ' (source_chain ' + event.source_chain + ', from ' + from +
-                '): quorum-class deletions require a retraction_generation fence ');
+                '): quorum-class deletions require a retraction_generation fence');
             return;
         }
         if (fenced) {
@@ -1424,7 +1424,7 @@ class HubDbSync {
                 if (own === null || !Number.isFinite(own) || gen >= own) {
                     console.error('HubDbSync: refusing retraction of ' + event.table + ' for OWN chain ' +
                         this.coin + ' at generation ' + gen + ' (own rollback generation ' + own +
-                        '): no local rollback produced this fence ');
+                        '): no local rollback produced this fence');
                     return;
                 }
             }
@@ -1441,7 +1441,7 @@ class HubDbSync {
             }
             this.trackedRollbackGeneration[trackKey] = gen;
         }
-        // 4. Signed retractions ( full fix): once this mirror's own
+        // 4. Signed retractions (full fix): once this mirror's own
         //    capability_snapshots high-water mark has crossed the
         //    RETRACTION_SIGNING flag-day era, a quorum-class deletion must carry
         //    a 2f+1 `cross_chain` co-signature set over the XRETRACTV1 canonical,
@@ -1463,7 +1463,7 @@ class HubDbSync {
                 if (!ok) {
                     console.error('HubDbSync: refusing UNVERIFIED retraction of ' + event.table +
                         ' (source_chain ' + event.source_chain + ', from ' + from +
-                        '): quorum-class deletions require a valid 2f+1 co-signature set ');
+                        '): quorum-class deletions require a valid 2f+1 co-signature set');
                     return;
                 }
             }
@@ -1512,7 +1512,7 @@ class HubDbSync {
         await this.hubDb.doQuery(query, args);
     }
 
-    // Verify a quorum-class retraction's co-signature set . The event
+    // Verify a quorum-class retraction's co-signature set. The event
     // must carry snapshot_block (itself at/after the flag-day era, so a signed
     // set can never be minted below the gate) plus retraction_signatures; each
     // signature is checked over the rebuilt XRETRACTV1 canonical against the
@@ -1548,7 +1548,7 @@ class HubDbSync {
             if (!pk || seen.has(pk)) continue;
             if (!snapPubkeys.has(pk)) continue;
             if (!verifyEd25519(canonical, sig, pk)) continue;
-            // Mark seen only AFTER the signature verifies (Pkg 13 / ), matching
+            // Mark seen only AFTER the signature verifies (Pkg 13 /), matching
             // the hub producer twin (RetractionConsensus._handleFinalized) and the
             // sibling tallies in anchor.js / recovery.js / StateAnchorPublisher. Marking
             // on first encounter lets a garbage-then-valid pair for one snapshot member

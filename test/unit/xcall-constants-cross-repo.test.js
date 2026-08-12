@@ -14,7 +14,7 @@
  *
  **********************************************************************
  * Cross-repo VALUE-EQUALITY gate for the four XCALL/VM protocol
- * constants .
+ * constants.
  *
  * MAX_CODE_SIZE, XCALL_MAX_GAS, XCALL_MAX_HOPS and XCALL_MIN_DEADLINE_BLOCKS
  * are enforced independently by three services: the VM (deploy size, emit-time
@@ -26,7 +26,7 @@
  * (or the reverse), which is a hashed-verdict divergence, and the SDK builds
  * actions the chain will not take.
  *
- * This is the gate that ties the copies together, mirroring the 
+ * This is the gate that ties the copies together, mirroring the
  * cross-repo repin guard (consensus-params.test.js, the six CONTROLLER_GUARD
  * gate constants): read every sibling's constants file straight off disk and
  * assert value equality, rather than trusting three independent literal pins to
@@ -123,7 +123,7 @@ function sha256(absPath) {
     return crypto.createHash('sha256').update(fs.readFileSync(absPath)).digest('hex');
 }
 
-describe('XCALL/VM protocol constants agree across vm/indexer/sdk ', function () {
+describe('XCALL/VM protocol constants agree across vm/indexer/sdk', function () {
 
     it('runs inside one of the three participating repos', function () {
         // Guards the walk-up above: if REPO_ROOT resolved somewhere unexpected

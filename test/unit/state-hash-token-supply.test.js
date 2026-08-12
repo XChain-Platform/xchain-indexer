@@ -67,7 +67,7 @@ describe('state_hash token-supply class (F-1 closure, armed) @regression', funct
 
     // Isolate this suite from the poll_finalize class (also armed on regtest):
     // its query slot would shift the canned call-order mock.
-    // (index-map likewise: armed on regtest since 2026-07-16, )
+    // (index-map likewise: armed on regtest since 2026-07-16)
     let pollPrev, indexPrev, betPrev;
     before(function(){
         pollPrev  = POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest; POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = 999999999;

@@ -8,10 +8,10 @@
 // This file is part of XChain Platform. Licensed under the GNU Affero
 // General Public License v3.0 or later; see LICENSE.md.
 //
-// : the  split-brain fence must be identical in EVERY holder of
+// the split-brain fence must be identical in EVERY holder of
 // state_checkpoints.
 //
-//  tightened the checkpoint unique key so a same-seq split-brain collapses
+// tightened the checkpoint unique key so a same-seq split-brain collapses
 // to exactly one admitted row, and applied it ON THE HUB ONLY. The indexer mirror
 // and the explorer's hub-mirror both kept the older, WIDER key
 // (chain, network, block_index, checkpoint_seq), which admits BOTH rows of a
@@ -77,7 +77,7 @@ describe('state_checkpoints split-brain fence parity (#3096) @regression @tier1'
             assert.deepStrictEqual(key.cols, FENCE_COLUMNS,
                 holder.label + ' (' + holder.file + ') carries ' + key.name + '(' + key.cols.join(', ') +
                 '). A wider key admits both rows of a same-seq split-brain, which is the ' +
-                'fork  exists to stop.');
+                'the split-brain fence exists to stop.');
         });
 
         it(`${holder.label}: block_index is NOT part of the fence`, function () {
@@ -117,7 +117,7 @@ describe('state_checkpoints split-brain fence parity (#3096) @regression @tier1'
         const sql = fs.readFileSync(path.join(dir, hit), 'utf8');
         // It tightens a unique key, so it can fail on pre-existing duplicates and can
         // reject writes from not-yet-upgraded code. Auto-applying it at boot under a
-        // running old-code hub is the live failure  §8 step 4a exists to avoid.
+        // running old-code hub is the live failure this migration's manual mode exists to avoid.
         assert.match(sql, /xchain:migration mode=manual/,
             'must be manual: it applies inside the maintenance window at §8 step 4a, ' +
             'after the halt and before the hub code deploy');

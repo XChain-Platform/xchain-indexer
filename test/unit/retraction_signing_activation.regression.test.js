@@ -13,11 +13,11 @@
  **********************************************************************
  * test/unit/retraction_signing_activation.regression.test.js
  *
- * Signed-retraction flag-day , consensus-surface regression pins.
+ * Signed-retraction flag-day, consensus-surface regression pins.
  *
  * isRetractionSigningActive decides whether a quorum-class retraction
  * broadcast must carry a 2f+1 `cross_chain` co-signature or may still be
- * accepted unsigned under the  generation fences. It is consensus
+ * accepted unsigned under the generation fences. It is consensus
  * surface: two mirrors that disagree on the answer for the same
  * snapshot_block diverge on which retractions they honour. These tests pin
  * the two directions that fork a fleet — the mainnet arming height itself,
@@ -32,10 +32,10 @@
 const assert = require('assert');
 const gate   = require('../../src/retraction_signing_activation.js');
 
-describe('Signed-retraction flag-day  @regression @tier1', function () {
+describe('Signed-retraction flag-day @regression @tier1', function () {
 
     describe('activation map (arming heights are a fleet-wide contract)', function () {
-        it('mainnet is armed to the ratified 963000 BTC snapshot_block anchor ', function () {
+        it('mainnet is armed to the ratified 963000 BTC snapshot_block anchor', function () {
             // 963000 is the ratified anchor every hub/indexer/explorer deploy is
             // pinned to. Re-pointing it silently would arm the co-signature gate on
             // a different era than the rest of the fleet expects, so the first

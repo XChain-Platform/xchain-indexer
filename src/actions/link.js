@@ -31,39 +31,30 @@
 
 class Link {
 
-    // Handle constructing a class instance
     constructor(action){
-        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
         this.indexerDb = action.indexerDb;
         this.util      = action.util;
         this.mapper    = action.mapper;
-        
-        // Define list of known FORMATS
+
         this.formats = {};
         this.formats[0] = 'VERSION|COIN1|COIN1_ACTION_INDEX|COIN2|COIN2_ACTION_INDEX|MEMO';
     }
 
-    // Handle parsing the ADDRESS transaction
     async parse(params, data, error){
-        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
-        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
-        // Convert NUMBER fields from string value to number value so comparisons are mathematical 
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        /*****************************************************************
-         * COIN Validations
-         ****************************************************************/
+        // COIN Validations
 
         // Validate COIN1 is valid
         if(!error && format==0 && !this.config['COINS'].includes(data['COIN1']))
@@ -73,9 +64,7 @@ class Link {
         if(!error && format==0 && !this.config['COINS'].includes(data['COIN2']))
             error = 'invalid: COIN2 (unsupported COIN network)';
 
-        /*****************************************************************
-         * FORMAT Validations
-         ****************************************************************/
+        // FORMAT Validations
 
         // Verify COIN1_ACTION_INDEX format
         if(!error && (this.util.isNull(data['COIN1_ACTION_INDEX']) || !this.util.isNumeric(data['COIN1_ACTION_INDEX'])))
@@ -85,9 +74,7 @@ class Link {
         if(!error && (this.util.isNull(data['COIN2_ACTION_INDEX']) || !this.util.isNumeric(data['COIN2_ACTION_INDEX'])))
             error = 'invalid: COIN2_ACTION_INDEX (format)';
 
-        /*****************************************************************
-         * General Validations
-         ****************************************************************/
+        // General Validations
 
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
@@ -129,20 +116,15 @@ class Link {
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
-        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
-        // Print status message 
         console.log("\t LINK : " + data['COIN1'] + ':' + data['COIN1_ACTION_INDEX'] + '->' + data['COIN2'] + ':' + data['COIN2_ACTION_INDEX'] + ' : ' + data['STATUS']);
 
-        // Create record in links table
         await this.indexerDb.createLink(data);
 
-        // Store the SOURCE in addresses list
         this.util.addAddressTicker(data['SOURCE']);
 
-        // Create action mappings
         await this.mapper.createMappings(data);
 
     }

@@ -34,7 +34,7 @@
  *
  * Identical by intent to xchain-encoder/src/corsOrigin.js, xchain-hub's
  * src/lib/corsOrigin.js, and xchain-utxo-tracker/src/corsOrigin.js; keep the
- * four in step .
+ * four in step.
  *
  * @param {string|undefined|null} raw - the raw CORS_ORIGIN value
  * @returns {false|string|string[]} `false` (disabled), `'*'` (any), one origin, or an allowlist

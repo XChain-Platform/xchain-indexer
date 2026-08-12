@@ -27,7 +27,7 @@
  * own suites pin behaviour against ITSELF only, which is exactly the shape
  * that drifts silently (the same reasoning as consensus-params.test.js for
  * the CONTROLLER_GUARD constants and xcall-constants-cross-repo.test.js for
- * the XCALL/VM constants). Found while costing , which had to touch all
+ * the XCALL/VM constants). Found while costing, which had to touch all
  * four copies; the gate is route-independent and outlives that item's fix.
  *
  * Skips where fewer than two carriers are on disk (standalone checkout); in

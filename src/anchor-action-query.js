@@ -62,46 +62,44 @@ const ANCHOR_ACTIONS_SQL =
      ORDER BY a.action_index DESC
      LIMIT ${ANCHOR_ROW_LIMIT}`;
 
-// ── Archive-batch authorship (#3075) ──────────────────────────────────────────
-// A v2 continuation chunk carries no signatures of its own: the ANCHOR spec calls it
-// "authenticated by its parent v1", but the only checks were that a parent exists and
-// its TOTAL_CHUNKS matches. Nothing bound the chunk to the parent's AUTHOR, and the
-// slot-occupancy guard rejects any later chunk for a filled index, so the FIRST
-// broadcast into a slot won permanently: anyone could fill a slot with junk, the real
-// publisher's chunk was then rejected as a duplicate, the archive never reassembled,
-// and the batch was denied for good.
+// Archive-batch authorship: a v2 continuation chunk carries no signatures of its
+// own. The ANCHOR spec calls it "authenticated by its parent v1", but the only
+// checks were that a parent exists and its TOTAL_CHUNKS matches; nothing bound the
+// chunk to the parent's AUTHOR. Combined with a slot-occupancy guard that rejects
+// any later chunk for a filled index, the first broadcast into a slot won
+// permanently: anyone could fill a slot with junk, the real publisher's chunk was
+// then rejected as a duplicate, and the archive never reassembled.
 //
-// The binding is the archive head's SOURCE, resolved through actions.source_id (the
-// authoritative source for auth per the actions schema - never re-derived from the
-// transaction). anchor_actions carries no source column of its own; the `publisher`
-// column is the v4/v5/v6 elected-PUBLISHER PUBKEY, a different thing entirely, and a
-// v1 head has none at all.
+// The binding is the archive head's SOURCE, resolved through actions.source_id
+// (the authoritative source for auth per the actions schema, never re-derived
+// from the transaction). anchor_actions carries no source column of its own; the
+// `publisher` column is the v4/v5/v6 elected-PUBLISHER PUBKEY, a different thing
+// entirely, and a v1 head has none at all.
 //
-// The head is the CANONICAL one: the earliest (lowest action_index) v1/v6 row for the
-// batch, byte-identical to db.getAnchorV1ByBatchSeq's rule, because match_batch_seq is
-// not unique (re-broadcast / failover double-publish). The selection is deliberately
-// STATUS-AGNOSTIC, matching that rule: a node with no mirrored oracle_publish snapshot
-// stores an unverifiable head 'unverified' where a mirrored node stores 'valid' or
-// 'invalid: ...', so a status-filtered head pick would make authorship - and every
-// chunk verdict downstream of it - differ between mirrored and unmirrored nodes. That
-// is a fleet divergence, which is worse than the exposure below.
+// The head is the canonical one: the earliest (lowest action_index) v1/v6 row for
+// the batch, byte-identical to db.getAnchorV1ByBatchSeq's rule, because
+// match_batch_seq is not unique (re-broadcast / failover double-publish). The
+// selection is deliberately status-agnostic, matching that rule: a node with no
+// mirrored oracle_publish snapshot stores an unverifiable head 'unverified' where
+// a mirrored node stores 'valid' or 'invalid: ...', so a status-filtered head pick
+// would make authorship, and every chunk verdict downstream of it, differ between
+// mirrored and unmirrored nodes. That fleet divergence is worse than the accepted
+// cost below.
 //
-// ACCEPTED COST, recorded so it is not rediscovered as a bug: because the earliest head
-// wins, a batch whose first head publisher stops before broadcasting all its chunks can
-// no longer be rescued by a second publisher's chunks under the same batch seq (the
-// pre-fix code mixed chunks freely across publishers, which worked only because the
-// archive blob is deterministic and the CRC bound the result). Denial now requires
-// BEING the legitimate first head publisher and then failing, instead of being anyone
-// at all. RESIDUAL, out of scope here: nothing stops a junk head row (bad signatures,
-// so status 'invalid: ...') from being the EARLIEST row for a batch and thereby
-// capturing both the geometry gate and this authorship rule. That exposure predates
-// #3075 (a junk head with a bogus TOTAL_CHUNKS already denied a batch) and cannot be
-// closed by filtering on status for the divergence reason above.
+// Accepted cost: because the earliest head wins, a batch whose first head
+// publisher stops before broadcasting all its chunks can no longer be rescued by
+// a second publisher's chunks under the same batch seq. Denial now requires being
+// the legitimate first head publisher and then failing, instead of being anyone
+// at all. Residual, out of scope here: nothing stops a junk head row (bad
+// signatures, status 'invalid: ...') from being the earliest row for a batch and
+// thereby capturing both the geometry gate and this authorship rule; that cannot
+// be closed by filtering on status, for the divergence reason above.
 //
 // LEFT JOINs throughout: the head pick must stay byte-identical to
-// getAnchorV1ByBatchSeq (inner joins would silently skip an unlinked head and select a
-// DIFFERENT one), and an unresolvable address then compares unequal, so a chunk whose
-// action linkage is missing is excluded rather than admitted. Fail-closed by shape.
+// getAnchorV1ByBatchSeq (inner joins would silently skip an unlinked head and
+// select a different one), and an unresolvable address then compares unequal, so
+// a chunk whose action linkage is missing is excluded rather than admitted.
+// Fail-closed by shape.
 const ARCHIVE_HEAD_AUTHOR_SQL =
     `SELECT hadr.address
      FROM anchor_actions h
@@ -112,12 +110,12 @@ const ARCHIVE_HEAD_AUTHOR_SQL =
      LIMIT 1`;
 
 // The usable v2 continuation chunks for one archive batch: rejected rows
-// ('invalid: ...') excluded, and now also every chunk not authored by the canonical
-// archive head (#3075). 'orphan' rows stay IN - a chunk that landed before its parent
-// head carries legitimate archive bytes - and this is precisely why the authorship
-// filter has to live in the READ path as well as in the parse-time verdict: an orphan
-// chunk is parsed with no parent to authenticate against, so a junk chunk broadcast
-// AHEAD of the head can only be excluded here.
+// ('invalid: ...') excluded, and also every chunk not authored by the canonical
+// archive head. 'orphan' rows stay in, since a chunk that landed before its parent
+// head carries legitimate archive bytes, and this is precisely why the authorship
+// filter has to live in the read path as well as in the parse-time verdict: an
+// orphan chunk is parsed with no parent to authenticate against, so a junk chunk
+// broadcast ahead of the head can only be excluded here.
 //
 // Callers dedupe to one row per chunk_index (lowest action_index wins) after this
 // query; the ORDER BY makes that deterministic. Params: [batchSeq, batchSeq].
@@ -138,16 +136,15 @@ const ARCHIVE_CHUNK_SET_SQL =
        AND cadr.address = (${ARCHIVE_HEAD_AUTHOR_SQL})
      ORDER BY c.chunk_index ASC, c.action_index ASC`;
 
-// ── Publisher-scoped archive batches (, flag-day gated) ────────────────
-// The same chunk set, but bound to a SUPPLIED author instead of the canonical
-// head's. At/after the ARCHIVE_BATCH_AUTHOR flag day the archive batch key is
-// (match_batch_seq, head author), so each head governs only its own publisher's
-// chunks and a junk head squatting the batch seq governs nothing: it captured
-// both the geometry gate and the #3075 authorship rule while "the batch" meant
-// "the earliest row carrying that seq". Everything else is byte-identical to
-// ARCHIVE_CHUNK_SET_SQL (rejected rows out, 'orphan' kept, deterministic order),
-// and with exactly one publisher per batch seq - honest operation - the two
-// queries return the same rows.
+// Publisher-scoped archive batches, flag-day gated: the same chunk set, but
+// bound to a SUPPLIED author instead of the canonical head's. At/after the
+// ARCHIVE_BATCH_AUTHOR flag day the archive batch key is (match_batch_seq, head
+// author), so each head governs only its own publisher's chunks and a junk head
+// squatting the batch seq governs nothing, closing the earlier gap where "the
+// batch" meant "the earliest row carrying that seq". Everything else is
+// byte-identical to ARCHIVE_CHUNK_SET_SQL (rejected rows out, 'orphan' kept,
+// deterministic order), and with exactly one publisher per batch seq (honest
+// operation) the two queries return the same rows.
 // Params: [batchSeq, author].
 const ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL =
     `SELECT c.*, cadr.address AS source
@@ -159,14 +156,14 @@ const ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL =
        AND cadr.address = ?
      ORDER BY c.chunk_index ASC, c.action_index ASC`;
 
-// The batch's CANONICAL head row identity (earliest v1/v6 row for the seq,
+// The batch's canonical head row identity (earliest v1/v6 row for the seq,
 // status-agnostic) reduced to what the flag-day predicate needs: the DOGE height it
-// landed at. This is the ONE row every node agrees on for a batch seq without
-// consulting status - which is why the  gate is anchored to it rather than to
-// the chunk's own block, so a head and its chunks can never straddle two rules.
-// block_index_doge, NOT block_index: the latter is the CHECKPOINTED height on the
-// checkpointed chain (and is NULL on a v2 chunk), while the flag day is a height on
-// the chain the ANCHOR itself lands on.
+// landed at. This is the one row every node agrees on for a batch seq without
+// consulting status, which is why the publisher-authorship gate is anchored to it
+// rather than to the chunk's own block, so a head and its chunks can never
+// straddle two rules. block_index_doge, not block_index: the latter is the
+// checkpointed height on the checkpointed chain (and is NULL on a v2 chunk), while
+// the flag day is a height on the chain the ANCHOR itself lands on.
 // Params: [batchSeq].
 const ARCHIVE_HEAD_GATE_SQL =
     `SELECT h.action_index, h.block_index_doge

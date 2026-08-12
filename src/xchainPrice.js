@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * XCHAIN price derivation from platform-realized fills 
+ * XCHAIN price derivation from platform-realized fills
  *
  * XCHAIN cannot be priced by the hub's exchange feeds: it is listed nowhere, its
  * supply is 0 and its mint is disabled. But every native-coin protocol fee needs
@@ -23,7 +23,8 @@
  * hands: DEX fills (order_matches) and dispenses. The USD leg is applied by the
  * caller from the federation's own BTC/USD in the same round.
  *
- * Spec: claude/specs/XCHAIN_PRICE_DERIVATION_SPEC.md (§4 formula, §5 threat model)
+ * Design-spec sections referenced throughout this file: §4 covers the derivation
+ * formula, §5 the threat model.
  *
  * PURE. No DB, no clock, no config. The caller selects the fill set for a window
  * anchored to the round's BTC reference height (with the §4 confirmation buffer,

@@ -12,7 +12,7 @@
 --
 --********************************************************************
 --
--- anchor_reward_attestations (, Option C derive-on-BTC-side).
+-- anchor_reward_attestations: reward tuples derived and attested on the BTC side.
 --
 -- Hub-authored, append-only federation-state table mirrored to every indexer via
 -- hub_db_sync (HUB_STATE_TABLES, exactly like state_checkpoints: id-parity INSERT

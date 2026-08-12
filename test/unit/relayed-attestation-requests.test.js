@@ -15,7 +15,7 @@
  **********************************************************************
  * test/unit/relayed-attestation-requests.test.js
  *
- * : getRelayedAttestationRequests, the home-side read the cross-chain
+ * getRelayedAttestationRequests, the home-side read the cross-chain
  * attestation relay runs both halves of its round trip on.
  *
  * What these pin, and why each is worth a test rather than a reading:
@@ -79,7 +79,7 @@ function row(overrides = {}) {
     };
 }
 
-describe(' getRelayedAttestationRequests @regression @tier1', function () {
+describe('getRelayedAttestationRequests @regression @tier1', function () {
 
     afterEach(function () { sinon.restore(); });
 

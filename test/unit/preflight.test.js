@@ -6,7 +6,7 @@
 // This file is part of XChain Platform. Licensed under the GNU Affero
 // General Public License v3.0 or later; see LICENSE.md.
 //
-// Public validity-first pre-flight  unit suite. Exercises the
+// Public validity-first pre-flight unit suite. Exercises the
 // REAL computePreflight prototype with the dry-run engine stubbed
 // (the engine itself is unit-tested in feeQuoteDryRun.test.js): the
 // classification (deny/exempt/quotable), FEE_DESTINATION decoupling,
@@ -92,7 +92,7 @@ describe('public pre-flight (computePreflight) @regression @tier1', function () 
         });
     });
 
-    describe('FEE_DESTINATION decoupling (the  fix)', function () {
+    describe('FEE_DESTINATION decoupling (the fix)', function () {
         it('reports a verdict even when no FEE_DESTINATION is configured', async function () {
             let { ctx } = makeCtx(makeUtil('BTC', PLACEHOLDER));
             let r = await ctx.computePreflight({ action: 'SEND', params: '0|JDOG|1|addr' });
@@ -119,7 +119,7 @@ describe('public pre-flight (computePreflight) @regression @tier1', function () 
         });
     });
 
-    describe('fee echo ', function () {
+    describe('fee echo', function () {
         it('echoes the dry-run xchainFee, 8dp normalized, so no second round-trip is needed', async function () {
             let { ctx, calls } = makeCtx(makeUtil('BTC', FEE_DEST), { dryRun: { xchainFee: '0.5' } });
             let r = await ctx.computePreflight({ action: 'ISSUE', params: '0|NEWTICK' });
@@ -172,11 +172,11 @@ describe('public pre-flight (computePreflight) @regression @tier1', function () 
         });
     });
 
-    // : the dry-run used to inject the probe fee output unconditionally, which put every
+    // the dry-run used to inject the probe fee output unconditionally, which put every
     // pre-flight in NATIVE settlement mode and so never debited the protocol fee against the
     // payer's XCHAIN balance. A payer holding zero XCHAIN got valid:true, signed, paid a miner
     // fee, and the chain then indexed the action `invalid: insufficient funds (FEE)`.
-    describe('fee settlement mode + payer balance ', function () {
+    describe('fee settlement mode + payer balance', function () {
 
         it('BTC defaults to the XCHAIN debit: no probe output, so the handler checks the balance', async function () {
             let { ctx, calls } = makeCtx(makeUtil('BTC', FEE_DEST));

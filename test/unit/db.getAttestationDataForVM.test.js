@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/db.getAttestationDataForVM.test.js
  *
- * : getAttestationDataForVM builds the read-only snapshot the VM exposes
+ * getAttestationDataForVM builds the read-only snapshot the VM exposes
  * through xchain.attestation.getResponse(requestId). This suite pins the shaping,
  * the retry-then-ok dedup, the as-of visibility gate, and the serializable shape
  * the forked-worker accessor (xchain-vm/src/readonly-accessors.js) rebuilds from.
@@ -59,7 +59,7 @@ function stubRows(db, rows) {
 
 const rid = (c) => c.repeat(64);
 
-describe('db.getAttestationDataForVM  @regression @tier2', function () {
+describe('db.getAttestationDataForVM @regression @tier2', function () {
 
     afterEach(() => sinon.restore());
 

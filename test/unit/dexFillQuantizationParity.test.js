@@ -8,7 +8,7 @@
 // This file is part of XChain Platform. Licensed under the GNU Affero
 // General Public License v3.0 or later; see LICENSE.md.
 //
-//  P1 (): the INDEXER half of the shared fill-quantization
+// P1 (/#3146): the INDEXER half of the shared fill-quantization
 // contract. The indexer is the arbiter here; the hub's CrossChainDexEngine is a
 // hand port that must reproduce these numbers exactly. The vectors are vendored
 // byte-identically into xchain-hub/test/fixtures/, and each side asserts its own

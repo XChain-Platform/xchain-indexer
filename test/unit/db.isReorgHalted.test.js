@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/db.isReorgHalted.test.js
  *
- * : the decoder writes a durable REORG_HALT marker into its events table
+ * the decoder writes a durable REORG_HALT marker into its events table
  * when it halts on a reorg it cannot safely rewind, but the indexer only ever
  * selects code='REORG', so a halted decoder is invisible (looks idle/lagging).
  * isReorgHalted() probes for the marker on decoderDb using the same throwing read
@@ -40,7 +40,7 @@ function makeDb() {
     return new Database('127.0.0.1', 3306, 'xchain_btc_regtest', 'u', 'p', indexer);
 }
 
-describe('db.isReorgHalted ()', function () {
+describe('db.isReorgHalted', function () {
 
     afterEach(() => sinon.restore());
 

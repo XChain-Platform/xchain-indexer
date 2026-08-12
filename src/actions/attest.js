@@ -18,8 +18,8 @@
  *   v0: Request (VM emission only; originated by xchain.attestation.request())
  *   v1: Response (validator-broadcast PBFT bundle with signatures)
  *   v2: Expire (system-synthesized; never user-broadcast)
- *   v3: Relay request  (cross_chain-federation-broadcast, BTC only; )
- *   v4: Relay response (cross_chain-federation-broadcast, origin chain only; )
+ *   v3: Relay request  (cross_chain-federation-broadcast, BTC only)
+ *   v4: Relay response (cross_chain-federation-broadcast, origin chain only)
  *
  * v3/v4 are the cross-chain delivery legs (spec §12, framework Phase 5). All
  * `attestation` capability stake lives on BTC, so an ATTEST emitted by an LTC or
@@ -88,11 +88,11 @@ class Attest {
         this.formats[0] = 'VERSION|REQUEST_ID|PROVIDER_ID|REQUEST_PAYLOAD|CALLBACK_METHOD|CALLBACK_PARAMS_JSON|REDUNDANCY|DEADLINE_BLOCKS|FEE_TICK|FEE_AMOUNT';
         this.formats[1] = 'VERSION|REQUEST_ID|PROVIDER_ID|RESPONSE_PAYLOAD|STATUS|META|SIG_COUNT|PUBKEY|SIG|...';
         this.formats[2] = 'VERSION|REQUEST_ID';
-        //  cross-chain relay legs. Both are broadcast by the elected
-        // cross_chain leader on behalf of the federation and carry their quorum
-        // inline, structurally mirroring v1. Both are flag-day gated: below
-        // activation the handlers write nothing and persist nothing, which is
-        // byte-identical to how a pre- node treats an unknown VERSION.
+        // Cross-chain relay legs. Both are broadcast by the elected cross_chain
+        // leader on behalf of the federation and carry their quorum inline,
+        // structurally mirroring v1. Both are flag-day gated: below activation
+        // the handlers write nothing and persist nothing, which is byte-identical
+        // to how a node without relay support treats an unknown VERSION.
         this.formats[3] = 'VERSION|REQUEST_ID|ORIGIN_CHAIN|ORIGIN_ACTION_INDEX|PROVIDER_ID|REQUEST_PAYLOAD|REDUNDANCY|DEADLINE_BLOCKS|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...';
         this.formats[4] = 'VERSION|REQUEST_ID|HOME_RESPONSE_ACTION_INDEX|RESPONSE_PAYLOAD|STATUS|META|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...';
     }
@@ -262,7 +262,7 @@ class Attest {
         // path runs verbatim so replay stays bit-identical. Deterministic: the set
         // derives from block-anchored stake state every validator replays alike.
         // The computed set is reused as the pinned RESPONSIBLE_SET_JSON below.
-        //  (Phase 5, spec §12): the origin-side half of the cross-chain relay.
+        // Framework Phase 5 (spec §12): the origin-side half of the cross-chain relay.
         // On LTC/DOGE _computeResponsibleSet returns [] by construction (attestation
         // stake is BTC-only), and ATTEST_ADMISSION is already satisfied there on local
         // height, so today EVERY off-BTC request is rejected at admission. At/above
@@ -280,7 +280,7 @@ class Attest {
             relayOrigin = await this.actions.protocolChanges.isEnabled('ATTEST_RELAY_ORIGIN', data['BLOCK_INDEX']);
 
         let admissionSet = null;
-        // LOCAL-HEIGHT plane (): BLOCK_INDEX is this request's height on
+        // LOCAL-HEIGHT plane: BLOCK_INDEX is this request's height on
         // its own chain, which is what this gate is defined against. It is deliberately
         // NOT the BTC-anchored plane the stake_weighted_quorum / price_sig_tally gates
         // use; see attest_admission_activation.js for why the two differ and why the
@@ -311,7 +311,7 @@ class Attest {
         // AND resolved_block >= reorg point), never promotes it back to pending.
         data['REQUEST_STATUS'] = (error) ? 'rejected' : 'pending';
 
-        // : stamp the origin chain on an admitted relay-eligible request. This is
+        // Stamp the origin chain on an admitted relay-eligible request. This is
         // the ONLY marker the hub's relay poll keys on, and it is written only for a
         // row that actually reached 'pending', so a rejected request is never relayed.
         data['ORIGIN_CHAIN'] = (relayOrigin && data['REQUEST_STATUS'] === 'pending')
@@ -319,8 +319,8 @@ class Attest {
         // Paired half of the same relay identity, on the IDENTICAL predicate. On an origin
         // v0 row "the origin chain's v0 action_index" is this row's own action_index, which
         // is what the response leg (ATTEST v4) and the BTC-side exactly-once guard correlate
-        // on; writing only ORIGIN_CHAIN left the identity half-formed and the column NULL
-        // (). Sharing the predicate keeps the two columns inseparable: a rejected
+        // on; writing only ORIGIN_CHAIN left the identity half-formed and the column NULL.
+        // Sharing the predicate keeps the two columns inseparable: a rejected
         // or native request leaves BOTH NULL, exactly as the v3 handler sets BOTH together.
         data['ORIGIN_ACTION_INDEX'] = (relayOrigin && data['REQUEST_STATUS'] === 'pending')
                                     ? data['ACTION_INDEX'] : null;
@@ -398,7 +398,7 @@ class Attest {
         // (AttestationConsensus._buildCanonical) and the only live producer lowercases
         // before broadcast. The CANONICAL signing bytes themselves are the exception:
         // whether they use the raw wire case or the lowercased id is CONSENSUS
-        // BEHAVIOUR . Legacy nodes build the canonical from the RAW wire id,
+        // BEHAVIOUR. Legacy nodes build the canonical from the RAW wire id,
         // so a case-mutated replay of a pending v1 fails signature verification there;
         // lowercasing ungated would make the same wire bytes verify on an upgraded
         // node and fork the fleet. The raw id is therefore kept for the canonical
@@ -445,7 +445,7 @@ class Attest {
 
         // The DECLARED height of this round: the REQUEST's block, deterministic from the
         // request_id every signer keyed on. Two different things are derived from it and
-        // they must not be conflated .
+        // they must not be conflated.
         //
         // 1. The flag-day inputs (EQUIV header below) are evaluated on the DECLARED height,
         //    verbatim. Shifting a flag-day boundary by the reorg buffer would move the
@@ -468,7 +468,7 @@ class Attest {
         // ROUND_ID=request_id, VIEW=0, no view change), gated on the request's block +
         // network; below it, the bare bytes. Byte-matches AttestationConsensus._buildCanonical.
         let responseHash = crypto.createHash('sha256').update(responseBodyBytes).digest('hex');
-        // : the id case inside the canonical is gated (see the normalization
+        // The id case inside the canonical is gated (see the normalization
         // note above). Raw wire bytes below the flag-day (byte-identical to legacy
         // verification), lowercased at/after it.
         let canonId      = (await this.actions.protocolChanges.isEnabled('ATTEST_CANONICAL_LOWERCASE_ID', data['BLOCK_INDEX']))
@@ -485,7 +485,7 @@ class Attest {
             // variant: _stakeWeightsSql gates MIN_STAKE on the SOURCE aggregate while
             // hasCapability gates on the PUBKEY aggregate, so the weighted set can be
             // strictly larger and would admit signers this gate rejects today. On a
-            // truncated read fall back per-signer rather than drop a capable co-signer (#3872).
+            // truncated read fall back per-signer rather than drop a capable co-signer.
             let capableRows = await this.indexerDb.getValidatorsByCapability('attestation', snapshotBlock);
             let capableSet  = (capableRows && capableRows.truncated === true)
                             ? null
@@ -517,7 +517,7 @@ class Attest {
             // guaranteed non-null inside this !error block; a null lookup sets
             // 'no matching request' above and skips the loop.)
             // DECLARED, not buried: _computeResponsibleSet takes the declared height and
-            // buries it internally , so every site that computes this request's
+            // buries it internally, so every site that computes this request's
             // responsible set (admission, the persisted RESPONSIBLE_SET_JSON, the expiry
             // missed_count charge, the fulfilled fee split, and here) resolves ONE set.
             let responsible = new Set(await this._computeResponsibleSet(
@@ -593,7 +593,7 @@ class Attest {
                 // and the v0 escrow (earlier action_index) survives intact.
                 await this._settleRequestFee(request, data, newRequestStatus);
 
-                // : a relay-materialized request (v3) carries the ORIGIN chain it
+                // A relay-materialized request (v3) carries the ORIGIN chain it
                 // came from. Its contract lives there, not here, so BTC must not try to
                 // execute a callback against a contract_index that means nothing locally.
                 // The response relays back as a v4 instead and the origin chain fires the
@@ -689,7 +689,7 @@ class Attest {
         }
 
         // Synthesize the callback EXECUTE so the contract can clean up (status='expired').
-        // : skipped for a relay-materialized row on the home chain, whose contract
+        // Skipped for a relay-materialized row on the home chain, whose contract
         // lives on the origin chain (see the same guard on the v1 path). The origin
         // chain's own copy of the request expires on its own deadline and fires the
         // contract's expired callback there.
@@ -714,8 +714,8 @@ class Attest {
     // within-subset quorum stays count-based. CONSENSUS-CRITICAL: must match the
     // hub's AttestationRound._computeResponsibleSet byte-for-byte or validation forks.
     async _computeResponsibleSet(requestId, redundancy, blockIndex){
-        // : the SWQ gate is BTC-ANCHORED, so only evaluate it where
-        // `blockIndex` actually is a BTC height.
+        // The SWQ gate is BTC-ANCHORED, so only evaluate it where `blockIndex`
+        // actually is a BTC height.
         //
         // isStakeWeightedQuorumActive() compares its argument against 961000, a BTC
         // height (~2026-08-04). `blockIndex` here is the ATTEST action's LOCAL height on
@@ -745,7 +745,7 @@ class Attest {
         // and flips at the anchor in lockstep with the hub.
         //
         // `blockIndex` is the DECLARED height (the request's block). Two different things
-        // come off it and  is the difference (see _parseResponse):
+        // come off it, and the difference matters (see _parseResponse):
         //   - the STAKE_WEIGHTED_QUORUM flag-day is evaluated on the declared height,
         //     verbatim, because moving a cutover block by the reorg buffer is its own fork;
         //   - the set is RESOLVED at the declared height BURIED by CANONICAL_REORG_BUFFER,
@@ -783,7 +783,7 @@ class Attest {
         return withHash.slice(0, Math.max(1, Number(redundancy) || 1)).map(v => v.pubkey);
     }
 
-    // ──  cross-chain relay (spec §12, framework Phase 5) ───────────────
+    // Cross-chain relay (spec §12, framework Phase 5)
 
     // True when `request` is one leg of a relay whose contract lives on ANOTHER
     // chain, i.e. the BTC row a v3 materialized. The callback paths consult this
@@ -862,7 +862,7 @@ class Attest {
     // garbage-then-valid pair for one qualified validator cannot suppress the real
     // signature and under-count a quorate relay.
     async _verifyRelayQuorum(canonical, sigs, snapshotBlock, network){
-        // Same declared-vs-resolved split as the v1 path above . The wire
+        // Same declared-vs-resolved split as the v1 path above. The wire
         // carries the RAW snapshot_block, but AttestationRelay resolved its cross_chain
         // signer set through CapabilitySnapshot, which buries by CANONICAL_REORG_BUFFER,
         // so re-resolving at the raw height admits or drops any validator whose stake
@@ -925,7 +925,7 @@ class Attest {
         // The landing block_index is what makes the leg inert before the flag day:
         // on the home chain it IS a BTC height and cannot be forged, so a v3 carrying
         // an invented future SNAPSHOT_BLOCK still persists nothing below activation,
-        // byte-identical to how a pre- node treats VERSION 3.
+        // byte-identical to how a node without relay support treats VERSION 3.
         //
         // The carried SNAPSHOT_BLOCK is what keeps this node on the same activation
         // predicate as everyone else. It is the ONLY plane the hub can gate on, since
@@ -994,7 +994,7 @@ class Attest {
         // origin reorg deeper than the hub's confirmation depth that re-emits the same
         // origin action_index from a different transaction produces a DIFFERENT request_id,
         // clears the check above, and materializes a second BTC request that nothing on BTC
-        // can retract (). Rejecting the second is the conservative side of that
+        // can retract. Rejecting the second is the conservative side of that
         // fork: the stranded origin request expires on its own deadline and refunds its
         // escrow, whereas a double materialization spends real BTC fees irreversibly.
         // Stored as an 'invalid' verdict rather than left to a DB constraint for the same
@@ -1178,8 +1178,8 @@ class Attest {
             // fulfillment would. The responsible set it splits to is the ORIGIN row's,
             // which is empty off BTC, so the fee lands in the REWARD pool and no
             // per-validator reward row is written; paying the BTC-staked validators
-            // out of an origin-chain pool is Phase 3 economics work, not a relay
-            // concern (see the open questions in the  report).
+            // out of an origin-chain pool is future economics work, not something
+            // this relay leg needs to solve.
             await this._settleRequestFee(request, data, newRequestStatus);
 
             // Fire the contract callback here, on the chain the contract lives on.
@@ -1329,7 +1329,7 @@ class Attest {
         // SOURCE = contract address so xchain.getSourceAddress() === xchain.getContractAddress() (spec §4.3).
         // The v1 response rode a real broadcast tx, so its TX_HASH is passed through;
         // post-SYNTH_EXEC_TX_HASH the builder throws rather than let a hashless
-        // context reach the VM ( class guard).
+        // context reach the VM.
         let synthActive = await this.actions.protocolChanges.isEnabled(SYNTH_EXEC_TX_HASH, responseData['BLOCK_INDEX']);
         let emissionData = buildInjectedExecContext({
             chain:         chain,
@@ -1401,7 +1401,7 @@ class Attest {
             SOURCE:      'C:' + chain + ':' + request.contract_index
         }, true);
 
-        // : the expiry callback has no real tx behind it (ATTEST v2 is
+        // The expiry callback has no real tx behind it (ATTEST v2 is
         // system-synthesized). Post-SYNTH_EXEC_TX_HASH the context gets a
         // deterministic synthetic TX_HASH (namespaced by request_id, unique per
         // request since expiry fires once), so anything the callback emits

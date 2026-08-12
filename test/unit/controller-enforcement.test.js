@@ -19,7 +19,7 @@
  * (SEND/ORDER/SWAP/DISPENSER) call at their validated→settlement boundary. These tests
  * pin its CONTROL FLOW with fakes (fake db.getEffectiveTokenController + fake
  * actions.actionExecute.runControllerGuard); no DB, no VM, so they run on any Node.
- * The real guard run (VM execution, gas metering) is exercised on Node 22 / test-host.
+ * The real guard run (VM execution, gas metering) is exercised on a separate regtest venue.
  *
  * Spec: xchain-documentation/protocol/Controller_Bound_Tokens.md
  ********************************************************************/

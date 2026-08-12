@@ -14,8 +14,7 @@
  *
  * XChain Platform Action - BET
  *
- * Decentralized parimutuel betting (spec claude/specs/BETTING_SYSTEM_SPEC.md,
- * ). One self-contained action covers the whole market lifecycle: an
+ * Decentralized parimutuel betting. One self-contained action covers the whole market lifecycle: an
  * oracle creates a feed (a betting market defined fully on-chain), anyone
  * bets any live token on an outcome (escrowed at parse), the oracle resolves
  * after the deadline and the protocol pays winners pro-rata from the pot,
@@ -51,9 +50,7 @@
 
 class Bet {
 
-    // Handle constructing a class instance
     constructor(action){
-        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -61,29 +58,25 @@ class Bet {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
-        // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|LABEL|OUTCOMES|TICK|FEE|DEADLINE|REFUND_WINDOW|MIN_AMOUNT|ALLOW_LIST|BLOCK_LIST|DETAILS|MEMO';
         this.formats[1] = 'VERSION|FEED_ACTION_INDEX|MEMO';
         this.formats[2] = 'VERSION|FEED_ACTION_INDEX|OUTCOME|AMOUNT|MEMO';
         this.formats[3] = 'VERSION|FEED_ACTION_INDEX|OUTCOME|MEMO';
 
-        // Define array of supported list types (1=Tick, 2=Address)
+        // Supported list types for ALLOW_LIST/BLOCK_LIST: 2=Address only.
         this.listTypes = [2];
     }
 
-    // Handle parsing the BET transaction
     async parse(params, data, error){
-        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
-        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
-        // Convert NUMBER fields from string value to number value so comparisons are mathematical
+        // Convert NUMBER fields from string to number so comparisons below are mathematical, not lexical.
         if(!error)
             data = this.util.setNumberFormats(data);
 
@@ -104,28 +97,21 @@ class Bet {
         if(feedInfo)
             feedTokenInfo = await this.indexerDb.getTokenInfo(feedInfo['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
-        // Get source address balances and preferences
         let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let preferences = await this.indexerDb.getAddressPreferences(data['SOURCE'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
-        // Create the fees object
         let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
 
         // Canonical outcome labels (trimmed, comma-joined) - computed during
         // validation below and stored on the feed row
         let outcomeLabels = [];
 
-        /*****************************************************************
-         * Format 0 (Create Feed) validations
-         ****************************************************************/
-
+        // Format 0 (Create Feed) validations
         if(format==0){
 
-            // Verify LABEL is present and within length bounds
             if(!error && (this.util.isNull(data['LABEL']) || String(data['LABEL']).length < 1 || String(data['LABEL']).length > this.config['MAX_BET_LABEL_LENGTH']))
                 error = 'invalid: LABEL (length)';
 
-            // Verify OUTCOMES: comma-split count bounds
             if(!error){
                 let rawOutcomes = this.util.isNull(data['OUTCOMES']) ? [] : String(data['OUTCOMES']).split(',');
                 if(rawOutcomes.length < 2 || rawOutcomes.length > this.config['MAX_BET_OUTCOMES'])
@@ -157,7 +143,6 @@ class Bet {
             if(!error && !tokenInfo)
                 error = 'invalid: TICK (unknown)';
 
-            // Verify TICK is not sleeping
             if(!error && await this.indexerDb.isActionAllowed(null, data['TICK'], data['BLOCK_INDEX']) == false)
                 error = 'invalid: TICK (sleeping)';
 
@@ -234,11 +219,7 @@ class Bet {
                 error = this._validateDetails(String(data['DETAILS']), outcomeLabels);
         }
 
-        /*****************************************************************
-         * Format 1 / 2 / 3 (existing feed) validations
-         ****************************************************************/
-
-        // Validate FEED_ACTION_INDEX references a known feed
+        // Format 1 / 2 / 3 (existing feed) validations
         if(!error && (format==1 || format==2 || format==3) && !feedInfo)
             error = 'invalid: FEED_ACTION_INDEX (unknown)';
 
@@ -270,7 +251,6 @@ class Bet {
             if(!error && data['SOURCE']==feedInfo['SOURCE'])
                 error = 'invalid: SOURCE (oracle may not bet own feed)';
 
-            // OUTCOME must be an integer inside the feed's outcome range
             let outcomeCount = feedInfo ? String(feedInfo['OUTCOMES']).split(',').length : 0;
             if(!error && (this.util.isNull(data['OUTCOME']) || !this.util.isNumeric(data['OUTCOME']) || !this.util.isInteger(data['OUTCOME']) || Number(data['OUTCOME']) < 0 || Number(data['OUTCOME']) >= outcomeCount))
                 error = 'invalid: OUTCOME (range)';
@@ -320,22 +300,15 @@ class Bet {
             // expires the feed (deterministic resolve-vs-expire boundary)
             if(!error && !this.util.bclt(data['BLOCK_TIME'], feedInfo['EXPIRE_AT']))
                 error = 'invalid: FEED_ACTION_INDEX (refund window expired)';
-            // OUTCOME must be an integer inside the feed's outcome range
             let outcomeCount = feedInfo ? String(feedInfo['OUTCOMES']).split(',').length : 0;
             if(!error && (this.util.isNull(data['OUTCOME']) || !this.util.isNumeric(data['OUTCOME']) || !this.util.isInteger(data['OUTCOME']) || Number(data['OUTCOME']) < 0 || Number(data['OUTCOME']) >= outcomeCount))
                 error = 'invalid: OUTCOME (range)';
         }
 
-        /*****************************************************************
-         * General Validations
-         ****************************************************************/
-
-        // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
-        // Verify SOURCE may act on the wagered tick (house token allow/block lists, create only;
-        // place checks the feed tick above)
+        // Wagered-tick allow/block check (create only; place checks the feed tick above)
         if(!error && format==0 && await this.indexerDb.isActionAllowed(data['SOURCE'], data['TICK']) == false)
             error = 'invalid: SOURCE (not authorized)';
 
@@ -347,18 +320,12 @@ class Bet {
         if(!error && !this.util.isNull(data['MEMO']) && String(data['MEMO']).indexOf(';')!=-1)
             error = 'invalid: MEMO (semicolon)';
 
-        // Verify MEMO is shorter than MAX_MEMO_LENGTH
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
-        /*****************************************************************
-         * Fees (unified schedule only: BET and UNIFIED_FEES are both
-         * genesis-active on every chain and network, so a BET action can
-         * never process below the gate; the legacy else-branch order.js
-         * carries would be dead code here, and dead code that silently
-         * charges zero if the condition were ever mis-evaluated)
-         ****************************************************************/
-
+        // Fees: unified schedule only. BET and UNIFIED_FEES are both genesis-active on every
+        // chain and network, so a BET action can never process below the gate; the legacy
+        // else-branch other actions carry would be dead code here.
         fees['AMOUNT'] = 0;
 
         // Create: duration-metered on the feed's full pass-eligible life
@@ -386,7 +353,6 @@ class Bet {
         // pre-funded at place time, and a resolve surcharge would be griefable
         // (dust bets inflating the oracle's cost until rational expiry)
 
-        // Validate fee payment (native coin or XCHAIN balance)
         if(!error && this.util.bcgt(fees['AMOUNT'], 0)){
             let paymentMode = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']);
             if(paymentMode === 'native'){
@@ -415,20 +381,14 @@ class Bet {
         if(!error && format==2 && !this.util.hasBalance(balances, feedTokenInfo['TICK_ID'], data['AMOUNT']))
             error = 'invalid: insufficient funds (AMOUNT)';
 
-        /*****************************************************************
-         * Storage + ledger changes
-         ****************************************************************/
-
         // Canonical stored values (create): trimmed labels joined with a single
         // comma, defaulted refund window, materialized expire_at
         if(format==0 && !error)
             data['OUTCOMES'] = outcomeLabels.join(',');
 
-        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
-        // Clone the raw data for storage
         let bet = Object.assign({}, data);
 
         // Current lifecycle status for the new row (invalid rows store 'invalid'
@@ -440,7 +400,6 @@ class Bet {
             bet['TICK'] = feedInfo ? feedInfo['TICK'] : null; // denormalized feed tick
         }
 
-        // Print status message
         if(format==0)
             console.log("\t BET_FEED : " + this.config['COIN'] + ' : ' + data['LABEL'] + ' : ' + data['STATUS']);
         if(format==1)
@@ -452,10 +411,10 @@ class Bet {
 
         // Every format stores its own typed row, whatever the status (house
         // convention). The cancel/resolve rows are what make a REJECTED cancel or
-        // resolve reportable at all : those legs used to write nothing but a
+        // resolve reportable at all: those legs used to write nothing but a
         // bet_feed_statuses history row, and only on the valid path, so the explorer
         // served the action with a NULL status and the SDK could not tell a rejection
-        // from a success (statusKnown:false / statusSource:assumed, ). These
+        // from a success (statusKnown:false / statusSource:assumed). These
         // rows carry the PARSE status; the feed's lifecycle status stays in
         // bet_feed_statuses and is still written only by the legs that move it
         if(format==0)
@@ -467,21 +426,17 @@ class Bet {
         if(format==3)
             await this.indexerDb.createBetResolve(bet);
 
-        // Store the SOURCE and wagered TICK in addresses list
         if(format==0)
             this.util.addAddressTicker(data['SOURCE'], data['TICK']);
         if(feedInfo)
             this.util.addAddressTicker(data['SOURCE'], feedInfo['TICK']);
 
-        // Array of credits, debits, and escrows
         let credits = [],
             debits  = [],
             escrows = [];
 
-        // If this was a valid transaction, process the lifecycle leg
         if(status=='valid'){
 
-            // If we are charging a fee, store the SOURCE and fees TICK in addresses list
             if(this.util.bcgt(fees['AMOUNT'], 0))
                 this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
 
@@ -506,28 +461,21 @@ class Bet {
             if(format==3)
                 await this._settleFeed(data, feedInfo, feedTokenInfo, credits, escrows);
 
-            // Handle any transaction FEE according to the user's ADDRESS preferences
             [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
 
-            // Process any transaction ledger changes (credits / debits / escrows)
             await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
 
-            // Get a list of tickers & addresses
             let tickers   = this.util.getTickersList(),
                 addresses = Object.keys(this.util.getAddressesList());
 
-            // Update address balances and token supply
             await this.indexerDb.updateBalances(addresses);
             await this.indexerDb.updateTokens(tickers);
         }
 
-        // Create action mappings
         await this.mapper.createMappings(data);
     }
 
-    /*****************************************************************
-     * Terminal paths (shared by cancel here and BET_EXPIRE's sibling)
-     ****************************************************************/
+    // Terminal paths (shared by cancel here and BET_EXPIRE's sibling)
 
     // Refund every `open` bet on the feed in full (the normative bet_status='open'
     // predicate: rows already refunded/settled by another path are never selected,
@@ -627,10 +575,6 @@ class Bet {
             await this._refundOpenBets(data, feedInfo, 'resolved_void', credits, escrows);
         }
     }
-
-    /*****************************************************************
-     * DETAILS validation
-     ****************************************************************/
 
     // Validate the base64 JSON market definition. Returns an error string or null.
     _validateDetails(details, outcomeLabels){

@@ -38,7 +38,7 @@ async function getStakeSourceByPubkey(indexer, { pubkey, block_index }){
     if(!indexer.indexerDb)
         return { error: 'indexer database not ready' };
     try {
-        // Federation READ isolation ( / H2 residual): resolve through apiView()
+        // Federation READ isolation: resolve through apiView()
         // so every read draws an independent pooled connection and sees only COMMITTED
         // state. This handler backs the getstakesourcebypubkey federation RPC; a call
         // landing mid-block must not join the block's open ACID transaction (sharing the
@@ -58,7 +58,7 @@ async function getStakeSourceByPubkey(indexer, { pubkey, block_index }){
         // deliberately NOT on the row's recording block_index. This must match: an
         // earlier `block_index <= ?` filter here (absent from membership) left a
         // delegated key counted-but-unresolvable, deferring its anchor reward and
-        // blocking the publish. The permanent-slash exclusion (WI-2) is part of the
+        // blocking the publish. The permanent-slash exclusion is part of the
         // active-row set, so it is applied here too.
         let rows = await db.doQuery(
             `SELECT ia.address AS source FROM stakes s

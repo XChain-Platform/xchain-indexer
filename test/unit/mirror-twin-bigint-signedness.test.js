@@ -13,7 +13,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Mirror-twin BIGINT signedness conformance .
+ * Mirror-twin BIGINT signedness conformance.
  *
  * The hub-mirrored tables are declared twice: once in xchain-hub/src/sql
  * (the source of truth, written by the hub) and once here in src/sql (the
@@ -106,7 +106,7 @@ describe('mirror-twin BIGINT signedness conformance @regression', function () {
         }
     });
 
-    //  landed anchor_reward_attestations into HUB_STATE_TABLES without adding it
+    // landed anchor_reward_attestations into HUB_STATE_TABLES without adding it
     // here, so its field shape went unguarded on a money rail for a full release cycle.
     // The inventory above is hand-written; this joins it back to the registries that
     // decide what the mirror actually carries, so the NEXT table added to either array
@@ -159,7 +159,7 @@ describe('mirror-twin BIGINT signedness conformance @regression', function () {
             assert.ok(sharedBigints > 0, table + ': found no shared BIGINT columns; the parser or twin pairing has gone stale');
             assert.strictEqual(drifted.length, 0,
                 'BIGINT signedness drifted from the hub source DDL (align src/sql AND add a tracked ' +
-                'src/sql/migrations ALTER for deployed mirrors, per ):\n' + drifted.join('\n'));
+                'src/sql/migrations ALTER for deployed mirrors):\n' + drifted.join('\n'));
         });
     }
 });

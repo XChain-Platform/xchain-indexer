@@ -34,7 +34,7 @@ const helmet     = require('helmet');
 function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null){
     if(!stallReason) return false;
     if(lastBlockCommittedAt == null) return false;
-    if(Number.isFinite(stallClearsAtMs) && now < stallClearsAtMs) return false;   // 
+    if(Number.isFinite(stallClearsAtMs) && now < stallClearsAtMs) return false;   
     return (now - lastBlockCommittedAt) > graceMs;
 }
 
@@ -80,7 +80,7 @@ function buildApp(indexer) {
         let decoderBlock = (indexer.lastDecoderBlock != null) ? Number(indexer.lastDecoderBlock) : null;
         // Same status-code contract as api.js: 503 on DB-unreachable/wedge so the
         // http_get container healthcheck can observe unhealthy; a not-synced catch-up
-        // AND a stalled-but-still-advancing barrier defer (degraded) both stay 200 .
+        // AND a stalled-but-still-advancing barrier defer (degraded) both stay 200.
         let stalled   = !!indexer.stallReason;
         let wedged    = stallWedged(indexer.stallReason, indexer.lastBlockCommittedAt,
                                     indexer.healthStallGraceMs, Date.now(), indexer.stallClearsAt);
@@ -155,7 +155,7 @@ describe('Smoke: REST /status', function () {
     });
 
     // -------------------------------------------------------------------------
-    // SM-05c/d: healthcheck status-code contract (). The xchain-node
+    // Healthcheck status-code contract. The xchain-node
     // http_get probe (wget, exit 0 on any 2xx) relies on /status returning a
     // non-200 when the indexer cannot serve: DB unreachable or stalled -> 503;
     // a healthy initial catch-up (isSynced false) must stay 200.
@@ -198,7 +198,7 @@ describe('Smoke: REST /status', function () {
         }
     });
 
-    it('SM-05e: GET /status stays 200 with degraded:true when stalled but still advancing ', async function () {
+    it('SM-05e: GET /status stays 200 with degraded:true when stalled but still advancing', async function () {
         // The BTC-mainnet steady state: the price-sync barrier is deferring the newest block
         // (stallReason set) but a block committed seconds ago, so the counter is advancing.
         const degraded = {

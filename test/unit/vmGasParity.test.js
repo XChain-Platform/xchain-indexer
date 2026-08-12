@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 
-/* Binds the static native-fee quote to the acceptance fee the handlers charge ().
+/* Binds the static native-fee quote to the acceptance fee the handlers charge.
  *
  * The pre-VM protocol fee used to be computed at four independent sites: deploy.js,
  * deploy_chunk.js, execute.js, and actions._staticProtocolFee (which sizes the native output
@@ -190,7 +190,7 @@ describe('static fee quote <-> handler acceptance fee parity @regression @tier1'
                 const hits = code.split('\n').filter((l) => GAS_KEY.test(l));
                 assert.deepStrictEqual(hits, [],
                     site + ' prices VM gas itself again:\n  ' + hits.join('\n  ')
-                    + '\n  Route it through this.util.vmGasCost so the static quote moves with it ().');
+                    + '\n  Route it through this.util.vmGasCost so the static quote moves with it.');
             });
         }
 

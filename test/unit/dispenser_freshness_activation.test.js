@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/dispenser_freshness_activation.test.js
  *
- * DISPENSER fresh-address verdict causality flag-day ( / b7ecae51). The
+ * DISPENSER fresh-address verdict causality flag-day (/ b7ecae51). The
  * verdict switches from the external utxo-tracker getFirstSeen HTTP call to
  * deterministic indexer-local chain state at the ratified deploy-train heights.
  * These tests pin the activation-module predicate both sides of the gate: mainnet
@@ -26,7 +26,7 @@ const assert = require('assert');
 const { isDispenserFreshnessLocalActive, DISPENSER_FRESHNESS_ACTIVATION } =
     require('../../src/dispenser_freshness_activation.js');
 
-describe('dispenser freshness activation predicate  @regression @tier1', function () {
+describe('dispenser freshness activation predicate @regression @tier1', function () {
 
     it('mainnet is armed per coin: inert below the height, active at/after it', function () {
         assert.strictEqual(isDispenserFreshnessLocalActive(960999, 'mainnet', 'BTC'), false);

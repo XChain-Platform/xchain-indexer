@@ -17,7 +17,7 @@
  * xchain-indexer/migrations/ directory must have a tracked counterpart.
  *
  * Sibling of sql-schema-column-parity.test.js / sql-schema-index-parity.test.js,
- * which cover tracked ADDs. Those tests' stated blind spot (): the
+ * which cover tracked ADDs. Those tests' stated blind spot: the
  * legacy migrations/ directory is documentation-only - runMigrations() scans
  * ONLY src/sql/migrations/ - yet it carries DDL an aged DB still needs:
  *   1. DROP COLUMN: verifyTables()/alterTableForDrift never drops an
@@ -134,7 +134,7 @@ function declaredIndexesByTable(dir) {
     return declared;
 }
 
-describe('legacy migrations/ DDL is ported to the tracked ledger ()', function () {
+describe('legacy migrations/ DDL is ported to the tracked ledger', function () {
     const legacy  = readSqlFiles(LEGACY_DIR);
     const tracked = readSqlFiles(TRACKED_DIR);
     const trackedText = tracked.map((t) => stripComments(t.text).toLowerCase()).join('\n');

@@ -99,7 +99,7 @@ describe('committed migrations declare intent @regression @tier1', function () {
             // _migrationMode actually resolves it to that declared value. This asserts the runner
             // and the declared intent agree, so a tag the runner cannot see (e.g. below the first
             // SQL statement) fails CI instead of default-landing as `manual` while looking tagged
-            // (the dead-tag gap this test exists to catch, ).
+            // (the dead-tag gap this test exists to catch).
             const anywhere = raw.match(/--\s*xchain:migration\b[^\n]*\bmode\s*=\s*(auto|manual)\b/im);
             assert.ok(anywhere,
                 file + ' has no explicit mode tag. Every migration must declare intent so a ' +
@@ -609,7 +609,7 @@ describe('Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1', function 
         }
     });
 
-    // . The two legacy migrations that were renamed AND carry their own filename in
+    // The two legacy migrations that were renamed AND carry their own filename in
     // a HOW TO RUN comment: the rename edited that comment, the ledger rename heal carried
     // the pre-rename checksum across, and every prod indexer logged `content CHANGED` for
     // them on every start. Pin the predecessor hashes so a real migration edit is loud again.
@@ -707,7 +707,7 @@ describe('runMigrations() checksum heal branch @regression @tier1', function () 
         assert.ok(!logged.some(l => /content CHANGED/.test(l)), 'unexpected divergence: ' + logged.join(' | '));
     });
 
-    it('the  pre-rename ledger heals silently instead of logging content CHANGED', async function () {
+    it('the pre-rename ledger heals silently instead of logging content CHANGED', async function () {
         // Exactly the prod-fleet shape: migrated before the 2026-07-12 rename, so the two
         // files that carry their own name in a comment recorded the pre-rename hashes.
         const ledger = fileChecksums();

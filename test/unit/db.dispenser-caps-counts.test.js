@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/db.dispenser-caps-counts.test.js
  *
- * DISPENSER caps derived counts (dispenser_caps_activation.js / ).
+ * DISPENSER caps derived counts (dispenser_caps_activation.js /).
  * getDispenserRefillCount and getDispenserDispenseCount are DERIVED from the
  * existing dispenser_edits / dispenses tables (no mutable counter, no migration):
  * a reorg that deletes those rows automatically corrects the count. These tests

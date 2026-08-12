@@ -186,7 +186,7 @@ async function computeReachable(query, chain, network){
 // The cap is checked by COUNT(*) BEFORE computeReachable runs, because the
 // post-load nodes.size check bounds nothing: computeReachable materializes every
 // state_tree_nodes row into a Map first, so an oversized store exhausts process
-// memory before the guard is ever reached (). Counting under the same
+// memory before the guard is ever reached. Counting under the same
 // runExclusive mutex keeps the count and any subsequent load consistent; the
 // nodes.size check below stays as a redundant net.
 async function reclaimOrphanNodes(query, chain, network, cfg, opts){

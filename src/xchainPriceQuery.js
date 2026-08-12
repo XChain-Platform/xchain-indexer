@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * XCHAIN price derivation - fill SELECTION ( step 2)
+ * XCHAIN price derivation - fill SELECTION
  *
  * The companion to xchainPrice.js. That file is the formula and never touches a
  * row; this one decides WHICH rows are trades, and over which block window. The
@@ -20,10 +20,11 @@
  * an empty set (carry-forward forever, no alarm) or off records that are not
  * trades at all.
  *
- * Spec: claude/specs/XCHAIN_PRICE_DERIVATION_SPEC.md (§3 predicate, §4 window)
+ * Design-spec sections referenced throughout this file: §3 covers the trade
+ * predicate, §4 the window.
  *
  * VERIFIED AGAINST LIVE ROWS, not schema comments (spec §10 step 1 acceptance
- * criterion). Dumped from XChain_BTC_Regtest_Indexer on devhost, 2026-07-25:
+ * criterion). Dumped from a live BTC regtest indexer, 2026-07-25:
  *
  *   dispense  946: give_amount '5'    give_tick 170, get_amount '0.01100000',
  *                  get_tick NULL, get_coin 1 (BTC), status 'valid', block 2018

@@ -45,9 +45,9 @@ describe('anchor_reward_activation twin parity @regression @tier1', function () 
         assert.strictEqual(indexer.ANCHOR_REWARD_ACTIVATION.regtest, 0);
     });
 
-    it('indexer exports the frozen ARCHIVE reward amount and the  activation map', function () {
+    it('indexer exports the frozen ARCHIVE reward amount and its activation map', function () {
         assert.strictEqual(indexer.ARCHIVE_REWARD_AMOUNT, '10.00000000');
-        assert.strictEqual(indexer.ARCHIVE_REWARD_ACTIVATION.mainnet, 963000);   //  anchor, re-pinned off 969500 by 
+        assert.strictEqual(indexer.ARCHIVE_REWARD_ACTIVATION.mainnet, 963000);   // re-pinned off an earlier height once the real anchor tip was known
         assert.strictEqual(indexer.ARCHIVE_REWARD_ACTIVATION.regtest, 0);
     });
 
@@ -59,7 +59,7 @@ describe('anchor_reward_activation twin parity @regression @tier1', function () 
         assert.strictEqual(indexer.isArchiveRewardActive('not-a-number', 'mainnet'), false);
     });
 
-    it(' derive-relocation gate is an inert null placeholder on mainnet/testnet, active on regtest', function () {
+    it('derive-relocation gate is an inert null placeholder on mainnet/testnet, active on regtest', function () {
         assert.strictEqual(indexer.ANCHOR_REWARD_DERIVE_ACTIVATION.mainnet, null);
         assert.strictEqual(indexer.ANCHOR_REWARD_DERIVE_ACTIVATION.testnet, null);
         assert.strictEqual(indexer.ANCHOR_REWARD_DERIVE_ACTIVATION.regtest, 0);

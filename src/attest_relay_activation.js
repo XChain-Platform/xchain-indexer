@@ -10,8 +10,8 @@
  *
  **********************************************************************
  *
- * Attestation cross-chain relay flag-day (, external-attestation
- * framework Phase 5 / spec §12).
+ * Attestation cross-chain relay flag-day (external-attestation framework
+ * Phase 5, spec section 12).
  *
  * Gates acceptance of the two relay legs that let an LTC or DOGE contract use
  * the attestation framework, whose validators and capability stake live only on
@@ -27,38 +27,31 @@
  *                         The origin indexer flips its pending request terminal
  *                         and injects the contract callback.
  *
- * ── ACTIVATION PLANE: BTC-ANCHORED SNAPSHOT_BLOCK ──────────────────────────
- *
- * Both legs carry an explicit BTC-anchored SNAPSHOT_BLOCK in their signed
- * canonical, and that is the ONLY value this gate is ever evaluated against.
- * Never a local height: on BTC the two coincide, but on LTC (~3.16M) and DOGE
- * (~6.3M) a BTC-derived threshold is already satisfied by the local height, so
- * gating a v4 on where it landed would ship the rule live instead of inert.
- * That is the documented ATTEST_ADMISSION_ACTIVATION plane trap; see the note
- * in attest_admission_activation.js for the same hazard in its armed form.
+ * ACTIVATION PLANE: BTC-ANCHORED SNAPSHOT_BLOCK, never a local height. Both
+ * legs carry an explicit BTC-anchored SNAPSHOT_BLOCK in their signed
+ * canonical, and that is the only value this gate is evaluated against: on
+ * LTC (~3.16M) and DOGE (~6.3M) a BTC-derived threshold is already satisfied
+ * by the local height, so gating a v4 on where it landed would ship the rule
+ * live instead of inert (the same plane trap documented in
+ * attest_admission_activation.js).
  *
  * The origin-side admission relaxation (admitting an LTC/DOGE v0 whose
- * responsible set is empty, so it survives to be relayed instead of being
+ * responsible set is empty, so it survives to be relayed rather than
  * rejected at admission) has no BTC anchor available at the moment it is
- * decided, so it is NOT gated here. It rides the ATTEST_RELAY_ORIGIN block-time
- * gate in protocol_changes.js, which flips every chain at one wall clock.
- * Either order is safe: origin-first admits requests nothing can service yet
- * and they expire on their own deadline (the pre-Phase-5 outcome); BTC-first
- * leaves no origin request to relay.
+ * decided, so it rides a separate block-time gate (ATTEST_RELAY_ORIGIN in
+ * protocol_changes.js) that flips every chain at one wall clock instead.
+ * Either deploy order is safe: origin-first just lets requests expire on
+ * their own deadline until BTC-side lands; BTC-first leaves no origin
+ * request to relay yet.
  *
- * Both versions are new VERSION values on an existing action, so a node that
- * has not been upgraded rejects them as an unknown VERSION while an upgraded
- * one accepts. Every indexer and every hub MUST be deployed before the height.
+ * Both versions are new VERSION values on an existing action, so an
+ * unupgraded node rejects them as unknown while an upgraded one accepts.
+ * Every indexer and every hub must be deployed before the height.
  *
- * LOCAL COPY of the canonical map in
- * xchain-documentation/protocol/constants.js (ATTEST_RELAY_ACTIVATION); kept
- * value-identical by xchain-indexer/test/unit/activationConstantsParity.test.js.
- * Two byte-identical copies exist and BOTH are named here, so this header reads
- * true from either file rather than pointing at itself:
- *   xchain-indexer/src/attest_relay_activation.js
- *   xchain-hub/src/attest_relay_activation.js
- * A one-sided edit forks relay acceptance at the flag-day, which is why
- * attestRelayActivationParity.test.js asserts the two are byte-equal.
+ * A byte-identical twin of this map lives in
+ * xchain-hub/src/attest_relay_activation.js (and in
+ * xchain-documentation/protocol/constants.js); a parity test keeps all
+ * copies byte-equal, since a one-sided edit forks relay acceptance.
  *
  ********************************************************************/
 
@@ -66,7 +59,7 @@
 // carried by the relay canonical (NOT the local processing height), so BTC, LTC,
 // DOGE and the hub all flip the relay legs on one anchor.
 const ATTEST_RELAY_ACTIVATION = {
-    mainnet: 963000,      // ARMED 2026-07-30  on the  BTC anchor, RE-PINNED 2026-08-12  off 969500 with the rest of that cohort; deploy every indexer + hub before this height
+    mainnet: 963000,      // ARMED 2026-07-30, RE-PINNED 2026-08-12 off block 969500 with the rest of the coordinated mainnet activation cohort; deploy every indexer + hub before this height
     testnet: 0,
     regtest: 0,
 };

@@ -33,7 +33,7 @@ const { ADDRESS_REF_FIELDS } = require('./addressRefFields.js');
 const FEE_QUOTE_DENYLIST = new Set(['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']);
 
 // Denied actions that still get a FEE-ONLY quote, priced from the gas schedule with no VM
-// . The old blanket answer was `supported:false` + "pay the fee in XCHAIN", which is
+// The old blanket answer was `supported:false` + "pay the fee in XCHAIN", which is
 // BTC-era advice: LTC/DOGE settle the protocol fee in native coin and have no XCHAIN fee lane,
 // so a denied action there was composable but literally unpayable (no way to size the required
 // output), and any client offering it burned a network fee on a guaranteed-invalid action.
@@ -83,7 +83,7 @@ const FEE_QUOTE_EXEMPT = new Set([
 ]);
 
 // ACTION aliases, expanded to canonical names before any gate. Single module-level source of
-// truth (#3133): the constructor copies this via Object.assign into `this.actionAliases`, and
+// truth: the constructor copies this via Object.assign into `this.actionAliases`, and
 // classifyFeeQuoteAction normalizes through this same constant, so the fee-quote classifier
 // de-aliases exactly as dispatch does. The conformance test binds ACTION_ALIASES to the manifest.
 const ACTION_ALIASES = {
@@ -110,7 +110,7 @@ function classifyFeeQuoteAction(action){
 }
 
 // How long a public read-only dry-run waits for the block-processing transaction mutex before
-// giving up . The default is deliberately well under the explorer's own 5s hop cap,
+// giving up. The default is deliberately well under the explorer's own 5s hop cap,
 // because the whole point is that the indexer's structured "busy, retryable" answer wins the
 // race against the proxy's transport timeout: losing it is what turned a block-processing
 // overlap into a bare 502 UPSTREAM_ERROR and a refused compose in the wallet. It is also
@@ -251,16 +251,14 @@ class Actions {
         // utxo-tracker client used by DISPENSER fresh-address check
         this.utxoTracker = indexer.utxoTracker || null;
 
-        // Public validity-first pre-flight verdict memo , keyed on
+        // Public validity-first pre-flight verdict memo, keyed on
         // (action, params, source, blockIndex); a new tip changes the key.
         this._preflightMemo = new PreflightMemo(
             parseInt(process.env.INDEXER_PREFLIGHT_MEMO_MAX, 10) || 256);
 
-        // Create action instances and pass database connections
         this.actionAddress         = new address(this);
         this.actionAirdrop         = new airdrop(this);
         this.actionBatch           = new batch(this);
-        // this.actionBet             = new bet(this);
         this.actionBroadcast       = new broadcast(this);
         this.actionCallback        = new callback(this);
         this.actionCoinpay         = new coinpay(this);
@@ -355,7 +353,7 @@ class Actions {
         this.actionXcall            = new xcall(this);
         this.actionXexec            = new xexec(this);
 
-        // ACTION aliases: copied from the single module-level ACTION_ALIASES source (#3133,
+        // ACTION aliases: copied from the single module-level ACTION_ALIASES source (it
         // was a hand-duplicated literal block that the 'single source of truth' comment
         // falsely claimed was a copy). Dispatch de-aliases through this.actionAliases and
         // classifyFeeQuoteAction through ACTION_ALIASES; both now derive from one constant.
@@ -646,7 +644,7 @@ class Actions {
         // (deterministic) assignment inside a transaction. Outside one this is a no-op.
         if(this.indexerDb.transactionConnection == null)
             return;
-        // #4888: skip pre-handler-rejected actions (unknown / not-yet-activated). Such an
+        // Skip pre-handler-rejected actions (unknown / not-yet-activated). Such an
         // action never reaches its handler, so interning its wire-field addresses would mint
         // index ids for an action that does nothing. (A semantic rejection INSIDE the handler
         // still interns, by design: the pre-pass exists to pin id-assignment ORDER, and the
@@ -709,7 +707,7 @@ class Actions {
         // Byte (binary) sort by value: the consensus tiebreak (matches the utf8_bin
         // collation intent; independent of field layout and of any DB collation).
         pending.sort((a, b) => Buffer.compare(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8')));
-        // #4889: stamp from the SINGLE authoritative block source. createAddress defaults
+        // Stamp from the SINGLE authoritative block source. createAddress defaults
         // blockIndex to this.indexerDb.blockIndex (= blockToParse), the same source
         // createActionIndex uses to stamp SOURCE, so every id created in a block lands under
         // one block_index value and the rollback "WHERE block_index >= ?" delete cannot split
@@ -742,7 +740,7 @@ class Actions {
     // pre-action state inside the same transaction the handler runs in. Advisory only: it
     // never changes the verdict, and it degrades to null rather than failing the run.
     //
-    // `acquireTimeoutMs` (optional, ) time-boxes the WAIT for the transaction mutex,
+    // `acquireTimeoutMs` (optional) time-boxes the WAIT for the transaction mutex,
     // which `timeoutMs` never covered: it bounds the run only, and the run cannot start until
     // the block loop hands the mutex over. Set by the public read-only surfaces so they answer
     // busy-and-retryable rather than queueing behind a whole block; throws TX_LOCK_BUSY, with
@@ -783,7 +781,7 @@ class Actions {
             // Marks a run that has no real transaction behind it, so a handler check that
             // matches a required OUTPUT cannot be satisfied by anything the caller could
             // have done. The native-coin fee check is already served by the probe output
-            // above; the  oracle usage fee is checked the same way and had no
+            // above; the oracle usage fee is checked the same way and had no
             // counterpart, so every Mode B dispenser quoted and pre-flighted
             // `invalid: ORACLE_ADDRESS (missing oracle fee output)` - a refusal no client
             // can act on, because the amount it demands is what the refused quote exists
@@ -806,7 +804,7 @@ class Actions {
         // rejects those zombie writes inside the db layer before they reach the driver.
         let dryRunEpoch = this.indexerDb.currentTxEpoch();
         try {
-            // : the payer's fee-token balance at PRE-action state, read inside this
+            // The payer's fee-token balance at PRE-action state, read inside this
             // transaction so it is the same snapshot the handler's own balance check reads.
             // Read-only by construction: getAddressId returns null for an address the ledger
             // has never seen (createAddress would WRITE one), so quoting from a fresh address
@@ -901,7 +899,7 @@ class Actions {
         let blockIndex         = (base.blockIndex !== undefined && base.blockIndex !== null)
                                ? base.blockIndex : await this.indexerDb.getLatestBlockIndex();
         let maxPriceAgeSeconds = parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800;
-        // : anchor the WHOLE price read (round selection, staleness, flag-day gate) on the
+        // Anchor the WHOLE price read (round selection, staleness, flag-day gate) on the
         // quoted block's own time, because that is the single quantity the on-chain check uses
         // (validateNativeCoinFee passes BLOCK_TIME). A pre-flight anchored on the operator's wall
         // clock answers a different question from the chain and disagrees with it in both
@@ -998,7 +996,7 @@ class Actions {
         return { bytes: bytes };
     }
 
-    // Gas-schedule-only price for a FEE_QUOTE_STATIC action : the XCHAIN-denominated
+    // Gas-schedule-only price for a FEE_QUOTE_STATIC action: the XCHAIN-denominated
     // protocol fee the handler stages BEFORE it enters the VM, which is the amount
     // validateNativeCoinFee checks the native output against. Selects the handler's own
     // gas-cost family per DEPLOY format version, then prices it through util.vmGasCost:
@@ -1007,7 +1005,7 @@ class Actions {
     //   v4 carrier     - DEPLOY_CARRIER over the carried CODE_PART slice (deploy_chunk.js)
     //   EXECUTE        - EXECUTE base (execute.js; metered gas re-prices only the record)
     // The arithmetic itself is NOT reproduced here: it is the single util.vmGasCost each of
-    // those handlers calls, so a term added to one is added to this quote too ().
+    // those handlers calls, so a term added to one is added to this quote too.
     // Returns { gasCost, xchainFee }, { error } for an input the handler would reject outright,
     // or null when the action has no statically knowable fee.
     async _staticProtocolFee(action, params, blockIndex){
@@ -1038,7 +1036,7 @@ class Actions {
         return { gasCost: gasCost, xchainFee: this.util.bcmul(gasCost, this.config['GAS_PRICE'], 8) };
     }
 
-    // The denied-action answer for the public feequote . FEE_QUOTE_STATIC actions get a
+    // The denied-action answer for the public feequote. FEE_QUOTE_STATIC actions get a
     // real, payable fee sized from the gas schedule (see _staticProtocolFee) so a client can build
     // the FEE_DESTINATION output on a native-fee chain; everything else keeps the flat refusal,
     // worded for the chain it is answering on (advising "pay it in XCHAIN" on LTC/DOGE, which have
@@ -1173,7 +1171,7 @@ class Actions {
                 feeProbe: true
             });
         } catch(e){
-            // Block processing still holds the transaction mutex . The admission cap
+            // Block processing still holds the transaction mutex. The admission cap
             // above cannot see this: it counts pending QUOTES, so a single quote arriving
             // during a slow block sailed past it and then waited out the whole block. Answer
             // the same retryable busy shape, in the budget rather than in block-time, so the
@@ -1221,8 +1219,7 @@ class Actions {
     // INDEXER_NETWORK=regtest AND INDEXER_ENABLE_DRYRUN is set (api.js ENABLE_DRYRUN), and is
     // API-key-gated when a key is configured. The 06-18 trial's AUTO_INCREMENT concern is
     // resolved (block hashes cover canonical strings; in-transaction index ids are dense-
-    // explicit and roll back), so the gate is about compute, not consensus. Spec:
-    // claude/reports/specs/2026-06-01_native-coin-fee-phase2-dryrun.md
+    // explicit and roll back), so the gate is about compute, not consensus.
     async computeFeeQuoteDryRun({ action, params, source, feeOutputs }){
         action = String(action || '').toUpperCase();
         if(!Array.isArray(params)) params = String(params == null ? '' : params).split('|');
@@ -1282,7 +1279,7 @@ class Actions {
         return result;
     }
 
-    // Public validity-first pre-flight . Answers "would the indexer accept this action?"
+    // Public validity-first pre-flight. Answers "would the indexer accept this action?"
     // decoupled from native-coin fee support: unlike computeFeeQuote (which returns
     // supported:false when no FEE_DESTINATION is configured, conflating "no fee config" with
     // "didn't run"), this reports supported:true whenever the handler actually ran, and its
@@ -1291,11 +1288,11 @@ class Actions {
     // enter the VM on this unauthenticated surface). VM actions stay denylisted; settlement/
     // lifecycle actions stay feeExempt (no dry-runnable verdict). A block-height-keyed memo
     // (this._preflightMemo) collapses identical same-height re-runs. Echoes the dry-run's own
-    // `xchainFee`  but no PRICING fields: converting that to a native-coin output is
+    // `xchainFee` but no PRICING fields: converting that to a native-coin output is
     // computeFeeQuote's job. Surfaced publicly via the explorer's /{COIN}/api/preflight
     // proxy. Never persists (the dry-run always rolls back).
     //
-    // FEE SETTLEMENT MODE . The verdict is only truthful if the dry-run settles the
+    // FEE SETTLEMENT MODE. The verdict is only truthful if the dry-run settles the
     // protocol fee the way the payer's real transaction will. computeFeeQuote always injects
     // the probe fee output (it is pricing a NATIVE output, so native mode is the question it
     // asks), and pre-flight used to copy that unconditionally - which silently exempted every
@@ -1375,7 +1372,7 @@ class Actions {
                 feeBalanceTick: feeTick
             });
         } catch(e){
-            // Same give-up as computeFeeQuote : block processing holds the mutex, so
+            // Same give-up as computeFeeQuote: block processing holds the mutex, so
             // answer busy-and-retryable in the budget rather than queueing behind the block.
             // Never memoized - a busy answer is the absence of a verdict, not a verdict.
             if(isTxLockBusy(e))
@@ -1396,7 +1393,7 @@ class Actions {
         let valid      = (run.status === 'valid');
 
         // The dry-run already staged the handler's fee record, so echoing it costs nothing and
-        // saves the caller a second round-trip to /feequote purely to disclose the fee .
+        // saves the caller a second round-trip to /feequote purely to disclose the fee.
         // `xchainFee` is the XCHAIN-denominated protocol fee in EVERY payment mode (the fee row
         // is always XCHAIN-denominated; native mode only changes how it is settled), which is
         // exactly what a confirm screen owes the user in the default XCHAIN mode. Sizing the
@@ -1405,7 +1402,7 @@ class Actions {
         // (rejected before the handler recorded one); '0.00000000' for a valid zero-fee action.
         let xchainFee = (run.xchainFee == null) ? null : this.util.bcformat(this.util.bcnum(run.xchainFee), 8);
 
-        // The payer's fee-token balance next to the fee it owes . Two callers need it:
+        // The payer's fee-token balance next to the fee it owes. Two callers need it:
         // a client that wants to say "you need N XCHAIN, you hold M" instead of relaying a bare
         // error string, and a native-mode caller, whose verdict above deliberately does NOT
         // depend on the XCHAIN balance but whose user may still want to see it. null when the
@@ -1454,7 +1451,7 @@ class Actions {
 
         // Current oracle prices (best-effort; a missing/stale feed doesn't fail the schedule call;
         // prices.available=false tells the client native fees can't be priced right now).
-        // Anchored on the tip block's time for the same reason _priceFeeQuote is : this
+        // Anchored on the tip block's time for the same reason _priceFeeQuote is: this
         // view exists to predict what the chain will charge, so it has to read the prices the
         // chain reads, not the ones the operator's clock happens to agree with.
         let chainTime = Number(blockTime);

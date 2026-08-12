@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/db.getArchiveReplayWatermarks.test.js
  *
- * CONSENSUS REGRESSION GUARD for the v1/v6 archive replay guard .
+ * CONSENSUS REGRESSION GUARD for the v1/v6 archive replay guard.
  *
  * The guard rejects a stale MATCH_BATCH_SEQ only when the wrapper CHECKPOINT_SEQ
  * is also behind, because the batch seq is a DENSE counter the hub allocates from
@@ -52,7 +52,7 @@ function makeDb() {
     return new Database('127.0.0.1', 3306, 'xchain_btc_regtest', 'u', 'p', indexer);
 }
 
-describe('getArchiveReplayWatermarks() ', function () {
+describe('getArchiveReplayWatermarks()', function () {
 
     afterEach(() => sinon.restore());
 

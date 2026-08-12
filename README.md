@@ -110,7 +110,7 @@ box), and ship logs with `LOG_SHIP_ENABLED=1` plus `LOG_SHIP_URL`. Full
 variable list and the exported metric names are in
 [`src/observability/README.md`](src/observability/README.md).
 
-The module is vendored byte-identically from xchain-hub . Edit it there
+The module is vendored byte-identically from xchain-hub. Edit it there
 and re-run `xchain-hub/bin/sync-observability.sh`; a local edit fails the
 parity gate in `bin/check-observability-parity.js`.
 

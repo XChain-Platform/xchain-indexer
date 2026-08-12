@@ -8,12 +8,12 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-//  (attestation framework Phase 5, spec §12): the cross-chain relay legs.
+// (attestation framework Phase 5, spec §12): the cross-chain relay legs.
 //
 // What these tests are actually protecting, in priority order:
 //   1. INERTNESS. The whole item ships gated. Below ATTEST_RELAY_ACTIVATION a v3
 //      or v4 must persist NOTHING, which is what makes replay byte-identical to a
-//      pre- node treating it as an unknown VERSION.
+// pre- node treating it as an unknown VERSION.
 //   2. THE PLANE. Both legs resolve the flag-day on the BTC-anchored SNAPSHOT_BLOCK
 //      they carry. For v4 that is the whole gate: resolving it on an LTC/DOGE local
 //      height would ship it live on day one (the documented ATTEST_ADMISSION plane
@@ -77,7 +77,7 @@ function v4Params(o = {}) {
     ];
 }
 
-describe('Attest cross-chain relay (ATTEST v3/v4, ) @regression @tier3', function () {
+describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function () {
     let indexer, actionsCtx, handler, executeStub, gateStub, protocolGates;
 
     function addAttestationDbStubs(db) {
@@ -258,7 +258,7 @@ describe('Attest cross-chain relay (ATTEST v3/v4, ) @regression @tier3', functio
         // The other half of the same gate, and the reason the landing-height check
         // survives rather than being replaced: SNAPSHOT_BLOCK is broadcaster-supplied,
         // so gating on it ALONE would let an invented future snapshot pull the leg
-        // live before the flag day and store an 'invalid' verdict where a pre-
+        // live before the flag day and store an 'invalid' verdict where a pre
         // node persists nothing at all.
         it('v3 stays inert below the flag-day even carrying a SNAPSHOT_BLOCK past it', async function () {
             gateStub.restore();
@@ -347,7 +347,7 @@ describe('Attest cross-chain relay (ATTEST v3/v4, ) @regression @tier3', functio
             assert.match(data['STATUS'], /already present/);
         });
 
-        // : request_id derives from the ORIGIN tx_hash, so a deep origin reorg
+        // request_id derives from the ORIGIN tx_hash, so a deep origin reorg
         // re-emitting one origin action from a different transaction arrives with a NEW
         // request_id. The request_id guard above waves it through; only the relay identity
         // stops a second, unretractable BTC materialization.
@@ -631,7 +631,7 @@ describe('Attest cross-chain relay (ATTEST v3/v4, ) @regression @tier3', functio
             assert.strictEqual(data['REQUEST_STATUS'], 'pending');
             assert.strictEqual(data['ORIGIN_CHAIN'], 'LTC',
                 'the origin stamp is the only marker the hub relay poll keys on');
-            // : the paired half. On an origin row "the origin chain's v0
+            // the paired half. On an origin row "the origin chain's v0
             // action_index" is this row's own, and the pair is the relay identity the
             // BTC-side exactly-once guard keys on.
             assert.strictEqual(data['ORIGIN_ACTION_INDEX'], data['ACTION_INDEX']);

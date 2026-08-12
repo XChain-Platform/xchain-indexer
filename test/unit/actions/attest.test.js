@@ -173,7 +173,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             // so a 'valid' STATUS proves the real derivation still produces the pinned
             // hex. Unlike the tests above, this assertion does NOT route through the
             // local deriveReqId lambda, so a lockstep field-reorder of BOTH the real
-            // handler and the lambda can no longer pass silently (closes ).
+            // handler and the lambda can no longer pass silently (closes).
             const gv   = GOLDEN_REQUEST_ID.input;
             const data = v0Data({
                 TX_HASH: gv.txHash, ROOT_ACTION_INDEX: gv.rootActionIndex,
@@ -192,7 +192,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             await handler.parse(v0Params({ requestId: reqId }), data, null);
             assert.strictEqual(data['STATUS'], 'valid');
             // The set is computed as-of the request's OWN block (not a later block), so it
-            // captures the historical stake amounts before any future slash. : the
+            // captures the historical stake amounts before any future slash. the
             // height it is RESOLVED at is that block BURIED by CANONICAL_REORG_BUFFER,
             // because that is where the hub's CapabilitySnapshot resolved it; regtest arms
             // the burial gate at genesis. The anchor is still the request block, not a
@@ -507,7 +507,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 'request lookup uses the lowercase id');
         });
 
-        // : the id case inside the canonical is consensus behaviour, gated on
+        // the id case inside the canonical is consensus behaviour, gated on
         // ATTEST_CANONICAL_LOWERCASE_ID. Below the flag-day the canonical uses the
         // RAW wire case (a case-mutated replay keeps failing verification exactly
         // like on a legacy node); at/after it the lowercased id (self-contained
@@ -621,7 +621,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             indexer.indexerDb.getAttestationRequestById.resolves(request);
             const data = v1Data({ BLOCK_INDEX: 100 });
             await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
-            // : the anchor is the REQUEST's block (90), not the response block (100),
+            // the anchor is the REQUEST's block (90), not the response block (100)
             // and the height actually queried is that anchor buried by CANONICAL_REORG_BUFFER
             // (the height the hub resolved the set at). Regtest arms the burial gate at genesis.
             const expectBlock = srb.buriedSnapshotBlock(90, 'regtest');
@@ -1306,7 +1306,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.ok(executeStub.parse.calledOnce, 'callback injected with empty payload');
         });
 
-        it('savepoint name is unique per injected callback (suffixed with emission action_index) ', async function () {
+        it('savepoint name is unique per injected callback (suffixed with emission action_index)', async function () {
             indexer.indexerDb.createActionIndex.resolves(42);
             indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
             const data = v1Data();
@@ -1375,7 +1375,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 'rollbackToSavepoint must be called when expire execute.parse throws');
         });
 
-        it('expire savepoint name is unique per injected callback (suffixed with emission action_index) ', async function () {
+        it('expire savepoint name is unique per injected callback (suffixed with emission action_index)', async function () {
             indexer.indexerDb.createActionIndex.resolves(77);
             indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ request_status: 'pending' }));
             const data = v2Data();
@@ -1479,7 +1479,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         it('uses the source-keyed query (not the count query) when weighted', async function () {
             indexer.indexerDb.getStakeWeightsByCapability.resolves([{ pubkey: 'k1', source: 'S1', weight: '100' }]);
             await handler._computeResponsibleSet('req-3', 1, 90);
-            // : the declared block 90 is resolved at its buried height; the
+            // the declared block 90 is resolved at its buried height; the
             // stake-weighted flag-day still keys on the declared 90 (see snapshotReorgBuffer.test.js).
             assert.ok(indexer.indexerDb.getStakeWeightsByCapability.calledWith(
                 'attestation', srb.buriedSnapshotBlock(90, 'regtest')));
@@ -1573,7 +1573,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
 });
 
 /*********************************************************************
- * : the responsible-set SWQ gate is BTC-ANCHORED.
+ * the responsible-set SWQ gate is BTC-ANCHORED.
  *
  * isStakeWeightedQuorumActive() compares against 961000, a BTC height. But
  * _computeResponsibleSet was handed the ATTEST action's LOCAL height, and ATTEST

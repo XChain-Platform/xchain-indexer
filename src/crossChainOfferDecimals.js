@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Give-side decimal grid for the cross-chain DEX book ().
+ * Give-side decimal grid for the cross-chain DEX book.
  *
  * The hub derives cross-chain fill quantities that no single indexer can compute
  * (each leg lives on a different chain) and must snap each derived amount onto the
@@ -51,8 +51,8 @@
 // getTickerId is consulted FIRST and getTokenInfo is skipped when it returns null,
 // because getTokenInfo resolves its tick through createTicker, which INSERTS an
 // index_tickers row for an unknown tick. On a federation read path that would be an
-// out-of-band index-id assignment (#5052): it offsets the deterministic dense
-// counter that wire ^<id> references and the index-map state-hash class depend on.
+// out-of-band index-id assignment: it offsets the deterministic dense counter that
+// wire ^<id> references and the index-map state-hash class depend on.
 // Every open offer's tick necessarily already has an id (the offer row references
 // give_tick_id), so the pre-check costs one cached lookup and makes that insert
 // branch unreachable rather than merely unlikely.

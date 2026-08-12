@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// : shared injected-execution context builder + SYNTH_EXEC_TX_HASH seam.
+// shared injected-execution context builder + SYNTH_EXEC_TX_HASH seam.
 //
 // A contract that emitted ATTEST/XCALL from inside its attestation-expiry or
 // poll-finalize callback got a synthesized exec context with no TX_HASH: the
@@ -37,7 +37,7 @@ const Xcall  = require('../../../src/actions/xcall.js');
 
 const sha256hex = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
-describe('execContext ( injected-execution TX_HASH seam) @regression @tier2', function () {
+describe('execContext (injected-execution TX_HASH seam) @regression @tier2', function () {
 
     afterEach(function () { sinon.restore(); });
 
@@ -266,7 +266,7 @@ describe('execContext ( injected-execution TX_HASH seam) @regression @tier2', fu
             const src = fs.readFileSync(path.join(__dirname, '../../../src/protocol_changes.js'), 'utf8');
             const m = src.match(/this\.addChange\('SYNTH_EXEC_TX_HASH', '2\.0\.0',(\d+),(\d+),(\d+)/);
             assert.ok(m, 'SYNTH_EXEC_TX_HASH must be registered as a 2.0.0 time-gated change');
-            assert.strictEqual(parseInt(m[1]), 1786060800, 'mainnet timestamp must be the ratified  anchor');
+            assert.strictEqual(parseInt(m[1]), 1786060800, 'mainnet timestamp must be the ratified anchor');
             assert.strictEqual(parseInt(m[2]), 0, 'testnet activates at genesis');
             assert.strictEqual(parseInt(m[3]), 0, 'regtest activates at genesis');
         });

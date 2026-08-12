@@ -13,7 +13,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * SDK-encoder <-> indexer-parser byte-level field-layout contract .
+ * SDK-encoder <-> indexer-parser byte-level field-layout contract.
  *
  * On the wire an ACTION is a pipe-delimited `ACTION|VERSION|FIELD...` string.
  * The indexer decodes it exactly as processTransaction does: split on '|',

@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/utility.computeOracleFee.test.js
  *
- * PRICE v1 oracle usage fee , Counterparty parity: the address opening
+ * PRICE v1 oracle usage fee, Counterparty parity: the address opening
  * a Mode B dispenser pays the oracle operator up front, proportional to the
  * whole escrow's projected proceeds.
  *
@@ -39,7 +39,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert  = require('assert');
 const Utility = require('../../src/utility.js');
 
-describe('Utility.computeOracleFee() - PRICE v1 oracle usage fee  @regression', function () {
+describe('Utility.computeOracleFee() - PRICE v1 oracle usage fee @regression', function () {
     let util;
 
     beforeEach(function () { util = new Utility(); });

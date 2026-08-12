@@ -18,8 +18,7 @@
 --
 -- WHY
 -- ---
--- SPV sub-tree spec Stage A (claude/specs/spv-state-subtree-extension.md, )
--- arms reserved state_root slot 4, contract_state_root. The derivation threads
+-- The SPV sub-tree design arms reserved state_root slot 4, contract_state_root. The derivation threads
 -- incrementally from the previous block's sub-root, so that value has to be
 -- persisted somewhere per block, and it belongs on the row that already holds the
 -- state_root it is a component of: the column and its root are written by ONE

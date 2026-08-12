@@ -32,22 +32,20 @@
  * (historical replay stays byte-identical); at/after it only the sweep path
  * transfers ownership.
  *
- * GATING RATIONALE (Package 14, vs the  zero-dispenser measurement).
- *  measured ZERO live dispensers on all three mainnet chains, so there is
- * no history to replay divergently on mainnet today. The gate is retained
- * anyway, not for replay-of-history, but because it eliminates the MIXED-FLEET
- * divergence window for NEW ownership-dispenser cancels during the rollout: with
- * an activation height every node flips at the SAME coordinated boundary rather
- * than at each node's own deploy time. It costs nothing (below it, byte-identical
- * legacy behavior) and reuses the EXISTING house dispenser flag-day cohort. It is
- * keyed on block TIME with the coordinated 2.0.0 timestamp, byte-for-byte the
- * shape of its sibling dispense_cancelling_match_activation.js (mainnet
- * 1786060800, testnet/regtest genesis), so ONE fleet deploy-by date governs the
- * whole dispenser-family flip.
+ * GATING RATIONALE. No live dispensers existed on any mainnet chain when this
+ * gate was added, so there was no history to replay divergently on mainnet at
+ * the time. The gate is retained anyway, not for replay-of-history, but because
+ * it eliminates the MIXED-FLEET divergence window for NEW ownership-dispenser
+ * cancels during the rollout: with an activation height every node flips at the
+ * SAME coordinated boundary rather than at each node's own deploy time. It costs
+ * nothing (below it, byte-identical legacy behavior) and reuses the existing
+ * dispenser flag-day cohort, keyed on block TIME with the coordinated 2.0.0
+ * timestamp (mainnet 1786060800, testnet/regtest genesis), so ONE fleet
+ * deploy-by date governs the whole dispenser-family flip.
  *
  * EXECUTION-PATH gate (dispenser close routing), NOT a hashing-path change, so
  * INDEXER-ONLY with no xchain-sync twin (xchain-sync reads materialized rows and
- * does not run action handlers), exactly like dispense_cancelling_match.
+ * does not run action handlers).
  *
  ********************************************************************/
 

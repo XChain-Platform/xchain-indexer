@@ -44,8 +44,8 @@ const merkle        = require('./merkle');
 const stateSubtree  = require('./state_subtree_activation');
 const ar            = require('./anchor_reward_activation.js');
 const crypto        = require('crypto');
-const { installObservability } = require('./observability');   // : default-off /metrics + structured log shim
-const { installIndexerMetrics } = require('./indexerMetrics');  // item 9bee49e8: poll-freshness heartbeat gauge
+const { installObservability } = require('./observability');   // default-off /metrics + structured log shim
+const { installIndexerMetrics } = require('./indexerMetrics');  // poll-freshness heartbeat gauge
 const { parseCorsOrigin } = require('./corsOrigin.js');
 
 // Constant-time API-key comparison. A plain `!==` short-circuits at the first
@@ -192,7 +192,7 @@ async function startApi(){
     // CORS_ORIGIN is comma-separated, not a single origin: handing `cors` the raw
     // string makes it echo that string verbatim to every caller, a multi-value
     // header no browser accepts, so every listed origin is blocked while the
-    // header reads as configured. See src/corsOrigin.js .
+    // header reads as configured. See src/corsOrigin.js.
     app.use(cors({
         origin: parseCorsOrigin(process.env.CORS_ORIGIN || 'http://localhost'),
         methods: ['POST']
@@ -209,7 +209,7 @@ async function startApi(){
         legacyHeaders: false
     }));
 
-    // : Prometheus /metrics plus a structured log shim, both DEFAULT OFF.
+    // Prometheus /metrics plus a structured log shim, both DEFAULT OFF.
     // Nothing is registered and no timer starts unless METRICS_ENABLED (and, for
     // log shipping, LOG_SHIP_ENABLED + LOG_SHIP_URL) are set. The coin/network
     // labels let one Prometheus scrape distinguish the per-chain indexers.
@@ -292,7 +292,7 @@ async function startApi(){
             let inFlightBlock = inFlightBlockIndex(indexer.indexerDb);
             try {
                 if(indexer.indexerDb)
-                    // : committed-only read. A bare getLatestBlockIndex() here
+                    // Committed-only read. A bare getLatestBlockIndex() here
                     // routes through getConnection() -> the block's OPEN transaction,
                     // so health advertised a height every federation query guard (which
                     // all read via apiView) rejects, and that a reorg may never commit.
@@ -329,7 +329,7 @@ async function startApi(){
                 return { error: 'pubkey must be a 64-char hex string' };
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            // Federation READ isolation ( / H2 residual): route every read
+            // Federation READ isolation: route every read
             // through apiView() so it draws an independent pooled connection and
             // sees only COMMITTED state. A federation read landing mid-block must
             // never join the block's open ACID transaction: sharing that physical
@@ -367,7 +367,7 @@ async function startApi(){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
             try {
-                // : committed-only, like health and every federation query
+                // Committed-only, like health and every federation query
                 // guard. The hub anchors its consensus snapshot at whatever height
                 // this returns; an in-flight height would anchor a snapshot on rows
                 // no other reader can see and a reorg may still erase.
@@ -395,7 +395,7 @@ async function startApi(){
         // block_index returns the latest indexed block. Public read: these hashes
         // are the platform's verifiability primitive, not sensitive state.
         //
-        // COMMITTED-ONLY read (, the signing-path sibling of ). A bare
+        // COMMITTED-ONLY read, the signing-path sibling of the health read above. A bare
         // read routes through db.getConnection(), which hands back the block loop's
         // open transactionConnection while a block is processing, so both the default
         // target height and the hash row itself would come from INSIDE the uncommitted
@@ -497,7 +497,7 @@ async function startApi(){
             }
         },
 
-        // Oracle usage fee quote . A Mode B dispenser (ORACLE_ADDRESS set) must
+        // Oracle usage fee quote. A Mode B dispenser (ORACLE_ADDRESS set) must
         // carry a native-coin output paying the oracle operator, sized from the escrow
         // this action adds. A payer calls this to learn the amount, then adds the output.
         //
@@ -551,7 +551,7 @@ async function startApi(){
             }
         },
 
-        // Public validity-first pre-flight : "would the indexer accept this action?"
+        // Public validity-first pre-flight: "would the indexer accept this action?"
         // decoupled from native-coin fee support. Same forced-rollback dry-run engine and the
         // same admission cap / timeout / guardInert as feequote, but the response is the
         // action's validity STATUS (not a fee band), and supported:true whenever the handler
@@ -560,7 +560,7 @@ async function startApi(){
         // wallets/SDK via the explorer /{COIN}/api/preflight proxy); NOT gated like
         // feequotedryrun. Never persists.
         // `feeMode` ('xchain' | 'native', optional) says how the caller's real transaction will
-        // settle the protocol fee, because the verdict differs : the XCHAIN mode debits
+        // settle the protocol fee, because the verdict differs: the XCHAIN mode debits
         // the payer's balance and the native mode pays a coin output. Omitted, the indexer picks
         // the mode the chain itself defaults to.
         // Body: { action, params, source, feeMode? }
@@ -623,7 +623,7 @@ async function startApi(){
                 return { error: 'block_index must be a non-negative integer' };
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            // Federation READ isolation : committed-only, off the block tx.
+            // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
             try {
                 let latestBlock = await db.getLatestBlockIndex();
@@ -658,7 +658,7 @@ async function startApi(){
                 return { error: 'block_index must be a non-negative integer' };
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            // Federation READ isolation : committed-only, off the block tx.
+            // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
             try {
                 let latestBlock = await db.getLatestBlockIndex();
@@ -699,7 +699,7 @@ async function startApi(){
                 return { error: 'block_index must be a non-negative integer' };
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            // Federation READ isolation : committed-only, off the block tx.
+            // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
             // A capability absent from this indexer's STAKING.CAPABILITIES config would
             // otherwise produce an empty validator set indistinguishable from "no
@@ -751,7 +751,7 @@ async function startApi(){
                 return { error: 'block_index must be a non-negative integer' };
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            // Federation READ isolation : committed-only, off the block tx.
+            // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
             try {
                 // Intersect the proof-window set with the LIVE full_node capability
@@ -761,7 +761,7 @@ async function startApi(){
                 // chain will accept.
                 // Resolve the capability side ONCE (hasCapability is ~5 sequential
                 // queries per pubkey); a truncated capability read re-probes per pubkey
-                // so the hub's quorum divisor cannot silently shrink (#3873).
+                // so the hub's quorum divisor cannot silently shrink.
                 let raw = await db.getVerifiedFullNodeSet(blk);
                 let capRows = await db.getValidatorsByCapability('full_node', blk);
                 let capSet  = (capRows && capRows.truncated === true)
@@ -802,7 +802,7 @@ async function startApi(){
                 return { error: 'block_index must be a non-negative integer' };
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            // Federation READ isolation : committed-only, off the block tx.
+            // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
             if(!db.isCapabilityConfigured(capability))
                 return { error: 'capability not configured: ' + capability };
@@ -856,7 +856,7 @@ async function startApi(){
             if(Number.isFinite(Number(after_block_index)) && Number.isFinite(Number(after_action_index))){
                 cursor = { after_block_index, after_action_index };
             }
-            // Federation READ isolation : committed-only, off the block tx.
+            // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
             try {
                 let latest  = await db.getLatestBlockIndex();
@@ -872,7 +872,7 @@ async function startApi(){
             }
         },
 
-        //  relay: list the ATTEST v0 requests this chain holds only as a
+        // Attestation relay: list the ATTEST v0 requests this chain holds only as a
         // MATERIALIZED relay leg (an origin_chain that is not this coin), at any
         // lifecycle status, each carrying its terminal response when one exists.
         // xchain-hub's AttestationRelay uses it for both halves of the round trip: to
@@ -895,7 +895,7 @@ async function startApi(){
             if(Number.isFinite(Number(after_block_index)) && Number.isFinite(Number(after_action_index))){
                 cursor = { after_block_index, after_action_index };
             }
-            // Federation READ isolation : committed-only, off the block tx.
+            // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
             try {
                 let latest = await db.getLatestBlockIndex();
@@ -923,11 +923,11 @@ async function startApi(){
             let max = Number(limit);
             if(!Number.isFinite(max) || max <= 0) max = 100;
             if(max > 500) max = 500;
-            // Federation READ isolation : committed-only, off the block tx.
+            // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
             try {
                 let latest = await db.getLatestBlockIndex();
-                // Source-chain reorg fence (item 5308): stamp each offer with this chain's current
+                // Source-chain reorg fence: stamp each offer with this chain's current
                 // push generation. The hub copies it onto the matched leg's a_/b_push_generation so a
                 // deferred retraction fences by generation and a re-published order at a recycled
                 // action_index (higher generation) survives. Per-COIN, so one read covers the book.
@@ -960,7 +960,7 @@ async function startApi(){
                 if(truncated)
                     console.warn('getopencrosschainorders hit the cap of ' + max + ' at block ' + latest + ' - the open cross-chain book is truncated (newer offers dropped); the hub should page via next_cursor or raise its limit.');
                 for(let o of merged) o.push_generation = pushGeneration;
-                // Give-side decimal grid (): the hub quantizes each cross-chain
+                // Give-side decimal grid: the hub quantizes each cross-chain
                 // fill on the grid of the leg that gives it, and declines the match outright
                 // rather than guessing when it is absent. Resolution lives in
                 // crossChainOfferDecimals.js (it delegates to the same getTokenInfo
@@ -981,9 +981,9 @@ async function startApi(){
             }
         },
 
-        // BET parimutuel betting reads (spec claude/specs/BETTING_SYSTEM_SPEC.md
-        // section 8: raw reads for ops tooling and e2e; the PUBLIC surface is the
-        // explorer REST layer). Paged listing of betting feeds.
+        // BET parimutuel betting reads (betting spec section 8: raw reads for ops
+        // tooling and e2e; the PUBLIC surface is the explorer REST layer). Paged
+        // listing of betting feeds.
         // Body: { status?, source?, tick?, limit?, after_action_index? }
         async getbetfeeds({status, source, tick, limit, after_action_index}){
             if(!indexer.indexerDb)
@@ -991,7 +991,7 @@ async function startApi(){
             let max = Number(limit);
             if(!Number.isFinite(max) || max <= 0) max = 100;
             if(max > 500) max = 500;
-            // Committed-only read off an independent pooled connection 
+            // Committed-only read off an independent pooled connection
             let db = indexer.indexerDb.apiView();
             try {
                 let latest = await db.getLatestBlockIndex();
@@ -1069,11 +1069,11 @@ async function startApi(){
             let max = Number(limit);
             if(!Number.isFinite(max) || max <= 0) max = 100;
             if(max > 500) max = 500;
-            // Federation READ isolation : committed-only, off the block tx.
+            // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
             try {
                 let latest = await db.getLatestBlockIndex();
-                // Source-chain reorg fence (item 5308): stamp each call with this chain's current
+                // Source-chain reorg fence: stamp each call with this chain's current
                 // push generation. The hub copies it onto the dispatch row (and the result row
                 // inherits it), so a source-keyed deferred retraction fences by generation. Per-COIN.
                 // Read the generation BEFORE the rows (HUB-RETRACT-1): the rollback bumps the
@@ -1104,11 +1104,11 @@ async function startApi(){
                 return { error: 'indexer database not ready' };
             if(!call_id || !/^[0-9a-fA-F]{64}$/.test(String(call_id)))
                 return { error: 'call_id must be a 64-hex id' };
-            // Federation READ isolation : committed-only, off the block tx.
+            // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
             try {
                 let latest = await db.getLatestBlockIndex();
-                // Source-chain reorg fence (item 5308): the hub follower pins this call's
+                // Source-chain reorg fence: the hub follower pins this call's
                 // generation against the leader's proposed dispatch row
                 // (CrossChainCallEngine._validateDispatch). The field is stamped on the row but
                 // never enters the signed canonical, so the pin is what stops a Byzantine leader
@@ -1159,7 +1159,7 @@ async function startApi(){
                 return { error: 'indexer database not ready' };
             if(!call_id || !/^[0-9a-fA-F]{64}$/.test(String(call_id)))
                 return { error: 'call_id must be a 64-hex id' };
-            // Federation READ isolation : committed-only, off the block tx.
+            // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
             try {
                 let latest = await db.getLatestBlockIndex();
@@ -1208,7 +1208,7 @@ async function startApi(){
             let idx = Number(action_index);
             if(!Number.isInteger(idx) || idx <= 0)
                 return { error: 'action_index must be a positive integer' };
-            // Federation READ isolation : committed-only, off the block tx.
+            // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
             try {
                 let latest = await db.getLatestBlockIndex();
@@ -1268,7 +1268,7 @@ async function startApi(){
                 return { error: 'indexer database not ready' };
             let v = anchorActionQuery.validateAnchorActionParams({ chain, network, block_index, checkpoint_seq, txid, version });
             if(!v.ok) return { error: v.error };
-            // Federation READ isolation : committed-only, off the block tx.
+            // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
             try {
                 let latest = await db.getLatestBlockIndex();
@@ -1301,14 +1301,14 @@ async function startApi(){
                 return { error: 'decoder database not ready' };
             let v = reorgHistoryQuery.validateReorgHistoryParams({ since_id, block_index, block_hash, limit });
             if(!v.ok) return { error: v.error };
-            // Federation READ isolation : route through apiView for symmetry
+            // Federation READ isolation: route through apiView for symmetry
             // with the indexerDb federation reads. The decoder DB never opens a block
             // transaction (its doQuery already pools), so this is defense-in-depth, but
             // keeping every federation read on the pooled view removes the whole class.
             let db = indexer.decoderDb.apiView();
             try {
                 let rows = await db.doQuery(reorgHistoryQuery.REORG_EVENTS_SQL, [v.since_id, v.limit]);
-                // #2736: live REORG_HALT probe so the hub can tell "no recent reorgs" apart from
+                // Live REORG_HALT probe so the hub can tell "no recent reorgs" apart from
                 // "decoder halted, history frozen". Best-effort: a probe fault falls back to the
                 // indexer's last-known flag rather than failing the whole read.
                 let decoderReorgHalted;
@@ -1333,9 +1333,9 @@ async function startApi(){
         // during block processing; accepting a push for them would let a stale
         // hub race the derivation and open a replay-divergence window, so they
         // are rejected outright.
-        // #5311 (staged retirement): per-chain anchor rewards become on-chain DERIVED
+        // Staged retirement: per-chain anchor rewards become on-chain DERIVED
         // at/above the ANCHOR_REWARD flag-day, so this endpoint rejects them there (see
-        // the gate below).  extends the same retirement to anchor_archive at/above
+        // the gate below). The same retirement extends to anchor_archive at/above
         // the ARCHIVE_REWARD flag-day (derived from the ANCHOR v6 publisher attestation).
         // The handler remains the transport for pre-flag-day rounds until pre-v4/pre-v6
         // history is buried, at which point the whole handler + its WRITE_METHODS entry
@@ -1358,7 +1358,7 @@ async function startApi(){
             if(!/^anchor_[A-Za-z_]+$/.test(type))
                 return { error: 'reward_type ' + type + ' is not pushable (derived during block processing)' };
             let blockIdx = block_index || 0;
-            // #5311 staged retirement: at/above the ANCHOR_REWARD flag-day a per-chain anchor
+            // Staged retirement: at/above the ANCHOR_REWARD flag-day a per-chain anchor
             // reward (anchor_<CHAIN>) is DERIVED on-chain from the ANCHOR v4/v5 publisher
             // attestation, so accepting an unauthenticated push for it is exactly the forge
             // vector this change retires; reject it (defense in depth; the upgraded hub no
@@ -1368,17 +1368,17 @@ async function startApi(){
             if(/^anchor_(BTC|LTC|DOGE)$/.test(type) &&
                ar.isAnchorRewardActive(Number(blockIdx), indexer.config && indexer.config['NETWORK']))
                 return { error: 'reward_type ' + type + ' at block ' + blockIdx +
-                                ' is derived on-chain from ANCHOR v4/v5; push retired (#5311)' };
-            // : the same staged retirement for the ARCHIVE leg. At/above the
+                                ' is derived on-chain from ANCHOR v4/v5; push retired' };
+            // The same staged retirement for the ARCHIVE leg. At/above the
             // ARCHIVE_REWARD flag-day anchor_archive is DERIVED on-chain from the ANCHOR v6
             // publisher attestation, so accepting a key-authenticated push for it is exactly
-            // the insider-with-key forge surface  retires; reject it (the upgraded hub
+            // the insider-with-key forge surface this retires; reject it (the upgraded hub
             // no longer pushes it). The canonicalizer above pins the type's case so no
             // collation-variant can slip this case-sensitive comparison.
             if(type === 'anchor_archive' &&
                ar.isArchiveRewardActive(Number(blockIdx), indexer.config && indexer.config['NETWORK']))
                 return { error: 'reward_type anchor_archive at block ' + blockIdx +
-                                ' is derived on-chain from ANCHOR v6; push retired ' };
+                                ' is derived on-chain from ANCHOR v6; push retired' };
             let written = 0;
             let skipped = 0;
             // apiView(): these writes land on an independent pooled connection. A
@@ -1402,7 +1402,7 @@ async function startApi(){
             // one winner. Collapse any failover-race duplicates to the
             // deterministic (smallest-pubkey) winner so a loser row pushed to
             // this indexer can't survive as a phantom COLLECT-claimable reward
-            // or diverge the recovery ledger hash (#3963).
+            // or diverge the recovery ledger hash.
             if(written > 0 && /^anchor_[A-Za-z_]+$/.test(type)){
                 try {
                     let removed = await apiDb.reconcileAnchorRewardWinner(round, type, blockIdx, null);
@@ -1449,7 +1449,7 @@ async function startApi(){
     app.get('/status', async (req, res) => {
         let indexerBlock = null;
         let indexerDbUnreachable = false;
-        // Same committed-vs-in-flight split as health : indexerBlock is
+        // Same committed-vs-in-flight split as health: indexerBlock is
         // the height a committed-only reader (every federation query guard) can
         // answer at; inFlightBlock is the block being parsed right now, which is
         // not indexed yet and a reorg may mean it never is.
@@ -1484,7 +1484,7 @@ async function startApi(){
         // Status-code contract for the xchain-node http_get healthcheck (wget
         // exits 0 on any 2xx): 503 when the indexer DB is unreachable or the
         // block counter is genuinely WEDGED, matching the encoder / utxo-tracker /
-        // sync siblings. A set stallReason ALONE no longer trips 503 : a
+        // sync siblings. A set stallReason ALONE no longer trips 503: a
         // BTC-mainnet indexer perpetually defers the newest block behind a price
         // mirror one block back, so it is almost always mid-barrier at probe time
         // even though it advances every few seconds. Reserve 503 for a stall with
@@ -1509,7 +1509,7 @@ async function startApi(){
             // executor host fault. Lets a monitoring probe tell these stalls apart from
             // a healthy catch-up, all of which otherwise present only as a growing lag.
             stallReason:  indexer.stallReason || null,
-            // : epoch-ms at which the current time-keyed barrier can first be
+            // Epoch-ms at which the current time-keyed barrier can first be
             // satisfied, or null. Non-null means this indexer is waiting on WALL CLOCK
             // because the block it is on is stamped in the future, which is expected and
             // self-clearing; it is not counted as a wedge, and it tells a probe when the

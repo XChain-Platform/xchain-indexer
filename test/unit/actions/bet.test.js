@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// BET action handler (spec claude/specs/BETTING_SYSTEM_SPEC.md,  P4).
+// BET action handler (spec, P4).
 // Mock-based: validation matrix for all four formats, the section-7 worked
 // settlement example (exact payouts / fee / dust / conservation), the
 // normative open-bet pool predicate, the zero-floor payout rule, the
@@ -516,13 +516,13 @@ describe('BET action handler @regression @tier2', function () {
     });
 
     /*****************************************************************
-     *  - the cancel (1) and resolve (3) legs persist a parse status
+     * The cancel (1) and resolve (3) legs persist a parse status
      *
      * Both legs used to write no typed row at all: their only durable trace was a
      * bet_feed_statuses history row, and that is written ONLY on the valid path. A
      * chain-REJECTED cancel or resolve therefore left no status anywhere, the
      * explorer served the action with a NULL status, and the SDK could only report
-     * statusKnown:false / statusSource:assumed rather than a real verdict .
+     * statusKnown:false / statusSource:assumed rather than a real verdict.
      * The rule these tests pin: one row per leg, written WHATEVER the status, the
      * same house convention create (bet_feeds) and place (bets) already follow.
      ****************************************************************/

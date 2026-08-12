@@ -33,40 +33,34 @@
 
 class Sweep {
 
-    // Handle constructing a class instance
     constructor(action){
-        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
         this.indexerDb = action.indexerDb;
         this.util      = action.util;
         this.mapper    = action.mapper;
-        
-        // Define list of known FORMATS
+
         this.formats = {};
         this.formats[0] = 'VERSION|DESTINATION|BALANCES|OWNERSHIPS|ORDERS|SWAPS|DISPENSERS|MEMO';
     }
 
-    // Handle parsing the SWEEP transaction
     async parse(params, data, error){
-        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
-        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
-        // Convert NUMBER fields from string value to number value so comparisons are mathematical 
+        // Convert NUMBER fields from string to number so comparisons below are mathematical, not lexical.
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        // Resolve a compacted ^<id> DESTINATION back to its canonical address
-        // before validation/use (see resolveAddressRefChecked). At/after the 
-        // flag-day an unresolvable reference is a hard reject; below it the value is
-        // left as-is and rejected by isCryptoAddress.
+        // Resolve a compacted ^<id> DESTINATION back to its canonical address before
+        // validation/use (see resolveAddressRefChecked). At/after the reference-resolution
+        // flag-day an unresolvable reference is a hard reject; below it the value is left
+        // as-is and rejected by isCryptoAddress.
         if(!error){
             let destRef = await this.indexerDb.resolveAddressRefChecked(data['DESTINATION'], data['BLOCK_INDEX']);
             data['DESTINATION'] = destRef.value;
@@ -74,13 +68,11 @@ class Sweep {
                 error = 'invalid: DESTINATION (unresolvable ^id)';
         }
 
-        // Get source address balances, preferences, and token ownerships
         let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let preferences = await this.indexerDb.getAddressPreferences(data['SOURCE'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let ownerships  = await this.indexerDb.getAddressOwnerships(data['SOURCE']);
         let escrowed    = await this.indexerDb.getAddressEscrows(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
-        // Create the fees object
         let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
 
         // Per-run memo for tick_id -> ticker resolution. SWEEP resolves the same set of held
@@ -106,10 +98,6 @@ class Sweep {
         let gasInfo  = await this.indexerDb.getTokenInfo(gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let guardFee = 0;
 
-        /*****************************************************************
-         * FORMAT Validations
-         ****************************************************************/
-
         // DESTINATION is mandatory. A null/empty DESTINATION skips the format check below and
         // sweeps every SOURCE balance into a NULL-address credit: createLedgerChangeRecord writes
         // the credit with address_id=NULL, but updateBalances skips NULL addresses, so SOURCE's
@@ -121,45 +109,33 @@ class Sweep {
         if(!error && this.util.isNull(data['DESTINATION']))
             error = "invalid: DESTINATION (null)";
 
-        // Verify DESTINATION address format
         if(!error && !this.util.isNull(data['DESTINATION']) && !this.util.isCryptoAddress(data['DESTINATION']))
             error = "invalid: DESTINATION (format)";
 
-        // Verify BALANCES format is valid (0 or 1)
         if(!error && !this.util.isNull(data['BALANCES']) && !this.util.isValidValue(data['BALANCES'],[0,1]))
             error = "invalid: BALANCES (format)";
 
-        // Verify OWNERSHIPS format is valid (0 or 1)
         if(!error && !this.util.isNull(data['OWNERSHIPS']) && !this.util.isValidValue(data['OWNERSHIPS'],[0,1]))
             error = "invalid: OWNERSHIP (format)";
 
-        // Verify ORDERS format is valid (0 or 1)
         if(!error && !this.util.isNull(data['ORDERS']) && !this.util.isValidValue(data['ORDERS'],[0,1]))
             error = "invalid: ORDERS (format)";
 
-        // Verify SWAPS format is valid (0 or 1)
         if(!error && !this.util.isNull(data['SWAPS']) && !this.util.isValidValue(data['SWAPS'],[0,1]))
             error = "invalid: SWAPS (format)";
 
-        // Verify DISPENSERS format is valid (0 or 1)
         if(!error && !this.util.isNull(data['DISPENSERS']) && !this.util.isValidValue(data['DISPENSERS'],[0,1]))
             error = "invalid: DISPENSERS (format)";
 
-        // Set default values for BALANCES, OWNERSHIPS, and per-offer-type close flags
         data['BALANCES']   = (!this.util.isNull(data['BALANCES']))   ? data['BALANCES']   : 1;
         data['OWNERSHIPS'] = (!this.util.isNull(data['OWNERSHIPS'])) ? data['OWNERSHIPS'] : 1;
         data['ORDERS']     = (!this.util.isNull(data['ORDERS']))     ? data['ORDERS']     : 0;
         data['SWAPS']      = (!this.util.isNull(data['SWAPS']))      ? data['SWAPS']      : 0;
         data['DISPENSERS'] = (!this.util.isNull(data['DISPENSERS'])) ? data['DISPENSERS'] : 0;
 
-        // Clone the raw data for storage in mints table
+        // Clone the raw data for storage in the sweeps table.
         let sweep = Object.assign({}, data);
 
-        /*****************************************************************
-         * General Validations
-         ****************************************************************/
-
-        // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
@@ -171,7 +147,6 @@ class Sweep {
         if(!error && !this.util.isNull(data['MEMO']) && String(data['MEMO']).indexOf(';')!=-1)
             error = 'invalid: MEMO (semicolon)';
 
-        // Verify MEMO is shorter than MAX_MEMO_LENGTH
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
@@ -184,7 +159,7 @@ class Sweep {
         let dispenserEscrows = (data['DISPENSERS'] == 1) ? escrowed.filter(e => e.type === 'dispenser') : [];
 
         // Calculate total number of database hits for this SWEEP. LEGACY_FEE_NUMERIC_DBHITS
-        //  gates the db_hits string-concatenation fix: below the flag-day reproduce the
+        // gates the db_hits string-concatenation fix: below the flag-day reproduce the
         // original `+= bcmul(...)` concatenation byte-for-byte. The escrow term has no ternary
         // guard, so even a zero-escrow SWEEP concatenated "0" onto db_hits (1 -> "10" -> "100")
         // and inflated the fee; the below-flag path preserves that so a pre-activation replay
@@ -208,7 +183,6 @@ class Sweep {
         // SWEEP as 'insufficient funds (FEE)'.
         fees['AMOUNT'] = this.util.feeForAction(this.util.getTransactionFee(db_hits, fees['TICK']), data);
 
-        // Validate fee payment (native coin or XCHAIN balance)
         if(!error && this.util.bcgt(fees['AMOUNT'], 0)){
             let paymentMode = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']);
             if(paymentMode === 'native'){
@@ -326,20 +300,14 @@ class Sweep {
             }
         }
 
-        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = sweep['STATUS'] = status;
 
-        // Print status message 
         console.log("\t SWEEP : " + sweep['DESTINATION'] + ' : '+ sweep['STATUS']);
 
-        // Create record in sweeps table
         await this.indexerDb.createSweep(sweep);
 
-        // If this was a valid transaction, then mint any actual supply
         if(status=='valid'){
-
-            // Array of credits and debits
             let credits = [],
                 escrows = [],
                 debits  = [];
@@ -394,7 +362,7 @@ class Sweep {
                         ownershipsTransferred.add(info['GIVE_TICK']);
                     } else if(!this.util.isNull(info['GIVE_TICK'])){
                         // Balance order: standard escrow → DESTINATION.
-                        // BigNumber-space negation, not JS unary minus (float truncation, #3736).
+                        // BigNumber-space negation, not JS unary minus (float truncation).
                         escrows.push([info['GIVE_TICK'], this.util.bcsub(0, info['GIVE_REMAINING'], 64), info['SOURCE']]);
                         credits.push([info['GIVE_TICK'],  info['GIVE_REMAINING'], data['DESTINATION']]);
                         this.util.addAddressTicker(data['DESTINATION'], info['GIVE_TICK']);
@@ -415,7 +383,7 @@ class Sweep {
                     ownershipsTransferred.add(info['GIVE_TICK']);
                 } else {
                     // Balance swap: standard escrow → DESTINATION.
-                    // BigNumber-space negation, not JS unary minus (float truncation, #3736).
+                    // BigNumber-space negation, not JS unary minus (float truncation).
                     escrows.push([info['GIVE_TICK'], this.util.bcsub(0, info['GIVE_AMOUNT'], 64), info['SOURCE']]);
                     credits.push([info['GIVE_TICK'],  info['GIVE_AMOUNT'], data['DESTINATION']]);
                     this.util.addAddressTicker(data['DESTINATION'], info['GIVE_TICK']);
@@ -438,34 +406,27 @@ class Sweep {
                 this.util.addAddressTicker(data['DESTINATION']);
             }
 
-            // Transfer any balances
             if(data['BALANCES']==1){
                 for(let tick_id in balances){
                     let amount = balances[tick_id];
                     let tick   = await resolveTicker(tick_id);
 
-                    // Debit token amount from SOURCE and credit to DESTINATION
                     debits.push([tick,  amount, data['SOURCE']]);
                     credits.push([tick, amount, data['DESTINATION']]);
 
-                    // Store the SOURCE, DESTINATION and TICK in addresses and tickers lists
                     this.util.addAddressTicker(data['SOURCE'], tick);
                     this.util.addAddressTicker(data['DESTINATION'], tick);
                 }
             }
 
-            // Process any transaction ledger changes (credits / debits)
             await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
 
-            // Get a list of tickers & addresses
             let tickers   = this.util.getTickersList(),
                 addresses = Object.keys(this.util.getAddressesList());
 
-            // Update address balances and token supply
             await this.indexerDb.updateBalances(addresses);
             await this.indexerDb.updateTokens(tickers);
 
-            // Create action mappings for this sweep
             await this.mapper.createMappings(data);
 
             // Transfer token ownerships. Each swept ownership's controller (if any) was already run
@@ -480,32 +441,25 @@ class Sweep {
                     if(ownershipsTransferred.has(tick))
                         continue;
 
-                    // Reset the address/tickers/transactions list on each parse
+                    // Reset the address/tickers/transactions list on each parse: each ownership
+                    // iteration below builds its own ISSUE and must not carry the prior one's lists.
                     this.util.resetLists();
 
-                    // Copy base transaction data object into issue object
                     let issue = sweep;
                     issue['ACTION']   = 'ISSUE';
                     issue['TICK']     = tick;
                     issue['TRANSFER'] = sweep['DESTINATION'];
 
-                    // Create a record of this action in the actions table
                     issue['ACTION_INDEX'] = await this.indexerDb.createActionIndex(issue, true);
 
-                    // Create issue record for transfer of ownership
                     await this.indexerDb.createIssue(issue);
 
-                    // Update tokens table to indicate new owner
                     await this.indexerDb.updateTokens(tick);
 
-                    // Store the SOURCE, DESTINATION and TICK in addresses and tickers lists
                     this.util.addAddressTicker(issue['SOURCE'], tick);
                     this.util.addAddressTicker(issue['DESTINATION'], tick);
 
-                    // Create action mappings for this ISSUE
                     await this.mapper.createMappings(issue);
-
-
                 }
             }
 

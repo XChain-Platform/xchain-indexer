@@ -11,7 +11,7 @@
  **********************************************************************
  *
  * state_root_version is derived PER HEIGHT, not from a constant and not from the
- * tip (SPV sub-tree spec §3 Stage A item 3,  stage A2).
+ * tip (SPV sub-tree design, Stage A item 3).
  *
  * getblockhashes is where this value is MINTED. The hub's checkpoint engine copies
  * it verbatim into the signed canonical string (StateCheckpointEngine builds `cp`

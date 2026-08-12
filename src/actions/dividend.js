@@ -30,9 +30,7 @@
 
 class Dividend {
 
-    // Handle constructing a class instance
     constructor(action){
-        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -45,9 +43,7 @@ class Dividend {
         this.formats[0] = 'VERSION|TICK|DIVIDEND_TICK|AMOUNT|MEMO';
     }
 
-    // Handle parsing the DIVIDEND transaction
     async parse(params, data, error){
-        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
@@ -120,10 +116,6 @@ class Dividend {
             dividend['DEBIT'] = totalDebit;
         }
 
-        /*****************************************************************
-         * TICK Validations
-         ****************************************************************/
-
         // Validate TICK exists
         if(!error && !tokenInfo)
             error = 'invalid: TICK (unknown)';
@@ -132,17 +124,9 @@ class Dividend {
         if(!error && !dividendTokenInfo)
             error = 'invalid: DIVIDEND_TICK (unknown)';
 
-        /*****************************************************************
-         * FORMAT Validations
-         ****************************************************************/
-
         // Verify AMOUNT format valid for DIVIDEND_TICK
         if(!error && (this.util.isNull(data['AMOUNT']) || !this.util.isValidAmountFormat(dividendTokenInfo['DECIMALS'], data['AMOUNT'])))
             error = "invalid: AMOUNT (format)";
-
-        /*****************************************************************
-         * General Validations
-         ****************************************************************/
 
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
@@ -178,7 +162,7 @@ class Dividend {
             fees['AMOUNT']      = result.fee;
             fees['FEE_VERSION'] = 2;
         } else {
-            // Legacy: database hits model. LEGACY_FEE_NUMERIC_DBHITS  gates the fix of
+            // Legacy: database hits model. LEGACY_FEE_NUMERIC_DBHITS gates the fix of
             // the db_hits string-concatenation bug: below the flag-day reproduce the original
             // `db_hits += bcmul(...)` concatenation byte-for-byte (3 + "4" -> "34") so a
             // pre-activation replay commits the identical (inflated) fee; at/above it accumulate
@@ -254,7 +238,7 @@ class Dividend {
         if(!error && (!fees['PAYMENT_MODE'] || fees['PAYMENT_MODE'] === 2))
             balances = this.util.debitBalances(balances, fees['TICK_ID'], fees['AMOUNT']);
 
-        // // Determine final status
+        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = dividend['STATUS'] = status;
 

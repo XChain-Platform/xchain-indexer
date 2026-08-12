@@ -114,7 +114,7 @@ function parseReorgEvent(row) {
 // it matches every supplied filter: that is exactly the question the hub asks
 // ("did you orphan block_hash H at height N?"), so a match is positive evidence
 // that H was canonical-then-orphaned there.
-// `opts.decoderReorgHalted` (#2736) is threaded from a live isReorgHalted() probe at the call
+// `opts.decoderReorgHalted` is threaded from a live isReorgHalted() probe at the call
 // site and surfaced as an ADDITIVE trailing field on the response: a decoder that wrote a durable
 // REORG_HALT marker cannot advance, so a hub reading this history must be able to tell "no recent
 // reorgs" apart from "decoder halted, history frozen". Existing fields are unchanged/unreordered.
@@ -138,7 +138,7 @@ function buildReorgHistoryResponse(rows, filter, opts) {
         // True only when a filter was supplied AND an orphaned block matched it.
         // The hub reads this as "oldHash was canonical, then orphaned, at that height".
         matched:  ((f.block_index !== undefined && f.block_index !== null) || !!f.block_hash) && events.length > 0,
-        // Additive trailing field (#2736): true when the decoder has a durable REORG_HALT marker.
+        // Additive trailing field: true when the decoder has a durable REORG_HALT marker.
         decoderReorgHalted: !!(opts && opts.decoderReorgHalted)
     };
 }

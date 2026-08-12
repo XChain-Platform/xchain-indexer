@@ -16,8 +16,8 @@
  * Prove that the migrations pending against a DEPLOYED ref are additive and
  * old-code-compatible, before they are applied to anything that matters.
  *
- *  §7 carries the gate this answers: "every pre-window migration proven
- * additive and old-code-compatible (old suite green against the migrated
+ * The migration-compatibility gate (spec §7) requires: "every pre-window migration
+ * proven additive and old-code-compatible (old suite green against the migrated
  * schema)". Driven by bin/check-migration-old-code-compat.sh, which provisions
  * the throwaway database; this file is the assertions.
  *
@@ -97,8 +97,8 @@ const OLD_STATEMENTS = {
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '[]')`,
     },
     // From `git show b5c8fcf:src/stateCommitment.js` (the ref six of the fleet's nine
-    // indexers were running on 2026-07-29). Seven columns named, so the /872
-    // migrations that add contract_state_root and the escrow shadow column have to be
+    // indexers were running on 2026-07-29). Seven columns named, so the migrations
+    // that add contract_state_root and the escrow shadow column have to be
     // nullable or defaulted for this to keep working.
     state_tree_roots: {
         insert: `INSERT INTO state_tree_roots

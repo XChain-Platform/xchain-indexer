@@ -44,8 +44,7 @@ MODE="${1:-fix}"
 
 # Fail closed off-Linux: the npm install in the WRITE path compiles isolated-vm
 # for the HOST platform, so a Mac-side run poisons the vendored tree with Mach-O
-# binaries the Linux runtime cannot load (PROM-029 incident). Run that on
-# devhost instead.
+# binaries the Linux runtime cannot load. Run that on a Linux host instead.
 #
 # `check` is exempt, and the distinction matters more than it looks. It writes
 # nothing: it greps CONSENSUS_VERSION out of the frozen export and sha1s src/**,
@@ -64,7 +63,7 @@ MODE="${1:-fix}"
 # is a guard people learn to route around.
 if [ "$MODE" != "check" ] && [ "$(uname -s)" != "Linux" ]; then
     echo "vendor-vm: refusing to $MODE on $(uname -s): npm install would build a non-Linux isolated-vm into the vendored tree." >&2
-    echo "vendor-vm: run this script on devhost (Linux), e.g.: ssh devhost 'cd $(pwd) && bin/vendor-vm.sh'" >&2
+    echo "vendor-vm: run this script on a Linux host instead, e.g.: ssh <host> 'cd $(pwd) && bin/vendor-vm.sh'" >&2
     exit 1
 fi
 

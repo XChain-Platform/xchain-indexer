@@ -249,7 +249,7 @@ describe('stateCommitment: missing prior root falls back to full recompute (item
     });
 });
 
-// Escrow ARMING block after a §7 shadow window ().
+// Escrow ARMING block after a §7 shadow window.
 //
 // The failure this pins: the arming replay writes no journal row for a key whose
 // locked total is unchanged since the shadow window, so touchedEscrowKeys(arming)

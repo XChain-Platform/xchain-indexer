@@ -10,7 +10,7 @@
  *
  **********************************************************************
  *
- * XChain Platform: Equivocation Header (EQUIV_HEADER / WI-2 bump 2)
+ * XChain Platform: Equivocation Header (EQUIV_HEADER)
  *
  * THE single, CONSENSUS-CRITICAL implementation of the uniform signed header that
  * prefixes every consensus canonical at/above the activation flag-day:

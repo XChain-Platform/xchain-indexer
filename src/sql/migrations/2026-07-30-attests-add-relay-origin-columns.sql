@@ -1,6 +1,6 @@
 -- xchain:migration mode=auto
--- Migration: attests.origin_chain / attests.origin_action_index (,
--- attestation Phase 5 cross-chain relay, spec §12).
+-- Migration: attests.origin_chain / attests.origin_action_index
+-- (attestation Phase 5 cross-chain relay).
 --
 -- WHY
 -- ---

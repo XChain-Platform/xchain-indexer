@@ -169,10 +169,10 @@ describe('Collect (COLLECT) @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    //  : partial claim (trailing optional AMOUNT, PARTIAL_UNSTAKE_COLLECT)
+    // partial claim (trailing optional AMOUNT, PARTIAL_UNSTAKE_COLLECT)
     // -----------------------------------------------------------------------
 
-    describe('partial claim ', function () {
+    describe('partial claim', function () {
 
         function setGate(enabled) {
             actionsCtx.protocolChanges = {

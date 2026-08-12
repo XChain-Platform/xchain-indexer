@@ -174,11 +174,11 @@ describe('reorg catch-up cursor refresh (XChainIndexer.start REORG-6 recheck)', 
     });
 });
 
-//  / RE-1: the cursor is a decoder events.id and the decoder never deletes
+// RE-1: the cursor is a decoder events.id and the decoder never deletes
 // events rows, so a cursor above the decoder's newest REORG id can only mean an
 // out-of-band decoder rebuild/restore (AUTO_INCREMENT reset). getReorgsSince used
 // to return [] forever in that state, silently disabling all future rollbacks.
-describe('reorg cursor incarnation guard ( / RE-1)', function () {
+describe('reorg cursor incarnation guard (/ RE-1)', function () {
 
     it('throws when the cursor exceeds the decoder\'s newest REORG event id (rebuilt decoder DB)', async function () {
         // Decoder rebuilt: its REORG history restarts at small ids (here: one event, id 3).

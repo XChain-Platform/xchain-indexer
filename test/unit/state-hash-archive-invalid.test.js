@@ -76,7 +76,7 @@ function anchorSqlOf(captured){
     return captured.find(sql => sql.indexOf('anchor_actions p') !== -1);
 }
 
-describe('state_hash anchor_invalid class: archive-head v6 coverage  @regression', function(){
+describe('state_hash anchor_invalid class: archive-head v6 coverage @regression', function(){
 
     // Isolate this suite from the other regtest-armed classes (their keys/query
     // slots would shift the expected key set); always restored.
@@ -99,7 +99,7 @@ describe('state_hash anchor_invalid class: archive-head v6 coverage  @regression
         assert.strictEqual(ARCHIVE_HEAD_VERSIONS_SQL, 'IN (1, 6)');
     });
 
-    it('gate: regtest armed from genesis; mainnet/testnet keys present but INERT placeholders pending ; fail-inert paths', function(){
+    it('gate: regtest armed from genesis; mainnet/testnet keys present but INERT placeholders pending; fail-inert paths', function(){
         assert.strictEqual(isArchiveInvalidStateHashActive(0, 'regtest'), true, 'regtest armed at 0');
         for(const key of ['BTC:mainnet', 'LTC:mainnet', 'DOGE:mainnet', 'BTC:testnet', 'LTC:testnet', 'DOGE:testnet']){
             const h = ARCHIVE_INVALID_STATE_HASH_ACTIVATION[key];

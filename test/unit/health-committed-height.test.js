@@ -11,13 +11,13 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Health advertises COMMITTED height only .
+ * Health advertises COMMITTED height only.
  *
  * health() used to read lastIndexedBlock off the RAW db handle. doQuery ->
  * getConnection() returns the block loop's open transactionConnection while a
  * block is processing, so that read landed INSIDE the uncommitted block. Every
  * federation query guard instead reads through apiView() (the committed-only
- * independent pooled connection,  / H2) and answers `block_index N not
+ * independent pooled connection, / H2) and answers `block_index N not
  * yet indexed (latest: N-1)`. The two endpoints therefore disagreed by exactly
  * one block, and any client that polls health and then queries AT the height
  * health just reported failed deterministically whenever the poll landed
@@ -77,7 +77,7 @@ function openBlock(db, blockIndex = UNCOMMITTED){
     return db;
 }
 
-describe('health advertises committed height only  @regression @tier1', function(){
+describe('health advertises committed height only @regression @tier1', function(){
 
     describe('committedView()', function(){
 
@@ -221,9 +221,9 @@ describe('health advertises committed height only  @regression @tier1', function
             'health()':         { body: handlerBody('health'),        advertisesInFlight: true },
             'getlatestblock()': { body: handlerBody('getlatestblock'), advertisesInFlight: true },
             '/status':          { body: statusRoute(),                advertisesInFlight: true },
-            // : getblockhashes does not advertise a height, it MINTS the
+            // getblockhashes does not advertise a height, it MINTS the
             // hashes the hub's StateCheckpointEngine quorum-signs into the
-            // XCHECKPOINT canonical. Same dirty-read class as , worse blast
+            // XCHECKPOINT canonical. Same dirty-read class as, worse blast
             // radius: a mid-block read gets a state hash for a block a reorg may
             // still erase, and the signature outlives the rollback. Its default
             // target height AND the stored-hash row must both come off the
@@ -282,10 +282,10 @@ describe('health advertises committed height only  @regression @tier1', function
         }
     });
 
-    // Runtime proof for the signing path : the hash row a mid-block read
+    // Runtime proof for the signing path: the hash row a mid-block read
     // returns is not the row a committed-only reader sees, and it is the committed
     // one the checkpoint engine must sign.
-    describe('getStoredBlockHashes() through committedView() ', function(){
+    describe('getStoredBlockHashes() through committedView()', function(){
 
         const COMMITTED_LEDGER   = 'aa'.repeat(32);
         const UNCOMMITTED_LEDGER = 'bb'.repeat(32);

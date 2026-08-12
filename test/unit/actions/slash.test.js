@@ -112,7 +112,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         assert.ok(indexer.indexerDb.createCapabilitySlashEvent.calledOnce, 'an audit event must be written');
     });
 
-    // . A delegated signing key owns no stake, so burning by its own pubkey
+    // A delegated signing key owns no stake, so burning by its own pubkey
     // matched nothing: the slash recorded as valid and burned ZERO. The handler must
     // resolve the owning source AT THE EQUIVOCATION HEIGHT and burn there.
     it('a DELEGATED offender burns the owning source\'s bond, resolved at the equivocation height', async function () {
@@ -335,7 +335,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         assert.strictEqual(d['STATUS'], 'valid', 'the gate must leave sub-flag-day acceptance untouched');
     });
 
-    // ── CHECKPOINT engine tag: two content families  ──
+    // ── CHECKPOINT engine tag: two content families ──
     // XCHECKPOINT (root canonical, snapshot_block at index 9) and XANCPUB (reward
     // attestation, snapshot_block at index 3) share the CHECKPOINT engine tag.
 
@@ -361,7 +361,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         assert.ok(indexer.indexerDb.slashCapabilityStake.calledOnce);
     });
 
-    it('ACCEPTS an XANCPUB equivocation (snapshot_block at index 3, )', async function () {
+    it('ACCEPTS an XANCPUB equivocation (snapshot_block at index 3)', async function () {
         // Same round, two different attested publishers = a reward-attestation double-sign.
         const round = 'XANCPUB|BTC|regtest|5|100';
         const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, round, 0, ancpubContent(100, 'aaaa'.repeat(16)));
@@ -407,7 +407,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
     });
 
-    // XATTEST hosts TWO content families ( Phase 5). The base v1 canonical is
+    // XATTEST hosts TWO content families (Phase 5). The base v1 canonical is
     // delimiter-less and carries no block, so the slot resolver reads it from the mirrored
     // request row; the relay legs are XCALL-shaped (snapshot_block at index 3) under a
     // HASHED round id, and are quorum-verified against `cross_chain`, not `attestation`.

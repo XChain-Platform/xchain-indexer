@@ -12,7 +12,7 @@
  **********************************************************************
  *
  * SOURCE-SIDE §7 shadow dry run for the XCHAIN_ESC locked leaf (SPV sub-tree
- * spec §7 step 1,  stage B3).
+ * spec §7 step 1).
  *
  * WHAT THIS IS, AND WHAT IT IS NOT. §7 asks for a shadow window in which BOTH
  * TWINS derive the would-be root for N blocks and are compared. That needs a

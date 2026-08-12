@@ -9,7 +9,7 @@
  * General Public License v3.0 or later; see LICENSE.md.
  *
  **********************************************************************
- * Give-side decimal grid on the cross-chain book ().
+ * Give-side decimal grid on the cross-chain book (/#3146).
  *
  * The hub quantizes every cross-chain fill on the grid reported here and DECLINES a
  * match when it is absent, so what this stamping gets wrong the hub either settles

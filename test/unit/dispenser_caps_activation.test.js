@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/dispenser_caps_activation.test.js
  *
- * DISPENSER lifetime caps flag-day ( / Package 14). MAX_DISPENSES and
+ * DISPENSER lifetime caps flag-day (/ Package 14). MAX_DISPENSES and
  * MAX_REFILLS enforcement is gated WITH the dispenser-family cohort: block-TIME,
  * mainnet 1786060800, testnet/regtest genesis (byte-for-byte the shape of
  * dispense_cancelling_match / dispenser_ownership_cancel). These tests pin the
@@ -26,7 +26,7 @@ const assert = require('assert');
 const { isDispenserCapsActive, DISPENSER_CAPS_ACTIVATION } =
     require('../../src/dispenser_caps_activation.js');
 
-describe('dispenser caps activation predicate  @regression @tier1', function () {
+describe('dispenser caps activation predicate @regression @tier1', function () {
 
     it('mainnet flips at the coordinated 2.0.0 flag-day (1786060800)', function () {
         assert.strictEqual(isDispenserCapsActive(1786060799, 'mainnet'), false);

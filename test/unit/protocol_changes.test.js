@@ -102,7 +102,7 @@ describe('ProtocolChanges @regression @tier3', function () {
         it('should return true for defined actions', function () {
             assert.strictEqual(pc.isDefined('SEND'), true);
             assert.strictEqual(pc.isDefined('ISSUE'), true);
-            assert.strictEqual(pc.isDefined('BET'), true); //  P4: BET registered, genesis-active
+            assert.strictEqual(pc.isDefined('BET'), true); // BET registered, genesis-active
         });
 
         it('should return false for undefined actions', function () {
@@ -210,11 +210,11 @@ describe('ProtocolChanges @regression @tier3', function () {
         });
     });
 
-    // Locks in : the activation gate must read its network from the validated
+    // Locks in: the activation gate must read its network from the validated
     // config (config.NETWORK), NOT re-read the raw process.env.INDEXER_NETWORK. Boot
     // validates the network once and stores it on config; a second env read could
     // diverge if the env is mutated post-boot, silently mis-gating consensus rules.
-    describe('network source is the validated config, not process.env ', function () {
+    describe('network source is the validated config, not process.env', function () {
         it('reads this.network from config.NETWORK even when process.env.INDEXER_NETWORK disagrees', function () {
             indexer.config.NETWORK = 'mainnet';
             process.env.INDEXER_NETWORK = 'regtest'; // stale/mutated env must be ignored
@@ -378,7 +378,7 @@ describe('ProtocolChanges @regression @tier3', function () {
         });
     });
 
-    // ─── VM_ATTESTATION_GETRESPONSE: the consensus anti-fork gate  ───
+    // ─── VM_ATTESTATION_GETRESPONSE: the consensus anti-fork gate ───
     // The VM xchain.attestation.getResponse() reader. Below activation execute.js
     // passes attestationData:null and getResponse() returns null for every request;
     // at/above it the indexer feeds the getAttestationDataForVM snapshot and a
@@ -525,7 +525,7 @@ describe('ProtocolChanges @regression @tier3', function () {
         // exported constant, so a future edit that updates the constant (or a subset
         // of the literals) but misses the rest would pass CI and activate coupled
         // contract-deploy consensus rules at different boundaries. This pins them
-        // equal so any such partial edit fails CI. See review finding uuid:e6069c27.
+        // equal so any such partial edit fails CI. See AML finding uuid:e6069c27.
         const COHORT = [
             'DEPLOY_BASE64_CODE',
             'ISSUANCE_FEE_EMISSION_EXEMPT',
@@ -606,26 +606,26 @@ describe('ProtocolChanges @regression @tier3', function () {
         });
     });
 
-    // ───  redesign: LOCK_NULL_PRIOR_UNSET ships ungated ───────────────
+    // ─── redesign: LOCK_NULL_PRIOR_UNSET ships ungated ───────────────
     // Built under the v1 three-key train and registered on its Key A block TIME
     // (1796083200 / 2026-12-01). The redesign (spec §0) replaced the activation
     // surface with a mandatory fleet-wide wipe-and-replay rebase, so this rule ships
     // plain. A reintroduced flag day here is a divergence window: nodes replaying
     // before and after the date would disagree.
-    describe('LOCK_NULL_PRIOR_UNSET is ungated ( redesign)', function () {
+    describe('LOCK_NULL_PRIOR_UNSET is ungated (redesign)', function () {
         it('carries no activation time or block on any network', function () {
             const change = pc.changes['LOCK_NULL_PRIOR_UNSET'];
             assert.ok(change, 'LOCK_NULL_PRIOR_UNSET must be registered');
             for (const field of ['mainnet_time', 'testnet_time', 'regtest_time',
                                  'mainnet_block', 'testnet_block', 'regtest_block']) {
                 assert.strictEqual(change[field], 0,
-                    `${field} must be 0; the  batch ships ungated (spec §0)`);
+                    `${field} must be 0; the redesign batch ships ungated (spec §0)`);
             }
         });
 
         it('retired the v1 train constant rather than leaving it dangling', function () {
             assert.strictEqual(ProtocolChanges.XC637_TRAIN_TIME, undefined,
-                'the v1  Key A anchor must not survive the redesign');
+                'the v1 Key A anchor must not survive the redesign');
         });
     });
 });

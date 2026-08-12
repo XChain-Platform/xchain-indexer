@@ -17,16 +17,16 @@
 --  FAIL on pre-existing duplicates and REJECT writes from code that has not yet
 --  been upgraded. Applying it at boot, under a running old-code hub still
 --  mirroring rows, risks a live duplicate-insert failure with no maintenance
---  window open to recover in.  spec §8 step 4a: it applies INSIDE the
---  window, after the halt and BEFORE the hub code deploy, and is verified
---  directly on every host. Run with `node src/migrate.js`.)
+--  window open to recover in. It applies INSIDE the deploy window, after the
+--  halt and BEFORE the hub code deploy, and is verified directly on every
+--  host. Run with `node src/migrate.js`.)
 --
--- Migration: mirror the  split-brain fence onto the indexer's
---            state_checkpoints copy ()
+-- Migration: mirror the split-brain fence onto the indexer's
+--            state_checkpoints copy
 --
 -- WHY
 -- ---
---  tightened the checkpoint unique key so a same-seq split-brain collapses
+-- The hub tightened the checkpoint unique key so a same-seq split-brain collapses
 -- to exactly one admitted row. That fence was applied ON THE HUB ONLY:
 --
 --   xchain-hub/src/sql/state_checkpoints.sql
@@ -55,7 +55,7 @@
 -- PRE-EXISTING DUPLICATES
 -- -----------------------
 -- Adding the tighter key FAILS if the table already holds two rows at one
--- (chain, network, checkpoint_seq). Under the  rebase this cannot happen:
+-- (chain, network, checkpoint_seq). Under a fleet-wide rebase this cannot happen:
 -- every indexer DB is rebuilt from the base schema and replayed (spec §3.1), so
 -- the table is empty when this runs and the base schema below already carries the
 -- tightened key. This migration therefore exists for schema PARITY and for any

@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// FIAT dispenser reverse price matching (claude/specs/DISPENSER_ORACLE_FIAT_PRICE_PLAN.md).
+// FIAT dispenser reverse price matching.
 //
 // Both matchers decide a CONSENSUS verdict: how many units a bare coin payment
 // buys, and whether the dispense is valid at all. dispense.test.js covers the
@@ -213,7 +213,7 @@ describe('Utility FIAT dispenser price matching @regression', function () {
         it('keys the validator pair on the PAY coin, not the priced token chain', async function () {
             // The two are the same on every dispenser that can exist today (both
             // GIVE_COIN and GET_COIN are guarded to the indexer's own chain), so this
-            // pins the distinction before cross-chain dispensers  make it
+            // pins the distinction before cross-chain dispensers make it
             // reachable and a single argument silently prices against the wrong pair.
             const db = fakeDb([snap('15000000', NOW - 600)], [oracle('7.50', NOW - 600)]);
             await util.reverseOraclePriceMatch(
@@ -249,7 +249,7 @@ describe('Utility FIAT dispenser price matching @regression', function () {
 
     // Guards on the inputs a PRICE v1 oracle is actually allowed to publish
     // (actions/price.js validates VALUE only as a positive 8-decimal string, so
-    // the minimum publishable price is 0.00000001). See .
+    // the minimum publishable price is 0.00000001).
     describe('degenerate price inputs', function () {
 
         it('does not throw on the smallest publishable oracle price at ordinary payment sizes', async function () {
@@ -260,7 +260,7 @@ describe('Utility FIAT dispenser price matching @regression', function () {
             assert.strictEqual(r.units, 5000000000);
         });
 
-        it(': saturates instead of throwing once the count passes MAX_SAFE_INTEGER', async function () {
+        it('saturates instead of throwing once the count passes MAX_SAFE_INTEGER', async function () {
             // A 1e-8 oracle price on a high-magnitude fiat pair puts the unit
             // count past 2^53-1 for under one coin of payment, sent to an address
             // the operator controls (so the attack costs a tx fee). This used to

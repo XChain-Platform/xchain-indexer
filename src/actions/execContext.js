@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Shared builder for system-injected EXECUTE contexts .
+ * Shared builder for system-injected EXECUTE contexts.
  *
  * Four injector sites synthesize an EXECUTE that runs a contract callback
  * (attest.js response + expiry callbacks, vote.js poll-finalize callback,

@@ -13,9 +13,9 @@
  **********************************************************************
  * test/unit/price-barrier-btc-time-coverage.test.js
  *
- * . On BTC the height-keyed price_snapshots barrier does NOT imply the
+ * On BTC the height-keyed price_snapshots barrier does NOT imply the
  * time coverage that FIAT dispenser settlement needs, so BTC must run the
- * time-keyed barrier as well.  gave that barrier to LTC/DOGE; BTC kept
+ * time-keyed barrier as well. gave that barrier to LTC/DOGE; BTC kept
  * taking the height branch as its ALTERNATIVE and was left uncovered.
  *
  * The two quantities are independent. A round's `reference_block` is the BTC
@@ -65,7 +65,7 @@ const INDEXER_SRC = fs.readFileSync(
 // cannot satisfy these assertions by accident.
 function priceBarrierBlock() {
     // Anchored on the BTC guard rather than on the call inside it, so the
-    // chain condition itself is inside the slice.  added the mayReadPrice
+    // chain condition itself is inside the slice. added the mayReadPrice
     // conjunct (skip the wait on a block that provably reads no price); the
     // chain guard it sits next to is still asserted below.
     const start = INDEXER_SRC.search(
@@ -76,7 +76,7 @@ function priceBarrierBlock() {
     return INDEXER_SRC.slice(start, end);
 }
 
-describe(' BTC price barrier covers time as well as height @regression @tier1', function () {
+describe('BTC price barrier covers time as well as height @regression @tier1', function () {
 
     it('the time barrier is reachable on BTC, not an else-branch of the height barrier', function () {
         const block = priceBarrierBlock();
@@ -97,7 +97,7 @@ describe(' BTC price barrier covers time as well as height @regression @tier1', 
             'comparable to a round\'s BTC reference_block anchor');
     });
 
-    //  narrowed WHEN the barriers run. That is only safe while the skip
+    // narrowed WHEN the barriers run. That is only safe while the skip
     // condition is the price-read predicate and nothing else: a chain term or a
     // flag-day term here would silently un-barrier a real reader.
     it('the only thing that may skip a barrier is the price-read predicate', function () {

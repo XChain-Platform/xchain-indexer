@@ -24,7 +24,7 @@ const http  = require('http');
 const https = require('https');
 const url   = require('url');
 
-// Name the hub rejections a REPLAY can never turn into an acceptance (item 4279).
+// Name the hub rejections a REPLAY can never turn into an acceptance.
 // A push can fail INSIDE a successful JSON-RPC envelope: PriceAggregator returns
 // { accepted:false, reason } and api.js returns { error:'...' } as an ordinary method
 // result, and _call rejects on neither. Every pattern here judges the PAYLOAD itself,
@@ -33,7 +33,7 @@ const url   = require('url');
 // a queue slot, a wrong drop costs a never-re-derivable oracle price (actions/price.js).
 const TERMINAL_HUB_REJECTIONS = [
     /^duplicate$/i,                        // the hub already holds this action key
-    /^stale \(retracted generation\)$/i,   // ingest fence; it only ever hardens 
+    /^stale \(retracted generation\)$/i,   // ingest fence; it only ever hardens
     /^invalid\b/i,                         // structural reject of the payload's own fields
     /^insufficient quorum\b/i,             // the sigs ride in the payload and never change
     /\b(is|are) required$/i,               // api.js missing-field guards
@@ -57,9 +57,9 @@ class HubClient {
     constructor(hubUrl, apiKey){
         this.hubUrl = hubUrl || process.env.HUB_API_URL || '';
         this.apiKey = apiKey || process.env.HUB_API_KEY || '';
-        //  interim credential scoping: when the hub gates its retraction
-        // rails (push*reorg) behind a dedicated HUB_REORG_API_KEY, the reorg
-        // pushes must carry that key; everything else keeps the bulk key.
+        // Interim credential scoping: when the hub gates its retraction rails
+        // (push*reorg) behind a dedicated HUB_REORG_API_KEY, the reorg pushes
+        // must carry that key; everything else keeps the bulk key.
         // Unset = legacy single-key behavior.
         this.reorgApiKey = process.env.HUB_REORG_API_KEY || this.apiKey;
         this.enabled = !!this.hubUrl;
@@ -78,7 +78,6 @@ class HubClient {
                 block_time:   blockTime
             });
         } catch (err) {
-            // Best-effort: log and continue
             console.warn('HubClient: pushChainTip failed:', err);
         }
     }
@@ -103,9 +102,9 @@ class HubClient {
     //                  this source_chain whose action_index is >= this value.
     // toActionIndex (optional): upper bound for a CLOSED-range retraction. The live retraction
     // omits it (open-ended is safe before forward processing resumes); a DEFERRED retraction from
-    // the queue passes it so a row re-published at A' inside the original range is not wiped (5296).
-    // retractionGeneration (optional, item 5308): the rollback's PRE-bump push generation. Both the
-    // live and deferred retractions carry it so the hub fences the delete to push_generation <= it,
+    // the queue passes it so a row re-published at A' inside the original range is not wiped.
+    // retractionGeneration (optional): the rollback's PRE-bump push generation. Both the live and
+    // deferred retractions carry it so the hub fences the delete to push_generation <= it,
     // leaving a row re-published at a recycled action_index (higher generation) intact.
     async retractPriceRange(sourceChain, fromActionIndex, toActionIndex, retractionGeneration){
         if(!this.enabled) return;
@@ -123,8 +122,8 @@ class HubClient {
     // sourceChain:     the chain this indexer serves (BTC/LTC/DOGE)
     // fromActionIndex: lowest rolled-back action_index; the hub retracts relay rows for
     //                  this source_chain whose source_action_index is >= this value.
-    // toActionIndex (optional): closed-range upper bound for a deferred retraction (see 5296).
-    // retractionGeneration (optional, item 5308): see retractPriceRange.
+    // toActionIndex (optional): closed-range upper bound for a deferred retraction.
+    // retractionGeneration (optional): see retractPriceRange.
     async retractXcallRange(sourceChain, fromActionIndex, toActionIndex, retractionGeneration){
         if(!this.enabled) return;
         let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
@@ -141,8 +140,8 @@ class HubClient {
     // sourceChain:     the chain this indexer serves (BTC/LTC/DOGE)
     // fromActionIndex: lowest rolled-back action_index; the hub retracts matches for this
     //                  source_chain whose a_action_index/b_action_index is >= this value.
-    // toActionIndex (optional): closed-range upper bound for a deferred retraction (see 5296).
-    // retractionGeneration (optional, item 5308): see retractPriceRange (fenced per-leg by the hub).
+    // toActionIndex (optional): closed-range upper bound for a deferred retraction.
+    // retractionGeneration (optional): see retractPriceRange (fenced per-leg by the hub).
     async retractMatchRange(sourceChain, fromActionIndex, toActionIndex, retractionGeneration){
         if(!this.enabled) return;
         let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
@@ -152,7 +151,7 @@ class HubClient {
     }
 
     // Throw on an application-level hub rejection a retry could still clear, so the durable
-    // outbox RETAINS the row instead of deleting it (item 4279). _call resolves any
+    // outbox RETAINS the row instead of deleting it. _call resolves any
     // error-free JSON-RPC envelope, so before this every rejection read as a delivery:
     // HubPushQueue._attempt called markHubPushDelivered and XChainIndexer's post-commit
     // path did the same, which destroyed the only remaining copy of a price the hub had
@@ -163,8 +162,8 @@ class HubClient {
         if(reason === null) return result;
         if(TERMINAL_HUB_REJECTIONS.some(rx => rx.test(reason))){
             // Terminal: a replay carries the same payload into the same verdict, so keep
-            // today's drop. Never silently, though - a rail stopped by the ingest fence is a
-            // standing condition someone has to clear, and  is the log line that says so.
+            // today's drop. Never silently, though: a rail stopped by the ingest fence is a
+            // standing condition an operator has to clear, and this is the log line that says so.
             console.warn('HubClient: ' + method + ' rejected terminally by the hub (' +
                 reason + '); dropping the queued row');
             return result;
@@ -174,7 +173,6 @@ class HubClient {
         throw err;
     }
 
-    // Make a JSON-RPC 2.0 call to the hub
     _call(method, params, apiKeyOverride){
         return new Promise((resolve, reject) => {
             let parsed = url.parse(this.hubUrl);

@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Strict `^<id>` address-reference rejection flag-day .
+ * Strict `^<id>` address-reference rejection flag-day.
  *
  * db.resolveAddressRef turns a wire `^<id>` address reference back into its
  * canonical address string. When the reference is malformed (`^007`, `^0x10`,
@@ -31,7 +31,7 @@
  *    DEPLOY_SLASH_DEST_ADDRESS_VALID flag-day is live.
  *  - ISSUE.TRANSFER / TRANSFER_SUPPLY skip their checks on the genesis path.
  *
- * The same shape is what  cost on SEND: one address-bearing handler
+ * This same shape cost a prior incident on SEND: one address-bearing handler
  * without the follow-up check, and the failure was silent and on chain. The
  * fix is to make the RESOLVER state the verdict (db.resolveAddressRefChecked)
  * and have every call site reject on it, so a future field cannot fail open by
@@ -62,7 +62,7 @@
  ********************************************************************/
 
 // Per-chain activation heights, interpreted against the chain's own block_index.
-// Pinned to the  pre-freeze activation train, the SAME cohort and the same
+// Pinned to the mainnet pre-freeze activation train, the SAME cohort and the same
 // values as LIST_EDIT_RESOLUTION_ACTIVATION in list_edit_resolution_activation.js
 // (which in turn rides BET_STATUS_STATE_HASH_ACTIVATION in stateHash.js): all three
 // are execution-path validity changes on the same deploy train, so operators reason

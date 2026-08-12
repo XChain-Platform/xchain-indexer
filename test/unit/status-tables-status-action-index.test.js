@@ -13,7 +13,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * : the per-block expiry sweep (getExpiredItems) probes
+ * the per-block expiry sweep (getExpiredItems) probes
  * order_statuses / swap_statuses / dispenser_statuses filtered by
  * status_id (the index_statuses 'open' join) and needs action_index for
  * the latest-status check. A composite (status_id, action_index) index
@@ -54,7 +54,7 @@ function standaloneIndexes(table){
     return out;
 }
 
-describe(' status-table composite (status_id, action_index) index @regression', function(){
+describe('status-table composite (status_id, action_index) index @regression', function(){
 
     for(const table of TABLES){
         describe(table, function(){

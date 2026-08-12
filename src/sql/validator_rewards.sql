@@ -21,8 +21,8 @@ CREATE TABLE validator_rewards (
     round_reference     BIGINT UNSIGNED,                  -- round number or attestation ref
     amount              VARCHAR(250) NOT NULL,
     block_index         BIGINT UNSIGNED NOT NULL,
-    -- MATERIALIZATION block . block_index above is the reward's EARN block, which for
-    -- an  derived anchor/archive reward is the checkpoint's SNAPSHOT_BLOCK S, a height the
+    -- MATERIALIZATION block. block_index above is the reward's EARN block, which for
+    -- a derived anchor/archive reward is the checkpoint's SNAPSHOT_BLOCK S, a height the
     -- BTC indexer has already passed by the time the mirrored attestation matures. The row is
     -- actually created while processing BTC block B >= S, so a reorg to any height H in (S, B]
     -- orphans the block that MINTED the row while leaving block_index = S below the delete's

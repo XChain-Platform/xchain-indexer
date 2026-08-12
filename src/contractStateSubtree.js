@@ -11,7 +11,7 @@
  **********************************************************************
  *
  * contract_state_root derivation (SPV sub-tree spec §3 Stage A; design in
- * claude/specs/spv-state-subtree-extension.md).
+ * ).
  *
  * One SMT leaf per live (contract_index, state_key), keyed by
  * merkle.contractStateKey()'s XCHAIN_CST domain. This module owns the whole
@@ -50,7 +50,7 @@
  * pre-orphan leaf without anyone deriving a "keys to undo" set, because the
  * root it threads from never contained the orphaned write.
  *
- * ---- ROW-TO-LEAF MAPPING (frozen 2026-07-28 by the A0 run, ) ------
+ * ---- ROW-TO-LEAF MAPPING (frozen 2026-07-28 by the A0 run) ------
  *
  * 1. Latest row per (contract_index, state_key) by MAX(id), grouped on the
  *    BINARY collation, mirroring db.getContractState.

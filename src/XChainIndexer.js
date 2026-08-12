@@ -47,7 +47,7 @@ const DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS = 60000;
 // Return the cadence actually in force. One reader feeds both the poll timer and the staleness
 // boundary below, so the two interval contracts cannot disagree: deriving the boundary from the
 // DEFAULT while the timer honoured the override made a 10s poll report fresh until 180s instead
-// of 30s, and a 10-minute poll report stale after three minutes (item 4461). The read stays at
+// of 30s, and a 10-minute poll report stale after three minutes. The read stays at
 // CALL time and is deliberately not hoisted to module load: api.js requires this module before
 // running its own dotenv.config(), so a load-time read cannot see HUB_CONFIG_POLL_INTERVAL_MS
 // from the documented `.env` and would silently revert the knob to the 60s default.
@@ -55,7 +55,7 @@ function effectiveHubConfigPollIntervalMs(){
     return parseInt(process.env.HUB_CONFIG_POLL_INTERVAL_MS, 10) || DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS;
 }
 // An overlay older than this is reported `stale`. Three poll intervals tolerates a couple of
-// missed/slow polls before flagging: a purely operational outage-observability margin (#3199).
+// missed/slow polls before flagging: a purely operational outage-observability margin.
 // This is independent of the WS_WATERMARK_GRACE constants (600s price/oracle, 120s match),
 // which gate consensus-critical block-processing barriers; the two serve different concerns
 // and their values need not (and do not) match.
@@ -77,14 +77,14 @@ function hubConfigStaleness(lastHubConfigFetchAt, now){
 // alone is not a wedge: a BTC-mainnet indexer's price mirror sits perpetually ~1
 // block behind the decoder tip, so the height-keyed price-sync barrier defers the
 // newest block on almost every poll (stallReason='price_sync_barrier') even though
-// the counter advances every few seconds as the mirror publishes each round
-// . Used by api.js's /status HTTP-code contract so the xchain-node
+// the counter advances every few seconds as the mirror publishes each round.
+// Used by api.js's /status HTTP-code contract so the xchain-node
 // container healthcheck only reports unhealthy on a real stall. `lastBlockCommittedAt`
 // and `now` are epoch-ms; graceMs is the no-progress window a stall must exceed.
 // A stall with no committed block yet (lastBlockCommittedAt == null) is NOT wedged:
 // a slow initial catch-up must never trip the container restart loop.
 //
-// : `stallClearsAtMs` is the wall-clock instant a time-keyed barrier can FIRST
+// `stallClearsAtMs` is the wall-clock instant a time-keyed barrier can FIRST
 // be satisfied, or null when the stall has no such instant. A block stamped in the
 // future (Bitcoin permits ~2h ahead of median-time-past, and miner clocks routinely run
 // minutes fast) cannot have its eligible price-round set finalized until that time
@@ -154,7 +154,7 @@ class XChainIndexer {
         // an operator can tell WHY lag is growing (a sync-barrier stall, a circuit
         // breaker, and a host fault otherwise all look identical: a rising lag).
         this.stallReason = null;
-        // : wall-clock (epoch ms) at which the CURRENT stall's barrier can first be
+        // Wall-clock (epoch ms) at which the CURRENT stall's barrier can first be
         // satisfied, or null when the stall has no such instant. Only the time-keyed barriers
         // set it, because only they wait on wall clock: a future-stamped block defers until
         // its own timestamp (plus the watermark grace) actually arrives. Read by stallWedged()
@@ -164,9 +164,9 @@ class XChainIndexer {
         // Wall-clock (epoch ms) of the most recent SUCCESSFUL block commit, or null until the
         // first block commits. Stamped at the commit point alongside the stallReason clear, and
         // read by the /status healthcheck to tell an advancing-but-barrier-deferring indexer
-        // (healthy) from a genuinely wedged one (see stallWedged / ).
+        // (healthy) from a genuinely wedged one (see stallWedged).
         this.lastBlockCommittedAt = null;
-        // #2736: set true when the decoder has written a durable REORG_HALT marker (a reorg it
+        // Set true when the decoder has written a durable REORG_HALT marker (a reorg it
         // could not safely rewind). Surfaced on /health so a halted decoder is not mistaken for
         // ordinary idle/lag. Updated by _checkDecoderReorgHalt(); the log-tick counter keeps the
         // periodic reminder from firing every tight poll.
@@ -199,7 +199,7 @@ class XChainIndexer {
         // retried rather than validated against a stale price copy.
         this.priceSyncTimeoutMs = parseInt(process.env.HUB_PRICE_SYNC_TIMEOUT_MS || '60000');
 
-        //  action-scoped barrier state, all node-local and never hashed.
+        // Action-scoped barrier state, all node-local and never hashed.
         // priceBarrierBlock      - the block the two flags below describe.
         // priceBarrierSkipped    - the price/oracle barriers were skipped for it because
         //                          priceReadPredicate proved no transaction-borne price
@@ -292,7 +292,7 @@ class XChainIndexer {
         }
     }
 
-    // : decide whether this block takes the price/oracle mirror barriers, and record
+    // Decide whether this block takes the price/oracle mirror barriers, and record
     // that decision for db._assertPriceBarrierNotSkipped(). Returns true to wait.
     //
     // Three ways to end up waiting, and the last two are the safety rails:
@@ -305,7 +305,7 @@ class XChainIndexer {
     // there is no mirror and the barriers never ran in the first place, so flagging a skip
     // there would arm the choke-point assertion against reads that were always legitimate
     // and wedge the node on its first priced block.
-    // : the wall-clock instant at which a time-keyed hub-sync barrier can FIRST be
+    // The wall-clock instant at which a time-keyed hub-sync barrier can FIRST be
     // satisfied for a block, or null when that cannot be determined. Every such barrier has
     // the same escape hatch (`streamWatermark >= blockTime + grace`), and the watermark only
     // advances as real time does, so a block stamped in the FUTURE cannot clear before
@@ -381,7 +381,6 @@ class XChainIndexer {
     async start(){
         console.log('Starting up ' + this.name + ' v' + this.version + '...');
 
-        // Get indexer configuration
         this.config = config.getConfig();
 
         // Create instance of the utility class, sharing the indexer's single
@@ -430,10 +429,10 @@ class XChainIndexer {
             if(process.env.HUB_DB_SYNC_ENABLED === 'true'){
                 this.hubDbSync = new HubDbSync(this.hubDb, {
                     coin: this.config['COIN'],
-                    //  signed retractions: keys the RETRACTION_SIGNING flag-day
+                    // Signed retractions: keys the RETRACTION_SIGNING flag-day
                     // and SWQ activation for quorum-class retraction verification.
                     network: this.config['NETWORK'],
-                    // Receive-side retraction authority for our own chain :
+                    // Receive-side retraction authority for our own chain:
                     // the mirror refuses hub-broadcast reorg retractions of THIS
                     // chain's rows unless their generation fence is below our own
                     // push_generations value, i.e. a rollback we actually performed.
@@ -481,16 +480,14 @@ class XChainIndexer {
             }
         }
 
-        // Prove the #3087 consensus-version pin is a no-op on this host BEFORE any
+        // Prove the consensus-version pin is a no-op on this host BEFORE any
         // activation is evaluated. Throws (aborting boot, and with it the rollout on
         // this host) if the compiled pin disagrees with the version the pre-pin code
         // would have resolved here. See protocol_changes.assertConsensusVersionPin.
         changes.assertConsensusVersionPin();
 
-        // Create instance of the protocol changes class
         this.protocolChanges = new changes(this);
 
-        // Create instance of the mapper class
         this.mapper = new mapper(this);
 
         // Create xchain-utxo-tracker client (used by DISPENSER fresh-address check)
@@ -498,14 +495,12 @@ class XChainIndexer {
         if(!this.utxoTracker.enabled)
             console.log('WARNING: UTXO_TRACKER_URL / UTXO_TRACKER_API_PORT not set. DISPENSER fresh-address check will reject all non-owner dispensers');
 
-        // Create instance of the actions class and pass database connection instances to it
         this.actions = new actions(this);
 
         // Genesis ledger bootstrap (Counterparty/Dogeparty name-ownership injection at the
         // configured genesis block; no-op when GENESIS_BLOCK is unset). See genesis.js.
         this.genesis = new Genesis(this.actions, this.indexerDb, this.config, this.util);
 
-        // Create instance of the rollback class and pass database connection instances to it
         this.rollback = new rollback(this);
 
         // Verify the Decoder database exists
@@ -561,7 +556,7 @@ class XChainIndexer {
             // schema_migrations ledger, so this is a no-op once applied.
             await this.indexerDb.runMigrations();
 
-            // Invariant probe (#5052/#4844/#5026 arming precondition): the deterministic
+            // Invariant probe (a precondition for arming the dense-id rules): the deterministic
             // address/ticker id counter (getNextAddressId = MAX(id)+1) and every wire ^<id>
             // resolution assume every index row carries a non-NULL, rollback-stable block_index.
             // Out-of-band rows (legacy AUTO_INCREMENT, NULL block_index) are invisible to ^id
@@ -573,7 +568,7 @@ class XChainIndexer {
             // Warn if the reorg cursor is all-legacy (would replay the full decoder reorg history on
             // the next reorg detection - REORG-4). Surfaced, not auto-fixed; operator does a reindex.
             await this.indexerDb.warnOnLegacyReorgCursor();
-            // #2736: surface a pre-existing decoder REORG_HALT at startup (loud) so a node booting
+            // Surface a pre-existing decoder REORG_HALT at startup (loud) so a node booting
             // behind a halted decoder is not silently mistaken for a slow catch-up.
             await this._checkDecoderReorgHalt();
 
@@ -622,11 +617,12 @@ class XChainIndexer {
         // that never adopts a transaction and sees only committed state. apiView may be absent on a
         // minimal test double, so fall back to the raw db.
         //
-        // That fallback is a TEST AFFORDANCE and NOT a production path . The real Database
+        // That fallback is a TEST AFFORDANCE and NOT a production path. The real Database
         // always defines apiView(), so against a live indexer the raw-db branch is unreachable; a
         // production handle without it is a wiring bug to fix, not a case to serve. Do not spread this
         // shape to the federation READ sites in api.js and stake-source.js: there a silent raw-db
-        // fallback would re-open exactly the dirty read REORG-1 and  exist to prevent. When a
+        // fallback would re-open exactly the dirty read REORG-1 and federation READ isolation exist
+        // to prevent. When a
         // test double trips over a missing apiView, the fix belongs to the DOUBLE (give it
         // `apiView(){ return this }`), never to the call site. Same reading applies to the two other
         // guarded sites, rollback.js and health.js, which point back here.
@@ -648,17 +644,16 @@ class XChainIndexer {
             // block-height magnitude: heights increase across repeated reorgs, so a height compare
             // silently drops every reorg after the first. Do not re-introduce a height comparison.
             let lastProcessedReorgId = await indexerReorgView.getLastProcessedReorgId();
-            // #2735: pass the cursor marker's stored witness so getReorgsSince can catch an
+            // Pass the cursor marker's stored witness so getReorgsSince can catch an
             // out-of-band decoder rebuild that reused this cursor id for a different event
             // (under-cursor silent skip). Null for legacy markers -> old over-cursor guard only.
             let cursorWitness        = (lastProcessedReorgId != null)
                                         ? await indexerReorgView.getLastProcessedReorgWitness() : null;
             let unprocessedReorgs    = await this.decoderDb.getReorgsSince(lastProcessedReorgId, cursorWitness);
-            // #2736: keep the decoder-halt flag current on every poll (loud on transition, then
+            // Keep the decoder-halt flag current on every poll (loud on transition, then
             // periodic). Advisory: it does not gate block processing, only makes the halt visible.
             await this._checkDecoderReorgHalt();
 
-            // Get last processed block from Indexer and Decoder databases
             lastDecoderBlock       = await this.decoderDb.getBlockIndex('decoder', 'last');
             this.lastDecoderBlock  = lastDecoderBlock;
             lastIndexerBlock       = await indexerReorgView.getBlockIndex('indexer', 'last');
@@ -700,7 +695,7 @@ class XChainIndexer {
                 // the rollback is skipped once lastIndexerBlock has dropped below minReorgBlock.
                 // Oldest-first so a partial-write crash only advances the cursor as far as is durable.
                 for(let reorg of unprocessedReorgs){
-                    // #2735: capture the decoder event's time + payload hash as the marker
+                    // Capture the decoder event's time + payload hash as the marker
                     // witness, so a later out-of-band decoder rebuild that reuses this id for a
                     // different event is caught (fail-loud RE-1) instead of silently skipped.
                     let witness = await this.decoderDb.getReorgEventWitness(reorg.id);
@@ -742,7 +737,6 @@ class XChainIndexer {
             // interrupted mid-flight.
             while( !this.stopFlag && !this.util.isNull(lastIndexerBlock) && !this.util.isNull(lastDecoderBlock) && this.util.bclt(lastIndexerBlock, lastDecoderBlock) ){
 
-                // Set flag to indicate not fully synced
                 this.synced = false;
 
                 // Bounded reorg-detection latency during long catch-up (REORG-6). Reorg events are
@@ -755,7 +749,7 @@ class XChainIndexer {
                 // Bounds the mixed-chain window to REORG_RECHECK_BLOCKS instead of the whole backlog;
                 // convergence is unchanged (the eventual rollback unwinds every block >= the reorg).
                 if((Number(lastIndexerBlock) % REORG_RECHECK_BLOCKS) === 0){
-                    // #2735: witness the cursor here too (same under-cursor protection).
+                    // Witness the cursor here too (same under-cursor protection).
                     let midCursorWitness = (lastProcessedReorgId != null)
                                             ? await indexerReorgView.getLastProcessedReorgWitness() : null;
                     let midReorgs = await this.decoderDb.getReorgsSince(lastProcessedReorgId, midCursorWitness);
@@ -765,7 +759,6 @@ class XChainIndexer {
                     }
                 }
 
-                // Start tracking time to parse block
                 var debugTimer = this.util.startTimer();
 
                 // Determine the next block to parse. Do NOT advance lastIndexerBlock yet:
@@ -804,7 +797,7 @@ class XChainIndexer {
                 // block's time. No barrier when hub-db sync is disabled (single-host: the local
                 // hub DB is the hub itself, always current).
                 //
-                // : the time-keyed barrier is NOT conditioned on the
+                // The time-keyed barrier is NOT conditioned on the
                 // NATIVE_FEE_PRICE_TIME_GATE flag-day. It was originally introduced as the
                 // twin of that gate's fee-validation change (H-3: db.getLatestPrice
                 // selectByTime), but native fees are not the only time-keyed reader of
@@ -828,7 +821,7 @@ class XChainIndexer {
                 // mirror (hub unreachable, watermark frozen) defers, which is the intent.
                 // Strictly-stricter than the fee query below the flag-day, which is the safe
                 // direction: an extra wait can delay a block but can never change its verdict.
-                // : the two barriers are ADDITIVE on BTC, not alternatives. The height
+                // The two barriers are ADDITIVE on BTC, not alternatives. The height
                 // barrier alone does NOT imply time coverage, and FIAT settlement reads by
                 // time, so BTC needed the time barrier as much as LTC/DOGE did.
                 //
@@ -859,7 +852,7 @@ class XChainIndexer {
                 // fee path and diverge a from-genesis replay. The two gate different readers of
                 // the same table and both are needed.
                 //
-                // : only blocks that can actually READ the mirror take these waits.
+                // Only blocks that can actually READ the mirror take these waits.
                 // The hub finalizes one price round per 600s, the same cadence as a BTC
                 // block, so a tip block is essentially never covered by a round anchored at
                 // or after it and burns the full timeout every time. A block that reads no
@@ -880,7 +873,7 @@ class XChainIndexer {
                         // it against a stale price copy. No transaction is open yet.
                         console.warn('Deferring block ' + blockToParse + ' (price sync): ', err);
                         this.stallReason = 'price_sync_barrier';
-                        this.stallClearsAt = null;          // : height case can clear early
+                        this.stallClearsAt = null;          // the height case can clear early
                         break;
                     }
                 }
@@ -891,7 +884,7 @@ class XChainIndexer {
                         // Same defer semantics as the height barrier above.
                         console.warn('Deferring block ' + blockToParse + ' (price time-sync): ', err);
                         this.stallReason = 'price_sync_barrier';
-                        // : this barrier waits on WALL CLOCK. It is satisfied once a
+                        // This barrier waits on WALL CLOCK. It is satisfied once a
                         // round at/past blockTime is mirrored, or the hub's stream watermark
                         // passes blockTime + grace; both advance only as real time does. Record
                         // that instant so a future-stamped block is not reported as a wedge
@@ -910,7 +903,7 @@ class XChainIndexer {
                 // (not BTC height), so unlike the price barrier this applies on every chain. The
                 // barrier is a no-op when sync is disabled or the mirror holds no oracle prices at
                 // all (deployments without FIAT oracles), so non-oracle chains never stall on it.
-                // Same  gate as the price barriers above: oracle_prices has the same
+                // Same barrier gate as the price barriers above: oracle_prices has the same
                 // reader set (FIAT settlement via reverseOraclePriceMatch, the DISPENSER
                 // create's oracle-fee quote), so a block that reaches neither reads nothing
                 // here either, and the choke-point assertion covers the rest.
@@ -979,7 +972,7 @@ class XChainIndexer {
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (direct call-presence barrier): ', err);
                         this.stallReason = 'call_presence_barrier';
-                        this.stallClearsAt = null;          // : no watermark fallback to key on
+                        this.stallClearsAt = null;          // no watermark fallback to key on
                         break;
                     }
                 }
@@ -994,7 +987,7 @@ class XChainIndexer {
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (cross-chain snapshot sync): ', err);
                         this.stallReason = 'snapshot_sync_barrier';
-                        this.stallClearsAt = null;          // : snapshot presence, not wall clock
+                        this.stallClearsAt = null;          // snapshot presence, not wall clock
                         break;
                     }
                 }
@@ -1009,7 +1002,7 @@ class XChainIndexer {
                 // Mark that deterministic, block-stamped id assignment has begun. The
                 // out-of-band createAddress/createTicker branch (NULL block_index, legacy
                 // AUTO_INCREMENT) warns if it ever runs after this point, since an out-of-band
-                // insert would bump MAX(id) and silently offset the dense counter (#5052).
+                // insert would bump MAX(id) and silently offset the dense counter.
                 this.indexerDb.deterministicIndexingStarted = true;
                 // Light-client state commitment (SPV spec §4): when active, install a
                 // fresh per-block touched-key set so the ledger choke point
@@ -1036,7 +1029,6 @@ class XChainIndexer {
                     // Process the block with a watchdog timeout to detect deadlocks or infinite loops
                     let blockProcessing = this.indexerDb.runInTxEpoch(txEpoch, async () => {
 
-                        // Initialize VM compilation cache for this block
                         if(this.actions.vm)
                             this.actions.vm.beginBlock();
 
@@ -1071,7 +1063,7 @@ class XChainIndexer {
                         // utility.processCrossChainCalls)
                         await this.util.processCrossChainCalls(this.actions, this.indexerDb, blockToParse, blockTime);
 
-                        //  Option C: derive matured anchor/archive publisher rewards from the
+                        // Derive matured anchor/archive publisher rewards from the
                         // hub-mirrored anchor_reward_attestations rows (re-verifying the XANCPUB
                         // quorum against this node's own oracle_publish set). BTC-only + gated by the
                         // derive-relocation flag-day; below the gate (or off-BTC) this is a no-op, so
@@ -1155,12 +1147,12 @@ class XChainIndexer {
                     // A block advanced, so we are no longer stalled. Clear any deferral
                     // reason set by a barrier timeout or host fault on a prior iteration, and
                     // stamp the commit time so the /status healthcheck can tell an
-                    // advancing-but-barrier-deferring indexer from a wedged one .
+                    // advancing-but-barrier-deferring indexer from a wedged one.
                     this.stallReason = null;
-                    this.stallClearsAt = null;              // : stall is over, so is its deadline
+                    this.stallClearsAt = null;              // the stall is over, so is its deadline
                     this.lastBlockCommittedAt = Date.now();
 
-                    // : the block is committed, so nothing else may attribute a price
+                    // The block is committed, so nothing else may attribute a price
                     // read to it. Clearing priceBarrierSkipped keeps the choke-point
                     // assertion inert outside block processing, and clearing the force flag
                     // (only when THIS block was the escalated one) keeps the escalation a
@@ -1169,7 +1161,6 @@ class XChainIndexer {
                     if(this.priceBarrierForceBlock === blockToParse)
                         this.priceBarrierForceBlock = null;
 
-                    // Log the total parse time for this block
                     let parseTime = this.util.getTimer(debugTimer);
                     console.log('Block Parsed' + "\t: " + lastIndexerBlock + ' [ledger:' + ledger + ' actions:' + actions + ' contracts:' + contracts + '] (' + parseTime + ')');
 
@@ -1208,7 +1199,7 @@ class XChainIndexer {
                     // Roll back all writes for this block so the DB stays at the end of the previous block
                     await this.indexerDb.rollbackTransaction();
 
-                    // : the block is no longer in flight, so no read can be attributed
+                    // The block is no longer in flight, so no read can be attributed
                     // to it. priceBarrierForceBlock is deliberately NOT cleared here: when
                     // this rollback IS the price-barrier escalation, that flag is what makes
                     // the retry take the barrier instead of skipping again and looping.
@@ -1228,9 +1219,8 @@ class XChainIndexer {
                             `HALTING block processing (not committing; a fabricated result would fork). ` +
                             `Retrying after ${this.config['BLOCK_CHECK_INTERVAL']}ms; will resume when the host recovers.`);
                         this.stallReason = 'vm_executor_unavailable';
-                        this.stallClearsAt = null;          // : a host fault has no deadline
+                        this.stallClearsAt = null;          // a host fault has no deadline
                     } else {
-                        // Log the error
                         this.util.logError(`Error while parsing block data at block ${lastIndexerBlock}:`, error);
                     }
 
@@ -1243,7 +1233,6 @@ class XChainIndexer {
 
             }
 
-            // Set flag to indicate fully synced and listening for block
             if(!this.synced && !this.util.bclt(lastIndexerBlock, lastDecoderBlock)){
                 this.synced = true;
                 console.log('Listening for blocks...');
@@ -1389,7 +1378,7 @@ class XChainIndexer {
     // hub that returns the bare map, seq stays 0 and the overlay is never re-applied
     // (matching pre-existing startup-only behavior). The timer is unref'd so it never
     // keeps the process alive. Interval is HUB_CONFIG_POLL_INTERVAL_MS (default 60s).
-    // #2736: probe the decoder for a durable REORG_HALT marker and keep this.decoderReorgHalted
+    // Probe the decoder for a durable REORG_HALT marker and keep this.decoderReorgHalted
     // in sync. A halted decoder cannot advance, so the indexer would otherwise just look idle or
     // lagging. Log LOUD on the transition into halted (naming the required operator action, a full
     // decoder resync), then only periodically while it stays halted so a tight poll does not spam
@@ -1430,9 +1419,9 @@ class XChainIndexer {
         if(!this.hubClient || !this.hubClient.enabled) return;
         if(this._hubConfigPollTimer) return;
         // Same reader the staleness boundary is derived from, so the reported boundary is
-        // always three of THESE intervals (item 4461).
+        // always three of THESE intervals.
         const intervalMs = effectiveHubConfigPollIntervalMs();
-        // Guarded against self-overlap like _startStateTreeMetric below (#2247): a
+        // Guarded against self-overlap like _startStateTreeMetric below: a
         // getallconfigs call outrunning the interval (restarting/partitioned hub)
         // must not stack overlapping in-flight polls.
         this._hubConfigPollRunning = false;
@@ -1472,14 +1461,14 @@ class XChainIndexer {
                 // eligible: _mergeHubParams is idempotent, so re-merging the (full) tree is
                 // safe. A missing watermark (0) keeps the strict path so a seq-only hub does
                 // NOT re-merge every poll. This relies on the full-tree fetch and stays that
-                // way: the hub's since_updated_at delta boundary is now inclusive `>=` (hub
-                // item #2265), so a new-enough hub no longer drops the same-second row, but
+                // way: the hub's since_updated_at delta boundary is now inclusive `>=`,
+                // so a new-enough hub no longer drops the same-second row, but
                 // an older hub's strict `>` still would - the full-tree fetch is the
                 // deployment-skew-proof choice, so do not thread the delta cursor here.
                 // Hub restart / restore-from-older-snapshot: a REGRESSED seq or watermark
                 // hits none of the three gates below, and the Math.max clamp keeps the stale
                 // high value forever, so config re-apply stops until the hub climbs back past
-                // it (#3884). Treat a regression as a cursor reset: re-merge and adopt the
+                // it. Treat a regression as a cursor reset: re-merge and adopt the
                 // served values verbatim, the way the startup overlay already does
                 // (_applyHubConfigOverlay assigns seq/watermark unclamped). _mergeHubParams is
                 // idempotent. Alarm loudly rather than self-heal in silence: a hub that lost
@@ -1607,7 +1596,7 @@ module.exports = XChainIndexer;
 module.exports.DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS   = DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS;
 // Exported as functions, not constants: the cadence the timer uses and the boundary derived from
 // it are both env-dependent at call time, and a snapshot taken at require() would be wrong for
-// any consumer loaded before dotenv.config() (item 4461).
+// any consumer loaded before dotenv.config().
 module.exports.effectiveHubConfigPollIntervalMs      = effectiveHubConfigPollIntervalMs;
 module.exports.hubConfigStalenessLimitMs             = hubConfigStalenessLimitMs;
 module.exports.hubConfigStaleness                    = hubConfigStaleness;

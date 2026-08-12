@@ -137,7 +137,7 @@ function v5Params(overrides = {}) {
     return p;
 }
 
-// ANCHOR v6 params (archive-reward, ): v1 fields + the wrapper sig list, then the
+// ANCHOR v6 params (archive-reward): v1 fields + the wrapper sig list, then the
 // PUBLISHER pubkey + the attestation sig list appended at the tail.
 function v6Params(archiveJson, overrides = {}) {
     let b64 = (overrides.archive_b64 !== undefined) ? overrides.archive_b64 : gz64(archiveJson);
@@ -194,7 +194,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         // quorum active at every block, so pin the legacy path: the oracle_publish
         // mocks here carry no source/weight. Weighted coverage: StakeWeightedQuorum.test.js.
         swqStub = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
-        // : these cases assert the LEGACY DOGE-side reward derivation (still the
+        // these cases assert the LEGACY DOGE-side reward derivation (still the
         // behavior below the derive-relocation flag-day / on mainnet, where the gate is an
         // inert placeholder). Pin the derive gate OFF so anchor.js runs the DOGE-side write;
         // the at/above-gate skip + BTC-side relocation are covered by anchorRewardDerive.test.js
@@ -331,7 +331,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         assert.ok(indexer.indexerDb.reconcileAnchorRewardWinner.calledOnceWith(0, 'anchor_BTC'));
     });
 
-    it(': at/above the derive-relocation gate the DOGE-side write is SKIPPED (relocated to BTC), anchor still valid', async function () {
+    it('at/above the derive-relocation gate the DOGE-side write is SKIPPED (relocated to BTC), anchor still valid', async function () {
         deriveGateStub.returns(true);                                   // derive relocated to the BTC indexer
         let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 4, COIN: 'DOGE' });
         await handler.parse(v4Params(), data, null);
@@ -406,7 +406,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         assert.deepStrictEqual(firstArgs, secondArgs);
     });
 
-    // ── v6: archive publisher-attestation + anchor_archive reward derivation  ──
+    // ── v6: archive publisher-attestation + anchor_archive reward derivation ──
     it('v6 with a valid publisher attestation is valid, stores the archive, and DERIVES the anchor_archive reward', async function () {
         let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 6, COIN: 'DOGE' });
         await handler.parse(v6Params(ARCHIVE_JSON), data, null);
@@ -476,7 +476,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
 
     it('v6 replay guard: a match_batch_seq below the recorded max is stale', async function () {
         // Both watermarks are behind-worthy: seq 2 < 3 AND the payload's checkpoint
-        // seq (0) is behind the newest archive's (5).  made the second half
+        // seq (0) is behind the newest archive's (5). made the second half
         // load-bearing, so a fixture that only pinned the batch seq would now pass
         // for the wrong reason.
         indexer.indexerDb.getArchiveReplayWatermarks.resolves({ batchSeq: 3, checkpointSeq: 5 });
@@ -486,22 +486,22 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
     });
 
-    // . The rebase resets the hub's dense batch-seq allocator
+    // The rebase resets the hub's dense batch-seq allocator
     // (StateAnchorPublisher._getNextBatchSeq counts its own tables) while this
     // watermark, read from replayed anchor_actions, returns to the pre-rebase max.
     // Both directions are pinned here because the two failures are opposite and
     // equally bad: reject the fresh batch and the archive rail is dead for as many
     // batches as history had; admit the old one and a stale archive can be replayed.
-    it(' v1 replay guard: a restarted batch seq is ACCEPTED when its wrapper checkpoint advances', async function () {
+    it('v1 replay guard: a restarted batch seq is ACCEPTED when its wrapper checkpoint advances', async function () {
         indexer.indexerDb.getArchiveReplayWatermarks.resolves({ batchSeq: 40, checkpointSeq: 900000 });
         let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
         // Post-rebase: the hub's counter restarted at 0, but checkpoint_seq is
-        // snapshot_block  and the chain kept moving.
+        // snapshot_block and the chain kept moving.
         await handler.parse(v1Params(ARCHIVE_JSON, { batch_seq: '0', seq: '961000' }), data, null);
         assert.strictEqual(data['STATUS'], 'valid');
     });
 
-    it(' v1 replay guard: a stale batch seq with a stale checkpoint is still rejected', async function () {
+    it('v1 replay guard: a stale batch seq with a stale checkpoint is still rejected', async function () {
         indexer.indexerDb.getArchiveReplayWatermarks.resolves({ batchSeq: 40, checkpointSeq: 900000 });
         let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
         // A genuine replay is signature-bound to its original canonical, so it can
@@ -510,7 +510,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         assert.ok(String(data['STATUS']).startsWith('invalid: MATCH_BATCH_SEQ (stale'));
     });
 
-    it(' v1 replay guard: a second batch riding the SAME checkpoint is not treated as stale', async function () {
+    it('v1 replay guard: a second batch riding the SAME checkpoint is not treated as stale', async function () {
         indexer.indexerDb.getArchiveReplayWatermarks.resolves({ batchSeq: 40, checkpointSeq: 961000 });
         let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
         // Equal, not ahead: one cadence can publish a second batch draining leftover
@@ -520,7 +520,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         assert.strictEqual(data['STATUS'], 'valid');
     });
 
-    it(' v6 replay guard: the reward rail rides the same exemption, so a restarted batch still derives its reward', async function () {
+    it('v6 replay guard: the reward rail rides the same exemption, so a restarted batch still derives its reward', async function () {
         indexer.indexerDb.getArchiveReplayWatermarks.resolves({ batchSeq: 40, checkpointSeq: 900000 });
         let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 6, COIN: 'DOGE' });
         await handler.parse(v6Params(ARCHIVE_JSON, { batch_seq: '0', seq: '961000' }), data, null);
@@ -644,7 +644,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         });
 
         it('an orphan chunk is still stored unjudged: there is no head to authenticate against', async function () {
-            // Legitimate early chunks exist (the head can land last, ), so an
+            // Legitimate early chunks exist (the head can land last), so an
             // orphan must NOT be rejected on authorship. Excluding a junk orphan is the
             // read path's job (ARCHIVE_CHUNK_SET_SQL), not this one's.
             indexer.indexerDb.getAnchorV1ByBatchSeq.resolves(null);
