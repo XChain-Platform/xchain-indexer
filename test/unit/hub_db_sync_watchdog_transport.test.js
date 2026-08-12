@@ -27,21 +27,10 @@ const WebSocketServer = ws.WebSocketServer || ws.Server;
 
 const HubDbSync = require('../../src/hub_db_sync.js');
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-/* Poll `predicate` until it holds or the deadline passes; returns what it last
- * saw. Use this for a case that asserts an event DID happen: a fixed sleep long
- * enough to be safe on a loaded box is dead time on every other run, and one
- * short enough to be quick is the flake. A case asserting an event did NOT
- * happen has nothing to poll and keeps its fixed settle. */
-async function waitFor(predicate, maxMs = 5000, intervalMs = 25) {
-    const deadline = Date.now() + maxMs;
-    while (Date.now() < deadline) {
-        if (predicate()) return true;
-        await sleep(intervalMs);
-    }
-    return predicate();
-}
+// Shared poll-until / fixed-settle helpers. waitUntil() is for a case that
+// asserts an event DID happen; a case asserting an event did NOT happen has
+// nothing to poll and keeps its fixed sleep() settle.
+const { sleep, waitUntil } = require('../helpers/wait.js');
 
 describe('HubDbSync watchdog measures transport not processing (ITEM 2477) @regression @tier2', function () {
     this.timeout(15000);
@@ -71,7 +60,7 @@ describe('HubDbSync watchdog measures transport not processing (ITEM 2477) @regr
 
         sync = makeSync();
         // A slow row apply holds _msgChain busy far longer than the 150ms watchdog timeout.
-        sinon.stub(sync, '_handleRowEvent').callsFake(() => new Promise((res) => setTimeout(res, 600)));
+        sinon.stub(sync, '_handleRowEvent').callsFake(() => sleep(600));
 
         await sync._connectWebSocket();                 // resolves on 'ready'
         const terminateSpy = sinon.spy(sync.ws, 'terminate');
@@ -99,7 +88,7 @@ describe('HubDbSync watchdog measures transport not processing (ITEM 2477) @regr
         const terminateSpy = sinon.spy(sync.ws, 'terminate');
 
         // Send NO further frames after 'ready'. Idle grows past the 150ms timeout.
-        await waitFor(() => terminateSpy.called);
+        await waitUntil(() => terminateSpy.called);
 
         assert.strictEqual(terminateSpy.called, true,
             'a half-open socket that stops delivering frames must still be terminated');

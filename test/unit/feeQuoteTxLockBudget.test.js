@@ -23,6 +23,9 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 const Utility  = require('../../src/utility.js');
 const Actions  = require('../../src/actions.js');
 const Database = require('../../src/db.js');
+// Fixed-delay helper: one case schedules a release, another settles a window to
+// assert an unbounded waiter did NOT give up — neither has an event to poll.
+const { sleep } = require('../helpers/wait.js');
 
 const FEE_DEST = 'feeDestinationAddr111111111111111';
 
@@ -97,7 +100,7 @@ describe('fee-quote transaction-lock budget ', function () {
             let db = makeLock();
             await db._acquireTxLock();                       // holder
             let waiting = db._acquireTxLock(1000);
-            setTimeout(() => db._releaseTxLock(), 10);
+            sleep(10).then(() => db._releaseTxLock());
             await waiting;                                    // must not reject
         });
 
@@ -116,7 +119,7 @@ describe('fee-quote transaction-lock budget ', function () {
             await db._acquireTxLock();
             let settled = false;
             let waiting = db._acquireTxLock().then(() => { settled = true; });
-            await new Promise(r => setTimeout(r, 60));
+            await sleep(60);
             assert.strictEqual(settled, false, 'no budget means no give-up');
             db._releaseTxLock();
             await waiting;

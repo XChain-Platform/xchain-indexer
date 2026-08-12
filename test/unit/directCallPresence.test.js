@@ -30,6 +30,9 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert         = require('assert');
 const sinon          = require('sinon');
 const XChainIndexer  = require('../../src/XChainIndexer.js');
+// The barrier's injected util.sleep is a spy over the shared fixed-delay helper,
+// so the poll loop under test uses a real (spied) timer, not a raw setTimeout.
+const { sleep }      = require('../helpers/wait.js');
 
 const NOW_S = () => Math.floor(Date.now() / 1000);
 
@@ -44,7 +47,7 @@ function ctx(opts){
         }
         return opts.rows || [{ ts: null }];
     });
-    const sleepSpy = sinon.spy((ms) => new Promise(r => setTimeout(r, ms)));
+    const sleepSpy = sinon.spy((ms) => sleep(ms));
     return {
         hubDb: opts.noHubDb ? null : { doQuery },
         callPresenceTimeoutMs: opts.timeoutMs != null ? opts.timeoutMs : 10000,

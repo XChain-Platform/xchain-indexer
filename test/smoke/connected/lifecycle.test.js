@@ -25,8 +25,9 @@
  * Notes:
  *   - start() runs an infinite while(true) loop; we fire it without await,
  *     then call stop() to break the loop, then await the promise.
- *   - The loop sleeps 5000ms (BLOCK_CHECK_INTERVAL) between iterations, so
- *     we wait 3 s for initialization + first iteration before asserting sync.
+ *   - The loop sleeps 5000ms (BLOCK_CHECK_INTERVAL) between iterations, so we
+ *     poll indexer.isSynced() (waitUntil) rather than sleeping a fixed window
+ *     before asserting sync.
  *   - XChainIndexer has no destroy() method; after stop() we manually close
  *     the MariaDB pools (decoderDb.pool / indexerDb.pool) so Mocha can exit.
  */
@@ -47,6 +48,7 @@ process.env.npm_package_name    = process.env.npm_package_name    || 'xchain-ind
 
 const assert       = require('assert');
 const XChainIndexer = require('../../../src/XChainIndexer.js');
+const { waitUntil } = require('../../helpers/wait.js');
 
 function buildIndexer() {
     return new XChainIndexer(
@@ -66,17 +68,6 @@ async function closeIndexerPools(indexer) {
     } catch (_) { /* ignore */ }
 }
 
-// Wait up to `maxMs` for predicate() to return true, checking every
-// `intervalMs`. Returns true if the predicate fired, false if it timed out.
-async function waitFor(predicate, maxMs, intervalMs) {
-    const deadline = Date.now() + maxMs;
-    while (Date.now() < deadline) {
-        if (predicate()) return true;
-        await new Promise(r => setTimeout(r, intervalMs));
-    }
-    return predicate(); // one final check
-}
-
 describe('Smoke: indexer lifecycle @regression @tier3', function () {
 
     // -------------------------------------------------------------------------
@@ -90,8 +81,11 @@ describe('Smoke: indexer lifecycle @regression @tier3', function () {
         // Fire the loop without awaiting: it runs until stopFlag is set
         const startPromise = indexer.start();
 
-        // Allow time for DB init and the first loop iteration to complete
-        await new Promise(r => setTimeout(r, 3000));
+        // Wait until the loop has initialised and caught up (isSynced flips true)
+        // so stop() lands on a running loop, not one still initialising. Bounded;
+        // if it never syncs we still fall through to stop() — SM-14 only pins that
+        // stop() resolves start(), not that the indexer reached sync.
+        await waitUntil(() => indexer.isSynced(), 10000, 200);
 
         // Signal the loop to exit on its next iteration
         indexer.stop();
@@ -116,7 +110,7 @@ describe('Smoke: indexer lifecycle @regression @tier3', function () {
 
         // Poll for synced state: should happen quickly when decoder DB is empty
         // or already fully indexed. Give up to 10 s before asserting.
-        const becameSynced = await waitFor(() => indexer.isSynced(), 10000, 200);
+        const becameSynced = await waitUntil(() => indexer.isSynced(), 10000, 200);
 
         assert.strictEqual(becameSynced, true,
             'Indexer did not reach synced state within 10 s. ' +

@@ -22,6 +22,9 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const Utility = require('../../../src/utility.js');
+// A deliberately slow promise, built from the shared fixed-delay helper, drives
+// the watchdog past its budget; there is no event to poll for here.
+const { sleep } = require('../../helpers/wait.js');
 
 describe('Chaos: Watchdog Timeout', function () {
     this.timeout(10000);
@@ -38,7 +41,7 @@ describe('Chaos: Watchdog Timeout', function () {
     });
 
     it('WD-02: rejects with timeout error when promise exceeds timeout', async function () {
-        const slow = new Promise(resolve => setTimeout(resolve, 5000));
+        const slow = sleep(5000);
         try {
             await util.withTimeout(slow, 50, 'slow-op');
             assert.fail('Should have thrown');
@@ -48,7 +51,7 @@ describe('Chaos: Watchdog Timeout', function () {
     });
 
     it('WD-03: timeout error message includes label', async function () {
-        const slow = new Promise(resolve => setTimeout(resolve, 5000));
+        const slow = sleep(5000);
         try {
             await util.withTimeout(slow, 50, 'block 12345');
             assert.fail('Should have thrown');
@@ -79,7 +82,7 @@ describe('Chaos: Watchdog Timeout', function () {
 
     it('WD-06: very short timeout rejects near-immediately', async function () {
         const start = Date.now();
-        const slow = new Promise(resolve => setTimeout(resolve, 10000));
+        const slow = sleep(10000);
         try {
             await util.withTimeout(slow, 1, 'instant');
             assert.fail('Should have thrown');
