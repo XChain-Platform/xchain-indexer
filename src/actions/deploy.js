@@ -39,11 +39,11 @@ const ProviderRegistry = require('../attestation/providerRegistry.js');
 const { rethrowIfInfraFault } = require('./faultGuard.js');
 const vmDeployLintPkg3 = require('../vm_deploy_lint_pkg3_activation.js');
 
-// Per-provider deadline windows, injected into the VM gateway so a constructor's
-// attestation.request() rejects an over-limit deadlineBlocks at call time rather
-// than landing on-chain and being silently rejected by the indexer DEADLINE check.
-// Sourced from the single provider registry so the two caps cannot drift.
-const PROVIDER_DEADLINE_WINDOWS = new ProviderRegistry().getDeadlineWindows();
+// Per-provider deadline windows are built per instance in the constructor
+// (this.providerDeadlineWindows) from the CONFIGURED registry. A module-scoped
+// snapshot cannot see config.ATTESTATION.PROVIDERS, so the VM enforced DEFAULTS
+// while attest.js validated against the overlay, letting the VM accept a request
+// the indexer then rejects ().
 
 // Maximum smart-contract code size (64 KiB). Vendored single source of truth:
 // ../protocol/constants.js (byte-identical to xchain-documentation/protocol/
@@ -76,6 +76,13 @@ class Deploy {
         this.indexerDb = action.indexerDb;
         this.util      = action.util;
         this.mapper    = action.mapper;
+
+        // Per-provider deadline windows injected into the VM gateway so a constructor's
+        // attestation.request() rejects an over-limit deadlineBlocks at call time rather
+        // than landing on-chain and being silently rejected by the indexer DEADLINE check.
+        // Built from the CONFIGURED registry, the same construction attest.js uses, so the
+        // VM cap and the host cap cannot drift under a config.ATTESTATION.PROVIDERS overlay.
+        this.providerDeadlineWindows = new ProviderRegistry(this.config).getDeadlineWindows();
 
         // Define list of known FORMATS
         this.formats = {};
@@ -468,7 +475,9 @@ class Deploy {
         // Chunked (v2/v3) deploys charge base + constructor only: each v4 carrier already
         // paid the per-byte component for the bytes it put on-chain, so the assembly does
         // not re-charge per byte (net ≈ a single-shot inline deploy of the same source).
-        let gasCost = schedule.VM_DEPLOY_BASE + (isChunked ? 0 : (codeBytes * schedule.VM_DEPLOY_PER_BYTE));
+        // Priced through util.vmGasCost, the one arithmetic the static quote also uses, so
+        // the quoted native output cannot drift from this acceptance number ().
+        let gasCost = this.util.vmGasCost(schedule, isChunked ? 'DEPLOY_CHUNKED' : 'DEPLOY_INLINE', codeBytes);
         let fee = this.util.bcmul(gasCost, this.config['GAS_PRICE'], 8);
 
         // Get source address balances
@@ -536,7 +545,9 @@ class Deploy {
         // runs with no args, and an arg-expecting one deployed with none throws inside
         // execute() and REJECTS the deploy (constructorResult.success handling below)
         // instead of committing an uninitialised contract. Gate on the LOCAL block time
-        // (mainnet 2026-10-01 cohort); below it the trigger is byte-identical to today.
+        // (mainnet 2026-08-07 cohort, = the CONTROLLER_GUARD / VM_BANNED_ASYNC contract-era
+        // timestamp 1786060800 in protocol_changes.js); below it the trigger is byte-identical
+        // to today.
         let initStrict = await this.actions.protocolChanges.isEnabled('DEPLOY_INIT_STRICT', data['BLOCK_INDEX']);
         let runConstructor = initStrict ? (hasInitialize || !!data['CONSTRUCTOR_PARAMS']) : !!data['CONSTRUCTOR_PARAMS'];
 
@@ -600,7 +611,7 @@ class Deploy {
                 crossChainData:   await this.indexerDb.getCrossChainDataForVM(data['BLOCK_INDEX']),
                 // : expose each poll's electorate TICK in the VM snapshot at/after the flag-day.
                 pollData:         await this.indexerDb.getPollResultsForVM(data['BLOCK_INDEX'], await this.actions.protocolChanges.isEnabled('VOTE_POLL_TICK_VISIBLE', data['BLOCK_INDEX'])),
-                providerDeadlines: PROVIDER_DEADLINE_WINDOWS
+                providerDeadlines: this.providerDeadlineWindows
             });
 
             // Defense-in-depth (consensus): mirror the gasUsed clamp in actions/execute.js so a

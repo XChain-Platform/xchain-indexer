@@ -61,7 +61,6 @@
 
 const zlib    = require('zlib');
 const crypto  = require('crypto');
-const mathjs  = require('mathjs');
 const ed25519 = require('./ed25519.js');
 const swq     = require('./stake_weighted_quorum.js');
 const eq      = require('./equivocation_header.js');
@@ -74,6 +73,12 @@ const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
 // SAME heads the live mirror path reads, so a new publisher-bearing version added to
 // ARCHIVE_HEAD_VERSIONS cannot reach one path and silently skip the other.
 const { ARCHIVE_HEAD_VERSIONS_SQL } = require('./stateHash.js');
+
+// Capabilities whose archived snapshot is re-resolvable from the BTC capability stakes.
+// Both cross-checks gate on this one set (_verifyStakes for its delegated-key admission,
+// _verifyCompleteness for the whole check), so a future snapshot kind cannot silently reach
+// one and skip the other.
+const QUORUM_CAPABILITIES = new Set(['cross_chain', 'oracle_publish', 'price', 'attestation']);
 
 class AnchorRecovery {
 
@@ -305,60 +310,152 @@ class AnchorRecovery {
         return archive;
     }
 
-    // Every archived snapshot pubkey must hold ANY active stake at its block.
-    async _verifyStakes(snaps){
-        for(let s of snaps){
-            let rows = await this.btcDb.doQuery(
-                `SELECT 1 FROM stakes st
-                 JOIN index_pubkeys ip ON ip.id = st.signing_pubkey_id
-                 JOIN index_statuses ix ON ix.id = st.status_id
-                 WHERE ip.pubkey = ? AND ix.status = 'valid'
-                   AND st.activation_block <= ?
-                   AND (st.deactivation_block IS NULL OR st.deactivation_block > ?)
-                 LIMIT 1`,
-                [String(s.signing_pubkey).toLowerCase(), Number(s.snapshot_block), Number(s.snapshot_block)]);
-            if(!rows || rows.length === 0)
-                throw new Error('archived snapshot pubkey ' + String(s.signing_pubkey).substring(0, 16) +
-                                '... has no on-chain stake at block ' + s.snapshot_block + ' (fabricated set?)');
-        }
-    }
-
-    // REC-SUBSET-1: every SOURCE that qualifies for a capability at the snapshot_block
-    // must appear in the archived snapshot for that (capability, block); a dropped
-    // qualifying source under-counts S and lets an evicted minority clear quorum.
-    //
-    // The completeness threshold is derived FROM THE ARCHIVE ITSELF: a = the minimum
-    // per-source weight the archive admits for the group. Every archived source has
-    // weight >= a, so a >= the hub's true MIN_STAKE at that block; therefore every source
-    // the resolver reports at threshold `a` is one an honest hub would also have included.
-    // Requiring resolved-sources ⊆ archived-sources thus NEVER false-rejects an honest
-    // full snapshot (which is the disaster-recovery safety property that matters) while
-    // catching any honest source dropped to shrink S. A truncated resolution cannot be
-    // trusted to be complete, so it fails closed (mirrors meetsStakeThreshold + XHUB-TRUNC-2).
-    async _verifyCompleteness(snaps, network){
-        // Group archived snapshot rows by (capability, snapshot_block).
+    // Group archived snapshot rows by (capability, snapshot_block) - the locus both
+    // cross-checks resolve at, since the on-chain effective signer set is defined per
+    // capability at a block.
+    _groupSnaps(snaps){
         let groups = new Map();
         for(let s of snaps){
             let key = String(s.capability) + '@' + Number(s.snapshot_block);
             if(!groups.has(key)) groups.set(key, { capability: String(s.capability), block: Number(s.snapshot_block), rows: [] });
             groups.get(key).rows.push(s);
         }
-        for(let g of groups.values()){
+        return [...groups.values()];
+    }
+
+    // REC-EXIST-1: every archived snapshot pubkey must be a real on-chain signer for its
+    // capability at its block. The probe runs in two stages and the ORDER is the fix:
+    //
+    //   1. the direct-stake query (_hasDirectStake) answers first, byte-unchanged. It is the
+    //      fabrication guard, needs no resolver, and is subject to no result cap - so every
+    //      key the delegation-blind check already accepted is still accepted.
+    //   2. ONLY a key that query rejects is looked up in the delegation-aware effective
+    //      signer set. A DELEGATED signing key is authorized by a staked source and holds no
+    //      `stakes` row of its own (db.js _effectiveCapabilitySetSql / _stakeWeightsSql UNION
+    //      active `delegations`), so a direct-only check rejected the WHOLE batch for any
+    //      honest archive carrying a delegated-only validator. That is the bug this closes.
+    //
+    // Stage 2 resolves through getValidatorsByCapability and NEVER through the stake-WEIGHT
+    // resolver, even at a block where stake-weighted quorum is active. Only the count
+    // resolver is key-complete: _cappedStakeWeightsSql bounds each source to
+    // STAKE_WEIGHT_MAX_KEYS_PER_SOURCE (64) effective keys and DELIBERATELY does not set
+    // `truncated` when it drops the excess (a source's spare keys cannot change its weight,
+    // which is all the weighted path is for). Used as a per-KEY oracle it would silently deny
+    // an honest source's 65th key - a fresh instance of the very false-reject this fixes.
+    //
+    // The threshold is deliberately LOOSE (minStake '0'), not the capability MIN_STAKE: this
+    // is the existence guard, and _verifyCompleteness is the bar. slashCapabilityStake
+    // rewrites `stakes.amount` IN PLACE (db.js), so re-resolving a historical block AFTER a
+    // slash reports the post-slash amount; a MIN_STAKE-thresholded existence check would then
+    // false-reject an honest archive, while at '0' the source still resolves.
+    //
+    // Truncation at VALIDATOR_QUERY_LIMIT cannot prove a key ABSENT, so it fails closed
+    // (mirrors _verifyCompleteness + XHUB-TRUNC-2). That cap binds only on stage 2, whose
+    // input is keys stage 1 has already rejected: a truncated resolution therefore turns a
+    // certain rejection into one that names the cap, and can never reject a key stage 1 admitted.
+    //
+    // Deliberately NOT added here: rejecting a key that is revoked (stake_key_revocations) or
+    // slashed at/before the block. The resolver does exclude those, but enforcing it means
+    // resolving EVERY archived key through a capped query - re-imposing stage 2's cap on the
+    // keys stage 1 answers for. Qualification is _verifyCompleteness's job; this stays an
+    // existence guard.
+    async _verifyStakes(snaps){
+        // A handle exposing only doQuery (unit fixtures, an embedder holding a raw query
+        // handle) has no resolver, so stage 1 is the whole answer - exactly as
+        // _verifyCompleteness degrades to skipping. The recovery bin always builds a
+        // BTC-scoped Database, so production runs both stages.
+        let canResolve = typeof this.btcDb.getValidatorsByCapability === 'function';
+        for(let g of this._groupSnaps(snaps)){
+            let undirected = [];
+            for(let s of g.rows)
+                if(!(await this._hasDirectStake(s))) undirected.push(s);
+            if(undirected.length === 0) continue;
+            if(!canResolve || !QUORUM_CAPABILITIES.has(g.capability))
+                throw new Error('archived snapshot pubkey ' + String(undirected[0].signing_pubkey).substring(0, 16) +
+                                '... has no on-chain stake at block ' + undirected[0].snapshot_block + ' (fabricated set?)');
+            let resolved = (await this.btcDb.getValidatorsByCapability(g.capability, g.block, '0')) || [];
+            let effective = new Set(resolved.map(v => String(v.pubkey).toLowerCase()));
+            for(let s of undirected){
+                if(effective.has(String(s.signing_pubkey).toLowerCase())) continue;
+                if(resolved.truncated === true)
+                    throw new Error('archived ' + g.capability + ' snapshot at block ' + g.block +
+                                    ' cannot be existence-checked: the delegation resolution is truncated at' +
+                                    ' VALIDATOR_QUERY_LIMIT, so pubkey ' + String(s.signing_pubkey).substring(0, 16) +
+                                    '... cannot be proven absent');
+                throw new Error('archived snapshot pubkey ' + String(s.signing_pubkey).substring(0, 16) +
+                                '... has no on-chain stake or delegation for ' + g.capability +
+                                ' at block ' + g.block + ' (fabricated set?)');
+            }
+        }
+    }
+
+    // Stage-1 existence probe: does this pubkey hold ANY active stake at its snapshot block?
+    // Delegation-blind by design - a false answer is escalated to the effective-set lookup,
+    // never treated as a rejection on its own.
+    async _hasDirectStake(s){
+        let rows = await this.btcDb.doQuery(
+            `SELECT 1 FROM stakes st
+             JOIN index_pubkeys ip ON ip.id = st.signing_pubkey_id
+             JOIN index_statuses ix ON ix.id = st.status_id
+             WHERE ip.pubkey = ? AND ix.status = 'valid'
+               AND st.activation_block <= ?
+               AND (st.deactivation_block IS NULL OR st.deactivation_block > ?)
+             LIMIT 1`,
+            [String(s.signing_pubkey).toLowerCase(), Number(s.snapshot_block), Number(s.snapshot_block)]);
+        return !!(rows && rows.length > 0);
+    }
+
+    // REC-SUBSET-1: every SOURCE that qualifies for a capability at the snapshot_block
+    // must appear in the archived snapshot for that (capability, block); a dropped
+    // qualifying source under-counts S and lets an evicted minority clear quorum.
+    //
+    // The threshold used to be derived FROM THE ARCHIVE (the smallest per-source weight the
+    // archive admitted), which let the archive choose its own bar: dropping every lower-weight
+    // qualifying source RAISES that minimum, the resolver then returns only the high-weight
+    // sources the archive kept, and resolved ⊆ archived passes while the dropped sources are
+    // missing from the stake denominator S. No override is passed now, so db.js applies this
+    // node's LOCAL per-capability MIN_STAKE (the coin config) and the archive can no longer
+    // move the bar. A truncated resolution cannot be trusted complete, so it fails closed
+    // (mirrors meetsStakeThreshold + XHUB-TRUNC-2).
+    //
+    // The local floor is NOT the bar the archive was built at, and this is a known residual,
+    // not an assumption. The authoritative threshold is the HUB's block-versioned governance
+    // MIN_STAKE: db.js honours a caller-supplied minStake VERBATIM precisely because the local
+    // config can drift between independently-operated indexers, and xchain-hub's
+    // CapabilitySnapshot passes its own governance value (refusing the snapshot outright when
+    // its registry is live and has none). So a governance MIN_STAKE ABOVE this node's local
+    // floor makes this check STRICTER than the honest hub that wrote the archive: the resolver
+    // reports sources the hub correctly excluded, and completeness false-rejects an honest
+    // archive, halting disaster recovery. Below it, the check merely under-catches. The local
+    // floor is used anyway because it is the only bar in this repo the archive cannot move,
+    // and failing closed on a security check beats trusting the attacker's own threshold; the
+    // error below names the bar so an operator can recognise a governance-drift false-reject.
+    //
+    // What narrows the exposure without closing it: XChainHub asserts its operator MIN_STAKE
+    // against the canonical BTC.js STAKING.CAPABILITIES at boot, so a conforming hub's
+    // governance value EQUALS this floor and the two agree. That assertion is a boot-time
+    // check against the hub's own config copy, it is bypassable
+    // (XCHAIN_HUB_SKIP_MIN_STAKE_ASSERT=1), and it says nothing about a threshold that changed
+    // across the block history the archive spans. Closing it properly needs an as-of-block
+    // governance-threshold source (the indexer mirrors no hub MIN_STAKE today) - .
+    //
+    // Also still trusted, and NOT closed here: the archived per-source `amount`. Weight
+    // equality against a re-resolution would false-reject an honest archive, because
+    // slashCapabilityStake rewrites `stakes.amount` in place (db.js), so a historical
+    // re-resolution reports post-slash weights; closing that vector needs the same as-of-block
+    // reconstruction, from capability_slash_debits - .
+    async _verifyCompleteness(snaps, network){
+        for(let g of this._groupSnaps(snaps)){
             // Only the quorum-bearing capabilities are re-resolvable from BTC stakes; skip
             // any other archived group (none today, but future-proof against a new snapshot kind).
-            if(g.capability !== 'cross_chain' && g.capability !== 'oracle_publish' && g.capability !== 'price' && g.capability !== 'attestation')
+            if(!QUORUM_CAPABILITIES.has(g.capability))
                 continue;
-            // Archive-derived threshold: smallest admitted per-source weight (exact bignumber).
-            let a = null;
-            for(let r of g.rows){
-                let w = mathjs.bignumber((r.amount === null || r.amount === undefined) ? '0' : String(r.amount));
-                if(a === null || w.lt(a)) a = w;
-            }
-            let minStake = (a === null) ? '0' : a.toFixed();
+            // Pass no override so db.js applies this node's local capability MIN_STAKE - see
+            // the governance-threshold residual above .
             let weighted = swq.isStakeWeightedQuorumActive(g.block, network);
             let resolved = weighted
-                ? await this.btcDb.getStakeWeightsByCapability(g.capability, g.block, minStake)
-                : await this.btcDb.getValidatorsByCapability(g.capability, g.block, minStake);
+                ? await this.btcDb.getStakeWeightsByCapability(g.capability, g.block, null)
+                : await this.btcDb.getValidatorsByCapability(g.capability, g.block, null);
             resolved = resolved || [];
             // A resolution that overflowed its cap cannot be trusted complete -> fail closed.
             if(resolved.truncated === true)
@@ -372,7 +469,9 @@ class AnchorRecovery {
                     if(!archivedSources.has(src))
                         throw new Error('archived ' + g.capability + ' snapshot at block ' + g.block +
                                         ' is incomplete: qualifying source ' + src.substring(0, 24) +
-                                        '... (weight >= ' + minStake + ') was dropped (subset-forge?)');
+                                        '... (qualifying at this node\'s local ' + g.capability +
+                                        ' MIN_STAKE) was dropped (subset-forge?) - if the hub\'s governance' +
+                                        ' MIN_STAKE at that block was HIGHER, this is a false reject, see ');
                 }
             } else {
                 // Legacy count quorum: completeness is by signing pubkey.

@@ -20,7 +20,9 @@
  * adds a consensus-relevant column before this indexer migrates cannot
  * silently fork the ledger. MUST stay in lockstep with
  * xchain-hub/src/hub-schema-version.js; bump both together whenever the mirror
- * row shape changes.
+ * row shape changes OR the mirror set gains a table (a table this indexer does
+ * not know about fails by omission rather than by column, which forks the ledger
+ * just as quietly).
  *
  ********************************************************************/
 
@@ -28,6 +30,15 @@
 // mirrors both (source, pubkey) rows for a multi-source key. Lockstep with
 // xchain-hub/src/hub-schema-version.js (already at v2); a v1 indexer must reject
 // the v2 stream until its own uq_cap_snap is widened (2026-07-20 migration).
-const HUB_SCHEMA_VERSION = 2;
+//
+// v3 : the mirror set gained anchor_reward_attestations (HUB_STATE_TABLES
+// in hub_db_sync.js). It carries the hub's XANCPUB publisher-attestation quorum,
+// from which this indexer derives the COLLECT-spendable anchor/archive reward, so
+// an indexer predating the table under-derives a money rail rather than merely
+// missing history. That table shipped under an unbumped v2, so a pre-
+// indexer accepted a current hub instead of failing closed; v3 restores the gate.
+// A v2 indexer must reject the v3 stream until it has applied the 2026-07-21
+// anchor-reward-attestations migration.
+const HUB_SCHEMA_VERSION = 3;
 
 module.exports = { HUB_SCHEMA_VERSION };

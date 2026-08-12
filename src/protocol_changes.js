@@ -922,6 +922,13 @@ class ProtocolChanges {
         // deposit/withdraw tightening (ungated - a leading-zero deposit was ALREADY a stranded-funds
         // bug, so rejecting forked nothing valid), a leading-zero contract stake currently produces a
         // VALID, correct row, so tightening it is a live validity change and MUST be gated.
+        // EXEC-1 () joins the same flag-day: EXECUTE's CONTRACT_ACTION_INDEX was also
+        // /^\d+$/, and there a leading-zero index is NOT benign - the VM hashes Number(index)
+        // into the attestation request_id preimage while the host re-hashes the raw EMITTER
+        // string, so '007' makes the two disagree and the host rejects an ATTEST the VM
+        // accepted. Same gate because it is the same validity change (an index form that is
+        // valid today stops being valid), and it also rejects indexes past the safe-integer
+        // range, whose Number() rounding is the same divergence class.
         this.addChange('CONTRACT_INDEX_CANONICAL', '2.0.0',1786060800,0,0,0,0,0);
 
         // SLASH-1: slashCapabilityStake Pass 1 filtered `activation_block <= block`, so a
@@ -935,6 +942,20 @@ class ProtocolChanges {
         // slashing does. slashCapabilityStake is indexer-only (the follower mirrors the zeroed rows),
         // so this is not a byte-locked twin.
         this.addChange('SLASH_BURNS_PENDING_STAKE', '2.0.0',0,0,0,961000,0,0);
+
+        // SLASH-2 (): an XORACLE equivocation proof must agree on the ORACLE ROUND
+        // carried in the signed JSON, not just on the BTC height in the EQUIV key. Oracle
+        // rounds advance on wall-clock while the captured BTC tip can stand still, so an
+        // honest validator signing rounds N and N+1 at one tip produced two messages sharing
+        // the header prefix `EQUIV|XORACLE|<height>|0||` with different content, which
+        // slash.js read as equivocation and burned its ENTIRE bond (permanent, fleet-wide
+        // disqualification). Same gate as SLASH-1 and for the same reason: real slashing is
+        // inert below the BTC-anchored EQUIV activation HEIGHT (equivocation_header.js
+        // EQUIV_HEADER_ACTIVATION.mainnet = 961000), so a height gate lands the fix exactly
+        // where the rule it narrows can first fire. Gated rather than unconditional because
+        // this REJECTS proofs a pre-fix node accepts, and a half-upgraded fleet disagreeing
+        // on a SLASH's validity is a ledger fork.
+        this.addChange('SLASH_ORACLE_ROUND_DISCRIMINATED', '2.0.0',0,0,0,961000,0,0);
 
         // H-3: deterministic price_snapshots selection for native-coin fee
         // validation on NON-reference chains. Price rounds are anchored to BTC

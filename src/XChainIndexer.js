@@ -44,12 +44,24 @@ const { blockMayReadPrice }    = require('./priceReadPredicate.js');
 // multiple of this interval means the hub is unreachable. Overridable via
 // HUB_CONFIG_POLL_INTERVAL_MS. Purely operational/observability, NOT a consensus parameter.
 const DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS = 60000;
+// Return the cadence actually in force. One reader feeds both the poll timer and the staleness
+// boundary below, so the two interval contracts cannot disagree: deriving the boundary from the
+// DEFAULT while the timer honoured the override made a 10s poll report fresh until 180s instead
+// of 30s, and a 10-minute poll report stale after three minutes (item 4461). The read stays at
+// CALL time and is deliberately not hoisted to module load: api.js requires this module before
+// running its own dotenv.config(), so a load-time read cannot see HUB_CONFIG_POLL_INTERVAL_MS
+// from the documented `.env` and would silently revert the knob to the 60s default.
+function effectiveHubConfigPollIntervalMs(){
+    return parseInt(process.env.HUB_CONFIG_POLL_INTERVAL_MS, 10) || DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS;
+}
 // An overlay older than this is reported `stale`. Three poll intervals tolerates a couple of
 // missed/slow polls before flagging: a purely operational outage-observability margin (#3199).
 // This is independent of the WS_WATERMARK_GRACE constants (600s price/oracle, 120s match),
 // which gate consensus-critical block-processing barriers; the two serve different concerns
 // and their values need not (and do not) match.
-const HUB_CONFIG_STALENESS_LIMIT_MS = DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS * 3;
+function hubConfigStalenessLimitMs(){
+    return effectiveHubConfigPollIntervalMs() * 3;
+}
 
 // Shared age/staleness computation for the hub-config overlay, used by both health.js and api.js
 // so the age math and the staleness threshold live in exactly one place. `now` and
@@ -57,7 +69,7 @@ const HUB_CONFIG_STALENESS_LIMIT_MS = DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS * 3;
 function hubConfigStaleness(lastHubConfigFetchAt, now){
     if(lastHubConfigFetchAt == null) return { ageSeconds: null, stale: false };
     let ageMs = now - lastHubConfigFetchAt;
-    return { ageSeconds: Math.floor(ageMs / 1000), stale: ageMs > HUB_CONFIG_STALENESS_LIMIT_MS };
+    return { ageSeconds: Math.floor(ageMs / 1000), stale: ageMs > hubConfigStalenessLimitMs() };
 }
 
 // Discriminate a genuinely WEDGED indexer from one that is merely deferring the
@@ -1417,7 +1429,9 @@ class XChainIndexer {
     _startHubConfigPolling(){
         if(!this.hubClient || !this.hubClient.enabled) return;
         if(this._hubConfigPollTimer) return;
-        const intervalMs = parseInt(process.env.HUB_CONFIG_POLL_INTERVAL_MS, 10) || DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS;
+        // Same reader the staleness boundary is derived from, so the reported boundary is
+        // always three of THESE intervals (item 4461).
+        const intervalMs = effectiveHubConfigPollIntervalMs();
         // Guarded against self-overlap like _startStateTreeMetric below (#2247): a
         // getallconfigs call outrunning the interval (restarting/partitioned hub)
         // must not stack overlapping in-flight polls.
@@ -1590,7 +1604,11 @@ class XChainIndexer {
 }
 
 module.exports = XChainIndexer;
-module.exports.DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS = DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS;
-module.exports.HUB_CONFIG_STALENESS_LIMIT_MS       = HUB_CONFIG_STALENESS_LIMIT_MS;
-module.exports.hubConfigStaleness                  = hubConfigStaleness;
-module.exports.stallWedged                         = stallWedged;
+module.exports.DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS   = DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS;
+// Exported as functions, not constants: the cadence the timer uses and the boundary derived from
+// it are both env-dependent at call time, and a snapshot taken at require() would be wrong for
+// any consumer loaded before dotenv.config() (item 4461).
+module.exports.effectiveHubConfigPollIntervalMs      = effectiveHubConfigPollIntervalMs;
+module.exports.hubConfigStalenessLimitMs             = hubConfigStalenessLimitMs;
+module.exports.hubConfigStaleness                    = hubConfigStaleness;
+module.exports.stallWedged                           = stallWedged;

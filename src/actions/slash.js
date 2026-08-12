@@ -95,6 +95,19 @@ const ENGINE_CAPABILITY = {
     [eq.ENGINE_TAGS.CONFIG]:     CONFIG_CAPABILITY,
 };
 
+// Read the (round, btc_block_height) pair out of an XORACLE signed content ().
+// The content is ed25519.buildPriceV0Payload's JSON.stringify output, so a parse failure
+// or a non-integer field means "this content does not declare the value" (null), never a
+// zero: coercing an absent round to 0 would make two absent rounds compare EQUAL and
+// re-open the false-pair hole this exists to close.
+function _parseOracleContent(content){
+    let obj = null;
+    try { obj = JSON.parse(String(content)); } catch(e){ return null; }
+    if(obj === null || typeof obj !== 'object' || Array.isArray(obj)) return null;
+    let num = (v) => Number.isInteger(v) ? v : null;
+    return { round: num(obj.round), height: num(obj.btc_block_height) };
+}
+
 class Slash {
 
     constructor(action){
@@ -205,7 +218,11 @@ class Slash {
         // confirm OFFENDER_PUBKEY was in CAPABILITY's locked snapshot at that block.
         let snapshotBlock = null;
         if(!error){
-            let slot = await this._resolveSlot(engineTag, roundId, msgA.substring(prefix.length), msgB.substring(prefix.length));
+            // SLASH-2 (): at/after SLASH_ORACLE_ROUND_DISCRIMINATED, an XORACLE pair
+            // must agree on the oracle round carried in-content. Gated, not unconditional,
+            // because narrowing which proofs burn a bond is a consensus acceptance rule.
+            let oracleRoundGate = await this.actions.protocolChanges.isEnabled('SLASH_ORACLE_ROUND_DISCRIMINATED', data['BLOCK_INDEX']);
+            let slot = await this._resolveSlot(engineTag, roundId, msgA.substring(prefix.length), msgB.substring(prefix.length), oracleRoundGate);
             if(slot.error) error = slot.error;
             else {
                 snapshotBlock = slot.snapshotBlock;
@@ -320,7 +337,7 @@ class Slash {
     // Recover the slot's snapshot_block from the proof, deterministically per engine.
     // The two CONTENT strings (header already stripped) must agree on the block where
     // it is carried in-content; for engines that don't carry it, derive from the round.
-    async _resolveSlot(engineTag, roundId, contentA, contentB){
+    async _resolveSlot(engineTag, roundId, contentA, contentB, oracleRoundGate){
         // In-content snapshot_block field index per engine (raw canonical layout).
         const FIELD = {
             [eq.ENGINE_TAGS.DEX]:        2,   // XMATCH|match_id|snapshot_block|...
@@ -353,6 +370,32 @@ class Slash {
         if(engineTag === eq.ENGINE_TAGS.ORACLE){
             if(!/^[0-9]+$/.test(String(roundId)))
                 return { error: 'invalid: ORACLE round (not a block)' };
+            // The BTC height alone does NOT name the slot (). Oracle rounds
+            // advance on wall-clock (hub OracleRound.js), so a run of rounds can capture
+            // the SAME BTC tip; ed25519.buildPriceV0Payload keys the EQUIV header on that
+            // height with VIEW=0 and leaves the round counter inside the signed JSON. Two
+            // honest, distinct rounds at one tip therefore share the header prefix and
+            // differ in content, which reads here as equivocation and burns the whole bond
+            // of a validator that did nothing wrong. Discriminate on the in-content round:
+            // different rounds are different messages, not two versions of one.
+            //
+            // Only pairs where BOTH contents declare a round are judged. A content with no
+            // `round` cannot have come from buildPriceV0Payload, the one producer of an
+            // ORACLE-tagged canonical, and refusing to resolve those would widen the
+            // rejection surface past the bug (the fail-open leg is unreachable for a real
+            // proof: both signatures verify against the offender's own key). The
+            // btc_block_height cross-check runs on the same terms.
+            if(oracleRoundGate){
+                let pa = _parseOracleContent(contentA);
+                let pb = _parseOracleContent(contentB);
+                if(pa !== null && pb !== null){
+                    if(pa.round !== null && pb.round !== null && pa.round !== pb.round)
+                        return { error: 'invalid: ORACLE round mismatch (distinct rounds, not equivocation)' };
+                    if((pa.height !== null && pa.height !== Number(roundId)) ||
+                       (pb.height !== null && pb.height !== Number(roundId)))
+                        return { error: 'invalid: ORACLE btc_block_height (does not match ROUND_ID)' };
+                }
+            }
             return { snapshotBlock: Number(roundId) };
         }
         // XATTEST: the canonical is delimiter-less and carries no block. Recover it from

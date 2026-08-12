@@ -142,6 +142,37 @@ const XCALL_RESULT_ORPHAN_GRACE_SECONDS = 3600;
 // under the  batch because the fleet-wide replay recomputes all of it.
 const ATTEST_MAX_EXPIRIES_PER_BLOCK = 25;
 
+// ── Cross-chain settlement pass ─────────────────────────────────────────────
+// Deterministic per-block cap on the CROSS_SETTLE pass (). It was the
+// one cross-chain pass without one: processCrossChainSettlements looped every
+// finalized, effective, unsettled match the hub mirror carried, so a hub backlog
+// (or a hub the indexer had been disconnected from for a while) injected an
+// unbounded number of escrow-releasing actions into a single block transaction,
+// which is the BLOCK_PROCESS_TIMEOUT shape the XCALL and ATTEST caps above exist
+// to prevent.
+//
+// Overflow carries forward rather than being dropped: getEffectiveUnsettledMatches
+// already orders by (snapshot_block ASC, match_id ASC), quorum-agreed row content
+// and a total order, so the capped prefix is the same set on every operator no
+// matter which hub DB it mirrors, and the remainder settles next block in order.
+//
+// CONSENSUS-VISIBLE, like both siblings: the cap decides which block a settlement
+// lands in, so it moves actions rows, the contract hash and the checkpoint
+// preimage. Whether it may ship UNGATED is an operator call this file does not
+// make (), because the two facts that decide it point opposite ways.
+// CROSS_CHAIN_DEX is genesis-active on every network (protocol_changes.js, all-zero
+// thresholds), and the fresh-genesis restart of 816d1e1 moved the three TESTNET
+// chains only - that commit says in as many words that mainnet and regtest are
+// untouched - so mainnet carries history this cap would reinterpret. Ungated is
+// replay-safe there only if no mainnet block ever held more than the cap of
+// effective unsettled matches, which is a chain-state question no file in this repo
+// can answer. If it is still unanswered at deploy time, gate it in
+// protocol_changes.js rather than assume; and do not lean on the
+// ATTEST_MAX_EXPIRIES_PER_BLOCK precedent above, which shipped ungated only because
+// the  fleet-wide replay recomputed the history it reinterpreted, a vehicle
+// this cap does not have.
+const CROSS_SETTLE_MAX_PER_BLOCK = 25;
+
 // ── Token-gated content (PC-29) ─────────────────────────────────────────────
 // Fixed fractional scale for comparing FILE.GATE_MIN_AMOUNT thresholds against a
 // holder's balance. The wallet scales both sides to this many fractional digits
@@ -389,6 +420,7 @@ module.exports = {
     XCALL_MAX_CALLS_PER_BLOCK,
     XCALL_RESULT_ORPHAN_GRACE_SECONDS,
     ATTEST_MAX_EXPIRIES_PER_BLOCK,
+    CROSS_SETTLE_MAX_PER_BLOCK,
     THRESHOLD_SCALE,
     STAKE_WEIGHTED_QUORUM_ACTIVATION,
     EQUIV_HEADER_ACTIVATION,

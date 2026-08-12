@@ -274,6 +274,67 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         assert.ok(indexer.indexerDb.slashCapabilityStake.calledOnce);
     });
 
+    // ── XORACLE round discrimination (, gated SLASH_ORACLE_ROUND_DISCRIMINATED) ──
+    //
+    // The EQUIV key for XORACLE is `XORACLE|<btc_height>|0` (ed25519.buildPriceV0Payload),
+    // but oracle rounds advance on wall-clock while the captured BTC tip can stand still,
+    // so an honest validator's rounds N and N+1 share that key and differ in content. That
+    // pair used to reach STATUS=valid and burn the whole bond.
+    function priceContent(round, btcHeight, price) {
+        return JSON.stringify({
+            round: round, timestamp: 1700000000, btc_block_height: btcHeight,
+            pairs: [{ pair: 'BTCUSD', price: String(price) }]
+        });
+    }
+
+    it('REJECTS an XORACLE pair whose signed contents declare DIFFERENT rounds', async function () {
+        const height = '961123';
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE, height, 0, priceContent(100, 961123, 60000));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE, height, 0, priceContent(101, 961123, 61000));
+        const d = data();
+        await handler.parse(params('price', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.notStrictEqual(d['STATUS'], 'valid');
+        assert.ok(String(d['STATUS']).indexOf('ORACLE round mismatch') >= 0, 'got: ' + d['STATUS']);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled,
+            'an honest validator signing two distinct rounds at one BTC tip must keep its bond');
+    });
+
+    it('still ACCEPTS a real same-round XORACLE double-sign', async function () {
+        const height = '961123';
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE, height, 0, priceContent(100, 961123, 60000));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE, height, 0, priceContent(100, 961123, 61000));
+        const d = data();
+        await handler.parse(params('price', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.strictEqual(d['STATUS'], 'valid');
+        assert.deepStrictEqual(indexer.indexerDb.getValidatorsByCapability.firstCall.args, ['price', 961123]);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.calledOnce, 'genuine equivocation must still burn');
+    });
+
+    it('REJECTS an XORACLE pair whose content height disagrees with the EQUIV ROUND_ID', async function () {
+        const height = '961123';
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE, height, 0, priceContent(100, 961123, 60000));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE, height, 0, priceContent(100, 961999, 61000));
+        const d = data();
+        await handler.parse(params('price', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.notStrictEqual(d['STATUS'], 'valid');
+        assert.ok(String(d['STATUS']).indexOf('ORACLE btc_block_height') >= 0, 'got: ' + d['STATUS']);
+    });
+
+    it('below the flag-day the pre-fix behavior is byte-identical (distinct rounds still slash)', async function () {
+        ctx.protocolChanges.isEnabled = sinon.stub().callsFake(async (name) =>
+            name !== 'SLASH_ORACLE_ROUND_DISCRIMINATED');
+        const height = '961123';
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE, height, 0, priceContent(100, 961123, 60000));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE, height, 0, priceContent(101, 961123, 61000));
+        const d = data();
+        await handler.parse(params('price', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.strictEqual(d['STATUS'], 'valid', 'the gate must leave sub-flag-day acceptance untouched');
+    });
+
     // ── CHECKPOINT engine tag: two content families  ──
     // XCHECKPOINT (root canonical, snapshot_block at index 9) and XANCPUB (reward
     // attestation, snapshot_block at index 3) share the CHECKPOINT engine tag.

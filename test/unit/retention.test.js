@@ -59,6 +59,9 @@ function makeDb(){
             const cutoff = args[2];
             return [{ c: db.roots.filter(r => r.block_index <= cutoff).length }];
         }
+        // Phase 2's pre-flight cap check counts before it loads ().
+        if(sql.includes('COUNT(*)') && sql.includes('state_tree_nodes'))
+            return [{ c: db.nodes.length }];
         if(sql.startsWith('DELETE FROM state_tree_roots')){
             const cutoff = args[2];
             const before = db.roots.length;
@@ -245,6 +248,11 @@ describe('retention: phase-2 orphan reachability + reclaim', () => {
         assert.strictEqual(res.skipped, true);
         assert.strictEqual(res.reason, 'too_many_nodes');
         assert.strictEqual(db.nodes.length, 4);   // nothing deleted
+        // The cap has to bind BEFORE the load, or it bounds nothing: the guard
+        // used to run on nodes.size, after every row was already in the Map.
+        assert.ok(!db.calls.some(s => s.startsWith('SELECT node_hash')),
+            'full-table node load must never be issued above the cap');
+        assert.strictEqual(res.totalNodes, 4);
     });
 });
 

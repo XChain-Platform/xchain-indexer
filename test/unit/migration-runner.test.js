@@ -399,6 +399,123 @@ describe('Database._destructiveAutoStatement() @regression @tier1', function () 
         const offender = destructiveOf(statementsOf(raw));
         assert.ok(offender && /DROP TABLE contract_stakes/i.test(offender));
     });
+
+    // ── executable (versioned) comments: the server RUNS these ───────────
+
+    it('flags a MySQL-versioned executable comment (/*!nnnnn ... */)', function () {
+        assert.ok(destructiveOf(['/*!50000 DROP TABLE balances */']));
+        assert.ok(destructiveOf(['/*!40000 TRUNCATE balances */']));
+    });
+
+    it('flags a MariaDB-only executable comment (/*M! ... */)', function () {
+        assert.ok(destructiveOf(['/*M! DROP TABLE balances */']));
+        assert.ok(destructiveOf(['/*M!100300 DROP TABLE balances */']));
+    });
+
+    it('flags an executable comment riding inside an otherwise-additive statement', function () {
+        assert.ok(destructiveOf(['ALTER TABLE t ADD COLUMN y INT NULL /*!50000, DROP COLUMN x */']));
+    });
+
+    it('the executable-comment bypass is caught end to end from raw file text', function () {
+        const raw = '-- xchain:migration mode=auto\n/*!50000 DROP TABLE balances */;\n';
+        assert.strictEqual(modeOf(raw), 'auto');
+        const offender = destructiveOf(statementsOf(raw));
+        assert.ok(offender && /DROP TABLE balances/i.test(offender),
+            'the versioned comment payload must reach the classifier, not be stripped before it');
+    });
+
+    it('a plain (non-executable) block comment still does not trigger', function () {
+        assert.strictEqual(destructiveOf(['CREATE TABLE foo (id INT) /* DROP TABLE bar */']), null);
+        assert.strictEqual(destructiveOf(['CREATE TABLE foo (id INT)']), null);
+    });
+});
+
+describe('Database.backdatedFrontierViolation() @regression @tier1', function () {
+
+    it('reports the frontier when a pending file is dated before an applied one', function () {
+        assert.strictEqual(
+            Database.backdatedFrontierViolation('2026-07-01-late-add.sql',
+                ['2026-06-10-a.sql', '2026-08-10-b.sql']),
+            '2026-08-10-b.sql');
+    });
+
+    it('stays silent for a pending file dated after everything applied', function () {
+        assert.strictEqual(
+            Database.backdatedFrontierViolation('2026-08-11-new.sql',
+                ['2026-06-10-a.sql', '2026-08-10-b.sql']),
+            null);
+    });
+
+    it('never trips on a fresh install (empty ledger)', function () {
+        assert.strictEqual(Database.backdatedFrontierViolation('2026-01-01-first.sql', []), null);
+        assert.strictEqual(Database.backdatedFrontierViolation('2026-01-01-first.sql', null), null);
+    });
+
+    it('accepts a Map keys() iterator, which is what the apply loop passes', function () {
+        const applied = new Map([['2026-06-10-a.sql', 'h1'], ['2026-08-10-b.sql', 'h2']]);
+        assert.strictEqual(
+            Database.backdatedFrontierViolation('2026-07-01-late-add.sql', applied.keys()),
+            '2026-08-10-b.sql');
+    });
+
+    it('compares against the MAXIMUM applied name, not the last one seen', function () {
+        // Ledger rows arrive in whatever order the SELECT returns them.
+        assert.strictEqual(
+            Database.backdatedFrontierViolation('2026-07-01-late-add.sql',
+                ['2026-08-10-b.sql', '2026-06-10-a.sql']),
+            '2026-08-10-b.sql');
+    });
+
+    it('treats an equal name as applied, not backdated', function () {
+        assert.strictEqual(
+            Database.backdatedFrontierViolation('2026-08-10-b.sql', ['2026-08-10-b.sql']),
+            null);
+    });
+
+    // An undated ledger name sorts ABOVE every 2026-* name in ASCII ('a' 0x61 > '2'
+    // 0x32), so an unfiltered maximum makes the frontier a garbage value that every
+    // ordinary new migration sorts below. add_controller_bound_token_columns.sql is
+    // the real instance: added in 7f1142e, DELETED in 1c728c5 rather than renamed, so
+    // MIGRATION_LEDGER_RENAMES cannot heal it and any DB migrated inside that window
+    // carries the row forever.
+    it('ignores an undated legacy ledger row when computing the frontier', function () {
+        assert.strictEqual(
+            Database.backdatedFrontierViolation('2026-08-11-new.sql', [
+                '2026-05-30-balances-composite-index.sql',
+                'add_controller_bound_token_columns.sql',
+                '2026-08-10-bet-cancel-resolve-standalone-indexes.sql',
+            ]),
+            null,
+            'an undated legacy row must never become the frontier');
+    });
+
+    it('still reports a real violation when an undated legacy row is present', function () {
+        assert.strictEqual(
+            Database.backdatedFrontierViolation('2026-07-01-late-add.sql', [
+                'add_controller_bound_token_columns.sql',
+                '2026-08-10-bet-cancel-resolve-standalone-indexes.sql',
+            ]),
+            '2026-08-10-bet-cancel-resolve-standalone-indexes.sql',
+            'the filter must narrow the frontier, not disable the guard');
+    });
+
+    it('never trips when the ledger holds only undated legacy rows', function () {
+        assert.strictEqual(
+            Database.backdatedFrontierViolation('2026-01-01-first.sql',
+                ['add_controller_bound_token_columns.sql', 'unique_full_column_index_addresses.sql']),
+            null);
+    });
+
+    it('every committed migration is clean against a ledger of all its predecessors', function () {
+        // The guard must not fire on the shipped tree: each file, checked against
+        // everything that sorts before it, is by construction at or after the frontier.
+        const dir   = path.join(__dirname, '..', '..', 'src', 'sql', 'migrations');
+        const files = fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort();
+        files.forEach(function (file, i) {
+            assert.strictEqual(Database.backdatedFrontierViolation(file, files.slice(0, i)), null,
+                file + ' must not sort before any migration committed before it');
+        });
+    });
 });
 
 describe('Database.splitSqlStatements() @regression @tier1', function () {
@@ -643,6 +760,139 @@ describe('runMigrations() checksum heal branch @regression @tier1', function () 
             'an unrecognized hash must never be healed away');
         assert.ok(logged.some(l => /content CHANGED/.test(l) && /unique-full-column-index-addresses/.test(l)),
             'a genuine migration edit must still be reported');
+    });
+});
+
+// Backdating guard in the apply loop. Apply order is lexical, so a migration committed
+// with a date EARLIER than one the fleet already applied runs in its date slot on a
+// fresh DB and after the frontier on an aged one, diverging the schemas. Driven through
+// the real _runMigrationsInner against the real migrations dir: seeding the ledger with
+// every file EXCEPT an early auto one reproduces exactly the aged-DB shape.
+describe('runMigrations() backdated-migration guard @regression @tier1', function () {
+
+    const crypto  = require('crypto');
+    const MIG_DIR = path.join(__dirname, '..', '..', 'src', 'sql', 'migrations');
+
+    const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
+    const allFiles = () => fs.readdirSync(MIG_DIR).filter(f => f.endsWith('.sql')).sort();
+    const ledgerOfAll = () => new Map(allFiles().map(f => [f, sha256(fs.readFileSync(path.join(MIG_DIR, f), 'utf8'))]));
+
+    // Earliest committed mode=auto file: pulling it out of the ledger makes it pending
+    // behind a frontier of everything else, which is the backdating shape.
+    const EARLY_AUTO = allFiles().find(f =>
+        modeOf(fs.readFileSync(path.join(MIG_DIR, f), 'utf8')) === 'auto');
+    const EARLY_MANUAL = allFiles().find(f =>
+        modeOf(fs.readFileSync(path.join(MIG_DIR, f), 'utf8')) === 'manual');
+
+    async function runAgainst(ledger, opts) {
+        const logged = [];
+        const applied = [];
+        const conn = {
+            query: async function (sql, params) {
+                if (/GET_LOCK/i.test(sql))     return [{ l: 1 }];
+                if (/RELEASE_LOCK/i.test(sql)) return [{}];
+                if (/SELECT name, checksum FROM schema_migrations/i.test(sql)) {
+                    return Array.from(ledger, ([name, checksum]) => ({ name, checksum }));
+                }
+                if (/^INSERT INTO schema_migrations/i.test(sql.trim())) { applied.push(params[0]); return {}; }
+                if (/^(UPDATE|INSERT|CREATE|ALTER|DROP)/i.test(sql.trim())) return {};
+                return [];
+            },
+            release: async function () {},
+        };
+        const db = {
+            dbName: 'test_indexer',
+            transactionConnection: null,
+            getConnection: async () => conn,
+            _ensureMigrationsLedger: async () => {},
+            _runMigrationsInner: Database.prototype._runMigrationsInner,
+            _migrationMode: Database.prototype._migrationMode,
+            splitSqlStatements: Database.prototype.splitSqlStatements,
+            stripSqlLineComments: Database.prototype.stripSqlLineComments,
+            _destructiveAutoStatement: Database.prototype._destructiveAutoStatement,
+            _isIdRepairUpdate: Database.prototype._isIdRepairUpdate,
+        };
+        const realLog = console.log, realErr = console.error, realWarn = console.warn;
+        console.log = console.error = console.warn = (...a) => { logged.push(a.join(' ')); };
+        try {
+            const r = await Database.prototype._runMigrationsInner.call(db, opts || {});
+            return { logged, applied, result: r, threw: null };
+        } catch (err) {
+            return { logged, applied, result: null, threw: err };
+        } finally {
+            console.log = realLog; console.error = realErr; console.warn = realWarn;
+        }
+    }
+
+    it('the shipped tree is clean: a fully current ledger raises no backdating error', async function () {
+        const { logged, threw } = await runAgainst(ledgerOfAll(), {});
+        assert.strictEqual(threw, null, 'a current ledger must not throw: ' + (threw && threw.message));
+        assert.ok(!logged.some(l => /dated BEFORE/.test(l)), 'unexpected backdating log: ' + logged.join(' | '));
+    });
+
+    it('the operator path fails closed on a backdated auto migration', async function () {
+        const ledger = ledgerOfAll();
+        ledger.delete(EARLY_AUTO);
+        const { threw } = await runAgainst(ledger, { includeManual: true });
+        assert.ok(threw, 'the operator path must refuse a backdated migration, not apply it');
+        assert.match(threw.message, /dated BEFORE already-applied migration/);
+        assert.ok(threw.message.includes(EARLY_AUTO), 'the error must name the offending file');
+    });
+
+    it('opt-in strict mode fails closed on the passive startup path too', async function () {
+        const ledger = ledgerOfAll();
+        ledger.delete(EARLY_AUTO);
+        const prev = process.env.MIGRATION_STRICT_CHECKSUM;
+        process.env.MIGRATION_STRICT_CHECKSUM = '1';
+        try {
+            const { threw } = await runAgainst(ledger, {});
+            assert.ok(threw && /dated BEFORE already-applied migration/.test(threw.message));
+        } finally {
+            if (prev === undefined) delete process.env.MIGRATION_STRICT_CHECKSUM;
+            else process.env.MIGRATION_STRICT_CHECKSUM = prev;
+        }
+    });
+
+    it('default passive startup logs loudly but still boots (no fleet black-start)', async function () {
+        const ledger = ledgerOfAll();
+        ledger.delete(EARLY_AUTO);
+        const { logged, applied, threw } = await runAgainst(ledger, {});
+        assert.strictEqual(threw, null, 'passive startup must not hard-fail the fleet');
+        assert.ok(logged.some(l => /dated BEFORE already-applied migration/.test(l)),
+            'the divergence must still be reported: ' + logged.join(' | '));
+        assert.ok(applied.includes(EARLY_AUTO), 'behavior is unchanged on the passive path: the file still applies');
+    });
+
+    // The carve-out that keeps the guard shippable. A mode=manual file legitimately sits
+    // unapplied behind the frontier for as long as the operator defers it, so guarding it
+    // would make `node src/migrate.js` throw on every aged fleet DB.
+    it('a deferred mode=manual migration is exempt and still applies on the operator path', async function () {
+        const ledger = ledgerOfAll();
+        ledger.delete(EARLY_MANUAL);
+        const { logged, applied, threw } = await runAgainst(ledger, { includeManual: true });
+        assert.strictEqual(threw, null,
+            'a deferred manual migration must not be mistaken for a backdated one: ' + (threw && threw.message));
+        assert.ok(!logged.some(l => /dated BEFORE/.test(l)), 'manual files must not be flagged: ' + logged.join(' | '));
+        assert.ok(applied.includes(EARLY_MANUAL), 'the operator must still be able to apply it');
+    });
+
+    // The aged-fleet shape the frontier filter exists for. A DB migrated between 7f1142e
+    // and 1c728c5 carries an undated add_controller_bound_token_columns.sql row that no
+    // rename heals, and undated sorts above every 2026-* name. Before the filter this made
+    // the frontier garbage and threw on the operator path for an ordinary new migration -
+    // the same hard-fail of `node src/migrate.js` on an aged fleet DB that the manual
+    // carve-out above exists to prevent, reintroduced from the ledger side.
+    it('an undated legacy ledger row does not fail the operator path for a normal new migration', async function () {
+        const files  = allFiles();
+        const newest = files[files.length - 1];          // at the frontier by construction
+        const ledger = ledgerOfAll();
+        ledger.delete(newest);
+        ledger.set('add_controller_bound_token_columns.sql', 'legacy-checksum');
+        const { logged, applied, threw } = await runAgainst(ledger, { includeManual: true });
+        assert.strictEqual(threw, null,
+            'an undated legacy row must not hard-fail an aged fleet DB: ' + (threw && threw.message));
+        assert.ok(!logged.some(l => /dated BEFORE/.test(l)), 'unexpected backdating log: ' + logged.join(' | '));
+        assert.ok(applied.includes(newest), 'the newest migration must still apply');
     });
 });
 

@@ -1000,12 +1000,14 @@ class Actions {
 
     // Gas-schedule-only price for a FEE_QUOTE_STATIC action : the XCHAIN-denominated
     // protocol fee the handler stages BEFORE it enters the VM, which is the amount
-    // validateNativeCoinFee checks the native output against. Reproduces the handler arithmetic
-    // per DEPLOY format family:
-    //   v0/v1 inline   - VM_DEPLOY_BASE + codeBytes * VM_DEPLOY_PER_BYTE (deploy.js)
-    //   v2/v3 chunked  - VM_DEPLOY_BASE only; the v4 carriers already paid per-byte (deploy.js)
-    //   v4 carrier     - CODE_PART bytes * VM_DEPLOY_PER_BYTE (deploy_chunk.js)
-    //   EXECUTE        - VM_EXECUTE_BASE (execute.js; metered gas re-prices only the record)
+    // validateNativeCoinFee checks the native output against. Selects the handler's own
+    // gas-cost family per DEPLOY format version, then prices it through util.vmGasCost:
+    //   v0/v1 inline   - DEPLOY_INLINE  over decoded code bytes (deploy.js)
+    //   v2/v3 chunked  - DEPLOY_CHUNKED, base only; the v4 carriers already paid per-byte (deploy.js)
+    //   v4 carrier     - DEPLOY_CARRIER over the carried CODE_PART slice (deploy_chunk.js)
+    //   EXECUTE        - EXECUTE base (execute.js; metered gas re-prices only the record)
+    // The arithmetic itself is NOT reproduced here: it is the single util.vmGasCost each of
+    // those handlers calls, so a term added to one is added to this quote too ().
     // Returns { gasCost, xchainFee }, { error } for an input the handler would reject outright,
     // or null when the action has no statically knowable fee.
     async _staticProtocolFee(action, params, blockIndex){
@@ -1013,19 +1015,19 @@ class Actions {
         let gasCost  = null;
 
         if(action === 'EXECUTE'){
-            gasCost = schedule.VM_EXECUTE_BASE;
+            gasCost = this.util.vmGasCost(schedule, 'EXECUTE', 0);
         } else if(action === 'DEPLOY'){
             let format = this.util.getFormatVersion(params[0]);
             if(format === 0 || format === 1){
                 let decoded = await this._decodeDeployCodeBytes(params[1], blockIndex);
                 if(decoded.error) return { error: decoded.error };
-                gasCost = schedule.VM_DEPLOY_BASE + (decoded.bytes * schedule.VM_DEPLOY_PER_BYTE);
+                gasCost = this.util.vmGasCost(schedule, 'DEPLOY_INLINE', decoded.bytes);
             } else if(format === 2 || format === 3){
-                gasCost = schedule.VM_DEPLOY_BASE;
+                gasCost = this.util.vmGasCost(schedule, 'DEPLOY_CHUNKED', 0);
             } else if(format === 4){
                 // The carrier is billed on the base64 slice as carried, not on decoded bytes.
-                gasCost = Buffer.byteLength(String(params[4] == null ? '' : params[4]), 'utf8')
-                        * schedule.VM_DEPLOY_PER_BYTE;
+                gasCost = this.util.vmGasCost(schedule, 'DEPLOY_CARRIER',
+                    Buffer.byteLength(String(params[4] == null ? '' : params[4]), 'utf8'));
             } else {
                 return { error: 'invalid: VERSION (unknown)' };
             }

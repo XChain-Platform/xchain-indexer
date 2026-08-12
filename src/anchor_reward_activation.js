@@ -120,9 +120,36 @@ function isArchiveRewardActive(snapshotBlock, network){
 // (v6) reward families uniformly. Per the  flag-day placeholder-guard doctrine, mainnet and
 // testnet stay INERT (null = never active) until the operator ratifies a coordinated height;
 // regtest activates from genesis so the fix is exercised where the bug lives.
+//
+// PRE-ARMING BLOCKERS (): three consensus defects sit on the derive path
+// and are harmless ONLY while this table is inert. Arming either mainnet or testnet before they
+// land forks the COLLECT rail, so ratifying a height is gated on all three being fixed, not just
+// on picking a number.
+//   (1) #4171 no mined-anchor proof. The hub writes the anchor_reward_attestations row the
+//       instant _broadcastWithRetry returns a DOGE txid (mempool acceptance), and the mirrored
+//       schema carries no DOGE txid, confirmation depth or status, so deriveAnchorRewards cannot
+//       prove the anchor was ever mined. A dropped or DOGE-reorged anchor leaves the append-only
+//       attestation and its COLLECT-spendable reward intact. Fixing it is producer-side in
+//       xchain-hub plus a mirrored schema column; the indexer half cannot stand alone.
+//   (2) #4172 non-deterministic materialization. anchor_reward_attestations mirrors in through
+//       hub_db_sync with NO block-loop barrier, and derivation selects on snapshot_block <=
+//       blockIndex, a key the mirror's arrival time is unrelated to. Two nodes whose copies
+//       differ derive the same reward at different heights, so a COLLECT lands a different
+//       credit on each and the ledger hash forks for identical BTC blocks.
+//   (3) #4170 the attestation row is never federated. StateAnchorPublisher._recordRewardAttestation
+//       INSERTs into the LOCAL hub db and fans out only through hubDbBroadcaster.broadcastRow,
+//       which reaches that process's own indexer subscribers; no peer message carries the XANCPUB
+//       sigs, and the V0_DONE / FINALIZED receivers skip reward mirroring at/above the flag-day.
+//       HubDbSync attaches to ONE hub (hub_db_sync.js, this.hubUrl), and the v0 publisher rotates
+//       per checkpoint by hashOrder election, so each hub holds a DISJOINT subset of the rows and
+//       an indexer derives only the subset its own hub happened to publish. Unlike
+//       state_checkpoints, which every peer persists, there is no persist-on-every-peer path.
+//       Fixing it is a new authenticated peer message whose receiver MINTS money rows, so it must
+//       re-verify the XANCPUB quorum against its own oracle_publish set rather than trust the
+//       wire, and it lands after (1) so the broadcast sits at the confirmed write.
 const ANCHOR_REWARD_DERIVE_ACTIVATION = {
-    mainnet: null,        // INERT placeholder: operator-ratify a BTC snapshot_block before arming
-    testnet: null,        // INERT placeholder: operator-ratify a BTC snapshot_block before arming
+    mainnet: null,        // INERT placeholder: ratify a BTC snapshot_block ONLY after #4170 + #4171 + #4172 land
+    testnet: null,        // INERT placeholder: ratify a BTC snapshot_block ONLY after #4170 + #4171 + #4172 land
     regtest: 0,
 };
 

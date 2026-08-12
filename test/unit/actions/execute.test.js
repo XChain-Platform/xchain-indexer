@@ -121,6 +121,40 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             assert.ok(String(data['STATUS']).includes('CONTRACT_ACTION_INDEX (format)'));
         });
 
+        // : a leading-zero index passed the old /^\d+$/ gate, resolved to the same
+        // contract through the integer-coercing DB lookup, then hashed two different ways:
+        // the VM Number()s it into the attestation request_id preimage while the host
+        // re-hashes the raw EMITTER string, so the host rejected an ATTEST the VM accepted.
+        // Gated on CONTRACT_INDEX_CANONICAL, the flag-day STAKE/UNSTAKE/DELEGATE already use
+        // for the same index-canonicality tightening.
+        it('rejects a leading-zero CONTRACT_ACTION_INDEX at/after CONTRACT_INDEX_CANONICAL', async function () {
+            const data = executeData({ FORMAT: 0 });
+            await handler.parse(['0', '007', 'run', ''], data, null);
+            assert.ok(String(data['STATUS']).includes('CONTRACT_ACTION_INDEX (format)'));
+        });
+
+        it('rejects a CONTRACT_ACTION_INDEX past the safe-integer range', async function () {
+            const data = executeData({ FORMAT: 0 });
+            await handler.parse(['0', '9007199254740993', 'run', ''], data, null);
+            assert.ok(String(data['STATUS']).includes('CONTRACT_ACTION_INDEX (format)'));
+        });
+
+        it('still accepts a canonical CONTRACT_ACTION_INDEX at/after the flag-day', async function () {
+            const data = executeData({ FORMAT: 0 });
+            await handler.parse(['0', String(CONTRACT), 'run', ''], data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+        });
+
+        it('preserves the legacy /^\\d+$/ gate below CONTRACT_INDEX_CANONICAL', async function () {
+            // Byte-identical replay below the flag-day: a leading-zero index stays valid
+            // there, so an old block re-indexes to the status it originally recorded.
+            indexer.protocolChanges.isEnabled = sinon.stub().callsFake(async (name) =>
+                name !== 'CONTRACT_INDEX_CANONICAL');
+            const data = executeData({ FORMAT: 0 });
+            await handler.parse(['0', '007', 'run', ''], data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+        });
+
         it('rejects when contract does not exist', async function () {
             indexer.indexerDb.getContract.resolves(null);
             const data = executeData({ FORMAT: 0 });

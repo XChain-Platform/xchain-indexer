@@ -293,6 +293,34 @@ class Utility {
         return false;
     }
 
+    /* Price the pre-VM protocol fee for a VM action, in gas units ().
+     *
+     * Single-sources arithmetic that used to live at four sites: the three acceptance
+     * handlers (deploy.js, deploy_chunk.js, execute.js) and the static quote that sizes
+     * the native fee output for them (actions._staticProtocolFee). Those four agreed by
+     * inspection only, so a term added to one and not the others would have quoted a
+     * client an output the handler then refuses, and no check could see it.
+     *
+     * Returns the schedule value uncoerced, so a schedule missing a key still yields the
+     * non-finite result each caller already guards on; the helper never substitutes a
+     * default, because a silent 0 here is a free VM action.
+     */
+    vmGasCost(schedule, family, bytes){
+        let s = (schedule && typeof schedule === 'object') ? schedule : {};
+        switch(family){
+            // Metered gas re-prices only the recorded fee, never this acceptance number.
+            case 'EXECUTE':        return s.VM_EXECUTE_BASE;
+            case 'DEPLOY_INLINE':  return s.VM_DEPLOY_BASE + (bytes * s.VM_DEPLOY_PER_BYTE);
+            // Chunked (v2/v3) charges base only (its v4 carriers already paid per-byte). The
+            // trailing + 0 is deploy.js's own per-byte term zeroed, kept literal so the
+            // extraction is arithmetic-identical even for a schedule missing a key.
+            case 'DEPLOY_CHUNKED': return s.VM_DEPLOY_BASE + 0;
+            // The v4 carrier is billed on the slice it puts on-chain, with no base.
+            case 'DEPLOY_CARRIER': return bytes * s.VM_DEPLOY_PER_BYTE;
+            default:               return null;
+        }
+    }
+
     // Handle returning integer format version
     getFormatVersion(format){
         let type = typeof format;
@@ -588,7 +616,17 @@ class Utility {
             return false;
         // Determine divisibility and default to true
         let divisible   = (parseInt(decimals)==0) ? false : true;
-        let [int, sats] = String(amount).split('.');
+        let parts       = String(amount).split('.');
+        let [int, sats] = parts;
+        //<MULTI-DOT-REJECT> (item 4310): reject an amount carrying more than one decimal
+        // point. Destructuring keeps only the first two segments, so "1.2.3" reads as
+        // int="1"/sats="2" and clears the divisible branch below, handing a non-numeric
+        // string to the bignumber ledger math. The non-divisible branch already catches it
+        // via its int==amount round trip; this guards the divisible one. Mirrored in
+        // xchain-sdk/src/utility.js (parity cases in the 15-sdk-parity integration suite).
+        if(parts.length > 2)
+            return false;
+        //</MULTI-DOT-REJECT>
         if(!divisible && this.isNumeric(int) && int==amount)
             return true;
         //<FRACTIONAL-PRECISION-CAP> (item 5346): an amount must not carry more fractional
@@ -2148,9 +2186,16 @@ class Utility {
     // counterparty. Idempotent: getEffectiveUnsettledMatches excludes matches already in
     // cross_chain_settlements. The caller gates this on the match-sync barrier so every
     // operator of this chain settles the same matches at the same block.
+    //
+    // Capped at CROSS_SETTLE_MAX_PER_BLOCK, the same discipline the XCALL passes below
+    // already carry: each settlement runs a 2f+1 signature verification and an escrow
+    // release, so an uncapped mirror backlog would blow BLOCK_PROCESS_TIMEOUT and wedge
+    // every operator of the chain at the identical block (). Overflow carries
+    // forward in (snapshot_block, match_id) order; nothing is dropped.
     async processCrossChainSettlements(actions, db, block_index, block_time){
         let coin    = db.config['COIN'];
-        let matches = await db.getEffectiveUnsettledMatches(coin, block_time);
+        let cap     = require('./protocol/constants.js').CROSS_SETTLE_MAX_PER_BLOCK;
+        let matches = await db.getEffectiveUnsettledMatches(coin, block_time, cap);
         for(let m of matches){
             let data = {};
             data['ACTION']      = 'CROSS_SETTLE';

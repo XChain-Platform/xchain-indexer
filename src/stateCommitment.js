@@ -791,8 +791,10 @@ async function computeAndStoreRoots(db, chain, network, blockIndex, isActivation
     // replays too, so the dry run covers positions opened long before it.
     const escArmed  = SUB.isEscrowLockedLeafActive(blockIndex, network, chain);
     const escShadow = SUB.isEscrowLockedLeafShadowActive(blockIndex, network, chain);
+    // Hoisted out of the journal-write block below: the balances gate needs it too
+    // (). See the full-build gate for why.
+    const armingBlock = escArmed && !SUB.isEscrowLockedLeafActive(blockIndex - 1, network, chain);
     if(escArmed || escShadow){
-        const armingBlock = escArmed && !SUB.isEscrowLockedLeafActive(blockIndex - 1, network, chain);
         const windowStart = escShadow && !SUB.isEscrowLockedLeafShadowActive(blockIndex - 1, network, chain);
         await EJW.writeEscrowJournal(db, blockIndex, { full: armingBlock || windowStart });
     }
@@ -808,7 +810,19 @@ async function computeAndStoreRoots(db, chain, network, blockIndex, isActivation
     const prior = isActivationBlock ? [] : await db.doQueryStrict(
         'SELECT balances_root FROM state_tree_roots WHERE chain=? AND network=? AND block_index=? LIMIT 1',
         [chain, network, blockIndex - 1]);
-    if(isActivationBlock || !prior.length){
+    // The ARMING BLOCK full-builds too (). The incremental branch applies
+    // escrow leaves from touchedEscrowKeys(armingBlock), i.e. only journal rows
+    // stamped at THIS height, while the arming replay deliberately writes no row for
+    // a key whose total is unchanged (escrowJournalWriter.js `if(eq(prior,next))
+    // continue`). After a §7 SHADOW window has already populated the journal, every
+    // still-unchanged live lock therefore gets no arming-height row, and it is not in
+    // the prior committed root either (block-1 committed the v1 leaf set), so it never
+    // enters the newly committed balances_root. A snapshot/follower rebuilds the same
+    // block from ESC.liveEscrowLeaves and includes it: two roots, one block, a false
+    // halt. Routing the arming block through buildFullBalancesRoot converges the
+    // source onto the follower's own enumeration, which is what the journal header
+    // above already promises ("both twins then full-build from the journal").
+    if(isActivationBlock || !prior.length || armingBlock){
         // No prior-block root to thread from: either the activation boundary, or a
         // snapshot-bootstrapped node (or a reorg that rolled the activation row
         // below this height) whose state_tree_roots history does not include
@@ -819,7 +833,12 @@ async function computeAndStoreRoots(db, chain, network, blockIndex, isActivation
         // block (after the ledger writes, before commit) it yields the identical
         // root the incremental thread would have produced. Correct and
         // self-healing rather than a fork or a halt.
-        if(!isActivationBlock)
+        //
+        // The arming block takes this branch with a prior root PRESENT, so it skips
+        // _enforceTouchedSet / _assertCommittedLeaves for that one block. Intended:
+        // both guards verify incremental threading, which this branch does not do,
+        // and the follower path this now mirrors does not run them either.
+        if(!isActivationBlock && !armingBlock)
             console.warn('stateCommitment: no prior state_tree_roots row for ' + chain + '/' + network +
                 ' block ' + (blockIndex - 1) + '; full-recomputing balances_root for block ' + blockIndex +
                 ' instead of threading from the empty root (snapshot-bootstrap or activation rolled below this height)');

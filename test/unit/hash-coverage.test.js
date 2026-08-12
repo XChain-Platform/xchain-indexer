@@ -123,17 +123,35 @@ describe('Hash coverage guard @regression', function () {
 
     it('state_commitment class declarations are pinned to the SMT inputs and stores', function () {
         // balances + BTC stakes are the SMT leaf inputs (stateCommitment.js);
-        // state_tree_roots/state_tree_nodes are the commitment store itself.
-        // Changing this set is an SPV-spec change: update the registry, this
+        // escrow_leaf_journal is the Stage B locked-leaf input folded into the same
+        // balances_root; state_tree_roots/state_tree_nodes are the commitment store
+        // itself. Changing this set is an SPV-spec change: update the registry, this
         // pin, and the stateCommitment twins together.
         assert.deepStrictEqual(lifecycle.hashClassTables('state_commitment').sort(),
-            ['balances', 'stakes', 'state_tree_nodes', 'state_tree_roots'],
+            ['balances', 'escrow_leaf_journal', 'stakes', 'state_tree_nodes', 'state_tree_roots'],
             'state_commitment table set changed; this is an SPV/light-client spec change');
         const src = read('src/stateCommitment.js');
         for (const t of ['balances', 'state_tree_roots', 'state_tree_nodes']) {
             assert.ok(src.indexOf(t) !== -1,
                 `stateCommitment.js no longer references ${t}; the state_commitment declaration is stale`);
         }
+    });
+
+    it('escrow_leaf_journal state_commitment class: the leaf builder reads it behind the arming gate', function () {
+        // Structural binding for the escrow_leaf_journal declaration, mirroring the
+        // gated-class bindings above (poll_finalize / token_supply / bet_status): the
+        // journal is only consensus-visible because escrowLeafSubtree.js reads it into
+        // balances_root, and stateCommitment.js applies that behind
+        // ESCROW_LOCKED_LEAF_ACTIVATION. If either half moves, the declaration is stale.
+        const leaf = read('src/escrowLeafSubtree.js');
+        assert.ok(/FROM escrow_leaf_journal j/.test(leaf),
+            'escrowLeafSubtree.js no longer reads escrow_leaf_journal; its state_commitment declaration is stale');
+        const commit = read('src/stateCommitment.js');
+        assert.ok(commit.indexOf('applyEscrowLeaves') !== -1,
+            'stateCommitment.js no longer applies the escrow leaves into balances_root');
+        const act = require('../../src/state_subtree_activation.js');
+        assert.ok(Number.isFinite(Number(act.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'])),
+            'ESCROW_LOCKED_LEAF_ACTIVATION lost its armed BTC:regtest height; re-check the declared coverage');
     });
 
     it('quorum class declarations are pinned to the hub-mirrored federation-signed tables', function () {

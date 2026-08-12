@@ -45,6 +45,7 @@ const stateSubtree  = require('./state_subtree_activation');
 const ar            = require('./anchor_reward_activation.js');
 const crypto        = require('crypto');
 const { installObservability } = require('./observability');   // : default-off /metrics + structured log shim
+const { installIndexerMetrics } = require('./indexerMetrics');  // item 9bee49e8: poll-freshness heartbeat gauge
 const { parseCorsOrigin } = require('./corsOrigin.js');
 
 // Constant-time API-key comparison. A plain `!==` short-circuits at the first
@@ -215,12 +216,18 @@ async function startApi(){
     // See src/observability/README.md.
     let indexerVersion = '';
     try { indexerVersion = require('../package.json').version; } catch { /* version label is cosmetic */ }
-    installObservability(app, {
+    const observability = installObservability(app, {
         service: 'xchain-indexer',
         version: indexerVersion,
         coin:    process.env.INDEXER_COIN || '',
         network: INDEXER_NETWORK || ''
     });
+
+    // Poll-freshness heartbeat (item 9bee49e8). Commit recency lives in the
+    // /status JSON only, so a wedged block poller leaves no trace on the scrape
+    // and is undetectable if /status polling itself regresses. No-ops when
+    // metrics are off (registry null unless METRICS_ENABLED).
+    installIndexerMetrics(observability, indexer);
 
     // API key enforcement for write + federation read + gated exec methods.
     // These methods forge spendable validator_rewards rows or enumerate the

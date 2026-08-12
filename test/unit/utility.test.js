@@ -651,6 +651,19 @@ describe('Utility @regression @tier1', function () {
         it('should accept fewer fractional digits than decimals', function () {
             assert.strictEqual(util.isValidAmountFormat(8, '1.5'), true);
         });
+        // Multi-dot reject (item 4310): destructuring the split dropped every segment past
+        // the second, so "1.2.3" read as int="1"/sats="2" and cleared the divisible branch.
+        it('should reject a multi-dot amount for divisible ticks', function () {
+            assert.strictEqual(util.isValidAmountFormat(8, '1.2.3'), false);
+            assert.strictEqual(util.isValidAmountFormat(8, '1.2.3.4'), false);
+        });
+        it('should reject a multi-dot amount for non-divisible ticks', function () {
+            assert.strictEqual(util.isValidAmountFormat(0, '1.2.3'), false);
+        });
+        it('should still accept a single-dot amount (guard is not over-broad)', function () {
+            assert.strictEqual(util.isValidAmountFormat(8, '1.00000001'), true);
+            assert.strictEqual(util.isValidAmountFormat(8, '0.5'), true);
+        });
     });
 
     describe('isValidFiatFormat()', function () {

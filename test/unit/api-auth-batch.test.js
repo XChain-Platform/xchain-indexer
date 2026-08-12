@@ -21,6 +21,16 @@
  * startApi() is not importable (it opens DB connections), so this mirrors the
  * middleware from src/api.js exactly and drives it with fake req/res, matching
  * the reconstruction pattern used by xchain-utxo-tracker's api unit test.
+ *
+ * SUPERSEDED for the shipped-behaviour question by
+ * test/security/http-surface/auth-gate.test.js, which boots the real src/api.js
+ * (stubbing only dotenv and XChainIndexer) and drives the actual gate over HTTP.
+ * Put any new assertion there. The copy below is a fast shape check ONLY, and
+ * it is already provably drifted: the shipped FEDERATION_READ_METHODS set has
+ * three entries this copy lacks (getrelayedattestation_requests,
+ * getanchoraction, getreorghistory) and the shipped key compare is the
+ * constant-time keyEquals, not `!==`. A green run here is therefore not
+ * evidence about src/api.js.
  *********************************************************************/
 
 'use strict';

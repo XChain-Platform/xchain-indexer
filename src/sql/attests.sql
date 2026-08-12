@@ -77,6 +77,14 @@ CREATE INDEX request_id_version ON attests (request_id, version);
 --  relay: serves the hub's relay poll (relay-eligible pending v0 requests on an
 -- origin chain) and the BTC side's origin-row resolution; both would otherwise scan.
 CREATE        INDEX origin_chain_status ON attests (origin_chain, request_status, version);
+--  relay identity (origin_chain, origin_action_index). Deliberately NON-UNIQUE: it
+-- serves the v3 admission's exactly-once lookup (getRelayRequestByOrigin) as a seek instead
+-- of a scan over every row this chain ever materialized from that origin. Uniqueness is
+-- enforced in CODE, as a stored 'invalid' verdict, and must NOT be moved here: a rejected v3
+-- persists its origin_chain/origin_action_index for the audit row, so two rejected v3s naming
+-- one origin action would collide, and a UNIQUE violation THROWS mid-block inside a consensus
+-- indexer rather than producing the identical stored verdict on every node ().
+CREATE        INDEX origin_relay_identity ON attests (origin_chain, origin_action_index);
 CREATE        INDEX version_status  ON attests (version, request_status, deadline_block);
 CREATE        INDEX contract_index  ON attests (contract_index);
 CREATE        INDEX provider_id     ON attests (provider_id);

@@ -36,7 +36,9 @@ describe('Security: remediated dependency advisories @regression @tier4', functi
 
     // GHSA-v2hh-gcrm-f6hx: fast-uri host confusion via a literal backslash
     // authority delimiter. Affects >=3.0.0 <=3.1.3; fixed in 3.1.4. Reaches
-    // this tree dev-only via ajv.
+    // this tree dev-only via ajv. GHSA-7p8r-x3mc-p8w7 then reopened the same
+    // backslash-authority confusion over a wider range, >=3.0.0 <3.1.5, so
+    // 3.1.4 is no longer a floor and the pin moves to 3.1.5 ().
     //
     // GHSA-mh99-v99m-4gvg (CVE-2026-14257): brace-expansion expand() bounds the
     // number of results but not their total length, so a few KB of chained brace
@@ -73,8 +75,17 @@ describe('Security: remediated dependency advisories @regression @tier4', functi
     // file or directory write through a symlinked `dir`. The 0.0.x line that
     // external-editor pulls in never got the patch, so the whole series has to
     // move onto 0.2.
+
+    // ip-address <=10.3.0 carries three overlapping SSRF / trust-boundary
+    // bypasses: leading-zero IPv4 octets decoded as decimal where resolvers
+    // read them as octal (GHSA-mwp4-54f8-5fhr), a CIDR suffix suppressing
+    // special-use classification (GHSA-4xrf-jv44-h6hh), and misclassified
+    // IPv4-mapped / NAT64 IPv6 addresses (GHSA-22jq-vg5j-6vgg). It is a runtime
+    // reach here, not dev-only: express-rate-limit and geoip-lite both parse the
+    // client request IP, so a padded or mapped form could key a different
+    // rate-limit bucket than its canonical address ().
     const advisories = [
-        { name: 'fast-uri', minSafe: [3, 1, 4], majorSeries: 3 },
+        { name: 'fast-uri', minSafe: [3, 1, 5], majorSeries: 3 },
         { name: 'brace-expansion', minSafe: [5, 0, 8], majorSeries: 5 },
         // Coupled to the entry above: brace-expansion 5.x dropped its CommonJS
         // default export, so only minimatch >=10 (named `import { expand }`)
@@ -86,7 +97,8 @@ describe('Security: remediated dependency advisories @regression @tier4', functi
         { name: 'serialize-javascript', minSafe: [7, 0, 5], majorSeries: 7 },
         { name: 'shell-quote', minSafe: [1, 9, 0], majorSeries: 1 },
         { name: 'form-data', minSafe: [4, 0, 6], majorSeries: 4 },
-        { name: 'tmp', minSafe: [0, 2, 6], majorSeries: 0 }
+        { name: 'tmp', minSafe: [0, 2, 6], majorSeries: 0 },
+        { name: 'ip-address', minSafe: [10, 3, 1], majorSeries: 10 }
     ];
 
     // Compares dotted numeric version triples without pulling in semver.

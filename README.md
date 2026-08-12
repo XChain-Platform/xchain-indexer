@@ -64,7 +64,7 @@ Observability / tuning knobs read from the environment. None affects ledger outp
 |---|---|---|---|
 | `HUB_CONFIG_POLL_INTERVAL_MS` | ms | `60000` | Hub to indexer config-overlay poll cadence. This is the sole staleness / propagation bound for the live-polled governance overlay: nothing else refreshes it. |
 
-Derived staleness boundary: an overlay that has not refreshed within `HUB_CONFIG_POLL_INTERVAL_MS * 3` is reported as `hubConfigStale: true` on both the `/health` API and the internal health response (three poll intervals tolerate a couple of missed or slow polls before flagging). The boundary lives in code as `HUB_CONFIG_STALENESS_LIMIT_MS` (`src/XChainIndexer.js`); it is not separately configurable.
+Derived staleness boundary: an overlay that has not refreshed within `HUB_CONFIG_POLL_INTERVAL_MS * 3` is reported as `hubConfigStale: true` on both the `/health` API and the internal health response (three poll intervals tolerate a couple of missed or slow polls before flagging). The boundary lives in code as `hubConfigStalenessLimitMs()` (`src/XChainIndexer.js`), which reads the poll interval at call time so a value supplied through `.env` is honoured; it is not separately configurable.
 
 ## Quick Start
 

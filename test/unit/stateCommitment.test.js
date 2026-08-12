@@ -248,3 +248,83 @@ describe('stateCommitment: missing prior root falls back to full recompute (item
         assert.strictEqual(out.balances_root, SC.EMPTY_ROOT_HEX);
     });
 });
+
+// Escrow ARMING block after a §7 shadow window ().
+//
+// The failure this pins: the arming replay writes no journal row for a key whose
+// locked total is unchanged since the shadow window, so touchedEscrowKeys(arming)
+// misses it; the prior committed root has no escrow leaves at all (block-1 is below
+// the armed height); and the incremental branch therefore commits a balances_root
+// WITHOUT that live lock, while a snapshot follower rebuilding the same block from
+// ESC.liveEscrowLeaves commits one WITH it. Pre-fix this test sees the bare prior
+// root; post-fix it sees the full build.
+//
+// Own mock (not makeRootsMockDb) because this scenario needs escrow_leaf_journal
+// routing the prior-root suite has no use for. BTC:regtest is the only chain the
+// escrow leaf is armed on (state_subtree_activation.js, block 11200), so the
+// arming boundary is 11200 with 11199 below it.
+function makeArmingMockDb({ priorRows, liveJournalRows }){
+    const nodes = new Map();
+    const persisted = {};
+    const route = async (sql, params) => {
+        if(/FROM state_tree_nodes/.test(sql)){
+            const v = nodes.get(params[0]);
+            return v ? [v] : [];
+        }
+        if(/INSERT IGNORE INTO state_tree_nodes/.test(sql)){
+            if(!nodes.has(params[0]))
+                nodes.set(params[0], { left_hash: params[1], right_hash: params[2] });
+            return [];
+        }
+        if(/SELECT balances_root FROM state_tree_roots/.test(sql)) return priorRows;
+        // touchedEscrowKeys: rows stamped at THIS block only. Empty is the whole
+        // point - the unchanged live lock has no arming-height row.
+        if(/escrow_leaf_journal/.test(sql) && /j\.block_index = \?/.test(sql)) return [];
+        // liveEscrowLeaves: the MAX(id)-per-key winner set, i.e. what a follower sees.
+        if(/escrow_leaf_journal/.test(sql) && /MAX\(id\)/.test(sql)) return liveJournalRows;
+        if(/UNION ALL/.test(sql) && /INNER JOIN actions/.test(sql)) return [];
+        if(/UNION ALL/.test(sql) && /credits/.test(sql)) return [];      // no spendable balances
+        if(/INSERT INTO\s+state_tree_roots/.test(sql)){
+            persisted.balances_root = params[3];
+            return [];
+        }
+        return [];
+    };
+    const db = {
+        config: { STAKING: {} },          // gatherStakeEntries reads it; BTC takes the stakes path
+        getBlockLeafRows: async () => [],
+        doQuery: route,
+        doQueryStrict: route
+    };
+    return { db, persisted };
+}
+
+describe('stateCommitment: escrow arming block full-builds balances (item 4363) @regression', function(){
+    const ARM = 11200;                                    // BTC:regtest ESCROW_LOCKED_LEAF_ACTIVATION
+    const liveJournalRows = [{ address: 'escAddr1', tick: 'XCP', locked_amount: '250.000000000000000000' }];
+
+    it('commits the live escrow leaf that has no arming-height journal row', async function(){
+        const { db, persisted } = makeArmingMockDb({
+            priorRows: [{ balances_root: SC.EMPTY_ROOT_HEX }], liveJournalRows });
+        const out = await SC.computeAndStoreRoots(db, 'BTC', 'regtest', ARM, false);
+
+        // Ground truth: the follower/snapshot build over the same live escrow set.
+        const { db: refDb } = makeArmingMockDb({ priorRows: [], liveJournalRows });
+        const expected = await SC.buildFullBalancesRoot(refDb, 'BTC', 'regtest', ARM);
+
+        assert.strictEqual(out.balances_root, expected,
+            'arming block must commit the same root a liveEscrowLeaves follower commits');
+        assert.strictEqual(persisted.balances_root, expected);
+        assert.notStrictEqual(out.balances_root, SC.EMPTY_ROOT_HEX,
+            'threading the prior root drops the unchanged live lock (the #4363 divergence)');
+    });
+
+    it('the block AFTER arming still threads incrementally', async function(){
+        // 11201 is armed but not the boundary, so the incremental branch owns it and
+        // the fix does not turn every armed block into a full rebuild.
+        const { db } = makeArmingMockDb({
+            priorRows: [{ balances_root: SC.EMPTY_ROOT_HEX }], liveJournalRows });
+        const out = await SC.computeAndStoreRoots(db, 'BTC', 'regtest', ARM + 1, false);
+        assert.strictEqual(out.balances_root, SC.EMPTY_ROOT_HEX);
+    });
+});

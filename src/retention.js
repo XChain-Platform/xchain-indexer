@@ -182,11 +182,22 @@ async function computeReachable(query, chain, network){
 // orphan set and returns it WITHOUT deleting (used for planning/observability and
 // by the unit tests). Above cfg.maxNodes the in-memory mark is skipped (bounded
 // memory), mirroring the orphan metric.
+//
+// The cap is checked by COUNT(*) BEFORE computeReachable runs, because the
+// post-load nodes.size check bounds nothing: computeReachable materializes every
+// state_tree_nodes row into a Map first, so an oversized store exhausts process
+// memory before the guard is ever reached (). Counting under the same
+// runExclusive mutex keeps the count and any subsequent load consistent; the
+// nodes.size check below stays as a redundant net.
 async function reclaimOrphanNodes(query, chain, network, cfg, opts){
     opts = opts || {};
     if(!cfg || !cfg.nodeReclaimEnabled) return { skipped: true, reason: 'disabled', deleted: 0 };
 
     const doWork = async () => {
+        const cntRows = await query('SELECT COUNT(*) AS c FROM state_tree_nodes', []);
+        const preCount = cntRows && cntRows.length ? Number(cntRows[0].c) : 0;
+        if(preCount > cfg.maxNodes)
+            return { skipped: true, reason: 'too_many_nodes', totalNodes: preCount, deleted: 0 };
         const { nodes, reachable } = await computeReachable(query, chain, network);
         if(nodes.size > cfg.maxNodes)
             return { skipped: true, reason: 'too_many_nodes', totalNodes: nodes.size, deleted: 0 };

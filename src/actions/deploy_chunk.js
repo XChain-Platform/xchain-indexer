@@ -114,7 +114,8 @@ class DeployChunk {
 
         let schedule  = this.config['GAS_SCHEDULE'];
         let partBytes = error ? 0 : Buffer.byteLength(String(data['CODE_PART']), 'utf8');
-        let gasCost   = partBytes * schedule.VM_DEPLOY_PER_BYTE;
+        // Priced through util.vmGasCost, the one arithmetic the static quote also uses ().
+        let gasCost   = this.util.vmGasCost(schedule, 'DEPLOY_CARRIER', partBytes);
         let fee       = this.util.bcmul(gasCost, this.config['GAS_PRICE'], 8);
 
         // Get source address balances (gas tick)

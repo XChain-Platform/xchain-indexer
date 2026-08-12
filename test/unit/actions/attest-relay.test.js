@@ -14,9 +14,12 @@
 //   1. INERTNESS. The whole item ships gated. Below ATTEST_RELAY_ACTIVATION a v3
 //      or v4 must persist NOTHING, which is what makes replay byte-identical to a
 //      pre- node treating it as an unknown VERSION.
-//   2. THE PLANE. v4 is gated on the BTC-anchored SNAPSHOT_BLOCK it carries, never
-//      on where it landed. Gating a relay leg on an LTC/DOGE local height would
-//      ship it live on day one (the documented ATTEST_ADMISSION plane trap).
+//   2. THE PLANE. Both legs resolve the flag-day on the BTC-anchored SNAPSHOT_BLOCK
+//      they carry. For v4 that is the whole gate: resolving it on an LTC/DOGE local
+//      height would ship it live on day one (the documented ATTEST_ADMISSION plane
+//      trap). For v3 the snapshot plane is checked ON TOP OF the unforgeable landing
+//      height, so this node accepts exactly what the hub will co-sign; the hub has no
+//      landing height when it decides, so the snapshot is the only shared predicate.
 //   3. THE ANCHOR. The v3 row's responsible set is pinned at the v3's own BTC
 //      block_index. That anchor is the entire reason the relay model was chosen
 //      over direct polling.
@@ -81,6 +84,7 @@ describe('Attest cross-chain relay (ATTEST v3/v4, ) @regression @tier3', functio
         db.getContract                         = sinon.stub().resolves({ contract_index: 5 });
         db.createAttestationRequest            = sinon.stub().resolves();
         db.getAttestationRequestById           = sinon.stub().resolves(null);
+        db.getRelayRequestByOrigin             = sinon.stub().resolves(null);
         db.hasCapability                       = sinon.stub().resolves(true);
         db.createAttestationResponse           = sinon.stub().resolves();
         db.incrementAttestationValidatorStat   = sinon.stub().resolves();
@@ -224,6 +228,50 @@ describe('Attest cross-chain relay (ATTEST v3/v4, ) @regression @tier3', functio
             assert.match(data['STATUS'], /SNAPSHOT_BLOCK/);
             assert.strictEqual(data['REQUEST_STATUS'], 'rejected');
         });
+
+        // The window the v3 gate used to miss. The hub resolves the same flag-day on
+        // the snapshot it is about to pin and refuses to co-sign below it, so a v3
+        // accepted here on its landing height alone is one the federation never
+        // produced, verified against the pre-activation cross_chain signer set.
+        it('v3 stays inert when it lands past the flag-day carrying a pre-activation SNAPSHOT_BLOCK', async function () {
+            gateStub.restore();
+            indexer.config['COIN']    = 'BTC';
+            indexer.config['NETWORK'] = 'mainnet';
+
+            const data = createBaseData({ ACTION: 'ATTEST', FORMAT: 3, BLOCK_INDEX: 969500 });
+            await handler.parse(v3Params({ snapshotBlock: 969499 }), data, null);
+
+            assert.strictEqual(indexer.indexerDb.createAttestationRequest.called, false,
+                'the landing height alone must not materialize a v3 the hub would refuse to co-sign');
+            assert.strictEqual(data['STATUS'], undefined,
+                'below the flag-day on either plane a v3 persists nothing, not even a verdict');
+
+            // Same landing block, one BTC block later on the signed plane: now live.
+            indexer.indexerDb.createAttestationRequest.resetHistory();
+            const data2 = createBaseData({ ACTION: 'ATTEST', FORMAT: 3, BLOCK_INDEX: 969500 });
+            await handler.parse(v3Params({ snapshotBlock: 969500 }), data2, null);
+
+            assert.strictEqual(data2['STATUS'], 'valid');
+            assert.strictEqual(indexer.indexerDb.createAttestationRequest.calledOnce, true);
+        });
+
+        // The other half of the same gate, and the reason the landing-height check
+        // survives rather than being replaced: SNAPSHOT_BLOCK is broadcaster-supplied,
+        // so gating on it ALONE would let an invented future snapshot pull the leg
+        // live before the flag day and store an 'invalid' verdict where a pre-
+        // node persists nothing at all.
+        it('v3 stays inert below the flag-day even carrying a SNAPSHOT_BLOCK past it', async function () {
+            gateStub.restore();
+            indexer.config['COIN']    = 'BTC';
+            indexer.config['NETWORK'] = 'mainnet';
+
+            const data = createBaseData({ ACTION: 'ATTEST', FORMAT: 3, BLOCK_INDEX: 969499 });
+            await handler.parse(v3Params({ snapshotBlock: 969500 }), data, null);
+
+            assert.strictEqual(indexer.indexerDb.createAttestationRequest.called, false);
+            assert.strictEqual(data['STATUS'], undefined,
+                'a forged future snapshot must not pull the leg live before its landing height');
+        });
     });
 
     // ── 3. v3 materialization on the home chain ──────────────────────────────
@@ -297,6 +345,38 @@ describe('Attest cross-chain relay (ATTEST v3/v4, ) @regression @tier3', functio
             await handler.parse(v3Params(), data, null);
 
             assert.match(data['STATUS'], /already present/);
+        });
+
+        // : request_id derives from the ORIGIN tx_hash, so a deep origin reorg
+        // re-emitting one origin action from a different transaction arrives with a NEW
+        // request_id. The request_id guard above waves it through; only the relay identity
+        // stops a second, unretractable BTC materialization.
+        it('rejects a relay identity already materialized under a different request_id', async function () {
+            indexer.config['COIN'] = 'BTC';
+            indexer.indexerDb.getRelayRequestByOrigin
+                .withArgs('LTC', 4242).resolves(originRequestRow({ request_id: 'b'.repeat(64) }));
+            const data = createBaseData({ ACTION: 'ATTEST', FORMAT: 3, BLOCK_INDEX: 900000 });
+
+            await handler.parse(v3Params(), data, null);
+
+            assert.strictEqual(indexer.indexerDb.getAttestationRequestById.calledOnce, true,
+                'the request_id guard must have passed: this is the case it cannot see');
+            assert.match(data['STATUS'], /ORIGIN_ACTION_INDEX \(relay identity already materialized/);
+            assert.strictEqual(data['REQUEST_STATUS'], 'rejected',
+                'a stored verdict every node reaches identically, not a DB-layer throw');
+        });
+
+        it('admits a relay identity this chain has not materialized', async function () {
+            indexer.config['COIN'] = 'BTC';
+            indexer.indexerDb.getRelayRequestByOrigin
+                .withArgs('LTC', 4243).resolves(originRequestRow());
+            const data = createBaseData({ ACTION: 'ATTEST', FORMAT: 3, BLOCK_INDEX: 900000 });
+
+            await handler.parse(v3Params(), data, null);
+
+            assert.strictEqual(indexer.indexerDb.getRelayRequestByOrigin.calledWith('LTC', 4242), true);
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(data['REQUEST_STATUS'], 'pending');
         });
 
         it('rejects when the cross_chain snapshot is empty (fails closed)', async function () {
@@ -551,6 +631,11 @@ describe('Attest cross-chain relay (ATTEST v3/v4, ) @regression @tier3', functio
             assert.strictEqual(data['REQUEST_STATUS'], 'pending');
             assert.strictEqual(data['ORIGIN_CHAIN'], 'LTC',
                 'the origin stamp is the only marker the hub relay poll keys on');
+            // : the paired half. On an origin row "the origin chain's v0
+            // action_index" is this row's own, and the pair is the relay identity the
+            // BTC-side exactly-once guard keys on.
+            assert.strictEqual(data['ORIGIN_ACTION_INDEX'], data['ACTION_INDEX']);
+            assert.notStrictEqual(data['ORIGIN_ACTION_INDEX'], null);
         });
 
         it('leaves the admission rejection intact when the gate is off', async function () {
@@ -564,6 +649,8 @@ describe('Attest cross-chain relay (ATTEST v3/v4, ) @regression @tier3', functio
             assert.match(data['STATUS'], /responsible set/);
             assert.strictEqual(data['REQUEST_STATUS'], 'rejected');
             assert.strictEqual(data['ORIGIN_CHAIN'], null);
+            assert.strictEqual(data['ORIGIN_ACTION_INDEX'], null,
+                'both halves of the relay identity share one predicate: a rejected row carries neither');
         });
 
         it('never stamps an origin on the home chain', async function () {
@@ -574,6 +661,7 @@ describe('Attest cross-chain relay (ATTEST v3/v4, ) @regression @tier3', functio
 
             assert.strictEqual(data['ORIGIN_CHAIN'], null,
                 'a BTC request is serviced in place and must never look relay-eligible');
+            assert.strictEqual(data['ORIGIN_ACTION_INDEX'], null);
         });
     });
 });

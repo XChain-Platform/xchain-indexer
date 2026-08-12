@@ -246,18 +246,94 @@ async function attributeRow(db, row){
     return resolver(db, row);
 }
 
-// Latest journal value for one key, as a bc string ('0' when absent or
-// tombstoned). The read is unbounded because the writer runs before this
-// block's rows are inserted, so the latest row is necessarily from a prior block.
-async function priorTotal(db, address, tick){
-    const rows = await db.doQuery(
-        'SELECT j.locked_amount AS locked_amount FROM escrow_leaf_journal j ' +
-        'INNER JOIN index_addresses a ON a.id = j.address_id ' +
-        'INNER JOIN index_tickers   t ON t.id = j.tick_id ' +
-        'WHERE a.address = ? AND t.tick = ? ORDER BY j.id DESC LIMIT 1',
-        [address, tick]);
-    if(!rows || !rows.length || rows[0].locked_amount == null) return '0';
-    return String(rows[0].locked_amount);
+// Split a list into fixed-size chunks, so an IN list or a VALUES list stays inside
+// the driver's placeholder limit and max_allowed_packet on the arming replay.
+const KEY_CHUNK = 500;
+function chunked(list, size){
+    const out = [];
+    for(let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
+    return out;
+}
+function placeholders(list){ return list.map(() => '?').join(','); }
+
+// Latest journal value for a SET of keys: Map of `address \t tick` -> bc string,
+// '0' when the key is absent or tombstoned. The read is unbounded in height
+// because the writer runs before this block's rows are inserted, so the latest
+// row for a key is necessarily from a prior block. MAX(id) is the same row the
+// per-key `ORDER BY j.id DESC LIMIT 1` returned: id is the AUTO_INCREMENT primary
+// key, so it orders the append-only journal exactly.
+//
+// Set-based rather than one SELECT per key (): the tail of
+// writeEscrowJournal ran 2 serial round-trips per changed key inside the block
+// transaction, and the arming replay attributes the WHOLE ledger, so that tail
+// scaled with ledger size. The id lookups narrow the grouped scan to the keys in
+// play; that filter is an address x tick superset of the real key set, which is
+// harmless because every value is read back by exact key and a key the grouped
+// result never mentions reads '0' just as an empty single-key JOIN did.
+// Resolve a set of address and tick STRINGS to their index-table ids, in two set
+// queries rather than one per key. Shared by the prior-total read and the INSERT.
+//
+// The INSERT needs it for a correctness reason, not a speed one (). The
+// per-key INSERTs this file used to run bound the ids as `(SELECT id FROM
+// index_addresses WHERE address = ?)` sub-selects, and leaned on the NOT NULL column
+// to throw when one resolved to nothing. That guarantee does not survive batching:
+// on a server without STRICT_ALL_TABLES a MULTI-row INSERT downgrades a NULL into a
+// NOT NULL column from an error to a warning and writes the implicit default 0, so a
+// consensus journal row would be silently attributed to whichever address holds id 0,
+// while the single-row form errored on the identical value. Resolving here and
+// throwing by name keeps the writer fail-loud under every sql_mode.
+async function indexIds(db, addresses, ticks){
+    const addrIds = new Map();
+    for(const chunk of chunked(Array.from(new Set(addresses)), KEY_CHUNK)){
+        const rows = await db.doQuery(
+            'SELECT a.id AS id, a.address AS address FROM index_addresses a WHERE a.address IN (' + placeholders(chunk) + ')',
+            chunk);
+        for(const r of (rows || [])) addrIds.set(String(r.address), r.id);
+    }
+    const tickIds = new Map();
+    for(const chunk of chunked(Array.from(new Set(ticks)), KEY_CHUNK)){
+        const rows = await db.doQuery(
+            'SELECT t.id AS id, t.tick AS tick FROM index_tickers t WHERE t.tick IN (' + placeholders(chunk) + ')',
+            chunk);
+        for(const r of (rows || [])) tickIds.set(String(r.tick), r.id);
+    }
+    return { addrIds, tickIds };
+}
+
+async function priorTotals(db, keys){
+    const out = new Map();
+    if(!keys.length) return out;
+    const { addrIds, tickIds } = await indexIds(db, keys.map(k => k.address), keys.map(k => k.tick));
+    // id-pair -> the string key the caller reads by; a key whose address or tick has
+    // no index row has no journal row either, so it is simply never populated ('0').
+    const byIdPair = new Map();
+    for(const k of keys){
+        const a = addrIds.get(k.address);
+        const t = tickIds.get(k.tick);
+        if(a === undefined || t === undefined) continue;
+        byIdPair.set(a + '\t' + t, k.address + '\t' + k.tick);
+    }
+    if(!byIdPair.size) return out;
+    const aList = Array.from(new Set(Array.from(byIdPair.keys()).map(p => p.split('\t')[0])));
+    const tList = Array.from(new Set(Array.from(byIdPair.keys()).map(p => p.split('\t')[1])));
+    for(const aChunk of chunked(aList, KEY_CHUNK)){
+        for(const tChunk of chunked(tList, KEY_CHUNK)){
+            const rows = await db.doQuery(
+                'SELECT j.address_id AS address_id, j.tick_id AS tick_id, j.locked_amount AS locked_amount ' +
+                'FROM escrow_leaf_journal j ' +
+                'INNER JOIN (SELECT address_id, tick_id, MAX(id) AS id FROM escrow_leaf_journal ' +
+                '            WHERE address_id IN (' + placeholders(aChunk) + ') AND tick_id IN (' + placeholders(tChunk) + ') ' +
+                '            GROUP BY address_id, tick_id) m ON m.id = j.id',
+                aChunk.concat(tChunk));
+            for(const r of (rows || [])){
+                const key = byIdPair.get(String(r.address_id) + '\t' + String(r.tick_id));
+                if(key === undefined) continue;                // cross-product row for a key we did not ask about
+                if(r.locked_amount == null) continue;          // tombstone reads '0', same as an absent row
+                out.set(key, String(r.locked_amount));
+            }
+        }
+    }
+    return out;
 }
 
 // Append one row per key whose total actually CHANGED. Runs on the SOURCE inside
@@ -329,9 +405,15 @@ async function writeEscrowJournal(db, blockIndex, opts){
         }
     }
 
+    // Every key's prior value in one set-based read; the keys are distinct by
+    // construction (sums is keyed by address+tick), so no key's prior can be
+    // affected by another key's write below.
+    const priors = await priorTotals(db, Array.from(sums.values()));
+
     let written = 0;
+    const pending = [];
     for(const s of sums.values()){
-        const prior = await priorTotal(db, s.address, s.tick);
+        const prior = priors.get(s.address + '\t' + s.tick) || '0';
         const next  = full ? s.amount : bc.bcstr(bc.bcadd(prior, s.amount, SCALE));
         if(bc.bclt(next, 0))
             throw new Error('escrowJournal: locked total for ' + s.address + '/' + s.tick + ' nets negative (' + next + ') ' +
@@ -341,12 +423,35 @@ async function writeEscrowJournal(db, blockIndex, opts){
         if(eq(prior, next)) continue;                     // unchanged (includes 0 -> 0)
         if(dry){ written++; continue; }                   // read-only conformance pass
         // A released key is recorded as SQL NULL, the reader's tombstone.
-        await db.doQuery(
-            'INSERT INTO escrow_leaf_journal (address_id, tick_id, locked_amount, block_index) ' +
-            'VALUES ((SELECT id FROM index_addresses WHERE address = ?), ' +
-            '        (SELECT id FROM index_tickers   WHERE tick = ?), ?, ?)',
-            [s.address, s.tick, isZero ? null : M.canonicalAmount(next), blockIndex]);
+        pending.push({ address: s.address, tick: s.tick, locked: isZero ? null : M.canonicalAmount(next) });
         written++;
+    }
+    // Ids resolved in JS, not by an id sub-select per VALUES row: see indexIds for why
+    // the sub-select form stops being fail-loud the moment the INSERT carries more than
+    // one row. An unresolvable key throws BY NAME here, before anything is written, and
+    // the throw rolls the block transaction back exactly as the NOT NULL violation did.
+    if(pending.length){
+        const ids = await indexIds(db, pending.map(p => p.address), pending.map(p => p.tick));
+        for(const p of pending){
+            p.address_id = ids.addrIds.get(p.address);
+            p.tick_id    = ids.tickIds.get(p.tick);
+            if(p.address_id === undefined || p.tick_id === undefined)
+                throw new Error('escrowJournal: no index row for ' +
+                                (p.address_id === undefined ? 'address ' + p.address : 'tick ' + p.tick) +
+                                ' ' + (full ? 'in the arming replay' : 'at block ' + blockIndex) +
+                                '; the journal row it keys would carry a NULL id');
+        }
+    }
+    // One multi-row INSERT per chunk rather than one per key. The VALUES list keeps
+    // the loop's order, so the AUTO_INCREMENT ids that idx_latest walks backwards are
+    // assigned exactly as the per-key inserts assigned them.
+    for(const chunk of chunked(pending, KEY_CHUNK)){
+        const args = [];
+        for(const p of chunk) args.push(p.address_id, p.tick_id, p.locked, blockIndex);
+        await db.doQuery(
+            'INSERT INTO escrow_leaf_journal (address_id, tick_id, locked_amount, block_index) VALUES ' +
+            chunk.map(() => '(?, ?, ?, ?)').join(', '),
+            args);
     }
     return written;
 }

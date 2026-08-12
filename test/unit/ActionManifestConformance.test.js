@@ -90,13 +90,71 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
         const denied  = Actions.getFeeQuoteDenylist();
         const exempt  = Actions.getFeeQuoteExempt();
 
-        it('(a) every dispatched action classifies as exactly one of denied/exempt/quotable', function () {
-            const dispatched = localIndexerSet();
-            for (const a of dispatched) {
-                const c = Actions.classifyFeeQuoteAction(a);
-                assert.ok(['denied', 'exempt', 'quotable'].includes(c),
-                    a + ' classified as unexpected value ' + JSON.stringify(c));
-            }
+        // #4267: the old (a) asserted only that the classifier returned one of
+        // denied/exempt/quotable, which classifyFeeQuoteAction can never fail to do - a
+        // tautology that passed for a dispatched action nobody classified. The sibling cases
+        // do not close it either: (d)/(e) pin the DENIED and STATIC sets exactly, but EXEMPT is
+        // constrained only by disjointness (b) and no-orphans (c), so a fee-bearing action added
+        // to FEE_QUOTE_EXEMPT, or a new VM/compound action left out of FEE_QUOTE_DENYLIST and
+        // defaulting to `quotable`, passed every check. The second re-opens the unauthenticated
+        // VM-compute-under-mutex the denylist comment (src/actions.js) exists to close.
+        //
+        // EXPECTED is a hand-written literal on purpose. Deriving it from
+        // getFeeQuoteDenylist()/getFeeQuoteExempt() would compare the sets against themselves
+        // and rebuild the same tautology; an independent second opinion is the whole point.
+        const EXPECTED_FEE_QUOTE_CLASS = {
+            // Run caller-supplied code in the VM (or smuggle something that does), so the
+            // public feequote refuses to dry-run them.
+            BATCH: 'denied', DEPLOY: 'denied', EXECUTE: 'denied', XEXEC: 'denied',
+
+            // Settlement/lifecycle legs that stage no wallet-priceable fee, plus ATTEST.
+            ATTEST: 'exempt', BET_EXPIRE: 'exempt', COINPAY: 'exempt', COINPAY_EXPIRE: 'exempt',
+            CROSS_SETTLE: 'exempt', DISPENSE: 'exempt', DISPENSER_CLOSE: 'exempt',
+            DISPENSER_EXPIRE: 'exempt', ORDER_EXPIRE: 'exempt', ORDER_MATCH: 'exempt',
+            SWAP_EXPIRE: 'exempt', SWAP_MATCH: 'exempt', XCALL: 'exempt',
+
+            // Everything else is wallet-broadcast and safely dry-runnable for a quote.
+            ADDRESS: 'quotable', AIRDROP: 'quotable', ANCHOR: 'quotable', BET: 'quotable',
+            BROADCAST: 'quotable', CALLBACK: 'quotable', COLLECT: 'quotable', DELEGATE: 'quotable',
+            DEPOSIT: 'quotable', DESTROY: 'quotable', DISPENSER: 'quotable', DIVIDEND: 'quotable',
+            FILE: 'quotable', ISSUE: 'quotable', LINK: 'quotable', LIST: 'quotable',
+            MESSAGE: 'quotable', MINT: 'quotable', NODEPROOF: 'quotable', ORDER: 'quotable',
+            PRICE: 'quotable', SEND: 'quotable', SLASH: 'quotable', SLEEP: 'quotable',
+            STAKE: 'quotable', SWAP: 'quotable', SWEEP: 'quotable', UNSTAKE: 'quotable',
+            VOTE: 'quotable', WITHDRAW: 'quotable',
+        };
+
+        it('(a1) every dispatched action carries an explicit expected fee-quote class', function () {
+            const unclassified = localIndexerSet().filter(
+                a => !Object.prototype.hasOwnProperty.call(EXPECTED_FEE_QUOTE_CLASS, a));
+            assert.deepStrictEqual(unclassified, [],
+                'These actions are dispatched by src/actions.js but no one decided their fee-quote class, ' +
+                'so classifyFeeQuoteAction silently defaults them to `quotable` and the PUBLIC feequote ' +
+                'endpoint will dry-run them. If an action runs caller code in the VM it belongs in ' +
+                'FEE_QUOTE_DENYLIST; if it stages no priceable fee it belongs in FEE_QUOTE_EXEMPT. Then ' +
+                'record the decision here: ' + JSON.stringify(unclassified));
+        });
+
+        it('(a2) every dispatched action classifies exactly as expected', function () {
+            const mismatches = localIndexerSet()
+                .filter(a => Object.prototype.hasOwnProperty.call(EXPECTED_FEE_QUOTE_CLASS, a))
+                .map(a => ({ action: a, want: EXPECTED_FEE_QUOTE_CLASS[a], got: Actions.classifyFeeQuoteAction(a) }))
+                .filter(m => m.want !== m.got);
+            assert.deepStrictEqual(mismatches, [],
+                'The fee-quote class of these actions changed. A quotable -> exempt move stops pricing a ' +
+                'fee the chain still charges; a denied -> quotable move hands unauthenticated callers a ' +
+                'VM dry-run under the block-loop mutex. Fix FEE_QUOTE_DENYLIST / FEE_QUOTE_EXEMPT in ' +
+                'src/actions.js, or - if the reclassification is deliberate - change this map in the same ' +
+                'commit and say why:\n' +
+                mismatches.map(m => `  ${m.action}: want ${m.want}, got ${m.got}`).join('\n'));
+        });
+
+        it('(a3) the expected-class map names no action the dispatch table dropped', function () {
+            const dispatched = new Set(localIndexerSet());
+            const orphans = Object.keys(EXPECTED_FEE_QUOTE_CLASS).filter(a => !dispatched.has(a));
+            assert.deepStrictEqual(orphans, [],
+                'This map classifies actions src/actions.js no longer dispatches, so the entries are dead ' +
+                'weight that would silently re-waive (a1) if a name were ever reused: ' + JSON.stringify(orphans));
         });
 
         it('(b) denied and exempt sets are disjoint', function () {

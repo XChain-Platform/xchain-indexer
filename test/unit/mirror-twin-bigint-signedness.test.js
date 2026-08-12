@@ -53,7 +53,28 @@ const MIRROR_TWINS = [
     'cross_chain_calls',
     'capability_snapshots',
     'state_checkpoints',
+    'anchor_reward_attestations',
 ];
+
+// Mirror tables that are NOT declared in a hub_db_sync.js registry array. Empty
+// today; an entry here is an explicit operator waiver, not a place to park drift.
+const REGISTRY_EXEMPT = [];
+
+// Tables the registries name outside the two scraped arrays: the oracle pair is
+// wired by name in the oracle bootstrap/apply paths rather than via a const list.
+const REGISTRY_IMPLICIT = ['oracle_prices', 'price_snapshots'];
+
+// Scrape a `const <NAME> = [ 'a', 'b' ];` array literal out of hub_db_sync.js.
+// Read from SOURCE rather than require()d because the module exports only the
+// class + ensureTables, and the file is a byte-identical vendored twin shared
+// with xchain-explorer: adding exports for a test's convenience would force a
+// same-commit edit to that copy. Returns null when the declaration is absent, so
+// the caller can fail loudly instead of silently inventorying nothing.
+function scrapeTableArray(source, name) {
+    const m = new RegExp('const\\s+' + name + '\\s*=\\s*\\[([^\\]]*)\\]').exec(source);
+    if (!m) return null;
+    return [...m[1].matchAll(/'([^']+)'/g)].map(x => x[1]);
+}
 
 // table -> { column(lower) -> { unsigned: bool, definition } } for BIGINT columns only.
 // Deliberately NOT parseExpectedColumns: that parser requires the local `) ENGINE ...`
@@ -83,6 +104,33 @@ describe('mirror-twin BIGINT signedness conformance @regression', function () {
                 throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but sibling xchain-hub sql dir not found at ' + HUB_SQL_DIR);
             this.skip();
         }
+    });
+
+    //  landed anchor_reward_attestations into HUB_STATE_TABLES without adding it
+    // here, so its field shape went unguarded on a money rail for a full release cycle.
+    // The inventory above is hand-written; this joins it back to the registries that
+    // decide what the mirror actually carries, so the NEXT table added to either array
+    // reddens the suite instead of drifting silently.
+    it('every hub_db_sync registry table is inventoried in MIRROR_TWINS', function () {
+        const source = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'hub_db_sync.js'), 'utf8');
+        const missingDecls = [];
+        const declared = [];
+        for (const name of ['CROSS_CHAIN_TABLES', 'HUB_STATE_TABLES']) {
+            const tables = scrapeTableArray(source, name);
+            if (!tables || tables.length === 0) { missingDecls.push(name); continue; }
+            declared.push(...tables);
+        }
+        assert.deepStrictEqual(missingDecls, [],
+            'could not scrape these registries out of src/hub_db_sync.js; the declaration was ' +
+            'renamed or reformatted and this guard is now inventorying nothing: ' + missingDecls.join(', '));
+        declared.push(...REGISTRY_IMPLICIT);
+
+        const uninventoried = declared.filter(t => !MIRROR_TWINS.includes(t) && !REGISTRY_EXEMPT.includes(t));
+        assert.deepStrictEqual(uninventoried, [],
+            'these tables are mirrored from the hub but absent from MIRROR_TWINS, so their BIGINT ' +
+            'signedness is unguarded: ' + uninventoried.join(', ') + '. Add each to MIRROR_TWINS (and ' +
+            'bump HUB_SCHEMA_VERSION in all three hub-schema-version.js copies, since a stale consumer ' +
+            'cannot interpret a table it does not have).');
     });
 
     it('sanity: every declared twin exists on both sides (list is not vacuous)', function () {

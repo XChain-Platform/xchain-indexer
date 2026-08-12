@@ -38,7 +38,8 @@ const caretRefStrict = require('./caret_ref_strict_activation');
 // Per-block cap on the ATTEST deadline-expiry sweep (). Vendored
 // byte-identical from xchain-documentation/protocol/constants.js, same convention
 // as the XCALL_MAX_CALLS_PER_BLOCK sibling it mirrors.
-const { ATTEST_MAX_EXPIRIES_PER_BLOCK } = require('./protocol/constants.js');
+const { ATTEST_MAX_EXPIRIES_PER_BLOCK,
+        CROSS_SETTLE_MAX_PER_BLOCK } = require('./protocol/constants.js');
 const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS,
         ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
         dedupeArchiveChunks } = require('./anchor-action-query');
@@ -515,6 +516,29 @@ class Database {
                         continue;
                     }
 
+                    // Backdating guard: the dated-prefix check above freezes the NAMING
+                    // convention, but nothing stopped a new file from being dated before a
+                    // migration the fleet already applied. Lexical apply order then puts it
+                    // in its date slot on a fresh DB and after the frontier on an aged one,
+                    // diverging the two schemas. `frontier` is the ledger state at run start
+                    // (appliedByName is not written during the loop), so files applied by
+                    // THIS run never advance it and a long-offline node catching up is fine.
+                    // Auto files only - see Database.backdatedFrontierViolation for why a
+                    // deferred mode=manual file cannot be told apart from a backdated one.
+                    if(mode === 'auto'){
+                        const frontier = Database.backdatedFrontierViolation(file, appliedByName.keys());
+                        if(frontier){
+                            const msg = 'runMigrations: ' + file + ' is dated BEFORE already-applied migration ' + frontier +
+                                ', so it would run in a different position here than on a fresh database and diverge the schema. ' +
+                                'Rename it with a date after ' + frontier + '.';
+                            // Same dual-mode contract as the checksum guard above: the operator
+                            // path and opt-in strict mode fail closed, passive startup logs and
+                            // proceeds so a backdated commit cannot black-start the fleet.
+                            if(includeManual || process.env.MIGRATION_STRICT_CHECKSUM === '1') throw new Error(msg);
+                            console.error(msg + ' Applying it anyway at this position - review manually.');
+                        }
+                    }
+
                     // Quote-aware split into statements: strips `--` line comments and
                     // breaks on ';' only outside quoted strings, so a ';' in a comment
                     // header or inside a string literal never terminates a statement, and
@@ -644,6 +668,15 @@ class Database {
         // ALTER (COLUMN, PARTITION, or a bare column identifier) loses data.
         const SAFE_ALTER_DROP = new Set(['INDEX', 'KEY', 'FOREIGN', 'CONSTRAINT', 'CHECK', 'DEFAULT', 'PRIMARY']);
         for(const raw of (statements || [])){
+            // Executable (versioned) comments are the one /* */ form the server RUNS:
+            // MariaDB/MySQL execute `/*!50000 DROP TABLE balances */` and `/*M! ... */`
+            // verbatim, and splitSqlStatements strips only `--` lines, so the payload
+            // reaches conn.query intact. The block-comment strip below would delete it
+            // before any keyword check, scoring the file safe and auto-running the DROP.
+            // Same class as the PREPARE/EXECUTE/CALL forms below - the server does
+            // something a prefix classifier cannot see - and no committed auto migration
+            // uses one, so treat any statement carrying one as non-auto-eligible.
+            if(/\/\*(?:!|M!)/i.test(String(raw)))                return raw;
             // Belt-and-braces: strip /* */ block comments (line comments are already
             // gone) so a keyword inside comment prose never triggers or hides a hit.
             const stmt = String(raw).replace(/\/\*[\s\S]*?\*\//g, ' ').trim();
@@ -8429,7 +8462,16 @@ class Database {
     // cross_chain_matches is a hub-mirrored table (read via _mirrorDb), while
     // cross_chain_settlements is a local indexer table (read via this) - so we filter in JS
     // rather than join across two databases.
-    async getEffectiveUnsettledMatches(coin, block_time){
+    //
+    // Capped per block, mirroring getEffectiveUndispatchedCalls (overflow carries
+    // forward; never dropped). Without it a hub backlog injected an unbounded number
+    // of escrow-releasing CROSS_SETTLE actions into one block transaction ().
+    // The slice lands AFTER the settled-set exclusion so the cap counts real work, and
+    // the ORDER BY above is a total order on quorum-agreed content, so every operator
+    // takes the identical prefix. See CROSS_SETTLE_MAX_PER_BLOCK in protocol/constants.js
+    // for why the cap is consensus-visible, and why whether it may ship UNGATED on the
+    // live mainnet chains is an operator call rather than a settled one.
+    async getEffectiveUnsettledMatches(coin, block_time, limit){
         // network filter: a match only settles on the indexer of the network it was matched
         // + signed on (also bound into the signed canonical - see cross_settle._canonical).
         // ORDER BY (snapshot_block, match_id) - quorum-agreed row content, so the
@@ -8451,7 +8493,15 @@ class Database {
         // only one side (unlike call_id, the match_id is never lowercased on write, so a one-
         // sided .toLowerCase() here would DESYNC the compare rather than fix it).
         let settledSet = new Set(settled.map(r => r.match_id));
-        return matches.filter(m => !settledSet.has(m.match_id));
+        // The no-limit default reads the protocol constant rather than repeating its value,
+        // so the cap has ONE definition. A literal here would be a second copy of a
+        // consensus-visible number that no test compares against the first, and the caller
+        // that omitted the limit would then settle a different prefix than the one that
+        // passed it. The `|| 25` tail keeps the "no uncapped path" property even if the
+        // constant is ever exported as 0 or undefined, since slice(0, undefined) returns
+        // the whole backlog.
+        return matches.filter(m => !settledSet.has(m.match_id))
+                      .slice(0, Number(limit) || CROSS_SETTLE_MAX_PER_BLOCK || 25);
     }
 
     // Record that this chain settled its leg of a cross-chain match (idempotent on
@@ -13951,6 +14001,40 @@ class Database {
         return rows.length > 0 ? rows[0] : null;
     }
 
+    //  relay: look up the ATTEST v0 row that already materialized a given relay
+    // identity (origin_chain, origin_action_index) on this chain. This is the exactly-once
+    // key the v3 admission guard needs and request_id cannot supply: request_id derives
+    // from the ORIGIN tx_hash, so a reorg that re-emits the same origin action from a
+    // different transaction yields a new request_id for the same identity ().
+    //
+    // 'rejected' rows are excluded deliberately. A rejected row never enters the pending
+    // pool, is never fulfilled and spends no fee, so it consumed no exactly-once slot;
+    // counting it would let anyone permanently block a legitimate materialization by
+    // broadcasting one malformed v3 naming the same origin action. ORDER BY action_index
+    // keeps the FIRST materialization canonical on every node.
+    //
+    // doQueryStrict, not doQuery, and the difference is a fork. This read is a CONSENSUS
+    // INPUT: null here is what admits the v3 and writes a 'valid'/'pending' row, so a
+    // swallowed query error collapsing to [] is indistinguishable from "no prior
+    // materialization" and makes one faulting node materialize a duplicate BTC request
+    // every other node rejected - the M-17 shape doQueryStrict was added for. Block
+    // processing already holds a transaction, under which doQuery re-throws anyway, so
+    // this is not a behavior flip on the live path; it is the guarantee stated
+    // unconditionally, for the replay/genesis/synthetic entry points that reach the same
+    // handler outside one. A throw rolls the block back and retries it, which is the
+    // correct answer to a DB fault and is NOT the DB-constraint throw the schema comment
+    // rules out: that one fires on legitimate DATA and would halt every node in turn.
+    async getRelayRequestByOrigin(originChain, originActionIndex){
+        let query = `SELECT action_index, request_id, request_status
+                     FROM attests
+                     WHERE origin_chain = ? AND origin_action_index = ?
+                       AND version = 0 AND request_status <> 'rejected'
+                     ORDER BY action_index ASC
+                     LIMIT 1`;
+        let rows = await this.doQueryStrict(query, [String(originChain || ''), Number(originActionIndex)]);
+        return rows.length > 0 ? rows[0] : null;
+    }
+
     // Update the request_status field on an ATTEST v0 (request) row
     // resolvedBlock anchors a TERMINAL flip ('fulfilled'/'errored'/'expired') to the
     // block that caused it, so the rollback pass can reset the surviving request row
@@ -15100,6 +15184,43 @@ Database.planLedgerRenames = function(appliedNames){
         if(have.has(oldName) && !have.has(newName)) ops.push({ from: oldName, to: newName });
     }
     return ops;
+};
+
+// Backdating guard for the auto-apply path. Apply order is lexical, so a migration
+// added with a date EARLIER than one already applied runs in a different position on
+// a fresh database (in its date slot) than on an aged one (after the frontier), and
+// the two schemas diverge across the fleet. Given a pending filename and the names
+// already in the ledger, return the offending applied name when the pending file
+// sorts before the lexical maximum of them, else null. Empty ledger (fresh install)
+// never trips. Pure string logic (no DB), unit-tested directly.
+//
+// Callers must pass this ONLY auto-mode files, and that restriction is the whole
+// correctness argument, not an optimization. A mode=manual file legitimately sits
+// unapplied behind the frontier for as long as the operator defers it (eleven such
+// files ship today), so it is indistinguishable at runtime from a backdated one and
+// guarding it would hard-fail `node src/migrate.js` on every aged fleet DB. An auto
+// file has no such state: it applies unattended at the first startup that sees it,
+// so an unapplied auto file behind the frontier is always newly backdated.
+//
+// Only DATED ledger names are eligible to be the frontier, and that filter is
+// load-bearing rather than tidiness. Four undated migrations shipped before the
+// dated-prefix convention; three are re-keyed by MIGRATION_LEDGER_RENAMES, but
+// add_controller_bound_token_columns.sql was deleted (7f1142e added it, 1c728c5
+// removed it) rather than renamed, so a DB migrated inside that window carries
+// that row forever with no heal path. An undated name sorts ABOVE every 2026-*
+// name in ASCII ('a' 0x61 > '2' 0x32), so taking the max over raw names would
+// make the frontier a garbage maximum that every ordinary new migration sorts
+// below, hard-failing `node src/migrate.js` on exactly the aged fleet DBs this
+// guard must not break.
+Database.backdatedFrontierViolation = function(pendingName, appliedNames){
+    let frontier = null;
+    for(const name of (appliedNames || [])){
+        const n = String(name);
+        if(!/^\d{4}-\d{2}-\d{2}-/.test(n)) continue;
+        if(frontier === null || n > frontier) frontier = n;
+    }
+    if(frontier === null) return null;
+    return (String(pendingName) < frontier) ? frontier : null;
 };
 
 module.exports = Database

@@ -308,7 +308,7 @@ describe('SQL schema column parity (definition path vs ledger path) @regression'
 
         const orphans = [];
         for (const [table, cols] of Object.entries(collectDefinitionColumns())) {
-            const based = new Set((baselineCols[table] || []).map(s => s.toLowerCase()));
+            const based = new Set((baselineCols[table] || []).map(e => String(e.name).toLowerCase()));
             for (const c of cols) {
                 const key  = (table + '.' + c.name).toLowerCase();
                 if (based.has(c.name.toLowerCase())) continue;   // predates the ledger
@@ -323,6 +323,63 @@ describe('SQL schema column parity (definition path vs ledger path) @regression'
             'them. Ship a dated migration (ADD COLUMN IF NOT EXISTS ... with the AFTER anchor matching the ' +
             'definition). If the column genuinely predates the migration ledger, add it to ' +
             'test/fixtures/schema-baseline.json deliberately:\n  ' + orphans.join('\n  '));
+    });
+
+    // #4435: the guard above exempts a pre-ledger column by NAME alone, and the baseline used
+    // to store nothing but names. So a definition-only SHAPE change to a baselined column -
+    // widening `balances.amount VARCHAR(250)`, flipping its nullability or default, or moving
+    // it among its pre-ledger siblings - stayed green with no dated migration behind it. That
+    // is not a theoretical hole: the boot-time drift reconciler (`alterTableForDrift` in
+    // src/db.js) adds MISSING columns but never retypes an existing one, so an aged DB keeps
+    // the old shape forever while a fresh install gets the new one, and the two schema paths
+    // silently disagree. The baseline now freezes each pre-ledger column's normalized spec in
+    // definition order, which is the same value collectDefinitionColumns() produces, so this
+    // compares like with like through one parser.
+    //
+    // Position is asserted RELATIVELY (the order of the baselined columns among themselves),
+    // not as an absolute index. A dated migration that legitimately inserts a column mid-table
+    // shifts every later absolute index, which would make an absolute check fail on correct
+    // work; relative order is untouched by that and still catches a reorder of the pre-ledger
+    // columns, which is what breaks byte-identity.
+    it('a pre-ledger baselined column has not changed shape or relative position @regression', function () {
+        const baseline = JSON.parse(fs.readFileSync(
+            path.join(__dirname, '..', 'fixtures', 'schema-baseline.json'), 'utf8'));
+        const defs = collectDefinitionColumns();
+
+        const drifted   = [];
+        const reordered = [];
+        for (const [table, frozen] of Object.entries(baseline.baseline || {})) {
+            const cols = defs[table] || [];
+            const want = new Map(frozen.map(e => [String(e.name).toLowerCase(), e]));
+            const live = cols.filter(c => want.has(c.name.toLowerCase()));
+
+            const liveOrder   = live.map(c => c.name.toLowerCase()).join(',');
+            const frozenOrder = frozen.map(e => String(e.name).toLowerCase()).join(',');
+            if (liveOrder !== frozenOrder)
+                reordered.push(`  ${table}: definition order [${liveOrder}] vs baseline [${frozenOrder}]`);
+
+            for (const c of live) {
+                const e = want.get(c.name.toLowerCase());
+                if (e.spec !== c.spec)
+                    drifted.push(`  ${table}.${c.name}\n    baseline:   ${e.spec}\n    definition: ${c.spec}`);
+            }
+        }
+
+        assert.deepStrictEqual(drifted, [],
+            'These columns predate the migration ledger, so they are exempt from needing a dated migration - ' +
+            'but their SHAPE changed in src/sql/<table>.sql with no migration behind it. A long-lived DB will ' +
+            'never converge: alterTableForDrift (src/db.js) adds missing columns but never retypes an existing ' +
+            'one, so aged DBs keep the old type/default/nullability while fresh installs get the new one. Ship ' +
+            'a dated migration with the matching MODIFY (the MODIFY-parity case above then enforces it), and ' +
+            're-freeze test/fixtures/schema-baseline.json in the SAME commit:\n' + drifted.join('\n'));
+
+        assert.deepStrictEqual(reordered, [],
+            'The pre-ledger columns of these tables changed order relative to each other in ' +
+            'src/sql/<table>.sql. MariaDB cannot reorder a column in place, so an aged DB keeps the original ' +
+            'order and the two paths stop producing a byte-identical SHOW CREATE TABLE (the way ' +
+            'contract_state.state_key_bin diverged). Restore the declared order, or - if the move is ' +
+            'deliberate and carried by a dated migration - re-freeze test/fixtures/schema-baseline.json in ' +
+            'the same commit:\n' + reordered.join('\n'));
     });
 
     // #3164: the guard above had no notion of a migration-created TABLE. Its columns are

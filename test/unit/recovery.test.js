@@ -212,29 +212,51 @@ function memDb(v1s, v2s, opts) {
     return db;
 }
 
-// BTC indexer stub: every pubkey in `staked` holds an active stake (the raw
-// _verifyStakes existence query). opts.capSets = { <capability>: [{pubkey, source, weight}] }
-// backs the REC-SUBSET-1 completeness resolver (getStakeWeightsByCapability /
-// getValidatorsByCapability); opts.truncated = [<capability>...] flags a capped
-// resolution. With no capSets the resolver returns [] (completeness is vacuous),
-// so the pre-existing --verify-stakes tests are unaffected.
+// BTC indexer stub. The two cross-checks resolve the SAME db.js methods at two different
+// thresholds, and the stub models them apart:
+//   minStake '0'  -> REC-EXIST-1 delegated-key admission (_verifyStakes stage 2): the
+//                    delegation-aware effective signer set. Backed by opts.effective,
+//                    defaulting to `staked`. A key in `effective` but NOT in `staked` models a
+//                    DELEGATED-only signer: authorized by a staked source, no stakes row of its
+//                    own. Stage 2 runs only for keys the direct query rejected, so with no
+//                    `effective` override the resolver is never reached for existence.
+//   minStake null -> REC-SUBSET-1 completeness (_verifyCompleteness): the set resolved at this
+//                    node's local capability MIN_STAKE, which db.js applies when no override is
+//                    passed. Backed by opts.capSets = { <capability>: [{pubkey, source, weight}] }.
+// `staked` backs the direct-stake doQuery probe (stage 1, and the whole answer for a handle
+// with no resolver). opts.truncated = [<capability>...] flags a capped resolution. Every
+// resolver call is recorded in `calls` as { capability, minStake, method } so a test can pin
+// both the threshold and WHICH resolver a check reached for.
 function btcDbStub(staked, opts) {
     opts = opts || {};
     let set = new Set(staked.map(p => p.toLowerCase()));
+    let effective = (opts.effective || staked).map(p => String(p).toLowerCase());
     let capSets = opts.capSets || {};
     let truncated = new Set(opts.truncated || []);
-    function resolve(capability, minStake) {
-        let out = (capSets[capability] || [])
-            .filter(r => Number(r.weight != null ? r.weight : r.amount) >= Number(minStake))
-            .map(r => ({ pubkey: r.pubkey, source: r.source, weight: String(r.weight != null ? r.weight : r.amount) }));
+    let calls = [];
+    function resolve(capability, minStake, method) {
+        calls.push({ capability, minStake, method });
+        let out = (minStake === '0')
+            ? effective.map(pk => ({ pubkey: pk, source: 'src_' + pk.slice(0, 16), weight: '5' }))
+            : (capSets[capability] || []).map(r => ({
+                pubkey: r.pubkey, source: r.source, weight: String(r.weight != null ? r.weight : r.amount) }));
         out.truncated = truncated.has(capability);
         return out;
     }
     return {
+        calls,
         async doQuery(sql, params) { return set.has(String(params[0]).toLowerCase()) ? [{ 1: 1 }] : []; },
-        async getStakeWeightsByCapability(cap, block, minStake) { return resolve(cap, minStake); },
-        async getValidatorsByCapability(cap, block, minStake) { return resolve(cap, minStake); }
+        async getStakeWeightsByCapability(cap, block, minStake) { return resolve(cap, minStake, 'getStakeWeightsByCapability'); },
+        async getValidatorsByCapability(cap, block, minStake) { return resolve(cap, minStake, 'getValidatorsByCapability'); }
     };
+}
+
+// Raw-handle stub: doQuery only, no capability resolvers. Models a unit fixture or an
+// embedder holding a bare query handle, where _verifyStakes degrades to the legacy
+// direct-stake existence query.
+function rawStakeHandleStub(staked) {
+    let set = new Set(staked.map(p => p.toLowerCase()));
+    return { async doQuery(sql, params) { return set.has(String(params[0]).toLowerCase()) ? [{ 1: 1 }] : []; } };
 }
 
 // Full qualifying set the BTC resolver would report for a set of signing keys,
@@ -515,6 +537,90 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         assert.ok(badReport.failed[0].reason.includes('no on-chain stake'));
     });
 
+    it('certifies an archive whose validator signs by DELEGATION, holding no direct stake row (#4270)', async function () {
+        // DELEGATE.md: a source may authorize signing keys that carry no `stakes` row of
+        // their own; db.js UNIONs those active delegations into the effective signer set,
+        // so an honest archive legitimately contains such a key. The existence check must
+        // resolve through that same effective set - a direct-stake-only query rejected the
+        // whole batch and left AnchorRecovery unable to certify valid live state.
+        let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
+        let allKeys  = oracleKeys.concat(crossKeys).map(k => k.pubkey);
+        let delegate = crossKeys[0].pubkey;
+        let directOnly = allKeys.filter(p => p !== delegate);   // the delegated key has no stakes row
+        let report = await new AnchorRecovery(memDb([v1], []),
+            Object.assign({ btcDb: btcDbStub(directOnly, { effective: allKeys }), verifyStakes: true }, quiet)).run();
+        assert.strictEqual(report.verified, 1);
+        assert.strictEqual(report.failed.length, 0);
+        // ... and a key that is neither staked nor delegated is still a forge.
+        let ghost = makeKeypair();
+        let bad = await new AnchorRecovery(memDb([v1], []),
+            Object.assign({ btcDb: btcDbStub(directOnly, { effective: directOnly.concat([ghost.pubkey]) }), verifyStakes: true }, quiet)).run();
+        assert.strictEqual(bad.verified, 0);
+        assert.ok(bad.failed[0].reason.includes('no on-chain stake or delegation'));
+    });
+
+    it('a directly-staked key is answered by the direct query alone, never by a capped resolver', async function () {
+        // Stage ordering is the fix, not an optimisation: the direct query is uncapped, so a key
+        // it accepts must never be re-adjudicated by a resolver whose result caps could deny it.
+        let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
+        let allStaked = oracleKeys.concat(crossKeys).map(k => k.pubkey);
+        let btcDb = btcDbStub(allStaked);
+        let report = await new AnchorRecovery(memDb([v1], []), Object.assign({ btcDb, verifyStakes: true }, quiet)).run();
+        assert.strictEqual(report.verified, 1);
+        assert.ok(!btcDb.calls.some(c => c.minStake === '0'),
+                  'no key lacked a direct stake row, so the existence check must not have resolved at all');
+        assert.ok(btcDb.calls.every(c => c.minStake === null),
+                  'only the completeness resolution (no threshold override) may reach the resolver here');
+    });
+
+    it('delegated-key admission resolves the KEY-COMPLETE count resolver at a LOOSE threshold', async function () {
+        // Two properties in one, both false-reject guards:
+        //  - threshold '0', because slashCapabilityStake rewrites stakes.amount in place, so a
+        //    MIN_STAKE-thresholded existence resolution would deny a source slashed AFTER the block;
+        //  - getValidatorsByCapability, NOT getStakeWeightsByCapability: _cappedStakeWeightsSql
+        //    drops a source's keys past STAKE_WEIGHT_MAX_KEYS_PER_SOURCE (64) and by design does
+        //    NOT set truncated, so the weight resolver cannot answer a per-KEY existence question.
+        let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
+        let allKeys = oracleKeys.concat(crossKeys).map(k => k.pubkey);
+        let directOnly = allKeys.filter(p => p !== crossKeys[0].pubkey);
+        let btcDb = btcDbStub(directOnly, { effective: allKeys });
+        let report = await new AnchorRecovery(memDb([v1], []), Object.assign({ btcDb, verifyStakes: true }, quiet)).run();
+        assert.strictEqual(report.verified, 1);
+        let admissions = btcDb.calls.filter(c => c.minStake === '0');
+        assert.ok(admissions.length > 0, 'the delegated-only key must have been resolved');
+        assert.ok(admissions.every(c => c.method === 'getValidatorsByCapability'),
+                  'the source-capped weight resolver must never answer a per-key existence probe');
+        assert.ok(btcDb.calls.every(c => c.minStake === '0' || c.minStake === null),
+                  'no archive-derived threshold may reach the resolver');
+    });
+
+    it('a truncated delegation resolution fails closed rather than declaring a key absent', async function () {
+        // A capped resolution cannot prove a key ABSENT. The cap binds only on keys the direct
+        // query already rejected, so this turns a certain rejection into one that names the cap.
+        let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
+        let allKeys = oracleKeys.concat(crossKeys).map(k => k.pubkey);
+        let directOnly = allKeys.filter(p => p !== crossKeys[0].pubkey);
+        let btcDb = btcDbStub(directOnly, { effective: directOnly, truncated: ['cross_chain'] });
+        let report = await new AnchorRecovery(memDb([v1], []), Object.assign({ btcDb, verifyStakes: true }, quiet)).run();
+        assert.strictEqual(report.verified, 0);
+        assert.ok(report.failed[0].reason.includes('truncated'));
+        assert.ok(report.failed[0].reason.includes('cannot be proven absent'));
+    });
+
+    it('a raw doQuery handle keeps the legacy direct-stake existence check', async function () {
+        let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
+        let allStaked = oracleKeys.concat(crossKeys).map(k => k.pubkey);
+        let ok = await new AnchorRecovery(memDb([v1], []),
+            Object.assign({ btcDb: rawStakeHandleStub(allStaked), verifyStakes: true }, quiet)).run();
+        assert.strictEqual(ok.verified, 1);
+
+        let partial = allStaked.filter(p => p !== crossKeys[0].pubkey);
+        let bad = await new AnchorRecovery(memDb([v1], []),
+            Object.assign({ btcDb: rawStakeHandleStub(partial), verifyStakes: true }, quiet)).run();
+        assert.strictEqual(bad.verified, 0);
+        assert.ok(bad.failed[0].reason.includes('has no on-chain stake at block'));
+    });
+
     it('stake cross-check is gated on the explicit flag, not btcDb presence (restore runs against an EMPTY pre-reindex BTC DB)', async function () {
         let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
         // btcDb present but knows NO stakes (pre-reindex) and the flag is off;
@@ -565,20 +671,31 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             assert.ok(report.failed[0].reason.includes('truncated'));
         });
 
-        it('a subset dropping a lower-weight source below the archive floor is NOT flagged (no false-reject)', async function () {
-            // The completeness threshold is the archive's own minimum admitted weight. A source
-            // with LESS weight than that floor is below the bar the archive itself set, so its
-            // absence is not a forge signal - the honest full-archive property must not misfire.
+        it('rejects a dropped source whose weight is below the archive OWN minimum (threshold-inflation forge, #4269)', async function () {
+            // The completeness threshold used to be the archive's own minimum admitted weight,
+            // which let the archive pick its own bar: drop every lower-weight qualifying source
+            // and that minimum RISES, so the resolver returns only the retained high-weight
+            // sources and the subset check passes while the dropped stake is missing from S.
+            // The threshold is now the capability's protocol MIN_STAKE (what the resolver
+            // applies when no override is passed), so a source qualifying there and absent from
+            // the archive is a forge signal whatever its weight.
             let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
             let allStaked = oracleKeys.concat(crossKeys).map(k => k.pubkey);
-            let dust = makeKeypair();
+            let dropped = makeKeypair();
             let capSets = {
-                cross_chain: capSetFromKeys(crossKeys).concat([{ pubkey: dust.pubkey, source: 'src_dust', weight: '1' }]),
+                cross_chain: capSetFromKeys(crossKeys).concat([{ pubkey: dropped.pubkey, source: 'src_low', weight: '1' }]),
                 oracle_publish: capSetFromKeys(oracleKeys)
             };
+            let btcDb = btcDbStub(allStaked, { capSets });
             let report = await new AnchorRecovery(memDb([v1], []),
-                Object.assign({ btcDb: btcDbStub(allStaked, { capSets }), verifyStakes: true }, quiet)).run();
-            assert.strictEqual(report.verified, 1);
+                Object.assign({ btcDb, verifyStakes: true }, quiet)).run();
+            assert.strictEqual(report.verified, 0);
+            assert.ok(report.failed[0].reason.includes('incomplete'));
+            assert.ok(report.failed[0].reason.includes('src_low'));
+            // And the resolution that caught it passed NO archive-derived threshold.
+            assert.ok(btcDb.calls.some(c => c.minStake === null), 'completeness must resolve at the protocol floor');
+            assert.ok(btcDb.calls.every(c => c.minStake === null || c.minStake === '0'),
+                      'no archive-derived threshold may reach the resolver');
         });
     });
 

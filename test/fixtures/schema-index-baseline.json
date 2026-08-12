@@ -1,734 +1,3739 @@
 {
-  "_comment": "Indexes that predate the migration ledger (declared in a table's original CREATE TABLE definition, so they legitimately have no dated migration). Consumed by sql-schema-index-parity.test.js to guard the definition->ledger direction: any NEW index added to a src/sql/<table>.sql definition must either be created by a dated migration under src/sql/migrations/ OR added here deliberately. This is the index twin of test/fixtures/schema-baseline.json (#3386). Regenerating this file in the same commit that adds the index silently waives the guard - review baseline diffs. A table CREATEd by a dated migration does NOT belong here: its indexes are ledger-covered by that CREATE TABLE.",
+  "_comment": "Indexes that predate the migration ledger (declared in a table's original CREATE TABLE definition, so they legitimately have no dated migration). Consumed by sql-schema-index-parity.test.js to guard the definition->ledger direction: any NEW index added to a src/sql/<table>.sql definition must either be created by a dated migration under src/sql/migrations/ OR added here deliberately. This is the index twin of test/fixtures/schema-baseline.json (#3386). Regenerating this file in the same commit that adds the index silently waives the guard - review baseline diffs. A table CREATEd by a dated migration does NOT belong here: its indexes are ledger-covered by that CREATE TABLE. ENTRY FORMAT (#4435): each entry is {name, columns, unique} - the index name plus its normalized column list (order and (len) prefix preserved) and UNIQUE flag - not a bare name. The shape is asserted by sql-schema-index-parity.test.js, so re-pointing or re-prefixing a pre-ledger index fails until a dated migration ships and this file is deliberately re-frozen.",
   "_why_it_matters": "An inline KEY / UNIQUE KEY added to a definition AFTER the table already exists reaches nobody: reconcileTableIndexes self-heals only standalone CREATE INDEX (parseExpectedIndexes never parses an inline KEY), so a running node cannot back-fill it and a migration-replayed replica never receives it. Such an index exists on fresh installs only. Ship a dated migration for it, or declare it standalone so the reconciler can heal it.",
   "_known_unledgered_comment": "Indexes present in a definition today with no migration that are KNOWN debt awaiting their own migration. The test skips these but keeps them visible. Delete each entry when its migration ships. Empty = no outstanding debt.",
   "known_unledgered": [],
   "baseline": {
     "actions": [
-      "action_format",
-      "action_id",
-      "action_index",
-      "block_index",
-      "source_id",
-      "tx_index"
+      {
+        "name": "action_format",
+        "columns": [
+          "action_format"
+        ],
+        "unique": false
+      },
+      {
+        "name": "action_id",
+        "columns": [
+          "action_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "block_index",
+        "columns": [
+          "block_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "source_id",
+        "columns": [
+          "source_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tx_index",
+        "columns": [
+          "tx_index"
+        ],
+        "unique": false
+      }
     ],
     "address_controllers": [
-      "action_index",
-      "address_class",
-      "address_id",
-      "block_index",
-      "contract_index"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "address_class",
+        "columns": [
+          "address_id",
+          "action_class"
+        ],
+        "unique": false
+      },
+      {
+        "name": "address_id",
+        "columns": [
+          "address_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "block_index",
+        "columns": [
+          "block_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "contract_index",
+        "columns": [
+          "contract_index"
+        ],
+        "unique": false
+      }
     ],
     "addresses": [
-      "action_index",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "memo_id",
+        "columns": [
+          "memo_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "airdrops": [
-      "action_index",
-      "list_action_index",
-      "memo_id",
-      "status_id",
-      "tick_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "list_action_index",
+        "columns": [
+          "list_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "memo_id",
+        "columns": [
+          "memo_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick_id",
+        "columns": [
+          "tick_id"
+        ],
+        "unique": false
+      }
     ],
     "anchor_actions": [
-      "idx_anchor_batch",
-      "idx_anchor_checkpoint"
+      {
+        "name": "idx_anchor_batch",
+        "columns": [
+          "match_batch_seq",
+          "version",
+          "chunk_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "idx_anchor_checkpoint",
+        "columns": [
+          "chain",
+          "network",
+          "checkpoint_seq"
+        ],
+        "unique": false
+      }
     ],
     "anchor_reward_reconcile_log": [
-      "block_index",
-      "round_ref"
+      {
+        "name": "block_index",
+        "columns": [
+          "block_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "round_ref",
+        "columns": [
+          "reward_type",
+          "round_reference",
+          "block_index"
+        ],
+        "unique": false
+      }
     ],
     "attest_validator_stats": [
-      "last_updated_block",
-      "provider_id",
-      "validator_pubkey_provider"
+      {
+        "name": "last_updated_block",
+        "columns": [
+          "last_updated_block"
+        ],
+        "unique": false
+      },
+      {
+        "name": "provider_id",
+        "columns": [
+          "provider_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "validator_pubkey_provider",
+        "columns": [
+          "validator_pubkey",
+          "provider_id"
+        ],
+        "unique": true
+      }
     ],
     "attests": [
-      "action_index",
-      "block_index",
-      "contract_index",
-      "provider_id",
-      "version_status"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "block_index",
+        "columns": [
+          "block_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "contract_index",
+        "columns": [
+          "contract_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "provider_id",
+        "columns": [
+          "provider_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "version_status",
+        "columns": [
+          "version",
+          "request_status",
+          "deadline_block"
+        ],
+        "unique": false
+      }
     ],
     "balances": [
-      "tick_id"
+      {
+        "name": "tick_id",
+        "columns": [
+          "tick_id"
+        ],
+        "unique": false
+      }
     ],
     "batches": [
-      "action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "bet_feed_statuses": [
-      "action_index",
-      "feed_action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "feed_action_index",
+        "columns": [
+          "feed_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "bet_feeds": [
-      "action_index",
-      "allow_list",
-      "block_list",
-      "closed_block",
-      "memo_id",
-      "status_deadline",
-      "status_expire",
-      "status_id",
-      "terminal_block",
-      "tick_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "allow_list",
+        "columns": [
+          "allow_list"
+        ],
+        "unique": false
+      },
+      {
+        "name": "block_list",
+        "columns": [
+          "block_list"
+        ],
+        "unique": false
+      },
+      {
+        "name": "closed_block",
+        "columns": [
+          "closed_block"
+        ],
+        "unique": false
+      },
+      {
+        "name": "memo_id",
+        "columns": [
+          "memo_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_deadline",
+        "columns": [
+          "feed_status_id",
+          "deadline"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_expire",
+        "columns": [
+          "feed_status_id",
+          "expire_at"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "terminal_block",
+        "columns": [
+          "terminal_block"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick_id",
+        "columns": [
+          "tick_id"
+        ],
+        "unique": false
+      }
     ],
     "bet_statuses": [
-      "action_index",
-      "bet_action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "bet_action_index",
+        "columns": [
+          "bet_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "bets": [
-      "action_index",
-      "bet_status_id",
-      "feed_outcome",
-      "memo_id",
-      "settled_block",
-      "status_id",
-      "tick_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "bet_status_id",
+        "columns": [
+          "bet_status_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "feed_outcome",
+        "columns": [
+          "feed_action_index",
+          "outcome"
+        ],
+        "unique": false
+      },
+      {
+        "name": "memo_id",
+        "columns": [
+          "memo_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "settled_block",
+        "columns": [
+          "settled_block"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick_id",
+        "columns": [
+          "tick_id"
+        ],
+        "unique": false
+      }
     ],
     "blocks": [
-      "actions_hash_id",
-      "block_index",
-      "contract_hash_id",
-      "ledger_hash_id",
-      "state_hash_id"
+      {
+        "name": "actions_hash_id",
+        "columns": [
+          "actions_hash_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "block_index",
+        "columns": [
+          "block_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "contract_hash_id",
+        "columns": [
+          "contract_hash_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "ledger_hash_id",
+        "columns": [
+          "ledger_hash_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "state_hash_id",
+        "columns": [
+          "state_hash_id"
+        ],
+        "unique": false
+      }
     ],
     "broadcasts": [
-      "action_index",
-      "broadcast_action_index",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "broadcast_action_index",
+        "columns": [
+          "broadcast_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "memo_id",
+        "columns": [
+          "memo_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "callbacks": [
-      "action_index",
-      "callback_tick_id",
-      "memo_id",
-      "status_id",
-      "tick_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "callback_tick_id",
+        "columns": [
+          "callback_tick_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "memo_id",
+        "columns": [
+          "memo_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick_id",
+        "columns": [
+          "tick_id"
+        ],
+        "unique": false
+      }
     ],
     "capability_slash_debits": [
-      "block_index",
-      "slash_action_index",
-      "stake_row"
+      {
+        "name": "block_index",
+        "columns": [
+          "block_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "slash_action_index",
+        "columns": [
+          "slash_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "stake_row",
+        "columns": [
+          "target_table",
+          "stake_action_index",
+          "block_index"
+        ],
+        "unique": false
+      }
     ],
     "capability_slash_events": [
-      "block_index",
-      "capability_pubkey",
-      "signing_pubkey_id",
-      "slash_action_index"
+      {
+        "name": "block_index",
+        "columns": [
+          "block_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "capability_pubkey",
+        "columns": [
+          "signing_pubkey_id",
+          "capability"
+        ],
+        "unique": false
+      },
+      {
+        "name": "signing_pubkey_id",
+        "columns": [
+          "signing_pubkey_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "slash_action_index",
+        "columns": [
+          "slash_action_index"
+        ],
+        "unique": false
+      }
     ],
     "capability_snapshots": [
-      "idx_cap_block"
+      {
+        "name": "idx_cap_block",
+        "columns": [
+          "capability",
+          "snapshot_block"
+        ],
+        "unique": false
+      }
     ],
     "coinpay_expires": [
-      "action_index",
-      "obligation_action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "obligation_action_index",
+        "columns": [
+          "obligation_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "coinpay_obligations": [
-      "action_index",
-      "coin_id",
-      "payee_address_id",
-      "payer_address_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "coin_id",
+        "columns": [
+          "coin_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "payee_address_id",
+        "columns": [
+          "payee_address_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "payer_address_id",
+        "columns": [
+          "payer_address_id"
+        ],
+        "unique": false
+      }
     ],
     "coinpay_statuses": [
-      "action_index",
-      "coinpay_action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "coinpay_action_index",
+        "columns": [
+          "coinpay_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "coinpays": [
-      "action_index",
-      "obligation_action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "obligation_action_index",
+        "columns": [
+          "obligation_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "contract_delegations": [
-      "action_index",
-      "activation_block",
-      "deactivation_block",
-      "signing_pubkey_id",
-      "source_id",
-      "status_id",
-      "target_contract_index",
-      "tick_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "activation_block",
+        "columns": [
+          "activation_block"
+        ],
+        "unique": false
+      },
+      {
+        "name": "deactivation_block",
+        "columns": [
+          "deactivation_block"
+        ],
+        "unique": false
+      },
+      {
+        "name": "signing_pubkey_id",
+        "columns": [
+          "signing_pubkey_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "source_id",
+        "columns": [
+          "source_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "target_contract_index",
+        "columns": [
+          "target_contract_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick_id",
+        "columns": [
+          "tick_id"
+        ],
+        "unique": false
+      }
     ],
     "contract_emissions": [
-      "action_index",
-      "execution_index"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "execution_index",
+        "columns": [
+          "execution_index"
+        ],
+        "unique": false
+      }
     ],
     "contract_executions": [
-      "action_index",
-      "block_index",
-      "caller_id",
-      "contract_index"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "block_index",
+        "columns": [
+          "block_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "caller_id",
+        "columns": [
+          "caller_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "contract_index",
+        "columns": [
+          "contract_index"
+        ],
+        "unique": false
+      }
     ],
     "contract_permissions": [
-      "action_index",
-      "block_index",
-      "contract_index"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "block_index",
+        "columns": [
+          "block_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "contract_index",
+        "columns": [
+          "contract_index"
+        ],
+        "unique": false
+      }
     ],
     "contract_slash_debits": [
-      "block_index",
-      "execution_index",
-      "stake_row"
+      {
+        "name": "block_index",
+        "columns": [
+          "block_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "execution_index",
+        "columns": [
+          "execution_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "stake_row",
+        "columns": [
+          "target_table",
+          "stake_action_index",
+          "block_index"
+        ],
+        "unique": false
+      }
     ],
     "contract_stakes": [
-      "action_index",
-      "activation_block",
-      "contract_tick",
-      "deactivation_block",
-      "signing_pubkey_id",
-      "source_id",
-      "status_id",
-      "target_contract_index",
-      "tick_id",
-      "version"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "activation_block",
+        "columns": [
+          "activation_block"
+        ],
+        "unique": false
+      },
+      {
+        "name": "contract_tick",
+        "columns": [
+          "target_contract_index",
+          "tick_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "deactivation_block",
+        "columns": [
+          "deactivation_block"
+        ],
+        "unique": false
+      },
+      {
+        "name": "signing_pubkey_id",
+        "columns": [
+          "signing_pubkey_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "source_id",
+        "columns": [
+          "source_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "target_contract_index",
+        "columns": [
+          "target_contract_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick_id",
+        "columns": [
+          "tick_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "version",
+        "columns": [
+          "version"
+        ],
+        "unique": false
+      }
     ],
     "contract_state": [
-      "idx_block",
-      "idx_latest",
-      "idx_latest_bin"
+      {
+        "name": "idx_block",
+        "columns": [
+          "block_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "idx_latest",
+        "columns": [
+          "contract_index",
+          "state_key",
+          "iddesc"
+        ],
+        "unique": false
+      },
+      {
+        "name": "idx_latest_bin",
+        "columns": [
+          "contract_index",
+          "state_key_bin",
+          "iddesc"
+        ],
+        "unique": false
+      }
     ],
     "contract_unstakes": [
-      "action_index",
-      "cooldown_end_block",
-      "signing_pubkey_id",
-      "source_id",
-      "status_id",
-      "target_contract_index",
-      "tick_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "cooldown_end_block",
+        "columns": [
+          "cooldown_end_block"
+        ],
+        "unique": false
+      },
+      {
+        "name": "signing_pubkey_id",
+        "columns": [
+          "signing_pubkey_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "source_id",
+        "columns": [
+          "source_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "target_contract_index",
+        "columns": [
+          "target_contract_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick_id",
+        "columns": [
+          "tick_id"
+        ],
+        "unique": false
+      }
     ],
     "contracts": [
-      "action_index",
-      "code_hash",
-      "slash_destination_id",
-      "source_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "code_hash",
+        "columns": [
+          "code_hash"
+        ],
+        "unique": false
+      },
+      {
+        "name": "slash_destination_id",
+        "columns": [
+          "slash_destination_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "source_id",
+        "columns": [
+          "source_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "credits": [
-      "action_index",
-      "address_id",
-      "tick_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "address_id",
+        "columns": [
+          "address_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick_id",
+        "columns": [
+          "tick_id"
+        ],
+        "unique": false
+      }
     ],
     "cross_chain_call_callbacks": [
-      "action_index",
-      "block_index",
-      "call_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "block_index",
+        "columns": [
+          "block_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "call_id",
+        "columns": [
+          "call_id"
+        ],
+        "unique": true
+      }
     ],
     "cross_chain_call_executions": [
-      "action_index",
-      "block_index",
-      "call_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "block_index",
+        "columns": [
+          "block_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "call_id",
+        "columns": [
+          "call_id"
+        ],
+        "unique": true
+      }
     ],
     "cross_chain_call_rejections": [
-      "last_block"
+      {
+        "name": "last_block",
+        "columns": [
+          "last_block"
+        ],
+        "unique": false
+      }
     ],
     "cross_chain_calls": [
-      "call_phase",
-      "effective_time",
-      "source_ref",
-      "target_ref"
+      {
+        "name": "call_phase",
+        "columns": [
+          "call_id",
+          "phase"
+        ],
+        "unique": true
+      },
+      {
+        "name": "effective_time",
+        "columns": [
+          "effective_time"
+        ],
+        "unique": false
+      },
+      {
+        "name": "source_ref",
+        "columns": [
+          "source_chain",
+          "source_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "target_ref",
+        "columns": [
+          "target_chain",
+          "phase",
+          "status",
+          "effective_time"
+        ],
+        "unique": false
+      }
     ],
     "cross_chain_matches": [
-      "idx_a_ref",
-      "idx_b_ref",
-      "idx_effective",
-      "idx_status",
-      "uq_match_id"
+      {
+        "name": "idx_a_ref",
+        "columns": [
+          "a_chain",
+          "a_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "idx_b_ref",
+        "columns": [
+          "b_chain",
+          "b_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "idx_effective",
+        "columns": [
+          "effective_time"
+        ],
+        "unique": false
+      },
+      {
+        "name": "idx_status",
+        "columns": [
+          "status"
+        ],
+        "unique": false
+      },
+      {
+        "name": "uq_match_id",
+        "columns": [
+          "match_id"
+        ],
+        "unique": true
+      }
     ],
     "cross_chain_settlements": [
-      "action_index",
-      "local_action_index",
-      "match_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "local_action_index",
+        "columns": [
+          "local_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "match_id",
+        "columns": [
+          "match_id"
+        ],
+        "unique": true
+      }
     ],
     "debits": [
-      "action_index",
-      "address_id",
-      "tick_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "address_id",
+        "columns": [
+          "address_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick_id",
+        "columns": [
+          "tick_id"
+        ],
+        "unique": false
+      }
     ],
     "delegations": [
-      "action_index",
-      "activation_block",
-      "deactivation_block",
-      "signing_pubkey_id",
-      "source_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "activation_block",
+        "columns": [
+          "activation_block"
+        ],
+        "unique": false
+      },
+      {
+        "name": "deactivation_block",
+        "columns": [
+          "deactivation_block"
+        ],
+        "unique": false
+      },
+      {
+        "name": "signing_pubkey_id",
+        "columns": [
+          "signing_pubkey_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "source_id",
+        "columns": [
+          "source_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "deploy_chunks": [
-      "action_index",
-      "code_hash",
-      "source_hash_chunk",
-      "source_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "code_hash",
+        "columns": [
+          "code_hash"
+        ],
+        "unique": false
+      },
+      {
+        "name": "source_hash_chunk",
+        "columns": [
+          "source_id",
+          "code_hash",
+          "chunk_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "source_id",
+        "columns": [
+          "source_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "deposits": [
-      "action_index",
-      "contract_index",
-      "source_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "contract_index",
+        "columns": [
+          "contract_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "source_id",
+        "columns": [
+          "source_id"
+        ],
+        "unique": false
+      }
     ],
     "destroys": [
-      "action_index",
-      "memo_id",
-      "status_id",
-      "tick_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "memo_id",
+        "columns": [
+          "memo_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick_id",
+        "columns": [
+          "tick_id"
+        ],
+        "unique": false
+      }
     ],
     "dispenser_cancels": [
-      "action_index",
-      "dispenser_action_index",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "dispenser_action_index",
+        "columns": [
+          "dispenser_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "memo_id",
+        "columns": [
+          "memo_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "dispenser_closes": [
-      "action_index",
-      "dispenser_action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "dispenser_action_index",
+        "columns": [
+          "dispenser_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "dispenser_edits": [
-      "action_index",
-      "allow_list",
-      "block_list",
-      "dispenser_action_index",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "allow_list",
+        "columns": [
+          "allow_list"
+        ],
+        "unique": false
+      },
+      {
+        "name": "block_list",
+        "columns": [
+          "block_list"
+        ],
+        "unique": false
+      },
+      {
+        "name": "dispenser_action_index",
+        "columns": [
+          "dispenser_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "memo_id",
+        "columns": [
+          "memo_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "dispenser_expires": [
-      "action_index",
-      "dispenser_action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "dispenser_action_index",
+        "columns": [
+          "dispenser_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "dispenser_statuses": [
-      "action_index",
-      "cancelled_by_id",
-      "dispenser_action_index"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "cancelled_by_id",
+        "columns": [
+          "cancelled_by_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "dispenser_action_index",
+        "columns": [
+          "dispenser_action_index"
+        ],
+        "unique": false
+      }
     ],
     "dispensers": [
-      "action_index",
-      "allow_list",
-      "block_list",
-      "fiat_id",
-      "get_address_id",
-      "get_coin_id",
-      "get_tick_id",
-      "give_coin_id",
-      "give_ownership",
-      "give_tick_id",
-      "memo_id",
-      "oracle_address_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "allow_list",
+        "columns": [
+          "allow_list"
+        ],
+        "unique": false
+      },
+      {
+        "name": "block_list",
+        "columns": [
+          "block_list"
+        ],
+        "unique": false
+      },
+      {
+        "name": "fiat_id",
+        "columns": [
+          "fiat_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "get_address_id",
+        "columns": [
+          "get_address_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "get_coin_id",
+        "columns": [
+          "get_coin_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "get_tick_id",
+        "columns": [
+          "get_tick_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "give_coin_id",
+        "columns": [
+          "give_coin_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "give_ownership",
+        "columns": [
+          "give_ownership"
+        ],
+        "unique": false
+      },
+      {
+        "name": "give_tick_id",
+        "columns": [
+          "give_tick_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "memo_id",
+        "columns": [
+          "memo_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "oracle_address_id",
+        "columns": [
+          "oracle_address_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "dispenses": [
-      "action_index",
-      "destination_id",
-      "dispenser_action_index",
-      "get_coin_id",
-      "get_tick_id",
-      "give_coin_id",
-      "give_tick_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "destination_id",
+        "columns": [
+          "destination_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "dispenser_action_index",
+        "columns": [
+          "dispenser_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "get_coin_id",
+        "columns": [
+          "get_coin_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "get_tick_id",
+        "columns": [
+          "get_tick_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "give_coin_id",
+        "columns": [
+          "give_coin_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "give_tick_id",
+        "columns": [
+          "give_tick_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "dividends": [
-      "action_index",
-      "dividend_tick_id",
-      "memo_id",
-      "status_id",
-      "tick_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "dividend_tick_id",
+        "columns": [
+          "dividend_tick_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "memo_id",
+        "columns": [
+          "memo_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick_id",
+        "columns": [
+          "tick_id"
+        ],
+        "unique": false
+      }
     ],
     "escrows": [
-      "action_index",
-      "address_id",
-      "tick_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "address_id",
+        "columns": [
+          "address_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick_id",
+        "columns": [
+          "tick_id"
+        ],
+        "unique": false
+      }
     ],
     "events": [
-      "code_id"
+      {
+        "name": "code_id",
+        "columns": [
+          "code",
+          "id"
+        ],
+        "unique": false
+      }
     ],
     "fees": [
-      "action_index",
-      "destination_id",
-      "fee_version",
-      "payment_mode",
-      "tick_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "destination_id",
+        "columns": [
+          "destination_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "fee_version",
+        "columns": [
+          "fee_version"
+        ],
+        "unique": false
+      },
+      {
+        "name": "payment_mode",
+        "columns": [
+          "payment_mode"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick_id",
+        "columns": [
+          "tick_id"
+        ],
+        "unique": false
+      }
     ],
     "files": [
-      "action_index",
-      "memo_id",
-      "status_id",
-      "type_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "memo_id",
+        "columns": [
+          "memo_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "type_id",
+        "columns": [
+          "type_id"
+        ],
+        "unique": false
+      }
     ],
     "full_node_verifications": [
-      "action_index",
-      "block_index",
-      "challenge_id",
-      "pubkey_block",
-      "source_id",
-      "uq_epoch_pubkey"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "block_index",
+        "columns": [
+          "block_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "challenge_id",
+        "columns": [
+          "challenge_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "pubkey_block",
+        "columns": [
+          "signing_pubkey_id",
+          "block_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "source_id",
+        "columns": [
+          "source_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "uq_epoch_pubkey",
+        "columns": [
+          "epoch_height",
+          "signing_pubkey_id"
+        ],
+        "unique": true
+      }
     ],
     "gated_files": [
-      "action_index",
-      "gate_ticker_key_hash",
-      "gate_ticker_status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "gate_ticker_key_hash",
+        "columns": [
+          "gate_ticker",
+          "key_hash"
+        ],
+        "unique": false
+      },
+      {
+        "name": "gate_ticker_status_id",
+        "columns": [
+          "gate_ticker",
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "icons": [
-      "last_checked_at",
-      "next_retry_at",
-      "status",
-      "token_id"
+      {
+        "name": "last_checked_at",
+        "columns": [
+          "last_checked_at"
+        ],
+        "unique": false
+      },
+      {
+        "name": "next_retry_at",
+        "columns": [
+          "next_retry_at"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status",
+        "columns": [
+          "status"
+        ],
+        "unique": false
+      },
+      {
+        "name": "token_id",
+        "columns": [
+          "token_id"
+        ],
+        "unique": true
+      }
     ],
     "index_actions": [
-      "action"
+      {
+        "name": "action",
+        "columns": [
+          "action"
+        ],
+        "unique": false
+      }
     ],
     "index_coins": [
-      "coin"
+      {
+        "name": "coin",
+        "columns": [
+          "coin"
+        ],
+        "unique": true
+      }
     ],
     "index_fiats": [
-      "code"
+      {
+        "name": "code",
+        "columns": [
+          "code"
+        ],
+        "unique": true
+      }
     ],
     "index_memos": [
-      "memo"
+      {
+        "name": "memo",
+        "columns": [
+          "memo"
+        ],
+        "unique": true
+      }
     ],
     "index_mime_types": [
-      "type"
+      {
+        "name": "type",
+        "columns": [
+          "type"
+        ],
+        "unique": true
+      }
     ],
     "index_pubkeys": [
-      "pubkey"
+      {
+        "name": "pubkey",
+        "columns": [
+          "pubkey"
+        ],
+        "unique": true
+      }
     ],
     "index_statuses": [
-      "status"
+      {
+        "name": "status",
+        "columns": [
+          "status"
+        ],
+        "unique": true
+      }
     ],
     "index_tickers": [
-      "tick"
+      {
+        "name": "tick",
+        "columns": [
+          "tick(200"
+        ],
+        "unique": true
+      }
     ],
     "index_transactions": [
-      "hash"
+      {
+        "name": "hash",
+        "columns": [
+          "hash(64"
+        ],
+        "unique": true
+      }
     ],
     "issues": [
-      "action_index",
-      "allow_list",
-      "block_list",
-      "callback_tick_id",
-      "memo_id",
-      "status_id",
-      "tick_id",
-      "transfer_id",
-      "transfer_supply_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "allow_list",
+        "columns": [
+          "allow_list"
+        ],
+        "unique": false
+      },
+      {
+        "name": "block_list",
+        "columns": [
+          "block_list"
+        ],
+        "unique": false
+      },
+      {
+        "name": "callback_tick_id",
+        "columns": [
+          "callback_tick_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "memo_id",
+        "columns": [
+          "memo_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick_id",
+        "columns": [
+          "tick_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "transfer_id",
+        "columns": [
+          "transfer_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "transfer_supply_id",
+        "columns": [
+          "transfer_supply_id"
+        ],
+        "unique": false
+      }
     ],
     "links": [
-      "action_index",
-      "coin1_action_index",
-      "coin1_id",
-      "coin2_action_index",
-      "coin2_id",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "coin1_action_index",
+        "columns": [
+          "coin1_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "coin1_id",
+        "columns": [
+          "coin1_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "coin2_action_index",
+        "columns": [
+          "coin2_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "coin2_id",
+        "columns": [
+          "coin2_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "memo_id",
+        "columns": [
+          "memo_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "list_edits": [
-      "action_index",
-      "item_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "item_id",
+        "columns": [
+          "item_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "list_items": [
-      "action_index",
-      "item_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "item_id",
+        "columns": [
+          "item_id"
+        ],
+        "unique": false
+      }
     ],
     "list_items_invalid": [
-      "action_index",
-      "item_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "item_id",
+        "columns": [
+          "item_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "lists": [
-      "action_index",
-      "edit",
-      "list_action_index",
-      "status_id",
-      "type"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "edit",
+        "columns": [
+          "edit"
+        ],
+        "unique": false
+      },
+      {
+        "name": "list_action_index",
+        "columns": [
+          "list_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "type",
+        "columns": [
+          "type"
+        ],
+        "unique": false
+      }
     ],
     "mappings_actions": [
-      "action_index",
-      "id",
-      "type_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "id",
+        "columns": [
+          "id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "type_id",
+        "columns": [
+          "type_id"
+        ],
+        "unique": false
+      }
     ],
     "mappings_files": [
-      "action_index",
-      "id",
-      "type_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "id",
+        "columns": [
+          "id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "type_id",
+        "columns": [
+          "type_id"
+        ],
+        "unique": false
+      }
     ],
     "markets": [
-      "tick1_id",
-      "tick2_id"
+      {
+        "name": "tick1_id",
+        "columns": [
+          "tick1_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick2_id",
+        "columns": [
+          "tick2_id"
+        ],
+        "unique": false
+      }
     ],
     "messages": [
-      "action_index",
-      "coin",
-      "destination_id",
-      "encryption_method",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "coin",
+        "columns": [
+          "coin"
+        ],
+        "unique": false
+      },
+      {
+        "name": "destination_id",
+        "columns": [
+          "destination_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "encryption_method",
+        "columns": [
+          "encryption_method"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "mints": [
-      "action_index",
-      "destination_id",
-      "memo_id",
-      "status_id",
-      "tick_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "destination_id",
+        "columns": [
+          "destination_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "memo_id",
+        "columns": [
+          "memo_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick_id",
+        "columns": [
+          "tick_id"
+        ],
+        "unique": false
+      }
     ],
     "oracle_prices": [
-      "idx_effective",
-      "idx_oracle_action",
-      "idx_oracle_tick",
-      "idx_source_chain"
+      {
+        "name": "idx_effective",
+        "columns": [
+          "coin",
+          "tick",
+          "fiat",
+          "effective_at"
+        ],
+        "unique": false
+      },
+      {
+        "name": "idx_oracle_action",
+        "columns": [
+          "source_chain",
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "idx_oracle_tick",
+        "columns": [
+          "source_address",
+          "coin",
+          "tick",
+          "fiat"
+        ],
+        "unique": false
+      },
+      {
+        "name": "idx_source_chain",
+        "columns": [
+          "source_chain"
+        ],
+        "unique": false
+      }
     ],
     "order_cancels": [
-      "action_index",
-      "memo_id",
-      "order_action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "memo_id",
+        "columns": [
+          "memo_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "order_action_index",
+        "columns": [
+          "order_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "order_edits": [
-      "action_index",
-      "allow_list",
-      "block_list",
-      "memo_id",
-      "order_action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "allow_list",
+        "columns": [
+          "allow_list"
+        ],
+        "unique": false
+      },
+      {
+        "name": "block_list",
+        "columns": [
+          "block_list"
+        ],
+        "unique": false
+      },
+      {
+        "name": "memo_id",
+        "columns": [
+          "memo_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "order_action_index",
+        "columns": [
+          "order_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "order_expires": [
-      "action_index",
-      "order_action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "order_action_index",
+        "columns": [
+          "order_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "order_matches": [
-      "action_index",
-      "get_action_index",
-      "get_coin_id",
-      "get_tick_id",
-      "give_action_index",
-      "give_coin_id",
-      "give_tick_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "get_action_index",
+        "columns": [
+          "get_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "get_coin_id",
+        "columns": [
+          "get_coin_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "get_tick_id",
+        "columns": [
+          "get_tick_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "give_action_index",
+        "columns": [
+          "give_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "give_coin_id",
+        "columns": [
+          "give_coin_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "give_tick_id",
+        "columns": [
+          "give_tick_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "order_statuses": [
-      "action_index",
-      "order_action_index"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "order_action_index",
+        "columns": [
+          "order_action_index"
+        ],
+        "unique": false
+      }
     ],
     "orders": [
-      "action_index",
-      "allow_list",
-      "block_list",
-      "get_address_id",
-      "get_coin_id",
-      "get_ownership",
-      "get_tick_id",
-      "give_coin_id",
-      "give_ownership",
-      "give_tick_id",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "allow_list",
+        "columns": [
+          "allow_list"
+        ],
+        "unique": false
+      },
+      {
+        "name": "block_list",
+        "columns": [
+          "block_list"
+        ],
+        "unique": false
+      },
+      {
+        "name": "get_address_id",
+        "columns": [
+          "get_address_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "get_coin_id",
+        "columns": [
+          "get_coin_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "get_ownership",
+        "columns": [
+          "get_ownership"
+        ],
+        "unique": false
+      },
+      {
+        "name": "get_tick_id",
+        "columns": [
+          "get_tick_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "give_coin_id",
+        "columns": [
+          "give_coin_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "give_ownership",
+        "columns": [
+          "give_ownership"
+        ],
+        "unique": false
+      },
+      {
+        "name": "give_tick_id",
+        "columns": [
+          "give_tick_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "memo_id",
+        "columns": [
+          "memo_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "pending_hub_pushes": [
-      "action_index",
-      "created_at",
-      "push_type",
-      "status"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "created_at",
+        "columns": [
+          "created_at"
+        ],
+        "unique": false
+      },
+      {
+        "name": "push_type",
+        "columns": [
+          "push_type"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status",
+        "columns": [
+          "status"
+        ],
+        "unique": false
+      }
     ],
     "poll_results": [
-      "action_index",
-      "block_index",
-      "poll_index",
-      "poll_option"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "block_index",
+        "columns": [
+          "block_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "poll_index",
+        "columns": [
+          "poll_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "poll_option",
+        "columns": [
+          "poll_index",
+          "option_index"
+        ],
+        "unique": true
+      }
     ],
     "polls": [
-      "action_index",
-      "block_index",
-      "end_block",
-      "poll_status",
-      "tick_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "block_index",
+        "columns": [
+          "block_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "end_block",
+        "columns": [
+          "end_block"
+        ],
+        "unique": false
+      },
+      {
+        "name": "poll_status",
+        "columns": [
+          "poll_status",
+          "end_block"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick_id",
+        "columns": [
+          "tick_id"
+        ],
+        "unique": false
+      }
     ],
     "price_snapshots": [
-      "idx_pair_block",
-      "idx_pair_timestamp",
-      "idx_round_pair",
-      "idx_source_chain",
-      "idx_status"
+      {
+        "name": "idx_pair_block",
+        "columns": [
+          "coin_pair",
+          "reference_block"
+        ],
+        "unique": false
+      },
+      {
+        "name": "idx_pair_timestamp",
+        "columns": [
+          "coin_pair",
+          "block_timestamp"
+        ],
+        "unique": false
+      },
+      {
+        "name": "idx_round_pair",
+        "columns": [
+          "round_number",
+          "coin_pair"
+        ],
+        "unique": true
+      },
+      {
+        "name": "idx_source_chain",
+        "columns": [
+          "source_chain"
+        ],
+        "unique": false
+      },
+      {
+        "name": "idx_status",
+        "columns": [
+          "status"
+        ],
+        "unique": false
+      }
     ],
     "prices": [
-      "action_index",
-      "fiat_id",
-      "round_number",
-      "source_id",
-      "tick_id",
-      "validation_status",
-      "version"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "fiat_id",
+        "columns": [
+          "fiat_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "round_number",
+        "columns": [
+          "round_number"
+        ],
+        "unique": false
+      },
+      {
+        "name": "source_id",
+        "columns": [
+          "source_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick_id",
+        "columns": [
+          "tick_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "validation_status",
+        "columns": [
+          "validation_status"
+        ],
+        "unique": false
+      },
+      {
+        "name": "version",
+        "columns": [
+          "version"
+        ],
+        "unique": false
+      }
     ],
     "recovery_pending_rewards": [
-      "applied_block",
-      "source_address"
+      {
+        "name": "applied_block",
+        "columns": [
+          "applied",
+          "applied_block"
+        ],
+        "unique": false
+      },
+      {
+        "name": "source_address",
+        "columns": [
+          "source_address",
+          "applied"
+        ],
+        "unique": false
+      }
     ],
     "reward_claims": [
-      "action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "sends": [
-      "action_index",
-      "destination_id",
-      "status_id",
-      "tick_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "destination_id",
+        "columns": [
+          "destination_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick_id",
+        "columns": [
+          "tick_id"
+        ],
+        "unique": false
+      }
     ],
     "slash_events": [
-      "block_index",
-      "destination_id",
-      "execution_index",
-      "signing_pubkey_id",
-      "target_contract_index",
-      "tick_id"
+      {
+        "name": "block_index",
+        "columns": [
+          "block_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "destination_id",
+        "columns": [
+          "destination_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "execution_index",
+        "columns": [
+          "execution_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "signing_pubkey_id",
+        "columns": [
+          "signing_pubkey_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "target_contract_index",
+        "columns": [
+          "target_contract_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick_id",
+        "columns": [
+          "tick_id"
+        ],
+        "unique": false
+      }
     ],
     "sleeps": [
-      "action_index",
-      "memo_id",
-      "status_id",
-      "tick_id",
-      "type"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "memo_id",
+        "columns": [
+          "memo_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick_id",
+        "columns": [
+          "tick_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "type",
+        "columns": [
+          "type"
+        ],
+        "unique": false
+      }
     ],
     "stake_key_revocations": [
-      "action_index",
-      "deactivation_block",
-      "signing_pubkey_id",
-      "source_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "deactivation_block",
+        "columns": [
+          "deactivation_block"
+        ],
+        "unique": false
+      },
+      {
+        "name": "signing_pubkey_id",
+        "columns": [
+          "signing_pubkey_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "source_id",
+        "columns": [
+          "source_id"
+        ],
+        "unique": false
+      }
     ],
     "stakes": [
-      "action_index",
-      "activation_block",
-      "deactivation_block",
-      "signing_pubkey_id",
-      "source_id",
-      "status_id",
-      "version"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "activation_block",
+        "columns": [
+          "activation_block"
+        ],
+        "unique": false
+      },
+      {
+        "name": "deactivation_block",
+        "columns": [
+          "deactivation_block"
+        ],
+        "unique": false
+      },
+      {
+        "name": "signing_pubkey_id",
+        "columns": [
+          "signing_pubkey_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "source_id",
+        "columns": [
+          "source_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "version",
+        "columns": [
+          "version"
+        ],
+        "unique": false
+      }
     ],
     "state_checkpoints": [
-      "idx_checkpoint_seq"
+      {
+        "name": "idx_checkpoint_seq",
+        "columns": [
+          "chain",
+          "network",
+          "checkpoint_seq"
+        ],
+        "unique": false
+      }
     ],
     "state_tree_nodes": [
-      "idx_left_hash",
-      "idx_right_hash",
-      "uq_node_hash"
+      {
+        "name": "idx_left_hash",
+        "columns": [
+          "left_hash"
+        ],
+        "unique": false
+      },
+      {
+        "name": "idx_right_hash",
+        "columns": [
+          "right_hash"
+        ],
+        "unique": false
+      },
+      {
+        "name": "uq_node_hash",
+        "columns": [
+          "node_hash"
+        ],
+        "unique": true
+      }
     ],
     "state_tree_roots": [
-      "idx_chain_net_block",
-      "uq_chain_net_block"
+      {
+        "name": "idx_chain_net_block",
+        "columns": [
+          "chain",
+          "network",
+          "block_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "uq_chain_net_block",
+        "columns": [
+          "chain",
+          "network",
+          "block_index"
+        ],
+        "unique": true
+      }
     ],
     "swap_cancels": [
-      "action_index",
-      "memo_id",
-      "status_id",
-      "swap_action_index"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "memo_id",
+        "columns": [
+          "memo_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "swap_action_index",
+        "columns": [
+          "swap_action_index"
+        ],
+        "unique": false
+      }
     ],
     "swap_edits": [
-      "action_index",
-      "allow_list",
-      "block_list",
-      "memo_id",
-      "status_id",
-      "swap_action_index"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "allow_list",
+        "columns": [
+          "allow_list"
+        ],
+        "unique": false
+      },
+      {
+        "name": "block_list",
+        "columns": [
+          "block_list"
+        ],
+        "unique": false
+      },
+      {
+        "name": "memo_id",
+        "columns": [
+          "memo_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "swap_action_index",
+        "columns": [
+          "swap_action_index"
+        ],
+        "unique": false
+      }
     ],
     "swap_expires": [
-      "action_index",
-      "status_id",
-      "swap_action_index"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "swap_action_index",
+        "columns": [
+          "swap_action_index"
+        ],
+        "unique": false
+      }
     ],
     "swap_matches": [
-      "action_index",
-      "get_action_index",
-      "get_coin_id",
-      "get_tick_id",
-      "give_action_index",
-      "give_coin_id",
-      "give_tick_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "get_action_index",
+        "columns": [
+          "get_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "get_coin_id",
+        "columns": [
+          "get_coin_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "get_tick_id",
+        "columns": [
+          "get_tick_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "give_action_index",
+        "columns": [
+          "give_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "give_coin_id",
+        "columns": [
+          "give_coin_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "give_tick_id",
+        "columns": [
+          "give_tick_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "swap_statuses": [
-      "action_index",
-      "swap_action_index"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "swap_action_index",
+        "columns": [
+          "swap_action_index"
+        ],
+        "unique": false
+      }
     ],
     "swaps": [
-      "action_index",
-      "allow_list",
-      "block_list",
-      "get_address_id",
-      "get_coin_id",
-      "get_ownership",
-      "get_tick_id",
-      "give_coin_id",
-      "give_ownership",
-      "give_tick_id",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "allow_list",
+        "columns": [
+          "allow_list"
+        ],
+        "unique": false
+      },
+      {
+        "name": "block_list",
+        "columns": [
+          "block_list"
+        ],
+        "unique": false
+      },
+      {
+        "name": "get_address_id",
+        "columns": [
+          "get_address_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "get_coin_id",
+        "columns": [
+          "get_coin_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "get_ownership",
+        "columns": [
+          "get_ownership"
+        ],
+        "unique": false
+      },
+      {
+        "name": "get_tick_id",
+        "columns": [
+          "get_tick_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "give_coin_id",
+        "columns": [
+          "give_coin_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "give_ownership",
+        "columns": [
+          "give_ownership"
+        ],
+        "unique": false
+      },
+      {
+        "name": "give_tick_id",
+        "columns": [
+          "give_tick_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "memo_id",
+        "columns": [
+          "memo_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "sweeps": [
-      "action_index",
-      "destination_id",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "destination_id",
+        "columns": [
+          "destination_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "memo_id",
+        "columns": [
+          "memo_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "token_controllers": [
-      "action_index",
-      "block_index",
-      "contract_index",
-      "tick_class",
-      "tick_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "block_index",
+        "columns": [
+          "block_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "contract_index",
+        "columns": [
+          "contract_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick_class",
+        "columns": [
+          "tick_id",
+          "action_class"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick_id",
+        "columns": [
+          "tick_id"
+        ],
+        "unique": false
+      }
     ],
     "tokens": [
-      "allow_list",
-      "block_list",
-      "callback_tick_id",
-      "escrow_action_index",
-      "lock_callback",
-      "lock_description",
-      "lock_max_mint",
-      "lock_max_supply",
-      "lock_mint",
-      "lock_mint_supply",
-      "lock_sleep",
-      "owner_id",
-      "tick_id"
+      {
+        "name": "allow_list",
+        "columns": [
+          "allow_list"
+        ],
+        "unique": false
+      },
+      {
+        "name": "block_list",
+        "columns": [
+          "block_list"
+        ],
+        "unique": false
+      },
+      {
+        "name": "callback_tick_id",
+        "columns": [
+          "callback_tick_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "escrow_action_index",
+        "columns": [
+          "escrow_action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "lock_callback",
+        "columns": [
+          "lock_callback"
+        ],
+        "unique": false
+      },
+      {
+        "name": "lock_description",
+        "columns": [
+          "lock_description"
+        ],
+        "unique": false
+      },
+      {
+        "name": "lock_max_mint",
+        "columns": [
+          "lock_max_mint"
+        ],
+        "unique": false
+      },
+      {
+        "name": "lock_max_supply",
+        "columns": [
+          "lock_max_supply"
+        ],
+        "unique": false
+      },
+      {
+        "name": "lock_mint",
+        "columns": [
+          "lock_mint"
+        ],
+        "unique": false
+      },
+      {
+        "name": "lock_mint_supply",
+        "columns": [
+          "lock_mint_supply"
+        ],
+        "unique": false
+      },
+      {
+        "name": "lock_sleep",
+        "columns": [
+          "lock_sleep"
+        ],
+        "unique": false
+      },
+      {
+        "name": "owner_id",
+        "columns": [
+          "owner_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick_id",
+        "columns": [
+          "tick_id"
+        ],
+        "unique": false
+      }
     ],
     "transactions": [
-      "block_index",
-      "source_id",
-      "tx_hash_id",
-      "tx_index"
+      {
+        "name": "block_index",
+        "columns": [
+          "block_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "source_id",
+        "columns": [
+          "source_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tx_hash_id",
+        "columns": [
+          "tx_hash_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tx_index",
+        "columns": [
+          "tx_index"
+        ],
+        "unique": true
+      }
     ],
     "unstakes": [
-      "action_index",
-      "cooldown_end_block",
-      "signing_pubkey_id",
-      "source_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "cooldown_end_block",
+        "columns": [
+          "cooldown_end_block"
+        ],
+        "unique": false
+      },
+      {
+        "name": "signing_pubkey_id",
+        "columns": [
+          "signing_pubkey_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "source_id",
+        "columns": [
+          "source_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "status_id",
+        "columns": [
+          "status_id"
+        ],
+        "unique": false
+      }
     ],
     "validator_rewards": [
-      "reward_unique",
-      "signing_pubkey_id"
+      {
+        "name": "reward_unique",
+        "columns": [
+          "source_id",
+          "signing_pubkey_id",
+          "reward_type",
+          "round_reference"
+        ],
+        "unique": true
+      },
+      {
+        "name": "signing_pubkey_id",
+        "columns": [
+          "signing_pubkey_id"
+        ],
+        "unique": false
+      }
     ],
     "vote_delegations": [
-      "action_index",
-      "block_index",
-      "tick_delegator"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "block_index",
+        "columns": [
+          "block_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "tick_delegator",
+        "columns": [
+          "tick_id",
+          "delegator_address_id",
+          "action_index"
+        ],
+        "unique": false
+      }
     ],
     "votes": [
-      "action_index",
-      "block_index",
-      "poll_index",
-      "voter_address_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "block_index",
+        "columns": [
+          "block_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "poll_index",
+        "columns": [
+          "poll_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "voter_address_id",
+        "columns": [
+          "voter_address_id"
+        ],
+        "unique": false
+      }
     ],
     "withdrawals": [
-      "action_index",
-      "contract_index",
-      "source_id"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "contract_index",
+        "columns": [
+          "contract_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "source_id",
+        "columns": [
+          "source_id"
+        ],
+        "unique": false
+      }
     ],
     "xcalls": [
-      "action_index",
-      "block_index",
-      "call_id",
-      "contract_index",
-      "request_status"
+      {
+        "name": "action_index",
+        "columns": [
+          "action_index"
+        ],
+        "unique": true
+      },
+      {
+        "name": "block_index",
+        "columns": [
+          "block_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "call_id",
+        "columns": [
+          "call_id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "contract_index",
+        "columns": [
+          "contract_index"
+        ],
+        "unique": false
+      },
+      {
+        "name": "request_status",
+        "columns": [
+          "request_status",
+          "deadline_block"
+        ],
+        "unique": false
+      }
     ]
   }
 }

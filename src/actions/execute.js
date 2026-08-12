@@ -30,11 +30,11 @@
 const crypto = require('crypto');
 const ProviderRegistry = require('../attestation/providerRegistry.js');
 
-// Per-provider deadline windows, injected into the VM gateway so a contract's
-// attestation.request() rejects an over-limit deadlineBlocks at call time rather
-// than landing on-chain and being silently rejected here by the DEADLINE check.
-// Sourced from the single provider registry so the two caps cannot drift.
-const PROVIDER_DEADLINE_WINDOWS = new ProviderRegistry().getDeadlineWindows();
+// Per-provider deadline windows are built per instance in the constructor
+// (this.providerDeadlineWindows) from the CONFIGURED registry. A module-scoped
+// snapshot cannot see config.ATTESTATION.PROVIDERS, so the VM enforced DEFAULTS
+// while attest.js validated against the overlay, letting the VM accept a request
+// the indexer then rejects ().
 
 // Gas ceiling for a top-level EXECUTE. Must match the gasCeiling the VM is
 // constructed with in actions.js. (Previously a function-local const in
@@ -101,6 +101,13 @@ class Execute {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
+        // Per-provider deadline windows injected into the VM gateway so a contract's
+        // attestation.request() rejects an over-limit deadlineBlocks at call time rather
+        // than landing on-chain and being silently rejected here by the DEADLINE check.
+        // Built from the CONFIGURED registry, the same construction attest.js uses, so the
+        // VM cap and the host cap cannot drift under a config.ATTESTATION.PROVIDERS overlay.
+        this.providerDeadlineWindows = new ProviderRegistry(this.config).getDeadlineWindows();
+
         // Monotonic per-instance ordinal appended to each controller-guard
         // savepoint name so every guard invocation gets a globally-unique name
         // within the transaction. (action_index, contractIndex, seq) alone can
@@ -162,8 +169,22 @@ class Execute {
         // Verify CONTRACT_ACTION_INDEX is a canonical integer index (see deposit.js).
         // Host-derived reentrant calls (emitted EXECUTE / XEXEC) pass integer indexes,
         // which String() renders canonically, so this only rejects malformed wire input.
-        if(!error && !/^\d+$/.test(String(data['CONTRACT_ACTION_INDEX'])))
-            error = 'invalid: CONTRACT_ACTION_INDEX (format)';
+        // EXEC-1, gated by CONTRACT_INDEX_CANONICAL (the same flag-day STAKE/UNSTAKE/DELEGATE
+        // use): at/after it a non-canonical wire index ('007') or one past the safe-integer
+        // range is rejected here. The VM hashes Number(contractIndex) into the attestation
+        // request_id preimage (xchain-vm/gateway.js) while the host re-hashes the raw EMITTER
+        // string (attest.js), so a non-canonical index makes the two disagree and the host
+        // rejects an ATTEST the VM already accepted. Below the flag-day the legacy /^\d+$/ is
+        // preserved so historical blocks replay byte-identically. .
+        if(!error){
+            let idxRaw    = String(data['CONTRACT_ACTION_INDEX']);
+            let canonical = await this.actions.protocolChanges.isEnabled('CONTRACT_INDEX_CANONICAL', data['BLOCK_INDEX']);
+            let idxBad    = canonical
+                ? (!/^[1-9]\d*$/.test(idxRaw) || Number(idxRaw) > Number.MAX_SAFE_INTEGER)
+                : !/^\d+$/.test(idxRaw);
+            if(idxBad)
+                error = 'invalid: CONTRACT_ACTION_INDEX (format)';
+        }
 
         // Verify METHOD is provided
         if(!error && this.util.isNull(data['METHOD']))
@@ -189,8 +210,9 @@ class Execute {
          ****************************************************************/
 
         let schedule = this.config['GAS_SCHEDULE'];
-        // Base execution gas (actual VM gas will be metered during execution)
-        let gasCost = schedule.VM_EXECUTE_BASE;
+        // Base execution gas (actual VM gas will be metered during execution), priced through
+        // util.vmGasCost, the one arithmetic the static quote also uses ().
+        let gasCost = this.util.vmGasCost(schedule, 'EXECUTE', 0);
         let fee = this.util.bcmul(gasCost, this.config['GAS_PRICE'], 8);
 
         // Get source address balances
@@ -375,7 +397,7 @@ class Execute {
                 pollData:          pollData,
                 attestationData:   attestationData, // : null pre-flag; populated at/after VM_ATTESTATION_GETRESPONSE
                 contractStakeData: contractStakeData,
-                providerDeadlines: PROVIDER_DEADLINE_WINDOWS
+                providerDeadlines: this.providerDeadlineWindows
             });
 
             gasUsed = vmResult.gasUsed;
@@ -707,7 +729,7 @@ class Execute {
                 // read surface .
                 attestationData:   null,
                 contractStakeData: contractStakeData,
-                providerDeadlines: PROVIDER_DEADLINE_WINDOWS
+                providerDeadlines: this.providerDeadlineWindows
             });
         } catch(e){
             // A host fault (e.g. permanently broken subprocess executor) must HALT,

@@ -1,1206 +1,4077 @@
 {
-  "_comment": "Columns that predate the migration ledger (original CREATE TABLE columns that legitimately have no dated migration). Consumed by sql-schema-column-parity.test.js to guard the definition->ledger direction: any NEW column added to a src/sql/<table>.sql definition must either be added by a dated migration under src/sql/migrations/ OR added here deliberately. Regenerating this file in the same commit that adds the column silently waives the guard - review baseline diffs. A table CREATEd by a dated migration does NOT belong here (it is ledger-covered by its CREATE TABLE); the parity suite compares that migration against the definition directly and fails if the table is parked here (#3164).",
+  "_comment": "Columns that predate the migration ledger (original CREATE TABLE columns that legitimately have no dated migration). Consumed by sql-schema-column-parity.test.js to guard the definition->ledger direction: any NEW column added to a src/sql/<table>.sql definition must either be added by a dated migration under src/sql/migrations/ OR added here deliberately. Regenerating this file in the same commit that adds the column silently waives the guard - review baseline diffs. A table CREATEd by a dated migration does NOT belong here (it is ledger-covered by its CREATE TABLE); the parity suite compares that migration against the definition directly and fails if the table is parked here (#3164). ENTRY FORMAT (#4435): each entry is {name, spec} - the column name plus its normalized definition spec - listed in DEFINITION order, not a bare name. The spec and the relative order are asserted by sql-schema-column-parity.test.js, so a definition-only shape or reorder of a pre-ledger column fails until a dated migration ships and this file is deliberately re-frozen.",
   "_known_unledgered_comment": "Columns present in a definition today with no migration that are KNOWN debt awaiting their own migration. The test skips these but keeps them visible. Delete each entry when its migration ships. Empty = no outstanding debt.",
   "known_unledgered": [],
   "baseline": {
     "actions": [
-      "action_index",
-      "block_index",
-      "tx_index",
-      "tx_vout",
-      "action_id",
-      "action_format",
-      "source_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "tx_index",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "tx_vout",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "action_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "action_format",
+        "spec": "TINYINT UNSIGNED"
+      },
+      {
+        "name": "source_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "address_controllers": [
-      "id",
-      "action_index",
-      "address_id",
-      "action_class",
-      "contract_index",
-      "is_unbind",
-      "cooldown_blocks",
-      "cooldown_end_block",
-      "block_index"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "address_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "action_class",
+        "spec": "VARCHAR(16) NOT NULL"
+      },
+      {
+        "name": "contract_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "is_unbind",
+        "spec": "TINYINT(1) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "cooldown_blocks",
+        "spec": "INT UNSIGNED NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "cooldown_end_block",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "addresses": [
-      "action_index",
-      "fee_preference",
-      "require_memo",
-      "dispenser_preference",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "fee_preference",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "require_memo",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "dispenser_preference",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "airdrops": [
-      "action_index",
-      "tick_id",
-      "list_action_index",
-      "amount",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "list_action_index",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "anchor_actions": [
-      "action_index",
-      "version",
-      "chain",
-      "network",
-      "block_index",
-      "block_hash",
-      "ledger_hash",
-      "actions_hash",
-      "contract_hash",
-      "checkpoint_seq",
-      "snapshot_block",
-      "state_root",
-      "state_root_version",
-      "block_merkle_root",
-      "block_merkle_version",
-      "match_batch_seq",
-      "match_count",
-      "batch_crc32",
-      "total_chunks",
-      "chunk_index",
-      "archive_b64",
-      "validator_signatures",
-      "status_id",
-      "block_index_doge"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "version",
+        "spec": "TINYINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "chain",
+        "spec": "VARCHAR(10)"
+      },
+      {
+        "name": "network",
+        "spec": "VARCHAR(20)"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_hash",
+        "spec": "VARCHAR(64)"
+      },
+      {
+        "name": "ledger_hash",
+        "spec": "VARCHAR(64)"
+      },
+      {
+        "name": "actions_hash",
+        "spec": "VARCHAR(64)"
+      },
+      {
+        "name": "contract_hash",
+        "spec": "VARCHAR(64)"
+      },
+      {
+        "name": "checkpoint_seq",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "snapshot_block",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "state_root",
+        "spec": "CHAR(64)"
+      },
+      {
+        "name": "state_root_version",
+        "spec": "TINYINT UNSIGNED"
+      },
+      {
+        "name": "block_merkle_root",
+        "spec": "CHAR(64)"
+      },
+      {
+        "name": "block_merkle_version",
+        "spec": "TINYINT UNSIGNED"
+      },
+      {
+        "name": "match_batch_seq",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "match_count",
+        "spec": "INT UNSIGNED"
+      },
+      {
+        "name": "batch_crc32",
+        "spec": "VARCHAR(8)"
+      },
+      {
+        "name": "total_chunks",
+        "spec": "INT UNSIGNED"
+      },
+      {
+        "name": "chunk_index",
+        "spec": "INT UNSIGNED"
+      },
+      {
+        "name": "archive_b64",
+        "spec": "MEDIUMTEXT"
+      },
+      {
+        "name": "validator_signatures",
+        "spec": "MEDIUMTEXT"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_index_doge",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "anchor_reward_reconcile_log": [
-      "id",
-      "anchor_action_index",
-      "reward_type",
-      "round_reference",
-      "source_id",
-      "signing_pubkey_id",
-      "amount",
-      "reward_block_index",
-      "block_index"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "anchor_action_index",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "reward_type",
+        "spec": "VARCHAR(20) NOT NULL"
+      },
+      {
+        "name": "round_reference",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "source_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "signing_pubkey_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "reward_block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "attest_validator_stats": [
-      "validator_pubkey",
-      "provider_id",
-      "fulfilled_count",
-      "missed_count",
-      "slashed_count",
-      "quality_score",
-      "last_updated_block"
+      {
+        "name": "validator_pubkey",
+        "spec": "CHAR(64) NOT NULL"
+      },
+      {
+        "name": "provider_id",
+        "spec": "VARCHAR(32) NOT NULL"
+      },
+      {
+        "name": "fulfilled_count",
+        "spec": "BIGINT UNSIGNED NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "missed_count",
+        "spec": "BIGINT UNSIGNED NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "slashed_count",
+        "spec": "BIGINT UNSIGNED NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "quality_score",
+        "spec": "DECIMAL(8,4) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "last_updated_block",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "attests": [
-      "action_index",
-      "version",
-      "request_id",
-      "provider_id",
-      "contract_index",
-      "fee_payer_id",
-      "payload",
-      "callback_method",
-      "callback_params_json",
-      "redundancy",
-      "deadline_block",
-      "gas_escrow",
-      "fee_tick_id",
-      "fee_amount",
-      "request_status",
-      "resolved_block",
-      "response_hash",
-      "response_payload",
-      "response_status",
-      "meta",
-      "validator_signatures",
-      "callback_execute_action_index",
-      "status_id",
-      "block_index"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "version",
+        "spec": "TINYINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "request_id",
+        "spec": "CHAR(64) NOT NULL"
+      },
+      {
+        "name": "provider_id",
+        "spec": "VARCHAR(32) NOT NULL"
+      },
+      {
+        "name": "contract_index",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "fee_payer_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "payload",
+        "spec": "MEDIUMTEXT"
+      },
+      {
+        "name": "callback_method",
+        "spec": "VARCHAR(64)"
+      },
+      {
+        "name": "callback_params_json",
+        "spec": "TEXT"
+      },
+      {
+        "name": "redundancy",
+        "spec": "TINYINT UNSIGNED"
+      },
+      {
+        "name": "deadline_block",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "gas_escrow",
+        "spec": "VARCHAR(60)"
+      },
+      {
+        "name": "fee_tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "fee_amount",
+        "spec": "VARCHAR(60)"
+      },
+      {
+        "name": "request_status",
+        "spec": "ENUM('PENDING','FULFILLED','EXPIRED','ERRORED','REJECTED')"
+      },
+      {
+        "name": "resolved_block",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "response_hash",
+        "spec": "CHAR(64)"
+      },
+      {
+        "name": "response_payload",
+        "spec": "MEDIUMTEXT"
+      },
+      {
+        "name": "response_status",
+        "spec": "ENUM('OK','TIMEOUT','NO_QUORUM','PROVIDER_ERROR','EXPIRED')"
+      },
+      {
+        "name": "meta",
+        "spec": "VARCHAR(256)"
+      },
+      {
+        "name": "validator_signatures",
+        "spec": "MEDIUMTEXT"
+      },
+      {
+        "name": "callback_execute_action_index",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "balances": [
-      "id",
-      "address_id",
-      "tick_id",
-      "amount"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "address_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250)"
+      }
     ],
     "batches": [
-      "action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "bet_feed_statuses": [
-      "action_index",
-      "feed_action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "feed_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "bet_feeds": [
-      "action_index",
-      "label",
-      "outcomes",
-      "tick_id",
-      "fee",
-      "deadline",
-      "refund_window",
-      "expire_at",
-      "min_amount",
-      "allow_list",
-      "block_list",
-      "details",
-      "memo_id",
-      "status_id",
-      "feed_status_id",
-      "closed_block",
-      "terminal_block"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "label",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "outcomes",
+        "spec": "VARCHAR(1100)"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "fee",
+        "spec": "VARCHAR(11)"
+      },
+      {
+        "name": "deadline",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "refund_window",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "expire_at",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "min_amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "allow_list",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_list",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "details",
+        "spec": "TEXT"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "feed_status_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "closed_block",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "terminal_block",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "bet_statuses": [
-      "action_index",
-      "bet_action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "bet_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "bets": [
-      "action_index",
-      "feed_action_index",
-      "outcome",
-      "tick_id",
-      "amount",
-      "memo_id",
-      "status_id",
-      "bet_status_id",
-      "settled_block"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "feed_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "outcome",
+        "spec": "INT UNSIGNED"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "bet_status_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "settled_block",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "blocks": [
-      "id",
-      "block_index",
-      "block_time",
-      "ledger_hash_id",
-      "actions_hash_id",
-      "contract_hash_id",
-      "state_hash_id"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_time",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "ledger_hash_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "actions_hash_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "contract_hash_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "state_hash_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "broadcasts": [
-      "action_index",
-      "message",
-      "value",
-      "fee",
-      "memo_id",
-      "broadcast_action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "message",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "value",
+        "spec": "VARCHAR(25)"
+      },
+      {
+        "name": "fee",
+        "spec": "VARCHAR(11)"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "broadcast_action_index",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "callbacks": [
-      "action_index",
-      "tick_id",
-      "callback_tick_id",
-      "callback_amount",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "callback_tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "callback_amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "capability_slash_debits": [
-      "id",
-      "slash_action_index",
-      "target_table",
-      "stake_action_index",
-      "prev_amount",
-      "amount",
-      "block_index"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "slash_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "target_table",
+        "spec": "ENUM('STAKES','UNSTAKES') NOT NULL"
+      },
+      {
+        "name": "stake_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "prev_amount",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "capability_slash_events": [
-      "id",
-      "slash_action_index",
-      "signing_pubkey_id",
-      "capability",
-      "equiv_key",
-      "amount",
-      "bounty_amount",
-      "treasury_amount",
-      "submitter_id",
-      "destination_id",
-      "block_index"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "slash_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "signing_pubkey_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "capability",
+        "spec": "VARCHAR(64) NOT NULL"
+      },
+      {
+        "name": "equiv_key",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "bounty_amount",
+        "spec": "VARCHAR(250) NOT NULL DEFAULT '0'"
+      },
+      {
+        "name": "treasury_amount",
+        "spec": "VARCHAR(250) NOT NULL DEFAULT '0'"
+      },
+      {
+        "name": "submitter_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "destination_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "capability_snapshots": [
-      "id",
-      "snapshot_block",
-      "capability",
-      "signing_pubkey",
-      "amount",
-      "created_at"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "snapshot_block",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "capability",
+        "spec": "VARCHAR(20) NOT NULL"
+      },
+      {
+        "name": "signing_pubkey",
+        "spec": "VARCHAR(64) NOT NULL"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "created_at",
+        "spec": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+      }
     ],
     "coinpay_expires": [
-      "action_index",
-      "obligation_action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "obligation_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "coinpay_obligations": [
-      "action_index",
-      "payer_address_id",
-      "payee_address_id",
-      "coin_id",
-      "coin_amount",
-      "expiration",
-      "block_index"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "payer_address_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "payee_address_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "coin_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "coin_amount",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "expiration",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "coinpay_statuses": [
-      "action_index",
-      "coinpay_action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "coinpay_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "coinpays": [
-      "action_index",
-      "obligation_action_index",
-      "coin_amount",
-      "txid",
-      "vout",
-      "status_id",
-      "block_index"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "obligation_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "coin_amount",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "txid",
+        "spec": "VARCHAR(64) NOT NULL"
+      },
+      {
+        "name": "vout",
+        "spec": "INT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "contract_delegations": [
-      "action_index",
-      "source_id",
-      "signing_pubkey_id",
-      "target_contract_index",
-      "tick_id",
-      "status_id",
-      "block_index",
-      "activation_block",
-      "deactivation_block"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "source_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "signing_pubkey_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "target_contract_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "activation_block",
+        "spec": "BIGINT UNSIGNED NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "deactivation_block",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "contract_emissions": [
-      "id",
-      "execution_index",
-      "emitted_action",
-      "action_index",
-      "position"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "execution_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "emitted_action",
+        "spec": "VARCHAR(20) NOT NULL"
+      },
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NULL"
+      },
+      {
+        "name": "position",
+        "spec": "INT UNSIGNED NOT NULL"
+      }
     ],
     "contract_executions": [
-      "action_index",
-      "contract_index",
-      "caller_id",
-      "method_name",
-      "input_params",
-      "gas_used",
-      "gas_limit",
-      "status_id",
-      "error_message",
-      "emitted_count",
-      "block_index"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "contract_index",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "caller_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "method_name",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "input_params",
+        "spec": "TEXT"
+      },
+      {
+        "name": "gas_used",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "gas_limit",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "error_message",
+        "spec": "TEXT"
+      },
+      {
+        "name": "emitted_count",
+        "spec": "INT UNSIGNED NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "contract_permissions": [
-      "action_index",
-      "contract_index",
-      "permissions",
-      "max_take_bps",
-      "block_index"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "contract_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "permissions",
+        "spec": "TEXT"
+      },
+      {
+        "name": "max_take_bps",
+        "spec": "INT UNSIGNED"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "contract_slash_debits": [
-      "id",
-      "execution_index",
-      "slash_position",
-      "target_table",
-      "stake_action_index",
-      "prev_amount",
-      "amount",
-      "block_index"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "execution_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "slash_position",
+        "spec": "INT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "target_table",
+        "spec": "ENUM('CONTRACT_STAKES','CONTRACT_UNSTAKES') NOT NULL"
+      },
+      {
+        "name": "stake_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "prev_amount",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "contract_stakes": [
-      "action_index",
-      "source_id",
-      "version",
-      "signing_pubkey_id",
-      "target_contract_index",
-      "tick_id",
-      "amount",
-      "status_id",
-      "block_index",
-      "activation_block",
-      "deactivation_block"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "source_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "version",
+        "spec": "TINYINT UNSIGNED NOT NULL DEFAULT 3"
+      },
+      {
+        "name": "signing_pubkey_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "target_contract_index",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "activation_block",
+        "spec": "BIGINT UNSIGNED NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "deactivation_block",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "contract_state": [
-      "id",
-      "contract_index",
-      "state_key",
-      "state_value",
-      "block_index",
-      "action_index"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "contract_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "state_key",
+        "spec": "VARCHAR(256) NOT NULL"
+      },
+      {
+        "name": "state_value",
+        "spec": "MEDIUMTEXT"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "contract_unstakes": [
-      "action_index",
-      "source_id",
-      "signing_pubkey_id",
-      "target_contract_index",
-      "tick_id",
-      "cooldown_end_block",
-      "amount",
-      "status_id",
-      "block_index"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "source_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "signing_pubkey_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "target_contract_index",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "cooldown_end_block",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "contracts": [
-      "action_index",
-      "source_id",
-      "code",
-      "code_hash",
-      "api_version",
-      "status_id",
-      "block_index",
-      "cooldown_blocks",
-      "slash_destination_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "source_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "code",
+        "spec": "MEDIUMTEXT NOT NULL"
+      },
+      {
+        "name": "code_hash",
+        "spec": "CHAR(64) NOT NULL"
+      },
+      {
+        "name": "api_version",
+        "spec": "INT UNSIGNED NOT NULL DEFAULT 1"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "cooldown_blocks",
+        "spec": "INT UNSIGNED"
+      },
+      {
+        "name": "slash_destination_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "credits": [
-      "action_index",
-      "address_id",
-      "tick_id",
-      "amount"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "address_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250)"
+      }
     ],
     "cross_chain_call_callbacks": [
-      "action_index",
-      "call_id",
-      "result_status",
-      "block_index"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "call_id",
+        "spec": "VARCHAR(80) NOT NULL"
+      },
+      {
+        "name": "result_status",
+        "spec": "VARCHAR(20) NOT NULL"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "cross_chain_call_executions": [
-      "action_index",
-      "call_id",
-      "execute_action_index",
-      "result_status",
-      "return_payload_b64",
-      "gas_used",
-      "block_index"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "call_id",
+        "spec": "VARCHAR(80) NOT NULL"
+      },
+      {
+        "name": "execute_action_index",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "result_status",
+        "spec": "VARCHAR(20) NOT NULL"
+      },
+      {
+        "name": "return_payload_b64",
+        "spec": "TEXT"
+      },
+      {
+        "name": "gas_used",
+        "spec": "BIGINT UNSIGNED NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "cross_chain_call_rejections": [
-      "call_id",
-      "reason",
-      "detail",
-      "attempts",
-      "first_block",
-      "last_block"
+      {
+        "name": "call_id",
+        "spec": "CHAR(64) NOT NULL PRIMARY KEY"
+      },
+      {
+        "name": "reason",
+        "spec": "VARCHAR(40) NOT NULL"
+      },
+      {
+        "name": "detail",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "attempts",
+        "spec": "BIGINT UNSIGNED NOT NULL DEFAULT 1"
+      },
+      {
+        "name": "first_block",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "last_block",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "cross_chain_calls": [
-      "id",
-      "call_id",
-      "phase",
-      "snapshot_block",
-      "network",
-      "source_chain",
-      "source_action_index",
-      "source_contract_index",
-      "target_chain",
-      "target_contract_index",
-      "method",
-      "params_json",
-      "gas_limit",
-      "cross_hops",
-      "effective_time",
-      "status",
-      "result_status",
-      "return_payload_b64",
-      "validator_signatures",
-      "created_at"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "call_id",
+        "spec": "VARCHAR(80) NOT NULL"
+      },
+      {
+        "name": "phase",
+        "spec": "VARCHAR(10) NOT NULL"
+      },
+      {
+        "name": "snapshot_block",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "network",
+        "spec": "VARCHAR(20) NOT NULL"
+      },
+      {
+        "name": "source_chain",
+        "spec": "VARCHAR(10) NOT NULL"
+      },
+      {
+        "name": "source_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "source_contract_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "target_chain",
+        "spec": "VARCHAR(10) NOT NULL"
+      },
+      {
+        "name": "target_contract_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "method",
+        "spec": "VARCHAR(64) NOT NULL"
+      },
+      {
+        "name": "params_json",
+        "spec": "TEXT NOT NULL"
+      },
+      {
+        "name": "gas_limit",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "cross_hops",
+        "spec": "INT NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "effective_time",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "status",
+        "spec": "VARCHAR(20) NOT NULL DEFAULT 'FINALIZED'"
+      },
+      {
+        "name": "result_status",
+        "spec": "VARCHAR(20)"
+      },
+      {
+        "name": "return_payload_b64",
+        "spec": "TEXT"
+      },
+      {
+        "name": "validator_signatures",
+        "spec": "TEXT NOT NULL"
+      },
+      {
+        "name": "created_at",
+        "spec": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+      }
     ],
     "cross_chain_matches": [
-      "id",
-      "match_id",
-      "snapshot_block",
-      "network",
-      "a_chain",
-      "a_action_index",
-      "a_tick",
-      "a_amount",
-      "a_ownership",
-      "a_payout_addr",
-      "b_chain",
-      "b_action_index",
-      "b_tick",
-      "b_amount",
-      "b_ownership",
-      "b_payout_addr",
-      "effective_time",
-      "validator_signatures",
-      "status",
-      "batch_root",
-      "anchor_txid",
-      "created_at"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "match_id",
+        "spec": "VARCHAR(80) NOT NULL"
+      },
+      {
+        "name": "snapshot_block",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "network",
+        "spec": "VARCHAR(20) NOT NULL"
+      },
+      {
+        "name": "a_chain",
+        "spec": "VARCHAR(10) NOT NULL"
+      },
+      {
+        "name": "a_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "a_tick",
+        "spec": "VARCHAR(255)"
+      },
+      {
+        "name": "a_amount",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "a_ownership",
+        "spec": "TINYINT(1) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "a_payout_addr",
+        "spec": "VARCHAR(255) NOT NULL"
+      },
+      {
+        "name": "b_chain",
+        "spec": "VARCHAR(10) NOT NULL"
+      },
+      {
+        "name": "b_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "b_tick",
+        "spec": "VARCHAR(255)"
+      },
+      {
+        "name": "b_amount",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "b_ownership",
+        "spec": "TINYINT(1) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "b_payout_addr",
+        "spec": "VARCHAR(255) NOT NULL"
+      },
+      {
+        "name": "effective_time",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "validator_signatures",
+        "spec": "TEXT NOT NULL"
+      },
+      {
+        "name": "status",
+        "spec": "VARCHAR(20) NOT NULL DEFAULT 'FINALIZED'"
+      },
+      {
+        "name": "batch_root",
+        "spec": "VARCHAR(64)"
+      },
+      {
+        "name": "anchor_txid",
+        "spec": "VARCHAR(64)"
+      },
+      {
+        "name": "created_at",
+        "spec": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+      }
     ],
     "cross_chain_settlements": [
-      "action_index",
-      "match_id",
-      "local_action_index",
-      "block_index",
-      "a_chain",
-      "a_action_index",
-      "b_chain",
-      "b_action_index"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "match_id",
+        "spec": "VARCHAR(80) NOT NULL"
+      },
+      {
+        "name": "local_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "a_chain",
+        "spec": "VARCHAR(10) NULL"
+      },
+      {
+        "name": "a_action_index",
+        "spec": "BIGINT UNSIGNED NULL"
+      },
+      {
+        "name": "b_chain",
+        "spec": "VARCHAR(10) NULL"
+      },
+      {
+        "name": "b_action_index",
+        "spec": "BIGINT UNSIGNED NULL"
+      }
     ],
     "debits": [
-      "action_index",
-      "address_id",
-      "tick_id",
-      "amount"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "address_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250)"
+      }
     ],
     "delegations": [
-      "action_index",
-      "source_id",
-      "signing_pubkey_id",
-      "status_id",
-      "block_index",
-      "activation_block",
-      "deactivation_block"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "source_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "signing_pubkey_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "activation_block",
+        "spec": "BIGINT UNSIGNED NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "deactivation_block",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "deploy_chunks": [
-      "action_index",
-      "source_id",
-      "code_hash",
-      "chunk_index",
-      "total_chunks",
-      "code_part",
-      "block_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "source_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "code_hash",
+        "spec": "CHAR(64) NOT NULL"
+      },
+      {
+        "name": "chunk_index",
+        "spec": "INT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "total_chunks",
+        "spec": "INT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "code_part",
+        "spec": "MEDIUMTEXT NOT NULL"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "deposits": [
-      "action_index",
-      "contract_index",
-      "source_id",
-      "tick_id",
-      "amount",
-      "status_id",
-      "block_index"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "contract_index",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "source_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "destroys": [
-      "action_index",
-      "tick_id",
-      "amount",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "dispenser_cancels": [
-      "action_index",
-      "dispenser_action_index",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "dispenser_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "dispenser_closes": [
-      "action_index",
-      "dispenser_action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "dispenser_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "dispenser_edits": [
-      "action_index",
-      "dispenser_action_index",
-      "give_escrow",
-      "expiration",
-      "allow_list",
-      "block_list",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "dispenser_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "give_escrow",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "expiration",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "allow_list",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_list",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "dispenser_expires": [
-      "action_index",
-      "dispenser_action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "dispenser_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "dispenser_statuses": [
-      "action_index",
-      "dispenser_action_index",
-      "cancelled_by_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "dispenser_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "cancelled_by_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "dispensers": [
-      "action_index",
-      "give_coin_id",
-      "give_tick_id",
-      "give_amount",
-      "give_escrow",
-      "give_ownership",
-      "get_coin_id",
-      "get_tick_id",
-      "get_amount",
-      "get_address_id",
-      "fiat_id",
-      "fiat_amount",
-      "oracle_address_id",
-      "expiration",
-      "allow_list",
-      "block_list",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "give_coin_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "give_tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "give_amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "give_escrow",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "give_ownership",
+        "spec": "TINYINT(1) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "get_coin_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "get_tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "get_amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "get_address_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "fiat_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "fiat_amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "oracle_address_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "expiration",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "allow_list",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_list",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "dispenses": [
-      "action_index",
-      "dispenser_action_index",
-      "give_coin_id",
-      "give_tick_id",
-      "give_amount",
-      "get_coin_id",
-      "get_tick_id",
-      "get_amount",
-      "destination_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "dispenser_action_index",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "give_coin_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "give_tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "give_amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "get_coin_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "get_tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "get_amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "destination_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "dividends": [
-      "action_index",
-      "tick_id",
-      "dividend_tick_id",
-      "amount",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "dividend_tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "escrows": [
-      "action_index",
-      "address_id",
-      "tick_id",
-      "amount"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "address_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250)"
+      }
     ],
     "events": [
-      "id",
-      "time",
-      "code",
-      "data"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "time",
+        "spec": "DATETIME"
+      },
+      {
+        "name": "code",
+        "spec": "VARCHAR(50)"
+      },
+      {
+        "name": "data",
+        "spec": "VARCHAR(250)"
+      }
     ],
     "fees": [
-      "action_index",
-      "tick_id",
-      "amount",
-      "method",
-      "destination_id",
-      "gas_cost",
-      "gas_price",
-      "xchain_amount",
-      "payment_mode",
-      "native_coin_amount",
-      "native_coin",
-      "oracle_round",
-      "fee_preference",
-      "status_id",
-      "fee_version"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "method",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "destination_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "gas_cost",
+        "spec": "BIGINT UNSIGNED DEFAULT 0"
+      },
+      {
+        "name": "gas_price",
+        "spec": "VARCHAR(250) DEFAULT '0'"
+      },
+      {
+        "name": "xchain_amount",
+        "spec": "VARCHAR(250) DEFAULT '0'"
+      },
+      {
+        "name": "payment_mode",
+        "spec": "TINYINT UNSIGNED NOT NULL DEFAULT 2"
+      },
+      {
+        "name": "native_coin_amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "native_coin",
+        "spec": "VARCHAR(10)"
+      },
+      {
+        "name": "oracle_round",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "fee_preference",
+        "spec": "TINYINT UNSIGNED NOT NULL DEFAULT 2"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "fee_version",
+        "spec": "TINYINT UNSIGNED NOT NULL DEFAULT 1"
+      }
     ],
     "files": [
-      "action_index",
-      "name",
-      "title",
-      "type_id",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "name",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "title",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "type_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "full_node_verifications": [
-      "id",
-      "action_index",
-      "challenge_id",
-      "epoch_height",
-      "target_height",
-      "signing_pubkey_id",
-      "source_id",
-      "passed",
-      "block_index"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "challenge_id",
+        "spec": "CHAR(64) NOT NULL"
+      },
+      {
+        "name": "epoch_height",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "target_height",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "signing_pubkey_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "source_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "passed",
+        "spec": "TINYINT(1) NOT NULL DEFAULT 1"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "gated_files": [
-      "action_index",
-      "gate_ticker",
-      "encryption_method",
-      "key_hash",
-      "status_id",
-      "raw_data"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "gate_ticker",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "encryption_method",
+        "spec": "TINYINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "key_hash",
+        "spec": "CHAR(64) NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "raw_data",
+        "spec": "MEDIUMBLOB"
+      }
     ],
     "icons": [
-      "id",
-      "token_id",
-      "description_hash",
-      "source_url",
-      "source_hash",
-      "icon_hash",
-      "status",
-      "attempts",
-      "last_error",
-      "next_retry_at",
-      "last_checked_at",
-      "created",
-      "updated"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "token_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "description_hash",
+        "spec": "CHAR(32) DEFAULT NULL"
+      },
+      {
+        "name": "source_url",
+        "spec": "VARCHAR(500) DEFAULT NULL"
+      },
+      {
+        "name": "source_hash",
+        "spec": "CHAR(32) DEFAULT NULL"
+      },
+      {
+        "name": "icon_hash",
+        "spec": "CHAR(32) DEFAULT NULL"
+      },
+      {
+        "name": "status",
+        "spec": "ENUM('PENDING','OK','FAILED','STALE') NOT NULL DEFAULT 'PENDING'"
+      },
+      {
+        "name": "attempts",
+        "spec": "INT UNSIGNED NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "last_error",
+        "spec": "VARCHAR(255) DEFAULT NULL"
+      },
+      {
+        "name": "next_retry_at",
+        "spec": "DATETIME DEFAULT NULL"
+      },
+      {
+        "name": "last_checked_at",
+        "spec": "DATETIME DEFAULT NULL"
+      },
+      {
+        "name": "created",
+        "spec": "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated",
+        "spec": "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
+      }
     ],
     "index_actions": [
-      "id",
-      "action"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "action",
+        "spec": "VARCHAR(250) NOT NULL"
+      }
     ],
     "index_addresses": [
-      "id",
-      "address"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "address",
+        "spec": "VARCHAR(120) NOT NULL"
+      }
     ],
     "index_coins": [
-      "id",
-      "coin"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "coin",
+        "spec": "VARCHAR(250) NOT NULL"
+      }
     ],
     "index_fiats": [
-      "id",
-      "code",
-      "name"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "code",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "name",
+        "spec": "VARCHAR(250)"
+      }
     ],
     "index_memos": [
-      "id",
-      "memo"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "memo",
+        "spec": "VARCHAR(250) NOT NULL"
+      }
     ],
     "index_mime_types": [
-      "id",
-      "type"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "type",
+        "spec": "VARCHAR(255) NOT NULL"
+      }
     ],
     "index_pubkeys": [
-      "id",
-      "pubkey"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "pubkey",
+        "spec": "CHAR(64) NOT NULL"
+      }
     ],
     "index_statuses": [
-      "id",
-      "status"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "status",
+        "spec": "VARCHAR(250) NOT NULL"
+      }
     ],
     "index_tickers": [
-      "id",
-      "tick"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "tick",
+        "spec": "TEXT NOT NULL"
+      }
     ],
     "index_transactions": [
-      "id",
-      "hash"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "hash",
+        "spec": "VARCHAR(250) NOT NULL"
+      }
     ],
     "issues": [
-      "action_index",
-      "tick_id",
-      "max_supply",
-      "max_mint",
-      "decimals",
-      "description",
-      "mint_supply",
-      "transfer_id",
-      "transfer_supply_id",
-      "lock_max_supply",
-      "lock_mint",
-      "lock_mint_supply",
-      "lock_max_mint",
-      "lock_description",
-      "lock_sleep",
-      "lock_callback",
-      "callback_block",
-      "callback_tick_id",
-      "callback_amount",
-      "allow_list",
-      "block_list",
-      "mint_address_max",
-      "mint_start_block",
-      "mint_stop_block",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "max_supply",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "max_mint",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "decimals",
+        "spec": "VARCHAR(2)"
+      },
+      {
+        "name": "description",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "mint_supply",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "transfer_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "transfer_supply_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "lock_max_supply",
+        "spec": "VARCHAR(1)"
+      },
+      {
+        "name": "lock_mint",
+        "spec": "VARCHAR(1)"
+      },
+      {
+        "name": "lock_mint_supply",
+        "spec": "VARCHAR(1)"
+      },
+      {
+        "name": "lock_max_mint",
+        "spec": "VARCHAR(1)"
+      },
+      {
+        "name": "lock_description",
+        "spec": "VARCHAR(1)"
+      },
+      {
+        "name": "lock_sleep",
+        "spec": "VARCHAR(1)"
+      },
+      {
+        "name": "lock_callback",
+        "spec": "VARCHAR(1)"
+      },
+      {
+        "name": "callback_block",
+        "spec": "VARCHAR(15)"
+      },
+      {
+        "name": "callback_tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "callback_amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "allow_list",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_list",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "mint_address_max",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "mint_start_block",
+        "spec": "VARCHAR(15)"
+      },
+      {
+        "name": "mint_stop_block",
+        "spec": "VARCHAR(15)"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "links": [
-      "action_index",
-      "coin1_id",
-      "coin1_action_index",
-      "coin2_id",
-      "coin2_action_index",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "coin1_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "coin1_action_index",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "coin2_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "coin2_action_index",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "list_edits": [
-      "action_index",
-      "item_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "item_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "list_items": [
-      "action_index",
-      "item_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "item_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "list_items_invalid": [
-      "action_index",
-      "item_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "item_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "lists": [
-      "action_index",
-      "type",
-      "edit",
-      "list_action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "type",
+        "spec": "VARCHAR(1)"
+      },
+      {
+        "name": "edit",
+        "spec": "VARCHAR(1)"
+      },
+      {
+        "name": "list_action_index",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "mappings_actions": [
-      "action_index",
-      "type_id",
-      "id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "type_id",
+        "spec": "TINYINT UNSIGNED"
+      },
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "mappings_files": [
-      "action_index",
-      "type_id",
-      "id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "type_id",
+        "spec": "TINYINT UNSIGNED"
+      },
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "markets": [
-      "id",
-      "tick1_id",
-      "tick1_price",
-      "tick1_bid",
-      "tick1_ask",
-      "tick1_24hr_price",
-      "tick1_24hr_high",
-      "tick1_24hr_low",
-      "tick1_24hr_change",
-      "tick1_24hr_volume",
-      "tick2_id",
-      "tick2_price",
-      "tick2_bid",
-      "tick2_ask",
-      "tick2_24hr_price",
-      "tick2_24hr_high",
-      "tick2_24hr_low",
-      "tick2_24hr_change",
-      "tick2_24hr_volume",
-      "last_updated"
+      {
+        "name": "id",
+        "spec": "INTEGER UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "tick1_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "tick1_price",
+        "spec": "VARCHAR(250) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "tick1_bid",
+        "spec": "VARCHAR(250) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "tick1_ask",
+        "spec": "VARCHAR(250) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "tick1_24hr_price",
+        "spec": "VARCHAR(250) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "tick1_24hr_high",
+        "spec": "VARCHAR(250) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "tick1_24hr_low",
+        "spec": "VARCHAR(250) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "tick1_24hr_change",
+        "spec": "VARCHAR(250) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "tick1_24hr_volume",
+        "spec": "VARCHAR(250) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "tick2_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "tick2_price",
+        "spec": "VARCHAR(250) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "tick2_bid",
+        "spec": "VARCHAR(250) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "tick2_ask",
+        "spec": "VARCHAR(250) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "tick2_24hr_price",
+        "spec": "VARCHAR(250) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "tick2_24hr_high",
+        "spec": "VARCHAR(250) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "tick2_24hr_low",
+        "spec": "VARCHAR(250) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "tick2_24hr_change",
+        "spec": "VARCHAR(250) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "tick2_24hr_volume",
+        "spec": "VARCHAR(250) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "last_updated",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "messages": [
-      "action_index",
-      "coin",
-      "destination_id",
-      "encryption_method",
-      "encryption_key",
-      "encrypted_message",
-      "plaintext_message",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "coin",
+        "spec": "VARCHAR(4)"
+      },
+      {
+        "name": "destination_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "encryption_method",
+        "spec": "VARCHAR(1)"
+      },
+      {
+        "name": "encryption_key",
+        "spec": "MEDIUMTEXT"
+      },
+      {
+        "name": "encrypted_message",
+        "spec": "MEDIUMTEXT"
+      },
+      {
+        "name": "plaintext_message",
+        "spec": "MEDIUMTEXT"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "mints": [
-      "action_index",
-      "tick_id",
-      "amount",
-      "destination_id",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "destination_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "oracle_prices": [
-      "id",
-      "source_address",
-      "source_chain",
-      "coin",
-      "tick",
-      "fiat",
-      "value",
-      "fee",
-      "memo",
-      "block_time",
-      "effective_at",
-      "action_index",
-      "created_at"
+      {
+        "name": "id",
+        "spec": "BIGINT AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "source_address",
+        "spec": "VARCHAR(100) NOT NULL"
+      },
+      {
+        "name": "source_chain",
+        "spec": "VARCHAR(10) NOT NULL"
+      },
+      {
+        "name": "coin",
+        "spec": "VARCHAR(10) NOT NULL"
+      },
+      {
+        "name": "tick",
+        "spec": "VARCHAR(50) NOT NULL"
+      },
+      {
+        "name": "fiat",
+        "spec": "VARCHAR(10) NOT NULL"
+      },
+      {
+        "name": "value",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "fee",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "memo",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "block_time",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "effective_at",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "created_at",
+        "spec": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+      }
     ],
     "order_cancels": [
-      "action_index",
-      "order_action_index",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "order_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "order_edits": [
-      "action_index",
-      "order_action_index",
-      "expiration",
-      "allow_list",
-      "block_list",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "order_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "expiration",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "allow_list",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_list",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "order_expires": [
-      "action_index",
-      "order_action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "order_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "order_matches": [
-      "action_index",
-      "give_action_index",
-      "give_coin_id",
-      "give_tick_id",
-      "give_amount",
-      "get_action_index",
-      "get_coin_id",
-      "get_tick_id",
-      "get_amount",
-      "settlement_type",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "give_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "give_coin_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "give_tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "give_amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "get_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "get_coin_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "get_tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "get_amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "settlement_type",
+        "spec": "ENUM('INSTANT','COINPAY') DEFAULT 'INSTANT'"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "order_statuses": [
-      "action_index",
-      "order_action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "order_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "orders": [
-      "action_index",
-      "give_coin_id",
-      "give_tick_id",
-      "give_amount",
-      "get_coin_id",
-      "get_tick_id",
-      "get_amount",
-      "get_address_id",
-      "give_ownership",
-      "get_ownership",
-      "expiration",
-      "allow_list",
-      "block_list",
-      "memo_id",
-      "status_id",
-      "payout_legs"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "give_coin_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "give_tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "give_amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "get_coin_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "get_tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "get_amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "get_address_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "give_ownership",
+        "spec": "TINYINT(1) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "get_ownership",
+        "spec": "TINYINT(1) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "expiration",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "allow_list",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_list",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "payout_legs",
+        "spec": "TEXT"
+      }
     ],
     "pending_hub_pushes": [
-      "id",
-      "push_type",
-      "action_index",
-      "payload",
-      "attempts",
-      "last_attempted_at",
-      "last_error",
-      "status",
-      "created_at"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT"
+      },
+      {
+        "name": "push_type",
+        "spec": "VARCHAR(32) NOT NULL"
+      },
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "payload",
+        "spec": "TEXT NOT NULL"
+      },
+      {
+        "name": "attempts",
+        "spec": "INT UNSIGNED NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "last_attempted_at",
+        "spec": "DATETIME NULL"
+      },
+      {
+        "name": "last_error",
+        "spec": "VARCHAR(500)"
+      },
+      {
+        "name": "status",
+        "spec": "VARCHAR(16) NOT NULL DEFAULT 'PENDING'"
+      },
+      {
+        "name": "created_at",
+        "spec": "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
+      }
     ],
     "poll_results": [
-      "action_index",
-      "block_index",
-      "poll_index",
-      "option_index",
-      "total_weight",
-      "voter_count",
-      "resolved_block",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "poll_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "option_index",
+        "spec": "SMALLINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "total_weight",
+        "spec": "VARCHAR(60)"
+      },
+      {
+        "name": "voter_count",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "resolved_block",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "polls": [
-      "action_index",
-      "block_index",
-      "tick_id",
-      "end_block",
-      "options",
-      "max_selections",
-      "tally_mode",
-      "weight_mode",
-      "quorum",
-      "min_voters",
-      "min_vote_balance",
-      "decide_threshold",
-      "question",
-      "poll_status",
-      "winning_option",
-      "total_weight",
-      "total_voters",
-      "quorum_met",
-      "min_voters_met",
-      "fail_reason",
-      "decided_early",
-      "effective_close_block",
-      "finalized_action_index",
-      "resolved_block",
-      "deposit_amount",
-      "deposit_address_id",
-      "deposit_resolved",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "end_block",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "options",
+        "spec": "MEDIUMTEXT"
+      },
+      {
+        "name": "max_selections",
+        "spec": "SMALLINT UNSIGNED"
+      },
+      {
+        "name": "tally_mode",
+        "spec": "ENUM('APPROVAL','SPLIT')"
+      },
+      {
+        "name": "weight_mode",
+        "spec": "ENUM('BALANCE','STAKE','FLAT','QUADRATIC','TIME_WEIGHTED')"
+      },
+      {
+        "name": "quorum",
+        "spec": "VARCHAR(60)"
+      },
+      {
+        "name": "min_voters",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "min_vote_balance",
+        "spec": "VARCHAR(60)"
+      },
+      {
+        "name": "decide_threshold",
+        "spec": "VARCHAR(60)"
+      },
+      {
+        "name": "question",
+        "spec": "MEDIUMTEXT"
+      },
+      {
+        "name": "poll_status",
+        "spec": "ENUM('OPEN','FINALIZED','FAILED_QUORUM') NOT NULL DEFAULT 'OPEN'"
+      },
+      {
+        "name": "winning_option",
+        "spec": "SMALLINT UNSIGNED"
+      },
+      {
+        "name": "total_weight",
+        "spec": "VARCHAR(60)"
+      },
+      {
+        "name": "total_voters",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "quorum_met",
+        "spec": "TINYINT UNSIGNED"
+      },
+      {
+        "name": "min_voters_met",
+        "spec": "TINYINT UNSIGNED"
+      },
+      {
+        "name": "fail_reason",
+        "spec": "ENUM('QUORUM','MIN_VOTERS','BOTH')"
+      },
+      {
+        "name": "decided_early",
+        "spec": "TINYINT UNSIGNED"
+      },
+      {
+        "name": "effective_close_block",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "finalized_action_index",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "resolved_block",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "deposit_amount",
+        "spec": "VARCHAR(60)"
+      },
+      {
+        "name": "deposit_address_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "deposit_resolved",
+        "spec": "ENUM('REFUNDED','FORFEITED')"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "price_snapshots": [
-      "id",
-      "round_number",
-      "coin_pair",
-      "price",
-      "reference_block",
-      "reference_chain",
-      "block_timestamp",
-      "validator_count",
-      "consensus_round",
-      "consensus_proof",
-      "status",
-      "source_chain",
-      "source_action_index",
-      "created_at"
+      {
+        "name": "id",
+        "spec": "BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "round_number",
+        "spec": "BIGINT NOT NULL"
+      },
+      {
+        "name": "coin_pair",
+        "spec": "VARCHAR(20) NOT NULL"
+      },
+      {
+        "name": "price",
+        "spec": "VARCHAR(40)"
+      },
+      {
+        "name": "reference_block",
+        "spec": "BIGINT NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "reference_chain",
+        "spec": "VARCHAR(10) NOT NULL DEFAULT 'BTC'"
+      },
+      {
+        "name": "block_timestamp",
+        "spec": "BIGINT NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "validator_count",
+        "spec": "INT NOT NULL"
+      },
+      {
+        "name": "consensus_round",
+        "spec": "INT DEFAULT 1"
+      },
+      {
+        "name": "consensus_proof",
+        "spec": "TEXT NOT NULL"
+      },
+      {
+        "name": "status",
+        "spec": "ENUM('FINALIZED','SKIPPED','DISPUTED') NOT NULL"
+      },
+      {
+        "name": "source_chain",
+        "spec": "VARCHAR(10) NOT NULL DEFAULT 'DOGE'"
+      },
+      {
+        "name": "source_action_index",
+        "spec": "BIGINT"
+      },
+      {
+        "name": "created_at",
+        "spec": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+      }
     ],
     "prices": [
-      "action_index",
-      "version",
-      "source_id",
-      "round_number",
-      "round_timestamp",
-      "pair_count",
-      "pairs_json",
-      "sig_count",
-      "sigs_json",
-      "coin_id",
-      "tick_id",
-      "fiat_id",
-      "value",
-      "fee",
-      "memo_id",
-      "validation_status",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "version",
+        "spec": "TINYINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "source_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "round_number",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "round_timestamp",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "pair_count",
+        "spec": "SMALLINT UNSIGNED"
+      },
+      {
+        "name": "pairs_json",
+        "spec": "TEXT"
+      },
+      {
+        "name": "sig_count",
+        "spec": "SMALLINT UNSIGNED"
+      },
+      {
+        "name": "sigs_json",
+        "spec": "TEXT"
+      },
+      {
+        "name": "coin_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "fiat_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "value",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "fee",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "validation_status",
+        "spec": "VARCHAR(20) NOT NULL DEFAULT 'PENDING'"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "pubkeys": [
-      "address_id",
-      "pubkey"
+      {
+        "name": "address_id",
+        "spec": "BIGINT UNSIGNED NOT NULL PRIMARY KEY"
+      },
+      {
+        "name": "pubkey",
+        "spec": "VARCHAR(130) NOT NULL"
+      }
     ],
     "push_generations": [
-      "coin",
-      "generation"
+      {
+        "name": "coin",
+        "spec": "VARCHAR(10) NOT NULL"
+      },
+      {
+        "name": "generation",
+        "spec": "BIGINT NOT NULL DEFAULT 0"
+      }
     ],
     "recovery_pending_rewards": [
-      "id",
-      "source_address",
-      "validator_pubkey",
-      "reward_type",
-      "round_reference",
-      "amount",
-      "block_index",
-      "source_id",
-      "applied",
-      "applied_block"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "source_address",
+        "spec": "VARCHAR(120) NOT NULL"
+      },
+      {
+        "name": "validator_pubkey",
+        "spec": "CHAR(64) NOT NULL"
+      },
+      {
+        "name": "reward_type",
+        "spec": "VARCHAR(20) NOT NULL"
+      },
+      {
+        "name": "round_reference",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "source_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "applied",
+        "spec": "TINYINT NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "applied_block",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "reward_claims": [
-      "action_index",
-      "source_id",
-      "amount",
-      "status_id",
-      "block_index"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "source_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "sends": [
-      "action_index",
-      "tick_id",
-      "destination_id",
-      "amount",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "destination_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "slash_events": [
-      "id",
-      "execution_index",
-      "target_contract_index",
-      "signing_pubkey_id",
-      "tick_id",
-      "amount",
-      "destination_id",
-      "block_index"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "execution_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "target_contract_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "signing_pubkey_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "destination_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "sleeps": [
-      "action_index",
-      "type",
-      "tick_id",
-      "resume_block",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "type",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "resume_block",
+        "spec": "VARCHAR(25)"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "stake_key_revocations": [
-      "action_index",
-      "source_id",
-      "signing_pubkey_id",
-      "status_id",
-      "block_index",
-      "deactivation_block"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "source_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "signing_pubkey_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "deactivation_block",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "stakes": [
-      "action_index",
-      "source_id",
-      "version",
-      "signing_pubkey_id",
-      "amount",
-      "status_id",
-      "block_index",
-      "activation_block",
-      "deactivation_block"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "source_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "version",
+        "spec": "TINYINT UNSIGNED NOT NULL DEFAULT 1"
+      },
+      {
+        "name": "signing_pubkey_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "activation_block",
+        "spec": "BIGINT UNSIGNED NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "deactivation_block",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "state_checkpoints": [
-      "id",
-      "chain",
-      "network",
-      "block_index",
-      "block_hash",
-      "ledger_hash",
-      "actions_hash",
-      "contract_hash",
-      "checkpoint_seq",
-      "snapshot_block",
-      "state_root",
-      "state_root_version",
-      "block_merkle_root",
-      "block_merkle_version",
-      "validator_signatures",
-      "created_at"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "chain",
+        "spec": "VARCHAR(10) NOT NULL"
+      },
+      {
+        "name": "network",
+        "spec": "VARCHAR(20) NOT NULL"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "block_hash",
+        "spec": "VARCHAR(64) NOT NULL"
+      },
+      {
+        "name": "ledger_hash",
+        "spec": "VARCHAR(64) NOT NULL"
+      },
+      {
+        "name": "actions_hash",
+        "spec": "VARCHAR(64) NOT NULL"
+      },
+      {
+        "name": "contract_hash",
+        "spec": "VARCHAR(64) NOT NULL"
+      },
+      {
+        "name": "checkpoint_seq",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "snapshot_block",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "state_root",
+        "spec": "CHAR(64)"
+      },
+      {
+        "name": "state_root_version",
+        "spec": "TINYINT UNSIGNED"
+      },
+      {
+        "name": "block_merkle_root",
+        "spec": "CHAR(64)"
+      },
+      {
+        "name": "block_merkle_version",
+        "spec": "TINYINT UNSIGNED"
+      },
+      {
+        "name": "validator_signatures",
+        "spec": "TEXT NOT NULL"
+      },
+      {
+        "name": "created_at",
+        "spec": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+      }
     ],
     "state_tree_nodes": [
-      "id",
-      "node_hash",
-      "left_hash",
-      "right_hash"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "node_hash",
+        "spec": "CHAR(64) NOT NULL"
+      },
+      {
+        "name": "left_hash",
+        "spec": "CHAR(64) NOT NULL"
+      },
+      {
+        "name": "right_hash",
+        "spec": "CHAR(64) NOT NULL"
+      }
     ],
     "state_tree_roots": [
-      "id",
-      "chain",
-      "network",
-      "block_index",
-      "balances_root",
-      "stakes_root",
-      "state_root",
-      "block_merkle_root",
-      "computed_at"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "chain",
+        "spec": "VARCHAR(10) NOT NULL"
+      },
+      {
+        "name": "network",
+        "spec": "VARCHAR(20) NOT NULL"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "balances_root",
+        "spec": "CHAR(64) NOT NULL"
+      },
+      {
+        "name": "stakes_root",
+        "spec": "CHAR(64) NOT NULL"
+      },
+      {
+        "name": "state_root",
+        "spec": "CHAR(64) NOT NULL"
+      },
+      {
+        "name": "block_merkle_root",
+        "spec": "CHAR(64) NOT NULL"
+      },
+      {
+        "name": "computed_at",
+        "spec": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+      }
     ],
     "swap_cancels": [
-      "action_index",
-      "swap_action_index",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "swap_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "swap_edits": [
-      "action_index",
-      "swap_action_index",
-      "expiration",
-      "allow_list",
-      "block_list",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "swap_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "expiration",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "allow_list",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_list",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "swap_expires": [
-      "action_index",
-      "swap_action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "swap_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "swap_matches": [
-      "action_index",
-      "give_action_index",
-      "give_coin_id",
-      "give_tick_id",
-      "give_amount",
-      "get_action_index",
-      "get_coin_id",
-      "get_tick_id",
-      "get_amount",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "give_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "give_coin_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "give_tick_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "give_amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "get_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "get_coin_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "get_tick_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "get_amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "swap_statuses": [
-      "action_index",
-      "swap_action_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "swap_action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "swaps": [
-      "action_index",
-      "give_coin_id",
-      "give_tick_id",
-      "give_amount",
-      "get_coin_id",
-      "get_tick_id",
-      "get_amount",
-      "get_address_id",
-      "give_ownership",
-      "get_ownership",
-      "expiration",
-      "allow_list",
-      "block_list",
-      "memo_id",
-      "status_id",
-      "payout_legs"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "give_coin_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "give_tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "give_amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "get_coin_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "get_tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "get_amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "get_address_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "give_ownership",
+        "spec": "TINYINT(1) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "get_ownership",
+        "spec": "TINYINT(1) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "expiration",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "allow_list",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_list",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "payout_legs",
+        "spec": "TEXT"
+      }
     ],
     "sweeps": [
-      "action_index",
-      "balances",
-      "ownerships",
-      "orders",
-      "swaps",
-      "dispensers",
-      "destination_id",
-      "memo_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "balances",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "ownerships",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "orders",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "swaps",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "dispensers",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "destination_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "memo_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "token_controllers": [
-      "id",
-      "action_index",
-      "tick_id",
-      "action_class",
-      "contract_index",
-      "bound_by_id",
-      "is_unbind",
-      "cooldown_blocks",
-      "cooldown_end_block",
-      "block_index"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "action_class",
+        "spec": "VARCHAR(16) NOT NULL"
+      },
+      {
+        "name": "contract_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "bound_by_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "is_unbind",
+        "spec": "TINYINT(1) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "cooldown_blocks",
+        "spec": "INT UNSIGNED NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "cooldown_end_block",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "tokens": [
-      "id",
-      "tick_id",
-      "action_index",
-      "last_action_index",
-      "supply",
-      "max_supply",
-      "max_mint",
-      "decimals",
-      "description",
-      "lock_max_supply",
-      "lock_mint",
-      "lock_mint_supply",
-      "lock_max_mint",
-      "lock_description",
-      "lock_sleep",
-      "lock_callback",
-      "callback_block",
-      "callback_tick_id",
-      "callback_amount",
-      "allow_list",
-      "block_list",
-      "mint_address_max",
-      "mint_start_block",
-      "mint_stop_block",
-      "owner_id",
-      "escrow_action_index",
-      "coin_price",
-      "coin_floor"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "last_action_index",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "supply",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "max_supply",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "max_mint",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "decimals",
+        "spec": "TINYINT(2)"
+      },
+      {
+        "name": "description",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "lock_max_supply",
+        "spec": "TINYINT(1) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "lock_mint",
+        "spec": "TINYINT(1) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "lock_mint_supply",
+        "spec": "TINYINT(1) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "lock_max_mint",
+        "spec": "TINYINT(1) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "lock_description",
+        "spec": "TINYINT(1) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "lock_sleep",
+        "spec": "TINYINT(1) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "lock_callback",
+        "spec": "TINYINT(1) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "callback_block",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "callback_tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "callback_amount",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "allow_list",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_list",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "mint_address_max",
+        "spec": "VARCHAR(250)"
+      },
+      {
+        "name": "mint_start_block",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "mint_stop_block",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "owner_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "escrow_action_index",
+        "spec": "BIGINT UNSIGNED DEFAULT NULL"
+      },
+      {
+        "name": "coin_price",
+        "spec": "VARCHAR(250) NOT NULL DEFAULT 0"
+      },
+      {
+        "name": "coin_floor",
+        "spec": "VARCHAR(250) NOT NULL DEFAULT 0"
+      }
     ],
     "transactions": [
-      "tx_index",
-      "block_index",
-      "tx_hash_id",
-      "source_id",
-      "fee",
-      "data"
+      {
+        "name": "tx_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "tx_hash_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "source_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "fee",
+        "spec": "BIGINT"
+      },
+      {
+        "name": "data",
+        "spec": "MEDIUMTEXT"
+      }
     ],
     "unstakes": [
-      "action_index",
-      "source_id",
-      "signing_pubkey_id",
-      "cooldown_end_block",
-      "amount",
-      "status_id",
-      "block_index"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "source_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "signing_pubkey_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "cooldown_end_block",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "validator_rewards": [
-      "id",
-      "source_id",
-      "signing_pubkey_id",
-      "reward_type",
-      "round_reference",
-      "amount",
-      "block_index"
+      {
+        "name": "id",
+        "spec": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY"
+      },
+      {
+        "name": "source_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "signing_pubkey_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "reward_type",
+        "spec": "VARCHAR(20) NOT NULL"
+      },
+      {
+        "name": "round_reference",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "vote_delegations": [
-      "action_index",
-      "block_index",
-      "tick_id",
-      "delegator_address_id",
-      "delegate_address_id",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "delegator_address_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "delegate_address_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "votes": [
-      "action_index",
-      "block_index",
-      "poll_index",
-      "voter_address_id",
-      "choice",
-      "share",
-      "memo",
-      "resolved_block",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "poll_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "voter_address_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "choice",
+        "spec": "SMALLINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "share",
+        "spec": "VARCHAR(60)"
+      },
+      {
+        "name": "memo",
+        "spec": "MEDIUMTEXT"
+      },
+      {
+        "name": "resolved_block",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      }
     ],
     "withdrawals": [
-      "action_index",
-      "contract_index",
-      "source_id",
-      "tick_id",
-      "amount",
-      "status_id",
-      "block_index"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "contract_index",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "source_id",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "tick_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "amount",
+        "spec": "VARCHAR(250) NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      }
     ],
     "xcalls": [
-      "action_index",
-      "version",
-      "call_id",
-      "contract_index",
-      "target_chain",
-      "target_contract_index",
-      "method",
-      "params_json",
-      "gas_limit",
-      "cross_hops",
-      "callback_method",
-      "callback_params_json",
-      "deadline_block",
-      "request_status",
-      "result_status",
-      "result_payload",
-      "resolved_block",
-      "callback_action_index",
-      "block_index",
-      "status_id"
+      {
+        "name": "action_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "version",
+        "spec": "INT NOT NULL"
+      },
+      {
+        "name": "call_id",
+        "spec": "VARCHAR(80) NOT NULL"
+      },
+      {
+        "name": "contract_index",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "target_chain",
+        "spec": "VARCHAR(10)"
+      },
+      {
+        "name": "target_contract_index",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "method",
+        "spec": "VARCHAR(64)"
+      },
+      {
+        "name": "params_json",
+        "spec": "TEXT"
+      },
+      {
+        "name": "gas_limit",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "cross_hops",
+        "spec": "INT"
+      },
+      {
+        "name": "callback_method",
+        "spec": "VARCHAR(64)"
+      },
+      {
+        "name": "callback_params_json",
+        "spec": "TEXT"
+      },
+      {
+        "name": "deadline_block",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "request_status",
+        "spec": "VARCHAR(20)"
+      },
+      {
+        "name": "result_status",
+        "spec": "VARCHAR(20)"
+      },
+      {
+        "name": "result_payload",
+        "spec": "TEXT"
+      },
+      {
+        "name": "resolved_block",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "callback_action_index",
+        "spec": "BIGINT UNSIGNED"
+      },
+      {
+        "name": "block_index",
+        "spec": "BIGINT UNSIGNED NOT NULL"
+      },
+      {
+        "name": "status_id",
+        "spec": "INT NOT NULL"
+      }
     ]
   }
 }

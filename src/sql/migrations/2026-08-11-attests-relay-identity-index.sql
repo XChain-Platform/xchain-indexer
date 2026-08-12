@@ -1,0 +1,34 @@
+-- xchain:migration mode=auto
+-- Migration: attests.origin_relay_identity, the lookup index behind the  relay's
+-- exactly-once admission guard ().
+--
+-- WHY
+-- ---
+-- ATTEST v3 admission deduplicated only on request_id, and request_id is SHA256 over the
+-- ORIGIN tx_hash (see attests.sql). An origin reorg deeper than the hub's confirmation
+-- depth that re-emits the same origin action_index from a different transaction therefore
+-- produces a different request_id, clears that check, and materializes a SECOND BTC
+-- request that nothing on BTC can retract. _parseRelayRequest now also rejects a relay
+-- identity (origin_chain, origin_action_index) this chain already materialized, which
+-- needs an indexed lookup: without this index every v3 scans every row the chain ever
+-- materialized from that origin chain, on the per-block consensus path.
+--
+-- NON-UNIQUE on purpose, and it must stay that way. A rejected v3 still persists its
+-- origin_chain / origin_action_index on its audit row, so two v3s naming one origin action
+-- legitimately coexist; and a UNIQUE violation would THROW mid-block inside a consensus
+-- indexer instead of yielding the identical stored 'invalid' verdict on every node, which
+-- is the same reason the request_id duplicate is rejected in code rather than by the DB.
+-- Exactly-once is enforced in xchain-indexer/src/actions/attest.js.
+--
+-- NOT consensus-visible. Index-only DDL: it changes no column, no row and no validation
+-- outcome, only the access path of a lookup that is already deterministic.
+--
+-- Additive + idempotent: CREATE INDEX IF NOT EXISTS is a no-op on a fresh install (the
+-- definition in src/sql/attests.sql already carries it) and back-fills only a DB converged
+-- by replaying the dated migrations alone. Name, column list and the non-UNIQUE flag are
+-- byte-equal to that definition, which sql-schema-index-parity asserts in both directions.
+--
+-- HOW TO RUN
+--   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-08-11-attests-relay-identity-index.sql
+
+CREATE INDEX IF NOT EXISTS origin_relay_identity ON attests (origin_chain, origin_action_index);

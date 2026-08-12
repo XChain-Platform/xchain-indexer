@@ -16,14 +16,46 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 const XChainIndexer = require('../../src/XChainIndexer.js');
 const {
     hubConfigStaleness,
-    HUB_CONFIG_STALENESS_LIMIT_MS,
+    hubConfigStalenessLimitMs,
+    effectiveHubConfigPollIntervalMs,
     DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS
 } = XChainIndexer;
 
+// The boundary is env-derived, so pin the ambient value for the default-cadence cases rather
+// than inheriting whatever the shell exported.
+const AMBIENT_POLL_INTERVAL = process.env.HUB_CONFIG_POLL_INTERVAL_MS;
+const HUB_CONFIG_STALENESS_LIMIT_MS = 180000;   // 3 x the 60s default, asserted below
+
 describe('hubConfigStaleness (#2607) @regression', function () {
+    beforeEach(function () { delete process.env.HUB_CONFIG_POLL_INTERVAL_MS; });
+    after(function () {
+        if(AMBIENT_POLL_INTERVAL === undefined) delete process.env.HUB_CONFIG_POLL_INTERVAL_MS;
+        else process.env.HUB_CONFIG_POLL_INTERVAL_MS = AMBIENT_POLL_INTERVAL;
+    });
+
     it('derives the staleness limit as 3 poll intervals', function () {
         assert.strictEqual(DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS, 60000);
-        assert.strictEqual(HUB_CONFIG_STALENESS_LIMIT_MS, 180000);
+        assert.strictEqual(hubConfigStalenessLimitMs(), HUB_CONFIG_STALENESS_LIMIT_MS);
+    });
+
+    // item 4461: the boundary used to be compiled from the DEFAULT while the poll timer
+    // honoured HUB_CONFIG_POLL_INTERVAL_MS, so a 10s poll still reported fresh until 180s.
+    it('tracks a HUB_CONFIG_POLL_INTERVAL_MS override (boundary = 3 x effective interval)', function () {
+        process.env.HUB_CONFIG_POLL_INTERVAL_MS = '10000';
+        assert.strictEqual(effectiveHubConfigPollIntervalMs(), 10000);
+        assert.strictEqual(hubConfigStalenessLimitMs(), 30000);
+        assert.strictEqual(hubConfigStaleness(1000000 - 30001, 1000000).stale, true);
+    });
+
+    // item 4461 (rework): api.js requires XChainIndexer BEFORE calling dotenv.config(), so a
+    // value that arrives from `.env` lands after this module is loaded. Reading env at module
+    // load would silently revert the documented knob to the 60s default on exactly the
+    // deployment shape the README documents, which is why the read stays lazy.
+    it('honours an override that arrives after module load (dotenv ordering)', function () {
+        assert.strictEqual(effectiveHubConfigPollIntervalMs(), 60000);
+        process.env.HUB_CONFIG_POLL_INTERVAL_MS = '600000';   // as if dotenv.config() just ran
+        assert.strictEqual(effectiveHubConfigPollIntervalMs(), 600000);
+        assert.strictEqual(hubConfigStalenessLimitMs(), 1800000);
     });
 
     it('null last-fetch: age null, not stale', function () {

@@ -315,6 +315,14 @@ class Attest {
         // row that actually reached 'pending', so a rejected request is never relayed.
         data['ORIGIN_CHAIN'] = (relayOrigin && data['REQUEST_STATUS'] === 'pending')
                              ? String(this.config['COIN']) : null;
+        // Paired half of the same relay identity, on the IDENTICAL predicate. On an origin
+        // v0 row "the origin chain's v0 action_index" is this row's own action_index, which
+        // is what the response leg (ATTEST v4) and the BTC-side exactly-once guard correlate
+        // on; writing only ORIGIN_CHAIN left the identity half-formed and the column NULL
+        // (). Sharing the predicate keeps the two columns inseparable: a rejected
+        // or native request leaves BOTH NULL, exactly as the v3 handler sets BOTH together.
+        data['ORIGIN_ACTION_INDEX'] = (relayOrigin && data['REQUEST_STATUS'] === 'pending')
+                                    ? data['ACTION_INDEX'] : null;
 
         console.log("\t ATTEST v0 : id=" + (data['REQUEST_ID'] ? String(data['REQUEST_ID']).substring(0,16) + '...' : '?') +
                     ' : provider=' + data['PROVIDER_ID'] +
@@ -864,11 +872,33 @@ class Attest {
             return;
         }
 
-        // Flag-day gate on this action's OWN block_index, which on the home chain IS
-        // a BTC height and, unlike the SNAPSHOT_BLOCK below, cannot be forged by the
-        // broadcaster. Below activation: write nothing, persist nothing, byte-identical
-        // to how a pre- node treats VERSION 3.
+        let snapshotBlock = parseInt(params[8]);
+
+        // Flag-day gate, and it takes BOTH planes because the two answer different
+        // questions and only one of them is shared with the rest of the federation.
+        //
+        // The landing block_index is what makes the leg inert before the flag day:
+        // on the home chain it IS a BTC height and cannot be forged, so a v3 carrying
+        // an invented future SNAPSHOT_BLOCK still persists nothing below activation,
+        // byte-identical to how a pre- node treats VERSION 3.
+        //
+        // The carried SNAPSHOT_BLOCK is what keeps this node on the same activation
+        // predicate as everyone else. It is the ONLY plane the hub can gate on, since
+        // the hub decides whether to co-sign and broadcast BEFORE the action has a
+        // landing height at all (xchain-hub AttestationRelay._validateRowEnvelope and
+        // the request-round gate), and it is the plane the v4 leg, the
+        // isAttestRelayActive contract, and the SNAPSHOT_BLOCK field spec all name.
+        // Without it the window landing >= activation > snapshot is accepted here and
+        // refused by the hub, and the signer set it resolves quorum against is the
+        // pre-activation one.
+        //
+        // A malformed or negative SNAPSHOT_BLOCK is deliberately NOT hard-returned
+        // here: it keeps falling through to the stored 'invalid: SNAPSHOT_BLOCK'
+        // verdict below, so this gate changes acceptance for exactly the divergent
+        // case and is a strict no-op on any network whose threshold is 0.
         if(!attestRelay.isAttestRelayActive(data['BLOCK_INDEX'], this.config['NETWORK']))
+            return;
+        if(snapshotBlock >= 0 && !attestRelay.isAttestRelayActive(snapshotBlock, this.config['NETWORK']))
             return;
 
         let requestId      = String(params[1] || '').toLowerCase();
@@ -878,7 +908,6 @@ class Attest {
         let requestPayload = (params[5] == null) ? '' : String(params[5]);
         let redundancy     = parseInt(params[6]);
         let deadlineBlocks = parseInt(params[7]);
-        let snapshotBlock  = parseInt(params[8]);
 
         if(!error && !/^[0-9a-f]{64}$/.test(requestId))
             error = 'invalid: REQUEST_ID (format)';
@@ -914,6 +943,20 @@ class Attest {
         // verdict every node reaches identically.
         if(!error && await this.indexerDb.getAttestationRequestById(requestId))
             error = 'invalid: REQUEST_ID (already present on this chain)';
+
+        // ...and one RELAY IDENTITY materializes exactly once, which the check above does
+        // NOT imply. request_id is SHA256 over the origin TX_HASH (attests.sql), so an
+        // origin reorg deeper than the hub's confirmation depth that re-emits the same
+        // origin action_index from a different transaction produces a DIFFERENT request_id,
+        // clears the check above, and materializes a second BTC request that nothing on BTC
+        // can retract (). Rejecting the second is the conservative side of that
+        // fork: the stranded origin request expires on its own deadline and refunds its
+        // escrow, whereas a double materialization spends real BTC fees irreversibly.
+        // Stored as an 'invalid' verdict rather than left to a DB constraint for the same
+        // reason the request_id check is: a UNIQUE violation would THROW mid-block inside a
+        // consensus indexer instead of producing the identical stored outcome on every node.
+        if(!error && await this.indexerDb.getRelayRequestByOrigin(originChain, originAction))
+            error = 'invalid: ORIGIN_ACTION_INDEX (relay identity already materialized on this chain)';
 
         if(!error){
             let canonical = this._relayRequestCanonical({

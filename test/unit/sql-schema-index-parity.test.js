@@ -209,7 +209,7 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
             for(const index of declared[table].keys()){
                 const key = table + '.' + index;
                 if(migrationAdded.has(key)) continue;
-                if((baseline[table] || []).includes(index)) continue;
+                if((baseline[table] || []).some(e => String(e.name).toLowerCase() === index)) continue;
                 if(debt.has(key)) continue;
                 unledgered.push('  ' + key);
             }
@@ -273,11 +273,51 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
         const declared = collectDeclaredIndexes();
         const stale = [];
         for(const table of Object.keys(baseline))
-            for(const index of baseline[table])
+            for(const entry of baseline[table]){
+                const index = String(entry.name).toLowerCase();
                 if(!(declared[table] && declared[table].has(index))) stale.push('  ' + table + '.' + index);
+            }
 
         assert.deepStrictEqual(stale, [],
             'These baseline entries name an index no src/sql/<table>.sql declares any more. Remove them ' +
             'from test/fixtures/schema-index-baseline.json:\n' + stale.join('\n'));
+    });
+
+    // #4435: the index twin of the column-shape guard. The inverse guard above exempts a
+    // pre-ledger index by NAME, and the baseline stored nothing but names, so re-pointing a
+    // baselined index at different columns, changing its (len) prefix or its column ORDER, or
+    // promoting a plain KEY to UNIQUE all stayed green with no dated migration. The runtime is
+    // no backstop: reconcileTableIndexes matches by COLUMN SET (so it cannot see a prefix or
+    // order change) and for an inline KEY it is never consulted at all, since parseExpectedIndexes
+    // reads only standalone CREATE INDEX. The shape case above (#3529) covers only indexes a
+    // migration ALSO declares; a baselined index has no migration by definition, so nothing
+    // watched it. The baseline now freezes each one's normalized columns + UNIQUE flag.
+    it('a pre-ledger baselined index has not changed shape (columns, prefix, uniqueness) @regression', function(){
+        const fixture  = JSON.parse(fs.readFileSync(INDEX_BASELINE, 'utf8'));
+        const baseline = fixture.baseline || {};
+        const declared = collectDeclaredIndexes();
+
+        const drifted = [];
+        for(const table of Object.keys(baseline))
+            for(const entry of baseline[table]){
+                const index = String(entry.name).toLowerCase();
+                const decl  = declared[table] && declared[table].get(index);
+                if(!decl) continue;                                       // staleness is the case above
+                if(decl.columns === null || entry.columns === null) continue;  // unparsed, do not guess
+                if(decl.columns.join(',') !== (entry.columns || []).join(','))
+                    drifted.push(`  ${table}.${index} columns: baseline (${(entry.columns || []).join(', ')}) ` +
+                                 `vs definition (${decl.columns.join(', ')})`);
+                else if(decl.unique !== !!entry.unique)
+                    drifted.push(`  ${table}.${index} uniqueness: baseline unique=${!!entry.unique} ` +
+                                 `vs definition unique=${decl.unique}`);
+            }
+
+        assert.deepStrictEqual(drifted, [],
+            'These indexes predate the migration ledger, so they are exempt from needing a dated migration - ' +
+            'but their SHAPE changed in src/sql/<table>.sql with no migration behind it. An aged DB keeps the ' +
+            'original index (the boot reconciler matches by column SET, so it cannot see a reorder or a (len) ' +
+            'prefix change, and never touches an inline KEY at all), so the two schema-construction paths stop ' +
+            'agreeing. Ship a dated migration that recreates the index in its new shape, and re-freeze ' +
+            'test/fixtures/schema-index-baseline.json in the SAME commit:\n' + drifted.join('\n'));
     });
 });

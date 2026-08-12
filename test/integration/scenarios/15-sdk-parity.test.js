@@ -71,6 +71,9 @@ describe('15 – SDK<->indexer fee-fragment parity @regression @tier1', function
             [8, '1.00000001', true], [8, '1.000000001', false],
             [8, '1.5', true], [2, '1.123', false], [2, '1.12', true],
             [8, '100', true],
+            // Multi-dot reject (item 4310): both copies must refuse an amount carrying
+            // more than one decimal point, which the split-destructure used to admit.
+            [8, '1.2.3', false], [8, '1.2.3.4', false], [0, '1.2.3', false],
         ];
         cases.forEach(function ([decimals, amount, expected]) {
             it(`decimals=${decimals} amount=${amount} -> ${expected} (both)`, function () {

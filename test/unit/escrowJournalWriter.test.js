@@ -58,6 +58,7 @@ const T2 = 'BRAVO';
 // cannot silently return [].
 function makeDb(state){
     state = state || {};
+    const unindexed = new Set(state.unindexed || []);
     const db = {
         util: UTIL,
         escrows:  state.escrows  || [],   // {action_index, action_name, address, tick, tick_id, amount, block_index}
@@ -73,16 +74,40 @@ function makeDb(state){
         journal:  [],
         inserted: [],
         async doQuery(sql, args){
+            // Multi-row INSERT: four bound args per row, in VALUES-list order.
             if(sql.indexOf('INSERT INTO escrow_leaf_journal') === 0){
-                const row = { address: args[0], tick: args[1], locked_amount: args[2], block_index: args[3] };
-                this.inserted.push(row); this.journal.push(row);
+                for(let i = 0; i < args.length; i += 4){
+                    const row = { address: args[i], tick: args[i+1], locked_amount: args[i+2], block_index: args[i+3] };
+                    this.inserted.push(row); this.journal.push(row);
+                }
                 return [];
             }
+            // The writer resolves its string keys to index ids before the grouped
+            // prior-total read AND before the INSERT; this stub hands back the strings
+            // as their own ids. `unindexed` names keys the index tables do not carry,
+            // which is how the fail-loud path is driven.
+            if(sql.indexOf('FROM index_addresses a WHERE a.address IN') !== -1)
+                return args.filter(a => !unindexed.has(a)).map(a => ({ id: a, address: a }));
+            if(sql.indexOf('FROM index_tickers t WHERE t.tick IN') !== -1)
+                return args.filter(t => !unindexed.has(t)).map(t => ({ id: t, tick: t }));
+            // Grouped latest-per-key prior totals: the newest journal row per
+            // (address, tick), which is what MAX(id) picks on the real append-only
+            // table. args is the address id chunk concatenated with the tick id
+            // chunk; one membership set covers both because no fixture address
+            // collides with a fixture tick.
             if(sql.indexOf('FROM escrow_leaf_journal') !== -1){
-                for(let i = this.journal.length - 1; i >= 0; i--)
-                    if(this.journal[i].address === args[0] && this.journal[i].tick === args[1])
-                        return [{ locked_amount: this.journal[i].locked_amount }];
-                return [];
+                const asked = new Set(args);
+                const seen  = new Set();
+                const out   = [];
+                for(let i = this.journal.length - 1; i >= 0; i--){
+                    const j = this.journal[i];
+                    const k = j.address + '\t' + j.tick;
+                    if(seen.has(k)) continue;
+                    if(!asked.has(j.address) || !asked.has(j.tick)) continue;
+                    seen.add(k);
+                    out.push({ address_id: j.address, tick_id: j.tick, locked_amount: j.locked_amount });
+                }
+                return out;
             }
             if(sql.indexOf('SELECT COUNT(*) AS n FROM escrows') === 0){
                 const rows = (args.length ? this.escrows.filter(e => e.block_index === args[0]) : this.escrows);
@@ -383,6 +408,30 @@ describe('escrow journal writer: change-log semantics @regression', function(){
         });
         assert.strictEqual(await W.writeEscrowJournal(db, 100), 1);
         assert.strictEqual(db.inserted[0].locked_amount, M.canonicalAmount('5'));
+    });
+
+    // The batched INSERT () is why this is a test rather than a column
+    // constraint. The per-key form bound address_id as a sub-select and let the NOT NULL
+    // column throw on an unresolvable key; a MULTI-row INSERT on a server without
+    // STRICT_ALL_TABLES turns that same NULL into a warning and writes id 0, which
+    // misattributes a consensus journal row instead of refusing it. The writer must
+    // therefore refuse in JS, before any row is emitted.
+    it('a key with no index row throws by name and writes nothing', async function(){
+        const db = makeDb({
+            escrows:   [ esc(10, 'ORDER', SO, T1, 1, '5', 100) ],
+            unindexed: [ SO ]
+        });
+        await assert.rejects(() => W.writeEscrowJournal(db, 100), /no index row for address/);
+        assert.strictEqual(db.inserted.length, 0, 'an unresolvable key must not reach the INSERT');
+    });
+
+    it('a tick with no index row throws by name too', async function(){
+        const db = makeDb({
+            escrows:   [ esc(10, 'ORDER', SO, T1, 1, '5', 100) ],
+            unindexed: [ T1 ]
+        });
+        await assert.rejects(() => W.writeEscrowJournal(db, 100), /no index row for tick/);
+        assert.strictEqual(db.inserted.length, 0);
     });
 
     it('a key netting NEGATIVE throws: the ledger released more than it locked', async function(){

@@ -72,7 +72,7 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
     // the per-chain local config. This age reflects only tunable/display params
     // the overlay is permitted to apply.)
     let lastHubConfigFetchAt = indexer.lastHubConfigFetchAt || null;
-    // Age + explicit staleness (past HUB_CONFIG_STALENESS_LIMIT_MS = 3 poll intervals), computed
+    // Age + explicit staleness (past hubConfigStalenessLimitMs() = 3 poll intervals), computed
     // by the one shared helper so health and the /health api agree on the threshold.
     let hubConfig            = hubConfigStaleness(lastHubConfigFetchAt, now);
     let hubConfigAgeSeconds  = hubConfig.ageSeconds;
