@@ -958,4 +958,119 @@ describe('Issue handler @regression @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid');
         });
     });
+
+    // : the wallet's COLLECTIBLE and MEME wizard templates promise a supply that can
+    // never grow. ISSUE-1's cumulative cap keeps that promise, but it is GATED - at genesis on
+    // testnet/regtest, on a flag day on mainnet - so a token that leans on it is only fixed
+    // where the flag has already flipped. LOCK_MINT_SUPPLY is the token's own version of the
+    // same refusal, checked at issue.js ~367, BEFORE the gated cap at ~383. These tests pin
+    // that ordering with the gate deliberately OFF: the refusal has to survive a chain where
+    // the protocol change has not activated, because that is the whole reason the templates
+    // write the flag.
+    describe(': LOCK_MINT_SUPPLY refuses re-ISSUE inflation without the flag day @regression @security', function () {
+
+        const source = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+
+        /** Every protocol change on EXCEPT the cumulative cap: a pre-flag-day mainnet. */
+        function disableCumulativeCap() {
+            actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(async (name, block) =>
+                name === 'ISSUANCE_FEE' ? Number(block) >= 862633 :
+                name === 'ISSUE_MINT_SUPPLY_CUMULATIVE_CAP' ? false : true);
+        }
+
+        /**
+         * A token record as `getTokenInfo` really returns one.
+         *
+         * The MINT_SUPPLY delete is not cosmetic. issue.js backfills every empty param from
+         * tokenInfo (~line 241), and the real getTokenInfo selects no mint_supply column at
+         * all, so on a live chain an edit that leaves MINT_SUPPLY blank stays blank. The
+         * shared fixture carries a MINT_SUPPLY key it does not have; left in place it would
+         * backfill '0' into every edit and make this lock look like it freezes the whole
+         * token, which is the opposite of what the DESCRIPTION control below proves.
+         */
+        function lockedTokenInfo(overrides) {
+            const info = createTokenInfo(overrides);
+            delete info.MINT_SUPPLY;
+            return info;
+        }
+
+        it('a collectible that set LOCK_MINT_SUPPLY refuses the re-ISSUE by the LOCK, not the gate', async function () {
+            // The token the wizard's collectible template now creates: 1 of 1, cap frozen,
+            // MINT closed, and MINT_SUPPLY locked.
+            const tokenInfo = lockedTokenInfo({
+                TICK: 'ONEOFONE', OWNER: source, MAX_SUPPLY: '1', SUPPLY: '1', DECIMALS: 0,
+                LOCK_MAX_SUPPLY: 1, LOCK_MINT: 1, LOCK_MINT_SUPPLY: 1,
+            });
+            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
+            indexer.indexerDb.getTokenSupply.resolves('1');
+            disableCumulativeCap();
+
+            // The attack restates MAX_SUPPLY at its CURRENT value on purpose: an omitted cap is
+            // caught by the older single-shot guard instead, and a changed one by the locked-cap
+            // check, so neither would prove anything about MINT_SUPPLY.
+            const params = makeFormat0Params({ TICK: 'ONEOFONE', MAX_SUPPLY: '1', MINT_SUPPLY: '1', MAX_MINT: '', DECIMALS: '0', DESCRIPTION: '' });
+            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: LOW_BLOCK, SOURCE: source });
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data.STATUS, 'invalid: MINT_SUPPLY (locked)');
+            assert.ok(!indexer.indexerDb.createToken.called, 'a refused re-ISSUE must not touch the token');
+        });
+
+        it('the same collectible WITHOUT the lock is inflatable pre-flag-day (what the lock buys)', async function () {
+            // Control. Identical token, LOCK_MINT_SUPPLY unset: this is the shape the templates
+            // used to compose, and on a chain whose cumulative cap has not activated the owner
+            // mints a second copy onto a "1 of 1".
+            const tokenInfo = lockedTokenInfo({
+                TICK: 'ONEOFONE', OWNER: source, MAX_SUPPLY: '1', SUPPLY: '1', DECIMALS: 0,
+                LOCK_MAX_SUPPLY: 1, LOCK_MINT: 1, LOCK_MINT_SUPPLY: 0,
+            });
+            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
+            indexer.indexerDb.getTokenSupply.resolves('1');
+            disableCumulativeCap();
+
+            const params = makeFormat0Params({ TICK: 'ONEOFONE', MAX_SUPPLY: '1', MINT_SUPPLY: '1', MAX_MINT: '', DECIMALS: '0', DESCRIPTION: '' });
+            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: LOW_BLOCK, SOURCE: source });
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data.STATUS, 'valid');
+        });
+
+        it('a meme token that set LOCK_MINT_SUPPLY keeps its fixed supply pre-flag-day', async function () {
+            const tokenInfo = lockedTokenInfo({
+                TICK: 'DANKCOIN', OWNER: source, MAX_SUPPLY: '21000000', SUPPLY: '21000000', DECIMALS: 0,
+                LOCK_MAX_SUPPLY: 1, LOCK_MINT: 1, LOCK_MINT_SUPPLY: 1,
+            });
+            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
+            indexer.indexerDb.getTokenSupply.resolves('21000000');
+            disableCumulativeCap();
+
+            const params = makeFormat0Params({ TICK: 'DANKCOIN', MAX_SUPPLY: '21000000', MINT_SUPPLY: '1000000', MAX_MINT: '', DECIMALS: '0', DESCRIPTION: '' });
+            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: LOW_BLOCK, SOURCE: source });
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data.STATUS, 'invalid: MINT_SUPPLY (locked)');
+        });
+
+        it('the lock leaves the fields it does not cover alone: a DESCRIPTION edit is still valid', async function () {
+            // Positive control. LOCK_MINT_SUPPLY must refuse the MINT_SUPPLY path and nothing
+            // else, or the templates would be quietly freezing metadata they never claimed to.
+            const tokenInfo = lockedTokenInfo({
+                TICK: 'ONEOFONE', OWNER: source, MAX_SUPPLY: '1', SUPPLY: '1', DECIMALS: 0,
+                LOCK_MAX_SUPPLY: 1, LOCK_MINT: 1, LOCK_MINT_SUPPLY: 1,
+            });
+            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
+            indexer.indexerDb.getTokenSupply.resolves('1');
+            disableCumulativeCap();
+
+            const params = makeFormat0Params({ TICK: 'ONEOFONE', MAX_SUPPLY: '', MINT_SUPPLY: '', MAX_MINT: '', DECIMALS: '', DESCRIPTION: 'https://example.com/art.png?v=2' });
+            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: LOW_BLOCK, SOURCE: source });
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data.STATUS, 'valid');
+        });
+    });
 });

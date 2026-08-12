@@ -45,6 +45,38 @@ const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS,
         dedupeArchiveChunks } = require('./anchor-action-query');
 const { rethrowIfInfraFault } = require('./actions/faultGuard');
 
+// A stake weight, as stake_weighted_quorum.bcnum accepts one (plain decimal string).
+// Kept identical to that predicate's pattern so this producer can never emit a row the
+// predicate then has to fail closed on.
+const STAKE_WEIGHT_NUMERIC = /^[+-]?(\d+\.?\d*|\.\d+)$/;
+
+// Fail CLOSED on a weightless stake-weight row . Every source-keyed weight
+// producer routes through here instead of resolving a missing weight to '0'. The '0'
+// looks harmless and is not: the source stays in the quorum's dedupe map carrying no
+// stake, so the denominator S shrinks while a signer keeps the full numerator, and a
+// smaller real stake clears 3*tally > 2*S. stake_weighted_quorum already rejects such a
+// row, but it never sees one - every consumer re-maps the set through
+// `String(v.weight != null ? v.weight : '0')`, which launders the missing weight into a
+// well-formed zero before the predicate runs. The weight columns behind these queries
+// (stakes.amount, capability_snapshots.amount) are NOT NULL and the source-aggregate is
+// HAVING-filtered, so a null here is a corrupt read, not a stakeless source; a live
+// regtest sweep over BTC/LTC/DOGE (all capabilities, several block boundaries) found
+// zero weightless rows. Throwing surfaces to the hub as an RPC error, which every
+// consensus caller already treats as "decline the round" - the same posture the hub
+// takes when CHECKPOINT_COMMITMENT is unarmed: refuse to sign rather than emit a
+// degraded row. A legitimate '0' still passes.
+function requireStakeWeight(weight, label){
+    if(weight === null || weight === undefined)
+        throw new Error((label || 'stake weights') + ': missing validator weight would silently lower the stake-quorum denominator S');
+    let w = String(weight).trim();
+    if(w === '' || !STAKE_WEIGHT_NUMERIC.test(w))
+        throw new Error((label || 'stake weights') + ': nonnumeric validator weight "' + w.slice(0, 32) + '" would silently lower the stake-quorum denominator S');
+    // Return the value UNTRIMMED: the accepted set is unchanged from the old
+    // String(r.weight) coercion for every weight a live producer emits, so the
+    // stakes_root leaves this feeds keep hashing byte-for-byte what they did before.
+    return String(weight);
+}
+
 // Tables whose highest-`id`-survivor dedupe rule is validated and safe to auto-apply at
 // startup (see dedupeForUniqueIndex: an upsert that degraded to plain INSERT appended a
 // fresh row per change, so the highest id is the live value). reconcileTableIndexes will
@@ -8469,8 +8501,14 @@ class Database {
     // The slice lands AFTER the settled-set exclusion so the cap counts real work, and
     // the ORDER BY above is a total order on quorum-agreed content, so every operator
     // takes the identical prefix. See CROSS_SETTLE_MAX_PER_BLOCK in protocol/constants.js
-    // for why the cap is consensus-visible, and why whether it may ship UNGATED on the
-    // live mainnet chains is an operator call rather than a settled one.
+    // for why the cap is consensus-visible and why it lands behind the
+    // CROSS_SETTLE_PER_BLOCK_CAP flag day (, operator ruling of 2026-08-11).
+    //
+    // The `limit` is the CALLER's decision because that caller (processCrossChainSettlements)
+    // is the one holding the block index the flag day is evaluated against: it passes the
+    // protocol cap once the gate is on, and MAX_SAFE_INTEGER before, which is the legacy
+    // uncapped pass. This method never evaluates the gate itself, so it can never disagree
+    // with the caller about which side of the flag day a block is on.
     async getEffectiveUnsettledMatches(coin, block_time, limit){
         // network filter: a match only settles on the indexer of the network it was matched
         // + signed on (also bound into the signed canonical - see cross_settle._canonical).
@@ -11517,7 +11555,13 @@ class Database {
     // upsert: deterministic block-processing writers pass true so their value
     //         always wins over a best-effort hub push that raced them - the
     //         derived row is the consensus row (replay produces it byte-equal)
-    async createValidatorReward(pubkeyHex, roundReference, rewardType, amount, blockIndex, upsert){
+    // deriveBlockIndex: the block that MATERIALIZED the row, when that differs from the
+    //         reward's earn-block (blockIndex). Only the  BTC-side anchor/archive
+    //         derivation passes it: that path earns at the checkpoint's SNAPSHOT_BLOCK but
+    //         writes while processing a much later BTC block, so rollback needs the creating
+    //         block to know the row must disappear . Every other writer earns and
+    //         writes in the same block and leaves it NULL.
+    async createValidatorReward(pubkeyHex, roundReference, rewardType, amount, blockIndex, upsert, deriveBlockIndex){
         let pubkey_id = await this.getPubkeyId(String(pubkeyHex).toLowerCase());
         if(pubkey_id === null){
             console.warn('createValidatorReward: unknown pubkey ' + pubkeyHex);
@@ -11532,15 +11576,18 @@ class Database {
         }
         // Insert the reward (idempotent via UNIQUE INDEX on source_id+signing_pubkey_id+reward_type+round_reference).
         // Deterministic writers upsert so their amount/block_index always win.
+        let derive_block_index = (deriveBlockIndex === undefined || deriveBlockIndex === null)
+            ? null : Number(deriveBlockIndex);
         let query = upsert
             ? `INSERT INTO validator_rewards
-                    (source_id, signing_pubkey_id, reward_type, round_reference, amount, block_index)
-                 VALUES (?, ?, ?, ?, ?, ?)
-                 ON DUPLICATE KEY UPDATE amount=VALUES(amount), block_index=VALUES(block_index)`
+                    (source_id, signing_pubkey_id, reward_type, round_reference, amount, block_index, derive_block_index)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE amount=VALUES(amount), block_index=VALUES(block_index),
+                                         derive_block_index=VALUES(derive_block_index)`
             : `INSERT IGNORE INTO validator_rewards
-                    (source_id, signing_pubkey_id, reward_type, round_reference, amount, block_index)
-                 VALUES (?, ?, ?, ?, ?, ?)`;
-        let args = [source_id, pubkey_id, rewardType, roundReference, amount, blockIndex];
+                    (source_id, signing_pubkey_id, reward_type, round_reference, amount, block_index, derive_block_index)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)`;
+        let args = [source_id, pubkey_id, rewardType, roundReference, amount, blockIndex, derive_block_index];
         await this.doQuery(query, args);
         return true;
     }
@@ -11575,11 +11622,17 @@ class Database {
         if(reconcileBlockIndex !== null && reconcileBlockIndex !== undefined){
             // Same loser predicate as the DELETE (pubkey > min_pubkey), capturing each
             // row's verbatim pre-image + its ORIGINAL earn-block (reward_block_index).
+            // reward_derive_block_index carries the loser's MATERIALIZATION block :
+            // the earn-block alone cannot tell the restore whether a replay to reorg-1 would
+            // have minted this loser at all, because a derived reward's earn-block is the far
+            // earlier SNAPSHOT_BLOCK. NULL for a loser written by a same-block writer.
             let logQuery = `INSERT INTO anchor_reward_reconcile_log
                                 (anchor_action_index, reward_type, round_reference,
-                                 source_id, signing_pubkey_id, amount, reward_block_index, block_index)
+                                 source_id, signing_pubkey_id, amount, reward_block_index,
+                                 reward_derive_block_index, block_index)
                             SELECT ?, vr.reward_type, vr.round_reference,
-                                   vr.source_id, vr.signing_pubkey_id, vr.amount, vr.block_index, ?
+                                   vr.source_id, vr.signing_pubkey_id, vr.amount, vr.block_index,
+                                   vr.derive_block_index, ?
                               FROM validator_rewards vr
                               JOIN index_pubkeys pk ON pk.id = vr.signing_pubkey_id
                               JOIN (
@@ -12435,7 +12488,7 @@ class Database {
             let rows = (truncated ? raw.filter(r => Number(r._sr) <= maxSources) : raw).map(r => ({
                 pubkey: String(r.pubkey),
                 source: String(r.source),
-                weight: (r.weight === null || r.weight === undefined) ? '0' : String(r.weight)
+                weight: requireStakeWeight(r.weight, label)
             }));
             return { rows, truncated };
         }
@@ -12448,7 +12501,7 @@ class Database {
         let rows = raw.map(r => ({
             pubkey: String(r.pubkey),
             source: String(r.source),
-            weight: (r.weight === null || r.weight === undefined) ? '0' : String(r.weight)
+            weight: requireStakeWeight(r.weight, label)
         }));
         return { rows, truncated };
     }
@@ -12488,7 +12541,11 @@ class Database {
             // The query aliases `amount AS weight`, so the value lands on r.weight -
             // reading r.amount (undefined) collapsed EVERY weight to '0', which made
             // stake-weighted quorum fail closed (S=0) for off-BTC chains (DOGE/LTC).
-            weight: r.weight == null ? '0' : String(r.weight)
+            // capability_snapshots.amount is NOT NULL, so a missing weight here means
+            // the mirror is corrupt, not that a source has no stake: THROW 
+            // rather than resolve it to '0', which would keep the source in the dedupe
+            // map with no stake and quietly shrink the quorum denominator S.
+            weight: requireStakeWeight(r.weight, 'getCapabilitySnapshotWeights(' + capability + ')')
         }));
     }
 
@@ -15222,5 +15279,9 @@ Database.backdatedFrontierViolation = function(pendingName, appliedNames){
     if(frontier === null) return null;
     return (String(pendingName) < frontier) ? frontier : null;
 };
+
+// Exposed for the unit suite (and the sync-twin drift check): the weightless-row
+// guard is consensus-relevant, so it is tested directly, not only through a query.
+Database.requireStakeWeight = requireStakeWeight;
 
 module.exports = Database

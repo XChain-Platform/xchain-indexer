@@ -31,6 +31,30 @@ const VM_BANNED_ASYNC_MAINNET_TIME = 1786060800;
 // fleet on the first fee-bearing LTC/DOGE action after the earlier timestamp.
 const NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME = 1786060800;
 
+// : mainnet arm for UNCAPPED_MAX_SUPPLY_ZERO. 9999999999 (year 2286) is the
+// house UNARMED sentinel, the same one price_pair_activation.js uses: the operator
+// ratified the PRODUCT direction (MAX_SUPPLY=0 stays the uncapped sentinel) on
+// 2026-08-11 but has NOT yet minted the mainnet flag-day the rule switches on, and a
+// loosening cannot be armed at a guessed value. Arming it is a one-line edit of this
+// constant; until then the rule is inert on mainnet and live from genesis on
+// testnet/regtest. Do NOT arm it at the 2026-08-07 contract-era anchor: that date is
+// already past, and a loosening with a retroactive boundary makes a from-genesis
+// replay accept mints the live fleet rejected.
+const UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME = 9999999999;
+
+// : mainnet arm for CROSS_SETTLE_PER_BLOCK_CAP. Same house UNARMED sentinel
+// as the constant above (9999999999, year 2286): the operator ruled on 2026-08-11
+// that the CROSS_SETTLE per-block cap lands behind a flag day rather than ungated
+// under the  §0 wipe-and-replay route, and ratifying the anchor is a separate
+// act that has not happened yet. Arming it is a one-line edit of this constant.
+// Until then the cap is inert on mainnet (the pass runs uncapped exactly as the
+// live chains have always run it) and live from genesis on testnet/regtest.
+// Do NOT arm it at the 2026-08-07 contract-era anchor: that date is already past,
+// and a TIGHTENING with a retroactive boundary makes a from-genesis replay defer
+// settlements the live fleet already applied, which is the fork the gate exists to
+// prevent.
+const CROSS_SETTLE_CAP_MAINNET_TIME = 9999999999;
+
 // Consensus protocol version, COMPILED IN ().
 //
 // isEnabled() compares this against the version registered on every protocol
@@ -1093,6 +1117,65 @@ class ProtocolChanges {
         // preserving there, and the  drill venue needs the rule from block 0).
         this.addChange('XCALL_RESULT_ORPHAN_RETIREMENT', '2.0.0',1786060800,0,0,0,0,0);
 
+        // : MAX_SUPPLY=0 is the UNCAPPED sentinel, so the supply ceiling is not
+        // applied at all on a token that declares no cap. MAX_SUPPLY is stored as 0 when
+        // the ISSUE omits it (createToken / db.js) and the protocol documents such a token
+        // as unlimited, but mint.js applied `SUPPLY + AMOUNT > MAX_SUPPLY` with no
+        // bcgt(MAX_SUPPLY,0) pre-condition, unlike all four sibling optional-cap checks in
+        // the same function (MAX_MINT, MINT_ADDRESS_MAX, MINT_START_BLOCK,
+        // MINT_STOP_BLOCK). Against a stored 0 that comparison is true for EVERY positive
+        // AMOUNT, so every mint on an uncapped token was rejected and the token was
+        // permanently unmintable. The same missing exemption sits on three ISSUE
+        // cross-checks that compare another field against MAX_SUPPLY (MINT_SUPPLY single-
+        // shot, MINT_SUPPLY cumulative, MINT_ADDRESS_MAX), which reject an uncapped token's
+        // own genesis parameters for exceeding a cap that does not exist. At/above this
+        // activation all four sites skip the comparison when no positive cap is declared.
+        //
+        // LOCK_MAX_SUPPLY is deliberately untouched: locking an uncapped token is still
+        // refused by the unchanged 'invalid: LOCK_MAX_SUPPLY (no max supply)' guard, since
+        // there is no cap to freeze.
+        //
+        // Gated as its own consensus rule because the change is a validity LOOSENING: a
+        // MINT (or ISSUE) that every legacy node rejects becomes valid on an upgraded node,
+        // so an ungated flip forks a heterogeneous fleet on the first mint of an uncapped
+        // token and breaks from-genesis replay byte-identity. Keyed on block_TIME (not
+        // block_index), mirroring MINT_SELF_MINTED_ONLY: MINT and ISSUE run on BTC, LTC and
+        // DOGE whose heights diverge by millions of blocks, so no single shared block height
+        // names one cutover across all three chains, but a single timestamp can.
+        //
+        // MAINNET IS UNARMED (see UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME above): the
+        // operator's 2026-08-11 ruling settled the product direction, not the flag day.
+        // testnet/regtest activate at genesis (all zeros) so the exemption is in force from
+        // block 0 there and in the unit/e2e suites.
+        this.addChange('UNCAPPED_MAX_SUPPLY_ZERO', '2.0.0',UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME,0,0,0,0,0);
+
+        // : per-block cap on the CROSS_SETTLE pass
+        // (CROSS_SETTLE_MAX_PER_BLOCK in protocol/constants.js, ). With the
+        // gate ON, processCrossChainSettlements settles at most the cap of finalized,
+        // effective, unsettled matches per block and carries the remainder forward in
+        // (snapshot_block, match_id) order; with it OFF the pass drains the whole
+        // backlog in one block transaction, which is the legacy behavior.
+        //
+        // Gated because the cap is CONSENSUS-VISIBLE: deferring a settlement moves the
+        // block it lands in, and with it the actions rows, the contract hash and the
+        // checkpoint preimage. CROSS_CHAIN_DEX is genesis-active on every network
+        // (all-zero thresholds below) and the fresh-genesis restart of 816d1e1 covered
+        // the three TESTNET chains only, so mainnet carries settled history that an
+        // ungated cap would reinterpret on any from-genesis replay. The sibling
+        // ATTEST_MAX_EXPIRIES_PER_BLOCK could ship ungated only because the 
+        // fleet-wide replay recomputed the history it reinterpreted; this cap has no
+        // such vehicle. Operator ruling of 2026-08-11, option (b).
+        //
+        // Keyed on block_TIME like the other multi-chain gates: CROSS_SETTLE runs on
+        // BTC, LTC and DOGE, whose heights diverge by millions of blocks, so no single
+        // height names one cutover across all three but a single timestamp does.
+        //
+        // MAINNET IS UNARMED (see CROSS_SETTLE_CAP_MAINNET_TIME above): the ruling
+        // settled the ROUTE, not the flag day, and the anchor is still the operator's
+        // to ratify. testnet/regtest activate at genesis (all zeros) so the cap is in
+        // force from block 0 there and in the unit/e2e suites.
+        this.addChange('CROSS_SETTLE_PER_BLOCK_CAP', '2.0.0',CROSS_SETTLE_CAP_MAINNET_TIME,0,0,0,0,0);
+
         // NOTE: STAKE_WEIGHTED_QUORUM (WI-1) is deliberately NOT registered here.
         // Standard activations gate on the LOCAL processing block via isEnabled();
         // stake-weighted quorum must gate on the BTC-anchored `snapshot_block`
@@ -1244,3 +1327,9 @@ module.exports.isNativeFeePriceTimeGateActive = isNativeFeePriceTimeGateActive;
 // pins the constant against package.json so the two cannot drift.
 module.exports.CONSENSUS_VERSION = CONSENSUS_VERSION;
 module.exports.assertConsensusVersionPin = assertConsensusVersionPin;
+//  UNARMED mainnet sentinel, exported so the suite can assert the gate is still
+// waiting on the operator's flag day rather than silently armed at a guessed value.
+module.exports.UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME = UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME;
+//  UNARMED mainnet sentinel, exported for the same reason: the suite asserts the
+// CROSS_SETTLE cap is still waiting on the operator's anchor, never armed at a guess.
+module.exports.CROSS_SETTLE_CAP_MAINNET_TIME = CROSS_SETTLE_CAP_MAINNET_TIME;

@@ -108,7 +108,7 @@ describe('consensus-primitive conformance: canonical vectors @regression', funct
 describe('consensus-primitive conformance: byte-identity to canonical source @regression', function(){
     before(function(){ if(!CANON_PRESENT){ if(process.env.XCHAIN_REQUIRE_SIBLINGS==='1') throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but canonical reference-impl dir not found at ' + CANON_DIR); this.skip(); } });
 
-    ['stake_weighted_quorum.js', 'equivocation_header.js'].forEach(function(f){
+    ['stake_weighted_quorum.js', 'equivocation_header.js', 'snapshot_reorg_buffer.js'].forEach(function(f){
         it(f + ' is byte-identical to xchain-documentation/protocol/reference-impl', function(){
             const local = fs.readFileSync(path.join(LOCAL_DIR, f), 'utf8');
             const canon = fs.readFileSync(path.join(CANON_DIR, f), 'utf8');

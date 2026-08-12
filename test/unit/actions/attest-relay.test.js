@@ -185,10 +185,10 @@ describe('Attest cross-chain relay (ATTEST v3/v4, ) @regression @tier3', functio
             assert.strictEqual(data['STATUS'], undefined);
         });
 
-        it('the real gate (unstubbed) is inert on mainnet below 969500 and live at it', function () {
+        it('the real gate (unstubbed) is inert on mainnet below 963000 and live at it', function () {
             gateStub.restore();
-            assert.strictEqual(attestRelay.isAttestRelayActive(969499, 'mainnet'), false);
-            assert.strictEqual(attestRelay.isAttestRelayActive(969500, 'mainnet'), true);
+            assert.strictEqual(attestRelay.isAttestRelayActive(962999, 'mainnet'), false);
+            assert.strictEqual(attestRelay.isAttestRelayActive(963000, 'mainnet'), true);
             // An unknown network must fail closed, never open.
             assert.strictEqual(attestRelay.isAttestRelayActive(99999999, 'devnet'), false);
         });
@@ -208,14 +208,14 @@ describe('Attest cross-chain relay (ATTEST v3/v4, ) @regression @tier3', functio
             // BLOCK_INDEX the leg would be live here, which is the exact trap this
             // item was told to avoid.
             const data = createBaseData({ ACTION: 'ATTEST', FORMAT: 4, BLOCK_INDEX: 3160000 });
-            await handler.parse(v4Params({ snapshotBlock: 969499 }), data, null);
+            await handler.parse(v4Params({ snapshotBlock: 962999 }), data, null);
 
             assert.strictEqual(indexer.indexerDb.createAttestationResponse.called, false,
                 'a BTC snapshot below the anchor must stay inert even at a huge LTC height');
 
             // Same action, one BTC block later: now live.
             const data2 = createBaseData({ ACTION: 'ATTEST', FORMAT: 4, BLOCK_INDEX: 3160000 });
-            await handler.parse(v4Params({ snapshotBlock: 969500 }), data2, null);
+            await handler.parse(v4Params({ snapshotBlock: 963000 }), data2, null);
             assert.strictEqual(indexer.indexerDb.createAttestationResponse.called, true);
         });
 
@@ -238,8 +238,8 @@ describe('Attest cross-chain relay (ATTEST v3/v4, ) @regression @tier3', functio
             indexer.config['COIN']    = 'BTC';
             indexer.config['NETWORK'] = 'mainnet';
 
-            const data = createBaseData({ ACTION: 'ATTEST', FORMAT: 3, BLOCK_INDEX: 969500 });
-            await handler.parse(v3Params({ snapshotBlock: 969499 }), data, null);
+            const data = createBaseData({ ACTION: 'ATTEST', FORMAT: 3, BLOCK_INDEX: 963000 });
+            await handler.parse(v3Params({ snapshotBlock: 962999 }), data, null);
 
             assert.strictEqual(indexer.indexerDb.createAttestationRequest.called, false,
                 'the landing height alone must not materialize a v3 the hub would refuse to co-sign');
@@ -248,8 +248,8 @@ describe('Attest cross-chain relay (ATTEST v3/v4, ) @regression @tier3', functio
 
             // Same landing block, one BTC block later on the signed plane: now live.
             indexer.indexerDb.createAttestationRequest.resetHistory();
-            const data2 = createBaseData({ ACTION: 'ATTEST', FORMAT: 3, BLOCK_INDEX: 969500 });
-            await handler.parse(v3Params({ snapshotBlock: 969500 }), data2, null);
+            const data2 = createBaseData({ ACTION: 'ATTEST', FORMAT: 3, BLOCK_INDEX: 963000 });
+            await handler.parse(v3Params({ snapshotBlock: 963000 }), data2, null);
 
             assert.strictEqual(data2['STATUS'], 'valid');
             assert.strictEqual(indexer.indexerDb.createAttestationRequest.calledOnce, true);
@@ -265,8 +265,8 @@ describe('Attest cross-chain relay (ATTEST v3/v4, ) @regression @tier3', functio
             indexer.config['COIN']    = 'BTC';
             indexer.config['NETWORK'] = 'mainnet';
 
-            const data = createBaseData({ ACTION: 'ATTEST', FORMAT: 3, BLOCK_INDEX: 969499 });
-            await handler.parse(v3Params({ snapshotBlock: 969500 }), data, null);
+            const data = createBaseData({ ACTION: 'ATTEST', FORMAT: 3, BLOCK_INDEX: 962999 });
+            await handler.parse(v3Params({ snapshotBlock: 963000 }), data, null);
 
             assert.strictEqual(indexer.indexerDb.createAttestationRequest.called, false);
             assert.strictEqual(data['STATUS'], undefined,
@@ -561,14 +561,14 @@ describe('Attest cross-chain relay (ATTEST v3/v4, ) @regression @tier3', functio
         it('the request canonical is the pinned field order the hub must reproduce', function () {
             sinon.stub(require('../../../src/equivocation_header.js'), 'isEquivHeaderActive').returns(false);
             const canonical = handler._relayRequestCanonical({
-                requestId: REQ_ID, snapshotBlock: 969500, network: 'mainnet',
+                requestId: REQ_ID, snapshotBlock: 963000, network: 'mainnet',
                 originChain: 'LTC', originActionIndex: 4242, providerId: 'http_get',
                 requestPayload: 'https://example.com/score', redundancy: 3, deadlineBlocks: 10
             });
             const payloadHash = crypto.createHash('sha256')
                 .update('https://example.com/score', 'utf8').digest('hex');
             assert.strictEqual(canonical,
-                'ATTEST|RELAY_REQUEST|' + REQ_ID + '|969500|mainnet|LTC|4242|http_get|' +
+                'ATTEST|RELAY_REQUEST|' + REQ_ID + '|963000|mainnet|LTC|4242|http_get|' +
                 payloadHash + '|3|10');
         });
 
@@ -576,12 +576,12 @@ describe('Attest cross-chain relay (ATTEST v3/v4, ) @regression @tier3', functio
             sinon.stub(require('../../../src/equivocation_header.js'), 'isEquivHeaderActive').returns(false);
             const bodyHash = crypto.createHash('sha256').update('body', 'utf8').digest('hex');
             const canonical = handler._relayResponseCanonical({
-                requestId: REQ_ID, snapshotBlock: 969500, network: 'mainnet',
+                requestId: REQ_ID, snapshotBlock: 963000, network: 'mainnet',
                 originChain: 'DOGE', homeResponseActionIndex: 777, providerId: 'http_get',
                 responseHash: bodyHash, status: 'ok', meta: '200'
             });
             assert.strictEqual(canonical,
-                'ATTEST|RELAY_RESPONSE|' + REQ_ID + '|969500|mainnet|DOGE|777|http_get|' +
+                'ATTEST|RELAY_RESPONSE|' + REQ_ID + '|963000|mainnet|DOGE|777|http_get|' +
                 bodyHash + '|ok|200');
         });
 
@@ -589,12 +589,12 @@ describe('Attest cross-chain relay (ATTEST v3/v4, ) @regression @tier3', functio
             const eq = require('../../../src/equivocation_header.js');
             sinon.stub(eq, 'isEquivHeaderActive').returns(true);
             const req = handler._relayRequestCanonical({
-                requestId: REQ_ID, snapshotBlock: 969500, network: 'mainnet',
+                requestId: REQ_ID, snapshotBlock: 963000, network: 'mainnet',
                 originChain: 'LTC', originActionIndex: 1, providerId: 'http_get',
                 requestPayload: '', redundancy: 1, deadlineBlocks: 10
             });
             const res = handler._relayResponseCanonical({
-                requestId: REQ_ID, snapshotBlock: 969500, network: 'mainnet',
+                requestId: REQ_ID, snapshotBlock: 963000, network: 'mainnet',
                 originChain: 'LTC', homeResponseActionIndex: 1, providerId: 'http_get',
                 responseHash: 'f'.repeat(64), status: 'ok', meta: ''
             });

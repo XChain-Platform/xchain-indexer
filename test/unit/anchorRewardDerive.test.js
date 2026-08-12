@@ -116,8 +116,25 @@ describe('anchor_reward_derive ( BTC-side derivation) @regression @tier2', funct
             assert.strictEqual(n, 1);
             assert.ok(db.createValidatorReward.calledOnce);
             assert.deepStrictEqual(db.createValidatorReward.firstCall.args,
-                [keys[0].pubkey, 7, 'anchor_BTC', ar.ANCHOR_REWARD_AMOUNT, 0, true]);
+                [keys[0].pubkey, 7, 'anchor_BTC', ar.ANCHOR_REWARD_AMOUNT, 0, true, 100]);
             assert.ok(db.reconcileAnchorRewardWinner.calledOnceWith(7, 'anchor_BTC', 100, null));
+        });
+
+        //  / . The reward is EARNED at snapshot_block but MATERIALIZED at the
+        // BTC block being processed, and rollback deletes on block_index, so without the second
+        // stamp a reorg to any height in (snapshot_block, blockIndex] orphans the block that
+        // minted the row yet leaves it spendable, forking the COLLECT rail against a replay.
+        it('stamps the CURRENT BTC block as the materialization block, distinct from the earn-block', async function () {
+            const keys = [makeKey()];
+            const row  = makeRow(keys, { round_reference: 11, snapshot_block: 0 });
+            const db   = stubDb(keys, [row]);
+            await db.createValidatorReward.resetHistory();
+            await derive.deriveAnchorRewards(db, cfg, 4321);
+            const args = db.createValidatorReward.firstCall.args;
+            assert.strictEqual(args[4], 0,    'block_index stays the earn-block (snapshot_block)');
+            assert.strictEqual(args[6], 4321, 'derive_block_index is the BTC block that created the row');
+            assert.notStrictEqual(args[4], args[6],
+                'the two heights must be persisted separately or rollback cannot scope on the creating block');
         });
 
         it('uses the ARCHIVE frozen amount + anchor_archive type for a v6 row', async function () {
@@ -126,7 +143,7 @@ describe('anchor_reward_derive ( BTC-side derivation) @regression @tier2', funct
             const db   = stubDb(keys, [row]);
             await derive.deriveAnchorRewards(db, cfg, 200);
             assert.deepStrictEqual(db.createValidatorReward.firstCall.args,
-                [keys[0].pubkey, 3, 'anchor_archive', ar.ARCHIVE_REWARD_AMOUNT, 0, true]);
+                [keys[0].pubkey, 3, 'anchor_archive', ar.ARCHIVE_REWARD_AMOUNT, 0, true, 200]);
         });
 
         it('collapses a failover double-publish: both publishers inserted, ONE reconcile per round', async function () {

@@ -367,11 +367,27 @@ module.exports = {
         // pin for that file (pre-pin dev/regtest only); AMOUNTS entries are mandatory and
         // genesis.js fails closed on a missing/invalid one. SNAPSHOT_BLOCK is informational
         // (announce + log); the CSVs are already cut at that height.
+        //
+        // The env surface is REGTEST-ONLY (, ), matching GENESIS_DUMP_HASH
+        // below and the hub coin bundle's genesis.$envOverrides gating. These values are
+        // consensus: they decide how much XCHAIN each snapshot holder mints and which
+        // synthetic tx hash carries the credit, so on mainnet/testnet they come from the
+        // pinned coin bundle (src/coins/<COIN>.js, mapped by configs/_adapter.js, which
+        // overrides everything set here) and never from a per-node export. Read at all off
+        // regtest, two replay nodes holding byte-identical snapshot CSVs could still derive
+        // different allocations and fork at the genesis block.
         let splitCsv = (raw) => String(raw || '').split(',').map(s => s.trim());
-        config['GENESIS_AIRDROP_PATHS']          = splitCsv(process.env.GENESIS_AIRDROP_PATHS).filter(s => s !== '');
-        config['GENESIS_AIRDROP_HASHES']         = process.env.GENESIS_AIRDROP_HASHES  ? splitCsv(process.env.GENESIS_AIRDROP_HASHES)  : [];
-        config['GENESIS_AIRDROP_AMOUNTS']        = process.env.GENESIS_AIRDROP_AMOUNTS ? splitCsv(process.env.GENESIS_AIRDROP_AMOUNTS) : [];
-        config['GENESIS_AIRDROP_SNAPSHOT_BLOCK'] = process.env.GENESIS_AIRDROP_SNAPSHOT_BLOCK || null;
+        let airdropEnv = (network === 'regtest');
+        config['GENESIS_AIRDROP_PATHS']          = airdropEnv ? splitCsv(process.env.GENESIS_AIRDROP_PATHS).filter(s => s !== '') : [];
+        config['GENESIS_AIRDROP_HASHES']         = (airdropEnv && process.env.GENESIS_AIRDROP_HASHES)  ? splitCsv(process.env.GENESIS_AIRDROP_HASHES)  : [];
+        config['GENESIS_AIRDROP_AMOUNTS']        = (airdropEnv && process.env.GENESIS_AIRDROP_AMOUNTS) ? splitCsv(process.env.GENESIS_AIRDROP_AMOUNTS) : [];
+        config['GENESIS_AIRDROP_SNAPSHOT_BLOCK'] = airdropEnv ? (process.env.GENESIS_AIRDROP_SNAPSHOT_BLOCK || null) : null;
+        // Combined set-hash pin over the canonical `name:hash:amount` bucket lines. The
+        // per-bucket GENESIS_AIRDROP_HASHES pin each FILE's content; this one pins the SET:
+        // which buckets exist, what each is funded with, and (through the canonical order)
+        // the sequence their synthetic actions are derived in. genesis.js verifies it before
+        // crediting anything and requires it on mainnet.
+        config['GENESIS_AIRDROP_SET_HASH']       = airdropEnv ? (process.env.GENESIS_AIRDROP_SET_HASH || null) : null;
 
         // Precomputed genesis state dump (genesisDump.js). When this artifact is present at
         // GENESIS_DUMP_PATH, inject() bulk-imports it (minutes) instead of re-deriving the

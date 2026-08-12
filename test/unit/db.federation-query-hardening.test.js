@@ -133,13 +133,19 @@ describe('getCapabilitySnapshotValidators() NULL-amount guard @regression @tier1
         assert.strictEqual(out[1].amount, '500');
     });
 
-    it('matches the sibling getCapabilitySnapshotWeights null contract', async function () {
+    it('diverges from the sibling weight reader, which now REFUSES a null weight ', async function () {
+        // The two readers deliberately part company here. This one feeds the COUNT
+        // quorum, where the amount is informational and rendering it as '0' beats
+        // rendering it as the literal 'null'. The sibling feeds the stake-weighted
+        // tally, where a coerced '0' keeps the source in the dedupe map with no
+        // stake, shrinks the denominator S and lowers the very two-thirds bar it is
+        // measured against - so it throws instead.
         const db = makeDb();
         sinon.stub(db, 'doQuery').resolves([{ pubkey: 'cc'.repeat(32), weight: null, source: null, amount: null }]);
         const vals = await db.getCapabilitySnapshotValidators('oracle_publish', 961000);
-        const wts  = await db.getCapabilitySnapshotWeights('oracle_publish', 961000);
         assert.strictEqual(vals[0].amount, '0');
-        assert.strictEqual(wts[0].weight, '0', 'sibling already guards weight');
+        await assert.rejects(() => db.getCapabilitySnapshotWeights('oracle_publish', 961000),
+            /denominator S/, 'the weight reader fails closed rather than under-counting S');
     });
 });
 

@@ -22,6 +22,7 @@ CREATE TABLE anchor_reward_reconcile_log (
     signing_pubkey_id   BIGINT UNSIGNED NOT NULL,         -- deleted row pre-image: FK to index_pubkeys
     amount              VARCHAR(250) NOT NULL,            -- deleted row's exact `amount` STRING; the reorg restore copies it back verbatim (frozen consensus constant per round → no arithmetic, byte-identical on source + replica + replay)
     reward_block_index  BIGINT UNSIGNED NOT NULL,         -- the deleted reward row's ORIGINAL block_index (= the checkpoint's SNAPSHOT_BLOCK, earlier than the reconcile block); the restore only re-inserts losers whose earn-block SURVIVES the reorg
+    reward_derive_block_index BIGINT UNSIGNED DEFAULT NULL, -- pre-image of the deleted row's validator_rewards.derive_block_index : the BTC block that MATERIALIZED the loser, NULL when its earn-block was also its materialization block. A loser derived INSIDE the orphaned range must NOT be restored (a replay to reorg-1 never mints it), which reward_block_index alone cannot express because that is the far earlier SNAPSHOT_BLOCK.
     block_index         BIGINT UNSIGNED NOT NULL          -- block of the reconcile (= the ANCHOR action's block); the rollback scoping key
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 

@@ -84,21 +84,26 @@
 // BTC_BLOCK_HEIGHT, NOT the landing chain's local height, so the hub and the BTC,
 // LTC and DOGE indexers all flip on the same anchor.
 //
-// mainnet is ARMED to 969500, the BTC snapshot_block the operator already
-// ratified on 2026-07-16 for RETRACTION_SIGNING_ACTIVATION (~2026-10-01, derived
-// from tip 957062 on 07-07 at ~144 blocks/day). Reusing a ratified anchor rather
-// than minting a new one, and deliberately NOT the nearer 961000 anchor: that
-// train shipped on 2026-07-23 and its BTC anchor is ~2026-08-04, so arming here
-// would demand a second fleet-wide indexer+hub deploy inside a week, and any node
-// that missed it would fork on the first round carrying a garbage signature ahead
-// of a real one. 969500 leaves the usual "deploy every consumer before this era"
-// runway.
+// mainnet is ARMED to 963000, the one BTC-height boundary the whole 
+// cohort now shares (RETRACTION_SIGNING, ARCHIVE_REWARD, ATTEST_RELAY and the
+// hub's GOV_SNAPSHOT), so operators reason about one boundary rather than five.
+// That cohort was RE-PINNED 2026-08-12 by off 969500: 969500 was derived
+// alongside a TIME anchor that has since been repinned twice and now sits at
+// 1786060800 (2026-08-07), which left the height half ~8 weeks behind the time
+// half of the same ratified flag-day set. 963000 is the  pre-freeze train
+// boundary already armed for BTC:mainnet in stateHash.js,
+// caret_ref_strict_activation.js and list_edit_resolution_activation.js (tip
+// 959,853 on 2026-07-27 at ~144 blocks/day + 21 days), so this reuses a ratified
+// boundary rather than minting a new one. Deliberately NOT the nearer 961000
+// anchor, whose train shipped 2026-07-23 and whose BTC anchor (~2026-08-04) has
+// already passed: a height in the past is not a flag day at all. 963000 leaves
+// the usual "deploy every consumer before this era" runway.
 //
 // testnet/regtest activate at genesis (same convention as
 // STAKE_WEIGHTED_QUORUM_ACTIVATION and ATTEST_ADMISSION_ACTIVATION, which are
 // also verdict-changing): the test venues run the corrected tally from block 0.
 const PRICE_SIG_TALLY_ACTIVATION = {
-    mainnet: 969500,      // ARMED : BTC anchor ~2026-10-01, ratified for RETRACTION_SIGNING; deploy ALL indexers + hubs before this height
+    mainnet: 963000,      // ARMED , RE-PINNED 2026-08-12  off 969500 onto the  train boundary shared with RETRACTION_SIGNING; deploy ALL indexers + hubs before this height
     testnet: 0,
     regtest: 0,
 };

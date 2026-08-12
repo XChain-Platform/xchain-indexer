@@ -129,11 +129,53 @@ describe('Rollback @regression @tier3', function () {
         // ORIGINAL earn-block SURVIVES the reorg (reward_block_index < reorg). Both params = reorg.
         assert.ok(/d\.block_index\s*>=\s*\?/.test(restore.args[0]), 'must scope on the reconcile block');
         assert.ok(/d\.reward_block_index\s*<\s*\?/.test(restore.args[0]), 'must only restore losers whose earn-block survives the reorg');
-        assert.deepStrictEqual(restore.args[1], [100, 100]);
+        assert.deepStrictEqual(restore.args[1], [100, 100, 100]);
         // Must precede the generic validator_rewards block delete (log rows must still exist).
         const restoreIdx = calls.indexOf(restore);
         const deleteIdx = calls.findIndex(c => /DELETE FROM validator_rewards WHERE block_index/.test(c.args[0]));
         assert.ok(restoreIdx >= 0 && deleteIdx >= 0 && restoreIdx < deleteIdx, 'reconcile restore must run before the validator_rewards delete');
+    });
+
+    // ───  / : materialization-block scoping ───────────
+    //
+    // An  derived anchor reward is EARNED at the checkpoint's snapshot_block S but
+    // MATERIALIZED while the BTC indexer processes a later block B. Scoping the reorg delete
+    // on block_index alone leaves the row alive for any reorg height in (S, B], i.e. a
+    // COLLECT-spendable credit a from-genesis replay to that height has not derived yet.
+
+    it('deletes validator_rewards by derive_block_index too, so a reward materialized in the orphaned range goes ', async function () {
+        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]); // firstActionIndex
+        indexer.indexerDb.doQuery.resolves([]);
+        await rollback.rollback(100);
+        const calls = indexer.indexerDb.doQuery.getCalls();
+        const del = calls.find(c => /DELETE FROM validator_rewards WHERE derive_block_index\s*>=\s*\?/.test(c.args[0]));
+        assert.ok(del, 'expected a validator_rewards delete scoped on the MATERIALIZATION block');
+        assert.deepStrictEqual(del.args[1], [100]);
+        // Must run before the index_addresses/index_tickers deletes: those remove ids this
+        // table still references, so any surviving row pointing at them would dangle.
+        const delIdx   = calls.indexOf(del);
+        const indexIdx = calls.findIndex(c => /DELETE FROM index_addresses WHERE block_index/.test(c.args[0]));
+        assert.ok(indexIdx >= 0, 'expected the index_addresses rollback delete');
+        assert.ok(delIdx < indexIdx, 'the derive-block delete must precede the index-lookup deletes');
+    });
+
+    it('does NOT restore a reconcile loser that was itself materialized inside the orphaned range ', async function () {
+        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]); // firstActionIndex
+        indexer.indexerDb.doQuery.resolves([]);
+        await rollback.rollback(100);
+        const restore = indexer.indexerDb.doQuery.getCalls().find(c =>
+            /INSERT IGNORE INTO validator_rewards/.test(c.args[0]) &&
+            c.args[0].includes('anchor_reward_reconcile_log'));
+        assert.ok(restore, 'expected the RB-ANCHOR restore');
+        const sql = restore.args[0];
+        // The earn-block test alone would restore a loser derived in the orphaned range, minting
+        // an orphan the replay never has. NULL keeps the pre- same-block-writer behavior.
+        assert.ok(/d\.reward_derive_block_index IS NULL OR d\.reward_derive_block_index\s*<\s*\?/.test(sql),
+            'restore must also require the loser MATERIALIZATION block to survive the reorg');
+        assert.ok(/derive_block_index/.test(sql.split('SELECT')[0]),
+            'restore must carry derive_block_index back onto the restored row');
+        assert.ok(/d\.reward_derive_block_index/.test(sql.split('FROM')[0]),
+            'restore must project the logged materialization block, not NULL');
     });
 
     it('deletes index_addresses and index_tickers by block_index, after the data deletes (#4904)', async function () {

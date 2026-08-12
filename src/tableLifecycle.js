@@ -31,6 +31,10 @@
  *                     test/unit/hash-coverage.test.js bind the declarations
  *                     to the actual hashing code.
  *
+ * A fourth artifact, the advisory TABLE_CONTENT_PARITY_CHECK coverage set
+ * , is DERIVED from those three rather than declared per entry: see
+ * the CONTENT_PARITY_* block below the registry.
+ *
  * Adding a table: create src/sql/<table>.sql, then add ONE entry here
  * declaring all three dimensions. test/unit/rollback-coverage.test.js fails
  * until the entry exists, and the per-dimension guards fail until the entry
@@ -269,7 +273,8 @@ const TABLES = [
       hashed: { classes: [], note: 'Mirror of decoder-confirmed chain transactions; correctness anchors to the coin chain, and action rows referencing them are hashed.' } },
     { table: 'validator_rewards', owner: 'indexer', replication: 'stream:block', rollback: 'block', replicaRollback: 'mirror',
       hashed: { classes: [],
-                note: 'Oracle/attest rewards derive deterministically during block processing; anchor_* rounds arrive via hub push but are quorum-verified before persistence. Reward credits they mint are ledger-hashed.' } },
+                note: 'Oracle/attest rewards derive deterministically during block processing; anchor_* rounds arrive via hub push but are quorum-verified before persistence. Reward credits they mint are ledger-hashed.' },
+      note: 'TWO block-scoped rollback keys, not one . block_index is the EARN block; derive_block_index is the MATERIALIZATION block, non-NULL only for the  BTC-side anchor/archive derivation, which earns at the checkpoint SNAPSHOT_BLOCK but writes the row while processing a later BTC block. rollback() deletes on BOTH, or a reorg into the gap between them leaves a COLLECT-spendable reward a from-genesis replay has not derived yet.' },
     { table: 'contract_state', owner: 'indexer', replication: 'stream:block', rollback: 'block', replicaRollback: 'mirror',
       hashed: { classes: ['contracts'], note: 'Latest value per state key written in the block.' } },
     { table: 'escrow_leaf_journal', owner: 'indexer', replication: 'stream:block', rollback: 'block', replicaRollback: 'mirror',
@@ -285,7 +290,7 @@ const TABLES = [
       hashed: DERIVED, note: 'WI-2 bump 2 capability-stake twin of contract_slash_debits, with the same reorg-restore requirement.' },
     { table: 'anchor_reward_reconcile_log', owner: 'indexer', replication: 'stream:block', rollback: 'block', replicaRollback: 'mirror',
       hashed: DERIVED,
-      note: 'Pre-image log of validator_rewards loser rows an anchor reconcile DELETEd (RB-ANCHOR). Same reorg-restore requirement as the slash-debit logs: rollback re-INSERTs the deleted losers whose earn-block survives the reorg BEFORE the generic block delete drops the log rows; replicas must replicate it for the same restore.' },
+      note: 'Pre-image log of validator_rewards loser rows an anchor reconcile DELETEd (RB-ANCHOR). Same reorg-restore requirement as the slash-debit logs: rollback re-INSERTs the deleted losers whose earn-block survives the reorg BEFORE the generic block delete drops the log rows; replicas must replicate it for the same restore. The pre-image carries reward_derive_block_index as well as reward_block_index , so a loser MATERIALIZED inside the orphaned range is left deleted rather than restored as an orphan the replay never mints.' },
     { table: 'state_tree_roots', owner: 'indexer', replication: 'follower-derived', rollback: 'block', replicaRollback: 'mirror',
       hashed: { classes: ['state_commitment'], note: 'The per-block light-client SMT roots themselves (SPV spec sec.4).' },
       note: 'Not streamed and excluded from snapshots (OPERATOR_LOCAL): each follower recomputes the roots apply-time (VERIFY_STATE_COMMITMENT) and halts on divergence vs source. Block-scoped rollback on both sides drops orphaned-fork roots so forward threading re-seeds from the fork point.' },
@@ -415,6 +420,68 @@ const ORPHAN_SWEEPS = [
     { table: 'pubkeys',  index: 'index_addresses', replica: true  },
 ];
 
+// ── Advisory content-parity coverage  ──────────────────────────
+//
+// What was missing. The three consensus block hashes commit the ledger /
+// actions / contract projections, the light-client STATE_SUBTREES commit
+// balances and stakes, state_hash commits the in-place mutation classes and
+// the id->address map, and the /status per-table row counts commit cardinality
+// and nothing else. The large majority of the per-block replicated tables were
+// therefore covered by NO content commitment at all: an equal-COUNT content
+// substitution in one of them passed every check a follower runs (review
+// xchain-platform #4486).
+//
+// What closes it. TABLE_CONTENT_PARITY_CHECK, an advisory, never-halting
+// per-table content checksum over a bounded block window: xchain-sync computes
+// it in BlockHasher.computeTableContentChecksums, the source publishes it on
+// /status (api.js) and a follower at the same height recomputes and compares in
+// ClientSync._verifyAgainstSource. Because both sides run the SAME method over
+// the SAME published bound, equal count + different checksum means content
+// divergence, which is exactly the class the row counts cannot see.
+//
+// This block is the coverage contract. The guards bind it to the code:
+// xchain-sync test/unit/tableContentParity.test.js (every replicated table is
+// committed by something) and this repo's test/unit/hash-coverage.test.js (the
+// carve-outs stay pinned to the operator ruling).
+//
+// There are exactly TWO exclusion classes, and a table outside both is covered:
+//
+//   1. OPERATOR CARVE-OUTS, decided 2026-08-11. markets is a derived
+//      full-snapshot OHLCV aggregate keyed by tick pair, and the decoder
+//      dispensers table soft-expires (UPDATE expired_block_index) with its hard
+//      purge deferred out of band. Neither has a block bound a source and a
+//      follower can agree on, so a checksum over them would false-alarm rather
+//      than detect. Both keep the convergence channel they already have (the
+//      snapshot upsert; ClientSync._reconcileDispensers' periodic replace).
+//
+//   2. IN-PLACE MUTATED tables: exactly the tables declaring the 'state_hash'
+//      class above. A row of theirs written in block N is edited again in a
+//      later block M, so "the content of blocks [a..b]" is not a stable
+//      quantity: a source one block ahead of the follower legitimately carries
+//      the later edit inside the same window and would read as a divergence.
+//      They are excluded here because they are ALREADY committed, by the
+//      enforced (halting) state_hash fourth hash that exists for precisely this
+//      mutation class. So the exclusion narrows coverage by nothing: every
+//      replicated table is committed by one mechanism or the other.
+const CONTENT_PARITY_CARVE_OUTS = Object.freeze([
+    Object.freeze({ table: 'markets', dbType: 'indexer',
+        reason: 'Derived full-snapshot OHLCV aggregate with no clean block bound (operator ruling 2026-08-11); converges through the snapshot upsert.' }),
+    Object.freeze({ table: 'dispensers', dbType: 'decoder',
+        reason: 'Decoder soft-expire UPDATE plus deferred hard purge ride no per-block channel (operator ruling 2026-08-11); converges through the periodic full-table reconcile.' }),
+]);
+
+// Columns dropped from the content-parity preimage because the follower is not
+// expected to hold the source's value for them. Keep this in step with
+// xchain-sync ClientApplier: `blocks.id` is the local AUTO_INCREMENT surrogate
+// the applier strips before insert (localSurrogateIdTables), so the two sides
+// legitimately disagree on it, and `contract_state.state_key_bin` is a
+// database-GENERATED column the applier never names (generatedColumns.js).
+// Hashing either would turn a by-design difference into a permanent alarm.
+const CONTENT_PARITY_EXCLUDED_COLUMNS = Object.freeze({
+    blocks:         Object.freeze(['id']),
+    contract_state: Object.freeze(['state_key_bin']),
+});
+
 // ── Derivation helpers ──────────────────────────────────────────────────
 
 function allTables(){
@@ -493,9 +560,46 @@ function hashClassTables(cls){
     return tablesWhere(t => t.hashed && t.hashed.classes.indexOf(cls) !== -1);
 }
 
+// ── Content-parity derivation helpers  ─────────────────────────
+
+// The operator carve-out reason for a table on a dbType, or null when the table
+// is not carved out there. dbType matters: the DECODER dispensers table is the
+// carve-out, while the indexer's own action-scoped dispensers table is covered.
+function contentParityCarveOut(table, dbType){
+    let hit = CONTENT_PARITY_CARVE_OUTS.find(c => c.table === table && c.dbType === (dbType === 'decoder' ? 'decoder' : 'indexer'));
+    return hit ? hit.reason : null;
+}
+
+// Tables the source mutates in place after the block that wrote them, which is
+// the same set that declares the state_hash class (that hash exists to commit
+// exactly these mutations). Derived, never hand-listed, so a new mutation class
+// joins both the hash and this exclusion in one registry edit.
+function contentParityMutableTables(){
+    return hashClassTables('state_hash');
+}
+
+// Columns excluded from the content-parity preimage for a table (empty for most).
+function contentParityExcludedColumns(table){
+    return (CONTENT_PARITY_EXCLUDED_COLUMNS[table] || []).slice();
+}
+
+// How a stream:index lookup is bounded for content parity: 'block' for the two
+// reorg-scoped lookups that carry a block_index stamp (their ids are consensus
+// -reproducible), 'id' for the inert append-only lookups, which have no block
+// column at all and are bounded by a source-published id ceiling instead.
+// Decoder lookups are always 'id': that schema stamps no block on them.
+function contentParityLookupBound(table, dbType){
+    if(dbType === 'decoder') return 'id';
+    let e = entry(table);
+    return (e && e.replication === 'stream:index' && e.rollback === 'index') ? 'block' : 'id';
+}
+
 module.exports = {
     TABLES, ORPHAN_SWEEPS,
+    CONTENT_PARITY_CARVE_OUTS, CONTENT_PARITY_EXCLUDED_COLUMNS,
     allTables, entry, tablesWhere,
     rollbackTables, replicaRollbackTables, streamTopology,
     rollbackBuckets, replicaRollbackBuckets, hashClassTables,
+    contentParityCarveOut, contentParityMutableTables,
+    contentParityExcludedColumns, contentParityLookupBound,
 };

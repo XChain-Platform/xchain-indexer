@@ -5,6 +5,7 @@
     "wireDecoded": "top-level ACTION-encoded on-chain tx the DECODER must decode (xchain-decoder VALID_ACTION_NAMES); also enforced pre-broadcast by the ENCODER's own VALID_ACTION_NAMES/ACTION_ALIASES gate (xchain-encoder src/validator.js)",
     "indexerHandled": "the INDEXER dispatches a handler for it (xchain-indexer src/actions.js action== switch)",
     "userEncodable": "the SDK can author it (xchain-sdk Formats keys)",
+    "userEncodableVersions": "REQUIRED on every userEncodable action, forbidden on the rest: the exact list of FORMAT versions a user may author (xchain-sdk Formats[ACTION] keys). Present because userEncodable alone is action-level, so a version the indexer accepts only when it synthesizes it could be added to the SDK Formats without any guard noticing . Each entry is audited against the indexer handler's own this.formats map plus its system-only gates, so a version listed here is one a user-broadcast tx can legitimately carry.",
     "explorerRender": "the EXPLORER renders it (xchain-explorer getActionData)",
     "walletForm": "the WALLET surfaces an authoring form (xchain-wallet registry/actions.js)"
   },
@@ -19,6 +20,7 @@
     "The indexer protocol_changes registry ALSO holds non-action feature-gate flags: any this.addChange(...) entry whose name is NOT a key in this manifest's 'actions' map is a feature gate, not an action, and is excluded here. As of this pass that set is CONTROLLER_GUARD, CROSS_CHAIN_DEX, ISSUANCE_FEE, ISSUANCE_FEE_EMISSION_EXEMPT, LOCK_MAX_SUPPLY_EXACT, UNIFIED_FEES, VM_ACTIONS, VM_BALANCE_TOKENINFO, VM_BANNED_ASYNC, DEPLOY_BASE64_CODE, CROSS_CHAIN_ROYALTY, ISSUE_MINT_SUPPLY_CUMULATIVE_CAP, SLEEP_RESPECTS_LOCK_SLEEP, COINPAY_EXPIRE_TOKEN_AMOUNT, UNSTAKE_COOLDOWN_COMPLETION_ACTION, DELEGATE_REVOKE_NO_REINSERT, CONTRACT_INDEX_CANONICAL, SLASH_BURNS_PENDING_STAKE, NATIVE_FEE_PRICE_TIME_GATE, DEPLOY_INIT_STRICT, but the enumeration is illustrative, not authoritative: trust the exclusion RULE above it, not this list, since new flag-days are added to the registry without a manifest update. The indexer conformance guard compares the dispatch switch, not the registry.",
     "UNKNOWN is the indexer/explorer catch-all sentinel, not an action; excluded. Each guard drops UNKNOWN before comparing.",
     "Aliases are expanded to canonical names during canonicalization - before the ACTION-name gate (so no alias appears as its own action entry) but AFTER the compiled-size gate, which therefore measures the alias/wire form, not the expanded canonical record (decoder ACTION_ALIASES / indexer actionAliases).",
+    "userEncodableVersions is NOT a copy of the SDK Formats keys, it is the audit those keys are checked against . Every entry was read off xchain-indexer/src/actions/<action>.js: the handler's this.formats map is the set of versions the indexer will parse at all, and a version is user-encodable only if nothing in the handler restricts it to indexer-synthesized input. Two versions the indexer parses are therefore absent here: VOTE v2 (finalize) rejects a user broadcast outright via `if(!data['IS_SYNTHETIC'])` in vote.js, and PRICE v0 is the validator COIN/FIAT snapshot, which only validates with a PBFT quorum of Ed25519 signatures from price-capability stakes, so no wallet can author one. Adding a version here that the indexer will not accept from a user is worse than omitting one: the SDK guard would then demand a Format that builds a command guaranteed to be rejected on arrival, so re-run the audit against the handler before editing an array.",
     "BET  is fully rolled out as of the P8 wallet form: wireDecoded + userEncodable (decoder, encoder gate, SDK), indexerHandled + the BET_EXPIRE lifecycle entry (P4), explorerRender (P7), walletForm (P8). It was staged one flag per work package on purpose, because flipping a flag ahead of the code makes that repo's conformance guard red, which is the intended signal rather than an oversight. BET_EXPIRE gained its own explorerRender in : it owns no table, so its detail reads the bet_feed_statuses row keyed by its action_index and joins through to the feed it expired."
   ],
   "aliases": {
@@ -34,6 +36,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0, 1],
       "explorerRender": true,
       "walletForm": true
     },
@@ -42,6 +45,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0, 1, 2, 3],
       "explorerRender": true,
       "walletForm": true
     },
@@ -62,6 +66,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0],
       "explorerRender": true,
       "walletForm": true
     },
@@ -69,6 +74,7 @@
       "category": "wire-user",
       "wireDecoded": true,
       "userEncodable": true,
+      "userEncodableVersions": [0, 1, 2, 3],
       "indexerHandled": true,
       "explorerRender": true,
       "walletForm": true
@@ -83,6 +89,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0, 1, 2, 3],
       "explorerRender": true,
       "walletForm": true
     },
@@ -91,6 +98,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0],
       "explorerRender": true,
       "walletForm": true
     },
@@ -99,6 +107,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0],
       "explorerRender": true,
       "walletForm": true
     },
@@ -112,6 +121,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0],
       "explorerRender": true,
       "walletForm": true
     },
@@ -125,6 +135,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0, 1, 2, 3],
       "explorerRender": true,
       "walletForm": true
     },
@@ -133,6 +144,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0, 1, 2, 3, 4],
       "explorerRender": true,
       "walletForm": true
     },
@@ -141,6 +153,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0],
       "explorerRender": true,
       "walletForm": true
     },
@@ -149,6 +162,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0, 1, 2],
       "explorerRender": true,
       "walletForm": true
     },
@@ -162,6 +176,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0, 1, 2],
       "explorerRender": true,
       "walletForm": true
     },
@@ -188,6 +203,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0],
       "explorerRender": true,
       "walletForm": true
     },
@@ -196,6 +212,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0],
       "explorerRender": true,
       "walletForm": true
     },
@@ -204,6 +221,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0],
       "explorerRender": true,
       "walletForm": true
     },
@@ -212,6 +230,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0, 1, 2, 3, 4, 5, 6],
       "explorerRender": true,
       "walletForm": true
     },
@@ -220,6 +239,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0],
       "explorerRender": true,
       "walletForm": true
     },
@@ -228,6 +248,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0, 1],
       "explorerRender": true,
       "walletForm": true
     },
@@ -236,6 +257,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0, 1, 2, 3],
       "explorerRender": true,
       "walletForm": true
     },
@@ -244,6 +266,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0],
       "explorerRender": true,
       "walletForm": true
     },
@@ -258,6 +281,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0, 1, 2],
       "explorerRender": true,
       "walletForm": true
     },
@@ -284,6 +308,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [1],
       "explorerRender": true,
       "walletForm": true
     },
@@ -292,6 +317,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0, 1, 2, 3],
       "explorerRender": true,
       "walletForm": true
     },
@@ -306,6 +332,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0, 1],
       "explorerRender": true,
       "walletForm": true
     },
@@ -314,6 +341,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [1, 2, 3],
       "explorerRender": true,
       "walletForm": true
     },
@@ -322,6 +350,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0, 1, 2],
       "explorerRender": true,
       "walletForm": true
     },
@@ -348,6 +377,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0],
       "explorerRender": true,
       "walletForm": true
     },
@@ -356,6 +386,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0, 1],
       "explorerRender": true,
       "walletForm": true
     },
@@ -364,6 +395,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0, 1, 3],
       "explorerRender": true,
       "walletForm": true
     },
@@ -372,6 +404,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
+      "userEncodableVersions": [0],
       "explorerRender": true,
       "walletForm": true
     },

@@ -42,6 +42,7 @@ const GATES = [
     ['anchor_reward_activation.js',         'ANCHOR_REWARD_DERIVE_ACTIVATION'],   // 
     ['price_pair_activation.js',            'PRICE_PAIR_WIDEN_ACTIVATION'],       // 
     ['price_sig_tally_activation.js',       'PRICE_SIG_TALLY_ACTIVATION'],        // 
+    ['snapshot_reorg_buffer.js',           'SNAPSHOT_BURIAL_ACTIVATION'],        // 
 ];
 
 describe('activation-gate constant parity to canonical constants.js @regression', function () {

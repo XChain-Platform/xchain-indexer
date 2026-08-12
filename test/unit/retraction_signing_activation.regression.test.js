@@ -35,12 +35,12 @@ const gate   = require('../../src/retraction_signing_activation.js');
 describe('Signed-retraction flag-day  @regression @tier1', function () {
 
     describe('activation map (arming heights are a fleet-wide contract)', function () {
-        it('mainnet is armed to the ratified 969500 BTC snapshot_block anchor ', function () {
-            // 969500 is the ratified anchor every hub/indexer/explorer deploy is
+        it('mainnet is armed to the ratified 963000 BTC snapshot_block anchor ', function () {
+            // 963000 is the ratified anchor every hub/indexer/explorer deploy is
             // pinned to. Re-pointing it silently would arm the co-signature gate on
             // a different era than the rest of the fleet expects, so the first
             // quorum-class retraction across the seam forks signed vs unsigned.
-            assert.strictEqual(gate.RETRACTION_SIGNING_ACTIVATION.mainnet, 969500);
+            assert.strictEqual(gate.RETRACTION_SIGNING_ACTIVATION.mainnet, 963000);
         });
 
         it('testnet and regtest are genesis-on (threshold 0)', function () {

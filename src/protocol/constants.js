@@ -158,19 +158,28 @@ const ATTEST_MAX_EXPIRIES_PER_BLOCK = 25;
 //
 // CONSENSUS-VISIBLE, like both siblings: the cap decides which block a settlement
 // lands in, so it moves actions rows, the contract hash and the checkpoint
-// preimage. Whether it may ship UNGATED is an operator call this file does not
-// make (), because the two facts that decide it point opposite ways.
-// CROSS_CHAIN_DEX is genesis-active on every network (protocol_changes.js, all-zero
-// thresholds), and the fresh-genesis restart of 816d1e1 moved the three TESTNET
-// chains only - that commit says in as many words that mainnet and regtest are
-// untouched - so mainnet carries history this cap would reinterpret. Ungated is
-// replay-safe there only if no mainnet block ever held more than the cap of
-// effective unsettled matches, which is a chain-state question no file in this repo
-// can answer. If it is still unanswered at deploy time, gate it in
-// protocol_changes.js rather than assume; and do not lean on the
-// ATTEST_MAX_EXPIRIES_PER_BLOCK precedent above, which shipped ungated only because
-// the  fleet-wide replay recomputed the history it reinterpreted, a vehicle
-// this cap does not have.
+// preimage. Unlike both siblings it is therefore NOT applied unconditionally.
+//
+// OPERATOR RULING, 2026-08-11 (, option b): the cap lands behind an
+// operator-ratified FLAG-DAY gate in protocol_changes.js
+// (CROSS_SETTLE_PER_BLOCK_CAP), and NOT ungated under the  §0
+// wipe-and-replay route. What the ruling settled: CROSS_CHAIN_DEX is
+// genesis-active on every network (protocol_changes.js, all-zero thresholds) and
+// the fresh-genesis restart of 816d1e1 moved the three TESTNET chains only, that
+// commit saying in as many words that mainnet and regtest are untouched, so
+// mainnet carries history this cap reinterprets; ungated would be replay-safe
+// there only if no mainnet block ever held more than the cap of effective
+// unsettled matches, a chain-state question no file in this repo can answer. The
+// ATTEST_MAX_EXPIRIES_PER_BLOCK precedent above does not carry it: that one
+// shipped ungated only because the  fleet-wide replay recomputed the
+// history it reinterpreted, a vehicle this cap does not have.
+//
+// The number below is the cap's VALUE; the gate decides WHEN it applies.
+// testnet/regtest activate at genesis, so the cap is in force there and in the
+// suites. Mainnet is parked on the UNARMED sentinel until the operator ratifies
+// the anchor (CROSS_SETTLE_CAP_MAINNET_TIME in protocol_changes.js): before it,
+// mainnet runs the uncapped legacy pass byte for byte, so no already-indexed
+// block is reinterpreted.
 const CROSS_SETTLE_MAX_PER_BLOCK = 25;
 
 // ── Token-gated content (PC-29) ─────────────────────────────────────────────
@@ -334,7 +343,7 @@ const ANCHOR_REWARD_AMOUNT = '10.00000000';
 // ANCHOR_REWARD_ACTIVATION; kept byte-identical to the local copies in
 // xchain-{hub,indexer}/src/anchor_reward_activation.js by the cross-service regression suite.
 const ARCHIVE_REWARD_ACTIVATION = {
-    mainnet: 969500,      // ARMED 2026-07-16 : BTC snapshot_block ~2026-10-01 (ratified anchor; derived from tip 957062 on 07-07 at ~144 blocks/day); deploy every consumer before this era
+    mainnet: 963000,      // ARMED 2026-07-16 , RE-PINNED 2026-08-12  off 969500 onto the  pre-freeze train boundary (tip 959,853 on 07-27 at ~144 blocks/day + 21d); deploy every consumer before this era
     testnet: 0,
     regtest: 0,
 };

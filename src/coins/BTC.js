@@ -93,6 +93,27 @@ module.exports = {
             // 2026-08-06): it decides which block the action history begins at, so
             // changing it is a coordinated one-wave flag-day, not a local knob.
             firstBlock: 950000,
+            // Block-0 hash of the CHAIN itself (). This is NOT the XChain
+            // `genesis` pin below: that one pins the bootstrap LEDGER, this one pins the
+            // coin node's own genesis block, and it is the ONLY constant that tells one
+            // chain from another at the same tier. `chain` from getblockchaininfo carries
+            // the tier and nothing else, so a BTC-mainnet and a DOGE-mainnet node both
+            // report "main", and Bitcoin testnet3 and testnet4 both report a testnet
+            // string; a consumer pointed at the wrong one decodes foreign blocks under
+            // our address rules and lets a foreign tip drive its reorg deletes.
+            // Consumers compare this against `getblockhash 0` and refuse to ingest on a
+            // mismatch.
+            //
+            // Deliberately NOT part of consensusSubset(): it identifies the ENDPOINT, it
+            // does not decide how any byte is read, so pinning one must not move
+            // CONSENSUS_CONFIG_PIN and needs no flag-day (classified in the hub suite's
+            // NON_CONSENSUS_TOP_LEVEL_KEYS).
+            //
+            // null means UNPINNED, and the check is skipped: absence of evidence is not
+            // evidence of a foreign chain, and a wrong value would fail-close a healthy
+            // decoder. The operator fills these from the fleet's own nodes, one per coin
+            // per network: `bitcoin-cli getblockhash 0`.
+            chainGenesisHash: null,
             // Canonical protocol address roles (UPPERCASE). Consumer adapters
             // alias these (explorer uses lowercase protocol/community/explorer).
             addresses: {
@@ -110,10 +131,24 @@ module.exports = {
             // DUMP_HASH re-pinned 2026-06-26: XCHAIN gas token injected as genesis token #1
             // (decimals 8, max_supply 100M, mint disabled, GAS-owned); ledgerHash unchanged
             // (XCHAIN is injected in genesis.js code, not the CSV manifest).
+            // XCP/XDP airdrop leg (, ): DISARMED, and disarmed HERE rather
+            // than by leaving the keys off a node's environment. The bucket set decides how
+            // much XCHAIN each snapshot holder mints and which synthetic tx hashes carry the
+            // credits, so on mainnet/testnet it is bundle data like every other genesis pin;
+            // the indexer ignores the GENESIS_AIRDROP_* env vars off regtest. Arming the leg
+            // is an edit here (index-aligned paths + sha256 content pins + XCHAIN amounts)
+            // plus airdropSetHash - the sha256 over the canonical `name:hash:amount` lines,
+            // which genesis.js verifies before it credits anything - followed by a
+            // bin/sync-coins.sh re-vendoring wave.
             genesis: {
                 block:      950000,
                 ledgerHash: 'f347a0499654b128dd0461441ed6341ac27a24b909d6ff6e3995db4e69dc23e5',
                 dumpHash:   'e416c382dd6951ce5c4da7e053f6dbb407ca3d966a513209eb59886dbe95e738',
+                airdropPaths:         [],
+                airdropHashes:        [],
+                airdropAmounts:       [],
+                airdropSnapshotBlock: null,
+                airdropSetHash:       null,
             },
         },
 
@@ -144,6 +179,11 @@ module.exports = {
             // into consensusSubset), so it moves the BTC testnet pin and ships in
             // one wave with every other vendoring service.
             firstBlock: 147500,
+            // Block-0 hash of the chain (see mainnet above). Unpinned until the operator
+            // reads it off the fleet's own node: `bitcoin-cli -testnet getblockhash 0`.
+            // This is the one value that separates testnet3 from testnet4, which the
+            // chain-tier gate provably cannot (both report a testnet string).
+            chainGenesisHash: null,
             addresses: {
                 BURN:            'mxchainburnaddressXXXXXXXXXXa8EAfp',
                 GAS:             'mgassdEpzH2AuKGK9W5FZh8drWYKrpXk6D',
@@ -154,7 +194,19 @@ module.exports = {
                 EXPLORER:        'n1jbLKMrhvFae7NwTj37ZtkN4uPy29o9aM',
             },
             // Testnet launches CLEAN (genesis disabled, like LTC); namespace open.
-            genesis: { block: 0, ledgerHash: null, dumpHash: null },
+            // Airdrop keys carried explicitly and empty for the same reason as mainnet:
+            // testnet is a multi-operator federation, so an env-armed bucket set would let
+            // one node mint an allocation the rest of the federation never derives.
+            genesis: {
+                block:      0,
+                ledgerHash: null,
+                dumpHash:   null,
+                airdropPaths:         [],
+                airdropHashes:        [],
+                airdropAmounts:       [],
+                airdropSnapshotBlock: null,
+                airdropSetHash:       null,
+            },
         },
 
         regtest: {
@@ -179,6 +231,11 @@ module.exports = {
                 singleOpReturnPolicy:        true,
             },
             firstBlock: 0,
+            // Deliberately unset on regtest, and it stays that way: every `-regtest`
+            // stack mines its own chain, so there is no stable block-0 hash to pin and a
+            // pinned one would fail-close every fresh dev stack. Endpoint identity on
+            // regtest rests on the chain-tier gate alone.
+            chainGenesisHash: null,
             addresses: {
                 BURN:            'mxchainburnaddressXXXXXXXXXXa8EAfp',
                 GAS:             'mgash6jYSKAR3Q5HPpDgNX2BYr18q9N6GQ',
@@ -196,6 +253,17 @@ module.exports = {
                     block:      { env: 'XCHAIN_GENESIS_BLOCK',       type: 'int', default: 0 },
                     ledgerHash: { env: 'XCHAIN_GENESIS_LEDGER_HASH', type: 'str', default: null },
                     dumpHash:   { env: 'XCHAIN_GENESIS_DUMP_HASH',   type: 'str', default: null },
+                    // XCP/XDP airdrop leg. Registering it here is what makes the leg
+                    // regtest-only-configurable : the indexer used to read these
+                    // three env vars on EVERY network, so two mainnet replay nodes with
+                    // byte-identical snapshot CSVs could still mint different allocations.
+                    // Paths compact empty entries; hashes/amounts keep them, because entry N
+                    // pins/funds entry N and an empty hash means "this bucket is unpinned".
+                    airdropPaths:         { env: 'GENESIS_AIRDROP_PATHS',          type: 'csv',        default: [] },
+                    airdropHashes:        { env: 'GENESIS_AIRDROP_HASHES',         type: 'csv_sparse', default: [] },
+                    airdropAmounts:       { env: 'GENESIS_AIRDROP_AMOUNTS',        type: 'csv_sparse', default: [] },
+                    airdropSnapshotBlock: { env: 'GENESIS_AIRDROP_SNAPSHOT_BLOCK', type: 'str',        default: null },
+                    airdropSetHash:       { env: 'GENESIS_AIRDROP_SET_HASH',       type: 'str',        default: null },
                 },
             },
         },

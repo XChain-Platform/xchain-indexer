@@ -220,13 +220,23 @@ function memDb(v1s, v2s, opts) {
 //                    DELEGATED-only signer: authorized by a staked source, no stakes row of its
 //                    own. Stage 2 runs only for keys the direct query rejected, so with no
 //                    `effective` override the resolver is never reached for existence.
-//   minStake null -> REC-SUBSET-1 completeness (_verifyCompleteness): the set resolved at this
-//                    node's local capability MIN_STAKE, which db.js applies when no override is
-//                    passed. Backed by opts.capSets = { <capability>: [{pubkey, source, weight}] }.
+//   anything else -> REC-SUBSET-1 completeness (_verifyCompleteness): the qualifying set at
+//                    the threshold recovery reconstructed as of the snapshot block ,
+//                    or null when this handle carries no coin config, in which case db.js
+//                    applies its own local floor. Backed by
+//                    opts.capSets = { <capability>: [{pubkey, source, weight}] }.
 // `staked` backs the direct-stake doQuery probe (stage 1, and the whole answer for a handle
 // with no resolver). opts.truncated = [<capability>...] flags a capped resolution. Every
 // resolver call is recorded in `calls` as { capability, minStake, method } so a test can pin
 // both the threshold and WHICH resolver a check reached for.
+//
+// opts.localFloor models a handle that DOES carry a coin config: it publishes
+// STAKING.CAPABILITIES.<cap>.MIN_STAKE (what recovery reads as the genesis floor) and it makes
+// the resolver behave like db.js, filtering capSets by the threshold actually in force
+// (caller override when supplied, local floor otherwise) instead of returning every row.
+// opts.slashRestores = [{source, restored}] answers the as-of-block capability_slash_debits
+// reconstruction : stake burned AFTER the snapshot block, which the archived weight
+// must be judged with, not without.
 function btcDbStub(staked, opts) {
     opts = opts || {};
     let set = new Set(staked.map(p => p.toLowerCase()));
@@ -236,19 +246,34 @@ function btcDbStub(staked, opts) {
     let calls = [];
     function resolve(capability, minStake, method) {
         calls.push({ capability, minStake, method });
+        // db.js: a caller override is honoured VERBATIM, the local floor is only the default.
+        let bar = (minStake !== null && minStake !== undefined) ? minStake
+                : (opts.localFloor !== undefined ? opts.localFloor : null);
         let out = (minStake === '0')
             ? effective.map(pk => ({ pubkey: pk, source: 'src_' + pk.slice(0, 16), weight: '5' }))
-            : (capSets[capability] || []).map(r => ({
-                pubkey: r.pubkey, source: r.source, weight: String(r.weight != null ? r.weight : r.amount) }));
+            : (capSets[capability] || [])
+                .map(r => ({ pubkey: r.pubkey, source: r.source, weight: String(r.weight != null ? r.weight : r.amount) }))
+                .filter(r => bar === null || Number(r.weight) >= Number(bar));
         out.truncated = truncated.has(capability);
         return out;
     }
-    return {
+    let db = {
         calls,
-        async doQuery(sql, params) { return set.has(String(params[0]).toLowerCase()) ? [{ 1: 1 }] : []; },
+        async doQuery(sql, params) {
+            if (String(sql).includes('capability_slash_debits'))
+                return (opts.slashRestores || []).map(r => ({ source: r.source, restored: String(r.restored) }));
+            return set.has(String(params[0]).toLowerCase()) ? [{ 1: 1 }] : [];
+        },
         async getStakeWeightsByCapability(cap, block, minStake) { return resolve(cap, minStake, 'getStakeWeightsByCapability'); },
         async getValidatorsByCapability(cap, block, minStake) { return resolve(cap, minStake, 'getValidatorsByCapability'); }
     };
+    if (opts.localFloor !== undefined) {
+        let caps = {};
+        for (let c of ['cross_chain', 'oracle_publish', 'price', 'attestation'])
+            caps[c] = { MIN_STAKE: String(opts.localFloor) };
+        db.config = { STAKING: { CAPABILITIES: caps } };
+    }
+    return db;
 }
 
 // Raw-handle stub: doQuery only, no capability resolvers. Models a unit fixture or an
@@ -260,9 +285,11 @@ function rawStakeHandleStub(staked) {
 }
 
 // Full qualifying set the BTC resolver would report for a set of signing keys,
-// matching the fixture's per-key source formula ('src_' + pubkey[:16], weight 5).
-function capSetFromKeys(keys) {
-    return keys.map(k => ({ pubkey: k.pubkey, source: 'src_' + k.pubkey.slice(0, 16), weight: '5' }));
+// matching the fixture's per-key source formula ('src_' + pubkey[:16], weight 5 unless the
+// archive under test was built at another weight).
+function capSetFromKeys(keys, weight) {
+    let w = String(weight != null ? weight : '5');
+    return keys.map(k => ({ pubkey: k.pubkey, source: 'src_' + k.pubkey.slice(0, 16), weight: w }));
 }
 
 // BTC indexer stub for the reward restore. F1a: recovery STAGES archived rewards by raw
@@ -692,10 +719,166 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             assert.strictEqual(report.verified, 0);
             assert.ok(report.failed[0].reason.includes('incomplete'));
             assert.ok(report.failed[0].reason.includes('src_low'));
-            // And the resolution that caught it passed NO archive-derived threshold.
+            // And the resolution that caught it passed NO archive-derived threshold. This
+            // handle carries no coin config, so nothing is reconstructable and db.js is left
+            // to apply its own local floor - the pre- path, unchanged.
             assert.ok(btcDb.calls.some(c => c.minStake === null), 'completeness must resolve at the protocol floor');
             assert.ok(btcDb.calls.every(c => c.minStake === null || c.minStake === '0'),
                       'no archive-derived threshold may reach the resolver');
+        });
+
+        // : the bar and the weights are reconstructed AS OF the snapshot block instead
+        // of being read off this node's live local config, which is neither the bar the archive
+        // was built at nor the weights it was built from.
+        describe('as-of-block threshold + weight reconstruction ', function () {
+
+            // The frozen table in capability_min_stake_history.js ships EMPTY on every network
+            // (arming an entry is a coordinated flag day, not a test fixture), so a ratified
+            // governance history enters the way a DR operator would supply one.
+            const GOVERNANCE_10 = {
+                cross_chain:    [{ activation_block: 0, value: '10' }],
+                oracle_publish: [{ activation_block: 0, value: '10' }]
+            };
+
+            // An archive an honest hub built at governance MIN_STAKE 10 while THIS node's coin
+            // config still reads 1: its snapshot legitimately omits every source below 10, and
+            // one such source (src_below_governance) is live on-chain to prove the omission is
+            // not a forge.
+            function highThresholdArchive() {
+                let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys, { snapAmount: '10' });
+                let capSets = {
+                    cross_chain: capSetFromKeys(crossKeys, '10')
+                        .concat([{ pubkey: makeKeypair().pubkey, source: 'src_below_governance', weight: '5' }]),
+                    oracle_publish: capSetFromKeys(oracleKeys, '10')
+                };
+                return { v1, capSets, staked: oracleKeys.concat(crossKeys).map(k => k.pubkey) };
+            }
+
+            it('certifies an archive built at a governance MIN_STAKE ABOVE the local floor', async function () {
+                // The residual this closes: resolving at the local floor reports sources the
+                // honest hub correctly excluded, so completeness condemns an honest archive and
+                // DISASTER RECOVERY HALTS. Reconstructed at the archive's own block, it passes.
+                let { v1, capSets, staked } = highThresholdArchive();
+                let btcDb = btcDbStub(staked, { capSets, localFloor: '1' });
+                let report = await new AnchorRecovery(memDb([v1], []),
+                    Object.assign({ btcDb, verifyStakes: true, minStakeActivations: GOVERNANCE_10 }, quiet)).run();
+                assert.deepStrictEqual(report.failed, [], 'an honest high-threshold archive must certify');
+                assert.strictEqual(report.verified, 1);
+                let completeness = btcDb.calls.filter(c => c.minStake !== '0');
+                assert.ok(completeness.length > 0, 'the completeness check must have resolved');
+                assert.ok(completeness.every(c => c.minStake === '10'),
+                          'completeness must resolve at the reconstructed governance MIN_STAKE, not the local floor');
+            });
+
+            it('false-rejects that same archive when the threshold falls back to the local floor', async function () {
+                // The control for the test above: with no governance history to reconstruct
+                // from, the bar is this node's floor and the honest archive is condemned. This
+                // is the exact failure  removes, kept as a live demonstration.
+                let { v1, capSets, staked } = highThresholdArchive();
+                let btcDb = btcDbStub(staked, { capSets, localFloor: '1' });
+                let report = await new AnchorRecovery(memDb([v1], []),
+                    Object.assign({ btcDb, verifyStakes: true }, quiet)).run();
+                assert.strictEqual(report.verified, 0);
+                assert.ok(report.failed[0].reason.includes('incomplete'));
+                assert.ok(report.failed[0].reason.includes('src_below_governance'));
+            });
+
+            it('resolves the threshold at the BURIED block, on the same plane as the set', async function () {
+                // The hub buries the declared height before resolving BOTH its threshold and
+                // its set (CapabilitySnapshot.getSnapshot), so a threshold resolved at the raw
+                // height would reintroduce, in the bar, the split the reorg buffer removes.
+                // SNAPSHOT_BLOCK 100 buries to 94 on regtest, so an activation AT 94 is in
+                // force and one at 95 is not.
+                let staked = oracleKeys.concat(crossKeys).map(k => k.pubkey);
+                let capSets = { cross_chain: capSetFromKeys(crossKeys), oracle_publish: capSetFromKeys(oracleKeys) };
+                async function thresholdWith(activationBlock) {
+                    let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
+                    let hist = { cross_chain:    [{ activation_block: 0, value: '1' }, { activation_block: activationBlock, value: '10' }],
+                                 oracle_publish: [{ activation_block: 0, value: '1' }, { activation_block: activationBlock, value: '10' }] };
+                    let btcDb = btcDbStub(staked, { capSets, localFloor: '1' });
+                    await new AnchorRecovery(memDb([v1], []),
+                        Object.assign({ btcDb, verifyStakes: true, minStakeActivations: hist }, quiet)).run();
+                    return btcDb.calls.filter(c => c.minStake !== '0').map(c => c.minStake);
+                }
+                assert.ok((await thresholdWith(94)).every(t => t === '10'),
+                          'an activation at the buried height must be in force');
+                assert.ok((await thresholdWith(95)).every(t => t === '1'),
+                          'an activation ABOVE the buried height must not be, even though it is below the declared one');
+            });
+
+            it('unwinds a post-snapshot slash instead of condemning the archived weight', async function () {
+                // slashCapabilityStake rewrites stakes.amount IN PLACE, so re-resolving the
+                // snapshot block after a slash reports the POST-slash weight. Comparing the
+                // archived weight against that raw number would reject an honest archive; the
+                // debits recorded after the block restore it to what the hub actually saw.
+                let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
+                let staked = oracleKeys.concat(crossKeys).map(k => k.pubkey);
+                let slashedSource = 'src_' + crossKeys[0].pubkey.slice(0, 16);
+                let cross = capSetFromKeys(crossKeys);
+                cross[0].weight = '2';                                   // 3 of its 5 burned later
+                let btcDb = btcDbStub(staked, {
+                    capSets: { cross_chain: cross, oracle_publish: capSetFromKeys(oracleKeys) },
+                    localFloor: '1',
+                    slashRestores: [{ source: slashedSource, restored: '3' }]
+                });
+                let report = await new AnchorRecovery(memDb([v1], []),
+                    Object.assign({ btcDb, verifyStakes: true }, quiet)).run();
+                assert.deepStrictEqual(report.failed, [], 'a weight restored by its slash debits must match the archive');
+                assert.strictEqual(report.verified, 1);
+            });
+
+            it('condemns that same archive when the slash is NOT unwound', async function () {
+                // The control for the test above: without the capability_slash_debits
+                // reconstruction the post-slash weight is all there is, so the honest archived
+                // weight reads as forged - which is exactly why the archived amount had to be
+                // taken on trust before .
+                let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
+                let staked = oracleKeys.concat(crossKeys).map(k => k.pubkey);
+                let cross = capSetFromKeys(crossKeys);
+                cross[0].weight = '2';
+                let btcDb = btcDbStub(staked, {
+                    capSets: { cross_chain: cross, oracle_publish: capSetFromKeys(oracleKeys) },
+                    localFloor: '1'                                   // no slashRestores
+                });
+                let report = await new AnchorRecovery(memDb([v1], []),
+                    Object.assign({ btcDb, verifyStakes: true }, quiet)).run();
+                assert.strictEqual(report.verified, 0);
+                assert.ok(report.failed[0].reason.includes('forged weight'));
+            });
+
+            it('rejects an archive that understates a source weight (S-deflation forge)', async function () {
+                // The archived per-source amount IS the quorum denominator S. Understating other
+                // sources lowers the bar a forged signature set must clear, and nothing checked
+                // it until the as-of-block weights existed to check it against.
+                let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);   // archives weight 5
+                let staked = oracleKeys.concat(crossKeys).map(k => k.pubkey);
+                let cross = capSetFromKeys(crossKeys);
+                cross[0].weight = '9';                                   // on-chain it held 9, not 5
+                let btcDb = btcDbStub(staked, {
+                    capSets: { cross_chain: cross, oracle_publish: capSetFromKeys(oracleKeys) },
+                    localFloor: '1'
+                });
+                let report = await new AnchorRecovery(memDb([v1], []),
+                    Object.assign({ btcDb, verifyStakes: true }, quiet)).run();
+                assert.strictEqual(report.verified, 0);
+                assert.ok(report.failed[0].reason.includes('forged weight'));
+                assert.ok(report.failed[0].reason.includes('archived 5, on-chain as of that block 9'));
+            });
+
+            it('rejects a snapshot spelling two weights for one source', async function () {
+                // Every key of a source carries the SAME aggregate (capability_snapshots.sql),
+                // so two spellings are a way to hide an inflated weight behind an honest row.
+                let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
+                let staked = oracleKeys.concat(crossKeys).map(k => k.pubkey);
+                // Two archived rows for ONE source: the fixture's per-key sources are distinct,
+                // so drive _verifyWeightedCompleteness directly with the crafted group.
+                let rec = new AnchorRecovery(memDb([v1], []), Object.assign({ btcDb: btcDbStub(staked, {}) }, quiet));
+                let g = { capability: 'cross_chain', block: 100, rows: [
+                    { source: 'src_a', signing_pubkey: 'a'.repeat(64), amount: '5' },
+                    { source: 'src_a', signing_pubkey: 'b'.repeat(64), amount: '50' }] };
+                await assert.rejects(() => rec._verifyWeightedCompleteness(g, [], 94, '1'),
+                                     /two different weights/);
+            });
         });
     });
 

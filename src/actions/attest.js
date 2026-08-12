@@ -49,6 +49,7 @@ const swq     = require('../stake_weighted_quorum.js');
 const attestAdmission = require('../attest_admission_activation.js');
 const attestRelay     = require('../attest_relay_activation.js');
 const eq      = require('../equivocation_header.js');
+const srb     = require('../snapshot_reorg_buffer.js');
 const ProviderRegistry = require('../attestation/providerRegistry.js');
 const { rethrowIfInfraFault } = require('./faultGuard.js');
 const { buildInjectedExecContext, SYNTH_EXEC_TX_HASH, SYNTH_TAGS } = require('./execContext.js');
@@ -442,9 +443,25 @@ class Attest {
             }
         }
 
-        // The responsible-set capability snapshot is locked at the REQUEST's block (also
-        // the EQUIV gate input (deterministic from request_id; byte-matches the hub).
-        let snapshotBlock = request ? Number(request.block_index) : Number(data['BLOCK_INDEX']);
+        // The DECLARED height of this round: the REQUEST's block, deterministic from the
+        // request_id every signer keyed on. Two different things are derived from it and
+        // they must not be conflated .
+        //
+        // 1. The flag-day inputs (EQUIV header below) are evaluated on the DECLARED height,
+        //    verbatim. Shifting a flag-day boundary by the reorg buffer would move the
+        //    cutover block itself, which is its own fork.
+        // 2. The height the capability set is RESOLVED at is the declared height BURIED by
+        //    the canonical reorg buffer, because that is what the hub actually resolved at:
+        //    CapabilitySnapshot subtracts CANONICAL_REORG_BUFFER from every height it is
+        //    handed (_buriedBlockIndex) while AttestationRound passes the raw
+        //    request.block_index, so the responsible set the hub signed is the set at
+        //    (declared - 6). Verifying at the raw height resolved a DIFFERENT set whenever a
+        //    validator's stake activated or deactivated inside (declared - 6, declared],
+        //    which rejects a correct deterministic response or stalls the round. Gated:
+        //    below the flag-day this is the declared height unchanged, so pre-flag-day
+        //    acceptance is byte-preserved.
+        let declaredBlock = request ? Number(request.block_index) : Number(data['BLOCK_INDEX']);
+        let snapshotBlock = srb.buriedSnapshotBlock(declaredBlock, this.config['NETWORK']);
 
         // Build canonical signing message (UTF-8 Buffer). At/above the EQUIV flag-day
         // (WI-2 bump 2) the raw string is wrapped in the uniform header (TAG=XATTEST,
@@ -457,7 +474,7 @@ class Attest {
         let canonId      = (await this.actions.protocolChanges.isEnabled('ATTEST_CANONICAL_LOWERCASE_ID', data['BLOCK_INDEX']))
                          ? String(requestId) : String(requestIdRaw);
         let canonRaw     = canonId + String(providerId) + responseHash + String(responseStatus) + String(meta || '');
-        if(eq.isEquivHeaderActive(snapshotBlock, this.config['NETWORK']))
+        if(eq.isEquivHeaderActive(declaredBlock, this.config['NETWORK']))
             canonRaw = eq.buildEquivCanonical(eq.ENGINE_TAGS.ATTEST, canonId, 0, canonRaw);
         let canonical    = Buffer.from(canonRaw, 'utf8');
         let validSigs    = 0;
@@ -499,8 +516,12 @@ class Attest {
             // deterministic and keeps the two stat columns symmetric. (request is
             // guaranteed non-null inside this !error block; a null lookup sets
             // 'no matching request' above and skips the loop.)
+            // DECLARED, not buried: _computeResponsibleSet takes the declared height and
+            // buries it internally , so every site that computes this request's
+            // responsible set (admission, the persisted RESPONSIBLE_SET_JSON, the expiry
+            // missed_count charge, the fulfilled fee split, and here) resolves ONE set.
             let responsible = new Set(await this._computeResponsibleSet(
-                requestId, request.redundancy, snapshotBlock
+                requestId, request.redundancy, declaredBlock
             ));
             verifiedSigs = verifiedSigs.filter(s => responsible.has(s.pubkey));
             validSigs    = verifiedSigs.length;
@@ -722,10 +743,27 @@ class Attest {
             return [];
         // On BTC, `blockIndex` IS a BTC height, so the gate is on its intended plane
         // and flips at the anchor in lockstep with the hub.
+        //
+        // `blockIndex` is the DECLARED height (the request's block). Two different things
+        // come off it and  is the difference (see _parseResponse):
+        //   - the STAKE_WEIGHTED_QUORUM flag-day is evaluated on the declared height,
+        //     verbatim, because moving a cutover block by the reorg buffer is its own fork;
+        //   - the set is RESOLVED at the declared height BURIED by CANONICAL_REORG_BUFFER,
+        //     which is where the hub's CapabilitySnapshot resolved it (AttestationRound
+        //     hands it the raw request.block_index and it subtracts the buffer). Resolving
+        //     at the raw height selects a different responsible set than the hub whenever a
+        //     validator's stake activates or deactivates inside (declared - 6, declared],
+        //     which is exactly the byte-for-byte agreement this routine's header demands.
+        // Burying HERE rather than at the call sites is deliberate: five paths compute this
+        // request's responsible set (v0 admission, the persisted RESPONSIBLE_SET_JSON, the
+        // v1 verify filter, the v2 expiry missed_count charge, the fulfilled fee split) and
+        // they must resolve ONE set or the stat columns and the fee split desynchronize.
+        // Flag-day gated, so below the gate this is the declared height unchanged.
         let weighted = swq.isStakeWeightedQuorumActive(blockIndex, this.config['NETWORK']);
+        let resolveBlock = srb.buriedSnapshotBlock(blockIndex, this.config['NETWORK']);
         let validators = weighted
-            ? await this.indexerDb.getStakeWeightsByCapability('attestation', blockIndex)
-            : await this.indexerDb.getValidatorsByCapability('attestation', blockIndex);
+            ? await this.indexerDb.getStakeWeightsByCapability('attestation', resolveBlock)
+            : await this.indexerDb.getValidatorsByCapability('attestation', resolveBlock);
         if(!validators || validators.length === 0) return [];
         let withHash = validators.map(v => {
             let pk = String(v.pubkey).toLowerCase();
@@ -824,10 +862,17 @@ class Attest {
     // garbage-then-valid pair for one qualified validator cannot suppress the real
     // signature and under-count a quorate relay.
     async _verifyRelayQuorum(canonical, sigs, snapshotBlock, network){
+        // Same declared-vs-resolved split as the v1 path above . The wire
+        // carries the RAW snapshot_block, but AttestationRelay resolved its cross_chain
+        // signer set through CapabilitySnapshot, which buries by CANONICAL_REORG_BUFFER,
+        // so re-resolving at the raw height admits or drops any validator whose stake
+        // moved inside the buried window. The weighted-quorum flag-day still keys on the
+        // DECLARED height: shifting a cutover block by the buffer is its own fork.
+        let resolveBlock = srb.buriedSnapshotBlock(snapshotBlock, network);
         let weighted   = swq.isStakeWeightedQuorumActive(snapshotBlock, network);
         let validators = weighted
-            ? await this.indexerDb.getStakeWeightsByCapability('cross_chain', snapshotBlock)
-            : await this.indexerDb.getValidatorsByCapability('cross_chain', snapshotBlock);
+            ? await this.indexerDb.getStakeWeightsByCapability('cross_chain', resolveBlock)
+            : await this.indexerDb.getValidatorsByCapability('cross_chain', resolveBlock);
         let N = (validators && validators.length) ? validators.length : 0;
         if(N === 0)
             return { ok: false, detail: 'cross_chain snapshot empty at block ' + snapshotBlock };

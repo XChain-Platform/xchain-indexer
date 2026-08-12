@@ -143,9 +143,12 @@ function buildBatch(batchSeq, rawMatches, oracleKeys, crossKeys, opts) {
     });
     let snaps = [];
     // Distinct source per signing key (no DELEGATE) at equal weight → the
-    // weighted threshold mirrors the legacy 2f+1 count.
-    for (let kp of crossKeys)  snaps.push({ snapshot_block: SNAPSHOT_BLOCK, capability: 'cross_chain',    signing_pubkey: kp.pubkey, source: 'src_' + kp.pubkey.slice(0, 16), amount: '5' });
-    for (let kp of oracleKeys) snaps.push({ snapshot_block: SNAPSHOT_BLOCK, capability: 'oracle_publish', signing_pubkey: kp.pubkey, source: 'src_' + kp.pubkey.slice(0, 16), amount: '5' });
+    // weighted threshold mirrors the legacy 2f+1 count. opts.snapAmount raises that
+    // shared weight, which is how a test models an archive a hub built at a
+    // GOVERNANCE MIN_STAKE above this node's local floor .
+    let snapAmount = String(opts.snapAmount != null ? opts.snapAmount : '5');
+    for (let kp of crossKeys)  snaps.push({ snapshot_block: SNAPSHOT_BLOCK, capability: 'cross_chain',    signing_pubkey: kp.pubkey, source: 'src_' + kp.pubkey.slice(0, 16), amount: snapAmount });
+    for (let kp of oracleKeys) snaps.push({ snapshot_block: SNAPSHOT_BLOCK, capability: 'oracle_publish', signing_pubkey: kp.pubkey, source: 'src_' + kp.pubkey.slice(0, 16), amount: snapAmount });
     let callKeys = opts.callKeys || crossKeys;   // calls must be signed by the cross_chain set
     let calls = (opts.calls || []).map(rc => {
         let c = Object.assign({}, rc);

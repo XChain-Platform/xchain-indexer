@@ -31,11 +31,11 @@ const gate   = require('../../src/price_sig_tally_activation.js');
 describe('PRICE v0 signature-tally flag-day  @regression', function () {
 
     describe('activation map', function () {
-        it('mainnet is armed to the ratified 969500 BTC anchor, not the shipped 961000 train', function () {
+        it('mainnet is armed to the ratified 963000 BTC anchor, not the shipped 961000 train', function () {
             // 961000 is ~2026-08-04 and its deploy train shipped 2026-07-23, so arming
             // there would require a second fleet-wide deploy inside a week; a node that
             // missed it forks on the first round with a garbage sig ahead of a real one.
-            assert.strictEqual(gate.PRICE_SIG_TALLY_ACTIVATION.mainnet, 969500);
+            assert.strictEqual(gate.PRICE_SIG_TALLY_ACTIVATION.mainnet, 963000);
         });
 
         it('testnet and regtest are genesis-on', function () {
@@ -46,9 +46,9 @@ describe('PRICE v0 signature-tally flag-day  @regression', function () {
 
     describe('isPriceSigTallyVerifyFirstActive', function () {
         it('is inactive below the mainnet anchor and active at/above it', function () {
-            assert.strictEqual(gate.isPriceSigTallyVerifyFirstActive(969499, 'mainnet'), false);
-            assert.strictEqual(gate.isPriceSigTallyVerifyFirstActive(969500, 'mainnet'), true);
-            assert.strictEqual(gate.isPriceSigTallyVerifyFirstActive(969501, 'mainnet'), true);
+            assert.strictEqual(gate.isPriceSigTallyVerifyFirstActive(962999, 'mainnet'), false);
+            assert.strictEqual(gate.isPriceSigTallyVerifyFirstActive(963000, 'mainnet'), true);
+            assert.strictEqual(gate.isPriceSigTallyVerifyFirstActive(963001, 'mainnet'), true);
         });
 
         it('is active from genesis on testnet and regtest', function () {
@@ -59,8 +59,8 @@ describe('PRICE v0 signature-tally flag-day  @regression', function () {
         it('accepts the numeric-string heights the wire actually carries', function () {
             // PRICE v0 params arrive as strings; BTC_BLOCK_HEIGHT is parsed but the
             // predicate must not depend on the caller having done so.
-            assert.strictEqual(gate.isPriceSigTallyVerifyFirstActive('969500', 'mainnet'), true);
-            assert.strictEqual(gate.isPriceSigTallyVerifyFirstActive('969499', 'mainnet'), false);
+            assert.strictEqual(gate.isPriceSigTallyVerifyFirstActive('963000', 'mainnet'), true);
+            assert.strictEqual(gate.isPriceSigTallyVerifyFirstActive('962999', 'mainnet'), false);
         });
 
         it('fails closed on an unknown network', function () {

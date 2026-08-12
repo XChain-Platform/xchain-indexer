@@ -2192,9 +2192,23 @@ class Utility {
     // release, so an uncapped mirror backlog would blow BLOCK_PROCESS_TIMEOUT and wedge
     // every operator of the chain at the identical block (). Overflow carries
     // forward in (snapshot_block, match_id) order; nothing is dropped.
+    //
+    // The cap is FLAG-DAY GATED on CROSS_SETTLE_PER_BLOCK_CAP (, operator ruling
+    // of 2026-08-11, option b), because deferring a settlement to a later block moves
+    // actions rows, the contract hash and the checkpoint preimage: applying it to blocks
+    // the live mainnet chains already settled would fork a from-genesis replay against
+    // them. Pre-flag-day the pass drains the full effective backlog exactly as before,
+    // so this is a byte-for-byte no-op on every already-indexed block. The gate must be
+    // consulted per block (not cached) so the switch happens at the same block on every
+    // operator; testnet/regtest are genesis-active, so both suites and drills run capped.
     async processCrossChainSettlements(actions, db, block_index, block_time){
         let coin    = db.config['COIN'];
-        let cap     = require('./protocol/constants.js').CROSS_SETTLE_MAX_PER_BLOCK;
+        let capped  = await actions.protocolChanges.isEnabled('CROSS_SETTLE_PER_BLOCK_CAP', block_index);
+        // MAX_SAFE_INTEGER rather than 0/undefined for the pre-flag-day limit: the
+        // db-side default treats a falsy limit as "caller forgot" and re-applies the
+        // protocol cap, which would silently gate-bypass in the ON direction.
+        let cap     = capped ? require('./protocol/constants.js').CROSS_SETTLE_MAX_PER_BLOCK
+                             : Number.MAX_SAFE_INTEGER;
         let matches = await db.getEffectiveUnsettledMatches(coin, block_time, cap);
         for(let m of matches){
             let data = {};

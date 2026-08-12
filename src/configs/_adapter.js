@@ -68,6 +68,22 @@ function toIndexerConfig(tick, network){
     config['GENESIS_LEDGER_HASH'] = c.genesis.ledgerHash;
     if('dumpHash' in c.genesis) config['GENESIS_DUMP_HASH'] = c.genesis.dumpHash;
 
+    // XCP/XDP airdrop leg . The armed bucket set is bundle data resolved by
+    // coins/index.js, which reads the GENESIS_AIRDROP_* env vars on regtest ONLY, so
+    // these values override config.js's env-derived ones for every network. That is the
+    // whole point of the registration: before it, a mainnet replay node took its bucket
+    // paths, content pins and XCHAIN amounts from whatever the operator exported, so two
+    // nodes with byte-identical snapshot CSVs could mint different allocations under
+    // different synthetic tx hashes. A coin bundle predating the fields leaves them
+    // untouched and config.js's own (now regtest-gated) defaults stand.
+    if('airdropPaths' in c.genesis){
+        config['GENESIS_AIRDROP_PATHS']          = c.genesis.airdropPaths          || [];
+        config['GENESIS_AIRDROP_HASHES']         = c.genesis.airdropHashes         || [];
+        config['GENESIS_AIRDROP_AMOUNTS']        = c.genesis.airdropAmounts        || [];
+        config['GENESIS_AIRDROP_SNAPSHOT_BLOCK'] = c.genesis.airdropSnapshotBlock  || null;
+        config['GENESIS_AIRDROP_SET_HASH']       = c.genesis.airdropSetHash        || null;
+    }
+
     return config;
 }
 

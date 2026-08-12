@@ -3878,6 +3878,28 @@ describe('Database.createValidatorReward() @regression @tier1', function () {
         assert.ok(sql.includes('ON DUPLICATE KEY UPDATE'));
         assert.ok(!sql.includes('INSERT IGNORE'));
     });
+
+    //  / : a reward whose EARN block is not its MATERIALIZATION block (the
+    //  BTC-side anchor derivation) must persist both, or the reorg delete has no key
+    // that names the block which actually minted the row.
+    it('persists the materialization block when the caller passes one, and NULL otherwise', async function () {
+        const db = makeDb();
+        sinon.stub(db, 'getPubkeyId').resolves(3);
+        sinon.stub(db, '_resolveActiveStakeSourceId').resolves(2);
+        const dq = sinon.stub(db, 'doQuery').resolves([]);
+
+        await db.createValidatorReward('deadbeef', 1, 'anchor_BTC', '10', 850000, true, 962400);
+        assert.ok(String(dq.args[0][0]).includes('derive_block_index'), 'the INSERT must name the column');
+        assert.deepStrictEqual(dq.args[0][1].slice(-2), [850000, 962400],
+            'block_index stays the earn-block; derive_block_index is the creating block');
+        // The upsert must refresh it too, or a replayed derive would leave a stale value behind.
+        assert.ok(/ON DUPLICATE KEY UPDATE[\s\S]*derive_block_index=VALUES\(derive_block_index\)/.test(String(dq.args[0][0])));
+
+        dq.resetHistory();
+        await db.createValidatorReward('deadbeef', 2, 'oracle_round', '10', 100, true);
+        assert.strictEqual(dq.args[0][1][6], null,
+            'a same-block writer leaves derive_block_index NULL so the new predicate never matches it');
+    });
 });
 
 // setDelegationDeactivation: returns false when source or pubkey missing

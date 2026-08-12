@@ -39,15 +39,15 @@ const HUB_SRC     = path.resolve(__dirname, '..', '..', '..', 'xchain-hub', 'src
 describe('attest_relay_activation twin parity @regression @tier1', function () {
 
     it('is armed on the ratified  BTC anchor, genesis-on off mainnet', function () {
-        assert.strictEqual(indexer.ATTEST_RELAY_ACTIVATION.mainnet, 969500);
+        assert.strictEqual(indexer.ATTEST_RELAY_ACTIVATION.mainnet, 963000);
         assert.strictEqual(indexer.ATTEST_RELAY_ACTIVATION.testnet, 0);
         assert.strictEqual(indexer.ATTEST_RELAY_ACTIVATION.regtest, 0);
     });
 
     it('is INERT below the anchor and live at it (the item ships gated)', function () {
-        assert.strictEqual(indexer.isAttestRelayActive(969499, 'mainnet'), false);
-        assert.strictEqual(indexer.isAttestRelayActive(969500, 'mainnet'), true);
-        assert.strictEqual(indexer.isAttestRelayActive(969501, 'mainnet'), true);
+        assert.strictEqual(indexer.isAttestRelayActive(962999, 'mainnet'), false);
+        assert.strictEqual(indexer.isAttestRelayActive(963000, 'mainnet'), true);
+        assert.strictEqual(indexer.isAttestRelayActive(963001, 'mainnet'), true);
     });
 
     it('fails closed on anything it cannot evaluate', function () {
@@ -73,7 +73,7 @@ describe('attest_relay_activation twin parity @regression @tier1', function () {
         if (!fs.existsSync(HUB_SRC)) this.skip();
         const hub = require(HUB_SRC);
         assert.deepStrictEqual(hub.ATTEST_RELAY_ACTIVATION, indexer.ATTEST_RELAY_ACTIVATION);
-        for (const [block, network] of [[969499, 'mainnet'], [969500, 'mainnet'], [0, 'regtest'], [7, 'bogusnet']]) {
+        for (const [block, network] of [[962999, 'mainnet'], [963000, 'mainnet'], [0, 'regtest'], [7, 'bogusnet']]) {
             assert.strictEqual(hub.isAttestRelayActive(block, network),
                 indexer.isAttestRelayActive(block, network),
                 'predicate disagreed at ' + network + ':' + block);

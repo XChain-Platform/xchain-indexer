@@ -739,14 +739,27 @@ class Rollback {
                 // round, so duplicate log rows carry an identical value and INSERT IGNORE is
                 // value-stable + idempotent (no earliest-debit tiebreak needed, unlike the slash
                 // restores above where prev_amount can differ across repeated slashes of one row).
+                //
+                // The surviving-earn-block test alone is NOT sufficient once a reward can be
+                // MATERIALIZED later than it is earned . An  derived anchor reward
+                // carries block_index = the checkpoint's SNAPSHOT_BLOCK but is written while the
+                // BTC indexer processes a much later block, recorded here as
+                // reward_derive_block_index. A loser materialized INSIDE the orphaned range has a
+                // surviving earn-block yet must NOT be restored: the replay to reorg_block-1 never
+                // ran the derivation, so restoring it would mint an orphan the replay does not have
+                // and fork SUM(validator_rewards) in the other direction. Require BOTH heights to
+                // survive; NULL (every same-block writer, and every row pre-dating the column)
+                // keeps the original earn-block-only behavior.
                 query = `INSERT IGNORE INTO validator_rewards
-                            (source_id, signing_pubkey_id, reward_type, round_reference, amount, block_index)
+                            (source_id, signing_pubkey_id, reward_type, round_reference, amount,
+                             block_index, derive_block_index)
                          SELECT d.source_id, d.signing_pubkey_id, d.reward_type, d.round_reference,
-                                d.amount, d.reward_block_index
+                                d.amount, d.reward_block_index, d.reward_derive_block_index
                            FROM anchor_reward_reconcile_log d
                           WHERE d.block_index >= ?
-                            AND d.reward_block_index < ?`;
-                args = [block_index, block_index];
+                            AND d.reward_block_index < ?
+                            AND (d.reward_derive_block_index IS NULL OR d.reward_derive_block_index < ?)`;
+                args = [block_index, block_index, block_index];
                 await this.indexerDb.doQuery(query, args);
 
                 // Cooldown-maturity reversal was here; it is now in _reverseCooldownMaturities,
@@ -905,6 +918,37 @@ class Rollback {
                 query = `DELETE FROM ` + table + ` WHERE block_index >= ?`;
                 args  = [block_index];
                 await this.indexerDb.doQuery(query, args);
+            }
+
+            // Second scoping key for validator_rewards: the MATERIALIZATION block (,
+            // ). The loop above deletes on block_index, which for a reward is its
+            // EARN block. That is the same block for every writer except the  BTC-side
+            // anchor/archive derivation, which earns at the checkpoint's SNAPSHOT_BLOCK S but
+            // creates the row while processing a later BTC block B (stamped derive_block_index).
+            // A reorg to any H in (S, B] orphans the block that MINTED the reward while leaving
+            // block_index = S below the delete's scope, so the row survived as a COLLECT-
+            // spendable credit that a from-genesis replay to H-1 has not derived yet: the next
+            // COLLECT reads a larger SUM(validator_rewards) here than on a freshly-synced node,
+            // which is a ledger-hashed fork. Deleting on the creating block makes the reorged
+            // node match the replay, and the derivation is idempotent, so the row re-materializes
+            // when the canonical chain reaches the mirrored attestation again.
+            //
+            // Runs AFTER the loop (so it also covers a row the earn-block delete already took,
+            // as a no-op) and BEFORE the index_addresses/index_tickers deletes below, which
+            // require that no surviving row still points at an id they are about to remove.
+            // NULL derive_block_index (every same-block writer, and every row written before the
+            // column existed) is never matched, so this is byte-neutral until the derive flag-day
+            // arms. Wrapped for the schema gap on a node that has not yet taken the column.
+            try {
+                await this.indexerDb.doQuery(
+                    `DELETE FROM validator_rewards WHERE derive_block_index >= ?`, [block_index]);
+            } catch(e){
+                // Swallow ONLY a genuine schema gap (1054 unknown column) on a DB that predates
+                // the migration; on such a node no derived reward can exist either, so there is
+                // nothing to delete. Every other fault (deadlock, lock-wait, killed connection)
+                // must propagate so the whole reorg transaction rolls back rather than committing
+                // a partial rollback that keeps a spendable reward.
+                if(!(e && (e.errno === 1146 || e.errno === 1054))) throw e;
             }
 
             // Roll back the index id lookups (index_addresses / index_tickers).

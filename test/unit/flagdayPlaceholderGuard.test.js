@@ -15,15 +15,29 @@
  *
  *  flag-day placeholder regression gate.
  *
- * On 2026-07-16 the operator ratified 2026-08-07 00:00 UTC (unix 1786060800)
- * as the coordinated activation anchor, and  derived every remaining
- * placeholder from it:
- *   - the four 2026-07-15 hardening gates in protocol_changes.js moved from
- *     the 1798761600 (2027-01-01) placeholder onto the ratified anchor,
- *     joining the confirmed 2.0.0 contract-era cohort;
- *   - ARCHIVE_REWARD_ACTIVATION and RETRACTION_SIGNING_ACTIVATION moved from
- *     the 983000 (~2027-01-01) BTC placeholder to 969500, the BTC
- *     snapshot_block landing ~2026-08-07 (tip 957062 on 07-07 + ~144/day).
+ * On 2026-07-16 the operator ratified a coordinated activation anchor and
+ *  derived every remaining placeholder from it. The set has TWO halves,
+ * because the gates it covers are not all keyed on the same thing:
+ *   - a TIME half. The 2026-07-15 hardening gates in protocol_changes.js moved
+ *     off the 1798761600 (2027-01-01) placeholder onto the ratified timestamp,
+ *     joining the confirmed 2.0.0 contract-era cohort. That timestamp has since
+ *     been repinned twice (, then) and now reads 1786060800
+ *     (2026-08-07);
+ *   - a BTC-HEIGHT half, for the gates keyed on a snapshot_block rather than a
+ *     block time. It moved off the 983000 (~2027-01-01) placeholder onto 969500.
+ *
+ *, 2026-08-12: the two halves had drifted eight weeks apart, because
+ * both TIME repins moved only the timestamp and left 969500 (~2026-10-01)
+ * standing. A fleet in that window runs hubs whose reward, retraction, relay and
+ * governance-snapshot rules are still pre-flag-day while their indexers are past
+ * theirs, which is the boundary-skew shape that halts a follower. The height
+ * half is therefore re-derived onto 963000, the  pre-freeze train boundary
+ * (tip 959,853 on 2026-07-27 + 21d at ~144/day) already armed for BTC:mainnet in
+ * stateHash.js, caret_ref_strict_activation.js and list_edit_resolution_
+ * activation.js. It is NOT re-derived onto the timestamp's own calendar date:
+ * 2026-08-07 is in the past, and a height in the past is not a flag day at all
+ * (a node replaying from genesis applies the rule from it while a long-running
+ * node never did, and the two diverge at the first hash comparison).
  *
  * This suite is the gate the runbook's "grep for placeholder regressions"
  * verify step automates: a re-introduced placeholder (or a gate silently
@@ -31,7 +45,9 @@
  * consensus protection dark on mainnet until 2027. The ONLY line permitted
  * to carry 1798761600 is the CROSS_CHAIN_ROYALTY create-side entry, whose
  * one-quarter-after-CONTROLLER_GUARD deny window is CONFIRMED by design
- * (flag-day inventory, Decision 5).
+ * (flag-day inventory, Decision 5). Since  it also asserts the height
+ * half is ONE value across every member: the defect that item recorded was not
+ * a wrong number, it was a repin that moved some members and not others.
  ********************************************************************/
 
 'use strict';
@@ -43,7 +59,7 @@ const path   = require('path');
 const SRC = path.join(__dirname, '..', '..', 'src');
 
 const RATIFIED_ANCHOR_TS  = 1786060800;   // 2026-08-07 00:00:00 UTC
-const RATIFIED_BTC_HEIGHT = 969500;       // BTC snapshot_block ~2026-08-07
+const RATIFIED_BTC_HEIGHT = 963000;       //  re-pin: the  pre-freeze train boundary
 const ROYALTY_CREATE_SIDE = 1798761600;   // 2027-01-01, CONFIRMED (deny window)
 
 const XC104_TS_GATES = [
@@ -95,6 +111,59 @@ describe(' flag-day placeholder guard @regression @tier1', function () {
         assert.strictEqual(mod.isRetractionSigningActive(RATIFIED_BTC_HEIGHT, 'mainnet'), true);
     });
 
+    //: the whole BTC-height half moves together or not at all.
+    //
+    // The two named tests above pin ARCHIVE_REWARD and RETRACTION_SIGNING because
+    // those were the two members  derived. PRICE_SIG_TALLY  and
+    // ATTEST_RELAY  were armed onto the same anchor later and were pinned
+    // nowhere in this file, which is exactly how  happened: the  and
+    //  repins moved the TIME half and nothing failed when the HEIGHT half
+    // stayed behind. Enumerating the cohort by name here makes a partial re-pin a
+    // CI failure rather than an eight-week boundary skew nobody notices.
+    const XC104_HEIGHT_COHORT = [
+        ['anchor_reward_activation.js',        'ARCHIVE_REWARD_ACTIVATION',    'isArchiveRewardActive'],
+        ['retraction_signing_activation.js',   'RETRACTION_SIGNING_ACTIVATION', 'isRetractionSigningActive'],
+        ['price_sig_tally_activation.js',      'PRICE_SIG_TALLY_ACTIVATION',   'isPriceSigTallyVerifyFirstActive'],
+        ['attest_relay_activation.js',         'ATTEST_RELAY_ACTIVATION',      'isAttestRelayActive'],
+    ];
+
+    it('every member of the  BTC-height cohort carries the SAME mainnet height', function () {
+        for (const [file, mapName] of XC104_HEIGHT_COHORT) {
+            const map = require(path.join(SRC, file))[mapName];
+            assert.ok(map && typeof map === 'object', file + ' must export ' + mapName);
+            assert.strictEqual(map.mainnet, RATIFIED_BTC_HEIGHT,
+                mapName + ' is at ' + map.mainnet + ', not the cohort height ' + RATIFIED_BTC_HEIGHT +
+                '. A re-pin that moves some members and not others leaves the fleet running one ' +
+                'rule set on its hubs and another on its indexers between the two boundaries.');
+            // testnet/regtest are genesis-active for the whole cohort; a member that
+            // quietly arms a venue height is a different gate wearing the cohort's name.
+            assert.strictEqual(map.testnet, 0, mapName + '.testnet must be genesis-active');
+            assert.strictEqual(map.regtest, 0, mapName + '.regtest must be genesis-active');
+        }
+    });
+
+    it('every cohort member flips exactly at the shared height, not one block either side', function () {
+        for (const [file, , fnName] of XC104_HEIGHT_COHORT) {
+            const fn = require(path.join(SRC, file))[fnName];
+            assert.strictEqual(fn(RATIFIED_BTC_HEIGHT - 1, 'mainnet'), false, fnName + ' fired below the cohort height');
+            assert.strictEqual(fn(RATIFIED_BTC_HEIGHT, 'mainnet'), true, fnName + ' did not fire at the cohort height');
+            assert.strictEqual(fn(RATIFIED_BTC_HEIGHT + 1, 'mainnet'), true, fnName + ' did not stay on above the cohort height');
+        }
+    });
+
+    it('the cohort height is still in the FUTURE relative to the ratified TIME anchor era', function () {
+        // The failure this guards is the one the  re-pin had to avoid: pinning
+        // the height half onto the calendar date of the TIME half. That date is past,
+        // and a height in the past is not a flag day (a genesis replay applies the rule
+        // from it, a long-running node never did, and they diverge at the first hash).
+        // 961000 is the last boundary the chain has already crossed, so anything at or
+        // below it is by definition retroactive.
+        const CROSSED = require(path.join(SRC, 'anchor_reward_activation.js')).ANCHOR_REWARD_ACTIVATION.mainnet;
+        assert.ok(RATIFIED_BTC_HEIGHT > CROSSED,
+            'the  height cohort (' + RATIFIED_BTC_HEIGHT + ') is at or below the already-crossed ' +
+            CROSSED + ' boundary, which arms it retroactively');
+    });
+
     it('SLASH_BURNS_PENDING_STAKE mainnet_block equals EQUIV_HEADER_ACTIVATION.mainnet (no duplicated-constant drift, #3134)', function () {
         // The gate is deliberately anchored to the EQUIV flag-day HEIGHT, but the literal
         // 961000 is duplicated in protocol_changes.js rather than derived from the shared map.
@@ -125,16 +194,19 @@ describe(' flag-day placeholder guard @regression @tier1', function () {
     // sibling job sets XCHAIN_REQUIRE_SIBLINGS=1, where a missing sibling hard-fails).
     describe('sibling copies carry no placeholder regression', function () {
         // NOTE (#2759): xchain-documentation/protocol/constants.js is deliberately NOT in
-        // this substring loop. Its `mainnet: 969500` substring is vacuously satisfied by
+        // this substring loop. Its `mainnet: 963000` substring is vacuously satisfied by
         // ARCHIVE_REWARD_ACTIVATION, so a substring check on the docs file could never fail
         // for the retraction gate. The docs arm is asserted by named export below instead.
         const SIBLING_FILES = [
             '../../../xchain-hub/src/anchor_reward_activation.js',
             '../../../xchain-hub/src/retraction_signing_activation.js',
             '../../../xchain-explorer/src/retraction_signing_activation.js',
-            // : the PRICE v0 signature-tally gate rides the SAME ratified 969500
+            // : the PRICE v0 signature-tally gate rides the SAME ratified 963000
             // anchor, so a future re-anchor has to move it along with the pair above.
             '../../../xchain-hub/src/price_sig_tally_activation.js',
+            //  /: the ATTEST relay gate rides it too and was listed
+            // nowhere here, so the  and  repins could not have failed on it.
+            '../../../xchain-hub/src/attest_relay_activation.js',
         ];
 
         for (const rel of SIBLING_FILES) {
@@ -176,7 +248,7 @@ describe(' flag-day placeholder guard @regression @tier1', function () {
         });
 
         // , same reasoning: the PRICE v0 signature-tally gate is armed to the
-        // ratified 969500 anchor, so it belongs to the height cohort this file guards.
+        // ratified 963000 anchor, so it belongs to the height cohort this file guards.
         // A substring check on the docs file is vacuous here (several maps carry that
         // literal), so bind it by NAMED EXPORT to both the ratified height and the local
         // copy: a re-anchor that moves one side and not the other now trips CI.
@@ -196,6 +268,50 @@ describe(' flag-day placeholder guard @regression @tier1', function () {
             assert.deepStrictEqual(local, canon.PRICE_SIG_TALLY_ACTIVATION,
                 'the local price_sig_tally_activation.js map drifted from the canonical constants.js map');
         });
+
+        //, same reasoning again for the remaining two cohort members.
+        it('xchain-documentation/protocol/constants.js pins ATTEST_RELAY_ACTIVATION and ARCHIVE_REWARD_ACTIVATION by named export', function () {
+            const p = path.resolve(__dirname, '../../../xchain-documentation/protocol/constants.js');
+            if (!fs.existsSync(p)) {
+                if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                    assert.fail('required sibling missing: ' + p);
+                return this.skip();
+            }
+            const canon = require(p);
+            for (const [mapName, file] of [
+                ['ATTEST_RELAY_ACTIVATION',   'attest_relay_activation.js'],
+                ['ARCHIVE_REWARD_ACTIVATION', 'anchor_reward_activation.js'],
+            ]) {
+                assert.ok(canon[mapName] && typeof canon[mapName] === 'object',
+                    'constants.js must export a ' + mapName + ' map');
+                assert.strictEqual(canon[mapName].mainnet, RATIFIED_BTC_HEIGHT,
+                    'canonical ' + mapName + ' mainnet height must be the cohort height ' + RATIFIED_BTC_HEIGHT);
+                assert.deepStrictEqual(require(path.join(SRC, file))[mapName], canon[mapName],
+                    'the local ' + file + ' ' + mapName + ' map drifted from the canonical constants.js map');
+            }
+        });
+
+        // GOV_SNAPSHOT_ACTIVATION  is the fifth cohort member and the only one
+        // that is hub-only and NOT exported: it is a file-local const inside
+        // Governance.js. Requiring that module from here would drag in the whole hub
+        // engine, so read the declaration out of the source instead. It still has to be
+        // asserted somewhere, because it was the third file  named and nothing in
+        // this tree could previously fail when a re-pin passed it by.
+        it('xchain-hub/src/Governance.js declares GOV_SNAPSHOT_ACTIVATION at the cohort height', function () {
+            const p = path.resolve(__dirname, '../../../xchain-hub/src/Governance.js');
+            if (!fs.existsSync(p)) {
+                if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                    assert.fail('required sibling missing: ' + p);
+                return this.skip();
+            }
+            const m = fs.readFileSync(p, 'utf8')
+                .match(/const\s+GOV_SNAPSHOT_ACTIVATION\s*=\s*\{\s*mainnet:\s*(\d+)\s*,\s*testnet:\s*(\d+)\s*,\s*regtest:\s*(\d+)\s*\}/);
+            assert.ok(m, 'GOV_SNAPSHOT_ACTIVATION declaration not found in Governance.js (renamed or reshaped?)');
+            assert.strictEqual(parseInt(m[1]), RATIFIED_BTC_HEIGHT,
+                'GOV_SNAPSHOT_ACTIVATION.mainnet is ' + m[1] + ', not the cohort height ' + RATIFIED_BTC_HEIGHT);
+            assert.strictEqual(parseInt(m[2]), 0, 'GOV_SNAPSHOT_ACTIVATION.testnet must be genesis-active');
+            assert.strictEqual(parseInt(m[3]), 0, 'GOV_SNAPSHOT_ACTIVATION.regtest must be genesis-active');
+        });
     });
 
     // #2734: retraction_signing_activation.js is a fork-relevant flag-day twin that
@@ -204,7 +320,7 @@ describe(' flag-day placeholder guard @regression @tier1', function () {
     // (a comparator flip >= -> >, a testnet/regtest value change, an added second map,
     // or any body rewrite) would let the hub sign under one era rule while a mirror
     // enforces another - with no CI signal. The substring checks above only prove the
-    // literal `mainnet: 969500` appears SOMEWHERE in each copy; they pass through all of
+    // literal `mainnet: 963000` appears SOMEWHERE in each copy; they pass through all of
     // those drifts. Assert full-file byte-identity of the hub and explorer copies against
     // the local indexer copy (all three are byte-identical today, headers included, so a
     // plain string compare is correct). Same skip machinery as the sibling sweep above.

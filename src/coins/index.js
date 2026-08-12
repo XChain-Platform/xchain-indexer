@@ -24,7 +24,10 @@
  * consensusHash(tick, network) returns the sha256 of the consensus-critical
  * subset (network byte-prefixes, addresses, fee math, gas schedule, staking),
  * the value the per-service content-pin verifies against. Genesis pins are
- * deliberately excluded here because genesis.js already fail-closes on them.
+ * deliberately excluded here because genesis.js already fail-closes on them,
+ * and chainGenesisHash (the node's own block-0 hash) is excluded because it
+ * identifies the ENDPOINT rather than deciding how bytes are read, so pinning
+ * one for a coin/network must not move CONSENSUS_CONFIG_PIN.
  *
  * To add a chain: drop a <COIN>.js data file in this directory and add it to
  * COIN_FILES below. Nothing else in this file changes.
@@ -94,6 +97,15 @@ function coerceEnv(raw, type){
     }
     if(type === 'csv_lower')
         return String(raw).split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    // 'csv' drops empty entries; 'csv_sparse' keeps them. The difference matters for
+    // index-aligned lists (the genesis airdrop set): entry N of the hashes list pins
+    // entry N of the paths list, and an empty hash entry legitimately means "this
+    // bucket is unpinned", so compacting it would silently shift every later pin onto
+    // the wrong file. Both parse exactly like the indexer's historical splitCsv().
+    if(type === 'csv')
+        return String(raw).split(',').map(s => s.trim()).filter(s => s !== '');
+    if(type === 'csv_sparse')
+        return String(raw).split(',').map(s => s.trim());
     return String(raw); // 'str'
 }
 
@@ -223,6 +235,12 @@ function getCoinConfig(tick, network){
         network:       network,
         net:           clone(netBlock.net),
         firstBlock:    netBlock.firstBlock,
+        // Block-0 hash of the chain, or null when unpinned (). Exposed here so
+        // consumers can refuse an endpoint serving a different chain at the same tier,
+        // and kept OUT of consensusSubset() on purpose: it identifies the endpoint, not
+        // how bytes are read, so pinning one must not move CONSENSUS_CONFIG_PIN. A coin
+        // file that predates the field resolves to null (unpinned = check skipped).
+        chainGenesisHash: netBlock.chainGenesisHash ?? null,
         addresses:     addresses,
         genesis:       resolveGenesis(netBlock.genesis, network),
         legacyFees:                     clone(src.legacyFees),

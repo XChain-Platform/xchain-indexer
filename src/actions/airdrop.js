@@ -245,11 +245,17 @@ class Airdrop {
 
             // Fetch TICK's allow/block lists ONCE before the recipient loop, then check membership in
             // memory, mirroring isActionAllowed()'s no-block_index decision exactly (approved set unchanged).
+            // : the two lists are held as Sets so each recipient costs an O(1) hash probe instead of
+            // an O(n) array scan, which kept the loop O(recipients x list). Membership is the only thing
+            // asked of them, so the list's own order never mattered; determinism rides on `recipients`,
+            // whose iteration (and therefore the insertion order of `approved`, and of the credits built
+            // from it downstream) is unchanged. An EMPTY list stays truthy as a Set exactly as it was as an
+            // array, so an empty ALLOW_LIST still approves nobody.
             let approved = new Set();
             let hasAllowList = tokenInfo && !this.util.isNull(tokenInfo['ALLOW_LIST']) && this.util.isNumeric(tokenInfo['ALLOW_LIST']);
             let hasBlockList = tokenInfo && !this.util.isNull(tokenInfo['BLOCK_LIST']) && this.util.isNumeric(tokenInfo['BLOCK_LIST']);
-            let recipientAllowList = hasAllowList ? await this.indexerDb.getList(tokenInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : null;
-            let recipientBlockList = hasBlockList ? await this.indexerDb.getList(tokenInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : null;
+            let recipientAllowList = hasAllowList ? new Set(await this.indexerDb.getList(tokenInfo['ALLOW_LIST'], data['BLOCK_INDEX'])) : null;
+            let recipientBlockList = hasBlockList ? new Set(await this.indexerDb.getList(tokenInfo['BLOCK_LIST'], data['BLOCK_INDEX'])) : null;
 
             // Verify airdrop is allowed to recipient (allow/block lists)
             for(let address of recipients){
@@ -257,10 +263,10 @@ class Airdrop {
                     continue;
                 let allowed = true;
                 // False if we have an ALLOW_LIST and address is NOT on it
-                if(allowed && recipientAllowList && !recipientAllowList.includes(address))
+                if(allowed && recipientAllowList && !recipientAllowList.has(address))
                     allowed = false;
                 // False if we have a BLOCK_LIST and address IS on it
-                if(allowed && recipientBlockList && recipientBlockList.includes(address))
+                if(allowed && recipientBlockList && recipientBlockList.has(address))
                     allowed = false;
                 if(allowed)
                     approved.add(address);

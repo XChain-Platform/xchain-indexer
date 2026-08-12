@@ -176,8 +176,20 @@ class Mint {
         // (issue.js), so the token can only ever be created (and its caps/window authored) by
         // the operator; only the subsequent minting is public.
 
-        // Verify minting AMOUNT will not exceed MAX_SUPPLY
-        if(!error && this.util.bcgt(this.util.bcadd(data['SUPPLY'],data['AMOUNT'],data['DECIMALS']), this.util.bcadd(data['MAX_SUPPLY'],0,data['DECIMALS'])))
+        // Verify minting AMOUNT will not exceed MAX_SUPPLY. MAX_SUPPLY is stored as 0 when the
+        // ISSUE omits it (createToken / db.js), and 0 is the documented UNCAPPED sentinel: the
+        // token has no supply ceiling. At/after the UNCAPPED_MAX_SUPPLY_ZERO flag-day the
+        // comparison is skipped when no positive cap is declared, guarded by bcgt(MAX_SUPPLY,0)
+        // exactly like the sibling MAX_MINT / MINT_ADDRESS_MAX / MINT_START_BLOCK /
+        // MINT_STOP_BLOCK optional-cap checks. Below it the legacy behaviour stands, where
+        // bcgt(SUPPLY+AMOUNT, 0) is true for any positive AMOUNT, so every mint on an uncapped
+        // token is rejected and the token is unmintable . Gated because the fix is a
+        // validity LOOSENING; see protocol_changes.js for why an ungated flip forks the fleet.
+        // Resolved only on the still-valid path with no cap declared, so an already-rejected
+        // action never spends a decoder-DB read on an activation it cannot use.
+        let uncappedSupply = !error && !this.util.bcgt(data['MAX_SUPPLY'], 0) &&
+            await this.actions.protocolChanges.isEnabled('UNCAPPED_MAX_SUPPLY_ZERO', data['BLOCK_INDEX']);
+        if(!error && !uncappedSupply && this.util.bcgt(this.util.bcadd(data['SUPPLY'],data['AMOUNT'],data['DECIMALS']), this.util.bcadd(data['MAX_SUPPLY'],0,data['DECIMALS'])))
             error = 'invalid: mint exceeds MAX_SUPPLY';
 
         // Verify TICK action is allowed from SOURCE (allow/block lists)

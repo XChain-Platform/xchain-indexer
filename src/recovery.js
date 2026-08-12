@@ -67,6 +67,8 @@ const eq      = require('./equivocation_header.js');
 const ccr     = require('./cross_chain_royalty_activation.js');
 const ar      = require('./anchor_reward_activation.js');
 const abas    = require('./archive_batch_author_activation.js');
+const srb     = require('./snapshot_reorg_buffer.js');
+const cmsh    = require('./capability_min_stake_history.js');
 const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
         ARCHIVE_HEAD_GATE_SQL, dedupeArchiveChunks } = require('./anchor-action-query.js');
 // Archive-head version set, spliced rather than hand-copied: recovery must replay the
@@ -99,6 +101,12 @@ class AnchorRecovery {
         // stake-weighted quorum predicate. Required when replaying archives whose
         // snapshot_block is at/above STAKE_WEIGHTED_QUORUM.
         this.util   = opts.util || null;
+        // : operator-supplied block-anchored governance MIN_STAKE history
+        // ({ <capability>: [{activation_block, value}] }), overriding the frozen
+        // per-network table in capability_min_stake_history.js. For a DR run replaying a
+        // federation whose ratified history is not in this build. OPERATOR input only -
+        // nothing archive-derived may ever reach it, or the archive picks its own bar again.
+        this.minStakeActivations = opts.minStakeActivations || null;
         this.log    = opts.log || ((msg) => console.log(msg));
     }
 
@@ -249,7 +257,7 @@ class AnchorRecovery {
 
         // Optional but recommended: archived validator sets must be backed by
         // real on-chain BTC stakes. Fabricated sets cannot survive this.
-        if(this.verifyStakes && this.btcDb) await this._verifyStakes(snaps);
+        if(this.verifyStakes && this.btcDb) await this._verifyStakes(snaps, v1.network);
 
         // Completeness (REC-SUBSET-1): existence alone (above) accepts a real-but-
         // PROPER-SUBSET snapshot - a single small-but-real staker could omit the honest
@@ -359,21 +367,31 @@ class AnchorRecovery {
     // resolving EVERY archived key through a capped query - re-imposing stage 2's cap on the
     // keys stage 1 answers for. Qualification is _verifyCompleteness's job; this stays an
     // existence guard.
-    async _verifyStakes(snaps){
+    //
+    // : BOTH stages re-derive at the DECLARED snapshot_block buried by
+    // CANONICAL_REORG_BUFFER, never at the declared height itself. The hub that wrote
+    // this archive resolved its set through CapabilitySnapshot, which subtracts the
+    // buffer from every height it is handed while the archived row keeps the raw label,
+    // so a validator whose stake DEACTIVATED inside (declared - 6, declared] is absent
+    // from a raw re-resolution and an honest archive is condemned as fabricated,
+    // unrecoverable. Flag-day gated (INERT on mainnet/testnet), so below the gate this
+    // is the declared height unchanged and pre-flag-day archives read exactly as before.
+    async _verifyStakes(snaps, network){
         // A handle exposing only doQuery (unit fixtures, an embedder holding a raw query
         // handle) has no resolver, so stage 1 is the whole answer - exactly as
         // _verifyCompleteness degrades to skipping. The recovery bin always builds a
         // BTC-scoped Database, so production runs both stages.
         let canResolve = typeof this.btcDb.getValidatorsByCapability === 'function';
         for(let g of this._groupSnaps(snaps)){
+            let resolveBlock = srb.buriedSnapshotBlock(g.block, network);
             let undirected = [];
             for(let s of g.rows)
-                if(!(await this._hasDirectStake(s))) undirected.push(s);
+                if(!(await this._hasDirectStake(s, resolveBlock))) undirected.push(s);
             if(undirected.length === 0) continue;
             if(!canResolve || !QUORUM_CAPABILITIES.has(g.capability))
                 throw new Error('archived snapshot pubkey ' + String(undirected[0].signing_pubkey).substring(0, 16) +
                                 '... has no on-chain stake at block ' + undirected[0].snapshot_block + ' (fabricated set?)');
-            let resolved = (await this.btcDb.getValidatorsByCapability(g.capability, g.block, '0')) || [];
+            let resolved = (await this.btcDb.getValidatorsByCapability(g.capability, resolveBlock, '0')) || [];
             let effective = new Set(resolved.map(v => String(v.pubkey).toLowerCase()));
             for(let s of undirected){
                 if(effective.has(String(s.signing_pubkey).toLowerCase())) continue;
@@ -392,7 +410,13 @@ class AnchorRecovery {
     // Stage-1 existence probe: does this pubkey hold ANY active stake at its snapshot block?
     // Delegation-blind by design - a false answer is escalated to the effective-set lookup,
     // never treated as a rejection on its own.
-    async _hasDirectStake(s){
+    //
+    // `atBlock` is the height the probe actually runs at: the archived snapshot_block
+    // buried by the reorg buffer at/above the  flag-day, the declared height
+    // below it. It is passed in rather than re-derived here so stage 1 and stage 2
+    // can never probe two different heights for the same group.
+    async _hasDirectStake(s, atBlock){
+        let at   = (atBlock === undefined) ? s.snapshot_block : atBlock;
         let rows = await this.btcDb.doQuery(
             `SELECT 1 FROM stakes st
              JOIN index_pubkeys ip ON ip.id = st.signing_pubkey_id
@@ -401,7 +425,7 @@ class AnchorRecovery {
                AND st.activation_block <= ?
                AND (st.deactivation_block IS NULL OR st.deactivation_block > ?)
              LIMIT 1`,
-            [String(s.signing_pubkey).toLowerCase(), Number(s.snapshot_block), Number(s.snapshot_block)]);
+            [String(s.signing_pubkey).toLowerCase(), Number(at), Number(at)]);
         return !!(rows && rows.length > 0);
     }
 
@@ -413,67 +437,70 @@ class AnchorRecovery {
     // archive admitted), which let the archive choose its own bar: dropping every lower-weight
     // qualifying source RAISES that minimum, the resolver then returns only the high-weight
     // sources the archive kept, and resolved ⊆ archived passes while the dropped sources are
-    // missing from the stake denominator S. No override is passed now, so db.js applies this
-    // node's LOCAL per-capability MIN_STAKE (the coin config) and the archive can no longer
-    // move the bar. A truncated resolution cannot be trusted complete, so it fails closed
-    // (mirrors meetsStakeThreshold + XHUB-TRUNC-2).
+    // missing from the stake denominator S. That vector stays closed: nothing archive-derived
+    // reaches the threshold. A truncated resolution cannot be trusted complete, so it fails
+    // closed (mirrors meetsStakeThreshold + XHUB-TRUNC-2).
     //
-    // The local floor is NOT the bar the archive was built at, and this is a known residual,
-    // not an assumption. The authoritative threshold is the HUB's block-versioned governance
-    // MIN_STAKE: db.js honours a caller-supplied minStake VERBATIM precisely because the local
-    // config can drift between independently-operated indexers, and xchain-hub's
-    // CapabilitySnapshot passes its own governance value (refusing the snapshot outright when
-    // its registry is live and has none). So a governance MIN_STAKE ABOVE this node's local
-    // floor makes this check STRICTER than the honest hub that wrote the archive: the resolver
-    // reports sources the hub correctly excluded, and completeness false-rejects an honest
-    // archive, halting disaster recovery. Below it, the check merely under-catches. The local
-    // floor is used anyway because it is the only bar in this repo the archive cannot move,
-    // and failing closed on a security check beats trusting the attacker's own threshold; the
-    // error below names the bar so an operator can recognise a governance-drift false-reject.
+    //  replaces the interim bar (this node's LOCAL coin-config MIN_STAKE, applied by
+    // db.js when no override is passed) with an AS-OF-BLOCK reconstruction of the two things
+    // the hub actually built the archive from:
     //
-    // What narrows the exposure without closing it: XChainHub asserts its operator MIN_STAKE
-    // against the canonical BTC.js STAKING.CAPABILITIES at boot, so a conforming hub's
-    // governance value EQUALS this floor and the two agree. That assertion is a boot-time
-    // check against the hub's own config copy, it is bypassable
-    // (XCHAIN_HUB_SKIP_MIN_STAKE_ASSERT=1), and it says nothing about a threshold that changed
-    // across the block history the archive spans. Closing it properly needs an as-of-block
-    // governance-threshold source (the indexer mirrors no hub MIN_STAKE today) - .
+    //   1. THE THRESHOLD. capability_min_stake_history.minStakeAt() resolves the governance
+    //      MIN_STAKE effective at the resolve block from the frozen block-anchored table plus
+    //      the genesis coin-config floor, byte-mirroring xchain-hub
+    //      CapabilityRegistry.getMinStake(capability, blockIndex) - the value
+    //      CapabilitySnapshot hands the indexer, and which db.js honours VERBATIM precisely
+    //      because local config drifts between independently-operated indexers. The local
+    //      floor was NOT the bar the archive was built at: a governance MIN_STAKE ABOVE it
+    //      made this check STRICTER than the honest hub, so the re-resolution reported sources
+    //      the hub correctly excluded and completeness false-rejected an honest archive,
+    //      HALTING disaster recovery; below it the check under-caught. The reconstruction is
+    //      resolved at the BURIED block, because the hub buries first and resolves its
+    //      threshold at the buried height too (CapabilitySnapshot.getSnapshot).
     //
-    // Also still trusted, and NOT closed here: the archived per-source `amount`. Weight
-    // equality against a re-resolution would false-reject an honest archive, because
-    // slashCapabilityStake rewrites `stakes.amount` in place (db.js), so a historical
-    // re-resolution reports post-slash weights; closing that vector needs the same as-of-block
-    // reconstruction, from capability_slash_debits - .
+    //   2. THE WEIGHTS. The archived per-source `amount` is the quorum denominator S, and it
+    //      was taken entirely on trust, because the obvious check - compare it to a
+    //      re-resolution - false-rejects honest archives: slashCapabilityStake rewrites
+    //      `stakes.amount` IN PLACE, so re-resolving a historical block after a slash reports
+    //      the POST-slash weight, not the weight the hub saw. _slashRestoresAfter() removes
+    //      that objection by unwinding every capability_slash_debits row recorded AFTER the
+    //      resolve block, so the archived weight is compared to the weight as of the snapshot.
+    //      A forged archive can no longer deflate other sources' weights to shrink S.
+    //
+    // Both reconstructions degrade to the pre- behaviour rather than failing closed
+    // when their inputs are absent (a handle with no coin config, a schema with no
+    // capability_slash_debits): a DR tool that refuses to run is the failure mode this item
+    // exists to remove, and check 1 - resolved ⊆ archived - is unaffected either way.
     async _verifyCompleteness(snaps, network){
         for(let g of this._groupSnaps(snaps)){
             // Only the quorum-bearing capabilities are re-resolvable from BTC stakes; skip
             // any other archived group (none today, but future-proof against a new snapshot kind).
             if(!QUORUM_CAPABILITIES.has(g.capability))
                 continue;
-            // Pass no override so db.js applies this node's local capability MIN_STAKE - see
-            // the governance-threshold residual above .
+            // : re-resolve at the DECLARED block buried by CANONICAL_REORG_BUFFER,
+            // the height the hub's CapabilitySnapshot actually resolved this archived set
+            // at. At the raw height a source whose stake ACTIVATED inside
+            // (declared - 6, declared] appears in the re-resolution but not in the archive,
+            // and this check condemns an honest archive for a "dropped qualifying source".
+            // The stake-weighted flag-day keeps keying on the DECLARED block: moving a
+            // cutover boundary by the buffer is its own fork.
+            let resolveBlock = srb.buriedSnapshotBlock(g.block, network);
+            // The bar the ARCHIVE was built at, reconstructed as of that block .
+            // null = nothing resolvable (no coin config on this handle), in which case no
+            // override is passed and db.js applies its own local floor exactly as before.
+            let minStake = this._minStakeAt(g.capability, resolveBlock, network);
             let weighted = swq.isStakeWeightedQuorumActive(g.block, network);
             let resolved = weighted
-                ? await this.btcDb.getStakeWeightsByCapability(g.capability, g.block, null)
-                : await this.btcDb.getValidatorsByCapability(g.capability, g.block, null);
+                ? await this.btcDb.getStakeWeightsByCapability(g.capability, resolveBlock, minStake)
+                : await this.btcDb.getValidatorsByCapability(g.capability, resolveBlock, minStake);
             resolved = resolved || [];
             // A resolution that overflowed its cap cannot be trusted complete -> fail closed.
             if(resolved.truncated === true)
                 throw new Error('archived ' + g.capability + ' snapshot at block ' + g.block +
                                 ' cannot be completeness-checked: the on-chain resolution is truncated (raise VALIDATOR_QUERY_LIMIT / STAKE_WEIGHT_MAX_SOURCES)');
-            if(weighted){
-                // Source-level completeness: no qualifying staking source may be absent.
-                let archivedSources = new Set(g.rows.map(r => String(r.source != null ? r.source : '')));
-                for(let v of resolved){
-                    let src = String(v.source != null ? v.source : '');
-                    if(!archivedSources.has(src))
-                        throw new Error('archived ' + g.capability + ' snapshot at block ' + g.block +
-                                        ' is incomplete: qualifying source ' + src.substring(0, 24) +
-                                        '... (qualifying at this node\'s local ' + g.capability +
-                                        ' MIN_STAKE) was dropped (subset-forge?) - if the hub\'s governance' +
-                                        ' MIN_STAKE at that block was HIGHER, this is a false reject, see ');
-                }
-            } else {
+            if(weighted)
+                await this._verifyWeightedCompleteness(g, resolved, resolveBlock, minStake);
+            else {
                 // Legacy count quorum: completeness is by signing pubkey.
                 let archivedPubkeys = new Set(g.rows.map(r => String(r.signing_pubkey).toLowerCase()));
                 for(let v of resolved){
@@ -485,6 +512,146 @@ class AnchorRecovery {
                 }
             }
         }
+    }
+
+    // Stake-weighted half of REC-SUBSET-1, at as-of-block weights . Two checks, in
+    // this order because the second is only meaningful on sources the first admitted:
+    //
+    //   1. every source the re-resolution reports must be in the archive (the original
+    //      subset check, byte-unchanged apart from the threshold it resolved at);
+    //   2. the archived per-source `amount` must EQUAL that source's as-of-block weight. This
+    //      is the quorum denominator S, so a deflated `amount` on other sources lowers the
+    //      bar a forged signature set has to clear.
+    //
+    // Check 2 needs the slash-debit reconstruction; when it is unavailable the check is
+    // skipped and check 1 stands alone, which is exactly the pre- behaviour.
+    //
+    // KNOWN RESIDUAL, deliberately not closed here: a source whose weight the re-resolution
+    // cannot report AT ALL because a post-snapshot slash took it under the threshold is
+    // invisible to check 1, so dropping it from the archive is still undetected. Catching it
+    // needs a key-complete candidate set - every source with ANY stake AND an effective key at
+    // the block, i.e. a zero-threshold weight resolution - and that resolution is far likelier
+    // to hit STAKE_WEIGHT_MAX_SOURCES than the thresholded one, where a truncated result must
+    // fail closed. Trading a rare missed subset-forge for a new way to HALT disaster recovery
+    // on honest data is the wrong trade for this tool; judging candidates on weight alone
+    // instead is not an option, because it condemns any archive whose source held stake but no
+    // effective key (all keys revoked) at the block.
+    async _verifyWeightedCompleteness(g, resolved, resolveBlock, minStake){
+        // Per-source archived weight. Every key of a source carries the SAME `amount` (the
+        // source's aggregate; capability_snapshots.sql), so a source spelling two amounts
+        // across its keys is malformed however it got that way - and is a way to hide an
+        // inflated weight behind an honest-looking row.
+        let archived = new Map();
+        for(let r of g.rows){
+            let src = String(r.source != null ? r.source : '');
+            let amt = String(r.amount != null ? r.amount : '0');
+            if(archived.has(src) && !cmsh.amountsEqual(archived.get(src), amt))
+                throw new Error('archived ' + g.capability + ' snapshot at block ' + g.block +
+                                ' is malformed: source ' + src.substring(0, 24) + '... carries two different' +
+                                ' weights (' + archived.get(src) + ' and ' + amt + ') across its keys');
+            if(!archived.has(src)) archived.set(src, amt);
+        }
+        let restores = await this._slashRestoresAfter(resolveBlock);
+
+        // 1. Source-level completeness: no qualifying staking source may be absent.
+        let resolvedSources = new Map();
+        for(let v of resolved){
+            let src = String(v.source != null ? v.source : '');
+            if(!resolvedSources.has(src)) resolvedSources.set(src, String(v.weight != null ? v.weight : '0'));
+            if(!archived.has(src))
+                throw new Error('archived ' + g.capability + ' snapshot at block ' + g.block +
+                                ' is incomplete: qualifying source ' + src.substring(0, 24) +
+                                '... (qualifying at the ' + g.capability + ' MIN_STAKE reconstructed as of block ' +
+                                resolveBlock + ': ' + (minStake === null ? 'this node\'s local floor' : minStake) +
+                                ') was dropped (subset-forge?)');
+        }
+
+        // 2. Archived weight must equal the as-of-block reconstruction. Only for sources the
+        // resolution reports: a source it does not report has no on-chain weight to compare
+        // against here (see the residual noted above).
+        for(let [src, weight] of resolvedSources){
+            if(!archived.has(src)) continue;                      // check 1 already threw
+            let asOf = cmsh.addAmount(weight, restores.get(src) || '0');
+            if(!cmsh.amountsEqual(asOf, archived.get(src)))
+                throw new Error('archived ' + g.capability + ' snapshot at block ' + g.block +
+                                ' carries a forged weight for source ' + src.substring(0, 24) + '...: archived ' +
+                                archived.get(src) + ', on-chain as of that block ' + asOf +
+                                ' (weight-forge? a deflated weight shrinks the quorum denominator S)');
+        }
+    }
+
+    // Per-source stake SLASHED AFTER `atBlock`, so a historical weight can be restored to
+    // what it was AT that block. slashCapabilityStake rewrites `stakes.amount` in place and
+    // records the exact per-row delta in capability_slash_debits, so a source's as-of-block
+    // aggregate is (the aggregate the resolver reports for that block today) + (every debit
+    // against its stake rows recorded after it).
+    //
+    // Scoped to `target_table = 'stakes'`: only active stake rows carry capability weight -
+    // an `unstakes` row is cooldown-locked tokens, outside the weight sum by construction
+    // (db.js _stakeWeightsSql), so unwinding its slash would inflate the reconstruction. The
+    // debit join applies the SAME valid-status + activation/deactivation window at `atBlock`
+    // the resolver applies, so both halves of the sum cover one identical row set.
+    //
+    // Returns Map(source -> restored amount) covering ONLY sources with a post-`atBlock`
+    // debit; every other source's resolved weight already IS its as-of-block weight.
+    // Degrades to an empty map (with a loud operator warning) when the query cannot run - an
+    // older schema without the table, or a bare doQuery handle - because the check it feeds is
+    // an ADDITION: skipping it leaves the pre- completeness check intact, where failing
+    // closed would refuse an honest recovery outright.
+    async _slashRestoresAfter(atBlock){
+        let out = new Map();
+        if(!this.btcDb || typeof this.btcDb.doQuery !== 'function') return out;
+        let at = Number(atBlock);
+        if(!Number.isFinite(at)) return out;
+        let rows;
+        try {
+            rows = await this.btcDb.doQuery(
+                `SELECT sa.address AS source,
+                        SUM(CAST(d.amount AS DECIMAL(30,8))) AS restored
+                 FROM capability_slash_debits d
+                 JOIN stakes s            ON s.action_index = d.stake_action_index
+                 JOIN index_statuses ix   ON ix.id          = s.status_id
+                 JOIN index_addresses sa  ON sa.id          = s.source_id
+                 WHERE d.target_table = 'stakes'
+                   AND d.block_index > ?
+                   AND ix.status = 'valid'
+                   AND s.activation_block <= ?
+                   AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)
+                 GROUP BY sa.address`,
+                [at, at, at]);
+        } catch(e){
+            this.log('recovery: WARNING as-of-block stake-weight reconstruction unavailable (' +
+                     ((e && e.message) || e) + '); archived per-source weights go UNCHECKED' +
+                     ' for this batch ');
+            return out;
+        }
+        for(let r of (rows || [])){
+            let src = String(r.source != null ? r.source : '');
+            if(src === '') continue;
+            out.set(src, String(r.restored != null ? r.restored : '0'));
+        }
+        return out;
+    }
+
+    // The capability MIN_STAKE effective at `atBlock` - the bar the hub that wrote the
+    // archive resolved its qualifying set at . Genesis floor comes from the BTC
+    // handle's own coin config, the frozen constant XChainHub asserts its genesis governance
+    // value against at boot; null when this handle carries no config, which leaves db.js
+    // applying its local floor exactly as it did before.
+    _minStakeAt(capability, atBlock, network){
+        return cmsh.minStakeAt(capability, atBlock, network,
+                               this._genesisMinStake(capability), this.minStakeActivations);
+    }
+
+    // Genesis (block-0) MIN_STAKE for a capability, from the BTC-scoped handle's coin config
+    // (STAKING.CAPABILITIES.<cap>.MIN_STAKE). Defensive throughout: recovery is also driven
+    // by bare query handles that carry no config at all.
+    _genesisMinStake(capability){
+        let cfg  = this.btcDb && this.btcDb.config;
+        let caps = (cfg && cfg['STAKING'] && cfg['STAKING']['CAPABILITIES']) ? cfg['STAKING']['CAPABILITIES'] : null;
+        let entry = caps ? caps[capability] : null;
+        if(!entry || entry['MIN_STAKE'] === undefined || entry['MIN_STAKE'] === null) return null;
+        return String(entry['MIN_STAKE']);
     }
 
     // ── Rebuild (latest-status-wins: batches process in batch_seq order) ───────

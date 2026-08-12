@@ -284,7 +284,7 @@ describe('Price (PRICE) @regression @tier3', function () {
             });
 
             it('below the gate: the legacy mark-then-verify verdict is preserved verbatim', async function () {
-                // The whole point of gating. mainnet arms at 969500; a round anchored
+                // The whole point of gating. mainnet arms at 963000; a round anchored
                 // below it must still be rejected exactly as the deployed fleet rejects
                 // it today, or a from-genesis reindex diverges from the agreed chain.
                 indexer.config['NETWORK'] = 'mainnet';
@@ -293,19 +293,19 @@ describe('Price (PRICE) @regression @tier3', function () {
                 await handler.parse(v0Params(ONE_PAIR, [
                     { pubkey: PUBKEY_A, sig: BAD_SIG },
                     { pubkey: PUBKEY_A, sig: SIG_A },
-                ], { btcHeight: '969499' }), data, null);
+                ], { btcHeight: '962999' }), data, null);
                 assert.strictEqual(data['VALIDATION_STATUS'], 'invalid',
                     'below the flag-day the garbage entry must still consume the dedupe slot');
             });
 
-            it('flips on the round BTC anchor, so mainnet at 969500 takes the corrected tally', async function () {
+            it('flips on the round BTC anchor, so mainnet at 963000 takes the corrected tally', async function () {
                 indexer.config['NETWORK'] = 'mainnet';
                 indexer.indexerDb.getActiveCapabilityCount.resolves(1);
                 const data = v0Data();
                 await handler.parse(v0Params(ONE_PAIR, [
                     { pubkey: PUBKEY_A, sig: BAD_SIG },
                     { pubkey: PUBKEY_A, sig: SIG_A },
-                ], { btcHeight: '969500' }), data, null);
+                ], { btcHeight: '963000' }), data, null);
                 assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
             });
 
@@ -319,7 +319,7 @@ describe('Price (PRICE) @regression @tier3', function () {
                 await handler.parse(v0Params(ONE_PAIR, [
                     { pubkey: PUBKEY_A, sig: BAD_SIG },
                     { pubkey: PUBKEY_A, sig: SIG_A },
-                ], { btcHeight: '969499' }), data, null);
+                ], { btcHeight: '962999' }), data, null);
                 assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
             });
 

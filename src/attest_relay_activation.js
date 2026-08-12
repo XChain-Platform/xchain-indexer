@@ -66,7 +66,7 @@
 // carried by the relay canonical (NOT the local processing height), so BTC, LTC,
 // DOGE and the hub all flip the relay legs on one anchor.
 const ATTEST_RELAY_ACTIVATION = {
-    mainnet: 969500,      // ARMED 2026-07-30  on the ratified  BTC anchor; deploy every indexer + hub before this height
+    mainnet: 963000,      // ARMED 2026-07-30  on the  BTC anchor, RE-PINNED 2026-08-12  off 969500 with the rest of that cohort; deploy every indexer + hub before this height
     testnet: 0,
     regtest: 0,
 };

@@ -22,6 +22,7 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 const Attest  = require('../../../src/actions/attest.js');
 const swq     = require('../../../src/stake_weighted_quorum.js');
 const attestAdmission = require('../../../src/attest_admission_activation.js');
+const srb     = require('../../../src/snapshot_reorg_buffer.js');
 // Same module instance Attest holds a reference to (Node module cache); stubbing
 // `verify` here controls signature acceptance inside the handler.
 const ed25519 = require('../../../src/ed25519.js');
@@ -190,10 +191,15 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             const reqId = deriveReqId(data['TX_HASH'], data['ROOT_ACTION_INDEX'], data['EMITTER_PATH'], data['EMITTER'], data['EMITTER_POSITION']);
             await handler.parse(v0Params({ requestId: reqId }), data, null);
             assert.strictEqual(data['STATUS'], 'valid');
-            // The set is computed at the request's OWN block (not a later block), so it captures
-            // the historical stake amounts before any future slash.
-            assert.ok(indexer.indexerDb.getValidatorsByCapability.calledWith('attestation', data['BLOCK_INDEX']),
-                'responsible set must be computed at the request block');
+            // The set is computed as-of the request's OWN block (not a later block), so it
+            // captures the historical stake amounts before any future slash. : the
+            // height it is RESOLVED at is that block BURIED by CANONICAL_REORG_BUFFER,
+            // because that is where the hub's CapabilitySnapshot resolved it; regtest arms
+            // the burial gate at genesis. The anchor is still the request block, not a
+            // later one, which is what ATT-RECOMP-1 is about.
+            assert.ok(indexer.indexerDb.getValidatorsByCapability.calledWith(
+                    'attestation', srb.buriedSnapshotBlock(data['BLOCK_INDEX'], 'regtest')),
+                'responsible set must be computed at the request block, buried by the reorg buffer');
             assert.ok(data['RESPONSIBLE_SET_JSON'], 'responsible_set_json must be set on the persisted data');
             const parsed = JSON.parse(data['RESPONSIBLE_SET_JSON']);
             assert.ok(Array.isArray(parsed) && parsed.includes(PUBKEY_A),
@@ -615,9 +621,18 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             indexer.indexerDb.getAttestationRequestById.resolves(request);
             const data = v1Data({ BLOCK_INDEX: 100 });
             await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+            // : the anchor is the REQUEST's block (90), not the response block (100),
+            // and the height actually queried is that anchor buried by CANONICAL_REORG_BUFFER
+            // (the height the hub resolved the set at). Regtest arms the burial gate at genesis.
+            const expectBlock = srb.buriedSnapshotBlock(90, 'regtest');
             assert.ok(
-                indexer.indexerDb.getValidatorsByCapability.calledWith('attestation', 90),
-                'the capable set must be read at the request snapshot block (90), not the response block (100)'
+                indexer.indexerDb.getValidatorsByCapability.calledWith('attestation', expectBlock),
+                'the capable set must be read at the request snapshot block (90, buried to ' +
+                expectBlock + '), not the response block (100)'
+            );
+            assert.ok(
+                !indexer.indexerDb.getValidatorsByCapability.calledWith('attestation', 100),
+                'the capable set must never be read at the response block'
             );
         });
 
@@ -1464,7 +1479,10 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         it('uses the source-keyed query (not the count query) when weighted', async function () {
             indexer.indexerDb.getStakeWeightsByCapability.resolves([{ pubkey: 'k1', source: 'S1', weight: '100' }]);
             await handler._computeResponsibleSet('req-3', 1, 90);
-            assert.ok(indexer.indexerDb.getStakeWeightsByCapability.calledWith('attestation', 90));
+            // : the declared block 90 is resolved at its buried height; the
+            // stake-weighted flag-day still keys on the declared 90 (see snapshotReorgBuffer.test.js).
+            assert.ok(indexer.indexerDb.getStakeWeightsByCapability.calledWith(
+                'attestation', srb.buriedSnapshotBlock(90, 'regtest')));
             assert.ok(indexer.indexerDb.getValidatorsByCapability.notCalled);
         });
     });

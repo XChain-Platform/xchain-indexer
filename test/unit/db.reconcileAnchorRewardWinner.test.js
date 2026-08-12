@@ -97,7 +97,13 @@ describe('reconcileAnchorRewardWinner() @regression @tier1', function () {
         // and scopes the log row to the reconcile (ANCHOR) block.
         assert.match(logSql, /INSERT\s+INTO\s+anchor_reward_reconcile_log/i);
         assert.match(logSql, /SELECT\s+\?,\s*vr\.reward_type/i);
-        assert.match(logSql, /vr\.block_index,\s*\?/i, 'must capture the loser row original earn-block as reward_block_index');
+        assert.match(logSql, /vr\.amount,\s*vr\.block_index/i, 'must capture the loser row original earn-block as reward_block_index');
+        // : the pre-image also carries the loser's MATERIALIZATION block, so the reorg
+        // restore can tell a loser a replay would still have (derived before the reorg point)
+        // from one it would never mint (derived inside the orphaned range). The earn-block is
+        // the far earlier SNAPSHOT_BLOCK for a derived reward and cannot answer that.
+        assert.match(logSql, /reward_derive_block_index/i, 'log must declare the reward_derive_block_index column');
+        assert.match(logSql, /vr\.derive_block_index,\s*\?/i, 'must capture the loser row materialization block');
         assert.match(logSql, /pk\.pubkey\s*>\s*m\.min_pubkey/i);
         // anchor_action_index, reconcile block, then the two (rewardType, round) subquery+WHERE pairs.
         assert.deepStrictEqual(logArgs, [42, 900, 'anchor_BTC', 306, 'anchor_BTC', 306]);

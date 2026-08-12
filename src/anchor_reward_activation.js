@@ -73,7 +73,7 @@ function isAnchorRewardActive(snapshotBlock, network){
 // insider-with-key forge surface the per-chain flag-day left open. Below the threshold the
 // legacy v1 + push path stands and v6 is rejected.
 const ARCHIVE_REWARD_ACTIVATION = {
-    mainnet: 969500,      // ARMED 2026-07-16 : BTC snapshot_block ~2026-10-01 (ratified anchor; derived from tip 957062 on 07-07 at ~144 blocks/day); deploy every consumer before this era
+    mainnet: 963000,      // ARMED 2026-07-16 , RE-PINNED 2026-08-12  off 969500 onto the  pre-freeze train boundary (tip 959,853 on 07-27 at ~144 blocks/day + 21d); deploy every consumer before this era
     testnet: 0,
     regtest: 0,
 };
@@ -113,7 +113,7 @@ function isArchiveRewardActive(snapshotBlock, network){
 // This is CONSENSUS-relevant (validator_rewards is COLLECT-spendable) and must deploy hub + ALL
 // indexers (+ the docs canonical) atomically on the same flag-day, so it gates on the same
 // BTC-anchored snapshot_block height space as ANCHOR_REWARD_ACTIVATION (NOT a local processing
-// height). It CANNOT ride the existing 961000/969500 boundaries: those are already 0 (live) on
+// height). It CANNOT ride the existing 961000/963000 boundaries: those are already 0 (live) on
 // testnet/regtest, so riding them would flip the DOGE-skip + BTC-derive relocation the instant
 // code deploys, with no coordinated deploy-first-then-flip window, risking a COLLECT-mediated
 // fork across a mid-upgrade fleet; and one gate must cover BOTH the per-chain (v4/v5) and archive
@@ -147,6 +147,17 @@ function isArchiveRewardActive(snapshotBlock, network){
 //       Fixing it is a new authenticated peer message whose receiver MINTS money rows, so it must
 //       re-verify the XANCPUB quorum against its own oracle_publish set rather than trust the
 //       wire, and it lands after (1) so the broadcast sits at the confirmed write.
+//
+// PRE-ARMING DEPLOY STEP (, , FIXED in code): a derived reward is EARNED at the
+// checkpoint's snapshot_block but MATERIALIZED at a later BTC block, and the reorg delete used to
+// scope only on the earn-block, so a rollback landing between the two heights left a COLLECT-
+// spendable reward a from-genesis replay had not derived yet. validator_rewards now carries
+// derive_block_index (and the RB-ANCHOR pre-image log carries reward_derive_block_index) and
+// rollback deletes on both keys. This is NOT an open blocker, but it IS a schema change on a
+// table xchain-sync replicates to validators: apply
+// src/sql/migrations/2026-08-12-validator-rewards-derive-block-index.sql fleet-wide BEFORE
+// ratifying a mainnet/testnet height here, or a node still short of the column keeps the old
+// earn-block-only scoping and forks the COLLECT rail after a reorg.
 const ANCHOR_REWARD_DERIVE_ACTIVATION = {
     mainnet: null,        // INERT placeholder: ratify a BTC snapshot_block ONLY after #4170 + #4171 + #4172 land
     testnet: null,        // INERT placeholder: ratify a BTC snapshot_block ONLY after #4170 + #4171 + #4172 land

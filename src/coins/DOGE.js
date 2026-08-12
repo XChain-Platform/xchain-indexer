@@ -62,6 +62,11 @@ module.exports = {
                 singleOpReturnPolicy: true, // DOGE/LTC enforce one OP_RETURN per tx
             },
             firstBlock: 6240000,
+            // Block-0 hash of the chain (; full rationale in BTC.js mainnet).
+            // Unpinned until the operator reads it off the fleet's own node:
+            // `dogecoin-cli getblockhash 0`. This is the value that separates a
+            // DOGE-mainnet endpoint from a BTC-mainnet one: both report chain="main".
+            chainGenesisHash: null,
             addresses: {
                 BURN:            'DChainBurnAddressXXXXXXXXXXXawc9pt',
                 GAS:             'DGasfpttCnTijuuoAdiJ9sXJjG7vQ5pMkW',
@@ -74,10 +79,24 @@ module.exports = {
             // Dogeparty name-ownership injected at the DOGE mainnet start block.
             // LEDGER_HASH = sha256 of the bundled CSV; DUMP_HASH = sha256 of the
             // uncompressed bundled state dump. Frozen at launch.
+            // XCP/XDP airdrop leg (, ): DISARMED, and disarmed HERE rather
+            // than by leaving the keys off a node's environment. The bucket set decides how
+            // much XCHAIN each snapshot holder mints and which synthetic tx hashes carry the
+            // credits, so on mainnet/testnet it is bundle data like every other genesis pin;
+            // the indexer ignores the GENESIS_AIRDROP_* env vars off regtest. Arming the leg
+            // is an edit here (index-aligned paths + sha256 content pins + XCHAIN amounts)
+            // plus airdropSetHash - the sha256 over the canonical `name:hash:amount` lines,
+            // which genesis.js verifies before it credits anything - followed by a
+            // bin/sync-coins.sh re-vendoring wave.
             genesis: {
                 block:      6240000,
                 ledgerHash: '87abac0b03cbd24694f7c5e666425bdae6f9a9c51b826826bd4848bd4ade991b',
                 dumpHash:   '81d3d2cb4714bc40ec12c2d1c8573040858ddf66e4ba89a05d44d86d3bffa0f1',
+                airdropPaths:         [],
+                airdropHashes:        [],
+                airdropAmounts:       [],
+                airdropSnapshotBlock: null,
+                airdropSetHash:       null,
             },
         },
 
@@ -99,6 +118,9 @@ module.exports = {
             // (folded into consensusSubset), so it moves the DOGE testnet pin and
             // ships in one wave with every other vendoring service.
             firstBlock: 67815000,
+            // Block-0 hash of the chain (see mainnet above). Unpinned until the operator
+            // reads it off the fleet's own node: `dogecoin-cli -testnet getblockhash 0`.
+            chainGenesisHash: null,
             addresses: {
                 BURN:            'nchainburnaddressXXXXXXXXXXXYKgF7W',
                 GAS:             'ngasn6zHFzJ72zpk3DBKmXhD2XtszujSDW',
@@ -109,7 +131,19 @@ module.exports = {
                 EXPLORER:        'ndonate3xHD56SnmmSxbjX7UMSPfN7XmVA',
             },
             // Testnet launches CLEAN (genesis disabled); namespace stays open.
-            genesis: { block: 0, ledgerHash: null, dumpHash: null },
+            // Airdrop keys carried explicitly and empty for the same reason as mainnet:
+            // testnet is a multi-operator federation, so an env-armed bucket set would let
+            // one node mint an allocation the rest of the federation never derives.
+            genesis: {
+                block:      0,
+                ledgerHash: null,
+                dumpHash:   null,
+                airdropPaths:         [],
+                airdropHashes:        [],
+                airdropAmounts:       [],
+                airdropSnapshotBlock: null,
+                airdropSetHash:       null,
+            },
         },
 
         regtest: {
@@ -127,6 +161,9 @@ module.exports = {
                 singleOpReturnPolicy: true,
             },
             firstBlock: 0,
+            // Deliberately unset on regtest: every stack mines its own chain, so there is
+            // no stable block-0 hash to pin (see BTC.js regtest).
+            chainGenesisHash: null,
             addresses: {
                 BURN:            'mvs8WdppEhzQLxfcYwrr1eoKA2nUFi55ff',
                 GAS:             'mgasDTdKu5DsbW97qSRnE8raAuYpKMfmhg',
@@ -141,6 +178,17 @@ module.exports = {
                     block:      { env: 'XCHAIN_GENESIS_BLOCK',       type: 'int', default: 0 },
                     ledgerHash: { env: 'XCHAIN_GENESIS_LEDGER_HASH', type: 'str', default: null },
                     dumpHash:   { env: 'XCHAIN_GENESIS_DUMP_HASH',   type: 'str', default: null },
+                    // XCP/XDP airdrop leg. Registering it here is what makes the leg
+                    // regtest-only-configurable : the indexer used to read these
+                    // three env vars on EVERY network, so two mainnet replay nodes with
+                    // byte-identical snapshot CSVs could still mint different allocations.
+                    // Paths compact empty entries; hashes/amounts keep them, because entry N
+                    // pins/funds entry N and an empty hash means "this bucket is unpinned".
+                    airdropPaths:         { env: 'GENESIS_AIRDROP_PATHS',          type: 'csv',        default: [] },
+                    airdropHashes:        { env: 'GENESIS_AIRDROP_HASHES',         type: 'csv_sparse', default: [] },
+                    airdropAmounts:       { env: 'GENESIS_AIRDROP_AMOUNTS',        type: 'csv_sparse', default: [] },
+                    airdropSnapshotBlock: { env: 'GENESIS_AIRDROP_SNAPSHOT_BLOCK', type: 'str',        default: null },
+                    airdropSetHash:       { env: 'GENESIS_AIRDROP_SET_HASH',       type: 'str',        default: null },
                 },
             },
         },

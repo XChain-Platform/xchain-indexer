@@ -38,7 +38,7 @@
 
 // Per-network activation, interpreted as a BTC-anchored snapshot_block era.
 const RETRACTION_SIGNING_ACTIVATION = {
-    mainnet: 969500,      // ARMED 2026-07-16 : BTC snapshot_block ~2026-10-01 (ratified anchor; derived from tip 957062 on 07-07 at ~144 blocks/day); deploy every consumer before this era
+    mainnet: 963000,      // ARMED 2026-07-16 , RE-PINNED 2026-08-12  off 969500 onto the  pre-freeze train boundary (tip 959,853 on 07-27 at ~144 blocks/day + 21d); deploy every consumer before this era
     testnet: 0,
     regtest: 0,
 };

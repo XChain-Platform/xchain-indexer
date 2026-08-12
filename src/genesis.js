@@ -271,18 +271,46 @@ class Genesis {
     // the bucket amount (the sub-satoshi remainder is simply never minted).
     async _injectAirdrops(gas, blockToParse, blockTime){
         let buckets = this._airdropBuckets();
-        if(buckets.length === 0)
+        let pin     = this.config['GENESIS_AIRDROP_SET_HASH'] || null;
+        if(buckets.length === 0){
+            // A pinned set with nothing armed is the DISARMED half of the same divergence:
+            // this node would derive a genesis with no airdrop actions at all while its
+            // peers mint the pinned set. Halt rather than quietly skip an allocation
+            // ; the pin is the operator's own statement that a set exists.
+            if(pin)
+                throw new Error('GENESIS FATAL: an airdrop set-hash is pinned (' + pin + ') but no airdrop buckets are '
+                    + 'configured. The pinned coin bundle (src/coins/' + this.config['COIN'] + '.js, genesis.airdrop*) '
+                    + 'is inconsistent: either arm the buckets it pins or clear the pin.');
             return;
+        }
         let tick     = this.config['GAS']; // 'XCHAIN'
         let snapshot = this.config['GENESIS_AIRDROP_SNAPSHOT_BLOCK'] || 'unpinned';
         // Combined set-hash over the canonical bucket order (name:hash:amount per line):
         // operators on different nodes compare this one line to prove they armed the
         // identical airdrop set before any consensus action is derived .
-        let setHash = crypto.createHash('sha256')
-            .update(buckets.map(b => b.name + ':' + (b.hash || 'unpinned') + ':' + b.amount).join('\n'))
-            .digest('hex');
+        let setHash = this._airdropSetHash(buckets);
         console.log('GENESIS: airdrop set-hash ' + setHash + ' (' + buckets.length + ' buckets, canonical order '
             + buckets.map(b => b.name).join(',') + ')');
+        // ENFORCE it (, ). Until this check the set-hash was a log line and
+        // nothing else: the per-bucket GENESIS_AIRDROP_HASHES pin each snapshot FILE, so two
+        // nodes with byte-identical CSVs still passed every check while minting different
+        // XCHAIN amounts (the amounts were pinned nowhere) or deriving different synthetic tx
+        // hashes (the bucket NAMES, hence the set membership, were pinned nowhere). This pins
+        // the set itself, and it runs before the first credit so a mismatch halts a node
+        // instead of forking it.
+        if(pin){
+            if(setHash !== String(pin).toLowerCase()){
+                console.error('GENESIS FATAL: airdrop set-hash mismatch (expected ' + pin + ', got ' + setHash + '). Halting.');
+                throw new Error('Genesis airdrop set-hash mismatch (expected ' + pin + ', got ' + setHash + ')');
+            }
+        } else if(this.config['NETWORK'] === 'mainnet'){
+            // Mainnet fails closed on an UNPINNED set for the same reason it already fails
+            // closed on an unpinned bucket file: the CSV fallback is the derivation path of
+            // record only when every consensus input it consumes is pinned in the bundle.
+            throw new Error('GENESIS FATAL: mainnet airdrop set is not pinned (genesis.airdropSetHash / '
+                + 'GENESIS_AIRDROP_SET_HASH). The computed set-hash is ' + setHash + '; pin it in the coin bundle '
+                + 'and re-vendor before a mainnet node derives the airdrop from CSVs.');
+        }
         for(let b of buckets){
             this._verifyAirdropFile(b);
             let rows  = this._loadAirdropRows(b.file);
@@ -303,6 +331,17 @@ class Genesis {
             }
             console.log('GENESIS: airdrop bucket ' + b.name + ' complete - ' + credited + ' credits');
         }
+    }
+
+    // sha256 over the canonical `name:hash:amount` line per bucket, newline-joined, in the
+    // canonical (name-sorted) bucket order _airdropBuckets returns. The line format is the
+    // pinned wire form: changing it changes every armed pin, so it is fixed here and mirrored
+    // in the arming runbook. An unpinned bucket contributes the literal 'unpinned', so an
+    // unpinned set and a pinned one never collide.
+    _airdropSetHash(buckets){
+        return crypto.createHash('sha256')
+            .update(buckets.map(b => b.name + ':' + (b.hash || 'unpinned') + ':' + b.amount).join('\n'))
+            .digest('hex');
     }
 
     // Zip GENESIS_AIRDROP_PATHS / _HASHES / _AMOUNTS into bucket descriptors, failing closed

@@ -24,6 +24,11 @@
  * These pin the cap, the fact that it is applied AFTER the settled-set
  * exclusion (so it counts real work, not history), and the carry-forward: the
  * overflow is never dropped, it is simply the next block's prefix.
+ *
+ * The cap's flag-day gate (CROSS_SETTLE_PER_BLOCK_CAP, ) lives in its own
+ * suite, crossChainSettlementCapGate.test.js. Here the gate is simply ON, which
+ * is its genesis state on regtest and testnet, so these keep testing the capped
+ * behavior itself.
  */
 
 'use strict';
@@ -119,6 +124,8 @@ describe('cross-chain settlement per-block cap ()', function(){
             }
         };
         const actions = {
+            // Gate ON: its genesis state on regtest/testnet .
+            protocolChanges: { async isEnabled(){ return true; } },
             async processAction(name, _k, data){
                 assert.strictEqual(name, 'CROSS_SETTLE');
                 seen.push(data['MATCH'].match_id);

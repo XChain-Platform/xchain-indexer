@@ -367,8 +367,26 @@ class Issue {
         if(!error && !this.util.isNull(data['MINT_SUPPLY']) && tokenInfo && tokenInfo['LOCK_MINT_SUPPLY']==1)
             error = 'invalid: MINT_SUPPLY (locked)';
 
+        // : resolve the uncapped-supply exemption ONCE for the three cross-checks
+        // below that compare another field against MAX_SUPPLY. MAX_SUPPLY is stored as 0
+        // when the ISSUE omits it (createToken / db.js) and 0 is the documented UNCAPPED
+        // sentinel, so on such a token there is no ceiling for MINT_SUPPLY or
+        // MINT_ADDRESS_MAX to exceed and the comparisons reject an uncapped token's own
+        // genesis parameters. At/after the UNCAPPED_MAX_SUPPLY_ZERO flag-day they are
+        // skipped when no positive cap is declared, matching the bcgt(MAX_SUPPLY,0)
+        // pre-condition the MAX_SUPPLY min/max and MAX_SUPPLY<SUPPLY guards above already
+        // carry, and matching mint.js's ceiling. Resolved once, not per check: the gate must
+        // not be able to differ between two comparisons inside one action. Below the
+        // flag-day every verdict is unchanged, so a from-genesis replay stays byte-identical.
+        // LOCK_MAX_SUPPLY is deliberately NOT covered: locking a cap that does not exist is
+        // still refused by the unchanged guard above.
+        // Resolved only on the still-valid path with no cap declared, so an already-rejected
+        // action never spends a decoder-DB read on an activation it cannot use.
+        let uncappedSupply = !error && !this.util.bcgt(data['MAX_SUPPLY'], 0) &&
+            await this.actions.protocolChanges.isEnabled('UNCAPPED_MAX_SUPPLY_ZERO', data['BLOCK_INDEX']);
+
         // Verify MINT_SUPPLY is less than MAX_SUPPLY
-        if(!error && !this.util.isNull(data['MINT_SUPPLY']) && this.util.bcgt(data['MINT_SUPPLY'], data['MAX_SUPPLY']))
+        if(!error && !uncappedSupply && !this.util.isNull(data['MINT_SUPPLY']) && this.util.bcgt(data['MINT_SUPPLY'], data['MAX_SUPPLY']))
             error = 'invalid: MINT_SUPPLY > MAX_SUPPLY';
 
         // Cumulative MINT_SUPPLY cap: MINT_SUPPLY mints fresh supply on EVERY valid ISSUE (line
@@ -380,7 +398,8 @@ class Issue {
         // cumulative invariant. getTokenSupply reflects earlier same-block mints/issues; this
         // action's own MINT_SUPPLY is credited later, so it is not yet counted. Gated (tightens
         // validity): flips fleet-wide at one coordinated block; pre-launch chains activate at genesis.
-        if(!error && !this.util.isNull(data['MINT_SUPPLY']) && this.util.bcgt(data['MINT_SUPPLY'], 0)
+        // (: the cumulative cap is likewise inapplicable to an uncapped token.)
+        if(!error && !uncappedSupply && !this.util.isNull(data['MINT_SUPPLY']) && this.util.bcgt(data['MINT_SUPPLY'], 0)
            && await this.actions.protocolChanges.isEnabled('ISSUE_MINT_SUPPLY_CUMULATIVE_CAP', data['BLOCK_INDEX'])){
             let currentSupply = await this.indexerDb.getTokenSupply(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
             let projected     = this.util.bcadd(currentSupply, data['MINT_SUPPLY'], data['DECIMALS']);
@@ -388,8 +407,8 @@ class Issue {
                 error = 'invalid: MINT_SUPPLY exceeds MAX_SUPPLY';
         }
 
-        // Verify MINT_ADDRESS_MAX is less than MAX_SUPPLY
-        if(!error && !this.util.isNull(data['MINT_ADDRESS_MAX']) && this.util.bcgt(data['MINT_ADDRESS_MAX'], 0) && this.util.bcgt(data['MINT_ADDRESS_MAX'], data['MAX_SUPPLY']))
+        // Verify MINT_ADDRESS_MAX is less than MAX_SUPPLY (: not on an uncapped token)
+        if(!error && !uncappedSupply && !this.util.isNull(data['MINT_ADDRESS_MAX']) && this.util.bcgt(data['MINT_ADDRESS_MAX'], 0) && this.util.bcgt(data['MINT_ADDRESS_MAX'], data['MAX_SUPPLY']))
             error = 'invalid: MINT_ADDRESS_MAX > MAX_SUPPLY';
 
         // Verify MINT_ADDRESS_MAX is greater than than MAX_MINT

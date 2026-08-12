@@ -28,6 +28,14 @@
  * failover double-publish is collapsed to the smallest-pubkey winner by reconcileAnchorRewardWinner;
  * a BTC reorg that block-scoped-deletes the reward at snapshot_block re-exposes the group for replay.
  *
+ * Two block heights, both persisted . block_index = snapshot_block is the reward's EARN
+ * block: it is where the stake source resolves and where a from-genesis replay must credit it.
+ * derive_block_index = the BTC block being processed is the reward's MATERIALIZATION block, which
+ * is strictly later. Rollback needs both, because the row must disappear when EITHER height is
+ * orphaned: scoping on the earn-block alone leaves a COLLECT-spendable reward alive after a reorg
+ * to any height in (snapshot_block, blockIndex], a reward a clean replay to that height has not
+ * derived yet.
+ *
  * Gated by ANCHOR_REWARD_DERIVE_ACTIVATION (the derive-relocation flag-day) and runs ONLY on BTC.
  ********************************************************************/
 
@@ -132,9 +140,14 @@ async function deriveAnchorRewards(indexerDb, config, blockIndex){
             if(!ar.isAnchorRewardDeriveActive(Number(row.snapshot_block), String(row.network))) continue;
             if(!await verifyAttestation(indexerDb, row)) continue;
             let amount = (String(row.reward_type) === 'anchor_archive') ? ar.ARCHIVE_REWARD_AMOUNT : ar.ANCHOR_REWARD_AMOUNT;
+            // block_index = snapshot_block (the earn-block, where the stake source resolves);
+            // derive_block_index = the CURRENT BTC block, which is where the row is actually
+            // minted. Without the second stamp a reorg to any height in (snapshot_block,
+            // blockIndex] orphans the minting block yet leaves the reward in place, because the
+            // rollback delete only scopes on block_index ( / ).
             let ok = await indexerDb.createValidatorReward(
                 String(row.publisher).toLowerCase(), Number(row.round_reference), String(row.reward_type),
-                amount, Number(row.snapshot_block), true);
+                amount, Number(row.snapshot_block), true, Number(blockIndex));
             if(ok) anyWritten = true;
         }
         if(anyWritten){

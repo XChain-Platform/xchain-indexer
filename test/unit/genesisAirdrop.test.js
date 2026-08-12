@@ -69,6 +69,22 @@ function build(airdrop, cfgOverride){
     return { genesis, calls, config };
 }
 
+// Recompute the combined set-hash the way an operator arming a bucket set has to:
+// `NAME:hash:amount` per bucket, newline-joined, in canonical (name byte-order) order.
+// Written independently of src/genesis.js on purpose - it is the pinned wire form, so a
+// test that called the implementation could not catch the format changing under it.
+function setHash(airdrop){
+    let lines = airdrop.paths
+        .map((p, i) => ({
+            name:   path.basename(p).replace(/\.[^.]*$/, '').toUpperCase(),
+            hash:   (airdrop.hashes || [])[i] || 'unpinned',
+            amount: airdrop.amounts[i],
+        }))
+        .sort((a, b) => a.name < b.name ? -1 : 1)
+        .map(b => b.name + ':' + b.hash + ':' + b.amount);
+    return crypto.createHash('sha256').update(lines.join('\n')).digest('hex');
+}
+
 // Split the recorded calls into ledger-name actions and airdrop credits by hash marker.
 function credits(calls){
     return calls.filter(c => c.tx.tx_hash.startsWith('GENESIS-BTC-A-'));
@@ -204,9 +220,75 @@ describe('genesis airdrop pass ', function(){
 
     it('accepts a fully-pinned bucket set on mainnet', async function(){
         let file = tmpFile('addr1,1\n');
-        let { genesis, calls } = build({ paths: [file], hashes: [sha256(file)], amounts: ['10'] }, { NETWORK: 'mainnet' });
+        let airdrop = { paths: [file], hashes: [sha256(file)], amounts: ['10'] };
+        let { genesis, calls } = build(airdrop, { NETWORK: 'mainnet', GENESIS_AIRDROP_SET_HASH: setHash(airdrop) });
         await genesis.inject(100, 1700000000);
         assert.strictEqual(credits(calls).length, 1);
+    });
+
+    // ── Combined set-hash pin ( / ) ─────────────────────────────
+    // The per-bucket hashes pin each snapshot FILE. Nothing pinned the SET: which
+    // buckets exist, what each is funded with, and therefore which synthetic tx
+    // hashes and XCHAIN amounts a replay derives. The set-hash was computed, logged
+    // and then discarded; these tests hold it as an enforced pin.
+
+    it('halts on a set-hash mismatch BEFORE any credit is injected', async function(){
+        let file = tmpFile('addr1,1\naddr2,1\n');
+        let airdrop = { paths: [file], hashes: [sha256(file)], amounts: ['10'] };
+        let { genesis, calls } = build(airdrop, { GENESIS_AIRDROP_SET_HASH: 'a'.repeat(64) });
+        await assert.rejects(() => genesis.inject(100, 1700000000), /airdrop set-hash mismatch/);
+        assert.strictEqual(credits(calls).length, 0);
+    });
+
+    it('accepts a matching set-hash pin, case-insensitively', async function(){
+        let file = tmpFile('addr1,1\n');
+        let airdrop = { paths: [file], hashes: [sha256(file)], amounts: ['10'] };
+        let { genesis, calls } = build(airdrop, { GENESIS_AIRDROP_SET_HASH: setHash(airdrop).toUpperCase() });
+        await genesis.inject(100, 1700000000);
+        assert.strictEqual(credits(calls).length, 1);
+    });
+
+    it('catches a re-funded bucket whose snapshot bytes are unchanged (the amount was pinned nowhere)', async function(){
+        // Same CSV, same per-file pin, different XCHAIN amount: every pre- check
+        // passes and the two nodes mint different allocations.
+        let file    = tmpFile('addr1,1\n');
+        let armed   = { paths: [file], hashes: [sha256(file)], amounts: ['30000000.00000000'] };
+        let drifted = { paths: [file], hashes: [sha256(file)], amounts: ['40000000.00000000'] };
+        let { genesis, calls } = build(drifted, { GENESIS_AIRDROP_SET_HASH: setHash(armed) });
+        await assert.rejects(() => genesis.inject(100, 1700000000), /airdrop set-hash mismatch/);
+        assert.strictEqual(credits(calls).length, 0);
+    });
+
+    it('catches a dropped bucket (set membership decides the synthetic tx hashes)', async function(){
+        let dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xchain-set-'));
+        let xcp = path.join(dir, 'xcp.csv'); fs.writeFileSync(xcp, 'addr1,1\n');
+        let xdp = path.join(dir, 'xdp.csv'); fs.writeFileSync(xdp, 'daddr1,1\n');
+        let armed   = { paths: [xcp, xdp], hashes: [sha256(xcp), sha256(xdp)], amounts: ['20', '10'] };
+        let dropped = { paths: [xcp],      hashes: [sha256(xcp)],              amounts: ['20'] };
+        let { genesis, calls } = build(dropped, { GENESIS_AIRDROP_SET_HASH: setHash(armed) });
+        await assert.rejects(() => genesis.inject(100, 1700000000), /airdrop set-hash mismatch/);
+        assert.strictEqual(credits(calls).length, 0);
+    });
+
+    it('halts when a set-hash is pinned but no buckets are armed (the disarmed half of the same fork)', async function(){
+        let { genesis, calls } = build(null, { GENESIS_AIRDROP_SET_HASH: 'b'.repeat(64) });
+        await assert.rejects(() => genesis.inject(100, 1700000000),
+            /set-hash is pinned .* but no airdrop buckets are configured/);
+        assert.strictEqual(credits(calls).length, 0);
+    });
+
+    it('fails closed on mainnet when the bucket set carries no set-hash pin', async function(){
+        let file = tmpFile('addr1,1\n');
+        let { genesis, calls } = build({ paths: [file], hashes: [sha256(file)], amounts: ['10'] }, { NETWORK: 'mainnet' });
+        await assert.rejects(() => genesis.inject(100, 1700000000), /mainnet airdrop set is not pinned/);
+        assert.strictEqual(credits(calls).length, 0);
+    });
+
+    it('leaves an unarmed, unpinned mainnet genesis alone (the airdrop stays disabled)', async function(){
+        let { genesis, calls } = build(null, { NETWORK: 'mainnet' });
+        await genesis.inject(100, 1700000000);
+        assert.strictEqual(credits(calls).length, 0);
+        assert.ok(calls.length > 0, 'name/gas-token injection still ran');
     });
 
     it('rejects two buckets sharing a basename (tx-hash namespace collision)', async function(){
