@@ -62,7 +62,7 @@ module.exports = {
                 singleOpReturnPolicy:        true, // DOGE/LTC enforce one OP_RETURN per tx
             },
             firstBlock: 3120000,
-            // Block-0 hash of the chain (; full rationale in BTC.js mainnet).
+            // Block-0 hash of the chain (full rationale in BTC.js mainnet).
             // Unpinned until the operator reads it off the fleet's own node:
             // `litecoin-cli getblockhash 0`. Not in consensusSubset(), so pinning it
             // moves no CONSENSUS_CONFIG_PIN.
@@ -77,7 +77,7 @@ module.exports = {
                 EXPLORER:        'Ldonate3FfyqbYQAYxo3qjFLcu28oUdAfn', // display-only donation
             },
             // No LTC source ledger; genesis disabled (no dumpHash on LTC).
-            // XCP/XDP airdrop leg (, ): DISARMED, and disarmed HERE rather
+            // XCP/XDP airdrop leg: DISARMED, and disarmed HERE rather
             // than by leaving the keys off a node's environment. The bucket set decides how
             // much XCHAIN each snapshot holder mints and which synthetic tx hashes carry the
             // credits, so on mainnet/testnet it is bundle data like every other genesis pin;
@@ -173,7 +173,7 @@ module.exports = {
                     block:      { env: 'XCHAIN_GENESIS_BLOCK',       type: 'int', default: 0 },
                     ledgerHash: { env: 'XCHAIN_GENESIS_LEDGER_HASH', type: 'str', default: null },
                     // XCP/XDP airdrop leg. Registering it here is what makes the leg
-                    // regtest-only-configurable : the indexer used to read these
+                    // regtest-only-configurable: the indexer used to read these
                     // three env vars on EVERY network, so two mainnet replay nodes with
                     // byte-identical snapshot CSVs could still mint different allocations.
                     // Paths compact empty entries; hashes/amounts keep them, because entry N

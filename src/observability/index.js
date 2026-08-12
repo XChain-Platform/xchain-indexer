@@ -33,8 +33,9 @@
  *   LOG_SHIP_ENABLED=1 + LOG_SHIP_URL=...   POST NDJSON batches to a collector
  *   (see logShipper.js for the remaining LOG_SHIP_* tuning knobs)
  *
- * Deliberately NOT here: alerting and watchdog logic, and the fleet rollout of
- * a Prometheus server plus a log collector, which is an ops step.
+ * Deliberately NOT here: alerting and watchdog logic, which live elsewhere,
+ * and the fleet rollout of a Prometheus server plus a log collector, which
+ * is an ops step.
  *
  * This module is canonical in xchain-hub. Edit it HERE, then re-run
  * xchain-hub/bin/sync-observability.sh to vendor it into the sibling services.

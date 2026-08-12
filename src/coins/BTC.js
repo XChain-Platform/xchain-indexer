@@ -50,7 +50,7 @@ module.exports = {
     // strip Litecoin HogEx/MWEB marker+flag, 'auxpow' = merge-mined header stripped
     // before the tx count. Declared here so onboarding a chain picks its wire shape
     // in one place instead of a hardcoded coin-name list in each consumer. IS part of
-    // the consensus subset/hash (folded by consensusSubset() in index.js, ,
+    // the consensus subset/hash (folded by consensusSubset() in index.js,
     // pin regenerated 2026-07-28), so changing it is a coordinated one-wave flag-day.
     wireFormat: 'default',
 
@@ -76,7 +76,7 @@ module.exports = {
                 scriptHash:                  0x05,
                 wif:                         0x80,
                 dustThreshold:               546,
-                // RELAY POLICY floor, not the consensus one . Bitcoin
+                // RELAY POLICY floor, not the consensus one. Bitcoin
                 // Core rejects "tx-size-small" below MIN_STANDARD_TX_NONWITNESS_SIZE
                 // = 82; the 65 that stood here until 2026-07-31 is the CONSENSUS
                 // MIN_TRANSACTION_NON_WITNESS_SIZE guarding the 64-byte-transaction
@@ -89,11 +89,11 @@ module.exports = {
                 singleOpReturnPolicy:        true,
             },
             // Indexing start boundary, and IS part of the consensus subset/hash
-            // (folded by consensusSubset() in index.js, , pin regenerated
+            // (folded by consensusSubset() in index.js, pin regenerated
             // 2026-08-06): it decides which block the action history begins at, so
             // changing it is a coordinated one-wave flag-day, not a local knob.
             firstBlock: 950000,
-            // Block-0 hash of the CHAIN itself (). This is NOT the XChain
+            // Block-0 hash of the CHAIN itself. This is NOT the XChain
             // `genesis` pin below: that one pins the bootstrap LEDGER, this one pins the
             // coin node's own genesis block, and it is the ONLY constant that tells one
             // chain from another at the same tier. `chain` from getblockchaininfo carries
@@ -131,7 +131,7 @@ module.exports = {
             // DUMP_HASH re-pinned 2026-06-26: XCHAIN gas token injected as genesis token #1
             // (decimals 8, max_supply 100M, mint disabled, GAS-owned); ledgerHash unchanged
             // (XCHAIN is injected in genesis.js code, not the CSV manifest).
-            // XCP/XDP airdrop leg (, ): DISARMED, and disarmed HERE rather
+            // XCP/XDP airdrop leg: DISARMED, and disarmed HERE rather
             // than by leaving the keys off a node's environment. The bucket set decides how
             // much XCHAIN each snapshot holder mints and which synthetic tx hashes carry the
             // credits, so on mainnet/testnet it is bundle data like every other genesis pin;
@@ -161,15 +161,8 @@ module.exports = {
                 scriptHash:                  0xc4,
                 wif:                         0xef,
                 dustThreshold:               546,
-                // RELAY POLICY floor, not the consensus one . Bitcoin
-                // Core rejects "tx-size-small" below MIN_STANDARD_TX_NONWITNESS_SIZE
-                // = 82; the 65 that stood here until 2026-07-31 is the CONSENSUS
-                // MIN_TRANSACTION_NON_WITNESS_SIZE guarding the 64-byte-transaction
-                // CVE, which no relay ever enforces on its own. At 65 the encoder's
-                // reveal floor-pad never fired on Bitcoin, so any P2WSH reveal
-                // spending a single data chunk (71 stripped bytes) was rejected by
-                // every node and stranded its funding output. Measured live on BTC
-                // regtest: 71 rejected, 82 accepted.
+                // RELAY POLICY floor, not the consensus one; see the mainnet net
+                // block above for why 82 replaced 65 on 2026-07-31.
                 minStandardTxNonWitnessSize: 82,
                 singleOpReturnPolicy:        true,
             },
@@ -218,15 +211,8 @@ module.exports = {
                 scriptHash:                  0xc4,
                 wif:                         0xef,
                 dustThreshold:               546,
-                // RELAY POLICY floor, not the consensus one . Bitcoin
-                // Core rejects "tx-size-small" below MIN_STANDARD_TX_NONWITNESS_SIZE
-                // = 82; the 65 that stood here until 2026-07-31 is the CONSENSUS
-                // MIN_TRANSACTION_NON_WITNESS_SIZE guarding the 64-byte-transaction
-                // CVE, which no relay ever enforces on its own. At 65 the encoder's
-                // reveal floor-pad never fired on Bitcoin, so any P2WSH reveal
-                // spending a single data chunk (71 stripped bytes) was rejected by
-                // every node and stranded its funding output. Measured live on BTC
-                // regtest: 71 rejected, 82 accepted.
+                // RELAY POLICY floor, not the consensus one; see the mainnet net
+                // block above for why 82 replaced 65 on 2026-07-31.
                 minStandardTxNonWitnessSize: 82,
                 singleOpReturnPolicy:        true,
             },
@@ -254,7 +240,7 @@ module.exports = {
                     ledgerHash: { env: 'XCHAIN_GENESIS_LEDGER_HASH', type: 'str', default: null },
                     dumpHash:   { env: 'XCHAIN_GENESIS_DUMP_HASH',   type: 'str', default: null },
                     // XCP/XDP airdrop leg. Registering it here is what makes the leg
-                    // regtest-only-configurable : the indexer used to read these
+                    // regtest-only-configurable: the indexer used to read these
                     // three env vars on EVERY network, so two mainnet replay nodes with
                     // byte-identical snapshot CSVs could still mint different allocations.
                     // Paths compact empty entries; hashes/amounts keep them, because entry N
@@ -355,7 +341,7 @@ module.exports = {
         // chain height so every hub closes on the same block and the leader has the same
         // answer set before proposing the PASS list. That makes it a consensus input:
         // hubs disagreeing on it propose different PASS lists. It lived only as an env
-        // var with a '3' literal in FullNodeChallengeRound (), outside the pin;
+        // var with a '3' literal in FullNodeChallengeRound, outside the pin;
         // it is pinned here so a divergent value is caught by pin verification.
         COLLECT_DEPTH_BLOCKS:            3,
         GENESIS_VERIFIERS:            [],

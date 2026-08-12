@@ -36,19 +36,19 @@ module.exports = {
         // Armed in a coordinated release (plan Phase 6). null = skip verification.
         mainnet: null,
 
-        // REGENERATED 2026-07-28 ( batch, ): folding `wireFormat` into
+        // REGENERATED 2026-07-28: folding `wireFormat` into
         // consensusSubset() changes every hash by construction. Every service that
         // bundles these must ship the SAME new values in one wave; a straggler
         // fail-closes on verifyConsensusPin() rather than forking, which is the
         // designed behavior but halts that node until it is updated.
         //
-        // BTC REGENERATED 2026-07-31 : minStandardTxNonWitnessSize 65 -> 82,
+        // BTC REGENERATED 2026-07-31: minStandardTxNonWitnessSize 65 -> 82,
         // the relay-policy floor Bitcoin Core actually enforces. It lives in the `net`
         // block, which consensusSubset() hashes whole, so a pure policy correction
         // still moves the pin and still needs the one-wave rollout above. LTC and DOGE
         // are unchanged and re-verified against the canonical files.
         //
-        // REGENERATED 2026-08-06 (): folding `firstBlock` into
+        // REGENERATED 2026-08-06: folding `firstBlock` into
         // consensusSubset() changes every hash by construction, same one-wave rollout
         // rule as the wireFormat fold above. Mainnet stays null (Phase 6 arms it).
         //

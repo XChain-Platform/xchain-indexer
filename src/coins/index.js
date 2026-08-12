@@ -66,7 +66,7 @@ for(const tick of ALLOWED_COINS)
 // Consumed by the decoder/utxo-tracker to pick their parse path from the registry
 // instead of a hardcoded coin-name list. Network-independent, so it is a plain
 // tick -> family map (not resolved per network). IS part of the consensus subset
-// (folded by consensusSubset() below, ); changing it is a flag-day.
+// (folded by consensusSubset() below); changing it is a flag-day.
 const WIRE_FORMAT = {};
 for(const tick of ALLOWED_COINS)
     WIRE_FORMAT[tick] = COIN_FILES[tick].wireFormat;
@@ -161,7 +161,7 @@ function resolveFullnode(fullnode, network){
     if(network !== 'regtest') return out;
 
     // The sidecar is a file on a developer's disk, so it is Node-only by nature.
-    // Ask before reaching, rather than reaching and apologising : in a
+    // Ask before reaching, rather than reaching and apologising: in a
     // browser bundle `fs` and `path` are shims, `path.resolve` is undefined, and
     // this threw a TypeError on EVERY launch of both mobile shells. The catch
     // below swallowed it into a console line reading "FULLNODE regtest sidecar
@@ -235,7 +235,7 @@ function getCoinConfig(tick, network){
         network:       network,
         net:           clone(netBlock.net),
         firstBlock:    netBlock.firstBlock,
-        // Block-0 hash of the chain, or null when unpinned (). Exposed here so
+        // Block-0 hash of the chain, or null when unpinned. Exposed here so
         // consumers can refuse an endpoint serving a different chain at the same tier,
         // and kept OUT of consensusSubset() on purpose: it identifies the endpoint, not
         // how bytes are read, so pinning one must not move CONSENSUS_CONFIG_PIN. A coin
@@ -301,7 +301,7 @@ function consensusSubset(tick, network){
 
     const subset = {
         net:        netBlock.net,
-        // wireFormat is a CONSENSUS input (): XChainBlockDecoder keys its
+        // wireFormat is a CONSENSUS input: XChainBlockDecoder keys its
         // block parser on it (default / mweb / auxpow) and XChainDecoder derives
         // this.auxPow from it, so it decides how every block's bytes are read. It sat
         // outside this subset, which meant CONSENSUS_CONFIG_PIN did not cover it and a
@@ -309,7 +309,7 @@ function consensusSubset(tick, network){
         // different transactions out of the same block while its pin verified clean.
         // Coin-level rather than per-network, matching where the coin files declare it.
         wireFormat: coin.wireFormat,
-        // firstBlock is a CONSENSUS input (), for the same reason wireFormat
+        // firstBlock is a CONSENSUS input, for the same reason wireFormat
         // is: getCoinConfig() exposes it (below) and the decoder reads it as the chain's
         // start height (xchain-decoder/src/CryptoNetworks.js), so it decides which block
         // the action history begins at. A node bundling a higher value skips the actions
@@ -369,7 +369,7 @@ function verifyConsensusPin(network){
 
 // Per-coin cross-chain confirmation thresholds via the hub's standard
 // three-tier idiom: env XCHAIN_CONFIRMATIONS_<COIN> -> p2pConfig -> per-coin
-// default. On mainnet an override may only RAISE the depth ( / CF-1):
+// default. On mainnet an override may only RAISE the depth (CF-1):
 // the defaults are a consensus-safety floor, and a single validator running a
 // lowered depth would co-sign source actions the rest of the federation still
 // considers reorg-able. testnet/regtest keep the full override for drills.

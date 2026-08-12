@@ -25,7 +25,7 @@
  ********************************************************************/
 module.exports = {
 
-    // ── IDENTITY ────────────────────────────────────────────────────────────
+    // IDENTITY
     tick:        'DOGE',
     fullName:    'dogecoin',
     displayName: 'Dogecoin',
@@ -47,7 +47,7 @@ module.exports = {
     // (consensusSubset in index.js derives the exclusion from this list).
     DISPLAY_ONLY_ADDRESS_ROLES: ['EXPLORER'],
 
-    // ── PER-NETWORK PARAMS ──────────────────────────────────────────────────
+    // PER-NETWORK PARAMS
     networks: {
 
         mainnet: {
@@ -62,7 +62,7 @@ module.exports = {
                 singleOpReturnPolicy: true, // DOGE/LTC enforce one OP_RETURN per tx
             },
             firstBlock: 6240000,
-            // Block-0 hash of the chain (; full rationale in BTC.js mainnet).
+            // Block-0 hash of the chain (full rationale in BTC.js mainnet).
             // Unpinned until the operator reads it off the fleet's own node:
             // `dogecoin-cli getblockhash 0`. This is the value that separates a
             // DOGE-mainnet endpoint from a BTC-mainnet one: both report chain="main".
@@ -79,7 +79,7 @@ module.exports = {
             // Dogeparty name-ownership injected at the DOGE mainnet start block.
             // LEDGER_HASH = sha256 of the bundled CSV; DUMP_HASH = sha256 of the
             // uncompressed bundled state dump. Frozen at launch.
-            // XCP/XDP airdrop leg (, ): DISARMED, and disarmed HERE rather
+            // XCP/XDP airdrop leg: DISARMED, and disarmed HERE rather
             // than by leaving the keys off a node's environment. The bucket set decides how
             // much XCHAIN each snapshot holder mints and which synthetic tx hashes carry the
             // credits, so on mainnet/testnet it is bundle data like every other genesis pin;
@@ -179,7 +179,7 @@ module.exports = {
                     ledgerHash: { env: 'XCHAIN_GENESIS_LEDGER_HASH', type: 'str', default: null },
                     dumpHash:   { env: 'XCHAIN_GENESIS_DUMP_HASH',   type: 'str', default: null },
                     // XCP/XDP airdrop leg. Registering it here is what makes the leg
-                    // regtest-only-configurable : the indexer used to read these
+                    // regtest-only-configurable: the indexer used to read these
                     // three env vars on EVERY network, so two mainnet replay nodes with
                     // byte-identical snapshot CSVs could still mint different allocations.
                     // Paths compact empty entries; hashes/amounts keep them, because entry N
@@ -194,7 +194,7 @@ module.exports = {
         },
     },
 
-    // ── COIN-LEVEL CONSENSUS PARAMS (network-independent) ────────────────────
+    // COIN-LEVEL CONSENSUS PARAMS (network-independent)
     legacyFees: {
         ISSUANCE_FEE_TOKEN:          '0.25000000',
         ISSUANCE_FEE_SUBTOKEN:       '0.10000000',
