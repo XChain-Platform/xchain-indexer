@@ -32,7 +32,7 @@
     "test:integration": "mocha --timeout 30000 --recursive 'test/integration/**/*.test.js'",
     "test:integration:ci": "mocha --no-config --timeout 120000 --exit 'test/integration/**/*.test.js'",
     "test:e2e": "mocha --no-config --timeout 60000 --exit 'test/e2e/scenarios/**/*.test.js'",
-    "test:boundary": "mocha --no-config --timeout 5000 --recursive 'test/unit/boundary/**/*.test.js'",
+    "test:boundary": "mocha --no-config --timeout 5000 --recursive 'test/boundary/**/*.test.js' 'test/unit/boundary/**/*.test.js'",
     "test:smoke": "mocha --no-config --timeout 5000 'test/smoke/**/*.test.js'",
     "test:smoke:unit": "mocha --no-config --timeout 5000 'test/smoke/unit/**/*.test.js'",
     "test:smoke:connected": "mocha --no-config --timeout 5000 'test/smoke/connected/**/*.test.js'",
