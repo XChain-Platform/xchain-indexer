@@ -39,6 +39,9 @@ const assert = require('assert');
 process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 const Utility = require('../../src/utility.js');
+// A deliberately slow promise, built from the shared fixed-delay helper, drives
+// the watchdog past its budget; there is no event to poll for here.
+const { sleep } = require('../helpers/wait.js');
 
 describe('Block-processing watchdog (withTimeout) @regression @tier1', function () {
     let util;
@@ -50,7 +53,7 @@ describe('Block-processing watchdog (withTimeout) @regression @tier1', function 
     });
 
     it('rejects with a labeled Watchdog timeout when processing exceeds the budget', async function () {
-        const slow = new Promise((resolve) => setTimeout(() => resolve('too late'), 200));
+        const slow = sleep(200).then(() => 'too late');
         await assert.rejects(
             () => util.withTimeout(slow, 20, 'block 7'),
             (err) => {
@@ -71,7 +74,7 @@ describe('Block-processing watchdog (withTimeout) @regression @tier1', function 
     });
 
     it('defaults the label to "operation" when none is given', async function () {
-        const slow = new Promise((resolve) => setTimeout(resolve, 200));
+        const slow = sleep(200);
         await assert.rejects(() => util.withTimeout(slow, 10), /Watchdog timeout: operation exceeded 10ms/);
     });
 });
