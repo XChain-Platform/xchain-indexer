@@ -70,8 +70,35 @@ class Coinpay {
             return;
         }
 
-        if(this.util.bclt(data['COIN_AMOUNT'], obligationInfo['COIN_AMOUNT'])){
-            console.log("\t COINPAY (skip): amount short tx=" + data['COIN_AMOUNT'] + " owed=" + obligationInfo['COIN_AMOUNT']);
+        // Batch-cumulative settlement-value accounting (BATCH_ISSUANCE_LIMITS_V2).
+        //
+        // COIN_AMOUNT is TRANSACTION-level state that the batch loop preserves across
+        // every sub-command, and nothing decrements it. So before this, each COINPAY
+        // sub-command judged the SAME untouched payment from zero: N COINPAYs in one
+        // batch settled N obligations out of ONE payment. batch.js seeds
+        // data['BATCH_VALUE_LEDGER'] (only when the flag is active, and only before its
+        // baseKeys snapshot so the per-command field clear preserves it); this is where
+        // the settlement half of that tally is read and written.
+        //
+        // The key's ABSENCE is both the flag gate and the not-a-batch case: with no
+        // ledger `available` IS data['COIN_AMOUNT'], so every line below collapses to the
+        // pre-existing behavior byte for byte, which is what a non-BATCH transaction and a
+        // pre-flag-day BATCH must still see.
+        //
+        // data['FEE_PROBE'] marks the read-only dry-run surfaces; a probe must neither
+        // read nor write the ledger.
+        let ledger    = (!data['FEE_PROBE'] && data['BATCH_VALUE_LEDGER'] && typeof data['BATCH_VALUE_LEDGER'] === 'object')
+                            ? data['BATCH_VALUE_LEDGER'] : null;
+        let available = ledger ? this.util.bcsub(data['COIN_AMOUNT'], ledger['coinAmountConsumed'], 8) : data['COIN_AMOUNT'];
+
+        // A later sub-command that the REMAINING payment cannot fully cover takes the
+        // existing short-payment path: it skips, settles nothing, and consumes nothing.
+        // Partial settlement is deliberately not invented here - an obligation is settled
+        // in full or not at all (getCoinpayObligationInfo has no partial-fill state), so
+        // "one payment settles one obligation, not N" is enforced by refusing the later
+        // command outright rather than by part-paying it.
+        if(this.util.bclt(available, obligationInfo['COIN_AMOUNT'])){
+            console.log("\t COINPAY (skip): amount short tx=" + available + " owed=" + obligationInfo['COIN_AMOUNT']);
             await this.indexerDb.deleteActionIndex(data['ACTION_INDEX']);
             return;
         }
@@ -81,6 +108,21 @@ class Coinpay {
 
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
+
+        // Draw this obligation's OWED amount (never the whole payment) out of the batch
+        // pool, and only for a settlement that actually stands: an expired obligation
+        // settles nothing, so like a rejected fee command it consumes nothing.
+        //
+        // Draining at the owed amount rather than at the payment is the same
+        // non-compounding rule the native-fee pool uses: N obligations' worth of payment
+        // covers exactly N obligations. Any overpayment above the owed amount stays in the
+        // pool, which is correct rather than generous - every obligation reaching this
+        // point was paid to the SAME address (the PAYEE_ADDRESS check above), so the
+        // surplus really is value that address received and a sibling obligation may draw
+        // on it. Ledger values stay decimal STRINGS at 8dp, accumulated with bcadd.
+        if(ledger && status == 'valid')
+            ledger['coinAmountConsumed'] = this.util.bcformat(
+                this.util.bcadd(ledger['coinAmountConsumed'], obligationInfo['COIN_AMOUNT'], 8), 8);
 
         console.log("\t COINPAY : " + this.config['COIN'] + ':' + data['ORDER_MATCH_ACTION_INDEX'] + ' : ' + data['STATUS']);
 

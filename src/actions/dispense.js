@@ -63,6 +63,27 @@ class Dispense {
                 divergenceMetrics.recordRejectedDispense(data['COIN'], block_index, data['COIN_DESTINATION'], closed['ACTION_INDEX'], closed['REASON']);
         }
 
+        // Batch-cumulative settlement-value accounting (BATCH_ISSUANCE_LIMITS_V2).
+        //
+        // COIN_AMOUNT is TRANSACTION-level state that the batch loop preserves across
+        // every sub-command, and nothing decrements it. So before this, each DISPENSE
+        // sub-command re-ran against the SAME untouched payment from zero and bought a
+        // full multiplier off it: N sub-commands spent one payment N times. batch.js seeds
+        // data['BATCH_VALUE_LEDGER'] (only when the flag is active, and only before its
+        // baseKeys snapshot so the per-command field clear preserves it), and the tally is
+        // shared with COINPAY: both consume the same transaction settlement value.
+        //
+        // The key's ABSENCE is both the flag gate and the not-a-batch case: with no ledger
+        // `available` below IS data['COIN_AMOUNT'], so every pricing path collapses to the
+        // pre-existing behavior byte for byte. That also covers the SEND-triggered
+        // dispense path (util.processDispenserSends), which builds its own data object and
+        // therefore never carries a ledger.
+        //
+        // data['FEE_PROBE'] marks the read-only dry-run surfaces; a probe must neither
+        // read nor write the ledger.
+        let ledger = (!data['FEE_PROBE'] && data['BATCH_VALUE_LEDGER'] && typeof data['BATCH_VALUE_LEDGER'] === 'object')
+                        ? data['BATCH_VALUE_LEDGER'] : null;
+
         // Loop through dispensers and generate a list of valid DISPENSE actions
         // Note: Dispense transactions which do not match an valid dispenser are ignored
         for(let action_index of action_indexes){
@@ -83,6 +104,17 @@ class Dispense {
 
             // Store the dispenser info for easy reference
             dispenserInfo[dispenser['ACTION_INDEX']] = dispenser;
+
+            // What is left of the payment for THIS dispenser, re-read every iteration so
+            // an earlier dispenser in this same loop (several dispensers can sit behind
+            // one paid address) sees its spend reflected too. Every pricing path below
+            // reads `available`, never the raw payment.
+            let available = ledger ? this.util.bcsub(data['COIN_AMOUNT'], ledger['coinAmountConsumed'], 8) : data['COIN_AMOUNT'];
+
+            // Coin cost of ONE fill on whichever pricing path runs, filled in by that path
+            // and used only to drain the pool at the end of this iteration. Left null when
+            // no ledger is in play (nothing to drain) or when no path priced a fill.
+            let unitCoinCost = null;
 
             // FIAT dispenser: reverse price match to determine effective GET_AMOUNT
             // Two pricing modes:
@@ -108,7 +140,7 @@ class Dispense {
             } else if(!error && !this.util.isNull(dispenser['FIAT']) && !this.util.isNull(dispenser['ORACLE_ADDRESS'])){
                 // User oracle path: combines PEPECASH/JPY (oracle) with BTC/JPY (validator) for cross-conversion
                 let priceMatch = await this.util.reverseOraclePriceMatch(
-                    data['COIN_AMOUNT'],
+                    available,
                     dispenser['ORACLE_ADDRESS'],
                     dispenser['GIVE_COIN'],
                     dispenser['GIVE_TICK'],
@@ -171,13 +203,29 @@ class Dispense {
                         multiplier = this.util.bcfloorSaturating(
                             this.util.bcdiv(affordable, dispenser['GIVE_AMOUNT'], 64));
                     }
+                    // Price one fill in COIN from the affordability this matcher just
+                    // computed rather than from a second price lookup, so the two can
+                    // never disagree: `available` bought priceMatch.rawUnits tokens, so
+                    // one token cost available/rawUnits, and a fill costs that times the
+                    // tokens one fill hands out - GIVE_AMOUNT under the per-token rule,
+                    // and exactly one token under the legacy reading, where the multiplier
+                    // IS a token count priced one token per fill.
+                    if(ledger){
+                        let rawTokens = this.util.isNull(priceMatch.rawUnits)
+                            ? String(priceMatch.units)
+                            : priceMatch.rawUnits;
+                        let coinPerToken = this.util.bcdiv(available, rawTokens, 64);
+                        unitCoinCost = (perTokenOracle && giveAmountPositive)
+                            ? this.util.bcmul(coinPerToken, dispenser['GIVE_AMOUNT'], 64)
+                            : coinPerToken;
+                    }
                 } else {
                     error = 'invalid: no matching oracle price';
                 }
             } else if(!error && !this.util.isNull(dispenser['FIAT'])){
                 let coinPair = dispenser['GET_COIN'] + '/' + dispenser['FIAT'];
                 let priceMatch = await this.util.reversePriceMatch(
-                    data['COIN_AMOUNT'],
+                    available,
                     dispenser['FIAT_AMOUNT'],
                     coinPair,
                     data['BLOCK_TIME'],
@@ -186,6 +234,10 @@ class Dispense {
                 );
                 if(priceMatch){
                     multiplier = priceMatch.units;
+                    // v0 FIAT prices one fill directly: btcPerToken IS the coin cost of a
+                    // single unit at the matched snapshot.
+                    if(ledger)
+                        unitCoinCost = priceMatch.btcPerToken;
                 } else {
                     error = 'invalid: no matching price snapshot';
                 }
@@ -193,10 +245,14 @@ class Dispense {
 
             // Non-FIAT dispenser: verify COIN_AMOUNT >= GET_AMOUNT and calculate multiplier
             if(!error && this.util.isNull(dispenser['FIAT'])){
-                if(this.util.bclt(data['COIN_AMOUNT'], dispenser['GET_AMOUNT']))
+                if(this.util.bclt(available, dispenser['GET_AMOUNT']))
                     error = 'invalid: GET_AMOUNT (insufficient funds)';
-                if(!error)
-                    multiplier = this.util.bcfloor(this.util.bcdiv(data['COIN_AMOUNT'], dispenser['GET_AMOUNT'], 64));
+                if(!error){
+                    multiplier = this.util.bcfloor(this.util.bcdiv(available, dispenser['GET_AMOUNT'], 64));
+                    // Non-FIAT prices a fill directly in coin: GET_AMOUNT per fill.
+                    if(ledger)
+                        unitCoinCost = dispenser['GET_AMOUNT'];
+                }
             }
 
             // Ignore if DISPENSE is being triggered by GET_ADDRESS (dispenser can't trigger itself)
@@ -309,6 +365,32 @@ class Dispense {
                             error = 'invalid: GET_ADDRESS (DISPENSER block list)';
                     }
                 }
+            }
+
+            // Draw what THIS dispense was actually priced at out of the batch pool. Placed
+            // here, at the end of the iteration, because every rejection above (allow and
+            // block lists included) lands in `error` first, and a dispense that never
+            // settles must consume nothing - the same rule the native-fee pool follows.
+            // The second loop below derives its status from this same `error`, so "!error
+            // here" and "valid there" are the same set.
+            //
+            // Cost is the FINAL multiplier (post ownership cap and post GIVE_REMAINING
+            // clamp) times one fill's coin price, so a dispense clamped to what the
+            // dispenser can still give consumes only what it bought. Overpayment above the
+            // last whole fill stays in the pool: it is a tip today, it was paid to the
+            // triggered address, and leaving it available lets a sibling command against
+            // another dispenser at that same address draw on it exactly as it can today.
+            //
+            // Draining per fill (not the whole payment) is what makes N fills' worth of
+            // payment cover exactly N fills, whichever pricing path priced them. The clamp
+            // to `available` is a rounding guard only: bcmul rounds at 8dp, and the pool
+            // must never go negative. Ledger values stay decimal STRINGS at 8dp.
+            if(ledger && !error && unitCoinCost !== null && multiplier > 0){
+                let cost = this.util.bcmul(multiplier, unitCoinCost, 8);
+                if(this.util.bclt(available, cost))
+                    cost = available;
+                ledger['coinAmountConsumed'] = this.util.bcformat(
+                    this.util.bcadd(ledger['coinAmountConsumed'], cost, 8), 8);
             }
 
             // Add the dispense info to the dispenses array;

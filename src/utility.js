@@ -1292,6 +1292,10 @@ class Utility {
         if(!quote.valid) return quote;
 
         let expectedFee = quote.expectedFee;
+        // Nothing is owed and no output is read, so this path spends none of the batch's
+        // oracle-fee pool and deliberately touches no tally. It stays ABOVE the pool
+        // arithmetic below for the same reason the zero-fee native path does: a command
+        // that owes nothing must never be invalidated by what its siblings spent.
         if(quote.belowDust)
             return { valid: true, expectedFee: this.bcformat(expectedFee, 8),
                      belowDust: true };
@@ -1314,16 +1318,61 @@ class Utility {
         let paidAmount   = this.bcnum(feeOutput.value || feeOutput.amount || 0);
         let toleranceMin = this.bcnum(this.config['FEE_TOLERANCE_MIN'] || '0.95');
         let minAcceptable = this.bcmul(expectedFee, toleranceMin, 8);
-        if(this.bclt(paidAmount, minAcceptable))
+
+        // Batch-cumulative oracle-fee accounting (BATCH_ISSUANCE_LIMITS_V2), the same
+        // shape validateNativeCoinFee uses for the native fee pool.
+        //
+        // TX_OUTPUTS is TRANSACTION-level state that the batch loop preserves across every
+        // sub-command, and nothing decrements it. So before this, each Mode B DISPENSER
+        // open/refill in one batch judged the SAME untouched oracle-fee output from zero:
+        // N opens referencing one oracle paid ONE oracle fee.
+        //
+        // The tally is keyed BY ORACLE ADDRESS rather than being a scalar: one batch may
+        // reference several oracles, each paid by its own output, and one exhausted
+        // output must never invalidate a sub-command paying a different oracle.
+        //
+        // The ledger's ABSENCE is both the flag gate and the not-a-batch case: with no
+        // ledger every line below collapses to the pre-existing behavior, which is what a
+        // non-BATCH transaction and a pre-flag-day BATCH must still see, byte for byte.
+        //
+        // data['FEE_PROBE'] marks the read-only public quote path. actions/dispenser.js
+        // routes a probe to quoteOracleFee (which reads no output at all), so a probe does
+        // not reach here today; this guard keeps that true for any later caller, because
+        // letting the public quote API mutate consensus state is the sharpest edge here.
+        let tally     = (!data['FEE_PROBE'] && data['BATCH_VALUE_LEDGER'] &&
+                         typeof data['BATCH_VALUE_LEDGER'] === 'object' &&
+                         data['BATCH_VALUE_LEDGER']['oracleFeeConsumed'] &&
+                         typeof data['BATCH_VALUE_LEDGER']['oracleFeeConsumed'] === 'object')
+                            ? data['BATCH_VALUE_LEDGER']['oracleFeeConsumed'] : null;
+        let consumed  = tally ? (tally[oracleAddress] || '0') : '0';
+        let available = tally ? this.bcsub(paidAmount, consumed, 8) : paidAmount;
+
+        // `available` is `paidAmount` verbatim when no tally is in play, so both strings
+        // below are unchanged off the batch path; mid-batch they report what is actually
+        // left of THIS oracle's output rather than the whole of it, which no longer
+        // belongs to one command alone.
+        if(this.bclt(available, minAcceptable))
             return { valid: false,
                      error: 'invalid: ORACLE_ADDRESS (insufficient oracle fee, paid ' +
-                            this.bcformat(paidAmount, 8) + ', expected ' + this.bcformat(expectedFee, 8) + ')',
+                            this.bcformat(available, 8) + ', expected ' + this.bcformat(expectedFee, 8) + ')',
                      expectedFee: this.bcformat(expectedFee, 8),
-                     paidAmount:  this.bcformat(paidAmount, 8) };
+                     paidAmount:  this.bcformat(available, 8) };
+
+        // Attribute at most ONE command's expected fee to this command and drain this
+        // oracle's pool by that much. Draining at minAcceptable would compound the
+        // per-command 0.95x tolerance across the batch: a batch paying N commands' worth
+        // would validate ~1.05N commands. Draining at expectedFee makes N commands' worth
+        // cover exactly N. Tally values stay decimal STRINGS at 8dp, accumulated with
+        // bcadd, never JS numbers.
+        let attributed = paidAmount;
+        if(tally){
+            attributed = this.bclt(available, expectedFee) ? available : expectedFee;
+            tally[oracleAddress] = this.bcformat(this.bcadd(consumed, attributed, 8), 8);
+        }
 
         return { valid: true,
                  expectedFee: this.bcformat(expectedFee, 8),
-                 paidAmount:  this.bcformat(paidAmount, 8) };
+                 paidAmount:  this.bcformat(attributed, 8) };
     }
 
     // Pure native-coin fee math, shared by validateNativeCoinFee (the on-chain consensus
@@ -1446,8 +1495,36 @@ class Utility {
         // Get the XCHAIN fee amount (already calculated by the action handler)
         let xchainAmount = this.bcnum(fees['AMOUNT']);
         if(this.bclte(xchainAmount, 0)){
-            // No fee required; accept
+            // No fee required; accept. A command that owes nothing spends none of the
+            // batch fee pool, so this path deliberately reads and writes no ledger, and
+            // it stays ABOVE the pool check below: a zero-fee sub-command must not be
+            // invalidated because earlier siblings spent the fee output.
             return { valid: true, nativeCoinAmount: '0', oracleRound: 0 };
+        }
+
+        // Batch-cumulative native-fee accounting (BATCH_ISSUANCE_LIMITS_V2).
+        //
+        // TX_OUTPUTS is TRANSACTION-level state that the batch loop preserves across every
+        // sub-command, and nothing decrements it. So before this, each sub-command judged the
+        // SAME untouched fee output from zero: a batch of 100 ORDERs paid one ORDER's fee.
+        // batch.js seeds data['BATCH_VALUE_LEDGER'] (only when the flag is active, and only
+        // before its baseKeys snapshot so the per-command field clear preserves it); this is
+        // where the native-fee half of that tally is read and written.
+        //
+        // The key's ABSENCE is both the flag gate and the not-a-batch case: with no ledger
+        // every line below collapses to the pre-existing behavior, which is exactly what a
+        // non-BATCH transaction and a pre-flag-day BATCH must still see, byte for byte.
+        //
+        // data['FEE_PROBE'] marks the read-only public feequote path. A probe must never read
+        // or write the ledger: it is a dry run over a synthetic transaction, and letting the
+        // public quote API mutate consensus state is the sharpest edge here.
+        let ledger    = (!data['FEE_PROBE'] && data['BATCH_VALUE_LEDGER'] && typeof data['BATCH_VALUE_LEDGER'] === 'object')
+                            ? data['BATCH_VALUE_LEDGER'] : null;
+        let available = ledger ? this.bcsub(paidAmount, ledger['nativeFeeConsumed'], 8) : paidAmount;
+        if(ledger && this.bclte(available, 0)){
+            // Earlier sub-commands spent the whole fee output: to this command the pool
+            // looks exactly like an unpaid fee output, and reports itself as one.
+            return { valid: false, error: 'fee output has zero value' };
         }
 
         // Get oracle prices: XCHAIN/USD and COIN/USD.
@@ -1463,14 +1540,28 @@ class Utility {
 
         let band = this.computeNativeFeeBand(xchainAmount, prices.xchainUsdPrice, prices.coinUsdPrice, toleranceMin, toleranceMax);
 
-        if(this.bclt(paidAmount, band.minAcceptable)){
-            return { valid: false, error: 'insufficient native coin fee (paid: ' + this.bcformat(paidAmount, 8) +
+        // `available` is `paidAmount` verbatim when no ledger is in play, so the error text
+        // is unchanged off the batch path; mid-batch it reports what is actually left rather
+        // than the full output, which no longer belongs to this command alone.
+        if(this.bclt(available, band.minAcceptable)){
+            return { valid: false, error: 'insufficient native coin fee (paid: ' + this.bcformat(available, 8) +
                 ', expected: ' + this.bcformat(band.expectedNative, 8) + ', min: ' + this.bcformat(band.minAcceptable, 8) + ')' };
+        }
+
+        // Attribute at most ONE command's expected fee to this command and drain the pool by
+        // that much. Draining at band.minAcceptable would compound the per-command 0.95x
+        // tolerance across the batch: a batch paying N commands' worth would validate ~1.05N
+        // commands. Draining at expectedNative makes N commands' worth cover exactly N.
+        // Ledger values stay decimal STRINGS at 8dp, accumulated with bcadd, never JS numbers.
+        let attributed = paidAmount;
+        if(ledger){
+            attributed = this.bclt(available, band.expectedNative) ? available : band.expectedNative;
+            ledger['nativeFeeConsumed'] = this.bcformat(this.bcadd(ledger['nativeFeeConsumed'], attributed, 8), 8);
         }
 
         return {
             valid:            true,
-            nativeCoinAmount: this.bcformat(paidAmount, 8),
+            nativeCoinAmount: this.bcformat(attributed, 8),
             nativeCoin:       coin,
             oracleRound:      prices.oracleRound,
             expectedAmount:   this.bcformat(band.expectedNative, 8)

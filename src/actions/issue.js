@@ -88,6 +88,38 @@ class Issue {
         this.fieldList['LOCK']   = ['LOCK_MAX_SUPPLY', 'LOCK_MINT', 'LOCK_MINT_SUPPLY', 'LOCK_MAX_MINT', 'LOCK_DESCRIPTION', 'LOCK_SLEEP', 'LOCK_CALLBACK'];
     }
 
+    // XC-1454 (BATCH_ISSUANCE_LIMITS_V2), R6/F11: the shared intern-gating wrapper for
+    // every getTokenInfo call this action makes (parent TICK, TICK itself, CALLBACK_TICK).
+    // getTokenInfo interns any unseen name into index_tickers via createTicker BEFORE this
+    // action's validity is known. Once `error` is already set the ISSUE cannot land valid
+    // no matter what tokenInfo comes back, so minting a fresh dense ticker id for it is
+    // pure waste an attacker can spend for free - R1's dotted-child exemption lets one
+    // BATCH repeat this up to ~250 times (one per child TICK string).
+    //
+    // indexerDb.suppressIndexIdCreation is the existing resolve-only lever (see the db.js
+    // constructor and rollback.js's refresh phase): true makes createTicker resolve an
+    // EXISTING tick normally but never INSERT an unseen one. Because a not-yet-interned
+    // tick returns no token-info row either way (interned-with-no-token-row vs
+    // not-interned both read back as "unknown"), the RESULT handed back to the caller is
+    // unchanged - only the permanent index_tickers side effect is skipped. Restored via
+    // `finally` (to the PRIOR value, not a hardcoded false, in case of nesting) so a throw
+    // never leaks suppression into the next getTokenInfo call or the next action.
+    //
+    // Gated behind BATCH_ISSUANCE_LIMITS_V2 as a tightening: below the flag, or while
+    // `error` is still unset, this is a transparent passthrough - byte-identical to the
+    // unwrapped call, including every historical intern an already-invalid ISSUE caused.
+    async gatedGetTokenInfo(tick, blockIndex, actionIndex, error, gateActive){
+        if(!error || !gateActive)
+            return await this.indexerDb.getTokenInfo(tick, blockIndex, actionIndex);
+        let prior = this.indexerDb.suppressIndexIdCreation;
+        this.indexerDb.suppressIndexIdCreation = true;
+        try {
+            return await this.indexerDb.getTokenInfo(tick, blockIndex, actionIndex);
+        } finally {
+            this.indexerDb.suppressIndexIdCreation = prior;
+        }
+    }
+
     async parse(params, data, error){
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
@@ -137,8 +169,16 @@ class Issue {
             ? { FEE_PREFERENCE: 2, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 1 }
             : await this.indexerDb.getAddressPreferences(data['SOURCE'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
-        // Create the fees object 
+        // Create the fees object
         let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
+
+        // XC-1454 (BATCH_ISSUANCE_LIMITS_V2): governs both the caret-dot TICK rejection
+        // below (XC-1457/R6) and the ticker-intern gating on every getTokenInfo call in
+        // this action (R6/F11 - see gatedGetTokenInfo). Computed once, early, so every
+        // consumer below sees the same activation state for this action's BLOCK_INDEX.
+        // Both are consensus tightenings: below the flag every historical verdict
+        // (including the two defects it closes) must replay identically from genesis.
+        let batchIssuanceLimitsV2 = await this.actions.protocolChanges.isEnabled('BATCH_ISSUANCE_LIMITS_V2', data['BLOCK_INDEX']);
 
         // TICK Validations
 
@@ -159,7 +199,7 @@ class Issue {
             parent = parts.slice(0,-1).join('.');
 
             // Get information on parent TICK
-            parentInfo = await this.indexerDb.getTokenInfo(parent, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            parentInfo = await this.gatedGetTokenInfo(parent, data['BLOCK_INDEX'], data['ACTION_INDEX'], error, batchIssuanceLimitsV2);
 
             // Verify parent TICK exists
             if(!error && !parentInfo)
@@ -186,6 +226,18 @@ class Issue {
         let tid = str.substring(1); // Possible TICK ID (everything after the ^ prefix)
         if(!error && str.substring(0,1)=='^' && !this.util.isNumeric(tid))
             error = 'invalid: TICK (id)';
+
+        // XC-1457 / R6 caret rule (review F4): isNumeric() is parseFloat-based, so a caret
+        // tail containing '.' (e.g. "^12.5" or "^1.0") reads as a number and slips past the
+        // check above, landing a status=valid ISSUE with a NULL ticker id (createTicker
+        // never inserts a literal "^..." row - see db.js createTicker). Because the TICK
+        // also contains a '.', it ALSO trips the parent/child split above, so such a tick
+        // can masquerade as a child issuance; that is why batch.js's dotted-TICK exemption
+        // classifier refuses to exempt ANY caret TICK. This is the paired indexer-side
+        // rejection. Gated (tightens validity): below the flag the historical (defective)
+        // verdict stands, so a from-genesis replay stays byte-identical.
+        if(!error && batchIssuanceLimitsV2 && str.substring(0,1)=='^' && tid.indexOf('.')!=-1)
+            error = 'invalid: TICK (caret dot)';
 
         // Verify TICK length is within acceptable range
         let len = String(data['TICK']).length,
@@ -219,7 +271,7 @@ class Issue {
             error = 'invalid: TICK (BTC-only)';
 
         // Get information on token, then check distribution passing tokenInfo to avoid a second getTokenInfo call
-        let tokenInfo     = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let tokenInfo     = await this.gatedGetTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX'], error, batchIssuanceLimitsV2);
         // Genesis creates name ownership only (no balances/holders), so a genesis token is
         // never distributed; isDistributed only feeds CALLBACK edits, which carry null fields
         // at genesis anyway. Skip the holders read.
@@ -238,7 +290,7 @@ class Issue {
         // Get information on CALLBACK_TICK
         let cbInfo = false;
         if(data['CALLBACK_TICK'])
-            cbInfo = await this.indexerDb.getTokenInfo(data['CALLBACK_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            cbInfo = await this.gatedGetTokenInfo(data['CALLBACK_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX'], error, batchIssuanceLimitsV2);
 
         // FORMAT Validations
 

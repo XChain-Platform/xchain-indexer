@@ -46,6 +46,18 @@ class Batch {
         this.actionLimits['BATCH'] = 0;
         this.actionLimits['MINT']  = 1;
         this.actionLimits['ISSUE'] = 1;
+
+        // Global per-BATCH command cap (BATCH_ISSUANCE_LIMITS_V2). Every parse-valid
+        // sub-command costs an ACTION_INDEX, mappings and (when it fails) an invalid
+        // row, so per-command indexer cost dwarfs per-command on-chain cost: the data
+        // lanes admit ~744 minimal sub-commands and the envelope lane ~35,000. This is
+        // the only bound on the O(N) scans below, which is why it is checked first.
+        this.commandLimit = 250;
+
+        // Counting bucket for child (dotted-TICK) ISSUE sub-commands. Deliberately not a
+        // legal ACTION name, so it can never collide with an entry in actionLimits and
+        // child issuance stays uncapped no matter what actions are added later.
+        this.childIssueKey = 'ISSUE.CHILD';
     }
 
     // Normalize a sub-action the same way the top-level dispatcher (actions.js)
@@ -66,11 +78,58 @@ class Batch {
         return action;
     }
 
+    // Classify a sub-command for the per-ACTION limit scan (BATCH_ISSUANCE_LIMITS_V2).
+    //
+    // Only ISSUE is reclassified: a CHILD issuance (dotted TICK, e.g. JDOG.1) is exempt
+    // from the top-level limit of 1, so one BATCH may register a parent plus any number
+    // of its children, while an undotted TICK still consumes the single top-level slot.
+    // The dot test runs on the TICK the EXECUTOR will see: params[1] in all seven ISSUE
+    // formats, read off a private split copy after the same normalizeSubAction the
+    // dispatch loop applies (that call injects the implied legacy VERSION 0 in place, so
+    // it must never touch the caller's array).
+    //
+    // Caret TICKs (^<id>[.<n>]) are NEVER exempt: the caret form is an id reference and
+    // its dot is a decimal, not a namespace separator, so it counts as top-level.
+    // A malformed command with no TICK is likewise counted as top-level: exemption is
+    // granted on positive evidence only. Never throws - a classifier crash here would
+    // halt block processing - so any surprise falls back to the unclassified name, which
+    // is the pre-flag behaviour.
+    classifyLimitAction(action, command, normalize){
+        if(action !== 'ISSUE')
+            return action;
+        try {
+            let params = String(command).split('|').slice(1);
+            // Mirror the dispatch loop exactly: it normalizes params only under the
+            // normalization flag, and classification must read TICK from the same shape
+            // the handler will parse.
+            if(normalize)
+                this.normalizeSubAction(action, params);
+            let tick = params[1];
+            if(tick === undefined || tick === null)
+                return action;
+            tick = String(tick);
+            if(tick.charAt(0) == '^')
+                return action;
+            if(tick.includes('.'))
+                return this.childIssueKey;
+            return action;
+        } catch(e) {
+            return action;
+        }
+    }
+
     async parse(params, data, error){
         // BATCH_SUBACTION_NORMALIZATION flag-day: when active, sub-actions get the same
         // alias rewrite + legacy VERSION-0 injection as top-level actions. Resolved once
         // per BATCH so every scan below gates identically.
         let normalize = await this.protocolChanges.isEnabled('BATCH_SUBACTION_NORMALIZATION', data['BLOCK_INDEX']);
+        // BATCH_ISSUANCE_LIMITS_V2 flag-day: the global command cap, the dotted-TICK
+        // exemption and the batch-cumulative value ledger below. Resolved once per BATCH,
+        // like `normalize`, so every gated site in this file and every sub-command the
+        // dispatch loop runs sees ONE verdict. The gate is registered at or after
+        // BATCH_SUBACTION_NORMALIZATION (asserted in test/unit/batchIssuanceLimitsGate),
+        // so wherever this is true, sub-command params are already normalized.
+        let limitsV2 = await this.protocolChanges.isEnabled('BATCH_ISSUANCE_LIMITS_V2', data['BLOCK_INDEX']);
         // Clone before mutation: this raw copy is what gets stored in the batches table.
         let batch = structuredClone(data);
 
@@ -88,10 +147,23 @@ class Batch {
             commands[0] = commands[0].replace('BATCH|' + format + '|','');
         }
 
+        // Global command cap (BATCH_ISSUANCE_LIMITS_V2), FIRST of the command checks.
+        // It is the only check that bounds the two O(N) scans below, and running it
+        // first PINS error precedence: a batch that breaks this rule and others reports
+        // the cap, never the rule a later loop would have found. Counting semantics are
+        // consensus-pinned: the raw ';'-split list AFTER the BATCH|<version>| prefix
+        // strip, EMPTY elements included (an empty element already whole-batch-rejects
+        // via the activation scan, so charging it a slot is consistent). Over-limit
+        // takes the existing whole-batch shape: one invalid record, no sub-command runs.
+        if(!error && limitsV2 && commands.length > this.commandLimit)
+            error = 'invalid: COMMAND (limit)';
+
         for(let command of commands){
             let action = String(command).split('|')[0];
             if(normalize)
                 action = this.normalizeSubAction(action);
+            if(limitsV2)
+                action = this.classifyLimitAction(action, command, normalize);
             if(this.util.isNull(actions[action]))
                 actions[action] = 0;
             actions[action]++;
@@ -146,6 +218,40 @@ class Batch {
             // FILE leaves FORMAT=0 + ENCRYPTION_METHOD set, and a following
             // MESSAGE v2 then parses under FILE's v0 format (its ciphertext lands
             // in ENCRYPTION_METHOD) and is wrongly rejected).
+
+            // Batch-cumulative value ledger (BATCH_ISSUANCE_LIMITS_V2).
+            //
+            // TX_OUTPUTS and the transaction's settlement values are TRANSACTION-level
+            // state: the loop below preserves them across every sub-command, and each
+            // per-command check read them UNTOUCHED. Sub-command i asked "does this
+            // transaction carry enough to cover me?", passed, and sub-command i+1 asked the
+            // same question of the same untouched value, so ONE command's worth of native
+            // fee satisfied all N (and one COINPAY payment settled N obligations).
+            //
+            // This object is the running tally of what earlier sub-commands already spent.
+            // It is seeded HERE, before the baseKeys snapshot, precisely so the
+            // field-clearing loop below treats it as transaction-level and preserves it;
+            // seeded after the snapshot it would be deleted before the second sub-command
+            // ran, which is the bug wearing a ledger. Consumers live in the SHARED
+            // validators (util.validateNativeCoinFee and the COINPAY/DISPENSE value reads)
+            // so all twelve fee-bearing handlers are covered by one change rather than
+            // twelve; a handler that never sees this key (any non-BATCH transaction, or a
+            // pre-flag-day BATCH) behaves byte-identically to before.
+            //
+            // Amounts are decimal STRINGS accumulated with bcadd at 8dp, never JS numbers.
+            // The three fields cover the three transaction-level values a sub-command can
+            // consume: the native fee output paying FEE_DESTINATION, the settlement value
+            // COINPAY/DISPENSE draw down, and the per-oracle fee outputs a DISPENSER pays.
+            // oracleFeeConsumed is keyed BY ORACLE ADDRESS, not a scalar: one batch can
+            // reference several oracles, and one oracle's exhausted output must not
+            // invalidate a sub-command paying a different one.
+            if(limitsV2)
+                data['BATCH_VALUE_LEDGER'] = {
+                    nativeFeeConsumed:  '0',
+                    coinAmountConsumed: '0',
+                    oracleFeeConsumed:  {}
+                };
+
             let baseKeys = new Set(Object.keys(data));
 
             let batchPosition = -1;
