@@ -118,6 +118,140 @@ class Batch {
         }
     }
 
+    // Read a TICK's token info WITHOUT interning the tick (BATCH_ISSUANCE_LIMITS / R4).
+    //
+    // getTokenInfo resolves its argument through createTicker, which INSERTS an unseen name
+    // into index_tickers - the same free consumption of dense id space R6 closed on the ISSUE
+    // path. A pre-check that probes up to 250 unseen ticks per BATCH would re-open it at 250x,
+    // and would do it before validity is decided, so every probe here runs under db.js's
+    // existing resolve-only lever. A not-yet-interned tick then resolves to a null tick_id and
+    // the token query finds no row: the SAME answer an interned-but-tokenless tick gives, so
+    // only the side effect is skipped, never the verdict. `prior` is restored (not hardcoded
+    // false) in a finally, so nesting and throws cannot leak suppression into the next read.
+    async probeTokenInfo(tick, data){
+        let prior = this.indexerDb.suppressIndexIdCreation;
+        this.indexerDb.suppressIndexIdCreation = true;
+        try {
+            return await this.indexerDb.getTokenInfo(tick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        } finally {
+            this.indexerDb.suppressIndexIdCreation = prior;
+        }
+    }
+
+    // Nominal gas cost of ONE new-tick ISSUE, reproduced from the SAME shared helper and the
+    // SAME config keys issue.js prices with, never a second copy of the schedule:
+    //   unified: util.getUnifiedTransactionFee(1, 'ISSUE'|'ISSUE_SUBTOKEN')
+    //            == bcmul(schedule[key], GAS_PRICE, 8), which is issue.js's expression verbatim.
+    //   legacy:  config ISSUANCE_FEE_SUBTOKEN / ISSUANCE_FEE_TOKEN, the two values issue.js reads.
+    //
+    // issue.js selects the subtoken price on `parentInfo` (the parent token EXISTS), not on the
+    // dot. Dotted-but-parentless is rejected before the fee block ever runs, so on every path
+    // that can reach a fee, dotted <=> subtoken price and this mapping is exact; on the paths
+    // that cannot, it quotes the SMALLER of the two prices, which is the safe direction for a
+    // lower bound.
+    nominalIssueFee(tick, unified){
+        let child = String(tick).includes('.');
+        if(unified)
+            return this.util.getUnifiedTransactionFee(1, child ? 'ISSUE_SUBTOKEN' : 'ISSUE').fee;
+        return child ? this.config['ISSUANCE_FEE_SUBTOKEN'] : this.config['ISSUANCE_FEE_TOKEN'];
+    }
+
+    // Aggregate gas pre-check (BATCH_ISSUANCE_LIMITS / R4, spec decision D3 2026-08-13).
+    //
+    // WHAT IT IS: a conservative LOWER-BOUND collapse of the no-gas spam case. True only when
+    // EVERY sub-command is provably fee-bearing at a positively-known price and the SOURCE
+    // cannot afford even the CHEAPEST of them; the caller then invalidates the whole BATCH as
+    // one record instead of writing N invalid rows. It is never a second opinion on validity:
+    // whenever it returns false the batch proceeds untouched and every sub-command bills itself
+    // exactly as it does today.
+    //
+    // WHY THE CHEAPEST AND NOT THE SUM (deviation from the spec's R4 sentence, reported to the
+    // frontier): gas debits are batch-cumulative, so the sub-commands are billed GREEDILY in
+    // list order against one running budget. A source holding gas for K of N therefore lands
+    // exactly K valid commands - which is what acceptance test A6 pins. Rejecting on
+    // balance < SUM would kill those K, i.e. reject work that really would have succeeded, the
+    // one failure mode this check may never have. Zero sub-commands can be paid if and only if
+    // the balance is below the MINIMUM cost, so that predicate is both safe AND the strongest
+    // safe one: the sum can only add false positives, never extra collapses.
+    //
+    // WHAT IS COVERED: ISSUE of a non-caret TICK that does not already exist. Everything else
+    // returns false (let it through) on FIRST sight, because its nominal cost is not knowable
+    // here:
+    //  - non-ISSUE actions: ORDER/SWAP/DISPENSER/BET price off EXPIRATION days and escrow
+    //    state, AIRDROP/DIVIDEND off recipient counts, CALLBACK/SWEEP off db_hits, DEPLOY off
+    //    code bytes. Each is computed by the handler from params it alone parses.
+    //  - caret TICKs (^<id>): an id reference, resolved (not interned) by db.js, and R6 rejects
+    //    the caret-dot form outright; no positive price evidence, so no evidence of cost.
+    //  - the GAS tick itself: its genesis issuance is fee-exempt (chicken-and-egg).
+    //  - a TICK that already has a valid issuance: a re-issue is FREE, so that sub-command can
+    //    be valid on a zero balance and the batch must proceed. This also covers the intended
+    //    "create, add supply, lock, transfer ownership as a sequence" shape.
+    //  - a repeated new TICK inside one batch costs the same nominal fee on every occurrence:
+    //    under this predicate the first occurrence cannot pay, so it never becomes valid, so it
+    //    never creates the token (getTokenInfo reads valid issues only) and the repeat is still
+    //    a new issuance. Memoized per TICK, so N copies cost ONE read.
+    //
+    // Scope gates before any of that: the whole check applies only to the XCHAIN-balance
+    // settlement lane. In native-coin mode the fee never touches this balance (R5's ledger owns
+    // that lane) and in 'rejected' mode the failure has nothing to do with gas, so both return
+    // false. IS_GENESIS/IS_EMISSION and an inactive ISSUANCE_FEE flag are fee-exempt outright.
+    // All of these are TRANSACTION-level, so one verdict covers the whole batch.
+    //
+    // Reads are as-of (BLOCK_INDEX, the BATCH's own ACTION_INDEX) - the budget and the token
+    // set exactly as they stand before the first sub-command runs - and are read-only. The
+    // command loop is bounded ONLY by the 250-command cap, which is why that cap is the first
+    // check in parse() and why this runs behind `!error`.
+    async isGasProvablyUnaffordable(commands, data, normalize){
+        if(data['IS_GENESIS'] || data['IS_EMISSION'])
+            return false;
+        if(this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']) !== 'xchain')
+            return false;
+        if(await this.protocolChanges.isEnabled('ISSUANCE_FEE', data['BLOCK_INDEX']) == false)
+            return false;
+        let unified = await this.protocolChanges.isEnabled('UNIFIED_FEES', data['BLOCK_INDEX']);
+
+        let gasTick  = String(this.config['GAS']).toUpperCase();
+        let priced   = {};   // TICK -> nominal fee, memoized so a repeated TICK costs one read
+        let cheapest = null;
+
+        for(let command of commands){
+            let parts  = String(command).split('|');
+            let action = String(parts.shift()).toUpperCase();
+            // Same normalization the dispatch loop applies, on this loop's own split copy, so
+            // the TICK read below is the one the handler will parse (params[1] in all seven
+            // ISSUE formats, after the implied legacy VERSION 0 is injected).
+            if(normalize)
+                action = this.normalizeSubAction(action, parts);
+            if(action !== 'ISSUE')
+                return false;
+
+            let tick = (parts[1] === undefined || parts[1] === null) ? '' : String(parts[1]).trim();
+            if(tick === '' || tick.charAt(0) == '^' || tick.toUpperCase() === gasTick)
+                return false;
+
+            if(priced[tick] === undefined){
+                if(await this.probeTokenInfo(tick, data))
+                    return false;
+                priced[tick] = this.nominalIssueFee(tick, unified);
+            }
+            if(cheapest === null || this.util.bclt(priced[tick], cheapest))
+                cheapest = priced[tick];
+        }
+
+        // No commands at all, or a schedule that prices an issuance at zero: nothing is provable.
+        if(cheapest === null || !this.util.bcgt(cheapest, 0))
+            return false;
+
+        // Same balance idiom every handler uses (getAddressBalances as-of BLOCK_INDEX +
+        // ACTION_INDEX, then util.hasBalance), against the gas TICK_ID resolved by the same
+        // getTickerId(config.GAS) call util.createFeesObject makes. The full fees object is not
+        // built here: nothing below the TICK_ID is used, and creating one would need an address
+        // preferences read this check has no reason to make.
+        let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let tickId   = await this.indexerDb.getTickerId(this.config['GAS']);
+        return !this.util.hasBalance(balances, tickId, cheapest);
+    }
+
     async parse(params, data, error){
         // BATCH_SUBACTION_NORMALIZATION flag-day: when active, sub-actions get the same
         // alias rewrite + legacy VERSION-0 injection as top-level actions. Resolved once
@@ -129,7 +263,7 @@ class Batch {
         // dispatch loop runs sees ONE verdict. The gate is registered at or after
         // BATCH_SUBACTION_NORMALIZATION (asserted in test/unit/batchIssuanceLimitsGate),
         // so wherever this is true, sub-command params are already normalized.
-        let limitsV2 = await this.protocolChanges.isEnabled('BATCH_ISSUANCE_LIMITS', data['BLOCK_INDEX']);
+        let limitsActive = await this.protocolChanges.isEnabled('BATCH_ISSUANCE_LIMITS', data['BLOCK_INDEX']);
         // Clone before mutation: this raw copy is what gets stored in the batches table.
         let batch = structuredClone(data);
 
@@ -155,14 +289,14 @@ class Batch {
         // strip, EMPTY elements included (an empty element already whole-batch-rejects
         // via the activation scan, so charging it a slot is consistent). Over-limit
         // takes the existing whole-batch shape: one invalid record, no sub-command runs.
-        if(!error && limitsV2 && commands.length > this.commandLimit)
+        if(!error && limitsActive && commands.length > this.commandLimit)
             error = 'invalid: COMMAND (limit)';
 
         for(let command of commands){
             let action = String(command).split('|')[0];
             if(normalize)
                 action = this.normalizeSubAction(action);
-            if(limitsV2)
+            if(limitsActive)
                 action = this.classifyLimitAction(action, command, normalize);
             if(this.util.isNull(actions[action]))
                 actions[action] = 0;
@@ -184,6 +318,17 @@ class Batch {
 
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
+
+        // Aggregate gas pre-check (BATCH_ISSUANCE_LIMITS / R4, spec decision D3 2026-08-13).
+        // LAST of the checks by design: it is the only one that costs database reads (one per
+        // DISTINCT new TICK plus one balance read), so every cheaper verdict above short-circuits
+        // it through `!error`, and the 250-command cap - still the FIRST check - is what bounds
+        // its loop. Precedence therefore stays exactly as R2/F7 pinned it: a batch that breaks
+        // the cap, the per-ACTION limits or the activation scan reports THAT error, never this
+        // one. See isGasProvablyUnaffordable for why the predicate is the cheapest sub-command
+        // and not the sum.
+        if(!error && limitsActive && await this.isGasProvablyUnaffordable(commands, data, normalize))
+            error = 'invalid: GAS (insufficient)';
 
         let status = (error) ? error : 'valid';
         data['STATUS'] = batch['STATUS'] = status;
@@ -245,7 +390,7 @@ class Batch {
             // oracleFeeConsumed is keyed BY ORACLE ADDRESS, not a scalar: one batch can
             // reference several oracles, and one oracle's exhausted output must not
             // invalidate a sub-command paying a different one.
-            if(limitsV2)
+            if(limitsActive)
                 data['BATCH_VALUE_LEDGER'] = {
                     nativeFeeConsumed:  '0',
                     coinAmountConsumed: '0',
