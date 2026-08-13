@@ -17,7 +17,7 @@
  * This class loads up all action classes and sets up handlers to process transactions
  *
  * The XChain Indexer actions are defined in the specifications at :
- * https://github.com/XChain-platform/xchain-documentation/blob/master/actions/README.md
+ * https://github.com/XChain-Platform/xchain-documentation/blob/master/actions/README.md
  * 
  ********************************************************************/
 

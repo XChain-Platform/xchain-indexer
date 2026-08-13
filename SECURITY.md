@@ -12,7 +12,7 @@ If you've found a security issue, please **do not open a public issue or pull re
 
 Open a draft advisory at:
 
-<https://github.com/XChain-platform/xchain-indexer/security/advisories/new>
+<https://github.com/XChain-Platform/xchain-indexer/security/advisories/new>
 
 This is the fastest path. The advisory is private until we publish it.
 

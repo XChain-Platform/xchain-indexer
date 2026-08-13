@@ -16,7 +16,7 @@
  * Service-specific Prometheus metrics for xchain-indexer.
  *
  * Lives outside src/observability/ on purpose: that directory is vendored
- * byte-identically from xchain-hub and bin/check-observability-parity.js fails
+ * byte-identically from xchain-hub and the vendored-copy parity check fails
  * on any drift, so a per-service metric may only use the shared module's public
  * API from the service's own code. It is its own module rather than inline in
  * api.js because api.js self-starts on require (it calls startApi() at load and

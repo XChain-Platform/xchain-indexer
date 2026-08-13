@@ -12213,7 +12213,7 @@ class Database {
     // the validator set at a block boundary for PBFT quorum calculations -
     // every hub independently calling this against the same blockIndex must
     // arrive at the same set, so consensus on quorum N is deterministic.
-    // Spec: claude/reports/specs/2026-05-24_capability-staking-model.md §6
+    // Spec: capability-staking model §6 (deterministic quorum selection).
     async getValidatorsByCapability(capability, blockIndex, minStakeOverride){
         // Off-BTC chains have no local capability stakes (capability staking is BTC-only),
         // so resolve the qualifying set from the hub-mirrored capability_snapshots at the
@@ -13045,7 +13045,7 @@ class Database {
     /*
      * Contract-targeted staking methods (STAKE v3 / UNSTAKE v1 / DELEGATE v1)
      * Parallel to the capability staking system; tracked in separate tables to keep
-     * capability-staking queries unchanged. See claude/reports/specs/contract-staking-model.md
+     * capability-staking queries unchanged.
      */
 
     // Create/Update record in `contract_stakes` table.
@@ -14030,7 +14030,7 @@ class Database {
     // replay. This keeps the counters consensus-safe across reorgs so Phase 4
     // slashing can consume them. See src/rollback.js.
     //
-    // Spec: claude/reports/specs/2026-05-24_external-attestation-framework.md §10
+    // Spec: external attestation framework §10 (validator stat accounting).
     async incrementAttestationValidatorStat(validatorPubkey, providerId, field, blockIndex){
         const allowed = { fulfilled_count: 1, missed_count: 1, slashed_count: 1 };
         if(!allowed[field]) throw new Error('incrementAttestationValidatorStat: unsupported field ' + field);

@@ -4,8 +4,9 @@ A dependency-free Prometheus `/metrics` exporter plus a structured log shim,
 vendored byte-identically into every `xchain-*` service.
 
 **Canonical copy: `xchain-hub/src/observability/`.** Edit here, then run
-`xchain-hub/bin/sync-observability.sh` to push the copies out. CI (or a manual
-run of `bin/check-observability-parity.js` at the platform root) fails on drift.
+`xchain-hub/bin/sync-observability.sh` to push the copies out. A parity check
+across the vendored copies fails on drift; run it locally with
+`xchain-hub/bin/sync-observability.sh --check`.
 
 ## Wiring a service
 

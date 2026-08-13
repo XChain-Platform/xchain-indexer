@@ -27,7 +27,7 @@
  * This file guards the JS wiring + guard (no-op for non-anchor types, correct
  * DELETE + params for anchor types). The SQL's runtime behaviour against a real
  * MariaDB (the DELETE…JOIN derived-table must not self-reference its target) is
- * proven by the real-DB drill in claude/scratch/reconcile-anchor-reward-drill.js.
+ * proven by a real-DB drill.
  */
 
 'use strict';

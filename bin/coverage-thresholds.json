@@ -1,0 +1,7 @@
+{
+  "comment": "Coverage floors for the CI coverage job (regression floors, ~1-1.5 points below measured on 2026-08-12, not tier targets; raise as coverage climbs). Mirrored into the coverage:check npm script in package.json: keep both in sync.",
+  "lines": 86.4,
+  "statements": 86.4,
+  "branches": 83.3,
+  "functions": 81.2
+}

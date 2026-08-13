@@ -23,8 +23,7 @@
  * NULL), mirroring findOrderMatches' null-side handling.
  *
  * This guards the generated SQL carries the NULL-aware predicates. The runtime
- * pairing semantics against MariaDB are proven by the real-DB drill in
- * claude/scratch/findswapmatches-null-pairing-drill.js.
+ * pairing semantics against MariaDB are proven by a real-DB drill.
  */
 
 'use strict';

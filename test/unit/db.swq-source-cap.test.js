@@ -21,7 +21,7 @@
  *   - the TRUNCATION semantics: truncated ONLY when a source beyond maxSources
  *     returns; a bounded key-spammer does NOT set truncated.
  * The SQL itself (window functions against real rows) is proven by the real-MariaDB
- * drill (claude/scratch/swq-source-cap-drill.js) - unit tests stub doQuery.
+ * drill; unit tests here stub doQuery.
  */
 
 'use strict';

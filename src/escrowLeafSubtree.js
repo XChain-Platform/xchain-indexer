@@ -10,8 +10,7 @@
  *
  **********************************************************************
  *
- * XCHAIN_ESC locked-balance leaf derivation (SPV sub-tree spec §3 Stage B;
- * design in claude/specs/spv-state-subtree-extension.md).
+ * XCHAIN_ESC locked-balance leaf derivation (SPV sub-tree spec §3 Stage B).
  *
  * NOT A SUB-ROOT. Stage A committed a new top-level slot; this commits a second
  * LEAF DOMAIN inside the EXISTING balances_root, beside the spendable-balance

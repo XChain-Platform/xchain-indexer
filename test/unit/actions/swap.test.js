@@ -299,7 +299,7 @@ describe('Swap action handler @regression @tier2', function () {
         // inside the ownership-bid block) are pre-empted by the GET_TICK existence check
         // at line 162 in the same-chain case, and the cross-chain case trips the GIVE_COIN
         // network guard first: i.e. this is a defensive, effectively-unreachable branch.
-        // Left uncovered intentionally; documented in claude/reports/coverage/HANDOVER.md.
+        // Left uncovered intentionally.
     });
 
     describe('LIST field validation', function () {

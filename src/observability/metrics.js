@@ -19,7 +19,7 @@
  * xchain-* service is an independent repo with its own package.json: a shared
  * npm dependency would need publishing and six lockfile bumps, while this file
  * is vendored byte-identically by bin/sync-observability.sh and gated in CI by
- * bin/check-observability-parity.js. Zero deps also means /metrics cannot pull
+ * a parity check across those copies. Zero deps also means /metrics cannot pull
  * a new supply-chain surface into a consensus-critical service.
  *
  * Cardinality is the failure mode that kills a Prometheus server, so two guards

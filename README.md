@@ -100,6 +100,16 @@ Start the indexer:
 npm run api
 ```
 
+## Database migrations
+
+The repo has two migration directories, and they are not interchangeable.
+`src/sql/migrations/` is the runner-tracked home: it is the only directory
+`Database.runMigrations()` scans, checksums, and records in the
+`schema_migrations` ledger, and it is where every new migration belongs. The
+top-level `migrations/` directory holds legacy, manual, one-off runbook SQL
+that is never auto-applied; see [`migrations/README.md`](migrations/README.md)
+for how (and whether) to run something from it by hand.
+
 ## Metrics and log shipping (optional, off by default)
 
 A Prometheus `/metrics` endpoint and a structured log shim ship with this
@@ -112,7 +122,7 @@ variable list and the exported metric names are in
 
 The module is vendored byte-identically from xchain-hub. Edit it there
 and re-run `xchain-hub/bin/sync-observability.sh`; a local edit fails the
-parity gate in `bin/check-observability-parity.js`.
+parity check CI runs across the vendored copies.
 
 ## Scripts
 
