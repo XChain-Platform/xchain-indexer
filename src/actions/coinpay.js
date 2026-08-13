@@ -22,6 +22,11 @@
  * each output separately; only the output matching the obligation's
  * payee address and amount triggers settlement.
  *
+ * Inside a BATCH there is no per-output processing (a BATCH row is not a
+ * per-output settlement row, so output_fanout.js collapses it to one row),
+ * so a batched sub-command resolves its own payment output from TX_OUTPUTS
+ * instead. See the note at the resolution below.
+ *
  * Format: COINPAY|0|ORDER_MATCH_ACTION_INDEX
  *
  ********************************************************************/
@@ -38,6 +43,29 @@ class Coinpay {
 
         this.formats = {};
         this.formats[0] = 'VERSION|ORDER_MATCH_ACTION_INDEX';
+    }
+
+    // The transaction output that pays `address`, or null.
+    //
+    // FIRST match, deliberately: the same matcher utility.js validateNativeCoinFee and
+    // validateOracleFee use, so a payer sizing one output per payee and the validator
+    // reading it back cannot disagree about WHICH output is meant. tx_outputs arrives
+    // sorted by vout (db.js getDecoderBlockData), so "first" is the lowest-vout output
+    // paying that address and is identical on every node.
+    //
+    // Consequence worth naming: an address paid by TWO outputs offers only the first as a
+    // pool, so a batch settling two obligations to one seller must pay that seller both
+    // obligations' worth in a single output. That is the shape the pool arithmetic below
+    // already assumes ("surplus above the owed amount stays in the pool for a sibling
+    // obligation to the same address") and is why the A5 invariant still binds per address.
+    findPaymentOutput(txOutputs, address){
+        if(!txOutputs || !Array.isArray(txOutputs) || this.util.isNull(address))
+            return null;
+        for(let output of txOutputs){
+            if(output && (output.address === address || output.scriptPubKey_address === address))
+                return output;
+        }
+        return null;
     }
 
     async parse(params, data, error){
@@ -64,12 +92,6 @@ class Coinpay {
             return;
         }
 
-        if(data['COIN_DESTINATION'] != obligationInfo['PAYEE_ADDRESS']){
-            console.log("\t COINPAY (skip): destination mismatch tx=" + data['COIN_DESTINATION'] + " payee=" + obligationInfo['PAYEE_ADDRESS']);
-            await this.indexerDb.deleteActionIndex(data['ACTION_INDEX']);
-            return;
-        }
-
         // Batch-cumulative settlement-value accounting (BATCH_ISSUANCE_LIMITS).
         //
         // COIN_AMOUNT is TRANSACTION-level state that the batch loop preserves across
@@ -87,9 +109,70 @@ class Coinpay {
         //
         // data['FEE_PROBE'] marks the read-only dry-run surfaces; a probe must neither
         // read nor write the ledger.
-        let ledger    = (!data['FEE_PROBE'] && data['BATCH_VALUE_LEDGER'] && typeof data['BATCH_VALUE_LEDGER'] === 'object')
+        let ledger = (!data['FEE_PROBE'] && data['BATCH_VALUE_LEDGER'] && typeof data['BATCH_VALUE_LEDGER'] === 'object')
                             ? data['BATCH_VALUE_LEDGER'] : null;
-        let available = ledger ? this.util.bcsub(data['COIN_AMOUNT'], ledger['coinAmountConsumed'], 8) : data['COIN_AMOUNT'];
+
+        let payee = obligationInfo['PAYEE_ADDRESS'];
+
+        // Per-payee payment resolution INSIDE a batch (BATCH_ISSUANCE_LIMITS, spec row 25).
+        //
+        // Outside a batch this handler is reached once per native-coin output: db.js
+        // getDecoderBlockData emits one row per stored output and output_fanout.js leaves
+        // a COINPAY transaction's rows alone, so COIN_DESTINATION/COIN_AMOUNT walk the
+        // whole output set and exactly the row paying the payee settles.
+        //
+        // A BATCH row is NOT a per-output settlement row (its top-level action is BATCH),
+        // so collapseOutputFanout keeps only the LOWEST-VOUT row and every sub-command
+        // sees that one output's COIN_DESTINATION. N sub-commands paying N different
+        // sellers therefore cleared exactly one of them: the rest failed the destination
+        // check against a payment that was never meant for them.
+        //
+        // The fix is NOT to fan a BATCH row out per output - that would re-execute every
+        // sub-command (every ISSUE, SEND, ORDER) once per output. It is for this handler to
+        // read the output set directly: getDecoderBlockData attaches the FULL, vout-sorted
+        // tx_outputs of the transaction to EVERY emitted row (db.js, `outputsByTx`), so the
+        // surviving row already carries every payee's output; only the consumer was missing.
+        //
+        // Gated by the ledger's presence, which is this spec's flag AND the in-a-batch
+        // marker. Off the batch path payeeOutput stays null and the destination check below
+        // is the unchanged single-output test.
+        let payeeOutput = ledger ? this.findPaymentOutput(data['TX_OUTPUTS'], payee) : null;
+
+        if(!payeeOutput && data['COIN_DESTINATION'] != payee){
+            console.log("\t COINPAY (skip): destination mismatch tx=" + data['COIN_DESTINATION'] + " payee=" + payee);
+            await this.indexerDb.deleteActionIndex(data['ACTION_INDEX']);
+            return;
+        }
+
+        // Which pool this obligation draws on, and this is the whole reason the tally is
+        // no longer a single scalar.
+        //
+        // coinAmountConsumed was correct while every consumer drew on ONE output: COINPAY
+        // and coin-paid DISPENSE both spent the surviving row's COIN_DESTINATION output and
+        // nothing else was reachable. Once an obligation can resolve its OWN output, a
+        // scalar is wrong in exactly the way a scalar oracle-fee tally would have been
+        // wrong (utility.js validateOracleFee, which keys by oracle address for this same
+        // reason): seller A's settlement would eat the output that pays seller B, and two
+        // sellers each paid in full would settle only once.
+        //
+        // So the model is per-ADDRESS, with the existing scalar kept as the cell for one
+        // address - the row's own COIN_DESTINATION. That address's arithmetic is then
+        // untouched (paidAmount IS data['COIN_AMOUNT'], the tally IS coinAmountConsumed),
+        // which preserves R5's driven behavior byte for byte and keeps the pool that
+        // actions/dispense.js shares through the same key. Every OTHER payee gets its own
+        // cell in coinPayeeConsumed, created lazily here rather than seeded in batch.js,
+        // and one payee's exhausted output can never invalidate a sibling paid separately.
+        let settledOutput = (payee == data['COIN_DESTINATION']) ? null : payeeOutput;
+
+        let paidAmount = settledOutput
+                            ? (settledOutput.value || settledOutput.amount || 0)
+                            : data['COIN_AMOUNT'];
+        let payeeTally = (ledger && ledger['coinPayeeConsumed'] && typeof ledger['coinPayeeConsumed'] === 'object')
+                            ? ledger['coinPayeeConsumed'] : null;
+        let consumed   = settledOutput
+                            ? (payeeTally ? (payeeTally[payee] || '0') : '0')
+                            : (ledger ? ledger['coinAmountConsumed'] : '0');
+        let available  = ledger ? this.util.bcsub(paidAmount, consumed, 8) : data['COIN_AMOUNT'];
 
         // A later sub-command that the REMAINING payment cannot fully cover takes the
         // existing short-payment path: it skips, settles nothing, and consumes nothing.
@@ -116,22 +199,41 @@ class Coinpay {
         // Draining at the owed amount rather than at the payment is the same
         // non-compounding rule the native-fee pool uses: N obligations' worth of payment
         // covers exactly N obligations. Any overpayment above the owed amount stays in the
-        // pool, which is correct rather than generous - every obligation reaching this
-        // point was paid to the SAME address (the PAYEE_ADDRESS check above), so the
-        // surplus really is value that address received and a sibling obligation may draw
-        // on it. Ledger values stay decimal STRINGS at 8dp, accumulated with bcadd.
-        if(ledger && status == 'valid')
-            ledger['coinAmountConsumed'] = this.util.bcformat(
-                this.util.bcadd(ledger['coinAmountConsumed'], obligationInfo['COIN_AMOUNT'], 8), 8);
+        // pool, which is correct rather than generous - every obligation drawing on a given
+        // pool was paid to the SAME address (that is what keys the pool), so the surplus
+        // really is value that address received and a sibling obligation to it may draw on
+        // it. Ledger values stay decimal STRINGS at 8dp, accumulated with bcadd.
+        //
+        // The draw lands in the cell for the address that was actually paid: the shared
+        // scalar for the row's own COIN_DESTINATION (unchanged, and still visible to
+        // actions/dispense.js), or this payee's own cell otherwise.
+        if(ledger && status == 'valid'){
+            let drawn = this.util.bcformat(this.util.bcadd(consumed, obligationInfo['COIN_AMOUNT'], 8), 8);
+            if(settledOutput){
+                if(!payeeTally){
+                    payeeTally = {};
+                    ledger['coinPayeeConsumed'] = payeeTally;
+                }
+                payeeTally[payee] = drawn;
+            } else {
+                ledger['coinAmountConsumed'] = drawn;
+            }
+        }
 
         console.log("\t COINPAY : " + this.config['COIN'] + ':' + data['ORDER_MATCH_ACTION_INDEX'] + ' : ' + data['STATUS']);
 
+        // Record the output this obligation actually settled against. On the legacy path
+        // that is the row's own output, unchanged. On the per-payee path the row describes
+        // a DIFFERENT address's payment, so recording it would file seller B's settlement
+        // under seller A's payment; `coinpays` is a descriptive record (nothing in the
+        // indexer reads the table back), so this corrects the attribution without moving a
+        // consensus value.
         let coinpayData = {
             ACTION_INDEX:            data['ACTION_INDEX'],
             OBLIGATION_ACTION_INDEX: obligationInfo['ACTION_INDEX'],
-            COIN_AMOUNT:             data['COIN_AMOUNT'],
+            COIN_AMOUNT:             settledOutput ? paidAmount     : data['COIN_AMOUNT'],
             TXID:                    data['TX_HASH'],
-            VOUT:                    data['TX_VOUT'],
+            VOUT:                    settledOutput ? settledOutput.vout : data['TX_VOUT'],
             STATUS:                  status,
             BLOCK_INDEX:             data['BLOCK_INDEX']
         };
