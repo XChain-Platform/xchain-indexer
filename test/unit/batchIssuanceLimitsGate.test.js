@@ -43,6 +43,7 @@ const ProtocolChanges       = require('../../src/protocol_changes.js');
 
 const GATE          = 'BATCH_ISSUANCE_LIMITS';
 const NORMALIZATION = 'BATCH_SUBACTION_NORMALIZATION';
+const FANOUT        = 'FIX_OUTPUT_FANOUT';
 
 // A far-future instant no real chain reaches before the operator arms the gate
 // deliberately: 2100-01-01, the same boundary the sibling unarmed-gate suites use
@@ -116,6 +117,40 @@ describe('BATCH issuance-limits flag day @regression @tier1', function(){
                     '; the limit scan would classify un-normalized params');
                 assert.ok(gate[network + '_block'] >= norm[network + '_block'],
                     GATE + ' must not be height-gated below ' + NORMALIZATION + ' on ' + network);
+            });
+        }
+    });
+
+    describe('ordering against FIX_OUTPUT_FANOUT', function(){
+
+        // A batched COINPAY is a DATA-BEARING transaction carrying SEVERAL payment
+        // outputs, one per payee (src/actions/coinpay.js resolves each obligation
+        // against its own output). Below FIX_OUTPUT_FANOUT, collapseOutputFanout does
+        // not collapse such a row - it THROWS, which halts block processing. So a
+        // window where this gate is live and the fan-out fix is not does not merely
+        // mis-settle: it stops the chain on the first multi-payee batch.
+        //
+        // The same argument binds the DECODER's own capture gate
+        // (BATCH_SUBCOMMAND_OUTPUT_CAPTURE_ACTIVATION, xchain-decoder), which must arm
+        // at or after this one or the output set is empty and nothing settles at all.
+        // That side is asserted in the decoder's own suite; this is the indexer half.
+        //
+        // Today's pins are safe (FIX_OUTPUT_FANOUT mainnet 1786060800 against this
+        // gate's unarmed sentinel; both genesis-active elsewhere), but nothing enforced
+        // it, which is the same gap the normalization ordering above exists to close.
+        for(const network of ['mainnet','testnet','regtest']){
+            it(network + ': never activates before the output-fanout fix', function(){
+                const changes = pcFor(network).pc.changes;
+                const gate    = changes[GATE];
+                const fanout  = changes[FANOUT];
+                assert.ok(gate, GATE + ' must be registered');
+                assert.ok(fanout, FANOUT + ' must be registered');
+                assert.ok(gate[network + '_time'] >= fanout[network + '_time'],
+                    GATE + ' activates at ' + gate[network + '_time'] + ' on ' + network +
+                    ', BEFORE ' + FANOUT + ' at ' + fanout[network + '_time'] +
+                    '; a multi-payee batched COINPAY would halt the block rather than settle');
+                assert.ok(gate[network + '_block'] >= fanout[network + '_block'],
+                    GATE + ' must not be height-gated below ' + FANOUT + ' on ' + network);
             });
         }
     });
