@@ -45,3 +45,33 @@ jobs:
       # speed and so private deps never need registry auth here.
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
+
+  # Post-flip both-branch sweep.
+  #
+  # A scheduled workflow runs from the DEFAULT branch's workflow file against the
+  # default branch. Once develop is the default, the job above would audit only
+  # develop, and a CVE against a dependency the current release train ships would
+  # produce no red anywhere: exactly the case this audit exists to catch. So the
+  # scheduled sweep checks out both branches explicitly.
+  #
+  # Not merged into the job above because that one must audit the PR's own merge
+  # commit on `pull_request`, which is a different ref than either branch.
+  audit-release-branches:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ref: [master, develop]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.ref }}
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Audit production dependencies (${{ matrix.ref }})
+        run: npm audit --omit=dev --audit-level=high

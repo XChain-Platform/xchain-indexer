@@ -6,7 +6,10 @@ name: CI
 
 on:
   push:
-    branches: [master]          # use [main] for repos whose default branch is main
+    # develop is where all work lands; master only ever receives release PRs.
+    # Both run the gate: develop so a lane push is verified as it lands, master
+    # so the merge commit a release tag points at has its own green run.
+    branches: [master, develop]
   pull_request:
     branches: [master]
 
