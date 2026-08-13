@@ -398,6 +398,18 @@ class Batch {
 
         let actions = {};
 
+        // The DISTINCT keys of `actions`, in the order their FIRST sub-command appears in the
+        // command list. R2b DECLARES that order: among per-ACTION caps, a batch breaking two of
+        // them reports the action whose first sub-command comes earliest, and that string is
+        // consensus. It is kept as its own list rather than read back off `actions` because the
+        // tally is a plain object whose iteration order is a property of key INSERTION (and of
+        // integer-like keys, which an unknown ACTION can produce), not a stated rule: a later
+        // tidy-up to a Map, a sort, or a second counting pass would silently move a consensus
+        // string. First-appearance was chosen precisely because it is what this loop and the SDK
+        // mirror already did, so declaring it moves no verdict; do not "simplify" the cap loop
+        // below back into an iteration over the tally.
+        let actionOrder = [];
+
         // TICKs of this batch's MINT sub-commands, in list order, collected in the SAME pass
         // that counts them so the two can never disagree about which commands are MINTs
         // (D7 caps MINTs per DISTINCT token, so the count alone is no longer the whole story).
@@ -436,8 +448,12 @@ class Batch {
                 if(action === 'MINT')
                     mintTicks.push(this.subCommandTick(action, command, normalize));
             }
-            if(this.util.isNull(actions[action]))
+            if(this.util.isNull(actions[action])){
                 actions[action] = 0;
+                // First sighting, and this IS the list walk, so pushing here is what makes the
+                // cap loop's order list-driven (R2b) rather than tally-driven.
+                actionOrder.push(action);
+            }
             actions[action]++;
         }
 
@@ -454,7 +470,10 @@ class Batch {
         // (DEPLOY, D5) are merged into a COPY, never into either stored table.
         let actionLimits = limitsActive ? Object.assign({}, this.actionLimits, this.gatedActionLimits) : this.actionLimits;
 
-        for(let action in actions){
+        // Walked in first-appearance order (R2b), which is why `actionOrder` exists: the action
+        // that names the error must be decided by the command LIST, never by however the tally
+        // object happens to enumerate.
+        for(let action of actionOrder){
             let count = actions[action];
             // D7: MINT is capped per DISTINCT TOKEN rather than per batch, so what the cap is
             // compared against is the largest number of MINTs naming ONE token, not the raw

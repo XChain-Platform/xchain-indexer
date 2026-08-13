@@ -1255,5 +1255,118 @@ describe('Batch @regression @tier3', function () {
 
         });
 
+        /*
+         * R2b: among per-ACTION caps, the error names the action whose FIRST sub-command appears
+         * EARLIEST in the command list.
+         *
+         * The status string is consensus, so which of two broken caps names it is a rule and not
+         * a formatting choice. It used to be settled by whatever order `for...in` handed back the
+         * tally, which happened to be first appearance; these tests own it, so a future refactor
+         * to a Map, a sort, or a second counting pass fails HERE instead of forking a chain.
+         *
+         * Every pair is stated in BOTH directions on purpose. One direction alone is satisfied
+         * just as well by alphabetical order, by descending count, or by key insertion, so a
+         * one-sided test would go on passing under any of the wrong rules.
+         */
+        describe('R2b: per-ACTION error precedence is FIRST APPEARANCE', function () {
+
+            const TABLE = { JDOG: 614, PEPE: 700 };
+
+            beforeEach(function () {
+                stubTickerTable(TABLE);
+                indexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
+            });
+
+            const issues = ['ISSUE|0|AAA', 'ISSUE|0|BBB'];
+            const repeatMints = mints(['JDOG', 'JDOG']);
+
+            it('DEPLOY first, ISSUE second → the DEPLOY limit', async function () {
+                const data = await run(true, deploys(2).concat(issues));
+
+                assert.strictEqual(data['STATUS'], 'invalid: DEPLOY (limit)');
+            });
+
+            it('ISSUE first, DEPLOY second → the ISSUE limit', async function () {
+                const data = await run(true, issues.concat(deploys(2)));
+
+                assert.strictEqual(data['STATUS'], 'invalid: ISSUE (limit)');
+            });
+
+            it('INTERLEAVED: the action that appears first wins, not the cap completed first', async function () {
+                // DEPLOY's second command is LAST in the list, so a rule keyed on which cap was
+                // completed first would report ISSUE here.
+                const d = deploys(2);
+                const onDeploy = await run(true, [d[0], issues[0], issues[1], d[1]]);
+                assert.strictEqual(onDeploy['STATUS'], 'invalid: DEPLOY (limit)');
+
+                const onIssue = await run(true, [issues[0], d[0], d[1], issues[1]]);
+                assert.strictEqual(onIssue['STATUS'], 'invalid: ISSUE (limit)');
+            });
+
+            it('a LARGER overage does not jump the queue', async function () {
+                // DEPLOY exceeds its cap by two and ISSUE by one; ISSUE leads, so ISSUE reports.
+                const data = await run(true, issues.concat(deploys(3)));
+
+                assert.strictEqual(data['STATUS'], 'invalid: ISSUE (limit)');
+            });
+
+            it('MINT takes its turn by first appearance despite its substituted count', async function () {
+                // MINT is the one cap compared against a per-DISTINCT-TOKEN maximum rather than
+                // the raw occurrence count (D7); the substitution must not move its place.
+                const onMint = await run(true, repeatMints.concat(issues));
+                assert.strictEqual(onMint['STATUS'], 'invalid: MINT (limit)');
+
+                const onIssue = await run(true, issues.concat(repeatMints));
+                assert.strictEqual(onIssue['STATUS'], 'invalid: ISSUE (limit)');
+            });
+
+            it('MINT before DEPLOY reports MINT, which alphabetical order would reverse', async function () {
+                const onMint = await run(true, repeatMints.concat(deploys(2)));
+                assert.strictEqual(onMint['STATUS'], 'invalid: MINT (limit)');
+
+                const onDeploy = await run(true, deploys(2).concat(repeatMints));
+                assert.strictEqual(onDeploy['STATUS'], 'invalid: DEPLOY (limit)');
+            });
+
+            it('uncapped and child-exempt commands take no turn in the queue', async function () {
+                const d = deploys(2);
+                const data = await run(true, [sends(1)[0], 'ISSUE|0|JDOG.1']
+                    .concat([d[0], issues[0], issues[1], d[1]]));
+
+                assert.strictEqual(data['STATUS'], 'invalid: DEPLOY (limit)');
+            });
+
+            it('three broken caps: the leader names the error, both directions', async function () {
+                const first = await run(true, repeatMints.concat(deploys(2), issues));
+                assert.strictEqual(first['STATUS'], 'invalid: MINT (limit)');
+
+                const second = await run(true, issues.concat(deploys(2), repeatMints));
+                assert.strictEqual(second['STATUS'], 'invalid: ISSUE (limit)');
+            });
+
+            it('an unknown ACTION still outranks the leading per-action cap (R2/F7 unchanged)', async function () {
+                const data = await run(true, issues.concat(deploys(2), ['NOPE|0|x']));
+
+                assert.strictEqual(data['STATUS'], 'invalid: ACTION (unknown)');
+            });
+
+            it('the 250-command cap still outranks the leading per-action cap', async function () {
+                const data = await run(true, issues.concat(deploys(2), sends(247)));
+                assert.strictEqual(data['STATUS'], 'invalid: COMMAND (limit)');
+            });
+
+            it('gate OFF: the same ordering rule decides the pre-flag caps', async function () {
+                // Below the flag DEPLOY is uncapped, so the pair that can still collide is
+                // MINT against ISSUE. The ordering code is shared across the flag and this is
+                // what says so.
+                const onMint = await run(false, repeatMints.concat(issues));
+                assert.strictEqual(onMint['STATUS'], 'invalid: MINT (limit)');
+
+                const onIssue = await run(false, issues.concat(repeatMints));
+                assert.strictEqual(onIssue['STATUS'], 'invalid: ISSUE (limit)');
+            });
+
+        });
+
     });
 });
