@@ -1,7 +1,32 @@
+# Repos the indexer suite needs checked out BESIDE it on the CI venue.
+#
+# Declaring a sibling here is what makes its cross-repo guards actually run. An
+# UNdeclared sibling is not a neutral omission: every guard written against it
+# resolves with existsSync, calls this.skip(), and the gate still prints PASS,
+# so the run reports green having exercised none of them. Measured 2026-08-12
+# across the nine gated repos, this was the ONE whose roster was already
+# complete, so its venue counts already equal a full local checkout's. See
+# test/unit/sibling-coverage.test.js, which reports the surface this file leaves
+# uncovered and now fails if a guard's sibling is ever added without a line here.
+#
+# ci-dispatch.sh ships each of these at its origin/master (falling back to local
+# HEAD) and REFUSES the push if one is not a checkout beside this repo, so a
+# declared sibling can never be silently absent.
+
+# Vendored coins-registry byte-identity, attest-relay and snapshot-reorg
+# activation parity, and the mirror bigint twin.
 xchain-hub
+# Block-hash conformance, the merkle and escrow-journal twins, rollback coverage.
 xchain-sync
+# Action-manifest, consensus-primitive, activation-constant and XCALL constants.
 xchain-documentation
+# The lint and metering vendored copies, consensus params, and the controller
+# integration scenarios.
 xchain-vm
+# The action roundtrip golden, address-ref field conformance, the merkle twin.
 xchain-sdk
+# The decoder schema the integration scenarios build their fixtures from
+# (XCHAIN_DECODER_SQL_PATH points straight at it when CI stages the schema repo).
 xchain-decoder
+# The merkle twin, the state-checkpoint fence parity, and the explorer launcher.
 xchain-explorer
