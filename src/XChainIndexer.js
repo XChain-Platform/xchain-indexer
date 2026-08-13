@@ -1038,6 +1038,15 @@ class XChainIndexer {
                         // No-op on every other block. See genesis.js.
                         await this.genesis.inject(blockToParse, blockTime);
 
+                        // Materialize any DELEGATE v1 signing-key rotation whose activation delay
+                        // has elapsed onto the contract_stakes rows it governs, BEFORE this
+                        // block's transactions, so the rotated key owns the stake for every read
+                        // this block makes (VM stake snapshot, UNSTAKE aggregate, SLASH
+                        // deduction) starting exactly at its activation block. Flag-day gated
+                        // (CONTRACT_DELEGATION_MATERIALIZE); a no-op below it and on any block
+                        // with no matured rotation. See utility.processContractDelegationMaterializations.
+                        await this.util.processContractDelegationMaterializations(this.actions, this.indexerDb, blockToParse);
+
                         // Loop through any block transactions and process them
                         for(const tx of blockTransactions)
                             await this.actions.processTransaction(tx);

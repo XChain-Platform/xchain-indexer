@@ -84,6 +84,39 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(restoreIdx >= 0 && deleteIdx >= 0 && restoreIdx < deleteIdx, 'slash restore must run before the contract_stakes delete');
     });
 
+    it('blockTables contains contract_delegation_rotations so orphaned rotation-journal rows are pruned', function () {
+        assert.ok(rollback.blockTables.includes('contract_delegation_rotations'));
+    });
+
+    it('restores signing keys an orphaned DELEGATE v1 materialization rewrote, before the deletes', async function () {
+        // materializeContractDelegations rewrites contract_stakes.signing_pubkey_id IN PLACE on
+        // surviving rows (#4366). The generic delete drops the orphaned journal rows but cannot
+        // revert the UPDATE, so the reorg must copy prev_signing_pubkey_id back or this node
+        // hands contracts a different staker set than a from-genesis replay does.
+        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]); // firstActionIndex
+        indexer.indexerDb.doQuery.resolves([]);
+        await rollback.rollback(100);
+        const calls    = indexer.indexerDb.doQuery.getCalls();
+        const restores = calls.filter(c => /UPDATE contract_(?:un)?stakes/.test(c.args[0]) &&
+                                        c.args[0].includes('contract_delegation_rotations') &&
+                                        c.args[0].includes('prev_signing_pubkey_id'));
+        assert.strictEqual(restores.length, 2,
+            'the sweep rotates both stake-ledger tables (cooldown rows stay slashable), so both restore');
+        const restore = restores[0];
+        assert.deepStrictEqual(restore.args[1], ['contract_stakes', 100, 100]);
+        assert.deepStrictEqual(restores[1].args[1], ['contract_unstakes', 100, 100]);
+        // Same-block ties resolve on delegation_action_index (replay-stable), never the
+        // AUTO_INCREMENT id, which is assigned in physical insert order and differs
+        // live-vs-replay and indexer-vs-replica.
+        assert.ok(/e\.delegation_action_index\s*<\s*r\.delegation_action_index/.test(restore.args[0]),
+            'restore must tiebreak on delegation_action_index');
+        assert.ok(!/e\.id\s*<\s*r\.id/.test(restore.args[0]), 'must not tiebreak on the AUTO_INCREMENT id');
+        const restoreIdx = calls.indexOf(restore);
+        const deleteIdx  = calls.findIndex(c => /DELETE FROM contract_stakes WHERE action_index/.test(c.args[0]));
+        assert.ok(restoreIdx >= 0 && deleteIdx >= 0 && restoreIdx < deleteIdx,
+            'key restore must run before the contract_stakes delete');
+    });
+
     it('contract slash-restore breaks same-block ties deterministically via (execution_index, slash_position), never AUTO_INCREMENT id', async function () {
         // When a reorg retracts a block with >=2 contract slashes against the same
         // stake_action_index, the "earliest debit" NOT EXISTS pick must resolve to the

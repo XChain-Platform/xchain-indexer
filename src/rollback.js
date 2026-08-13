@@ -681,6 +681,40 @@ class Rollback {
                     await this.indexerDb.doQuery(query, args);
                 }
 
+                // Restore signing keys an orphaned DELEGATE v1 materialization rewrote IN PLACE
+                // on surviving rows. materializeContractDelegations rewrites
+                // contract_stakes/contract_unstakes.signing_pubkey_id on rows from earlier
+                // (surviving) blocks and records each rewrite's pre-rotation key, with the table
+                // it landed on, in contract_delegation_rotations. The
+                // generic deletes below drop the orphaned journal rows but cannot revert the
+                // UPDATE, so without this a surviving row keeps the rotated key while a
+                // from-genesis replay (the DELEGATE never re-mined, or re-mined at a different
+                // height) keeps the original - a consensus-affecting divergence, since the key on
+                // the row is exactly what the VM stake snapshot, the UNSTAKE aggregate and the
+                // SLASH deduction all read. We copy back the EARLIEST orphaned rotation's
+                // `prev_signing_pubkey_id` per row (min block_index, then delegation_action_index,
+                // both replay-stable; the AUTO_INCREMENT `id` is NOT and would let two nodes
+                // restore different keys). Pure id copy, so the restored value is byte-identical
+                // to the surviving chain's pre-rotation state. Earlier SURVIVING rotations are
+                // intentionally left applied. Runs BEFORE the deletes so both tables still exist.
+                for(let rotTbl of ['contract_stakes', 'contract_unstakes']){
+                    query = `UPDATE ` + rotTbl + ` t
+                                JOIN contract_delegation_rotations r ON r.stake_action_index = t.action_index
+                                SET t.signing_pubkey_id = r.prev_signing_pubkey_id
+                                WHERE r.target_table = ?
+                                  AND r.block_index >= ?
+                                  AND NOT EXISTS (
+                                      SELECT 1 FROM contract_delegation_rotations e
+                                      WHERE e.target_table       = r.target_table
+                                        AND e.stake_action_index = r.stake_action_index
+                                        AND e.block_index >= ?
+                                        AND (e.block_index < r.block_index
+                                             OR (e.block_index = r.block_index
+                                                 AND e.delegation_action_index < r.delegation_action_index)))`;
+                    args = [rotTbl, block_index, block_index];
+                    await this.indexerDb.doQuery(query, args);
+                }
+
                 // Same restore for CAPABILITY-stake equivocation slashes (WI-2 bump 2):
                 // slashCapabilityStake reduces stakes/unstakes.amount IN PLACE on surviving
                 // rows and logs the pre-slash `prev_amount` in capability_slash_debits. Copy

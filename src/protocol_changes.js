@@ -929,6 +929,35 @@ class ProtocolChanges {
         // range, whose Number() rounding is the same divergence class.
         this.addChange('CONTRACT_INDEX_CANONICAL', '2.0.0',1786060800,0,0,0,0,0);
 
+        // DEL-2 (#4366): a DELEGATE v1 signing-key rotation wrote contract_delegations but NEVER
+        // reached contract_stakes, so the rotated key owned nothing the protocol actually reads.
+        // All three contract-stake lookup surfaces key on contract_stakes.signing_pubkey_id:
+        // getContractStakeDataForVM (the getStake/getStakers/getTotalStaked snapshot a contract
+        // observes), getActiveContractStakeByPubkey (the UNSTAKE refund aggregate) and
+        // slashContractStake (the SLASH deduction). The rotated key therefore never appeared in
+        // getStakers, could not UNSTAKE, and a SLASH against it deducted nothing while the
+        // contract still recorded the punishment - the incoherence the build-a-stakeable-contract
+        // guide promises does not exist.
+        //
+        // At/after this flag-day the rotation is MATERIALIZED onto contract_stakes: the end-of-
+        // activation-delay sweep (utility.processContractDelegationMaterializations ->
+        // db.materializeContractDelegations) rewrites signing_pubkey_id on the delegating source's
+        // active (target, tick) stake rows and journals each rewrite in
+        // contract_delegation_rotations so a reorg restores the previous key verbatim. The three
+        // lookup surfaces then agree by construction, with no per-surface remap: remapping only
+        // the READ (the finding's proposal A) would make a contract emit SLASH against a key the
+        // ledger cannot debit, which is worse than the coherent gap it replaces.
+        //
+        // Gated because it changes what EXECUTE observes through getStake/getStakers/
+        // getTotalStaked, so historical blocks must replay byte-identically. Minted at its own
+        // future instant rather than reusing the contract-era anchor: that anchor is already in
+        // the past, and a retroactive boundary would make a from-genesis replay hand contracts a
+        // DIFFERENT staker set than the live fleet observed. The value lives here and is
+        // rendered into the docs by xchain-documentation/bin/generate-flag-days.js; every
+        // indexer and sync process must be deployed before mainnet crosses it.
+        // testnet/regtest are live from genesis, exactly like the sibling contract-era gates.
+        this.addChange('CONTRACT_DELEGATION_MATERIALIZE', '2.0.0',1789430400,0,0,0,0,0);
+
         // SLASH-1: slashCapabilityStake Pass 1 filtered `activation_block <= block`, so a
         // pending-activation capability top-up (debited at STAKE time) escaped the equivocation bond
         // burn and could later be UNSTAKEd/refunded (the sibling slashContractStake has no such

@@ -13147,6 +13147,12 @@ class Database {
 
     // Get aggregate active contract-stake for (target, pubkey, tick).
     // Returns { source_id, signing_pubkey_id, signing_pubkey, tick_id, tick, amount, activation_block } or null.
+    //
+    // SIGNING-KEY ROTATIONS (#4366). `pubkey` is the CURRENT key on the stake row, so once a
+    // DELEGATE v1 rotation has been materialized (CONTRACT_DELEGATION_MATERIALIZE) an UNSTAKE
+    // names the rotated key, not the original - the same key getContractStakeDataForVM shows the
+    // contract. The caller (UNSTAKE v1) still checks that SOURCE owns the aggregate, so a
+    // rotation never lets the delegate's holder move someone else's stake.
     async getActiveContractStakeByPubkey(targetContractIndex, pubkey, tick, blockIndex, opts){
         let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
         if(pubkey_id === null) return null;
@@ -13305,6 +13311,206 @@ class Database {
         await this.doQuery(query, args);
     }
 
+    // Materialize matured DELEGATE v1 signing-key rotations onto contract_stakes (#4366,
+    // gated by CONTRACT_DELEGATION_MATERIALIZE; the caller,
+    // utility.processContractDelegationMaterializations, owns the gate).
+    //
+    // WHY THIS EXISTS. DELEGATE v1 wrote contract_delegations and stopped there, but all THREE
+    // contract-stake lookup surfaces key on contract_stakes.signing_pubkey_id:
+    // getContractStakeDataForVM (what a contract sees through getStake/getStakers/
+    // getTotalStaked), getActiveContractStakeByPubkey (the UNSTAKE refund aggregate) and
+    // slashContractStake (the SLASH deduction). So a rotated key owned nothing: it never
+    // appeared in getStakers, and a SLASH against it deducted zero while the contract recorded
+    // the punishment. Rewriting the key HERE, on the row itself, is what makes the three
+    // surfaces agree - remapping only the reads would leave SLASH naming a key the ledger
+    // cannot debit, which is strictly worse than the coherent gap it replaces.
+    //
+    // WHEN. Called once per block, BEFORE the block's transactions, so a rotation is visible to
+    // everything in its activation block; that matches the `activation_block <= blockIndex`
+    // semantics every other contract-stake read uses. Runs inside the block transaction, so the
+    // rewrites and their journal rows commit (or roll back) with the block.
+    //
+    // WHICH ROWS. One delegation GOVERNS each (target, source, tick) slot: the matured, un-revoked
+    // delegation with the greatest (activation_block, action_index). Selecting all matured
+    // delegations instead would let two live delegations rewrite the same rows in opposite
+    // directions on every block forever. Its key is written to every valid, never-unstaked
+    // contract_stakes row on that slot, INCLUDING rows still inside their activation delay: a
+    // pending top-up left on the old key would surface as a second, phantom staker under the old
+    // pubkey the moment it activates.
+    //
+    // BOTH STAKE TABLES. The still-slashable contract_unstakes rows on the slot rotate too, even
+    // though nothing shows them to a contract. slashContractStake Pass 2 finds cooldown-locked
+    // tokens by (target, pubkey, tick); leaving those rows on the old key while the contract is
+    // shown the new one would let the cooldown-locked portion of a rotated staker's balance
+    // escape every slash - a rotation would become a way to shield funds. 'completed' rows are
+    // skipped: they were already refunded and are not slashable. The cooldown sweep keys on
+    // action_index/source, never on the pubkey, so refunds are unaffected.
+    //
+    // REVOKE. DELEGATE v3 ends a delegation's authority (deactivation_block). A slot whose
+    // rotation was revoked and has no other governing delegation is reverted to the key the
+    // stake was created with, read back from the FIRST journal row for that stake row - a
+    // revoked (typically compromised) key must not keep owning the stake in the VM snapshot.
+    // The revert is skipped, deterministically, when another source has since claimed that
+    // pubkey on any contract stake or delegation: merging two owners under one pubkey would
+    // fold them into a single staker entry in the VM snapshot. Such a claim is only possible
+    // because the DELEGATE v1 / STAKE v3 collision checks do not reserve a pre-rotation key;
+    // reserving it is a separate validity change and would need its own flag-day.
+    //
+    // DETERMINISM. Every ordering key is replay-stable (block_index, activation_block,
+    // action_index); the AUTO_INCREMENT journal id is never ordered on. Returns the applied
+    // rotations (audit/tests); an empty array is the common case.
+    async materializeContractDelegations(currentBlock){
+        let applied  = [];
+        let valid_id = await this.getStatusId('valid');
+        if(valid_id === null) return applied;
+        let block = Number(currentBlock);
+
+        // 1. Governing delegations: matured, not revoked as-of this block, and the LATEST such
+        //    delegation for their (target, source, tick) slot.
+        let govQuery = `SELECT d.action_index, d.source_id, d.signing_pubkey_id,
+                               d.target_contract_index, d.tick_id
+                        FROM contract_delegations d
+                        WHERE d.status_id=? AND d.tick_id IS NOT NULL
+                          AND d.activation_block <= ?
+                          AND (d.deactivation_block IS NULL OR d.deactivation_block > ?)
+                          AND NOT EXISTS (
+                              SELECT 1 FROM contract_delegations d2
+                              WHERE d2.target_contract_index = d.target_contract_index
+                                AND d2.source_id             = d.source_id
+                                AND d2.tick_id               = d.tick_id
+                                AND d2.status_id             = ?
+                                AND d2.activation_block     <= ?
+                                AND (d2.deactivation_block IS NULL OR d2.deactivation_block > ?)
+                                AND (d2.activation_block > d.activation_block
+                                     OR (d2.activation_block = d.activation_block
+                                         AND d2.action_index > d.action_index)))
+                        ORDER BY d.activation_block ASC, d.action_index ASC`;
+        let governing = await this.doQuery(govQuery, [valid_id, block, block, valid_id, block, block]);
+
+        // The cooldown table's slashable statuses mirror slashContractStake Pass 2 exactly
+        // ('valid' plus 'pending'); a 'completed' row was already refunded and cannot be slashed,
+        // so rewriting its key would be noise in the journal.
+        let pending_id       = await this.getStatusId('pending');
+        let unstakeStatusIds = (pending_id === null) ? [valid_id] : [valid_id, pending_id];
+        let unstakePlace     = unstakeStatusIds.map(() => '?').join(',');
+
+        // Slots under an active delegation; the revert pass below must leave these alone.
+        let governedSlots = new Set();
+        for(let d of governing){
+            governedSlots.add(String(d.target_contract_index) + '|' + String(d.source_id) + '|' + String(d.tick_id));
+            // Rows that already carry the delegated key are skipped, so a materialized rotation
+            // is a no-op on every later block (and writes no further journal rows).
+            let stakeRows = await this.doQuery(
+                `SELECT action_index, signing_pubkey_id FROM contract_stakes
+                 WHERE target_contract_index=? AND source_id=? AND tick_id=? AND status_id=?
+                   AND deactivation_block IS NULL
+                   AND signing_pubkey_id<>?
+                 ORDER BY action_index ASC`,
+                [Number(d.target_contract_index), d.source_id, d.tick_id, valid_id, d.signing_pubkey_id]);
+            for(let row of stakeRows)
+                applied.push(await this._rotateContractStakeKey('contract_stakes', row, d.action_index, d.signing_pubkey_id, block));
+            let unstakeRows = await this.doQuery(
+                `SELECT action_index, signing_pubkey_id FROM contract_unstakes
+                 WHERE target_contract_index=? AND source_id=? AND tick_id=?
+                   AND status_id IN (${unstakePlace})
+                   AND signing_pubkey_id<>?
+                 ORDER BY action_index ASC`,
+                [Number(d.target_contract_index), d.source_id, d.tick_id, ...unstakeStatusIds, d.signing_pubkey_id]);
+            for(let row of unstakeRows)
+                applied.push(await this._rotateContractStakeKey('contract_unstakes', row, d.action_index, d.signing_pubkey_id, block));
+        }
+
+        // 2. Revert pass: rows whose slot no longer has a governing delegation but that still
+        //    carry a delegated key. The FIRST journal row per (table, row) carries the
+        //    pre-rotation (original) key in prev_signing_pubkey_id; (block_index,
+        //    delegation_action_index) is the deterministic order (at most one journal row per
+        //    row per block, so the tiebreak is defensive).
+        for(let spec of [{ table: 'contract_stakes',   extra: 'AND t.deactivation_block IS NULL', args: [valid_id] },
+                         { table: 'contract_unstakes', extra: '', args: unstakeStatusIds }]){
+            let statusPredicate = (spec.table === 'contract_stakes')
+                ? 't.status_id=?'
+                : `t.status_id IN (${spec.args.map(() => '?').join(',')})`;
+            let revertQuery = `SELECT r.stake_action_index, r.delegation_action_index,
+                                      r.prev_signing_pubkey_id AS original_pubkey_id,
+                                      t.signing_pubkey_id      AS current_pubkey_id,
+                                      t.target_contract_index, t.source_id, t.tick_id
+                               FROM contract_delegation_rotations r
+                                   JOIN ${spec.table} t ON (t.action_index = r.stake_action_index)
+                               WHERE r.target_table=? AND ${statusPredicate} ${spec.extra}
+                                 AND t.signing_pubkey_id <> r.prev_signing_pubkey_id
+                                 AND NOT EXISTS (
+                                     SELECT 1 FROM contract_delegation_rotations e
+                                     WHERE e.stake_action_index = r.stake_action_index
+                                       AND e.target_table       = r.target_table
+                                       AND (e.block_index < r.block_index
+                                            OR (e.block_index = r.block_index
+                                                AND e.delegation_action_index < r.delegation_action_index)))
+                               ORDER BY t.action_index ASC`;
+            let rotated = await this.doQuery(revertQuery, [spec.table, ...spec.args]);
+            for(let row of rotated){
+                let slot = String(row.target_contract_index) + '|' + String(row.source_id) + '|' + String(row.tick_id);
+                if(governedSlots.has(slot)) continue;
+                if(String(row.current_pubkey_id) === String(row.original_pubkey_id)) continue;
+                if(await this._contractPubkeyClaimedElsewhere(row.original_pubkey_id, row, valid_id)) continue;
+                applied.push(await this._rotateContractStakeKey(spec.table,
+                    { action_index: row.stake_action_index, signing_pubkey_id: row.current_pubkey_id },
+                    row.delegation_action_index, row.original_pubkey_id, block));
+            }
+        }
+        return applied;
+    }
+
+    // Rewrite one contract_stakes / contract_unstakes row's signing key and journal the previous
+    // value so a reorg can restore it verbatim (see rollback.js) and xchain-sync can carry the
+    // mutated surviving row to followers (updatedRows.js). Shared by the rotate and revert passes
+    // above. `table` is a fixed literal from this method, never caller input.
+    async _rotateContractStakeKey(table, stakeRow, delegationActionIndex, newPubkeyId, blockIndex){
+        await this.doQuery('UPDATE ' + table + ' SET signing_pubkey_id=? WHERE action_index=?',
+            [newPubkeyId, stakeRow.action_index]);
+        await this.createContractDelegationRotation(table, delegationActionIndex, stakeRow.action_index,
+            stakeRow.signing_pubkey_id, newPubkeyId, blockIndex);
+        return {
+            target_table:            table,
+            stake_action_index:      Number(stakeRow.action_index),
+            delegation_action_index: Number(delegationActionIndex),
+            prev_signing_pubkey_id:  Number(stakeRow.signing_pubkey_id),
+            new_signing_pubkey_id:   Number(newPubkeyId),
+            block_index:             Number(blockIndex)
+        };
+    }
+
+    // True when `pubkeyId` is held by a contract stake outside this (target, source, tick) slot,
+    // or by any active contract delegation. Guards the revert pass: handing a slot back its
+    // original key while someone else holds that key would merge two owners into one staker
+    // entry in the VM snapshot.
+    async _contractPubkeyClaimedElsewhere(pubkeyId, slotRow, validStatusId){
+        let stakeRows = await this.doQuery(
+            `SELECT 1 FROM contract_stakes
+             WHERE signing_pubkey_id=? AND status_id=?
+               AND NOT (target_contract_index=? AND source_id=? AND tick_id=?)
+             LIMIT 1`,
+            [pubkeyId, validStatusId, Number(slotRow.target_contract_index), slotRow.source_id, slotRow.tick_id]);
+        if(stakeRows.length > 0) return true;
+        let delegationRows = await this.doQuery(
+            `SELECT 1 FROM contract_delegations
+             WHERE signing_pubkey_id=? AND status_id=? AND deactivation_block IS NULL
+             LIMIT 1`,
+            [pubkeyId, validStatusId]);
+        return delegationRows.length > 0;
+    }
+
+    // Append a signing-key rotation to the reorg-restore journal. Mirrors
+    // createContractSlashDebit: prev_signing_pubkey_id is copied back verbatim on rollback, so
+    // the restored value is byte-identical to a from-genesis replay's.
+    async createContractDelegationRotation(targetTable, delegationActionIndex, stakeActionIndex, prevPubkeyId, newPubkeyId, blockIndex){
+        let query = `INSERT INTO contract_delegation_rotations
+                        (target_table, delegation_action_index, stake_action_index,
+                         prev_signing_pubkey_id, new_signing_pubkey_id, block_index)
+                     VALUES (?, ?, ?, ?, ?, ?)`;
+        await this.doQuery(query, [String(targetTable), Number(delegationActionIndex), Number(stakeActionIndex),
+            Number(prevPubkeyId), Number(newPubkeyId), Number(blockIndex)]);
+    }
+
     // Snapshot the contract's stake state at blockIndex into an in-memory accessor
     // returned to the VM execution context. Methods on the returned object are
     // synchronous since they query the pre-loaded snapshot only.
@@ -13313,6 +13519,14 @@ class Database {
     // calling xchain.contract.* cannot see other contracts' stakes through this
     // accessor (implicit slash authorization). The 1000-staker cap on getStakers
     // is applied here at query time (LIMIT clause).
+    //
+    // SIGNING-KEY ROTATIONS (#4366). This reads contract_stakes.signing_pubkey_id and nothing
+    // else - deliberately, and it must stay that way. A DELEGATE v1 rotation reaches the
+    // snapshot because materializeContractDelegations rewrites the stake row itself at the
+    // delegation's activation block (CONTRACT_DELEGATION_MATERIALIZE), so the pubkey a contract
+    // sees in getStakers is by construction the same one slashContractStake can debit. Joining
+    // contract_delegations in HERE instead would hand the contract a key the SLASH path cannot
+    // find, and the emitted punishment would silently no-op at execute.js's zero-slashed guard.
     async getContractStakeDataForVM(targetContractIndex, blockIndex){
         let valid_id = await this.getStatusId('valid');
         let stakes = [];
@@ -13470,6 +13684,14 @@ class Database {
     // Returns the actual amount slashed (may be less than `amount` if available balance is lower).
     // Does NOT credit the destination or emit the slash_events row - caller (_processSlashEmission)
     // wires those side effects.
+    //
+    // SIGNING-KEY ROTATIONS (#4366). `pubkeyId` is resolved from the pubkey the contract emitted,
+    // which it read out of the same snapshot getContractStakeDataForVM built, and that snapshot
+    // reads the stake row's CURRENT key. Because materializeContractDelegations rewrites the row
+    // at the delegation's activation block, a SLASH against a rotated staker lands on the very
+    // rows the contract was shown, instead of matching nothing and returning '0' (which
+    // _processSlashEmission's zero-slashed path then records as a punishment the ledger never
+    // applied). No rotation-aware lookup belongs here: the row IS the rotation.
     async slashContractStake(targetContractIndex, pubkeyId, tickId, amount, blockIndex, executionIndex, slashPosition){
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return '0';

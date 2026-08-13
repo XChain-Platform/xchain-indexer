@@ -2008,6 +2008,25 @@ class Utility {
         await actions.actionVote.processDueCallbacks(block_index, block_time);
     }
 
+    // Materialize matured DELEGATE v1 signing-key rotations onto contract_stakes (#4366).
+    //
+    // Runs at the TOP of a block, before its transactions, so a rotation is in force for
+    // everything that block does (EXECUTE snapshots, UNSTAKE lookups, SLASH deductions) exactly
+    // at its activation_block, the same `activation_block <= blockIndex` boundary every other
+    // contract-stake read uses. Placing it with the end-of-block sweeps instead would delay each
+    // rotation by one block, which is a consensus difference, not a cosmetic one.
+    //
+    // Gated by CONTRACT_DELEGATION_MATERIALIZE: below the flag-day this is a no-op and history
+    // replays byte-identically, because before it a rotation existed only in
+    // contract_delegations and nothing that reads stake ownership ever looked there. The gate is
+    // evaluated once per block here (never inside db.materializeContractDelegations), so there
+    // is exactly one place a node can decide the rotation is live.
+    async processContractDelegationMaterializations(actions, db, block_index){
+        if(!(await actions.protocolChanges.isEnabled('CONTRACT_DELEGATION_MATERIALIZE', block_index)))
+            return [];
+        return await db.materializeContractDelegations(block_index);
+    }
+
     // Finalize unstakes (capability + contract) whose cooldown has elapsed.
     // For each completed row: writes a return credit, updates the source address's
     // balance, and marks the unstake row as 'completed' so the same release doesn't
