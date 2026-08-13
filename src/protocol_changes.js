@@ -69,6 +69,21 @@ const CROSS_SETTLE_CAP_MAINNET_TIME = 9999999999;
 // the fork the gate exists to prevent.
 const BATCH_ROOT_SUB_INDEX_MAINNET_TIME = 9999999999;
 
+// Mainnet arm for BATCH_ISSUANCE_LIMITS_V2, the BATCH issuance rework: the dotted-TICK
+// exemption that lets one BATCH carry a parent plus any number of child ISSUEs, the global
+// 250-command cap that bounds the scan it rides on, the batch-cumulative fee/settlement
+// accounting that stops one command's fee from satisfying all N, and the caret-TICK and
+// ticker-intern tightenings that ship with them (see the registration below). Same house
+// UNARMED sentinel as the three constants above (9999999999, year 2286): naming the
+// activation instant is the operator's act, and this entry carries BOTH a loosening (the
+// exemption) and several TIGHTENINGS (the cap, the fee ledger), so a retroactive boundary
+// forks a from-genesis replay in both directions at once - the replay would reject batches
+// the live fleet accepted AND accept batches it rejected. Arming it is a one-line edit here.
+// Until then every rule in the set is inert on mainnet (the scan runs exactly as the live
+// chains have always run it) and live from genesis on testnet/regtest. Do NOT arm it at the
+// 2026-08-07 contract-era anchor: that date is already past.
+const BATCH_ISSUANCE_LIMITS_V2_MAINNET_TIME = 9999999999;
+
 // Consensus protocol version, COMPILED IN.
 //
 // isEnabled() compares this against the version registered on every protocol
@@ -1092,6 +1107,40 @@ class ProtocolChanges {
         // testnet/regtest activate at genesis (all zeros).
         this.addChange('BATCH_SUBACTION_NORMALIZATION', '2.0.0',1786060800,0,0,0,0,0);
 
+        // BATCH issuance limits v2. One entry gating the whole rework so a fleet can never
+        // run half of it:
+        //   - the per-action ISSUE limit stops counting DOTTED (child) ticks, so one BATCH
+        //     may register a parent and any number of its children. A caret TICK ('^<id>')
+        //     is NEVER exempt: its dot is an id/precision separator, not a namespace one.
+        //   - a global 250-command cap per BATCH, checked FIRST so it bounds the scan loops
+        //     the exemption runs inside and so its error wins over the per-action limit for
+        //     a batch that breaks both. Without it the envelope lane admits ~35,000
+        //     sub-commands, each buying its own ACTION_INDEX, mappings and invalid row.
+        //   - fee and settlement value accounted CUMULATIVELY across the batch. TX_OUTPUTS
+        //     is transaction-level state the batch loop preserves, and every per-command
+        //     check read it untouched, so N fee-bearing sub-commands were satisfied by ONE
+        //     command's worth of native fee (and N COINPAYs settled from one payment).
+        //   - an ISSUE whose TICK is a caret form containing '.' is rejected rather than
+        //     landing a valid issuance under a NULL ticker id, and an invalid ISSUE no
+        //     longer interns its name into index_tickers for free.
+        //
+        // Gated because all four move consensus verdicts: a batch that was invalid becomes
+        // valid (the exemption) and batches that were valid become invalid (the cap, the fee
+        // ledger), and both directions change the actions/ledger state hashed into the
+        // checkpoint preimage. Keyed on block TIME like the sibling BATCH gates: BATCH runs
+        // on BTC, LTC and DOGE, whose heights diverge by millions of blocks, so no single
+        // height names one cutover across all three but a single timestamp does.
+        //
+        // This entry MUST activate at or after BATCH_SUBACTION_NORMALIZATION above:
+        // classification reads the TICK out of NORMALIZED sub-command params, and below the
+        // normalization flag a legacy-format sub-action's params are not yet shifted, so
+        // params[1] is not the TICK. Nothing in isEnabled() enforces the ordering, so
+        // test/unit/batchIssuanceLimitsGate.test.js asserts it per network.
+        //
+        // MAINNET IS UNARMED (see BATCH_ISSUANCE_LIMITS_V2_MAINNET_TIME above);
+        // testnet/regtest activate at genesis (all zeros).
+        this.addChange('BATCH_ISSUANCE_LIMITS_V2', '2.0.0',BATCH_ISSUANCE_LIMITS_V2_MAINNET_TIME,0,0,0,0,0);
+
         // Numeric legacy-fee db_hits accumulation. The legacy
         // (non-UNIFIED_FEES) transaction-fee model in dividend.js / callback.js / sweep.js
         // accumulates a db_hits count and prices it via getTransactionFee. The original
@@ -1425,3 +1474,7 @@ module.exports.CROSS_SETTLE_CAP_MAINNET_TIME = CROSS_SETTLE_CAP_MAINNET_TIME;
 // reason: the suite asserts this consensus-preimage change is still waiting on the operator's
 // flag day rather than armed at a guessed instant.
 module.exports.BATCH_ROOT_SUB_INDEX_MAINNET_TIME = BATCH_ROOT_SUB_INDEX_MAINNET_TIME;
+// UNARMED mainnet sentinel for the BATCH issuance-limits rework, exported for the same
+// reason: the suite asserts the set is still waiting on the operator's flag day rather than
+// armed at a guessed instant, and that it never precedes BATCH_SUBACTION_NORMALIZATION.
+module.exports.BATCH_ISSUANCE_LIMITS_V2_MAINNET_TIME = BATCH_ISSUANCE_LIMITS_V2_MAINNET_TIME;
