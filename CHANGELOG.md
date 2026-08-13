@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.7.17] - 2026-08-13
 
 ### Fixed
 - AIRDROP recipient membership is set-backed instead of two O(n^2) array scans on the synchronous per-block path.
