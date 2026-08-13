@@ -69,7 +69,7 @@ const CROSS_SETTLE_CAP_MAINNET_TIME = 9999999999;
 // the fork the gate exists to prevent.
 const BATCH_ROOT_SUB_INDEX_MAINNET_TIME = 9999999999;
 
-// Mainnet arm for BATCH_ISSUANCE_LIMITS_V2, the BATCH issuance rework: the dotted-TICK
+// Mainnet arm for BATCH_ISSUANCE_LIMITS, the BATCH issuance rework: the dotted-TICK
 // exemption that lets one BATCH carry a parent plus any number of child ISSUEs, the global
 // 250-command cap that bounds the scan it rides on, the batch-cumulative fee/settlement
 // accounting that stops one command's fee from satisfying all N, and the caret-TICK and
@@ -82,7 +82,7 @@ const BATCH_ROOT_SUB_INDEX_MAINNET_TIME = 9999999999;
 // Until then every rule in the set is inert on mainnet (the scan runs exactly as the live
 // chains have always run it) and live from genesis on testnet/regtest. Do NOT arm it at the
 // 2026-08-07 contract-era anchor: that date is already past.
-const BATCH_ISSUANCE_LIMITS_V2_MAINNET_TIME = 9999999999;
+const BATCH_ISSUANCE_LIMITS_MAINNET_TIME = 9999999999;
 
 // Consensus protocol version, COMPILED IN.
 //
@@ -1137,9 +1137,9 @@ class ProtocolChanges {
         // params[1] is not the TICK. Nothing in isEnabled() enforces the ordering, so
         // test/unit/batchIssuanceLimitsGate.test.js asserts it per network.
         //
-        // MAINNET IS UNARMED (see BATCH_ISSUANCE_LIMITS_V2_MAINNET_TIME above);
+        // MAINNET IS UNARMED (see BATCH_ISSUANCE_LIMITS_MAINNET_TIME above);
         // testnet/regtest activate at genesis (all zeros).
-        this.addChange('BATCH_ISSUANCE_LIMITS_V2', '2.0.0',BATCH_ISSUANCE_LIMITS_V2_MAINNET_TIME,0,0,0,0,0);
+        this.addChange('BATCH_ISSUANCE_LIMITS', '2.0.0',BATCH_ISSUANCE_LIMITS_MAINNET_TIME,0,0,0,0,0);
 
         // Numeric legacy-fee db_hits accumulation. The legacy
         // (non-UNIFIED_FEES) transaction-fee model in dividend.js / callback.js / sweep.js
@@ -1477,4 +1477,4 @@ module.exports.BATCH_ROOT_SUB_INDEX_MAINNET_TIME = BATCH_ROOT_SUB_INDEX_MAINNET_
 // UNARMED mainnet sentinel for the BATCH issuance-limits rework, exported for the same
 // reason: the suite asserts the set is still waiting on the operator's flag day rather than
 // armed at a guessed instant, and that it never precedes BATCH_SUBACTION_NORMALIZATION.
-module.exports.BATCH_ISSUANCE_LIMITS_V2_MAINNET_TIME = BATCH_ISSUANCE_LIMITS_V2_MAINNET_TIME;
+module.exports.BATCH_ISSUANCE_LIMITS_MAINNET_TIME = BATCH_ISSUANCE_LIMITS_MAINNET_TIME;

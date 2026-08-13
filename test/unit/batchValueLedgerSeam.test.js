@@ -93,7 +93,7 @@ async function runBatch({ count, feeValue, flagOn }){
         util,
         mapper:          { createMappings: async () => {} },
         actionAliases:   {},
-        protocolChanges: { isEnabled: async (name) => flagOn || name !== 'BATCH_ISSUANCE_LIMITS_V2' },
+        protocolChanges: { isEnabled: async (name) => flagOn || name !== 'BATCH_ISSUANCE_LIMITS' },
         indexerDb: {
             createBatch:       async () => {},
             isActionAllowed:   async () => true,

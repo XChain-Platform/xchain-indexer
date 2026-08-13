@@ -41,7 +41,7 @@ const assert = require('assert');
 const { createMockIndexer } = require('../fixtures/mocks');
 const ProtocolChanges       = require('../../src/protocol_changes.js');
 
-const GATE          = 'BATCH_ISSUANCE_LIMITS_V2';
+const GATE          = 'BATCH_ISSUANCE_LIMITS';
 const NORMALIZATION = 'BATCH_SUBACTION_NORMALIZATION';
 
 // A far-future instant no real chain reaches before the operator arms the gate
@@ -75,7 +75,7 @@ describe('BATCH issuance-limits flag day @regression @tier1', function(){
         });
 
         it('mainnet is UNARMED: the operator owes the activation instant', function(){
-            const sentinel = ProtocolChanges.BATCH_ISSUANCE_LIMITS_V2_MAINNET_TIME;
+            const sentinel = ProtocolChanges.BATCH_ISSUANCE_LIMITS_MAINNET_TIME;
             assert.strictEqual(typeof sentinel, 'number', 'the sentinel must be exported');
             assert.strictEqual(pcFor('mainnet').pc.changes[GATE].mainnet_time, sentinel);
             // A value inside any plausible chain lifetime means somebody armed a set that

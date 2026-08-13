@@ -14,7 +14,7 @@
  * test/unit/batchSettlementValueLedger.test.js
  *
  * Batch-cumulative SETTLEMENT-VALUE and ORACLE-FEE accounting against the shared
- * data['BATCH_VALUE_LEDGER'] (BATCH_ISSUANCE_LIMITS_V2, R5b; sibling of the
+ * data['BATCH_VALUE_LEDGER'] (BATCH_ISSUANCE_LIMITS, R5b; sibling of the
  * native-fee half covered by nativeFeeBatchLedger.test.js).
  *
  * Three call sites share one defect shape: COIN_AMOUNT and TX_OUTPUTS are
@@ -48,7 +48,7 @@ const Utility  = require('../../src/utility.js');
 const Coinpay  = require('../../src/actions/coinpay.js');
 const Dispense = require('../../src/actions/dispense.js');
 
-// What batch.js seeds, verbatim, once BATCH_ISSUANCE_LIMITS_V2 is enabled.
+// What batch.js seeds, verbatim, once BATCH_ISSUANCE_LIMITS is enabled.
 function seedLedger(){
     return { nativeFeeConsumed: '0', coinAmountConsumed: '0', oracleFeeConsumed: {} };
 }

@@ -1319,7 +1319,7 @@ class Utility {
         let toleranceMin = this.bcnum(this.config['FEE_TOLERANCE_MIN'] || '0.95');
         let minAcceptable = this.bcmul(expectedFee, toleranceMin, 8);
 
-        // Batch-cumulative oracle-fee accounting (BATCH_ISSUANCE_LIMITS_V2), the same
+        // Batch-cumulative oracle-fee accounting (BATCH_ISSUANCE_LIMITS), the same
         // shape validateNativeCoinFee uses for the native fee pool.
         //
         // TX_OUTPUTS is TRANSACTION-level state that the batch loop preserves across every
@@ -1502,7 +1502,7 @@ class Utility {
             return { valid: true, nativeCoinAmount: '0', oracleRound: 0 };
         }
 
-        // Batch-cumulative native-fee accounting (BATCH_ISSUANCE_LIMITS_V2).
+        // Batch-cumulative native-fee accounting (BATCH_ISSUANCE_LIMITS).
         //
         // TX_OUTPUTS is TRANSACTION-level state that the batch loop preserves across every
         // sub-command, and nothing decrements it. So before this, each sub-command judged the

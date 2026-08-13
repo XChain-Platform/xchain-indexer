@@ -14,7 +14,7 @@
  * test/unit/issueCaretDotAndIntern.test.js
  *
  * XC-1457 / R6 (frontier row 6 of claude/specs/batch-issuance-limits.md), gated
- * behind BATCH_ISSUANCE_LIMITS_V2:
+ * behind BATCH_ISSUANCE_LIMITS:
  *
  *   - Defect A: the caret-id guard in issue.js (`^<tail>`) is isNumeric()
  *     (parseFloat-based), so a tail containing '.' (e.g. "^12.5") reads as a
@@ -44,7 +44,7 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../fixtu
 const Issue = require('../../src/actions/issue.js');
 
 const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH'; // createBaseData's default SOURCE
-const GATE   = 'BATCH_ISSUANCE_LIMITS_V2';
+const GATE   = 'BATCH_ISSUANCE_LIMITS';
 
 // Below the 862633 ISSUANCE_FEE mainnet activation block, so new-token issuance
 // needs no GAS balance (mirrors test/unit/actions/issue.test.js's LOW_BLOCK).

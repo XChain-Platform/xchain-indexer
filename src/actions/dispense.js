@@ -63,7 +63,7 @@ class Dispense {
                 divergenceMetrics.recordRejectedDispense(data['COIN'], block_index, data['COIN_DESTINATION'], closed['ACTION_INDEX'], closed['REASON']);
         }
 
-        // Batch-cumulative settlement-value accounting (BATCH_ISSUANCE_LIMITS_V2).
+        // Batch-cumulative settlement-value accounting (BATCH_ISSUANCE_LIMITS).
         //
         // COIN_AMOUNT is TRANSACTION-level state that the batch loop preserves across
         // every sub-command, and nothing decrements it. So before this, each DISPENSE

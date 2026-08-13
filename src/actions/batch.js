@@ -47,7 +47,7 @@ class Batch {
         this.actionLimits['MINT']  = 1;
         this.actionLimits['ISSUE'] = 1;
 
-        // Global per-BATCH command cap (BATCH_ISSUANCE_LIMITS_V2). Every parse-valid
+        // Global per-BATCH command cap (BATCH_ISSUANCE_LIMITS). Every parse-valid
         // sub-command costs an ACTION_INDEX, mappings and (when it fails) an invalid
         // row, so per-command indexer cost dwarfs per-command on-chain cost: the data
         // lanes admit ~744 minimal sub-commands and the envelope lane ~35,000. This is
@@ -78,7 +78,7 @@ class Batch {
         return action;
     }
 
-    // Classify a sub-command for the per-ACTION limit scan (BATCH_ISSUANCE_LIMITS_V2).
+    // Classify a sub-command for the per-ACTION limit scan (BATCH_ISSUANCE_LIMITS).
     //
     // Only ISSUE is reclassified: a CHILD issuance (dotted TICK, e.g. JDOG.1) is exempt
     // from the top-level limit of 1, so one BATCH may register a parent plus any number
@@ -123,13 +123,13 @@ class Batch {
         // alias rewrite + legacy VERSION-0 injection as top-level actions. Resolved once
         // per BATCH so every scan below gates identically.
         let normalize = await this.protocolChanges.isEnabled('BATCH_SUBACTION_NORMALIZATION', data['BLOCK_INDEX']);
-        // BATCH_ISSUANCE_LIMITS_V2 flag-day: the global command cap, the dotted-TICK
+        // BATCH_ISSUANCE_LIMITS flag-day: the global command cap, the dotted-TICK
         // exemption and the batch-cumulative value ledger below. Resolved once per BATCH,
         // like `normalize`, so every gated site in this file and every sub-command the
         // dispatch loop runs sees ONE verdict. The gate is registered at or after
         // BATCH_SUBACTION_NORMALIZATION (asserted in test/unit/batchIssuanceLimitsGate),
         // so wherever this is true, sub-command params are already normalized.
-        let limitsV2 = await this.protocolChanges.isEnabled('BATCH_ISSUANCE_LIMITS_V2', data['BLOCK_INDEX']);
+        let limitsV2 = await this.protocolChanges.isEnabled('BATCH_ISSUANCE_LIMITS', data['BLOCK_INDEX']);
         // Clone before mutation: this raw copy is what gets stored in the batches table.
         let batch = structuredClone(data);
 
@@ -147,7 +147,7 @@ class Batch {
             commands[0] = commands[0].replace('BATCH|' + format + '|','');
         }
 
-        // Global command cap (BATCH_ISSUANCE_LIMITS_V2), FIRST of the command checks.
+        // Global command cap (BATCH_ISSUANCE_LIMITS), FIRST of the command checks.
         // It is the only check that bounds the two O(N) scans below, and running it
         // first PINS error precedence: a batch that breaks this rule and others reports
         // the cap, never the rule a later loop would have found. Counting semantics are
@@ -219,7 +219,7 @@ class Batch {
             // MESSAGE v2 then parses under FILE's v0 format (its ciphertext lands
             // in ENCRYPTION_METHOD) and is wrongly rejected).
 
-            // Batch-cumulative value ledger (BATCH_ISSUANCE_LIMITS_V2).
+            // Batch-cumulative value ledger (BATCH_ISSUANCE_LIMITS).
             //
             // TX_OUTPUTS and the transaction's settlement values are TRANSACTION-level
             // state: the loop below preserves them across every sub-command, and each

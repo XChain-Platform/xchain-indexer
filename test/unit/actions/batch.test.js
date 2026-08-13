@@ -416,7 +416,7 @@ describe('Batch @regression @tier3', function () {
 
     });
 
-    describe('issuance limits v2 (BATCH_ISSUANCE_LIMITS_V2)', function () {
+    describe('issuance limits v2 (BATCH_ISSUANCE_LIMITS)', function () {
 
         const ADDR = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
 
@@ -428,7 +428,7 @@ describe('Batch @regression @tier3', function () {
             const known = ['BATCH', 'SEND', 'MESSAGE', 'ADDRESS', 'AIRDROP', 'BROADCAST', 'ISSUE', 'MINT'];
             actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(async (name) => {
                 if (name === 'BATCH_SUBACTION_NORMALIZATION') return true;
-                if (name === 'BATCH_ISSUANCE_LIMITS_V2') return limitsOn;
+                if (name === 'BATCH_ISSUANCE_LIMITS') return limitsOn;
                 return known.includes(name);
             });
             handler = new Batch(actionsCtx);

@@ -88,7 +88,7 @@ class Issue {
         this.fieldList['LOCK']   = ['LOCK_MAX_SUPPLY', 'LOCK_MINT', 'LOCK_MINT_SUPPLY', 'LOCK_MAX_MINT', 'LOCK_DESCRIPTION', 'LOCK_SLEEP', 'LOCK_CALLBACK'];
     }
 
-    // XC-1454 (BATCH_ISSUANCE_LIMITS_V2), R6/F11: the shared intern-gating wrapper for
+    // XC-1454 (BATCH_ISSUANCE_LIMITS), R6/F11: the shared intern-gating wrapper for
     // every getTokenInfo call this action makes (parent TICK, TICK itself, CALLBACK_TICK).
     // getTokenInfo interns any unseen name into index_tickers via createTicker BEFORE this
     // action's validity is known. Once `error` is already set the ISSUE cannot land valid
@@ -105,7 +105,7 @@ class Issue {
     // `finally` (to the PRIOR value, not a hardcoded false, in case of nesting) so a throw
     // never leaks suppression into the next getTokenInfo call or the next action.
     //
-    // Gated behind BATCH_ISSUANCE_LIMITS_V2 as a tightening: below the flag, or while
+    // Gated behind BATCH_ISSUANCE_LIMITS as a tightening: below the flag, or while
     // `error` is still unset, this is a transparent passthrough - byte-identical to the
     // unwrapped call, including every historical intern an already-invalid ISSUE caused.
     async gatedGetTokenInfo(tick, blockIndex, actionIndex, error, gateActive){
@@ -172,13 +172,13 @@ class Issue {
         // Create the fees object
         let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
 
-        // XC-1454 (BATCH_ISSUANCE_LIMITS_V2): governs both the caret-dot TICK rejection
+        // XC-1454 (BATCH_ISSUANCE_LIMITS): governs both the caret-dot TICK rejection
         // below (XC-1457/R6) and the ticker-intern gating on every getTokenInfo call in
         // this action (R6/F11 - see gatedGetTokenInfo). Computed once, early, so every
         // consumer below sees the same activation state for this action's BLOCK_INDEX.
         // Both are consensus tightenings: below the flag every historical verdict
         // (including the two defects it closes) must replay identically from genesis.
-        let batchIssuanceLimitsV2 = await this.actions.protocolChanges.isEnabled('BATCH_ISSUANCE_LIMITS_V2', data['BLOCK_INDEX']);
+        let batchIssuanceLimitsV2 = await this.actions.protocolChanges.isEnabled('BATCH_ISSUANCE_LIMITS', data['BLOCK_INDEX']);
 
         // TICK Validations
 

@@ -14,7 +14,7 @@
  * test/unit/nativeFeeBatchLedger.test.js
  *
  * Batch-cumulative native-fee accounting inside util.validateNativeCoinFee
- * (BATCH_ISSUANCE_LIMITS_V2, R5; the live defect it closes is XC-1455).
+ * (BATCH_ISSUANCE_LIMITS, R5; the live defect it closes is XC-1455).
  *
  * TX_OUTPUTS is transaction-level state that the batch loop preserves across every
  * sub-command and nothing decrements, so each of N fee-bearing sub-commands used to
@@ -79,7 +79,7 @@ function makeData(extra){
     return Object.assign({ BLOCK_INDEX: 100, BLOCK_TIME: 1000, COIN: 'DOGE' }, extra || {});
 }
 
-// What batch.js seeds, verbatim, once BATCH_ISSUANCE_LIMITS_V2 is enabled.
+// What batch.js seeds, verbatim, once BATCH_ISSUANCE_LIMITS is enabled.
 function seedLedger(){
     return { nativeFeeConsumed: '0', coinAmountConsumed: '0' };
 }
