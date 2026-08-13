@@ -42,10 +42,37 @@ class Batch {
         this.formats[0] = 'VERSION|COMMAND';
 
         // Per-BATCH usage cap for each ACTION (0 = disallowed inside a BATCH).
+        // MINT's 1 is re-read at/after BATCH_ISSUANCE_LIMITS as "1 per DISTINCT token"
+        // rather than "1 per batch" (spec decision D7); the number itself does not move,
+        // only what it is counted over. See maxMintsPerDistinctTick.
         this.actionLimits = {};
         this.actionLimits['BATCH'] = 0;
         this.actionLimits['MINT']  = 1;
         this.actionLimits['ISSUE'] = 1;
+
+        // Per-ACTION caps that arrive WITH the BATCH_ISSUANCE_LIMITS flag-day, held in their
+        // own table so the pre-flag one above stays byte-identical below the flag: adding a
+        // row to actionLimits would apply it retroactively and fork a replay.
+        //
+        // DEPLOY = 1 (spec decision D5, operator 2026-08-13). The chain never capped DEPLOY at
+        // all; only the SDK builder and the wallet refused it, which is a client-side line and
+        // not a protocol rule, while deploy.js (~536-541) DELIBERATELY supports a DEPLOY inside
+        // a BATCH, carrying the sub-command position into the constructor's root discriminator.
+        // THE CAP IS NOT ABOUT SIZE. "Too large for BATCH" was a legacy-lane fact (8192 bytes)
+        // and the envelope lane carries ~390000, with oversize self-enforcing at the encoder.
+        // The reason for the cap is COST: every DEPLOY runs a CONSTRUCTOR IN THE VM, by far the
+        // most expensive per-command work in the system, and the 250-command cap above was
+        // sized for cheap commands, so 250 constructors is a wholly different unit of work from
+        // 250 SENDs. Do not fold this into that cap or drop it because the payload fits.
+        // One is the deliberate starting point because the asymmetry is one-way: raising a
+        // limit later is a loosening and cheap, lowering one later is a tightening that risks
+        // forking a replay.
+        this.gatedActionLimits = {};
+        this.gatedActionLimits['DEPLOY'] = 1;
+
+        // Distinctness bucket for a MINT TICK that resolves to NO ticker id (D7). A Symbol, so
+        // it can never collide with a real id key however a wire tick is spelled.
+        this.unresolvedTickKey = Symbol('BATCH_UNRESOLVED_TICK');
 
         // Global per-BATCH command cap (BATCH_ISSUANCE_LIMITS). Every parse-valid
         // sub-command costs an ACTION_INDEX, mappings and (when it fails) an invalid
@@ -136,6 +163,108 @@ class Batch {
         } finally {
             this.indexerDb.suppressIndexIdCreation = prior;
         }
+    }
+
+    // Read the TICK a sub-command's handler will parse (BATCH_ISSUANCE_LIMITS / D7).
+    //
+    // TICK sits at params[1] in ALL SEVEN ISSUE formats and in MINT's SINGLE format
+    // (VERSION|TICK|AMOUNT|DESTINATION|MEMO, mint.js:41), so positional extraction is not
+    // format-fragile for either action and no per-action position rule is needed. It must be
+    // read AFTER the same normalizeSubAction the dispatch loop applies: that call injects the
+    // implied legacy VERSION 0 for BTNS-style params, and an un-normalized legacy MINT carries
+    // its TICK one position earlier (MINT|TICK|AMOUNT|DESTINATION).
+    //
+    // Runs on a PRIVATE split copy because normalizeSubAction splices params in place and must
+    // never reach the caller's array. Returns '' when there is no TICK at all, which callers
+    // read as "no positive evidence", never as a token named the empty string. The trim mirrors
+    // the R4 probe: an untrimmed spelling the executor would reject can only COLLAPSE into a
+    // real tick's bucket here, which is the safe direction (it rejects, never admits). Never
+    // throws, because a classifier crash here would halt block processing.
+    //
+    // classifyLimitAction above predates this helper and deliberately keeps its own copy of the
+    // extraction: it is landed consensus code already driven green on chain, so it is not
+    // re-derived through a new shared path just for tidiness.
+    subCommandTick(action, command, normalize){
+        try {
+            let params = String(command).split('|').slice(1);
+            if(normalize)
+                this.normalizeSubAction(action, params);
+            let tick = params[1];
+            if(tick === undefined || tick === null)
+                return '';
+            return String(tick).trim();
+        } catch(e) {
+            return '';
+        }
+    }
+
+    // Resolve a TICK to its ticker id WITHOUT interning it (BATCH_ISSUANCE_LIMITS / D7).
+    //
+    // Same resolve-only discipline as probeTokenInfo above, for the same reason: this runs over
+    // untrusted wire ticks, before validity is decided, up to the 250-command cap. getTickerId
+    // is a pure SELECT today (createTicker is the only interning path, and it hands any ^-led
+    // tick straight back to getTickerId without ever inserting one), so the lever changes no
+    // verdict here; it is set anyway so a future interning read cannot silently start burning
+    // dense id space from a pre-check. `prior` is restored (not hardcoded false) in a finally,
+    // so nesting and throws cannot leak suppression into the next read.
+    async probeTickerId(tick){
+        let prior = this.indexerDb.suppressIndexIdCreation;
+        this.indexerDb.suppressIndexIdCreation = true;
+        try {
+            return await this.indexerDb.getTickerId(tick);
+        } finally {
+            this.indexerDb.suppressIndexIdCreation = prior;
+        }
+    }
+
+    // Largest number of MINT sub-commands in this BATCH naming the SAME token
+    // (BATCH_ISSUANCE_LIMITS / spec decision D7, operator 2026-08-13).
+    //
+    // D7 replaces the flat "one MINT per BATCH" with "one MINT per DISTINCT token, any number
+    // of tokens". The flat cap protected FAIRNESS, not cost: a fair-mint token's supply is
+    // contended, and 100 MINTs of one tick in one transaction beat 100 separate transactions on
+    // both fee and in-block ordering, while minting twelve DIFFERENT tokens takes nothing from
+    // anyone. Returning the per-token MAXIMUM keeps the cap itself in actionLimits ("at most 1
+    // MINT per distinct tick") instead of restating the number here.
+    //
+    // DISTINCTNESS IS JUDGED ON THE RESOLVED TICKER ID, NEVER THE LITERAL STRING. `JDOG` and
+    // `^614` can name the SAME token, so comparing raw strings would let a minter spell one
+    // scarce tick both ways and take two bites at it: precisely the bypass this rule exists to
+    // prevent, and the same aliasing hole XC-1457 closed on the ISSUE path.
+    //
+    // A TICK THAT RESOLVES TO NO ID gets no evidence that it is distinct from anything, so ALL
+    // unresolvable ticks share ONE bucket: at most one such MINT per batch, which is exactly
+    // the pre-flag limit, so this direction loosens nothing it cannot prove. It is the same
+    // "on positive evidence only" rule classifyLimitAction already applies to a TICK-less
+    // ISSUE, and it is what closes the intra-batch variant of the alias hole: in
+    // `ISSUE FOO; MINT FOO; MINT ^<the id FOO is about to get>` NEITHER MINT resolves here,
+    // because this scan reads the token set as it stands BEFORE the first sub-command runs, yet
+    // both would name one token by the time they execute. One shared bucket rejects that pair.
+    // A MINT of a genuinely unknown tick is invalid at execution anyway, so the work this
+    // forgoes could never have landed; raising the rule later is a loosening and cheap, while
+    // lowering it later would fork a replay.
+    //
+    // Reads: ONE getTickerId per DISTINCT tick STRING, memoized, so 250 copies of one tick cost
+    // one read and the worst case is bounded by the 250-command cap. Every read is read-only
+    // and intern-suppressed. Both tables are Maps rather than plain objects because the keys
+    // are untrusted wire strings and a `constructor`/`__proto__` tick would read as an
+    // already-present entry on an object literal, skipping its probe.
+    async maxMintsPerDistinctTick(ticks){
+        let resolved = new Map();   // tick string -> distinctness key (memoized, one read each)
+        let counts   = new Map();   // distinctness key -> MINTs in this batch naming it
+        let max      = 0;
+        for(let tick of ticks){
+            if(!resolved.has(tick)){
+                let id = (tick === '') ? null : await this.probeTickerId(tick);
+                resolved.set(tick, (id === null || id === undefined) ? this.unresolvedTickKey : id);
+            }
+            let key   = resolved.get(tick);
+            let count = (counts.get(key) || 0) + 1;
+            counts.set(key, count);
+            if(count > max)
+                max = count;
+        }
+        return max;
     }
 
     // Nominal gas cost of ONE new-tick ISSUE, reproduced from the SAME shared helper and the
@@ -269,6 +398,12 @@ class Batch {
 
         let actions = {};
 
+        // TICKs of this batch's MINT sub-commands, in list order, collected in the SAME pass
+        // that counts them so the two can never disagree about which commands are MINTs
+        // (D7 caps MINTs per DISTINCT token, so the count alone is no longer the whole story).
+        // Populated only under the flag: below it nothing reads it and no work is done.
+        let mintTicks = [];
+
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
@@ -296,8 +431,11 @@ class Batch {
             let action = String(command).split('|')[0];
             if(normalize)
                 action = this.normalizeSubAction(action);
-            if(limitsActive)
+            if(limitsActive){
                 action = this.classifyLimitAction(action, command, normalize);
+                if(action === 'MINT')
+                    mintTicks.push(this.subCommandTick(action, command, normalize));
+            }
             if(this.util.isNull(actions[action]))
                 actions[action] = 0;
             actions[action]++;
@@ -311,8 +449,21 @@ class Batch {
                 error = 'invalid: ACTION (unknown)';
         }
 
+        // Per-ACTION caps in force for THIS batch. Below the flag this IS the pre-flag table,
+        // by identity, so nothing about an old batch can move; at/after it the gated caps
+        // (DEPLOY, D5) are merged into a COPY, never into either stored table.
+        let actionLimits = limitsActive ? Object.assign({}, this.actionLimits, this.gatedActionLimits) : this.actionLimits;
+
         for(let action in actions){
-            if(!error && Object.keys(this.actionLimits).includes(action) && actions[action] > this.actionLimits[action])
+            let count = actions[action];
+            // D7: MINT is capped per DISTINCT TOKEN rather than per batch, so what the cap is
+            // compared against is the largest number of MINTs naming ONE token, not the raw
+            // occurrence count. Guarded by !error because it is the only branch in this loop
+            // that touches the database: an already-invalid batch keeps its cheaper verdict
+            // and pays for no reads, exactly as the R4 pre-check below does.
+            if(!error && limitsActive && action === 'MINT')
+                count = await this.maxMintsPerDistinctTick(mintTicks);
+            if(!error && Object.keys(actionLimits).includes(action) && count > actionLimits[action])
                 error = 'invalid: ' + action  + ' (limit)';
         }
 
