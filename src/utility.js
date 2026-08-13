@@ -1169,6 +1169,13 @@ class Utility {
     // `giveEscrow / giveAmount`. giveAmount cancels, leaving the simpler identity below.
     // Kept as the same product Counterparty computes, just with the cancellation applied:
     //
+    // That per-dispense premise is what SETTLEMENT does only at/above
+    // DISPENSER_ORACLE_PER_TOKEN_PRICE. Below it, dispense.js spent the published price
+    // as the price of one whole FILL, so the fee an oracle was paid and the proceeds the
+    // dispenser could actually take in differed by a factor of giveAmount (XC-993). This
+    // function is unchanged either side of that flag day: per-token is the canonical
+    // reading and this is the surface that already had it right.
+    //
     //     projected_fiat_total = oraclePrice * giveEscrow
     //     projected_coin_total = projected_fiat_total / coinFiatPrice
     //     fee                  = projected_coin_total * feeFraction
@@ -2439,6 +2446,18 @@ class Utility {
             if(units >= 1){
                 return {
                     units:         units,
+                    // The SAME affordability, un-floored. `units` is whole tokens, which is
+                    // the right granularity for a caller that hands out one token at a time,
+                    // but the per-token settlement rule
+                    // (DISPENSER_ORACLE_PER_TOKEN_PRICE in actions/dispense.js) divides this
+                    // by GIVE_AMOUNT to get a FILL count, and flooring to whole tokens first
+                    // silently under-credits whenever GIVE_AMOUNT is below 1: a buyer who can
+                    // afford 1.75 tokens of a dispenser giving 0.5 per fill is owed 3 fills,
+                    // and floor(floor(1.75)/0.5) is 2. Dividing the raw value and flooring
+                    // ONCE is the only rounding the rule intends. Rendered through bcstr, so
+                    // it is the exact plain-decimal string the division produced and never a
+                    // JS number (and never String()'s exponential form).
+                    rawUnits:      this.bcstr(rawTokens),
                     oraclePrice:   op,
                     coinFiatPrice: coinFiatPrice
                 };

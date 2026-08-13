@@ -245,6 +245,33 @@ describe('Utility FIAT dispenser price matching @regression', function () {
                 '0.001', '1OracleAddr', 'BTC', 'PEPECASH', 'JPY', NOW, WINDOW, db);
             assert.strictEqual(r, null);
         });
+
+        // rawUnits is what DISPENSER_ORACLE_PER_TOKEN_PRICE divides by GIVE_AMOUNT.
+        // It has to be the UN-floored affordability, or the settlement rule floors
+        // twice and under-credits a sub-1 GIVE_AMOUNT dispenser (see dispense.js).
+        it('reports the un-floored affordability beside the whole-token count', async function () {
+            // 1 PEPECASH = $1.50, 1 BTC = $30, pays 0.37 BTC => $11.10 => 7.4 tokens.
+            // These are the values measured on LTC regtest 2026-07-31 (XC-993).
+            const db = fakeDb([snap('30', NOW - 600)], [oracle('1.5', NOW - 600)]);
+            const r = await util.reverseOraclePriceMatch(
+                '0.37', '1OracleAddr', 'BTC', 'PEPECASH', 'USD', NOW, WINDOW, db);
+            assert(r, 'expected a match');
+            assert.strictEqual(r.units, 7, 'whole tokens the payment covers');
+            assert.strictEqual(r.rawUnits, '7.4', 'the same affordability, un-floored');
+        });
+
+        it('renders rawUnits in plain decimal notation, never exponential', async function () {
+            // String() on a decimal.js-backed bignumber switches to exponential
+            // below 1e-7, and bcdiv/bcgt downstream parse it as text. rawUnits is
+            // always >= 1 here (the matcher only returns once units >= 1), but pin
+            // the plain form so a future loosening of that gate cannot leak "3e-8"
+            // into a consensus division.
+            const db = fakeDb([snap('30', NOW - 600)], [oracle('1.5', NOW - 600)]);
+            const r = await util.reverseOraclePriceMatch(
+                '0.37', '1OracleAddr', 'BTC', 'PEPECASH', 'USD', NOW, WINDOW, db);
+            assert.strictEqual(typeof r.rawUnits, 'string');
+            assert.ok(!/e/i.test(r.rawUnits), `rawUnits must not be exponential: ${r.rawUnits}`);
+        });
     });
 
     // Guards on the inputs a PRICE v1 oracle is actually allowed to publish

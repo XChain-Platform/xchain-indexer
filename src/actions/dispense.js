@@ -123,7 +123,54 @@ class Dispense {
                     dispenser['GET_COIN']
                 );
                 if(priceMatch){
+                    // priceMatch.units is how many TOKENS the payment buys at the oracle's
+                    // published price. `multiplier` further down is a FILL count: it is
+                    // multiplied by the dispenser's GIVE_AMOUNT to get the tokens credited.
+                    // Assigning one to the other equates a token with a fill, so a dispenser
+                    // giving N tokens per fill sold each token at 1/N of the published price.
+                    // Measured on chain (LTC regtest 2026-07-31, DISPENSE 1956): oracle 1.5
+                    // USD per XCHAIN, GIVE_AMOUNT 5, a 0.37 LTC payment worth $11.10 credited
+                    // 35 XCHAIN, i.e. 7 fills at $1.50 each and $0.317 a token.
+                    //
+                    // A PRICE v1 oracle publishes the price of one TOKEN, and that reading is
+                    // canonical (operator decision 2026-08-11, XC-993): the docs, the XC-650
+                    // oracle-fee base (`oracle_price x GIVE_ESCROW`, which only holds if the
+                    // fiat cost of one dispense is `oracle_price x GIVE_AMOUNT`) and the
+                    // wallet's publishing form all state it, and two of those are what an
+                    // oracle operator is paid on. So SETTLEMENT is the side that moves:
+                    // divide the affordable tokens by GIVE_AMOUNT to get whole fills.
+                    //
+                    // Gated because it is consensus: the same payment against the same
+                    // dispenser credits a different number of tokens either side of the
+                    // boundary, so an ungated flip forks a heterogeneous fleet on the first
+                    // Mode B dispense with GIVE_AMOUNT != 1. Invisible at GIVE_AMOUNT 1,
+                    // where fills and tokens coincide, which is why it survived every prior
+                    // example and test.
+                    //
+                    // Divide priceMatch.rawUnits (un-floored) rather than .units so the value
+                    // is floored exactly ONCE; see the note on reverseOraclePriceMatch. Fall
+                    // back to .units when the matcher did not supply it.
+                    //
+                    // Two guards, both of which would otherwise be a divide-by-zero on a
+                    // legal dispenser: GIVE_AMOUNT is empty/NULL on an ownership dispenser
+                    // (which dispenses the ownership record itself, not a token quantity, and
+                    // is capped to a single fill below anyway), and bcdiv returns 0 on a zero
+                    // divisor, which would silently reject every dispense as insufficient
+                    // funds instead of leaving the legacy behavior in place.
                     multiplier = priceMatch.units;
+                    let perTokenOracle = await this.actions.protocolChanges.isEnabled('DISPENSER_ORACLE_PER_TOKEN_PRICE', block_index);
+                    let giveAmountPositive = !this.util.isNull(dispenser['GIVE_AMOUNT']) &&
+                                             this.util.bcgt(dispenser['GIVE_AMOUNT'], '0');
+                    if(perTokenOracle && giveAmountPositive){
+                        let affordable = this.util.isNull(priceMatch.rawUnits)
+                            ? String(priceMatch.units)
+                            : priceMatch.rawUnits;
+                        // Saturating, not throwing: a throw here wedges the block loop, and a
+                        // sub-1 GIVE_AMOUNT can lift the fill count above the affordable token
+                        // count by orders of magnitude.
+                        multiplier = this.util.bcfloorSaturating(
+                            this.util.bcdiv(affordable, dispenser['GIVE_AMOUNT'], 64));
+                    }
                 } else {
                     error = 'invalid: no matching oracle price';
                 }
