@@ -42,6 +42,7 @@ const { ATTEST_MAX_EXPIRIES_PER_BLOCK,
         CROSS_SETTLE_MAX_PER_BLOCK } = require('./protocol/constants.js');
 const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS,
         ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
+        ARCHIVE_ANCHOR_BY_CONTENT_SQL, selectArchiveHeadRow,
         dedupeArchiveChunks } = require('./anchor-action-query');
 const { rethrowIfInfraFault } = require('./actions/faultGuard');
 
@@ -13034,6 +13035,44 @@ class Database {
             ? await this.doQuery(ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL, [batchSeq, String(author)])
             : await this.doQuery(ARCHIVE_CHUNK_SET_SQL, [batchSeq, batchSeq]);
         return dedupeArchiveChunks(rows);
+    }
+
+    // CONTENT-ADDRESSED archive-head lookup: the archive-anchor head for one batch
+    // identified by WHAT IT CONTAINS (checkpoint identity + batch_crc32 + match_count)
+    // rather than by the match_batch_seq it happened to be published under.
+    //
+    // getAnchorV1ByBatchSeq above cannot serve this question at all. Its key is
+    // match_batch_seq, and the caller that needs this read (the hub's archive publish
+    // path, recovering from a crash between "head broadcast" and "batch recorded") has
+    // by definition lost that seq: the re-election allocates a fresh one. The content
+    // key is the only identity that survives the restart, and the publisher signs it
+    // into the v1 canonical, so both sides can compute it.
+    //
+    // `author` scopes the answer to one publishing address. Supplied, the question
+    // becomes "did THIS publisher already publish this batch", which is the only form
+    // safe to act on: unscoped, a copy of an already-mined head broadcast by anyone
+    // answers yes for a batch whose chunks that party never sent.
+    //
+    // Returns the head row (with `source` = author address and `txid`) plus the chunk
+    // rows already on-chain for it, so a partially published batch is resumable:
+    // { head, chunks } with head null when nothing matches (chunks then empty).
+    // Status is NOT filtered here for the reason ARCHIVE_CHUNK_SET_SQL is not
+    // status-filtered either: a mirrored and an unmirrored node store the same head
+    // under different statuses, and the caller applies its own verdict.
+    async getArchiveAnchorByContent(chain, network, block_index, checkpoint_seq, batch_crc32, match_count, author){
+        let rows = await this.doQuery(ARCHIVE_ANCHOR_BY_CONTENT_SQL,
+            [chain, network, Number(block_index), Number(checkpoint_seq),
+             String(batch_crc32).toLowerCase(), Number(match_count)]);
+        let head = selectArchiveHeadRow(rows, { author: (author != null && author !== '') ? author : null });
+        if(!head) return { head: null, chunks: [] };
+        // Chunks are read under the head's OWN seq and author, never the caller's:
+        // that pairing is what lets a resuming publisher address slots allocated by a
+        // process that is gone. A head with an unresolvable author has no chunk set
+        // that can be attributed, so report none rather than the whole seq's rows.
+        let chunks = head.source != null
+            ? await this.getAnchorChunks(Number(head.match_batch_seq), String(head.source))
+            : [];
+        return { head, chunks };
     }
 
     // Flag an anchor row (e.g. 'invalid_archive' when chunk reassembly fails CRC).

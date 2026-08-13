@@ -161,6 +161,7 @@ const FEDERATION_READ_METHODS = new Set([
     'getopencrosschainorders',
     'getactionconfirmations',
     'getanchoraction',
+    'getarchiveanchor',
     'getreorghistory',
     'getpendingcrosschaincalls',
     'getcrosschaincall',
@@ -1280,6 +1281,51 @@ async function startApi(){
             } catch (err) {
                 console.error('getanchoraction error:', err);
                 return { error: 'failed to look up anchor action' };
+            }
+        },
+
+        // Content-addressed archive-anchor existence: "is this exact archive batch
+        // already on-chain, published by this address?" - answered WITHOUT the
+        // match_batch_seq.
+        //
+        // Serves the crash-safety guard on the hub's archive publish path. That path
+        // broadcasts the v1/v6 head and its v2 continuation chunks BEFORE it records the
+        // batch locally, so a crash in between re-elects the same match rows on the next
+        // flush under a FRESH batch seq and re-spends DOGE on a duplicate archive. Every
+        // other archive read is keyed on that seq and therefore cannot see the earlier
+        // publish; this one is keyed on the batch's content commitment (checkpoint
+        // identity + batch_crc32 + match_count), which the publisher signs into the v1
+        // canonical and can recompute after the restart.
+        //
+        // `chain`/`network` are the CHECKPOINTED chain (e.g. BTC/regtest); this indexer
+        // serves the anchor chain (DOGE), so confirmations are DOGE-relative. Any depth
+        // counts to the caller: a 1-conf archive already spent the fee.
+        //
+        // `author` scopes the answer to one publishing address (the hub passes its own
+        // DOGE address). Unscoped, a third party who copied our mined head onto the
+        // chain would answer "already published" for a batch whose chunks it never sent,
+        // and the publisher would skip its own head and strand the archive.
+        //
+        // `chunks_present` / `chunks_complete` + the head's own `match_batch_seq` let a
+        // resuming publisher re-send only the chunks that are actually missing, in the
+        // slots of the batch its previous process allocated.
+        async getarchiveanchor({chain, network, block_index, checkpoint_seq, batch_crc32, match_count, author}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            let v = anchorActionQuery.validateArchiveAnchorParams(
+                { chain, network, block_index, checkpoint_seq, batch_crc32, match_count, author });
+            if(!v.ok) return { error: v.error };
+            // Federation READ isolation: committed-only, off the block tx.
+            let db = indexer.indexerDb.apiView();
+            try {
+                let latest = await db.getLatestBlockIndex();
+                let found  = await db.getArchiveAnchorByContent(chain, network, v.block_index,
+                    v.checkpoint_seq, v.batch_crc32, v.match_count, v.author);
+                return anchorActionQuery.buildArchiveAnchorResponse(
+                    indexer.config, latest, found.head, found.chunks);
+            } catch (err) {
+                console.error('getarchiveanchor error:', err);
+                return { error: 'failed to look up archive anchor' };
             }
         },
 

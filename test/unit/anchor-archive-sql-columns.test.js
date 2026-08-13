@@ -78,6 +78,7 @@ const QUERIES = [
     ['ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL',  q.ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL],
     ['ARCHIVE_HEAD_GATE_SQL',            q.ARCHIVE_HEAD_GATE_SQL],
     ['ANCHOR_ACTIONS_SQL',               q.ANCHOR_ACTIONS_SQL],
+    ['ARCHIVE_ANCHOR_BY_CONTENT_SQL',    q.ARCHIVE_ANCHOR_BY_CONTENT_SQL],
 ];
 
 describe('archive query column references exist in the canonical schema @regression @tier1', function () {
