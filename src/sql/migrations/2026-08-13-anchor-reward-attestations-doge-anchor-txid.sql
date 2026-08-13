@@ -1,0 +1,41 @@
+-- xchain:migration mode=auto
+-- Migration: anchor_reward_attestations.doge_anchor_txid.
+--
+-- WHY
+-- ---
+-- The mirrored attestation row is the ONLY input to the BTC-side anchor/archive reward
+-- derivation, and it carried no reference to the DOGE transaction the rewarded ANCHOR
+-- landed in. So nothing downstream of the hub could re-prove that the anchor was ever
+-- mined: an evicted or reorged anchor still produced an append-only, never-retracted row
+-- and a permanent COLLECT-spendable validator_rewards credit for a transaction the chain
+-- never carried.
+--
+-- With the txid on the row the proof is re-checkable at every hop that mints money:
+--   * the publishing hub writes the row only after the txid is buried dogeConfirmations
+--     deep at the exact ANCHOR version it published;
+--   * a peer receiving the federated XANCREWARD message re-proves the same thing against
+--     its OWN DOGE indexer before writing its copy;
+--   * the BTC indexer re-proves it a third time (getanchorconfirmations) and binds the
+--     returned anchor to this exact reward tuple before createValidatorReward.
+-- A row with a NULL txid (written before this column existed) can never be proven and
+-- therefore derives nothing. Fail-closed by shape.
+--
+-- BYTE-NEUTRAL WHILE THE GATE IS INERT. ANCHOR_REWARD_DERIVE_ACTIVATION is null on
+-- mainnet and testnet, so no attestation row is written and no reward is derived on those
+-- networks; the column stays empty until the operator ratifies a height. It is additive
+-- and idempotent (IF NOT EXISTS), which is why it is mode=auto rather than manual: unlike
+-- the validator_rewards derive_block_index migration it retimes nothing and changes no
+-- rollback predicate, so a rolling restart applying it on some nodes before others cannot
+-- diverge anything.
+--
+-- The startup drift reconciler (alterTableForDrift) converges a fresh or aged install from
+-- src/sql/anchor_reward_attestations.sql independently, so a node that never replays this
+-- file still ends up with the same schema. This file exists for replicas converged by
+-- replaying migrations alone. The hub carries the same column in its own copy of the table
+-- SQL and reconciles it by the same drift mechanism.
+--
+-- HOW TO RUN
+--   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-08-13-anchor-reward-attestations-doge-anchor-txid.sql
+
+ALTER TABLE anchor_reward_attestations
+  ADD COLUMN IF NOT EXISTS doge_anchor_txid VARCHAR(64) DEFAULT NULL AFTER publisher_attestations;

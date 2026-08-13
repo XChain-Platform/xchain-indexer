@@ -46,11 +46,27 @@ function makeRow(signers, overrides) {
         chain: 'BTC', network: 'regtest', reward_type: 'anchor_BTC',
         round_reference: 5, snapshot_block: 0, publisher: signers[0].pubkey,
         reward_amount: '10.00000000',
+        // Every row the hub writes at/above the derive gate carries the MINED DOGE anchor
+        // it is proof-bound to; the derive pass re-proves it before paying.
+        doge_anchor_txid: 'a'.repeat(64),
     }, overrides || {});
     const canonical = derive.rewardCanonical(row);
     row.publisher_attestations = JSON.stringify(
         signers.map(s => ({ pubkey: s.pubkey, sig: sign(s.privateKey, canonical) })));
     return row;
+}
+
+// A stand-in AnchorProofClient. `verdict` is what the DOGE re-proof returns; the default
+// is the happy path (the anchor is on DOGE, bound to this tuple, buried).
+function stubProof(verdict) {
+    return { proveMined: sinon.stub().resolves(verdict === undefined ? 'verified' : verdict) };
+}
+
+// Any BTC height at/after a row's maturity boundary. Derivation is keyed on the
+// fleet-agreed watermark (snapshot_block + ANCHOR_REWARD_MIRROR_MATURITY), never on
+// snapshot_block itself, so a test that means "this has matured" has to say so.
+function maturedAt(snapshotBlock) {
+    return Number(snapshotBlock || 0) + ar.ANCHOR_REWARD_MIRROR_MATURITY;
 }
 
 function stubDb(validators, pending) {
@@ -112,12 +128,33 @@ describe('anchor_reward_derive (BTC-side derivation) @regression @tier2', functi
             const keys = [makeKey()];                                          // N=1 -> quorum 1
             const row  = makeRow(keys, { round_reference: 7, snapshot_block: 0 });
             const db   = stubDb(keys, [row]);
-            const n    = await derive.deriveAnchorRewards(db, cfg, 100);
+            const n    = await derive.deriveAnchorRewards(db, cfg, 200, stubProof());
             assert.strictEqual(n, 1);
             assert.ok(db.createValidatorReward.calledOnce);
             assert.deepStrictEqual(db.createValidatorReward.firstCall.args,
-                [keys[0].pubkey, 7, 'anchor_BTC', ar.ANCHOR_REWARD_AMOUNT, 0, true, 100]);
-            assert.ok(db.reconcileAnchorRewardWinner.calledOnceWith(7, 'anchor_BTC', 100, null));
+                [keys[0].pubkey, 7, 'anchor_BTC', ar.ANCHOR_REWARD_AMOUNT, 0, true, 200]);
+            assert.ok(db.reconcileAnchorRewardWinner.calledOnceWith(7, 'anchor_BTC', 200, null));
+        });
+
+        // #4172, operator ruling (a). snapshot_block is the height the XANCPUB signing set was
+        // resolved at, and it is already in the past when the row is written, so maturing on it
+        // let two nodes with different mirror contents derive the same reward at different
+        // heights. Maturity is now the fleet-agreed watermark, and the fetch must ask for it.
+        it('keys maturity on the fleet-agreed watermark, not on snapshot_block', async function () {
+            const keys = [makeKey()];
+            const db   = stubDb(keys, []);
+            await derive.deriveAnchorRewards(db, cfg, 5000, stubProof());
+            assert.deepStrictEqual(db.getPendingAnchorRewardAttestations.firstCall.args,
+                ['regtest', 5000 - ar.ANCHOR_REWARD_MIRROR_MATURITY]);
+        });
+
+        it('derives nothing before the maturity watermark can be reached at all', async function () {
+            const keys = [makeKey()];
+            const db   = stubDb(keys, [makeRow(keys)]);
+            const n    = await derive.deriveAnchorRewards(db, cfg, ar.ANCHOR_REWARD_MIRROR_MATURITY - 1, stubProof());
+            assert.strictEqual(n, 0);
+            assert.ok(db.getPendingAnchorRewardAttestations.notCalled,
+                'an early chain must not underflow into maturing every row at a negative height');
         });
 
         // The reward is EARNED at snapshot_block but MATERIALIZED at the
@@ -129,7 +166,7 @@ describe('anchor_reward_derive (BTC-side derivation) @regression @tier2', functi
             const row  = makeRow(keys, { round_reference: 11, snapshot_block: 0 });
             const db   = stubDb(keys, [row]);
             await db.createValidatorReward.resetHistory();
-            await derive.deriveAnchorRewards(db, cfg, 4321);
+            await derive.deriveAnchorRewards(db, cfg, 4321, stubProof());
             const args = db.createValidatorReward.firstCall.args;
             assert.strictEqual(args[4], 0,    'block_index stays the earn-block (snapshot_block)');
             assert.strictEqual(args[6], 4321, 'derive_block_index is the BTC block that created the row');
@@ -141,7 +178,7 @@ describe('anchor_reward_derive (BTC-side derivation) @regression @tier2', functi
             const keys = [makeKey()];
             const row  = makeRow(keys, { reward_type: 'anchor_archive', round_reference: 3 });
             const db   = stubDb(keys, [row]);
-            await derive.deriveAnchorRewards(db, cfg, 200);
+            await derive.deriveAnchorRewards(db, cfg, 200, stubProof());
             assert.deepStrictEqual(db.createValidatorReward.firstCall.args,
                 [keys[0].pubkey, 3, 'anchor_archive', ar.ARCHIVE_REWARD_AMOUNT, 0, true, 200]);
         });
@@ -151,7 +188,7 @@ describe('anchor_reward_derive (BTC-side derivation) @regression @tier2', functi
             const rowA = makeRow(keys, { publisher: keys[0].pubkey });
             const rowB = makeRow(keys, { publisher: keys[1].pubkey });
             const db   = stubDb(keys, [rowA, rowB]);
-            const n    = await derive.deriveAnchorRewards(db, cfg, 50);
+            const n    = await derive.deriveAnchorRewards(db, cfg, maturedAt(0), stubProof());
             assert.strictEqual(n, 1, 'one logical reward group');
             assert.strictEqual(db.createValidatorReward.callCount, 2, 'both publishers upserted before reconcile');
             assert.strictEqual(db.reconcileAnchorRewardWinner.callCount, 1);
@@ -160,7 +197,7 @@ describe('anchor_reward_derive (BTC-side derivation) @regression @tier2', functi
         it('is a no-op on a non-BTC chain (reward resolves only where the stake lives)', async function () {
             const keys = [makeKey()];
             const db   = stubDb(keys, [makeRow(keys)]);
-            const n    = await derive.deriveAnchorRewards(db, { COIN: 'DOGE', NETWORK: 'regtest' }, 100);
+            const n    = await derive.deriveAnchorRewards(db, { COIN: 'DOGE', NETWORK: 'regtest' }, 1000, stubProof());
             assert.strictEqual(n, 0);
             assert.ok(db.getPendingAnchorRewardAttestations.notCalled);
             assert.ok(db.createValidatorReward.notCalled);
@@ -170,15 +207,64 @@ describe('anchor_reward_derive (BTC-side derivation) @regression @tier2', functi
             const keys = [makeKey()];
             const row  = makeRow(keys, { network: 'mainnet', snapshot_block: 1000000 });
             const db   = stubDb(keys, [row]);
-            const n    = await derive.deriveAnchorRewards(db, { COIN: 'BTC', NETWORK: 'mainnet' }, 1000000);
+            const n    = await derive.deriveAnchorRewards(db, { COIN: 'BTC', NETWORK: 'mainnet' }, maturedAt(1000000), stubProof());
             assert.strictEqual(n, 0, 'mainnet derive gate is an inert null placeholder');
             assert.ok(db.createValidatorReward.notCalled);
         });
 
         it('derives nothing when no rows are pending (idempotent steady state)', async function () {
             const db = stubDb([makeKey()], []);
-            assert.strictEqual(await derive.deriveAnchorRewards(db, cfg, 100), 0);
+            assert.strictEqual(await derive.deriveAnchorRewards(db, cfg, 1000, stubProof()), 0);
             assert.ok(db.createValidatorReward.notCalled);
+        });
+
+        // The mined-anchor re-proof (AML #4171). The mirror is transport: the hub that wrote
+        // the row is the party the reward pays, so its claim that the anchor was mined is
+        // re-checked here against DOGE before any money row exists.
+        describe('DOGE mined-anchor re-proof', function () {
+            it('binds the proof to the reward tuple it is about to pay', async function () {
+                const keys  = [makeKey()];
+                const row   = makeRow(keys, { round_reference: 9, snapshot_block: 0 });
+                const db    = stubDb(keys, [row]);
+                const proof = stubProof();
+                await derive.deriveAnchorRewards(db, cfg, maturedAt(0), proof);
+                const asked = proof.proveMined.firstCall.args[0];
+                assert.strictEqual(asked.txid, row.doge_anchor_txid);
+                assert.strictEqual(asked.rewardType, 'anchor_BTC');
+                assert.strictEqual(asked.roundReference, 9);
+                assert.strictEqual(asked.snapshotBlock, 0);
+                assert.strictEqual(asked.publisher, keys[0].pubkey.toLowerCase());
+                assert.ok(asked.minConfirmations > 0, 'a depth requirement must be stated, never defaulted to zero');
+            });
+
+            it('DEFERS the block (throws) when the anchor cannot be proven either way', async function () {
+                const keys = [makeKey()];
+                const db   = stubDb(keys, [makeRow(keys)]);
+                await assert.rejects(
+                    () => derive.deriveAnchorRewards(db, cfg, maturedAt(0), stubProof('unknown')),
+                    (e) => e instanceof derive.AnchorProofUnavailableError);
+                assert.ok(db.createValidatorReward.notCalled, 'nothing is minted on an unprovable anchor');
+            });
+
+            it('DEFERS the block when no DOGE visibility is wired at all', async function () {
+                const keys = [makeKey()];
+                const db   = stubDb(keys, [makeRow(keys)]);
+                await assert.rejects(
+                    () => derive.deriveAnchorRewards(db, cfg, maturedAt(0), null),
+                    (e) => e instanceof derive.AnchorProofUnavailableError);
+                assert.ok(db.createValidatorReward.notCalled);
+            });
+
+            // A positively-contradicted txid is chain data, identical on every node, so
+            // skipping it is deterministic; deferring on it would wedge the fleet forever.
+            it('SKIPS a row whose anchor proof is positively rejected, without deferring', async function () {
+                const keys = [makeKey()];
+                const db   = stubDb(keys, [makeRow(keys)]);
+                const n    = await derive.deriveAnchorRewards(db, cfg, maturedAt(0), stubProof('rejected'));
+                assert.strictEqual(n, 0);
+                assert.ok(db.createValidatorReward.notCalled);
+                assert.ok(db.reconcileAnchorRewardWinner.notCalled);
+            });
         });
     });
 });

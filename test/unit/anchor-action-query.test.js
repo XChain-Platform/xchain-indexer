@@ -299,3 +299,96 @@ describe('anchor-action-query: ANCHOR_ACTIONS_SQL', function () {
         assert.strictEqual(inClause.split(',').length, CHECKPOINT_VERSIONS.length);
     });
 });
+
+// ── getanchorconfirmations: DOGE anchor visibility for the BTC indexer ──────────
+//
+// The read the BTC side uses to re-prove that the anchor it is about to pay for was
+// actually mined. Keyed on the txid alone, because that is the only DOGE-side identity a
+// mirrored anchor_reward_attestations row carries. The response has to keep three things
+// separable for the caller: what the transaction anchored, how deep it is, and whether it
+// exists at all - collapsing any of those into a bare boolean loses the caller's ability to
+// tell a forge from a lagging DOGE indexer.
+describe('anchor-action-query: getanchorconfirmations', function () {
+    const { ANCHOR_BY_TXID_SQL, validateAnchorConfirmationsParams,
+            buildAnchorConfirmationsResponse } = require('../../src/anchor-action-query');
+
+    function txidRow(overrides) {
+        return Object.assign({
+            action_index: 9, version: 4, chain: 'BTC', network: 'regtest', block_index: 850000,
+            checkpoint_seq: 7, snapshot_block: 950000, publisher: 'AA'.repeat(32),
+            match_batch_seq: null, block_index_doge: 100, status: 'valid'
+        }, overrides || {});
+    }
+
+    describe('validateAnchorConfirmationsParams', function () {
+        it('accepts a 64-hex txid and lowercases it', function () {
+            let v = validateAnchorConfirmationsParams({ txid: 'A'.repeat(64) });
+            assert.strictEqual(v.ok, true);
+            assert.strictEqual(v.txid, 'a'.repeat(64));
+        });
+
+        it('rejects a short, non-hex, missing or non-string txid', function () {
+            for (const bad of ['a'.repeat(63), 'z'.repeat(64), undefined, null, 12345, ''])
+                assert.strictEqual(validateAnchorConfirmationsParams({ txid: bad }).ok, false);
+        });
+    });
+
+    describe('buildAnchorConfirmationsResponse', function () {
+        it('reports depth as DOGE-relative burial of the block the tx landed in', function () {
+            let r = buildAnchorConfirmationsResponse(CONFIG, 200, [txidRow()]);
+            assert.strictEqual(r.exists, true);
+            assert.strictEqual(r.anchors[0].confirmations, 101);   // 200 - 100 + 1
+        });
+
+        it('reports 0 confirmations for a row deeper than tip or a non-finite latest', function () {
+            assert.strictEqual(buildAnchorConfirmationsResponse(CONFIG, 50, [txidRow()]).anchors[0].confirmations, 0);
+            assert.strictEqual(buildAnchorConfirmationsResponse(CONFIG, null, [txidRow()]).anchors[0].confirmations, 0);
+        });
+
+        it('lowercases the publisher and nulls it on an unattested version', function () {
+            assert.strictEqual(buildAnchorConfirmationsResponse(CONFIG, 200, [txidRow()]).anchors[0].publisher,
+                'aa'.repeat(32));
+            assert.strictEqual(
+                buildAnchorConfirmationsResponse(CONFIG, 200, [txidRow({ version: 0, publisher: null })]).anchors[0].publisher,
+                null);
+        });
+
+        // A decoded-invalid row is a positively-detected forge for the caller; filtering it
+        // out would make it indistinguishable from "the DOGE indexer has not seen this tx",
+        // which is the one case the caller must treat as retryable rather than final.
+        it('reports a decoded-invalid anchor rather than hiding it', function () {
+            let r = buildAnchorConfirmationsResponse(CONFIG, 200, [txidRow({ status: 'invalid: bad sigs' })]);
+            assert.strictEqual(r.exists, true);
+            assert.strictEqual(r.anchors[0].status, 'invalid: bad sigs');
+        });
+
+        it('returns every anchor the transaction carries, not just one', function () {
+            let r = buildAnchorConfirmationsResponse(CONFIG, 200, [txidRow({ version: 6, match_batch_seq: 3 }), txidRow()]);
+            assert.strictEqual(r.anchors.length, 2);
+            assert.strictEqual(r.anchors[0].match_batch_seq, 3);
+        });
+
+        it('reports exists:false with an empty list for an unseen txid', function () {
+            let r = buildAnchorConfirmationsResponse(CONFIG, 200, []);
+            assert.strictEqual(r.exists, false);
+            assert.deepStrictEqual(r.anchors, []);
+        });
+    });
+
+    describe('ANCHOR_BY_TXID_SQL', function () {
+        it('keys on the transaction hash and joins through to anchor_actions', function () {
+            assert.match(ANCHOR_BY_TXID_SQL, /FROM index_transactions it/);
+            assert.match(ANCHOR_BY_TXID_SQL, /JOIN anchor_actions a/);
+            assert.match(ANCHOR_BY_TXID_SQL, /WHERE it\.hash = \?/);
+        });
+
+        it('selects the columns the reward binding compares against', function () {
+            for (const col of ['a.publisher', 'a.snapshot_block', 'a.checkpoint_seq', 'a.match_batch_seq', 'a.version', 's.status'])
+                assert.ok(ANCHOR_BY_TXID_SQL.includes(col), 'missing ' + col);
+        });
+
+        it('is bounded so one pathological transaction cannot stream unbounded rows', function () {
+            assert.match(ANCHOR_BY_TXID_SQL, /LIMIT \d+/);
+        });
+    });
+});

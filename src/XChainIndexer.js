@@ -33,6 +33,7 @@ const stateCommitAct    = require('./state_commitment_activation.js');
 const HubClient    = require('./hub_client.js');
 const HubDbSync    = require('./hub_db_sync.js');
 const anchorRewardDerive = require('./anchor_reward_derive.js');
+const AnchorProofClient  = require('./anchor_proof_client.js');
 const HubPushQueue = require('./hub_push_queue.js');
 const UtxoTracker  = require('./UtxoTracker.js');
 const Genesis      = require('./genesis.js');
@@ -403,6 +404,14 @@ class XChainIndexer {
 
         // Create hub client (for pushing chain tip and other cross-chain data to xchain-hub)
         this.hubClient = new HubClient();
+
+        // DOGE anchor visibility for the BTC-side anchor/archive reward derivation. ANCHOR
+        // lives on DOGE while the reward is minted here, so before paying, the derive pass
+        // re-proves the mirrored row's doge_anchor_txid against the DOGE indexer itself
+        // rather than trusting the hub that would be paid. Constructed on every chain (it is
+        // inert off BTC and costs nothing unconfigured); an unset DOGE_INDEXER_URL means no
+        // matured reward can be proven, which DEFERS the block rather than paying blind.
+        this.anchorProof = new AnchorProofClient(this.config);
 
         // Overlay hub-served operational params on top of local config defaults (best-effort)
         await this._applyHubConfigOverlay();
@@ -977,6 +986,26 @@ class XChainIndexer {
                     }
                 }
 
+                // Anchor-reward attestation mirror-completeness barrier. The BTC-side derive
+                // pass below mints COLLECT-spendable rewards at a height fixed fleet-wide
+                // (snapshot_block + ANCHOR_REWARD_MIRROR_MATURITY), so a node that has not
+                // received a matured attestation by that height must NOT commit the block with a
+                // smaller reward set: it would fork the ledger hash for a block its peers agree
+                // on. Defer instead, exactly like the barriers above. BTC-only (nothing derives
+                // elsewhere) and inert until the operator arms the derive flag-day, but the wait
+                // itself is cheap and unconditional on BTC so a node cannot advance into an armed
+                // boundary with a stale mirror.
+                if(this.hubDbSync && this.config['COIN'] === 'BTC'){
+                    try {
+                        await this.hubDbSync.waitForAnchorAttestationSync(blockTime, this.priceSyncTimeoutMs);
+                    } catch(err){
+                        console.warn('Deferring block ' + blockToParse + ' (anchor-reward attestation mirror): ', err);
+                        this.stallReason = 'anchor_attest_barrier';
+                        this.stallClearsAt = this._barrierClearsAt(blockTime, 'anchorAttestWatermarkGraceS');
+                        break;
+                    }
+                }
+
                 // Cross-chain capability-snapshot barrier: wait until the capability snapshot
                 // for every effective cross-chain match AND call relay row has mirrored in, so
                 // neither is ever skipped (and applied later at a per-operator-variable height)
@@ -1074,11 +1103,16 @@ class XChainIndexer {
 
                         // Derive matured anchor/archive publisher rewards from the
                         // hub-mirrored anchor_reward_attestations rows (re-verifying the XANCPUB
-                        // quorum against this node's own oracle_publish set). BTC-only + gated by the
+                        // quorum against this node's own oracle_publish set, AND re-proving the DOGE
+                        // anchor mined via this.anchorProof). BTC-only + gated by the
                         // derive-relocation flag-day; below the gate (or off-BTC) this is a no-op, so
-                        // legacy behavior stays byte-identical. The reward lands at block_index =
-                        // snapshot_block; a null return / empty set is the common case.
-                        await anchorRewardDerive.deriveAnchorRewards(this.indexerDb, this.config, blockToParse);
+                        // legacy behavior stays byte-identical. Maturity is the fleet-agreed watermark
+                        // (snapshot_block + ANCHOR_REWARD_MIRROR_MATURITY), not the current block. The
+                        // reward lands at block_index = snapshot_block; a null return / empty set is
+                        // the common case. Throws AnchorProofUnavailableError when a matured reward
+                        // cannot be proven either way here, which defers the block rather than
+                        // deriving a set this node's peers would not.
+                        await anchorRewardDerive.deriveAnchorRewards(this.indexerDb, this.config, blockToParse, this.anchorProof);
 
                         // Check for any cancelled items (dispensers)
                         await this.util.processCancellations(this.actions, this.indexerDb, blockToParse, blockTime);
@@ -1229,6 +1263,19 @@ class XChainIndexer {
                             `Retrying after ${this.config['BLOCK_CHECK_INTERVAL']}ms; will resume when the host recovers.`);
                         this.stallReason = 'vm_executor_unavailable';
                         this.stallClearsAt = null;          // a host fault has no deadline
+                    } else if(error && error.name === 'AnchorProofUnavailableError'){
+                        // A matured anchor reward could not be proven mined on DOGE from HERE.
+                        // Not a contract or host outcome: deriving it unproven would pay for an
+                        // anchor that may never have landed, and skipping it would make this
+                        // node's reward set differ from its peers' at a height they all agree
+                        // on. Both fork the COLLECT rail, so the block is left uncommitted and
+                        // retried, loudly, until DOGE visibility returns.
+                        console.error('ANCHOR REWARD PROOF UNAVAILABLE at block ' + lastIndexerBlock + ': ' +
+                            (error && error.message) + ' HALTING block processing (not committing; an ' +
+                            'unproven or partial reward set would fork). Retrying after ' +
+                            this.config['BLOCK_CHECK_INTERVAL'] + 'ms.');
+                        this.stallReason = 'anchor_reward_proof_unavailable';
+                        this.stallClearsAt = null;          // clears when DOGE visibility returns, not on a clock
                     } else {
                         this.util.logError(`Error while parsing block data at block ${lastIndexerBlock}:`, error);
                     }

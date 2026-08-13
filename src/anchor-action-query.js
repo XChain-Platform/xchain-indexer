@@ -352,6 +352,85 @@ function buildAnchorActionResponse(config, latest, row, extra) {
     };
 }
 
+// ---------------------------------------------------------------------------
+// getanchorconfirmations: DOGE anchor visibility for the BTC indexer.
+//
+// The BTC indexer mints the COLLECT-spendable anchor/archive reward from a
+// hub-mirrored anchor_reward_attestations row, but ANCHOR lives on DOGE, so before
+// this read the BTC side had NO way to check that the anchor it is paying for was ever
+// mined: it took the mirror's word for it, and an evicted or reorged anchor still paid.
+// This is the federation read that closes that (the third and last independent re-proof,
+// after the publishing hub's and the receiving peer's).
+//
+// Keyed on the TXID ALONE, deliberately. The attestation row carries the reward tuple and
+// doge_anchor_txid, not the wrapper checkpoint's DOGE-side identity, so getanchoraction's
+// (block_index, checkpoint_seq) key is unusable here. Answering "what did THIS transaction
+// anchor, and how deep is it" lets the caller do the binding itself: it compares the
+// returned publisher / snapshot_block / seq against the tuple it is about to pay, and a
+// txid that anchored something else fails that comparison instead of passing a weaker test.
+//
+// Every attestation-bearing version is served ({4,5,6}) plus their unattested siblings, so
+// the caller can positively DETECT a version mismatch rather than see an empty answer for
+// one and have to guess. Bounded like every other anchor read.
+const ANCHOR_BY_TXID_SQL =
+    `SELECT a.action_index, a.version, a.chain, a.network, a.block_index,
+            a.checkpoint_seq, a.snapshot_block, a.publisher, a.match_batch_seq,
+            a.block_index_doge, s.status, it.hash AS txid
+     FROM index_transactions it
+     JOIN transactions t   ON t.tx_hash_id  = it.id
+     JOIN actions ac       ON ac.tx_index   = t.tx_index
+     JOIN anchor_actions a ON a.action_index = ac.action_index
+     JOIN index_statuses s ON s.id          = a.status_id
+     WHERE it.hash = ?
+     ORDER BY a.action_index ASC
+     LIMIT ${ANCHOR_ROW_LIMIT}`;
+
+// Validate a getanchorconfirmations request: a single 64-hex txid.
+// Returns {ok:true, txid} (lowercased) or {ok:false, error}.
+function validateAnchorConfirmationsParams({ txid }) {
+    if (typeof txid !== 'string' || !TXID_RE.test(txid))
+        return { ok: false, error: 'txid must be a 64-character hex string' };
+    return { ok: true, txid: txid.toLowerCase() };
+}
+
+// Map the anchor rows a txid carries + the indexer's latest block into the
+// getanchorconfirmations response.
+//
+// `confirmations` is DOGE-relative depth of the block the transaction landed in, computed
+// exactly as buildAnchorActionResponse does (a missing row, a non-finite latest, or a row
+// deeper than tip reports 0), so a caller can never read a shallow or rolled-back anchor as
+// buried. One transaction can carry more than one anchor action (an archive head plus its
+// own continuation), so `anchors` is a LIST and the caller picks by version rather than the
+// read guessing for it. A decoded-invalid row is reported with its status rather than
+// filtered out: "this txid exists and is invalid" is a positively-detected forge for the
+// caller, while an empty list is merely "not seen", and the two must not collapse.
+function buildAnchorConfirmationsResponse(config, latest, rows) {
+    let coin    = config['COIN'];
+    let network = config['NETWORK'];
+    let latestNum = Number(latest);
+    let list = (Array.isArray(rows) ? rows : []).map(row => {
+        let dogeBlock = Number(row.block_index_doge);
+        let confirmations = (Number.isFinite(latestNum) && Number.isFinite(dogeBlock) && latestNum >= dogeBlock)
+            ? (latestNum - dogeBlock + 1) : 0;
+        return {
+            status:             row.status,
+            version:            normalizeVersion(row.version),
+            checkpoint_chain:   row.chain,
+            checkpoint_network: row.network,
+            block_index:        (row.block_index != null) ? Number(row.block_index) : null,
+            checkpoint_seq:     (row.checkpoint_seq != null) ? Number(row.checkpoint_seq) : null,
+            snapshot_block:     (row.snapshot_block != null) ? Number(row.snapshot_block) : null,
+            // The v4/v5/v6 ELECTED PUBLISHER pubkey the reward is attested to. Null on the
+            // unattested versions, which is itself the answer for a caller checking one.
+            publisher:          row.publisher ? String(row.publisher).toLowerCase() : null,
+            match_batch_seq:    (row.match_batch_seq != null) ? Number(row.match_batch_seq) : null,
+            block_index_doge:   Number.isFinite(dogeBlock) ? dogeBlock : null,
+            confirmations:      confirmations
+        };
+    });
+    return { coin, network, exists: list.length > 0, latest_block_index: latest, anchors: list };
+}
+
 // Validate a getarchiveanchor request. Returns
 // {ok:true, block_index, checkpoint_seq, batch_crc32, match_count, author} or
 // {ok:false, error}.
@@ -481,5 +560,6 @@ module.exports = {
     ARCHIVE_HEAD_VERSIONS, ARCHIVE_CRC_RE, ARCHIVE_ANCHOR_ROW_LIMIT,
     ARCHIVE_ANCHOR_BY_CONTENT_SQL, validateArchiveAnchorParams, selectArchiveHeadRow,
     presentChunkIndexes, buildArchiveAnchorResponse,
-    validateAnchorActionParams, selectAnchorRow, buildAnchorActionResponse
+    validateAnchorActionParams, selectAnchorRow, buildAnchorActionResponse,
+    ANCHOR_BY_TXID_SQL, validateAnchorConfirmationsParams, buildAnchorConfirmationsResponse
 };

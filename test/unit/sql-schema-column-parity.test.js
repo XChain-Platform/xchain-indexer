@@ -152,6 +152,34 @@ function normalizeCreateBody(sql) {
         .toUpperCase();
 }
 
+// Apply later dated ADD COLUMN migrations onto a migration-created table's column list,
+// at each one's AFTER/FIRST anchor, so the result is the shape a replica that replayed the
+// whole ledger actually holds. Already-present names are skipped: an idempotent
+// `ADD COLUMN IF NOT EXISTS` re-declaring an existing column adds nothing.
+function composeLedgerColumns(created, laterAdds) {
+    const cols = created.columns.map(c => ({ name: c.name, spec: c.spec }));
+    const at = (name) => cols.findIndex(c => c.name.toLowerCase() === String(name || '').toLowerCase());
+    for (const a of laterAdds.slice().sort((x, y) => (x.file < y.file ? -1 : x.file > y.file ? 1 : 0))) {
+        if (at(a.name) >= 0) continue;
+        const entry = { name: a.name, spec: a.spec };
+        if (a.first) { cols.unshift(entry); continue; }
+        const anchor = a.after ? at(a.after) : -1;
+        if (anchor >= 0) cols.splice(anchor + 1, 0, entry);
+        else cols.push(entry);
+    }
+    return cols;
+}
+
+// The part of a normalized CREATE body that no ADD COLUMN can change: the table-level
+// key clauses and the ENGINE/CHARSET tail. Everything before the first key clause is the
+// column list, which is compared separately and per column.
+function bodyTail(body) {
+    const m = String(body).match(/,(?:PRIMARY\s+KEY|UNIQUE\s+KEY|KEY|INDEX|FULLTEXT|CONSTRAINT)\b/);
+    if (m) return String(body).slice(m.index);
+    const eng = String(body).lastIndexOf(')ENGINE');
+    return eng >= 0 ? String(body).slice(eng) : '';
+}
+
 // The definition file's own CREATE TABLE block, normalized the same way. Keyed by table.
 function collectDefinitionBodies() {
     const out = {};
@@ -400,11 +428,33 @@ describe('SQL schema column parity (definition path vs ledger path) @regression'
     });
 
     it('a migration-created table matches its definition byte-for-byte (columns, keys, engine)', function () {
-        const bodies    = collectDefinitionBodies();
+        const bodies     = collectDefinitionBodies();
+        const defCols    = collectDefinitionColumns();
+        const adds       = collectMigrationColumns();
         const mismatches = [];
         for (const t of collectMigrationCreatedTables()) {
             if (!bodies[t.table]) { mismatches.push({ table: t.table, file: t.file, reason: 'no src/sql/' + t.table + '.sql definition declares this table' }); continue; }
-            if (bodies[t.table] !== t.body) mismatches.push({ table: t.table, file: t.file, reason: 'CREATE TABLE differs from the definition', definition: bodies[t.table], migration: t.body });
+            // A migration-created table is not frozen at its CREATE. When it later gains a
+            // column the CREATE cannot be edited (db.js enforces migration immutability by
+            // checksum), so the shape a replaying replica converges to is CREATE + every
+            // LATER dated ALTER, and THAT is what must equal the definition. Compare that
+            // composed shape: columns (name + normalized spec, in position) plus the
+            // non-column tail (keys + ENGINE), which no ADD COLUMN can change.
+            const later = adds.filter(a => a.table === t.table && a.file > t.file);
+            if (later.length === 0) {
+                if (bodies[t.table] !== t.body) mismatches.push({ table: t.table, file: t.file, reason: 'CREATE TABLE differs from the definition', definition: bodies[t.table], migration: t.body });
+                continue;
+            }
+            const composed = composeLedgerColumns(t, later);
+            const want     = defCols[t.table] || [];
+            if (JSON.stringify(composed) !== JSON.stringify(want))
+                mismatches.push({ table: t.table, file: t.file,
+                    reason: 'CREATE TABLE + later ADD COLUMN migrations do not compose to the definition columns',
+                    definition: JSON.stringify(want), migration: JSON.stringify(composed) });
+            else if (bodyTail(bodies[t.table]) !== bodyTail(t.body))
+                mismatches.push({ table: t.table, file: t.file,
+                    reason: 'keys/ENGINE tail differs from the definition',
+                    definition: bodyTail(bodies[t.table]), migration: bodyTail(t.body) });
         }
         assert.deepStrictEqual(mismatches, [],
             'A dated migration CREATEs these tables, so a fresh install (createTable from the definition) and a ' +

@@ -100,6 +100,17 @@ const HUB_SYNC_WATERMARK_GRACE_S = Object.freeze({
     // change: every node must move in lockstep, reconciled against the hub's
     // call-stamping path first.
     call:   120,
+    // Anchor-reward attestations. Unlike the four above, this barrier does not gate on a
+    // row-content watermark at all (the rows carry no effective_time, and their arrival is
+    // governed by DOGE confirmation and hub failover, not by any clock the block loop can
+    // read). It gates purely on "the mirror has received everything the hub produced up to
+    // this block's time", which is what makes the fleet-agreed maturity watermark in
+    // anchor_reward_activation.js safe: a node that cannot certify that much DEFERS instead
+    // of deriving a partial reward set. The value only has to cover ordinary stream lag,
+    // because the maturity constant already absorbs the ~24h of DOGE burial, failover and
+    // federation delay. Changing this NUMBER is a protocol change (it moves which nodes can
+    // advance past a maturity boundary), so it moves fleet-wide or not at all.
+    anchorAttest: 120,
 });
 
 // Resolve one grace margin. `frozen` is the pinned protocol constant; `envKey`
@@ -359,6 +370,8 @@ class HubDbSync {
         this.oracleWatermarkGraceS = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.oracle, 'HUB_SYNC_ORACLE_GRACE_S', this.network);
         this.matchWatermarkGraceS  = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.match,  'HUB_SYNC_MATCH_GRACE_S',  this.network);
         this.callWatermarkGraceS   = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.call,   'HUB_SYNC_CALL_GRACE_S',   this.network);
+        this.anchorAttestWatermarkGraceS = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.anchorAttest, 'HUB_SYNC_ANCHOR_ATTEST_GRACE_S', this.network);
+        this._anchorAttestWaiters  = [];                   // pending waitForAnchorAttestationSync() resolvers
 
         // Watermark advancement is gated on a completed bootstrap: WS heartbeats
         // certify only what was delivered ON THE SOCKET, so until the REST
@@ -438,6 +451,7 @@ class HubDbSync {
         this._releaseOracleWaiters();
         this._releaseMatchWaiters();
         this._releaseCallWaiters();
+        this._releaseAnchorAttestWaiters();
     }
 
     // Adopt the hub's advertised heartbeat cadence (from the 'ready' message's
@@ -1740,6 +1754,73 @@ class HubDbSync {
                                  blockTime + ' (call mirror at ' + this.callSyncTimestamp + ')'));
             }, ms);
             this._callWaiters.push(waiter);
+        });
+    }
+
+    // ── Anchor-reward attestation mirror-completeness barrier ──────────────────
+    //
+    // The BTC indexer mints a COLLECT-spendable reward from mirrored
+    // anchor_reward_attestations rows, and the block a given reward materializes at is
+    // fixed fleet-wide (snapshot_block + ANCHOR_REWARD_MIRROR_MATURITY). That fixed height
+    // is only safe if a node which has NOT received the row by then declines to advance
+    // rather than deriving a smaller set: otherwise the lagging node commits a block whose
+    // ledger hash differs from its peers' for the same BTC block, which is exactly the
+    // divergence the maturity re-keying exists to remove.
+    //
+    // No row-content watermark is possible here. These rows carry no effective_time, and
+    // their arrival is governed by DOGE confirmation depth and hub failover, neither of
+    // which is comparable to a BTC block height or time. So the barrier gates on the STREAM
+    // watermark alone: "the hub has told me I hold everything it produced up to this
+    // block's time." That is a strictly stronger claim than the maturity window needs (the
+    // rows in question were written roughly a day earlier), which is the point.
+    //
+    // Disabled sync is satisfied by definition: with no mirror the indexer reads the hub's
+    // MariaDB directly, so there is no delivery lag to wait out. Poll mode is NOT satisfied
+    // and never will be, because the stream watermark deliberately freezes there (a REST
+    // poll cannot observe an in-place upsert), and the barrier's timeout then defers the
+    // block, which is the correct fail-closed outcome for a node that cannot certify
+    // completeness at all.
+    _anchorAttestSyncSatisfied(blockTime) {
+        if (!this.enabled) return true;
+        blockTime = Number(blockTime);
+        if (!Number.isFinite(blockTime)) return true;
+        return this.streamWatermark >= blockTime + this.anchorAttestWatermarkGraceS;
+    }
+
+    _releaseAnchorAttestWaiters() {
+        if (!this._anchorAttestWaiters || this._anchorAttestWaiters.length === 0) return;
+        let stillWaiting = [];
+        for (let w of this._anchorAttestWaiters) {
+            if (this._anchorAttestSyncSatisfied(w.ts)) {
+                clearTimeout(w.timer);
+                w.resolve(this.streamWatermark);
+            } else {
+                stillWaiting.push(w);
+            }
+        }
+        this._anchorAttestWaiters = stillWaiting;
+    }
+
+    // Block-processing barrier for the anchor-reward derive pass. Resolves once this
+    // mirror is certified caught up through blockTime; rejects after timeoutMs so the
+    // caller DEFERS the block and retries it (never advancing past a maturity boundary it
+    // cannot prove it holds the rows for).
+    waitForAnchorAttestationSync(blockTime, timeoutMs) {
+        blockTime = Number(blockTime);
+        if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.streamWatermark);
+        if (this._anchorAttestSyncSatisfied(blockTime))    return Promise.resolve(this.streamWatermark);
+
+        let ms = parseInt(timeoutMs);
+        if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
+        return new Promise((resolve, reject) => {
+            let waiter = { ts: blockTime, resolve: resolve, timer: null };
+            waiter.timer = setTimeout(() => {
+                this._anchorAttestWaiters = this._anchorAttestWaiters.filter(w => w !== waiter);
+                reject(new Error('anchor-reward attestation mirror barrier timed out after ' + ms +
+                                 'ms waiting for block_time ' + blockTime +
+                                 ' (stream watermark at ' + this.streamWatermark + ')'));
+            }, ms);
+            this._anchorAttestWaiters.push(waiter);
         });
     }
 

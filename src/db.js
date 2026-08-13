@@ -11514,9 +11514,18 @@ class Database {
     }
 
     // Option C (derive-on-BTC-side): mirrored anchor_reward_attestations rows whose
-    // reward has NOT yet been derived into validator_rewards, matured to `maxSnapshotBlock`
-    // (the current BTC block, so the reward's block_index = snapshot_block is never in the
-    // future). Returned flat, ordered by (reward_type, round_reference, publisher) so the
+    // reward has NOT yet been derived into validator_rewards, matured to `maxSnapshotBlock`.
+    //
+    // `maxSnapshotBlock` is the MATURITY WATERMARK the caller computed, i.e. the current BTC
+    // block MINUS ANCHOR_REWARD_MIRROR_MATURITY, not the current block itself. Keying on the
+    // current block matured a row the instant its snapshot_block was reached, but
+    // snapshot_block is a height already in the PAST when the row is written (the hub writes
+    // only after the DOGE anchor buries, after the publisher failover ladder, and after the
+    // hub-to-hub federation hop), so two nodes whose mirrors differed by one row derived the
+    // same reward at different heights and forked the ledger hash. See
+    // anchor_reward_activation.ANCHOR_REWARD_MIRROR_MATURITY for the watermark and
+    // XChainIndexer._waitForAnchorAttestationMirror for the completeness half of the rule.
+    // Returned flat, ordered by (reward_type, round_reference, publisher) so the
     // caller can group each logical reward and reconcile the smallest-pubkey winner across a
     // failover double-publish. NOT-EXISTS-scoped so a group already derived is skipped and a
     // reorg that block-scoped-deletes the reward at snapshot_block re-exposes it for replay.
@@ -11541,7 +11550,7 @@ class Database {
     async getPendingAnchorRewardAttestations(network, maxSnapshotBlock){
         return await this.doQuery(
             'SELECT ara.chain, ara.network, ara.reward_type, ara.round_reference, ara.snapshot_block, ' +
-            '       ara.publisher, ara.publisher_attestations ' +
+            '       ara.publisher, ara.publisher_attestations, ara.doge_anchor_txid ' +
             '  FROM anchor_reward_attestations ara ' +
             ' WHERE ara.network = ? AND ara.snapshot_block <= ? ' +
             '   AND NOT EXISTS (SELECT 1 FROM validator_rewards vr ' +

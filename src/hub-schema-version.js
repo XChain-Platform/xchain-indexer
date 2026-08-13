@@ -39,6 +39,13 @@
 // indexer accepted a current hub instead of failing closed; v3 restores the gate.
 // A v2 indexer must reject the v3 stream until it has applied the 2026-07-21
 // anchor-reward-attestations migration.
-const HUB_SCHEMA_VERSION = 3;
+//
+// v4: anchor_reward_attestations gained doge_anchor_txid, the MINED DOGE anchor
+// each attested reward is proof-bound to. This indexer re-proves that txid against
+// the DOGE indexer (getanchorconfirmations) before minting the reward, so a mirror
+// stream without the column leaves it deriving a COLLECT-spendable reward it cannot
+// bind to any landed anchor. A v3 indexer must reject the v4 stream until it has
+// applied the 2026-08-13-anchor-reward-attestations-doge-anchor-txid migration.
+const HUB_SCHEMA_VERSION = 4;
 
 module.exports = { HUB_SCHEMA_VERSION };

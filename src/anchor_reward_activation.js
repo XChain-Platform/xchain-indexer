@@ -117,25 +117,38 @@ function isArchiveRewardActive(snapshotBlock, network){
 // coordinated height; regtest activates from genesis so the fix is exercised
 // where the bug lives.
 //
-// PRE-ARMING BLOCKERS: three consensus defects sit on the derive path and are
-// harmless only while this table is inert. Arming mainnet or testnet before
-// they land forks the COLLECT rail.
-//   (1) No mined-anchor proof: the hub writes the attestation row on mempool
-//       acceptance, not confirmation, and the mirrored schema carries no DOGE
-//       txid or confirmation depth, so a dropped or reorged anchor leaves its
-//       COLLECT-spendable reward intact. Needs a hub-side fix plus a mirrored
-//       schema column.
-//   (2) Non-deterministic materialization: attestations mirror in with no
-//       block-loop barrier, and derivation keys on snapshot_block <=
+// PRE-ARMING BLOCKERS (ALL THREE LANDED 2026-08-13; the table stays inert until
+// the operator picks the height). Three consensus defects sat on the derive path
+// and were harmless only while this table was inert; arming mainnet or testnet
+// before they landed would have forked the COLLECT rail. Their remedies are now
+// in code and are described here because the remedies, not the defects, are what
+// a ratifier has to verify deployed fleet-wide before picking a height.
+//   (1) No mined-anchor proof: the hub wrote the attestation row on mempool
+//       acceptance, not confirmation, and the mirrored schema carried no DOGE
+//       txid, so a dropped or reorged anchor left its COLLECT-spendable reward
+//       intact. CLOSED: the hub holds the row in _deferredRewardAttest until
+//       _verifyAnchorOnChain binds that exact txid at that exact ANCHOR version
+//       buried dogeConfirmations deep, the mirrored schema gained
+//       doge_anchor_txid (idempotent forward migration in xchain-hub AND
+//       xchain-indexer), and the BTC indexer re-proves mined depth itself
+//       against the DOGE indexer's getanchorconfirmations federation read
+//       before createValidatorReward.
+//   (2) Non-deterministic materialization: attestations mirrored in with no
+//       block-loop barrier, and derivation keyed on snapshot_block <=
 //       blockIndex, unrelated to the mirror's arrival time. Two nodes whose
-//       copies differ derive the same reward at different heights, forking
-//       the ledger hash for identical BTC blocks.
-//   (3) The attestation row is never federated: it fans out only to that
-//       hub's own indexer subscribers, so each hub holds a disjoint subset of
-//       rows and an indexer derives only what its own hub happened to
-//       publish. Needs a new authenticated peer message whose receiver
-//       re-verifies the XANCPUB quorum itself, landing after (1) so the
-//       broadcast sits at the confirmed write.
+//       copies differed derived the same reward at different heights, forking
+//       the ledger hash for identical BTC blocks. CLOSED by the operator's
+//       2026-08-11 ruling (a): derivation is re-keyed onto the fleet-agreed
+//       mirror-completeness watermark below (ANCHOR_REWARD_MIRROR_MATURITY),
+//       and a node whose mirror is not provably caught up DEFERS the block
+//       rather than deriving a partial set.
+//   (3) The attestation row was never federated: it fanned out only to that
+//       hub's own indexer subscribers, so each hub held a disjoint subset of
+//       rows and an indexer derived only what its own hub happened to publish.
+//       CLOSED: the confirmed write broadcasts the authenticated XANCREWARD
+//       peer message, and every receiver re-verifies the XANCPUB quorum against
+//       its OWN oracle_publish set at snapshot_block (and re-proves the anchor
+//       mined) before writing its copy. The wire is transport, never trust.
 //
 // PRE-ARMING DEPLOY STEP (already fixed in code): a derived reward earns at
 // the checkpoint's snapshot_block but materializes at a later BTC block, and
@@ -149,8 +162,8 @@ function isArchiveRewardActive(snapshotBlock, network){
 // keeps the old earn-block-only scoping and forks the COLLECT rail after a
 // reorg.
 const ANCHOR_REWARD_DERIVE_ACTIVATION = {
-    mainnet: null,        // INERT placeholder: ratify a BTC snapshot_block only after all three pre-arming blockers above land
-    testnet: null,        // INERT placeholder: ratify a BTC snapshot_block only after all three pre-arming blockers above land
+    mainnet: null,        // INERT placeholder: the operator owns this height; the three blockers above have landed, ratification has not
+    testnet: null,        // INERT placeholder: the operator owns this height; the three blockers above have landed, ratification has not
     regtest: 0,
 };
 
@@ -165,6 +178,39 @@ function isAnchorRewardDeriveActive(snapshotBlock, network){
     return sb >= threshold;
 }
 
+// The fleet-agreed mirror-completeness watermark, in BTC blocks (operator ruling (a),
+// 2026-08-11, settling AML #4172).
+//
+// Derivation used to mature a mirrored attestation the instant snapshot_block <= the BTC
+// block being processed. snapshot_block is the height the XANCPUB signing set was resolved
+// at, and it is ALREADY IN THE PAST when the row is written: the hub writes only after the
+// DOGE anchor is buried dogeConfirmations deep, after a failover ladder that can hand the
+// publish to a later hub, and after the XANCREWARD federation hop. The maturity key was
+// therefore unrelated to the row's arrival, so two nodes whose mirrors differed by one row
+// derived the same reward at different BTC heights and forked the ledger hash for identical
+// blocks. A hub_db_sync barrier alone cannot fix that: snapshot_block is not a maturity key
+// for a mirror whose arrival is governed by DOGE confirmation and hub failover.
+//
+// Re-keyed: a row matures at snapshot_block + ANCHOR_REWARD_MIRROR_MATURITY, a frozen
+// constant every node applies identically, sized to exceed the worst-case arrival lag (60
+// DOGE confirmations is ~1h, plus the anchor failover ladder, plus federation). The height
+// is only half the barrier. The other half is fail-closed: a node whose attestation mirror
+// is not provably caught up DEFERS the block (wait-then-retry, never a partial-set commit;
+// see XChainIndexer._waitForAnchorAttestationMirror), so every node either derives the
+// identical set at the identical height or does not advance at all. Changing this value
+// moves the block a reward materializes at, so it is a hashed value: it is frozen with the
+// activation map above and a change needs its own flag-day.
+const ANCHOR_REWARD_MIRROR_MATURITY = 144;   // ~24h of BTC blocks
+
+// The BTC block at which a mirrored attestation row whose XANCPUB signing set was resolved
+// at `snapshotBlock` becomes derivable. Returns null for an unparseable height so callers
+// fail closed rather than maturing everything at NaN.
+function anchorRewardDeriveHeight(snapshotBlock){
+    let sb = parseInt(snapshotBlock);
+    if(!Number.isFinite(sb)) return null;
+    return sb + ANCHOR_REWARD_MIRROR_MATURITY;
+}
+
 module.exports = {
     ANCHOR_REWARD_ACTIVATION,
     ANCHOR_REWARD_AMOUNT,
@@ -173,5 +219,7 @@ module.exports = {
     ARCHIVE_REWARD_AMOUNT,
     isArchiveRewardActive,
     ANCHOR_REWARD_DERIVE_ACTIVATION,
-    isAnchorRewardDeriveActive
+    isAnchorRewardDeriveActive,
+    ANCHOR_REWARD_MIRROR_MATURITY,
+    anchorRewardDeriveHeight
 };

@@ -19,6 +19,15 @@
  * publishes the XANCPUB publisher-attestation quorum to the append-only, hub-mirrored
  * `anchor_reward_attestations` table; the BTC indexer keys derivation on those mirrored rows.
  *
+ * THREE independent gates stand between a mirrored row and a minted reward, and none of
+ * them trusts the party that would be paid:
+ *   1. the XANCPUB quorum, re-verified below against this node's OWN oracle_publish set;
+ *   2. the MINED DOGE ANCHOR, re-proved via the DOGE indexer's getanchorconfirmations read
+ *      (anchor_proof_client.js) and bound to this exact reward tuple, so an evicted or
+ *      reorged anchor pays nothing;
+ *   3. the fleet-agreed MIRROR-COMPLETENESS WATERMARK, so the block a reward materializes
+ *      at is the same on every node whatever their mirrors' arrival order was.
+ *
  * The mirror is transport, not trust: this pass re-verifies each row's XANCPUB signatures
  * against the BTC indexer's own locally-computed oracle_publish set at snapshot_block (the same
  * set + weighting anchor.js uses on DOGE), rebuilds the reward canonical byte-identically to
@@ -45,6 +54,7 @@ const ed25519 = require('./ed25519.js');
 const swq     = require('./stake_weighted_quorum.js');
 const eq      = require('./equivocation_header.js');
 const ar      = require('./anchor_reward_activation.js');
+const coins   = require('./coins');
 
 // Rebuild the XANCPUB canonical for a mirrored attestation row. MUST byte-match
 // anchor.js._rewardCanonical (DOGE parse side) and the hub's publisher canonical, or the
@@ -109,17 +119,39 @@ async function verifyAttestation(indexerDb, row){
         : (attSigners.length >= ((oracleN <= 1) ? 1 : Math.max(2 * Math.floor((oracleN - 1) / 3) + 1, Math.ceil((oracleN + 1) / 2))));
 }
 
+// Thrown when a matured reward cannot be PROVEN either way at this block (no DOGE
+// visibility, DOGE unreachable, or the anchor is not yet buried deep enough). The block
+// loop catches it, does not advance, and retries the block: deferring is the only outcome
+// that keeps every node deriving the identical set at the identical height. Deriving
+// without the proof would pay for an anchor that may never have landed; SKIPPING would make
+// the reward set depend on one node's network luck and fork the ledger just as badly.
+class AnchorProofUnavailableError extends Error {
+    constructor(message){ super(message); this.name = 'AnchorProofUnavailableError'; }
+}
+
 // Derive all matured, not-yet-derived anchor/archive rewards from the mirrored
 // anchor_reward_attestations table. Runs inside the block transaction on BTC only.
 //   indexerDb  - db handle (block-transaction bound)
 //   config     - indexer config ({ COIN, NETWORK })
-//   blockIndex - the BTC block being processed (matures snapshot_block <= blockIndex)
-async function deriveAnchorRewards(indexerDb, config, blockIndex){
+//   blockIndex - the BTC block being processed
+//   proof      - AnchorProofClient (DOGE anchor visibility). Required at/above the derive
+//                gate: without it nothing can be proven mined, so every matured row defers.
+//
+// Maturity is the fleet-agreed watermark, NOT snapshot_block: a row is derivable at
+// snapshot_block + ANCHOR_REWARD_MIRROR_MATURITY. Rows still inside that window are simply
+// not fetched, so a node whose mirror is a few minutes behind the fleet still derives the
+// identical set at the identical height.
+async function deriveAnchorRewards(indexerDb, config, blockIndex, proof){
     // Reward derivation resolves only where the oracle_publish stake lives: BTC.
     if(String(config['COIN']) !== 'BTC') return 0;
     let network = String(config['NETWORK'] || '');
-    let rows = await indexerDb.getPendingAnchorRewardAttestations(network, Number(blockIndex));
+    // Below the watermark nothing has matured yet (and an early chain cannot underflow into
+    // maturing everything at a negative height).
+    let watermark = Number(blockIndex) - ar.ANCHOR_REWARD_MIRROR_MATURITY;
+    if(!Number.isFinite(watermark) || watermark < 0) return 0;
+    let rows = await indexerDb.getPendingAnchorRewardAttestations(network, watermark);
     if(!rows || rows.length === 0) return 0;
+    let minConfirmations = coins.DEFAULT_CONFIRMATIONS.DOGE;
 
     // Group by the logical reward (reward_type, round_reference): every attesting publisher
     // for a round must be inserted BEFORE reconcile, so a failover double-publish collapses to
@@ -139,6 +171,33 @@ async function deriveAnchorRewards(indexerDb, config, blockIndex){
             // keeps this byte-neutral until the operator arms the derive flag-day.
             if(!ar.isAnchorRewardDeriveActive(Number(row.snapshot_block), String(row.network))) continue;
             if(!await verifyAttestation(indexerDb, row)) continue;
+            // The mirror says this reward's anchor was mined. Prove it against DOGE
+            // ourselves before minting: the mirror is transport, and the hub that wrote the
+            // row is exactly the party the reward pays. 'rejected' is chain-determined and
+            // fleet-uniform, so it skips this row permanently; 'unknown' is a local
+            // visibility failure, so it defers the whole block rather than letting this
+            // node's reward set diverge from its peers'.
+            let verdict = await (proof ? proof.proveMined({
+                txid:            row.doge_anchor_txid,
+                rewardType:      String(row.reward_type),
+                roundReference:  Number(row.round_reference),
+                snapshotBlock:   Number(row.snapshot_block),
+                publisher:       String(row.publisher).toLowerCase(),
+                network:         String(row.network),
+                minConfirmations: minConfirmations
+            }) : 'unknown');
+            if(verdict === 'unknown')
+                throw new AnchorProofUnavailableError(
+                    'anchor reward ' + row.reward_type + '/' + row.round_reference + ' (publisher ' +
+                    String(row.publisher).toLowerCase() + ') matured at BTC block ' + blockIndex +
+                    ' but its DOGE anchor ' + (row.doge_anchor_txid || '<none>') + ' could not be proven mined; ' +
+                    'deferring the block (wire DOGE_INDEXER_URL on this indexer if this persists)');
+            if(verdict !== 'verified'){
+                console.warn('anchor reward ' + row.reward_type + '/' + row.round_reference + ' publisher ' +
+                             String(row.publisher).toLowerCase() + ': DOGE anchor proof REJECTED (' +
+                             (row.doge_anchor_txid || '<no txid>') + '); no reward derived');
+                continue;
+            }
             let amount = (String(row.reward_type) === 'anchor_archive') ? ar.ARCHIVE_REWARD_AMOUNT : ar.ANCHOR_REWARD_AMOUNT;
             // block_index = snapshot_block (the earn-block, where the stake source resolves);
             // derive_block_index = the current BTC block, which is where the row is actually
@@ -163,4 +222,4 @@ async function deriveAnchorRewards(indexerDb, config, blockIndex){
     return derived;
 }
 
-module.exports = { deriveAnchorRewards, verifyAttestation, rewardCanonical };
+module.exports = { deriveAnchorRewards, verifyAttestation, rewardCanonical, AnchorProofUnavailableError };

@@ -161,6 +161,7 @@ const FEDERATION_READ_METHODS = new Set([
     'getopencrosschainorders',
     'getactionconfirmations',
     'getanchoraction',
+    'getanchorconfirmations',
     'getarchiveanchor',
     'getreorghistory',
     'getpendingcrosschaincalls',
@@ -1281,6 +1282,32 @@ async function startApi(){
             } catch (err) {
                 console.error('getanchoraction error:', err);
                 return { error: 'failed to look up anchor action' };
+            }
+        },
+
+        // DOGE anchor visibility for the BTC indexer: "what did this DOGE transaction
+        // anchor, and how deep is it?" Keyed on the txid alone, because that is the only
+        // DOGE-side identity a mirrored anchor_reward_attestations row carries
+        // (doge_anchor_txid). The BTC indexer calls this before it mints the
+        // COLLECT-spendable anchor/archive reward and does the binding itself: it matches
+        // the returned publisher / snapshot_block / seq against the reward tuple it is
+        // about to pay, so a txid that anchored something else is positively rejected
+        // rather than weakly accepted. See anchor_proof_client.js and
+        // anchor_reward_derive.js on the calling side.
+        async getanchorconfirmations({txid}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            let v = anchorActionQuery.validateAnchorConfirmationsParams({ txid });
+            if(!v.ok) return { error: v.error };
+            // Federation READ isolation: committed-only, off the block tx.
+            let db = indexer.indexerDb.apiView();
+            try {
+                let latest = await db.getLatestBlockIndex();
+                let rows   = await db.doQuery(anchorActionQuery.ANCHOR_BY_TXID_SQL, [v.txid]);
+                return anchorActionQuery.buildAnchorConfirmationsResponse(indexer.config, latest, rows);
+            } catch (err) {
+                console.error('getanchorconfirmations error:', err);
+                return { error: 'failed to look up anchor confirmations' };
             }
         },
 

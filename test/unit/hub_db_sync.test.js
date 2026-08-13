@@ -2015,3 +2015,65 @@ describe('HubDbSync._applyRetraction signed retractions @regression @tier1', fun
         assert.strictEqual(deletes.length, 0, 'no verifying signature means no quorum, whatever the ordering');
     });
 });
+
+// ── Anchor-reward attestation mirror-completeness barrier (XC-1404 / AML #4172) ──
+//
+// The BTC indexer mints COLLECT-spendable anchor rewards at a height fixed fleet-wide
+// (snapshot_block + ANCHOR_REWARD_MIRROR_MATURITY). That fixed height is only safe when a
+// node whose mirror has not caught up DECLINES to advance instead of committing a smaller
+// reward set, so this barrier's whole job is to fail closed. It gates on the stream
+// watermark alone: these rows carry no effective_time, and their arrival is governed by
+// DOGE confirmation depth and hub failover, neither comparable to a BTC height or time.
+describe('HubDbSync anchor-reward attestation barrier @regression @tier1', function () {
+
+    it('resolves immediately when the stream watermark already covers the block plus its grace', async function () {
+        const { sync } = makeSync(0);
+        sync.streamWatermark = 1000 + sync.anchorAttestWatermarkGraceS;
+        assert.strictEqual(await sync.waitForAnchorAttestationSync(1000, 500), sync.streamWatermark);
+    });
+
+    it('does NOT resolve on a watermark that is short by the grace margin', function () {
+        const { sync } = makeSync(0);
+        sync.streamWatermark = 1000 + sync.anchorAttestWatermarkGraceS - 1;
+        assert.strictEqual(sync._anchorAttestSyncSatisfied(1000), false);
+    });
+
+    it('resolves once a later watermark advance covers the block', async function () {
+        const { sync } = makeSync(0);
+        sync.streamWatermark = 0;
+        const pending = sync.waitForAnchorAttestationSync(1000, 2000);
+        assert.strictEqual(sync._anchorAttestWaiters.length, 1, 'the block waits rather than deriving a partial set');
+        sync._advanceWatermark(1000 + sync.anchorAttestWatermarkGraceS);
+        await pending;
+        assert.strictEqual(sync._anchorAttestWaiters.length, 0, 'waiter cleared on resolve');
+    });
+
+    it('rejects on timeout so the caller DEFERS the block instead of committing it', async function () {
+        const { sync } = makeSync(0);
+        sync.streamWatermark = 0;
+        await assert.rejects(
+            sync.waitForAnchorAttestationSync(1000, 50),
+            /anchor-reward attestation mirror barrier timed out/);
+        assert.strictEqual(sync._anchorAttestWaiters.length, 0, 'timed-out waiter removed');
+    });
+
+    // With no mirror the indexer reads the hub's MariaDB directly, so there is no delivery
+    // lag to wait out and the barrier must not wedge a single-host / regtest stack.
+    it('is satisfied by definition when sync is disabled', async function () {
+        const sync = new HubDbSync({ doQuery: sinon.stub().resolves([]) }, { hubUrl: '' });
+        assert.strictEqual(sync.enabled, false);
+        assert.strictEqual(sync._anchorAttestSyncSatisfied(999999), true);
+        await sync.waitForAnchorAttestationSync(999999, 10);
+    });
+
+    // Poll mode freezes the stream watermark on purpose (a REST poll cannot observe an
+    // in-place upsert), so a poll-mode node can never certify completeness and must defer.
+    // That is the correct outcome: it is exactly the node whose mirror might be stale.
+    it('never certifies completeness in poll mode (frozen watermark defers the block)', async function () {
+        const { sync } = makeSync(0);
+        sync._pollMode = true;
+        sync.streamWatermark = 0;
+        await assert.rejects(sync.waitForAnchorAttestationSync(1000, 30),
+            /anchor-reward attestation mirror barrier timed out/);
+    });
+});
