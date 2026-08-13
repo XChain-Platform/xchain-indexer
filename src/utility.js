@@ -2586,6 +2586,27 @@ class Utility {
     }
 
     // Handle checking if any sends were to an active dispenser address
+    //
+    // VALUE SCOPE (BATCH_ISSUANCE_LIMITS, spec row 20). Each DISPENSE below is settled
+    // against send.amount, the tokens THAT send moved, and each SEND debits the source
+    // separately. That stays true when a BATCH emits several SENDs: two batched SENDs are
+    // two independent debits, not two claims on one value, so they are the one shape the
+    // batch-cumulative rule must NOT collapse.
+    //
+    // So info['BATCH_VALUE_LEDGER'] is deliberately NOT threaded onto the object below,
+    // and the strip makes that hold by construction rather than by the accident of the
+    // object being built field by field (a later refactor to a spread/Object.assign of
+    // `info` would otherwise inherit it silently). Threading it would be a units error as
+    // well as a scope error: that tally counts the TRANSACTION's coin settlement value,
+    // drawn down by COINPAY and by coin-paid DISPENSE, while these dispenses are priced
+    // in the SEND's token.
+    //
+    // The one-value-N-settlements property still holds here, and by construction, not by
+    // luck: with the key absent, actions/dispense.js opens its own transaction-scoped
+    // tally over this send.amount whenever the flag is active, so several dispensers
+    // behind one paid address can no longer each buy a full multiplier off the same SEND.
+    // A future batched SEND therefore cannot reintroduce the defect: it would arrive here
+    // exactly as an ordinary SEND does, and be tallied the same way.
     async processDispenserSends(actions, db, info){
         let sends = await db.findDispenserSends(info['ACTION_INDEX']);
         for(let send of sends){
@@ -2602,6 +2623,9 @@ class Utility {
             data['BLOCK_TIME']       = info['BLOCK_TIME'];
             data['TX_INDEX']         = info['TX_INDEX'];
             data['DISPENSE_TYPE']    = 'SEND';
+            // See the VALUE SCOPE note above: a SEND-triggered dispense never inherits the
+            // enclosing batch's value tally. A no-op on the object as built today.
+            delete data['BATCH_VALUE_LEDGER'];
             await actions.processAction(action, null, data, null);
         }
     }

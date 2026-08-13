@@ -73,16 +73,55 @@ class Dispense {
         // baseKeys snapshot so the per-command field clear preserves it), and the tally is
         // shared with COINPAY: both consume the same transaction settlement value.
         //
-        // The key's ABSENCE is both the flag gate and the not-a-batch case: with no ledger
-        // `available` below IS data['COIN_AMOUNT'], so every pricing path collapses to the
-        // pre-existing behavior byte for byte. That also covers the SEND-triggered
-        // dispense path (util.processDispenserSends), which builds its own data object and
-        // therefore never carries a ledger.
+        // The key's PRESENCE is what says "I am inside a batch" to every reader; its
+        // absence is the not-a-batch case.
         //
         // data['FEE_PROBE'] marks the read-only dry-run surfaces; a probe must neither
         // read nor write the ledger.
         let ledger = (!data['FEE_PROBE'] && data['BATCH_VALUE_LEDGER'] && typeof data['BATCH_VALUE_LEDGER'] === 'object')
                         ? data['BATCH_VALUE_LEDGER'] : null;
+
+        // The SAME one-payment-N-settlements shape exists OUTSIDE a batch, and the batch
+        // ledger cannot close it because the key is absent there (spec row 19).
+        //
+        // findMatchingDispensers returns EVERY open dispenser sitting behind the paid
+        // address, and the loop below runs once per dispenser. Nothing decremented the
+        // payment between iterations, so each dispenser priced itself against the same
+        // untouched COIN_AMOUNT and bought a full multiplier off it: one payment, N
+        // settlements, in an ordinary single-command transaction. Anyone may open a second
+        // dispenser at an address they control, so this is reachable without a batch.
+        //
+        // This is a CONSENSUS TIGHTENING on the ordinary path, so it activates with this
+        // spec's flag (operator decision 2026-08-13: ship it here rather than mint a
+        // second flag). Below the flag no tally exists, `available` IS data['COIN_AMOUNT']
+        // on every iteration, and the defect replays byte for byte.
+        //
+        // A LOCAL object, deliberately never written to data['BATCH_VALUE_LEDGER']: that
+        // key's presence means "inside a batch" to batch.js, coinpay.js and
+        // validateOracleFee, so fabricating one on non-batch data would tell three other
+        // readers something untrue. Same field name and same semantics as the batch
+        // ledger's coinAmountConsumed, so the drain below is one code path for both; the
+        // only difference is the SCOPE it tallies over (this transaction's dispense, not
+        // the whole batch). Only coinAmountConsumed is carried, because this handler
+        // consumes no native fee and pays no oracle fee.
+        //
+        // Scoped to this parse() call, which for a non-batch transaction IS the
+        // transaction: a fresh DISPENSE action gets a fresh tally, so nothing leaks
+        // between transactions or between blocks.
+        //
+        // A FEE_PROBE gets no tally at all, matching the batch path: the quote surfaces
+        // must keep reading the un-drained payment.
+        //
+        // This also covers the SEND-triggered dispense path
+        // (util.processDispenserSends), which builds its own data object carrying the
+        // SEND's own amount and deliberately no batch ledger: it lands here with the key
+        // absent and gets a tally scoped to that one SEND's value, which is exactly the
+        // value its dispensers may spend. See the note at processDispenserSends.
+        if(!ledger && !data['FEE_PROBE'] && this.util.isNull(data['BATCH_VALUE_LEDGER']) && action_indexes.length > 0){
+            let batchIssuanceLimits = await this.actions.protocolChanges.isEnabled('BATCH_ISSUANCE_LIMITS', block_index);
+            if(batchIssuanceLimits)
+                ledger = { coinAmountConsumed: '0' };
+        }
 
         // Loop through dispensers and generate a list of valid DISPENSE actions
         // Note: Dispense transactions which do not match an valid dispenser are ignored
@@ -115,6 +154,12 @@ class Dispense {
             // and used only to drain the pool at the end of this iteration. Left null when
             // no ledger is in play (nothing to drain) or when no path priced a fill.
             let unitCoinCost = null;
+
+            // What this dispense was actually charged, written by the drain below and
+            // recorded as the row's GET_AMOUNT. Null means nothing was attributed (no
+            // tally in play, or this dispense settled nothing), and the row keeps the
+            // legacy whole-payment figure.
+            let attributedCost = null;
 
             // FIAT dispenser: reverse price match to determine effective GET_AMOUNT
             // Two pricing modes:
@@ -385,15 +430,41 @@ class Dispense {
             // payment cover exactly N fills, whichever pricing path priced them. The clamp
             // to `available` is a rounding guard only: bcmul rounds at 8dp, and the pool
             // must never go negative. Ledger values stay decimal STRINGS at 8dp.
-            if(ledger && !error && unitCoinCost !== null && multiplier > 0){
+            //
+            // isNull rather than !== null on unitCoinCost: an undefined price would
+            // multiply out to a silent zero, which now also lands in the row's GET_AMOUNT
+            // and would read as "this dispense was free". Unreachable in production (all
+            // three pricing paths set it before a dispense can be valid); the strict form
+            // keeps it that way.
+            if(ledger && !error && !this.util.isNull(unitCoinCost) && multiplier > 0){
                 let cost = this.util.bcmul(multiplier, unitCoinCost, 8);
                 if(this.util.bclt(available, cost))
                     cost = available;
+                // Row 18: the row records what this dispense was CHARGED, not the whole
+                // payment. Taken from the same `cost` the pool is drained by, on purpose:
+                // the record and the accounting are one number, so they can never
+                // disagree. Under the old shape three batched sub-commands each wrote the
+                // full payment into their own row while consuming a third of it, and the
+                // multi-dispenser loop did the same outside a batch.
+                attributedCost = this.util.bcformat(cost, 8);
                 ledger['coinAmountConsumed'] = this.util.bcformat(
                     this.util.bcadd(ledger['coinAmountConsumed'], cost, 8), 8);
             }
 
             // Add the dispense info to the dispenses array;
+            //
+            // GET_AMOUNT is the attributed cost when a tally priced this dispense, and
+            // otherwise the whole payment exactly as before. That makes the flag the gate
+            // for the record shape too: below it, or on a dispense that settled nothing,
+            // nothing is attributed and the legacy figure stands. The column is not a hash
+            // preimage anywhere (tableLifecycle.js classes `dispenses` as a derived
+            // projection, and getBlockHashes covers credits/debits/escrows/actions/
+            // contracts only), so this is a record correction rather than a consensus
+            // change. It is gated regardless: replicas mirror these rows verbatim and no
+            // hash would catch a fleet writing two different values, and get_amount is the
+            // coin leg of the XCHAIN/BTC price derivation over realized dispense fills
+            // (xchainPriceQuery.js DISPENSE_FILLS_SQL), which is built to feed native fee
+            // bands. An ungated record change is a silent divergence there.
             dispenses.push({
                 DISPENSER_ACTION_INDEX: action_index,
                 GIVE_COIN:              dispenser['GIVE_COIN'],
@@ -401,7 +472,7 @@ class Dispense {
                 GIVE_AMOUNT:            give_amount,
                 GET_COIN:               dispenser['GET_COIN'],
                 GET_TICK:               dispenser['GET_TICK'],
-                GET_AMOUNT:             data['COIN_AMOUNT'],
+                GET_AMOUNT:             (attributedCost !== null) ? attributedCost : data['COIN_AMOUNT'],
                 DESTINATION:            data['SOURCE'],
                 STATUS:                 error
             });
