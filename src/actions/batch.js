@@ -148,7 +148,9 @@ class Batch {
             // in ENCRYPTION_METHOD) and is wrongly rejected).
             let baseKeys = new Set(Object.keys(data));
 
+            let batchPosition = -1;
             for(let command of commands){
+                batchPosition++;
                 params = String(command).split('|');
                 let action = String(params.shift()).toUpperCase();
 
@@ -170,6 +172,16 @@ class Batch {
 
                 // Each command gets its own ACTION_INDEX.
                 data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(data, true);
+
+                // This subcommand's 0-based position in the BATCH's command list.
+                // Every subcommand is its own ROOT action but they all share the
+                // transaction's single TX_VOUT, so the position is the only
+                // content-derived value that tells two same-contract EXECUTE
+                // subcommands apart in the ATTEST request_id / XCALL call_id
+                // preimages (src/batch_root_discriminator.js; whether it actually
+                // enters a preimage is decided by that gate, not here). Set after
+                // the clear above, which drops every non-base key each iteration.
+                data['BATCH_POSITION'] = batchPosition;
 
                 await this.actions.processAction(action, params, data, error);
             }

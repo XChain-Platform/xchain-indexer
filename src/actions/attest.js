@@ -223,6 +223,10 @@ class Attest {
             } else if(data['ROOT_ACTION_INDEX'] === undefined || data['ROOT_ACTION_INDEX'] === null){
                 // The per-root discriminator (deterministic root on-chain action_index). Required
                 // for every legitimate VM emission; check === undefined/null (0 is a valid index).
+                // Hashed as the raw string it arrives as: for a root that is a BATCH subcommand it
+                // is the composite "<TX_VOUT>.<position>" (src/batch_root_discriminator.js), which
+                // must NOT be Number()-coerced here or by the VM ('3.10' and '3.1' would fold
+                // together and re-collide the roots the discriminator exists to separate).
                 error = 'invalid: ROOT_ACTION_INDEX (required for request_id derivation)';
             } else if(!data['TX_HASH']){
                 error = 'invalid: TX_HASH (required for request_id derivation)';

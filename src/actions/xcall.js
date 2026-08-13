@@ -255,7 +255,9 @@ class Xcall {
                 error = 'invalid: EMITTER_PATH (required for call_id derivation)';
             } else if(data['ROOT_ACTION_INDEX'] === undefined || data['ROOT_ACTION_INDEX'] === null){
                 // The per-root discriminator (deterministic root on-chain action_index). Required;
-                // check === undefined/null (0 is a valid index).
+                // check === undefined/null (0 is a valid index). Hashed as the raw string it
+                // arrives as: for a root that is a BATCH subcommand it is the composite
+                // "<TX_VOUT>.<position>" (src/batch_root_discriminator.js), never Number()-coerced.
                 error = 'invalid: ROOT_ACTION_INDEX (required for call_id derivation)';
             } else if(!data['TX_HASH']){
                 error = 'invalid: TX_HASH (required for call_id derivation)';

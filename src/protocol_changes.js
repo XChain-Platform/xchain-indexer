@@ -55,6 +55,20 @@ const UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME = 9999999999;
 // prevent.
 const CROSS_SETTLE_CAP_MAINNET_TIME = 9999999999;
 
+// Mainnet arm for BATCH_SUBCOMMAND_ROOT_DISCRIMINATOR, the per-subcommand root
+// discriminator that stops two same-contract EXECUTE subcommands of one BATCH from
+// deriving the IDENTICAL ATTEST request_id (see the registration below). Same house
+// UNARMED sentinel as the two constants above (9999999999, year 2286): the operator
+// ruled the remedy on 2026-08-11 but naming the activation instant is a separate act
+// no lane may perform, and a consensus preimage cannot be moved at a guessed value.
+// Arming it is a one-line edit here. Until then the discriminator is inert on mainnet
+// (the preimage is assembled exactly as the live chains have always assembled it) and
+// live from genesis on testnet/regtest. Do NOT arm it at the 2026-08-07 contract-era
+// anchor: that date is already past, and a preimage change with a retroactive boundary
+// makes a from-genesis replay derive request_ids the live fleet never wrote, which is
+// the fork the gate exists to prevent.
+const BATCH_ROOT_SUB_INDEX_MAINNET_TIME = 9999999999;
+
 // Consensus protocol version, COMPILED IN.
 //
 // isEnabled() compares this against the version registered on every protocol
@@ -601,6 +615,48 @@ class ProtocolChanges {
         // early-close history to preserve; the e2e/regtest stack exercises the
         // per-unit close from block 0).
         this.addChange('DISPENSER_CLOSE_PER_UNIT', '2.0.0',1786060800,0,0,0,0,0);
+
+        // Mode B (user PRICE v1 oracle) dispenser settlement prices one TOKEN, not
+        // one FILL. Below this activation actions/dispense.js takes the affordable
+        // token count straight from utility.reverseOraclePriceMatch and uses it as
+        // the FILL multiplier, then credits multiplier x GIVE_AMOUNT tokens, so a
+        // dispenser giving N tokens per fill sold every token at 1/N of the price
+        // its oracle published. At/above it the affordable token count is divided by
+        // GIVE_AMOUNT first, so the published figure is what one token costs.
+        //
+        // Per-token is the canonical reading (operator decision 2026-08-11,
+        // XC-993), and settlement was the only one of four surfaces disagreeing with
+        // it: the protocol docs' Mode A and Mode B examples, the wallet's oracle
+        // publishing form ("Price of one <TICK> in <FIAT>") and the XC-650
+        // oracle-fee base all state the per-token price. That last one is money: the
+        // fee is FEE x (oracle_price x GIVE_ESCROW) / coin_price, which is only the
+        // projected proceeds if one dispense costs oracle_price x GIVE_AMOUNT, so
+        // pre-activation an oracle at GIVE_AMOUNT 5 is PAID on five times what the
+        // dispenser can actually take in.
+        //
+        // Gated as its own consensus rule because the switch changes the token
+        // amount a settled dispense credits (different dispenses/credits/escrow
+        // rows, hence different consensus block hashes): an ungated flip forks a
+        // heterogeneous fleet on the first Mode B dispense against a dispenser whose
+        // GIVE_AMOUNT is not 1. At GIVE_AMOUNT 1 the two readings coincide exactly,
+        // which is why every documented example and every test before 2026-07-31
+        // missed it.
+        //
+        // Keyed on block_TIME like the sibling dispenser rules. Minted at its own
+        // future instant rather than reusing the contract-era anchor for the reason
+        // CONTRACT_DELEGATION_MATERIALIZE states above: that anchor is already in
+        // the past, and a retroactive boundary makes a from-genesis replay credit
+        // different balances than the live fleet settled. It shares
+        // CONTRACT_DELEGATION_MATERIALIZE's already-ratified post-contract-era
+        // instant (2026-09-15 00:00:00 UTC) rather than inventing a second date;
+        // mainnet is economically pre-launch, so this may be repinned EARLIER at any
+        // time provided the value is still in the future when the last indexer and
+        // sync process finishes deploying. Every indexer and sync process must carry
+        // this gate before mainnet crosses it; a divergent value is a fork.
+        // testnet/regtest activate at genesis (the per-fill reading has no history
+        // worth preserving there, and the regtest stack is where the defect was
+        // measured).
+        this.addChange('DISPENSER_ORACLE_PER_TOKEN_PRICE', '2.0.0',1789430400,0,0,0,0,0);
 
         // Cross-chain royalty enforcement, layered on CONTROLLER_GUARD. Once the guard
         // produces royalty payout_legs (post-CONTROLLER_GUARD), a CROSS-CHAIN listing of
@@ -1174,6 +1230,40 @@ class ProtocolChanges {
         // force from block 0 there and in the unit/e2e suites.
         this.addChange('CROSS_SETTLE_PER_BLOCK_CAP', '2.0.0',CROSS_SETTLE_CAP_MAINNET_TIME,0,0,0,0,0);
 
+        // Per-subcommand root discriminator for the ATTEST request_id / XCALL call_id
+        // preimages.
+        //
+        // Those preimages carry a per-root discriminator whose value is the root action's
+        // on-chain output index TX_VOUT, which was assumed unique per root within a
+        // transaction. A BATCH breaks the assumption: actions.js assigns TX_VOUT once per
+        // TRANSACTION and every subcommand of the batch is its own root action under it,
+        // each seeding call-path ''. Two EXECUTE subcommands against the SAME contract in
+        // one BATCH therefore derived the IDENTICAL request_id for their first attestation,
+        // and db.createAttestationRequest dropped the second (warn-and-return on the prior
+        // row), leaving the second execution bound to the first request's provider,
+        // payload and callback while its value stayed escrowed against no row of its own.
+        //
+        // With the gate ON, a root action that is a BATCH subcommand carries the composite
+        // discriminator "<TX_VOUT>.<subcommand position>" instead of the bare TX_VOUT (see
+        // src/batch_root_discriminator.js). Nothing else about the preimages changes: a
+        // non-BATCH root keeps the bare TX_VOUT, so every id derived outside a BATCH is
+        // byte-identical across the flag day and no pending request's id moves.
+        //
+        // Gated because the request_id is a CONSENSUS preimage: it is what the handler
+        // re-derives to accept an ATTEST v0, what validators sign over, and what the
+        // callback resolves against. Mainnet carries live history, so a from-genesis
+        // replay must reproduce the historical (colliding) id below the flag day.
+        //
+        // Keyed on block_TIME like the sibling contract-era gates: EXECUTE runs on BTC,
+        // LTC and DOGE, whose heights diverge by millions of blocks, so no single height
+        // names one cutover across all three but a single timestamp does.
+        //
+        // MAINNET IS UNARMED (see BATCH_ROOT_SUB_INDEX_MAINNET_TIME above): the operator
+        // ruled the REMEDY on 2026-08-11 and naming the activation instant is a separate
+        // act that has not happened yet. testnet/regtest activate at genesis (all zeros),
+        // so the discriminator is in force from block 0 there and in the unit/e2e suites.
+        this.addChange('BATCH_SUBCOMMAND_ROOT_DISCRIMINATOR', '2.0.0',BATCH_ROOT_SUB_INDEX_MAINNET_TIME,0,0,0,0,0);
+
         // NOTE: STAKE_WEIGHTED_QUORUM (WI-1) is deliberately NOT registered here.
         // Standard activations gate on the LOCAL processing block via isEnabled();
         // stake-weighted quorum must gate on the BTC-anchored `snapshot_block`
@@ -1331,3 +1421,7 @@ module.exports.UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME = UNCAPPED_MAX_SUPPLY_ZERO_
 // UNARMED mainnet sentinel for the CROSS_SETTLE cap, exported for the same reason: the suite asserts the
 // CROSS_SETTLE cap is still waiting on the operator's anchor, never armed at a guess.
 module.exports.CROSS_SETTLE_CAP_MAINNET_TIME = CROSS_SETTLE_CAP_MAINNET_TIME;
+// UNARMED mainnet sentinel for the per-subcommand root discriminator, exported for the same
+// reason: the suite asserts this consensus-preimage change is still waiting on the operator's
+// flag day rather than armed at a guessed instant.
+module.exports.BATCH_ROOT_SUB_INDEX_MAINNET_TIME = BATCH_ROOT_SUB_INDEX_MAINNET_TIME;

@@ -50,6 +50,12 @@ const PROTO = require('../protocol/constants.js');
 const MAX_CALL_DEPTH = PROTO.VM_MAX_CALL_DEPTH;
 const MIN_CALL_GAS   = PROTO.VM_MIN_CALL_GAS;
 
+// Per-root discriminator for the ATTEST request_id / XCALL call_id preimages. One
+// helper for all three root-bearing sites here (top-level EXECUTE, controller guard,
+// emission propagation) plus deploy.js, so they cannot drift into deriving different
+// ids for the same emission.
+const { resolveRootDiscriminator } = require('../batch_root_discriminator.js');
+
 // Reserved method name a controller-bound token's contract must export. The
 // indexer invokes it before a guarded native action (SEND/ORDER/SWAP/DISPENSER)
 // on the token settles; the contract returns normally to ALLOW or reverts to
@@ -331,6 +337,12 @@ class Execute {
                 .update(String(data['BLOCK_INDEX']) + ':' + String(data['BLOCK_TIME']))
                 .digest('hex');
 
+            // Per-root discriminator for the request_id/call_id preimages: the root's
+            // TX_VOUT, plus this subcommand's position when the root is one of a BATCH's
+            // (flag-day gated). See src/batch_root_discriminator.js.
+            let rootDiscrim = (data['ROOT_ACTION_INDEX'] != null) ? data['ROOT_ACTION_INDEX']
+                : await resolveRootDiscriminator(this.actions.protocolChanges, data['BLOCK_INDEX'], data['TX_VOUT'], data['BATCH_POSITION']);
+
             // Execute contract in VM
             let vmResult = await this.actions.vm.execute({
                 code:             contractInfo.code,
@@ -365,9 +377,12 @@ class Execute {
                 // that would silently fork the hash. A top-level on-chain EXECUTE has no
                 // inherited ROOT_ACTION_INDEX so it IS the root and uses its own TX_VOUT; a
                 // nested EXECUTE emission inherits the root's value via processEmission.
-                // TX_VOUT is distinct per action within a tx and stable across reorgs, so
-                // two forest roots under one tx_hash cannot collide.
-                rootActionIndex:   data['ROOT_ACTION_INDEX'] != null ? data['ROOT_ACTION_INDEX'] : (data['TX_VOUT'] != null ? data['TX_VOUT'] : 0),
+                // TX_VOUT is stable across reorgs and distinct per action within a tx EXCEPT
+                // inside a BATCH, whose subcommands are all root actions under the ONE TX_VOUT
+                // actions.js assigns per transaction; there the subcommand's BATCH_POSITION is
+                // appended ("<TX_VOUT>.<position>", flag-day gated) so two same-contract EXECUTE
+                // subcommands cannot derive one request_id (src/batch_root_discriminator.js).
+                rootActionIndex:   rootDiscrim,
                 // Cross-chain call context: hop budget for emit.crossExecute (threaded
                 // from XEXEC injections / result callbacks), the network bound into the
                 // call_id preimage, and the cross-call flag the harness uses to enforce
@@ -665,6 +680,11 @@ class Execute {
             .update(String(hostData['BLOCK_INDEX']) + ':' + String(hostData['BLOCK_TIME']))
             .digest('hex');
 
+        // Per-root discriminator for this guard subtree (see src/batch_root_discriminator.js).
+        // Resolved ONCE and used by both the guard's vm.execute and its emission context,
+        // which must hand the VM and the host re-derivation the identical value.
+        let guardRootDiscrim = await resolveRootDiscriminator(this.actions.protocolChanges, hostData['BLOCK_INDEX'], hostData['TX_VOUT'], hostData['BATCH_POSITION']);
+
         // Positional, all-string guard inputs. Order is consensus; see spec.
         let guardParams = [
             String(opts.actionType),
@@ -699,7 +719,10 @@ class Execute {
                 // Root discriminator = the guarded native action's on-chain output index (TX_VOUT),
                 // carried under the VM opt name `rootActionIndex` the gateway preimage reads.
                 // Distinguishes this guard subtree from a co-tx top-level EXECUTE that also seeds ''.
-                rootActionIndex:   hostData['TX_VOUT'] != null ? hostData['TX_VOUT'] : 0,
+                // A guarded action inside a BATCH shares its TX_VOUT with every sibling subcommand,
+                // so the subcommand position is appended there (flag-day gated); without it two
+                // guarded sends of one controlled token in a BATCH seed identical subtrees.
+                rootActionIndex:   guardRootDiscrim,
                 isGuard:           true,   // disables ATTEST/XCALL in the gateway
                 network:           this.config['NETWORK'],
                 balances:          guardLedger.balances,
@@ -779,8 +802,10 @@ class Execute {
             ACTION_INDEX:          hostData['ACTION_INDEX'],
             // Root discriminator for this guard's emission subtree = the guarded native action's
             // on-chain output index TX_VOUT, under the ROOT_ACTION_INDEX key attest.js/xcall.js
-            // read (propagated unchanged by processEmission).
-            ROOT_ACTION_INDEX:     hostData['TX_VOUT'] != null ? hostData['TX_VOUT'] : 0,
+            // read (propagated unchanged by processEmission). MUST be the identical value the
+            // guard's own vm.execute above was given, BATCH_POSITION suffix included, or the
+            // guard's emissions re-derive against a different root than the VM hashed.
+            ROOT_ACTION_INDEX:     guardRootDiscrim,
             CONTRACT_ACTION_INDEX: contractIndex,
             SOURCE:                derived,
             BLOCK_INDEX:           hostData['BLOCK_INDEX'],
@@ -986,7 +1011,13 @@ class Execute {
         // ROOT_ACTION_INDEX, so its own TX_VOUT (a pure on-chain output index, stable across reorgs)
         // IS the root; a nested/guard executionData already carries the inherited root value. Stamped
         // onto emissionData so attest.js/xcall.js re-derive with it and nested EXECUTEs inherit it.
-        let rootActionIndex = (executionData['ROOT_ACTION_INDEX'] != null) ? executionData['ROOT_ACTION_INDEX'] : (executionData['TX_VOUT'] != null ? executionData['TX_VOUT'] : 0);
+        // Inside a BATCH every subcommand is a root under the ONE TX_VOUT of the transaction, so
+        // the subcommand's BATCH_POSITION is appended (flag-day gated); this MUST reproduce the
+        // value the executing vm.execute was handed, or the host re-derives a request_id the VM
+        // never hashed (src/batch_root_discriminator.js).
+        let rootActionIndex = (executionData['ROOT_ACTION_INDEX'] != null) ? executionData['ROOT_ACTION_INDEX']
+                                : await resolveRootDiscriminator(this.actions.protocolChanges, executionData['BLOCK_INDEX'],
+                                                                 executionData['TX_VOUT'], executionData['BATCH_POSITION']);
 
         // Force source to the contract's derived address
         let contractAddress = 'C:' + this.config['CHAIN'] + ':' + executionData['CONTRACT_ACTION_INDEX'];

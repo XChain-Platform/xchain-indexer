@@ -38,6 +38,9 @@ const DeployChunk = require('./deploy_chunk.js');
 const ProviderRegistry = require('../attestation/providerRegistry.js');
 const { rethrowIfInfraFault } = require('./faultGuard.js');
 const vmDeployLintPkg3 = require('../vm_deploy_lint_pkg3_activation.js');
+// Per-root discriminator for the ATTEST request_id / XCALL call_id preimages, shared
+// with execute.js so a constructor's emissions derive ids the same way an EXECUTE's do.
+const { resolveRootDiscriminator } = require('../batch_root_discriminator.js');
 
 // Per-provider deadline windows are built per instance in the constructor
 // (this.providerDeadlineWindows) from the CONFIGURED registry. A module-scoped
@@ -530,6 +533,13 @@ class Deploy {
         let initStrict = await this.actions.protocolChanges.isEnabled('DEPLOY_INIT_STRICT', data['BLOCK_INDEX']);
         let runConstructor = initStrict ? (hasInitialize || !!data['CONSTRUCTOR_PARAMS']) : !!data['CONSTRUCTOR_PARAMS'];
 
+        // Per-root discriminator for the constructor's subtree: a DEPLOY inside a BATCH
+        // shares the transaction's single TX_VOUT with every sibling subcommand, so it
+        // carries the subcommand position to stay distinct from theirs (flag-day gated,
+        // src/batch_root_discriminator.js). Resolved ONCE and used by BOTH the
+        // constructor's vm.execute and its emission context, which must agree exactly.
+        let rootDiscrim = await resolveRootDiscriminator(this.actions.protocolChanges, data['BLOCK_INDEX'], data['TX_VOUT'], data['BATCH_POSITION']);
+
         if(!error && runConstructor && this.actions.vm){
             // Derive deterministic block hash
             let blockHash = crypto.createHash('sha256')
@@ -567,7 +577,9 @@ class Deploy {
                 txHash:           data['TX_HASH'],
                 actionIndex:      data['ACTION_INDEX'],
                 callPath:         '',
-                rootActionIndex:  data['TX_VOUT'] != null ? data['TX_VOUT'] : 0,   // root discriminator = the DEPLOY's on-chain output index (VM opt name)
+                // Root discriminator = the DEPLOY's on-chain output index (VM opt name), with the
+                // BATCH subcommand position appended when this DEPLOY is one (flag-day gated).
+                rootActionIndex:  rootDiscrim,
                 // A constructor is a root execution: emitted cross-contract calls
                 // run at depth 1, same as calls emitted by a user EXECUTE.
                 callDepth:        0,
@@ -705,7 +717,9 @@ class Deploy {
                 let emissionContext = {
                     CONTRACT_ACTION_INDEX: data['ACTION_INDEX'],
                     ACTION_INDEX:          data['ACTION_INDEX'],
-                    ROOT_ACTION_INDEX:     data['TX_VOUT'] != null ? data['TX_VOUT'] : 0,   // root discriminator for constructor emissions (key attest.js/xcall.js read)
+                    // Root discriminator for constructor emissions (key attest.js/xcall.js read).
+                    // MUST be the identical value the constructor's vm.execute was handed above.
+                    ROOT_ACTION_INDEX:     rootDiscrim,
                     SOURCE:                data['SOURCE'],
                     BLOCK_INDEX:           data['BLOCK_INDEX'],
                     BLOCK_TIME:            data['BLOCK_TIME'],
