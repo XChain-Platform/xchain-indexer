@@ -75,6 +75,8 @@
  *   9. a SEND that triggers a dispenser, overpaid   (row 18/20: get_amount)
  *  10. 3 ORDERs paying ONE ORDER's native-coin fee  (R5: the fee ledger)
  *  11. the same 3 ORDERs paying three ORDERs' worth (R5: N worth funds N)
+ *  12. 3 Mode B DISPENSERs on ONE oracle fee output   (R5b: validateOracleFee)
+ *  13. 2 Mode B DISPENSERs on TWO opens' worth        (R5b: the tally drains)
  *
  * Shapes 8 and 9 are ORDINARY, non-batch transactions: since a319226 the flag no
  * longer gates only BATCH behavior, so a comparison over batch shapes alone would
@@ -82,6 +84,15 @@
  * Shapes 10/11 run on the NATIVE fee lane in the same corpus: an output paying
  * FEE_DESTINATION is what flips detectFeePaymentMode, so one BTC regtest chain
  * exercises both the XCHAIN-balance lane and the native-coin lane.
+ *
+ * Shapes 12/13 reach validateOracleFee's PER-ORACLE tally, which every earlier run
+ * of this tool named as the one gated site it did not touch. A Mode B DISPENSER
+ * (ORACLE_ADDRESS set) owes the oracle operator a real native-coin output at open
+ * time, so N opens referencing one oracle in one batch is the same
+ * one-value-satisfies-N shape shapes 10/11 put on the native fee lane, against a
+ * different pool. Shape 12's third sub-command names a SECOND oracle that is paid
+ * nothing, so the run distinguishes the tally's verdict (`insufficient oracle fee`)
+ * from a blanket rejection (`missing oracle fee output`) by error string.
  *
  * Each of those has a WITNESS assertion (below) pinning what the OLD side actually
  * did with it, so a corpus that silently stopped exercising the change cannot pass
@@ -112,18 +123,35 @@
  * ------------------------------------------------------------------------------
  * WHAT IT DOES NOT COVER - read this before quoting a green run.
  *
- * Two of R5's consumers are absent from the corpus, and neither is an oversight:
+ * ONE of R5's consumers is absent from the corpus, and it is not an oversight:
  *
- *   - validateOracleFee's per-ORACLE tally (a Mode B DISPENSER paying a PRICE v1
- *     oracle's usage fee). Reaching it needs a user oracle with published PRICE v1
- *     rows plus a second FEE_DESTINATION-shaped output per oracle address, which
- *     is a corpus of its own; it is the one gated site this tool leaves unmeasured.
  *   - COINPAY's settlement-value tally, which is STRUCTURALLY unreachable inside a
  *     BATCH today: the decoder gates payment-output capture on the raw data
  *     starting with `COINPAY|`, false for a `BATCH|...` transaction, so
  *     COIN_AMOUNT / COIN_DESTINATION never reach the indexer (spec row 21). There
  *     is no wire path to exercise, and manufacturing one here would test a shape
  *     the fleet cannot produce.
+ *
+ * And one property of a covered site is out of this harness's reach, stated so it
+ * is not mistaken for coverage:
+ *
+ *   - `oracleFeeConsumed` is keyed BY ORACLE ADDRESS so one exhausted output cannot
+ *     invalidate a sub-command paying a DIFFERENT oracle. Witnessing that positively
+ *     needs one transaction carrying an adequate output for EACH of two oracles, and
+ *     test/integration/setup/indexer-launcher.js does not apply
+ *     output_fanout.collapseOutputFanout the way XChainIndexer.start does, so a
+ *     data-bearing transaction with two outputs would be executed once PER OUTPUT
+ *     here - a harness artifact, not product behavior. Shape 12 pins the next best
+ *     thing without a second output: the unpaid oracle's sub-command fails with the
+ *     MISSING-output string on every side, while only the flag-ON side produces the
+ *     tally's INSUFFICIENT string, so the two verdicts cannot be confused.
+ *
+ * PRICE v1 oracle rows are seeded directly into `oracle_prices`, not published as
+ * PRICE v1 actions in the corpus, and that is the faithful shape rather than a
+ * shortcut: `oracle_prices` is a HUB-MIRRORED table (src/sql/oracle_prices.sql,
+ * populated by hub_db_sync). The indexer never writes it, so a PRICE v1 action in
+ * the corpus would land in `prices` and leave the row validateOracleFee reads
+ * absent. Same reason price_snapshots is seeded rather than mined.
  *
  * The summary at the end of every run restates this, so a green run cannot be
  * quoted as covering more than it does.
@@ -244,13 +272,17 @@ function parseArgs() {
 
 // --- corpus -----------------------------------------------------------------
 //
-// Addresses are the generic 34-char test addresses the integration tier already
-// uses (utility.isCryptoAddress is length-only, no chain prefixes).
+// The addresses the integration tier already uses. They are REAL base58check testnet
+// P2PKH addresses and have to be: utility.isCryptoAddress base58check-decodes and
+// checks the version byte against the coin bundle, so an invented 34-character string
+// is rejected wherever an address is validated (ORACLE_ADDRESS is one such field).
 const A1 = 'mq7tVfobimRUPxPNnyd5mKn11SVmTiLxtu';   // issuer / dispenser owner, funded with gas
 const A2 = 'n4nbVcRRR5sEHyp2VYuLUvCyDmQmBoonoK';   // counterparty, funded with gas
 const A3 = 'mvuKWKvgzrkxh8QgNZ91vMBZUKN5BFYmo3';   // dispenser payment collector (TWO dispensers)
 const A4 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi';   // deliberately holds NO gas (R4 pre-check)
 const A5 = 'mzBc4XEFSdzCDcTxAgf6EZXgsZWpztRhef';   // second collector (get_amount attribution)
+const ORACLE_A = 'mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp';  // PRICE v1 oracle the paid output goes to
+const ORACLE_B = 'mjifPngDYQ6HHPNQdGk1kQuFkJWEiQksQp';  // a SECOND oracle, deliberately never paid
 
 const T0    = 1700000000;
 const STEP  = 60;    // tight spacing: keeps every block inside one oracle price's staleness window
@@ -259,6 +291,24 @@ const GAS_B = 99;    // gas preamble block (seedGas convention: first block - 1)
 const PARENT = 'PARENT';   // the parent tick the 50 children hang off
 const DTOK   = 'DTOK';     // dispenser GIVE tick
 const BETA   = 'BETA';     // dispenser GET tick
+
+// Dispenser expiration, far enough out that processExpirations never closes one of
+// these inside the corpus's ~17 minutes of block time.
+const FAR = T0 + 86400 * 30;
+
+// A Mode B (oracle-priced) DISPENSER open, the ONE shape that reaches
+// utility.validateOracleFee. Mode B is what ORACLE_ADDRESS being set means: the oracle
+// operator prices the token in FIAT_CODE and is paid a usage fee up front, so FIAT_CODE
+// is required and FIAT_AMOUNT must stay empty (dispenser.js ~171-179).
+// GET_ADDRESS is the SOURCE itself, which is always permitted (owner self-opening) and
+// so keeps the third-party ADDRESS opt-in of shape 8 out of this shape entirely.
+// DISPENSER|0|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_OWNERSHIP|GIVE_ESCROW|GET_COIN|GET_TICK|
+//            GET_AMOUNT|GET_ADDRESS|FIAT_CODE|FIAT_AMOUNT|ORACLE_ADDRESS|EXPIRATION|
+//            ALLOW_LIST|BLOCK_LIST|MEMO
+const MODE_B_ESCROW = '50';
+function modeBDispenser(oracle) {
+    return `DISPENSER|0|BTC|${DTOK}|1||${MODE_B_ESCROW}|BTC||0|${A1}|USD||${oracle}|${FAR}|||`;
+}
 
 function batchOf(commands) { return 'BATCH|0|' + commands.join(';'); }
 
@@ -345,11 +395,11 @@ function corpus() {
     // 109: SHAPE 8 setup - TWO dispensers behind ONE paid address (A3). Anyone may
     // open a second dispenser at an address they control, so this is the ordinary
     // -path one-payment-N-settlements shape, reachable with no batch at all.
-    // DISPENSER|0|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_ESCROW|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|FIAT_CODE|FIAT_AMOUNT|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO
+    // Field layout as in modeBDispenser above (GIVE_OWNERSHIP sits between GIVE_AMOUNT
+    // and GIVE_ESCROW); these two are Mode A, so FIAT_CODE and ORACLE_ADDRESS stay empty.
     // The collectors must first opt in to third-party dispensers (ADDRESS option 2) or
     // both dispensers die on `invalid: GET_ADDRESS (dispenser not permitted)`; same
     // in-block ordering the existing scenario 03/13 corpora use.
-    const FAR = T0 + 86400 * 30;
     blocks.push({ block: 109, time: t(109), txs: [
         { source: A3, data: 'ADDRESS|0|||2|' },
         { source: A5, data: 'ADDRESS|0|||2|' },
@@ -399,9 +449,39 @@ function corpus() {
         ] });
     }
 
+    // 115: SHAPE 12 - the oracle-fee half of R5b, the site every earlier run of this
+    // tool named as unreached. THREE Mode B DISPENSER opens in one BATCH: the first two
+    // name ORACLE_A, the third names ORACLE_B. The transaction's single output pays
+    // ORACLE_A exactly ONE open's worth of oracle fee and pays ORACLE_B nothing.
+    //
+    // Below the flag nothing decrements the oracle's output between sub-commands, so
+    // both ORACLE_A opens judge the same untouched 0.5 and BOTH are valid: one oracle
+    // fee bought two dispensers. Above it the per-address tally drains at expectedFee
+    // and the second open sees an exhausted pool.
+    //
+    // The ORACLE_B command is the string discriminator: it is rejected for a MISSING
+    // output on every side, so the flag-ON divergence cannot be read as "the gate just
+    // rejects Mode B dispensers".
+    {
+        const openA = modeBDispenser(ORACLE_A);
+        const openB = modeBDispenser(ORACLE_B);
+        blocks.push({ block: 115, time: t(115), txs: [
+            { source: A1, destination: ORACLE_A, amount: ONE_ORACLE_FEE,
+              data: batchOf([openA, openA, openB]) },
+        ] });
+        // 116: SHAPE 13 - the other half of the same invariant, and the same control
+        // shape 11 is for shape 10: TWO opens paying TWO opens' worth must leave BOTH
+        // valid on every side. Without it, shape 12 would pass for the trivial reason
+        // that the flag rejects the second Mode B open no matter what was paid.
+        blocks.push({ block: 116, time: t(116), txs: [
+            { source: A1, destination: ORACLE_A, amount: TWO_ORACLE_FEE,
+              data: batchOf([openA, openA]) },
+        ] });
+    }
+
     return blocks;
 }
-const LAST_BLOCK = 114;
+const LAST_BLOCK = 116;
 
 // BTC regtest FEE_DESTINATION (configs/BTC.js). An output to it is what makes
 // detectFeePaymentMode answer 'native' on a chain that otherwise falls back to the
@@ -426,6 +506,20 @@ const ORDER_EXP = T0 + 86400 * 200;
 const ONE_ORDER_FEE   = '0.60500000';
 const THREE_ORDER_FEE = '1.81500000';
 
+// The PRICE v1 oracle rows shapes 12/13 price themselves against, and the fee that
+// falls out of them. computeOracleFee is
+//     oraclePrice * GIVE_ESCROW / coinFiatPrice * feeFraction
+// so 1.00 USD per DTOK, 50 DTOK escrowed, BTC/USD seeded at 1 and a 1% oracle fee give
+// exactly 0.5 per open - three orders of magnitude above BTC's 546-satoshi dust floor,
+// below which validateOracleFee requires no output at all and touches no tally.
+// Both oracles get a row: ORACLE_B must fail shape 12 on its MISSING OUTPUT, not on
+// "no effective oracle price", or the discriminator that separates the tally's verdict
+// from a blanket rejection would not be testing what it claims.
+const ORACLE_VALUE    = '1.00000000';   // USD per DTOK
+const ORACLE_FEE_RATE = '0.01000000';   // 1% of projected proceeds
+const ONE_ORACLE_FEE  = '0.50000000';
+const TWO_ORACLE_FEE  = '1.00000000';
+
 // Two finalized oracle rounds, seeded identically on every side. reference_block 0 so
 // the (non-time-keyed, BTC-is-the-reference-chain) selection always finds them, and a
 // block_timestamp inside the 1800s staleness window of every block that reads them.
@@ -440,6 +534,24 @@ async function seedPrices(db) {
             'block_timestamp, validator_count, consensus_round, consensus_proof, status) ' +
             "VALUES (?, ?, ?, 0, 'BTC', ?, 1, 1, '', 'finalized')",
             [r.round, r.pair, r.price, T0]);
+
+    // The two user oracles shapes 12/13 reference. `oracle_prices` is a HUB-MIRRORED
+    // table (src/sql/oracle_prices.sql, filled by hub_db_sync): the indexer READS it on
+    // the consensus path and never writes it, so publishing PRICE v1 actions in the
+    // corpus would land rows in `prices` and leave this table empty. Seeding it is what
+    // a hub-connected node actually presents to validateOracleFee, and it is seeded from
+    // this ONE code path so all three sides get byte-identical rows.
+    //
+    // effective_at is T0, before every block in the corpus, so the 24h activation delay
+    // is already served when the first block that reads it is processed. action_index is
+    // only a tiebreaker within this table; it names no action in the indexer's ledger.
+    let oracleActionIndex = 0;
+    for (const oracle of [ORACLE_A, ORACLE_B])
+        await db.doQuery(
+            'INSERT INTO oracle_prices (source_address, source_chain, coin, tick, fiat, value, fee, ' +
+            'memo, block_time, effective_at, action_index) ' +
+            "VALUES (?, 'BTC', 'BTC', ?, 'USD', ?, ?, '', ?, ?, ?)",
+            [oracle, DTOK, ORACLE_VALUE, ORACLE_FEE_RATE, T0, T0, ++oracleActionIndex]);
 }
 
 // --- old tree ---------------------------------------------------------------
@@ -562,6 +674,23 @@ async function orderRowsAtBlock(q, blockIndex) {
     return rows.map(r => ({ status: String(r.status),
                             native: r.native_coin_amount === null ? null : String(r.native_coin_amount),
                             mode: r.payment_mode === null || r.payment_mode === undefined ? null : Number(r.payment_mode) }));
+}
+
+// Mode B DISPENSER verdicts in one block, tagged with the oracle each one named.
+// Addressed by BLOCK and ordered by action_index, so a sub-command that was rejected
+// (and therefore escrowed nothing and moved no balance) is still counted in position:
+// createDispenser records the invalid attempt, which is the only reason the
+// one-fee-two-opens divergence is visible in a table at all.
+async function oracleDispensersAtBlock(q, blockIndex) {
+    const rows = await q(
+        'SELECT d.action_index, s.status, ao.address AS oracle ' +
+        'FROM dispensers d ' +
+        'JOIN actions a ON a.action_index = d.action_index ' +
+        'LEFT JOIN index_addresses ao ON ao.id = d.oracle_address_id ' +
+        'LEFT JOIN index_statuses  s  ON s.id = d.status_id ' +
+        'WHERE a.block_index = ? ORDER BY d.action_index', [blockIndex]);
+    return rows.map(r => ({ status: String(r.status),
+                            oracle: r.oracle === null ? null : String(r.oracle) }));
 }
 
 async function countRows(q, table) {
@@ -740,6 +869,17 @@ async function main() {
     check(wOld.ordersThreeFee.length === 3 && wOld.ordersThreeFee.every(o => o.status === 'valid'),
         'shape 11 (three ORDERs\' worth): all three valid on OLD (the not-everything-rejects control)',
         JSON.stringify(wOld.ordersThreeFee));
+    check(wOld.oracleOneFee.length === 3 &&
+          wOld.oracleOneFee[0].status === 'valid' && wOld.oracleOneFee[1].status === 'valid',
+        'shape 12 (one oracle fee, two opens on that oracle): OLD validates BOTH off one output',
+        JSON.stringify(wOld.oracleOneFee));
+    check(wOld.oracleOneFee.length === 3 && wOld.oracleOneFee[2].oracle === ORACLE_B &&
+          wOld.oracleOneFee[2].status === 'invalid: ORACLE_ADDRESS (missing oracle fee output)',
+        'shape 12: the UNPAID oracle\'s open is rejected for a missing output, on OLD too',
+        JSON.stringify(wOld.oracleOneFee[2]));
+    check(wOld.oracleTwoFee.length === 2 && wOld.oracleTwoFee.every(d => d.status === 'valid'),
+        'shape 13 (two opens\' worth): both valid on OLD (the not-everything-rejects control)',
+        JSON.stringify(wOld.oracleTwoFee));
 
     // ---- THE A7 ASSERTION -------------------------------------------------
     section('A7: OLD vs HEAD-with-the-flag-unarmed');
@@ -785,7 +925,7 @@ async function main() {
 
     // Targeted: the tables the change is SUPPOSED to move must be among them.
     const movedTables = new Set(dOnOld.map(d => d.table));
-    for (const t of ['batches', 'issues', 'index_tickers', 'dispenses'])
+    for (const t of ['batches', 'issues', 'index_tickers', 'dispenses', 'dispensers'])
         check(movedTables.has(t), 'control moves `' + t + '` (the surface this spec changes)',
             movedTables.has(t) ? '' : 'the corpus does not reach the gated code that writes ' + t);
 
@@ -801,6 +941,28 @@ async function main() {
         'and three ORDERs\' worth still funds three (the tally drains, it does not just reject)',
         'valid=' + onValidThree + ' of ' + wOn.ordersThreeFee.length);
 
+    // The ORACLE-FEE tally, the site every earlier run of this tool reported as the one
+    // it did not reach. The witness is POSITIVE and attributable: the second open on the
+    // paid oracle must flip valid -> invalid, and its error string must be the tally's
+    // own (`insufficient oracle fee`), which nothing but the per-address pool arithmetic
+    // in validateOracleFee produces.
+    const onOracleValid  = wOn.oracleOneFee.filter(d => d.status === 'valid').length;
+    const onOracleSecond = wOn.oracleOneFee.length > 1 ? wOn.oracleOneFee[1].status : '(no row)';
+    check(onOracleValid === 1,
+        'control reaches R5b\'s ORACLE-fee tally: one oracle fee funds exactly ONE Mode B open with the flag ON',
+        'valid=' + onOracleValid + ' of ' + wOn.oracleOneFee.length + ' ' + JSON.stringify(wOn.oracleOneFee));
+    check(onOracleSecond.includes('insufficient oracle fee'),
+        'and it fails with the TALLY\'s error string, not the missing-output one (attributable to oracleFeeConsumed)',
+        'second open on the paid oracle: ' + JSON.stringify(onOracleSecond));
+    check(wOn.oracleOneFee.length === 3 &&
+          wOn.oracleOneFee[2].status === wOld.oracleOneFee[2].status,
+        'and the UNPAID oracle\'s open still reports the MISSING-output verdict, unchanged by the gate',
+        'OLD=' + JSON.stringify(wOld.oracleOneFee[2] && wOld.oracleOneFee[2].status) +
+        ' ON=' + JSON.stringify(wOn.oracleOneFee[2] && wOn.oracleOneFee[2].status));
+    check(wOn.oracleTwoFee.length === 2 && wOn.oracleTwoFee.every(d => d.status === 'valid'),
+        'and two opens\' worth still funds two (the oracle tally drains, it does not just reject Mode B)',
+        JSON.stringify(wOn.oracleTwoFee));
+
     check(wOn.batchVerdicts[2] === wOld.batchVerdicts[2] && wOn.batchVerdicts[3] === wOld.batchVerdicts[3],
         'control is TARGETED: the exactly-250 batch and the two-undotted batch reach the same verdict with the flag ON',
         'OLD=' + JSON.stringify([wOld.batchVerdicts[2], wOld.batchVerdicts[3]]) +
@@ -811,12 +973,22 @@ async function main() {
     info('COVERED, driven on both sides: the batch limit scan (250-command cap, dotted-TICK');
     info('  exemption, error precedence), the caret-dot TICK rejection, the ticker-intern');
     info('  gating, the aggregate gas pre-check, R5\'s native-coin fee ledger on the NATIVE');
-    info('  lane, and the ORDINARY non-batch dispense tally in both its shapes (two dispensers');
-    info('  behind one paid address, and the get_amount attribution of an overpaid SEND).');
-    info('NOT COVERED: validateOracleFee\'s per-ORACLE tally (needs a PRICE v1 user oracle and');
-    info('  a per-oracle fee output; the one gated site this tool does not reach), and COINPAY\'s');
-    info('  settlement tally, which is STRUCTURALLY unreachable inside a BATCH today because the');
-    info('  decoder never captures a payment output for one (spec row 21).');
+    info('  lane, R5b\'s per-ORACLE fee tally in validateOracleFee (Mode B DISPENSER opens');
+    info('  against a PRICE v1 oracle), and the ORDINARY non-batch dispense tally in both its');
+    info('  shapes (two dispensers behind one paid address, and the get_amount attribution of');
+    info('  an overpaid SEND).');
+    info('NOT COVERED: COINPAY\'s settlement tally, which is STRUCTURALLY unreachable inside a');
+    info('  BATCH today because the decoder never captures a payment output for one (spec row');
+    info('  21). It is the only gated site this tool leaves unmeasured, and there is no wire');
+    info('  path to measure it on.');
+    info('COVERED BUT NOT IN BOTH DIRECTIONS: oracleFeeConsumed is keyed BY ORACLE ADDRESS, and');
+    info('  the POSITIVE witness for that keying (one transaction paying two different oracles');
+    info('  enough for both) needs a two-output transaction, which this harness cannot carry:');
+    info('  indexer-launcher.js does not apply collapseOutputFanout the way XChainIndexer.start');
+    info('  does, so a data-bearing transaction with two outputs would run once per output.');
+    info('  What IS pinned: an unpaid oracle\'s sub-command reports the MISSING-output verdict');
+    info('  identically on every side, so the paid oracle\'s exhausted pool is not leaking into');
+    info('  it as a blanket rejection.');
 
     for (const k of ['OLD', 'OFF', 'ON']) { try { await conns[k].end(); } catch (e) {} }
     try { await dbc.closeAll(); } catch (e) {}
@@ -846,6 +1018,8 @@ async function witnesses(qf) {
         dispensesAt:    (addr) => disp.filter(d => d.collector === addr),
         ordersOneFee:   await orderRowsAtBlock(qf, 113),
         ordersThreeFee: await orderRowsAtBlock(qf, 114),
+        oracleOneFee:   await oracleDispensersAtBlock(qf, 115),
+        oracleTwoFee:   await oracleDispensersAtBlock(qf, 116),
         counts: {
             actions:       await countRows(qf, 'actions'),
             issues:        await countRows(qf, 'issues'),
@@ -863,5 +1037,7 @@ function printWitnesses(label, w) {
     info(label + ' dispenses: ' + JSON.stringify(w.dispenses));
     info(label + ' native-fee ORDERs  1x fee: ' + JSON.stringify(w.ordersOneFee) +
          '   3x fee: ' + JSON.stringify(w.ordersThreeFee));
+    info(label + ' Mode B DISPENSERs  1x oracle fee: ' + JSON.stringify(w.oracleOneFee));
+    info(label + ' Mode B DISPENSERs  2x oracle fee: ' + JSON.stringify(w.oracleTwoFee));
     info(label + ' row counts: ' + JSON.stringify(w.counts));
 }
