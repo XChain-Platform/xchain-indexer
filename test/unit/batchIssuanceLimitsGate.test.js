@@ -50,6 +50,13 @@ const FANOUT        = 'FIX_OUTPUT_FANOUT';
 // to tell a scheduled date from an UNARMED sentinel.
 const YEAR_2100 = 4102444800;
 
+// The ratified mainnet activation instant, ARMED 2026-08-14 by the operator, pre-launch.
+// 1786838400 = 2026-08-16T00:00:00Z. ARMED_AT is the moment it was armed (2026-08-14T00:00Z,
+// floored to the day so this pin never drifts): the instant must sit strictly after it,
+// because a retroactive boundary forks a from-genesis replay in both directions at once.
+const ARMED_INSTANT = 1786838400;
+const ARMED_AT      = 1786665600;
+
 function pcFor(network){
     const indexer = createMockIndexer();
     indexer.config.NETWORK = network;
@@ -75,14 +82,31 @@ describe('BATCH issuance-limits flag day @regression @tier1', function(){
             assert.strictEqual(change.regtest_time, 0);
         });
 
-        it('mainnet is UNARMED: the operator owes the activation instant', function(){
-            const sentinel = ProtocolChanges.BATCH_ISSUANCE_LIMITS_MAINNET_TIME;
-            assert.strictEqual(typeof sentinel, 'number', 'the sentinel must be exported');
-            assert.strictEqual(pcFor('mainnet').pc.changes[GATE].mainnet_time, sentinel);
-            // A value inside any plausible chain lifetime means somebody armed a set that
-            // both loosens and tightens consensus without the operator's flag day.
-            assert.ok(sentinel > YEAR_2100,
-                'the mainnet arm must stay a far-future UNARMED sentinel until the instant is ratified');
+        it('mainnet is ARMED at the ratified instant, and it is a real date rather than a sentinel', function(){
+            const instant = ProtocolChanges.BATCH_ISSUANCE_LIMITS_MAINNET_TIME;
+            assert.strictEqual(typeof instant, 'number', 'the instant must be exported');
+            assert.strictEqual(pcFor('mainnet').pc.changes[GATE].mainnet_time, instant);
+            // ARMED 2026-08-14 (operator, pre-launch). This used to assert the opposite - that
+            // the value stayed a far-future UNARMED sentinel - and flipping it is the whole
+            // point of the arming, so the pin flips with it rather than being deleted.
+            assert.strictEqual(instant, ARMED_INSTANT,
+                'the mainnet arm is a ratified instant; changing it is a consensus act, not a tidy-up');
+            assert.ok(instant < YEAR_2100,
+                'a value at or past the house sentinel means the arm was reverted or re-parked');
+        });
+
+        it('the armed instant was in the FUTURE when it was set, never retroactive', function(){
+            // The property that outlives the date. This entry carries a loosening AND several
+            // tightenings, so a backdated boundary forks a from-genesis replay in BOTH
+            // directions: it would reject batches the chain accepted and accept batches it
+            // rejected. Pre-launch quiet does not make that safe, it only makes it unnoticed.
+            // ARMED_AT is when the operator set it; the instant must sit after that moment.
+            // Read the LIVE source constant, not the local pin: comparing two test constants
+            // would be tautological and would stay green while somebody backdated the real
+            // one. Caught by falsification - the first cut of this test did exactly that.
+            const live = ProtocolChanges.BATCH_ISSUANCE_LIMITS_MAINNET_TIME;
+            assert.ok(live > ARMED_AT,
+                'the activation instant must be later than the moment it was armed, got ' + live);
         });
 
         it('regtest: active from genesis, so drills and suites run the post-flag-day rules', async function(){
@@ -91,10 +115,19 @@ describe('BATCH issuance-limits flag day @regression @tier1', function(){
             assert.strictEqual(await pc.isEnabled(GATE, 0), true);
         });
 
-        it('mainnet: inert at any real block time while the sentinel stands', async function(){
+        it('mainnet: inert BELOW the instant, so history before it is untouched', async function(){
             const { pc, indexer } = pcFor('mainnet');
-            indexer.decoderDb.getBlockTime.resolves(YEAR_2100);
+            indexer.decoderDb.getBlockTime.resolves(ARMED_INSTANT - 1);
             assert.strictEqual(await pc.isEnabled(GATE, 1000000), false);
+        });
+
+        it('mainnet: live AT and ABOVE the instant', async function(){
+            for(const t of [ARMED_INSTANT, ARMED_INSTANT + 1, YEAR_2100]){
+                const { pc, indexer } = pcFor('mainnet');
+                indexer.decoderDb.getBlockTime.resolves(t);
+                assert.strictEqual(await pc.isEnabled(GATE, 1000000), true,
+                    'must be active at block_time ' + t);
+            }
         });
     });
 

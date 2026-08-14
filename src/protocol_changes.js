@@ -73,16 +73,31 @@ const BATCH_ROOT_SUB_INDEX_MAINNET_TIME = 9999999999;
 // exemption that lets one BATCH carry a parent plus any number of child ISSUEs, the global
 // 250-command cap that bounds the scan it rides on, the batch-cumulative fee/settlement
 // accounting that stops one command's fee from satisfying all N, and the caret-TICK and
-// ticker-intern tightenings that ship with them (see the registration below). Same house
-// UNARMED sentinel as the three constants above (9999999999, year 2286): naming the
-// activation instant is the operator's act, and this entry carries BOTH a loosening (the
-// exemption) and several TIGHTENINGS (the cap, the fee ledger), so a retroactive boundary
-// forks a from-genesis replay in both directions at once - the replay would reject batches
-// the live fleet accepted AND accept batches it rejected. Arming it is a one-line edit here.
-// Until then every rule in the set is inert on mainnet (the scan runs exactly as the live
-// chains have always run it) and live from genesis on testnet/regtest. Do NOT arm it at the
-// 2026-08-07 contract-era anchor: that date is already past.
-const BATCH_ISSUANCE_LIMITS_MAINNET_TIME = 9999999999;
+// ticker-intern tightenings that ship with them (see the registration below).
+//
+// ARMED 2026-08-14 (operator), pre-launch, at 1786838400 = 2026-08-16T00:00:00Z.
+//
+// It was parked on the house UNARMED sentinel (9999999999) while the public-repo release
+// was prepared; the operator lifted that on 2026-08-14 on the grounds that the platform is
+// pre-launch with no live fleet to coordinate, so the set does not need a ceremonial flag
+// day. What it DOES still need is the property this file has always enforced, and the
+// instant above satisfies both halves of it:
+//
+//   - FUTURE, never retroactive. This entry carries BOTH a loosening (the exemption) and
+//     several TIGHTENINGS (the cap, the fee ledger), so a backdated boundary forks a
+//     from-genesis replay in BOTH directions at once: the replay would reject batches the
+//     chain accepted AND accept batches it rejected. That hazard is independent of how
+//     busy the chain is, which is why "pre-launch" does not license a past instant.
+//   - At or after BATCH_SUBACTION_NORMALIZATION (mainnet 1786060800, 2026-08-07), because
+//     classification reads the TICK out of NORMALIZED sub-command params. The assertion in
+//     test/unit/batchIssuanceLimitsGate.test.js is what actually holds that ordering.
+//
+// OPERATIONAL DEPENDENCY, and it is the real one: every mainnet indexer must be running
+// this code BEFORE the instant. Per XC-792 the mainnet indexers deliberately do not track
+// master, so this does not reach them by `xchain-node update` on its own - it is an
+// explicit deploy. A node still on the pre-arm code at 2026-08-16T00:00:00Z applies the
+// old rules past the boundary and forks from the ones that did.
+const BATCH_ISSUANCE_LIMITS_MAINNET_TIME = 1786838400;
 
 // Consensus protocol version, COMPILED IN.
 //
@@ -1149,7 +1164,8 @@ class ProtocolChanges {
         // params[1] is not the TICK. Nothing in isEnabled() enforces the ordering, so
         // test/unit/batchIssuanceLimitsGate.test.js asserts it per network.
         //
-        // MAINNET IS UNARMED (see BATCH_ISSUANCE_LIMITS_MAINNET_TIME above);
+        // MAINNET IS ARMED at 2026-08-16T00:00:00Z (see BATCH_ISSUANCE_LIMITS_MAINNET_TIME
+        // above for the instant and the deploy dependency it carries);
         // testnet/regtest activate at genesis (all zeros).
         this.addChange('BATCH_ISSUANCE_LIMITS', '2.0.0',BATCH_ISSUANCE_LIMITS_MAINNET_TIME,0,0,0,0,0);
 
