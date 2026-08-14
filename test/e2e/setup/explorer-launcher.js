@@ -25,6 +25,7 @@
 const http    = require('http');
 const express = require('express');
 const cors    = require('cors');
+const { parseCorsOrigin } = require('../../../src/corsOrigin.js');
 const path    = require('path');
 
 // Set package info before requiring explorer (it reads process.env.npm_package_*)
@@ -84,7 +85,7 @@ function buildTestConfigInfo() {
 async function startExplorer() {
     const app = express();
     app.use(express.json());
-    app.use(cors({ origin: '*', methods: ['GET', 'POST'] }));
+    app.use(cors({ origin: parseCorsOrigin(process.env.CORS_ORIGIN || 'http://localhost'), methods: ['GET', 'POST'] }));
 
     const testConfigInfo = buildTestConfigInfo();
     const explorer = new XChainExplorer(app, testConfigInfo);

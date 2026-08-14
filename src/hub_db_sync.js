@@ -463,6 +463,15 @@ class HubDbSync {
     _adoptHubWatermarkInterval(watermarkIntervalMs) {
         let ms = Number(watermarkIntervalMs);
         if (!Number.isFinite(ms) || ms <= 0) return false;
+        // Clamp both ends: the value arrives from the hub over the wire, so an
+        // arbitrarily small interval would drive this client's watchdog timer
+        // into a busy loop, and an arbitrarily large one would disable the
+        // stall detection the watchdog exists to provide. The bounds sit far
+        // outside any real heartbeat cadence, so a legitimate hub is never
+        // clamped.
+        const MIN_WATERMARK_INTERVAL_MS = 1000;
+        const MAX_WATERMARK_INTERVAL_MS = 300000;
+        ms = Math.min(Math.max(ms, MIN_WATERMARK_INTERVAL_MS), MAX_WATERMARK_INTERVAL_MS);
         this.watermarkIntervalMs = ms;
         this.watermarkTimeoutMs = ms * 3;
         return true;

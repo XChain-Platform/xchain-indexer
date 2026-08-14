@@ -105,7 +105,9 @@ function mutatedDataString() {
             const parts = str.split('|');
             switch (mut) {
                 case 'duplicate_pipe':
-                    return str.replace('|', '||');
+                    // Global flag: a bare '|' replace only touches the first pipe,
+                    // leaving every later field separator unmutated.
+                    return str.replace(/\|/g, '||');
                 case 'remove_field':
                     if (parts.length > 2) parts.splice(2, 1);
                     return parts.join('|');
