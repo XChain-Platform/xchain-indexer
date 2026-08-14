@@ -180,7 +180,19 @@ class ProtocolChanges {
         // removes the chance of the two diverging if the env is ever mutated after boot.
         this.network = this.config.NETWORK;
 
-        this.changes = {};
+        // PROTOTYPE-FREE, and that is a consensus property rather than tidiness. Every read of
+        // this map is a bare `this.changes[name]` where `name` is an UNTRUSTED ACTION name off
+        // the wire, so on a plain object `constructor`, `toString`, `valueOf`, `hasOwnProperty`
+        // and `__proto__` all resolve to an inherited member. That member is truthy, so
+        // isEnabled() takes its `if(change)` branch, every gate field is undefined, every
+        // numeric comparison is NaN (so no `>` is ever true), and `enabled` stays TRUE at any
+        // block on any network. A BATCH sub-command named `constructor` therefore PASSED the
+        // activation scan that an unregistered name fails - the same scan the decoder's
+        // whole-batch-rejection mirror relies on. isDefined() answered true for all five, and
+        // addChange() would also have refused a legitimately-named change as a duplicate.
+        // Object.create(null) closes all of it at the source instead of at each read site, so a
+        // future reader cannot reintroduce it by adding a sixth lookup.
+        this.changes = Object.create(null);
         this.parseChanges();
     }
 
