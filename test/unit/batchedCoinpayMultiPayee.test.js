@@ -326,15 +326,19 @@ describe('batched COINPAY resolves its own payment output @regression @tier1', f
 
     describe('ledger shape', function () {
 
-        it('a FEE_PROBE resolves no output and mutates nothing', async function () {
+        // Spec row 30 SPLIT the probe contract this case used to pin: a probe now READS
+        // the output set (it is inside the same batch) and writes nothing. The old
+        // assertion (payee B skipping as a destination mismatch) was the false negative,
+        // and the full case lives in feeProbeBatchedCoinpayParity.test.js.
+        it('a FEE_PROBE reads its own payee\'s output and mutates nothing', async function () {
             let { coinpay, calls } = makeCoinpay();
             let data = batchRow({ BATCH_VALUE_LEDGER: seedLedger(), FEE_PROBE: true });
 
             await sub(coinpay, data, 900);
             await sub(coinpay, data, 900);
-            await sub(coinpay, data, 901);   // the read-only path keeps the legacy skip
+            await sub(coinpay, data, 901);   // resolved from TX_OUTPUTS, as consensus does
 
-            assert.deepStrictEqual(settled(calls), [900, 900]);
+            assert.deepStrictEqual(settled(calls), [900, 900, 901]);
             let ledger = data['BATCH_VALUE_LEDGER'];
             assert.strictEqual(ledger.coinAmountConsumed, '0',
                 'a read-only surface must never mutate consensus state');

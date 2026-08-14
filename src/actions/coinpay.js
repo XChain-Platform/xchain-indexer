@@ -107,10 +107,24 @@ class Coinpay {
         // pre-existing behavior byte for byte, which is what a non-BATCH transaction and a
         // pre-flag-day BATCH must still see.
         //
-        // data['FEE_PROBE'] marks the read-only dry-run surfaces; a probe must neither
-        // read nor write the ledger.
-        let ledger = (!data['FEE_PROBE'] && data['BATCH_VALUE_LEDGER'] && typeof data['BATCH_VALUE_LEDGER'] === 'object')
+        // data['FEE_PROBE'] marks the read-only dry-run surfaces. TWO capabilities used to
+        // hang off one variable here, and conflating them made a probe disagree with the
+        // chain (spec row 30):
+        //   batchLedger - "am I inside a flagged batch", answered by the key's PRESENCE.
+        //                 A probe is inside one too, so this is true for a probe.
+        //   ledger      - "may I draw on the tally", answered by !FEE_PROBE. A read-only
+        //                 surface must never mutate consensus state, so this is the one
+        //                 capability a probe is denied.
+        // Denying a probe BOTH left it resolving no per-payee output, so it answered
+        // `destination mismatch` for every payee the collapsed row does not name: a false
+        // negative on a transaction the chain accepts, the same class the _primaryVerdict
+        // snapshot in actions.js fixes for ORDER. A probe now reads the output set and
+        // tallies ZERO, so each sub-command is quoted against the payment it will really
+        // draw on. FEE_PROBE is false for every decoded transaction (actions.js sources it
+        // from the synthetic tx only), so nothing below this line can move a consensus value.
+        let batchLedger = (data['BATCH_VALUE_LEDGER'] && typeof data['BATCH_VALUE_LEDGER'] === 'object')
                             ? data['BATCH_VALUE_LEDGER'] : null;
+        let ledger      = data['FEE_PROBE'] ? null : batchLedger;
 
         let payee = obligationInfo['PAYEE_ADDRESS'];
 
@@ -135,8 +149,10 @@ class Coinpay {
         //
         // Gated by the ledger's presence, which is this spec's flag AND the in-a-batch
         // marker. Off the batch path payeeOutput stays null and the destination check below
-        // is the unchanged single-output test.
-        let payeeOutput = ledger ? this.findPaymentOutput(data['TX_OUTPUTS'], payee) : null;
+        // is the unchanged single-output test. On the READ capability, not the write one:
+        // resolving which output pays this payee is a question about the transaction, and a
+        // probe that cannot ask it quotes a mismatch the chain does not report.
+        let payeeOutput = batchLedger ? this.findPaymentOutput(data['TX_OUTPUTS'], payee) : null;
 
         if(!payeeOutput && data['COIN_DESTINATION'] != payee){
             console.log("\t COINPAY (skip): destination mismatch tx=" + data['COIN_DESTINATION'] + " payee=" + payee);
@@ -172,7 +188,13 @@ class Coinpay {
         let consumed   = settledOutput
                             ? (payeeTally ? (payeeTally[payee] || '0') : '0')
                             : (ledger ? ledger['coinAmountConsumed'] : '0');
-        let available  = ledger ? this.util.bcsub(paidAmount, consumed, 8) : data['COIN_AMOUNT'];
+        // A probe holds the read capability and no write one, so `consumed` is '0' on both
+        // branches above and this reduces to the payee's OWN output undrained. That is the
+        // point: quoting against data['COIN_AMOUNT'] would price this obligation off the
+        // lowest-vout output, which belongs to a DIFFERENT payee. The quote is deliberately
+        // optimistic about siblings (nothing tracks what an earlier sub-command of the same
+        // probe would have spent), exactly as validateNativeCoinFee's probe path already is.
+        let available  = batchLedger ? this.util.bcsub(paidAmount, consumed, 8) : data['COIN_AMOUNT'];
 
         // A later sub-command that the REMAINING payment cannot fully cover takes the
         // existing short-payment path: it skips, settles nothing, and consumes nothing.
