@@ -87,6 +87,40 @@ class Batch {
         // the only bound on the O(N) scans below, which is why it is checked first.
         this.commandLimit = 250;
 
+        // Weighted cost budget (BATCH_COST_WEIGHTING). The cap above counts sub-commands and
+        // charges every one of them 1, which is a proxy for indexer work and a bad one in both
+        // directions: EXECUTE runs VM code and is capped at nothing, while 250 minimal SENDs
+        // cost far less than 10 DEPLOYs and the count cannot say so. At/after the flag the
+        // batch is bounded by the SUM of per-sub-command WEIGHTS instead.
+        //
+        // THE BUDGET IS DELIBERATELY THE SAME NUMBER AS THE COUNT CAP, and that is the
+        // compatibility property rather than a coincidence: with the default weight at 1, the
+        // sum over an ordinary batch IS its command count, so every batch carrying no weighted
+        // action is admitted or refused exactly as it is today, including the error string. The
+        // rule only bites where the flat cap was already wrong. Do not "tidy" these two into one
+        // constant: they are equal today and they are separately meaningful, and collapsing them
+        // would silently move the pre-flag cap if the budget is ever retuned.
+        this.weightBudget = 250;
+
+        // Per-ACTION cost weights (BATCH_COST_WEIGHTING). An action absent from this table
+        // weighs the DEFAULT of 1, which is every ordinary action: one ACTION_INDEX, its
+        // mappings and at most one invalid-record row, roughly constant whatever the action.
+        // ISSUE and its dotted children are deliberately in that class - a child issuance is one
+        // row like any other - which is what stops a weighting from repealing bulk child
+        // issuance on its first day.
+        //
+        // EMPTY at this flag's introduction, and that is the whole point of landing it empty:
+        // with every weight at the default, the budget check is ARITHMETICALLY IDENTICAL to the
+        // count check it replaces, so the machinery can be proven a no-op before any weight is
+        // assigned to it. Entries arrive one class at a time, each separately measurable.
+        //
+        // Keys are canonical post-normalization ACTION names and are matched CASE-SENSITIVELY,
+        // exactly like the sibling scans in this file. That is deliberate: the activation scan
+        // below rejects a mis-cased action as 'invalid: ACTION (unknown)', and upper-casing here
+        // would let a weighted spelling reach the budget check first and change which consensus
+        // string wins.
+        this.commandWeights = {};
+
         // Counting bucket for child (dotted-TICK) ISSUE sub-commands. Deliberately not a
         // legal ACTION name, so it can never collide with an entry in actionLimits and
         // child issuance stays uncapped no matter what actions are added later.
@@ -387,6 +421,60 @@ class Batch {
         return !this.util.hasBalance(balances, tickId, cheapest);
     }
 
+    // Cost weight of ONE sub-command (BATCH_COST_WEIGHTING / R7).
+    //
+    // THE INVARIANT, and every future weight class must preserve it: the return is an integer
+    // >= 1. It is what makes the cheap count pre-filter in parse() a sound bound on this scan
+    // (count > budget implies weight sum > budget, so an oversized batch is refused without
+    // weighing anything), and a weight of 0 would let a batch carry unbounded sub-commands of
+    // that action for free, which is the exact failure the budget exists to prevent.
+    //
+    // `action` arrives already alias-normalized by the caller, matching the dispatch loop.
+    // `data` and `normalize` are unused by the default and table paths and are threaded through
+    // for the fan-out classes (AIRDROP, DIVIDEND), whose weight is 1 + recipients and whose
+    // recipient count is NOT on the wire: AIRDROP carries a LIST_ACTION_INDEX and DIVIDEND
+    // carries only a TICK, so both need an as-of read. Those reads must be as-of
+    // (BLOCK_INDEX, ACTION_INDEX) and resolve-only, the discipline probeTokenInfo and
+    // probeTickerId already set in this file, or two nodes will weigh the same batch
+    // differently and fork.
+    //
+    // Async from the outset for that reason: adding the first fan-out class must not change
+    // this signature, because the signature is what parse() and every other weight class are
+    // written against.
+    //
+    // Never throws. A weight crash here would halt block processing, and the safe fallback is
+    // the default 1, which is the pre-flag behaviour for that sub-command.
+    async subCommandWeight(action, command, data, normalize){
+        try {
+            let weight = this.commandWeights[action];
+            if(weight === undefined)
+                return 1;
+            return (Number.isInteger(weight) && weight >= 1) ? weight : 1;
+        } catch(e) {
+            return 1;
+        }
+    }
+
+    // Total cost weight of a BATCH (BATCH_COST_WEIGHTING / R7).
+    //
+    // Plain integer arithmetic, not the bc* helpers: these are small counts, not token amounts,
+    // and the surrounding cap logic has always compared counts with `>`. The loop is bounded by
+    // the count pre-filter in parse(), which is why that filter runs first.
+    //
+    // Actions are read and alias-normalized exactly as the two scans below do it, off the raw
+    // sub-command string, so the weight scan and the dispatch loop can never disagree about
+    // what a sub-command IS.
+    async batchWeight(commands, data, normalize){
+        let total = 0;
+        for(let command of commands){
+            let action = String(command).split('|')[0];
+            if(normalize)
+                action = this.normalizeSubAction(action);
+            total += await this.subCommandWeight(action, command, data, normalize);
+        }
+        return total;
+    }
+
     async parse(params, data, error){
         // BATCH_SUBACTION_NORMALIZATION flag-day: when active, sub-actions get the same
         // alias rewrite + legacy VERSION-0 injection as top-level actions. Resolved once
@@ -399,6 +487,12 @@ class Batch {
         // BATCH_SUBACTION_NORMALIZATION (asserted in test/unit/batchIssuanceLimitsGate),
         // so wherever this is true, sub-command params are already normalized.
         let limitsActive = await this.protocolChanges.isEnabled('BATCH_ISSUANCE_LIMITS', data['BLOCK_INDEX']);
+        // BATCH_COST_WEIGHTING flag-day: the flat command cap becomes a budget over per-action
+        // cost weights. Resolved once per BATCH like the two above, so every gated site sees ONE
+        // verdict. Registered at or after BATCH_ISSUANCE_LIMITS (asserted in
+        // test/unit/batchCostWeightingGate.test.js), so wherever this is true the classification
+        // and normalization the weight scan reads from are already in force.
+        let weightsActive = await this.protocolChanges.isEnabled('BATCH_COST_WEIGHTING', data['BLOCK_INDEX']);
         // Clone before mutation: this raw copy is what gets stored in the batches table.
         let batch = structuredClone(data);
 
@@ -442,8 +536,25 @@ class Batch {
         // strip, EMPTY elements included (an empty element already whole-batch-rejects
         // via the activation scan, so charging it a slot is consistent). Over-limit
         // takes the existing whole-batch shape: one invalid record, no sub-command runs.
-        if(!error && limitsActive && commands.length > this.commandLimit)
-            error = 'invalid: COMMAND (limit)';
+        //
+        // BATCH_COST_WEIGHTING replaces the count with a WEIGHT BUDGET in this same position,
+        // for the same reason it had to be first, and reports the SAME string: the error is
+        // still "this batch is too much work", only measured better.
+        //
+        // The count test survives as a PRE-FILTER rather than being deleted, and it is load
+        // bearing twice over. Every weight is >= 1 (see subCommandWeight), so a batch whose raw
+        // count already exceeds the budget cannot possibly weigh in under it: rejecting it here
+        // is exact, not conservative. And weighing is not free - the fan-out classes need an
+        // as-of read per sub-command - so without this filter the envelope lane's ~35,000
+        // sub-commands would each buy a database read BEFORE anything bounded them, which is
+        // the denial-of-service the budget exists to close rather than open.
+        if(!error && limitsActive){
+            if(commands.length > (weightsActive ? this.weightBudget : this.commandLimit)){
+                error = 'invalid: COMMAND (limit)';
+            } else if(weightsActive && await this.batchWeight(commands, data, normalize) > this.weightBudget){
+                error = 'invalid: COMMAND (limit)';
+            }
+        }
 
         for(let command of commands){
             let action = String(command).split('|')[0];
