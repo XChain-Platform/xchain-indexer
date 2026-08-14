@@ -121,6 +121,33 @@ class Batch {
         // string wins.
         this.commandWeights = {};
 
+        // FAN-OUT actions (operator decision 2026-08-14). AIRDROP and DIVIDEND write a row PER
+        // RECIPIENT, so one sub-command really is worth many. They take a FLAT weight rather
+        // than the spec's original '1 + recipients', and the reason is that the exact recipient
+        // count is not knowable here at any acceptable price:
+        //
+        //   - it is not on the wire. AIRDROP carries a LIST_ACTION_INDEX, not a list, and
+        //     DIVIDEND carries only a TICK whose holders are the recipients;
+        //   - the number that matters is the FILTERED count, not the raw one. airdrop.js
+        //     resolves the list and then filters it through the token's ALLOW_LIST and
+        //     BLOCK_LIST; dividend.js fetches every holder, filters the same two ways, and then
+        //     drops holders whose share rounds to zero at the dividend token's decimals;
+        //   - so an exact count means re-running each handler's own resolution inside this
+        //     pre-check. That duplicates consensus logic into a second place it can drift from,
+        //     and it performs precisely the O(commands x recipients) work the budget exists to
+        //     prevent, before the batch is even known to be valid.
+        //
+        // A flat weight keeps the weight scan free of database reads, which is what lets it stay
+        // cheap enough to run FIRST, ahead of every other check.
+        //
+        // THE NUMBER IS A DELIBERATE STARTING POINT, NOT A MEASUREMENT, and it is chosen HIGH
+        // for the asymmetry this file already applies to DEPLOY: for a weight the directions are
+        // reversed from a limit, so LOWERING one later is a loosening and cheap, while RAISING
+        // one later is a tightening that risks forking a replay. 25 admits 10 fan-out
+        // sub-commands per batch. Retune it before the mainnet instant is armed, never after.
+        this.commandWeights['AIRDROP']  = 25;
+        this.commandWeights['DIVIDEND'] = 25;
+
         // Counting bucket for child (dotted-TICK) ISSUE sub-commands. Deliberately not a
         // legal ACTION name, so it can never collide with an entry in actionLimits and
         // child issuance stays uncapped no matter what actions are added later.

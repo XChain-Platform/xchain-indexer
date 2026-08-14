@@ -1498,6 +1498,76 @@ describe('Batch @regression @tier3', function () {
             });
         });
 
+        describe('fan-out actions carry a flat weight (operator decision 2026-08-14)', function () {
+
+            // AIRDROP and DIVIDEND write a row PER RECIPIENT. They are weighed FLAT rather than
+            // per-recipient because the filtered recipient count cannot be obtained here without
+            // re-running each handler's own resolution, which would both duplicate consensus
+            // logic and perform the very work the budget exists to bound. See the table's own
+            // comment in batch.js for the full reasoning.
+
+            function airdrops(n, name) {
+                const out = [];
+                for (let i = 0; i < n; i++) out.push((name || 'AIRDROP') + '|0|TEST|10|' + (i + 1) + '|memo');
+                return out;
+            }
+
+            it('10 AIRDROPs exactly fill the budget at weight 25', async function () {
+                const data = await run(true, true, airdrops(10));
+
+                assert.strictEqual(data['STATUS'], 'valid');
+                assert.strictEqual(actionsCtx.processAction.callCount, 10);
+            });
+
+            it('11 AIRDROPs exceed it, as one record rather than eleven', async function () {
+                const data = await run(true, true, airdrops(11));
+
+                assert.strictEqual(data['STATUS'], 'invalid: COMMAND (limit)');
+                assert.strictEqual(actionsCtx.processAction.callCount, 0);
+                assert.strictEqual(indexer.indexerDb.createBatch.callCount, 1);
+            });
+
+            it('DIVIDEND is weighed the same', async function () {
+                const commands = [];
+                for (let i = 0; i < 11; i++) commands.push('DIVIDEND|0|TEST|PAYT|1|memo');
+                const data = await run(true, true, commands);
+
+                assert.strictEqual(data['STATUS'], 'invalid: COMMAND (limit)');
+            });
+
+            it('one fan-out plus ordinary commands is bounded by the SUM, not by either alone', async function () {
+                // 25 + 226 = 251. Neither the single AIRDROP nor the 226 SENDs breaches
+                // anything on its own, which is the entire point of a budget.
+                const data = await run(true, true, airdrops(1).concat(sends(226)));
+
+                assert.strictEqual(data['STATUS'], 'invalid: COMMAND (limit)');
+            });
+
+            it('one fan-out plus 225 ordinary commands still fits', async function () {
+                const data = await run(true, true, airdrops(1).concat(sends(225)));
+
+                assert.strictEqual(data['STATUS'], 'valid');
+            });
+
+            it('the DROP alias cannot dodge the weight', async function () {
+                // normalizeSubAction rewrites DROP to AIRDROP, and the weight scan must read the
+                // canonical name. If it read the raw one, an alias would weigh the default 1 and
+                // buy 250 fan-outs in a batch for the price of 250 sends.
+                const data = await run(true, true, airdrops(11, 'DROP'));
+
+                assert.strictEqual(data['STATUS'], 'invalid: COMMAND (limit)');
+            });
+
+            it('below the weighting flag the same fan-out batch is unaffected', async function () {
+                // The pre-flag verdict has to be reproducible byte for byte by a replay, and 11
+                // AIRDROPs were never anywhere near the flat 250-command cap.
+                const data = await run(true, false, airdrops(11));
+
+                assert.strictEqual(data['STATUS'], 'valid');
+                assert.strictEqual(actionsCtx.processAction.callCount, 11);
+            });
+        });
+
         describe('the weight >= 1 invariant, which the count pre-filter depends on', function () {
 
             it('an action absent from the table weighs the default 1', async function () {
