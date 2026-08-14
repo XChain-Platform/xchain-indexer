@@ -99,6 +99,44 @@ const BATCH_ROOT_SUB_INDEX_MAINNET_TIME = 9999999999;
 // old rules past the boundary and forks from the ones that did.
 const BATCH_ISSUANCE_LIMITS_MAINNET_TIME = 1786838400;
 
+// Mainnet arm for BATCH_COST_WEIGHTING, the weighted per-BATCH cost budget that replaces
+// the flat 250-command cap registered above (see claude/specs/batch-cost-weighting.md).
+//
+// UNARMED, on the house sentinel (9999999999, year 2286), and deliberately so.
+//
+// WHY IT IS A SECOND FLAG RATHER THAN A WIDENING OF THE ONE ABOVE. That one arms at
+// 2026-08-16T00:00:00Z, and folding this in would mean shipping a consensus cap-model
+// replacement, its client mirrors, its prose and its replay evidence under that clock.
+// The operator established on 2026-08-14 that a pre-launch flag day is cheap - arming the
+// set above cost one deploy cycle - so a second boundary is a far better price than a
+// rushed one. Once the instant above passes, this entry is what makes re-expressing the
+// cap possible at all without rewriting armed history.
+//
+// WHAT IT GATES. The flat count check becomes a WEIGHT BUDGET: each sub-command
+// contributes a weight and the batch caps their SUM. The budget stays 250 and the default
+// weight is 1, so every batch carrying no VM and no fan-out action is admitted or refused
+// EXACTLY as it is today, byte for byte - that compatibility is the design's own proof and
+// is what acceptance test A1 measures over a real corpus. The rule only bites where the
+// flat cap was already wrong: DEPLOY (one consumes the budget), EXECUTE/XEXEC (VM compute,
+// capped at nothing today) and AIRDROP/DIVIDEND (one sub-command writes a row PER
+// RECIPIENT).
+//
+// Gated because it moves verdicts in BOTH directions, which is also why the instant may
+// never be backdated: batches that were valid become invalid (a second DEPLOY, N EXECUTEs,
+// a wide fan-out) and the weight arithmetic changes which sub-commands run at all, both of
+// which change the actions/ledger state hashed into the checkpoint preimage. Keyed on
+// block TIME like every sibling BATCH gate, for the same reason: BATCH runs on BTC, LTC and
+// DOGE, whose heights diverge by millions of blocks, so no single height names one cutover
+// across all three but a single timestamp does.
+//
+// This entry MUST activate at or after BATCH_ISSUANCE_LIMITS above. The budget check
+// REPLACES that entry's command cap in the same position (first, so it still bounds the
+// O(N) scans behind it) and reuses its classification of sub-commands; a window where this
+// is live and that is not would run a weight scan over un-normalized params AND would leave
+// the batch with no bound at all in the gap. Nothing in isEnabled() enforces the ordering,
+// so test/unit/batchCostWeightingGate.test.js asserts it per network.
+const BATCH_COST_WEIGHTING_MAINNET_TIME = 9999999999;
+
 // Consensus protocol version, COMPILED IN.
 //
 // isEnabled() compares this against the version registered on every protocol
@@ -1169,6 +1207,18 @@ class ProtocolChanges {
         // testnet/regtest activate at genesis (all zeros).
         this.addChange('BATCH_ISSUANCE_LIMITS', '2.0.0',BATCH_ISSUANCE_LIMITS_MAINNET_TIME,0,0,0,0,0);
 
+        // Weighted per-BATCH cost budget (BATCH_COST_WEIGHTING). Replaces the flat
+        // 250-command cap registered immediately above with a budget over per-action
+        // COST WEIGHTS, so the rule bounds worst-case indexer work directly instead of
+        // by proxy. Budget 250, default weight 1: a batch with no VM and no fan-out
+        // sub-command is decided exactly as it is today.
+        //
+        // MAINNET IS UNARMED (see BATCH_COST_WEIGHTING_MAINNET_TIME above for the
+        // sentinel and for why this is a second flag day rather than a widening of the
+        // entry above); testnet/regtest activate at genesis (all zeros), so drills and
+        // suites run the post-flag-day rules.
+        this.addChange('BATCH_COST_WEIGHTING', '2.0.0',BATCH_COST_WEIGHTING_MAINNET_TIME,0,0,0,0,0);
+
         // Numeric legacy-fee db_hits accumulation. The legacy
         // (non-UNIFIED_FEES) transaction-fee model in dividend.js / callback.js / sweep.js
         // accumulates a db_hits count and prices it via getTransactionFee. The original
@@ -1506,3 +1556,4 @@ module.exports.BATCH_ROOT_SUB_INDEX_MAINNET_TIME = BATCH_ROOT_SUB_INDEX_MAINNET_
 // reason: the suite asserts the set is still waiting on the operator's flag day rather than
 // armed at a guessed instant, and that it never precedes BATCH_SUBACTION_NORMALIZATION.
 module.exports.BATCH_ISSUANCE_LIMITS_MAINNET_TIME = BATCH_ISSUANCE_LIMITS_MAINNET_TIME;
+module.exports.BATCH_COST_WEIGHTING_MAINNET_TIME = BATCH_COST_WEIGHTING_MAINNET_TIME;
