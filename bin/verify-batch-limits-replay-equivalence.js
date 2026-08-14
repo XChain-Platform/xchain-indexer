@@ -137,14 +137,17 @@
  *
  *   - `oracleFeeConsumed` is keyed BY ORACLE ADDRESS so one exhausted output cannot
  *     invalidate a sub-command paying a DIFFERENT oracle. Witnessing that positively
- *     needs one transaction carrying an adequate output for EACH of two oracles, and
- *     test/integration/setup/indexer-launcher.js does not apply
+ *     needs one transaction carrying an adequate output for EACH of two oracles.
+ *     That was IMPOSSIBLE here until spec row 49: indexer-launcher.js did not apply
  *     output_fanout.collapseOutputFanout the way XChainIndexer.start does, so a
- *     data-bearing transaction with two outputs would be executed once PER OUTPUT
- *     here - a harness artifact, not product behavior. Shape 12 pins the next best
- *     thing without a second output: the unpaid oracle's sub-command fails with the
- *     MISSING-output string on every side, while only the flag-ON side produces the
- *     tally's INSUFFICIENT string, so the two verdicts cannot be confused.
+ *     data-bearing transaction with two outputs executed once PER OUTPUT, a harness
+ *     artifact rather than product behavior. The launcher now collapses like
+ *     production and decoder-seeder.js can emit a full output set, so the positive
+ *     witness is CONSTRUCTIBLE and simply is not built yet; do not read the wording
+ *     below as a standing impossibility. Shape 12 still pins the weaker thing: the
+ *     unpaid oracle's sub-command fails with the MISSING-output string on every
+ *     side, while only the flag-ON side produces the tally's INSUFFICIENT string,
+ *     so the two verdicts cannot be confused.
  *
  * PRICE v1 oracle rows are seeded directly into `oracle_prices`, not published as
  * PRICE v1 actions in the corpus, and that is the faithful shape rather than a
@@ -189,6 +192,17 @@ const SIDE_MARK  = '###A7-SIDE###'; // child -> parent report line
 // ---------------------------------------------------------------------------
 // CHILD MODE: index the shared decoder corpus with ONE side's code.
 // ---------------------------------------------------------------------------
+/* Declared BEFORE main() runs, not beside check() further down.
+ *
+ * main() is invoked synchronously below, and its prefix through the harness-parity
+ * loop is synchronous too, so a `let` sited next to check() was still in its temporal
+ * dead zone when the first FAILING check ran. The failure path therefore died with a
+ * ReferenceError instead of printing its verdict and exiting 1. Passing checks never
+ * touch the counter, which is exactly why this survived every green run: the only code
+ * path that could reveal it was the one that had never been taken.
+ */
+let failures = 0;
+
 if (process.argv.includes('--side')) {
     runSide().catch(e => { console.error('SIDE ERROR: ' + (e && e.stack || e)); process.exit(1); });
 } else {
@@ -244,7 +258,6 @@ async function runSide() {
 // PARENT
 // ---------------------------------------------------------------------------
 
-let failures = 0;
 function check(ok, label, detail) {
     console.log((ok ? '  PASS  ' : '  FAIL  ') + label + (detail ? '\n          ' + detail : ''));
     if (!ok) failures++;
@@ -722,16 +735,44 @@ async function main() {
     }
     info('old tree at ' + oldRoot);
 
-    // The two sides may differ ONLY in src. If the harness moved, a diff would
-    // confound harness with product and this tool has nothing to say.
-    const HARNESS = [
+    // The two sides may differ ONLY in src. Asserting the harness happened to be
+    // identical made that invariant hostage to the harness never being fixed: when
+    // indexer-launcher.js gained production's output-fanout collapse (spec row 49),
+    // this check went red on a CORRECT change and the tool refused to run at all.
+    //
+    // So the test scaffolding is now OVERLAID from the working tree onto the old
+    // tree rather than compared to it. That makes "one harness, two src trees" true
+    // by construction instead of true by luck, which is the property the comparison
+    // actually needs. It is also what lets the old side benefit from a harness FIX:
+    // replaying old product code through a harness that mis-modelled execution count
+    // would have measured the harness, not the code.
+    //
+    // Only pure test scaffolding is overlaid. package.json stays a comparison,
+    // because overlaying it would hand the old tree a dependency set its src was
+    // never installed against, and a mismatch there is a real reason to stop.
+    const HARNESS_OVERLAY = [
         'test/integration/setup/indexer-launcher.js',
         'test/integration/setup/db-connection.js',
         'test/integration/setup/equivalence.js',
-        'package.json',
+        'test/integration/setup/decoder-seeder.js',
     ];
+    const HARNESS_ASSERT = ['package.json'];
     let harnessOk = true;
-    for (const rel of HARNESS) {
+    for (const rel of HARNESS_OVERLAY) {
+        const a = path.join(REPO, rel), b = path.join(oldRoot, rel);
+        if (!fs.existsSync(a)) {
+            harnessOk = false;
+            check(false, 'harness file present to overlay: ' + rel, 'missing from the working tree');
+            continue;
+        }
+        fs.mkdirSync(path.dirname(b), { recursive: true });
+        fs.copyFileSync(a, b);
+        const same = sha256File(a) === sha256File(b);
+        if (!same) harnessOk = false;
+        check(same, 'harness overlaid onto the old tree: ' + rel,
+            same ? '' : 'copy did not take; the two sides would run different harnesses');
+    }
+    for (const rel of HARNESS_ASSERT) {
         const a = path.join(REPO, rel), b = path.join(oldRoot, rel);
         const same = fs.existsSync(b) && sha256File(a) === sha256File(b);
         if (!same) harnessOk = false;
@@ -983,9 +1024,9 @@ async function main() {
     info('  path to measure it on.');
     info('COVERED BUT NOT IN BOTH DIRECTIONS: oracleFeeConsumed is keyed BY ORACLE ADDRESS, and');
     info('  the POSITIVE witness for that keying (one transaction paying two different oracles');
-    info('  enough for both) needs a two-output transaction, which this harness cannot carry:');
-    info('  indexer-launcher.js does not apply collapseOutputFanout the way XChainIndexer.start');
-    info('  does, so a data-bearing transaction with two outputs would run once per output.');
+    info('  enough for both) needs a two-output transaction. That is now CONSTRUCTIBLE and');
+    info('  simply unbuilt: the launcher applies collapseOutputFanout like XChainIndexer.start');
+    info('  and the seeder can emit a full output set (spec row 49). It is no longer blocked.');
     info('  What IS pinned: an unpaid oracle\'s sub-command reports the MISSING-output verdict');
     info('  identically on every side, so the paid oracle\'s exhausted pool is not leaking into');
     info('  it as a blanket rejection.');
