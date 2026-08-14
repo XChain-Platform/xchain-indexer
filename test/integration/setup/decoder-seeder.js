@@ -92,6 +92,12 @@ class DecoderSeeder {
      *   - data: pipe-delimited ACTION string (required)
      *   - txHash: override tx hash (default: auto-generated)
      *   - vout: override vout index (default: 0)
+     *   - outputs: full native-coin output set as [{ destination, amount, vout }],
+     *     replacing the single-output shape above. A real transaction may pay several
+     *     addresses (a fee destination plus a dispenser, two oracles, ...), which the
+     *     decoder stores as several transaction_outputs rows; getDecoderBlockData then
+     *     emits one row per output. Without this, no scenario could reach the
+     *     production output-fanout collapse at all.
      */
     async seedBlock(blockIndex, blockTime, txs = []) {
         await this.query(
@@ -120,7 +126,21 @@ class DecoderSeeder {
                 [txIndex, txHashId, blockIndex, sourceId, destId, amount, tx.data]
             );
 
-            if (tx.destination || vout > 0) {
+            if (Array.isArray(tx.outputs)) {
+                // Explicit multi-output shape: the caller owns the whole output set, so the
+                // legacy single-output insert below is skipped rather than added to.
+                for (let i = 0; i < tx.outputs.length; i++) {
+                    const out = tx.outputs[i];
+                    const outVout = out.vout !== undefined ? out.vout : i;
+                    await this.query(
+                        `INSERT INTO transaction_outputs
+                            (tx_index, vout, destination_id, amount)
+                         VALUES (?, ?, ?, ?)`,
+                        [txIndex, outVout, await this.getOrCreateAddress(out.destination),
+                         out.amount || '0']
+                    );
+                }
+            } else if (tx.destination || vout > 0) {
                 const outputDestId = await this.getOrCreateAddress(tx.destination);
                 await this.query(
                     `INSERT INTO transaction_outputs

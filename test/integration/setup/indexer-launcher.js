@@ -36,6 +36,9 @@ process.env.npm_package_version = process.env.npm_package_version
 process.env.npm_package_name = process.env.npm_package_name || 'xchain-indexer';
 
 const XChainIndexer = require('../../../src/XChainIndexer.js');
+// Same module the production block loop uses, so the harness cannot drift from
+// the collapse rule it is meant to model (see processBlocks below).
+const { collapseOutputFanout } = require('../../../src/output_fanout.js');
 
 /**
  * Create a configured XChainIndexer instance pointing at the test databases.
@@ -151,7 +154,18 @@ async function processBlocks(indexer) {
            lastIndexerBlock < lastDecoderBlock) {
         lastIndexerBlock++;
 
-        const blockTransactions = await indexer.decoderDb.getDecoderBlockData(lastIndexerBlock);
+        let blockTransactions = await indexer.decoderDb.getDecoderBlockData(lastIndexerBlock);
+        // Mirror production (XChainIndexer.start, the collapseOutputFanout call beside
+        // getDecoderBlockData): getDecoderBlockData emits ONE row per stored native-coin
+        // output, so without this collapse a data-bearing non-COINPAY transaction paying
+        // more than one address is executed once PER OUTPUT here while the fleet executes
+        // it once. A harness that disagrees with production about how many times a
+        // transaction runs can certify a doubled ledger effect as correct. The gate is
+        // read per block from the same ProtocolChanges the block is parsed under, not
+        // hardcoded, so a scenario that moves the flag-day gets production's behaviour on
+        // both sides of it (regtest activates at genesis, so the collapse is in force).
+        const fanoutFixActive = await indexer.protocolChanges.isEnabled('FIX_OUTPUT_FANOUT', lastIndexerBlock);
+        blockTransactions = collapseOutputFanout(blockTransactions, fanoutFixActive, (m) => indexer.util.logError(m));
         const blockTime = await indexer.decoderDb.getBlockTime(lastIndexerBlock);
 
         await indexer.indexerDb.beginTransaction();
