@@ -280,14 +280,14 @@ describe('MAX_SUPPLY=0 is the uncapped sentinel @regression @tier1', function ()
         function pcFor(network) {
             const indexer = createMockIndexer();
             indexer.config.NETWORK = network;
-            return { pc: new ProtocolChanges(indexer, '2.0.0'), indexer };
+            return { pc: new ProtocolChanges(indexer, '0.2.0'), indexer };
         }
 
         it('is a 2.0.0 time-keyed change, genesis-active on testnet and regtest', function () {
             const change = pcFor('regtest').pc.changes['UNCAPPED_MAX_SUPPLY_ZERO'];
             assert.ok(change, 'UNCAPPED_MAX_SUPPLY_ZERO must be registered');
-            assert.strictEqual(change.version_major, 2);
-            assert.strictEqual(change.version_minor, 0);
+            assert.strictEqual(change.version_major, 0);
+            assert.strictEqual(change.version_minor, 2);
             assert.strictEqual(change.version_revision, 0);
             // Time-keyed: MINT/ISSUE run on BTC, LTC and DOGE, whose heights diverge.
             assert.strictEqual(change.mainnet_block, 0);

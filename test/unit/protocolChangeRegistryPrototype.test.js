@@ -71,7 +71,7 @@ const REAL_CHANGES = ['BATCH_ISSUANCE_LIMITS', 'BATCH_SUBACTION_NORMALIZATION'];
 function pcFor(network){
     const indexer = createMockIndexer();
     indexer.config.NETWORK = network;
-    return new ProtocolChanges(indexer, '2.0.0');
+    return new ProtocolChanges(indexer, '0.2.0');
 }
 
 describe('protocol-change registry is prototype-free @regression @tier1', function(){

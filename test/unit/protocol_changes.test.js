@@ -21,7 +21,7 @@ describe('ProtocolChanges @regression @tier3', function () {
         process.env.INDEXER_NETWORK = 'regtest';
         ProtocolChanges = require('../../src/protocol_changes.js');
         // Consensus version is passed explicitly now that it is a compiled pin (#3087).
-        pc = new ProtocolChanges(indexer, '1.0.0');
+        pc = new ProtocolChanges(indexer, '0.1.0');
     });
 
     describe('parseChanges()', function () {
@@ -39,8 +39,8 @@ describe('ProtocolChanges @regression @tier3', function () {
 
         it('should parse version into major/minor/revision', function () {
             const change = pc.changes['SEND'];
-            assert.strictEqual(change.version_major, 1);
-            assert.strictEqual(change.version_minor, 0);
+            assert.strictEqual(change.version_major, 0);
+            assert.strictEqual(change.version_minor, 1);
             assert.strictEqual(change.version_revision, 0);
         });
 
@@ -136,21 +136,21 @@ describe('ProtocolChanges @regression @tier3', function () {
         });
 
         it('should return false when block_index is before activation', async function () {
-            pc.addChange('LATE_ACTION', '1.0.0', 0, 0, 0, 0, 0, 999999);
+            pc.addChange('LATE_ACTION', '0.1.0', 0, 0, 0, 0, 0, 999999);
             indexer.decoderDb.getBlockTime.resolves(1700000000);
             const enabled = await pc.isEnabled('LATE_ACTION', 100);
             assert.strictEqual(enabled, false);
         });
 
         it('should return true when block_index equals activation block', async function () {
-            pc.addChange('EXACT_BLOCK', '1.0.0', 0, 0, 0, 0, 0, 100);
+            pc.addChange('EXACT_BLOCK', '0.1.0', 0, 0, 0, 0, 0, 100);
             indexer.decoderDb.getBlockTime.resolves(1700000000);
             const enabled = await pc.isEnabled('EXACT_BLOCK', 100);
             assert.strictEqual(enabled, true);
         });
 
         it('should return false when block_time is before activation time', async function () {
-            pc.addChange('LATE_TIME', '1.0.0', 0, 0, 2000000000, 0, 0, 0);
+            pc.addChange('LATE_TIME', '0.1.0', 0, 0, 2000000000, 0, 0, 0);
             indexer.decoderDb.getBlockTime.resolves(1700000000);
             const enabled = await pc.isEnabled('LATE_TIME', 100);
             assert.strictEqual(enabled, false);
@@ -162,18 +162,18 @@ describe('ProtocolChanges @regression @tier3', function () {
         });
 
         it('should check version major/minor/revision correctly', async function () {
-            // Current version is 1.0.0
-            pc.addChange('V1_1', '1.1.0', 0, 0, 0, 0, 0, 0);
+            // Current version is 0.1.0
+            pc.addChange('V1_1', '0.2.0', 0, 0, 0, 0, 0, 0);
             indexer.decoderDb.getBlockTime.resolves(1700000000);
             const enabled = await pc.isEnabled('V1_1', 100);
-            // 1.1.0 > 1.0.0 → disabled (minor version too high)
+            // 0.2.0 > 0.1.0 → disabled (minor version too high)
             assert.strictEqual(enabled, false);
         });
 
         it('should enable when current version exceeds required', async function () {
             // Recreate with an explicit consensus version (#3087: the pin means the
             // environment no longer supplies one).
-            pc = new ProtocolChanges(indexer, '2.0.0');
+            pc = new ProtocolChanges(indexer, '0.2.0');
             indexer.decoderDb.getBlockTime.resolves(1700000000);
             const enabled = await pc.isEnabled('SEND', 100);
             assert.strictEqual(enabled, true);
@@ -194,7 +194,7 @@ describe('ProtocolChanges @regression @tier3', function () {
     describe('isEnabled network fail-closed (consensus backstop)', function () {
         it('throws on an unrecognized network instead of enabling every gated change', async function () {
             indexer.config.NETWORK = 'mainnett'; // typo, from the validated config
-            const bad = new ProtocolChanges(indexer, '2.0.0');
+            const bad = new ProtocolChanges(indexer, '0.2.0');
             indexer.decoderDb.getBlockTime.resolves(1);
             await assert.rejects(() => bad.isEnabled('CONTROLLER_GUARD', 100), /unrecognized network/);
         });
@@ -202,7 +202,7 @@ describe('ProtocolChanges @regression @tier3', function () {
         it('still evaluates normally for each valid network', async function () {
             for (const net of ['mainnet', 'testnet', 'regtest']) {
                 indexer.config.NETWORK = net;
-                const pc2 = new ProtocolChanges(indexer, '2.0.0');
+                const pc2 = new ProtocolChanges(indexer, '0.2.0');
                 indexer.decoderDb.getBlockTime.resolves(1);
                 // SEND is genesis-active (1.0.0, all-zero gates), enabled on every valid network.
                 assert.strictEqual(await pc2.isEnabled('SEND', 0), true, net + ' should evaluate');
@@ -218,7 +218,7 @@ describe('ProtocolChanges @regression @tier3', function () {
         it('reads this.network from config.NETWORK even when process.env.INDEXER_NETWORK disagrees', function () {
             indexer.config.NETWORK = 'mainnet';
             process.env.INDEXER_NETWORK = 'regtest'; // stale/mutated env must be ignored
-            const pc2 = new ProtocolChanges(indexer, '2.0.0');
+            const pc2 = new ProtocolChanges(indexer, '0.2.0');
             assert.strictEqual(pc2.network, 'mainnet');
         });
 
@@ -226,7 +226,7 @@ describe('ProtocolChanges @regression @tier3', function () {
             const MAINNET_FLAG_DAY = 1786060800;
             indexer.config.NETWORK = 'mainnet';
             process.env.INDEXER_NETWORK = 'regtest'; // env would (wrongly) enable from genesis
-            const pc2 = new ProtocolChanges(indexer, '2.0.0');
+            const pc2 = new ProtocolChanges(indexer, '0.2.0');
             indexer.decoderDb.getBlockTime.resolves(MAINNET_FLAG_DAY - 1);
             // Under config.NETWORK='mainnet' the gate is DISABLED below the flag-day; a stale
             // env read would have returned true (regtest genesis-active) and forked the ledger.
@@ -249,8 +249,8 @@ describe('ProtocolChanges @regression @tier3', function () {
         it('is registered as a v2.0.0 change keyed on block_time, not block_index', function () {
             const change = pcFor('regtest').changes['DEPLOY_BASE64_CODE'];
             assert.ok(change, 'DEPLOY_BASE64_CODE must be defined');
-            assert.strictEqual(change.version_major, 2);
-            assert.strictEqual(change.version_minor, 0);
+            assert.strictEqual(change.version_major, 0);
+            assert.strictEqual(change.version_minor, 2);
             assert.strictEqual(change.version_revision, 0);
             // Time-keyed (BTC/LTC/DOGE heights diverge by millions of blocks); all block gates stay 0.
             assert.strictEqual(change.mainnet_block, 0);
@@ -294,10 +294,10 @@ describe('ProtocolChanges @regression @tier3', function () {
         });
 
         it('a pre-consensus (v1.x) node treats it as not-yet-active; no premature base64', async function () {
-            const pc1 = pcFor('regtest', '1.9.9');
+            const pc1 = pcFor('regtest', '0.1.9');
             indexer.decoderDb.getBlockTime.resolves(1);
             assert.strictEqual(await pc1.isEnabled('DEPLOY_BASE64_CODE', 0), false,
-                'below the 2.0.0 consensus version the gate is inactive; decode stays hex');
+                'below the 0.2.0 consensus version the gate is inactive; decode stays hex');
         });
     });
 
@@ -326,8 +326,8 @@ describe('ProtocolChanges @regression @tier3', function () {
         it('is registered as a v2.0.0 change keyed on block_time, not block_index', function () {
             const change = pcFor('regtest').changes['VM_BALANCE_TOKENINFO'];
             assert.ok(change, 'VM_BALANCE_TOKENINFO must be defined');
-            assert.strictEqual(change.version_major, 2);
-            assert.strictEqual(change.version_minor, 0);
+            assert.strictEqual(change.version_major, 0);
+            assert.strictEqual(change.version_minor, 2);
             assert.strictEqual(change.version_revision, 0);
             // Time-keyed (BTC/LTC/DOGE heights diverge by millions of blocks); all block gates stay 0.
             assert.strictEqual(change.mainnet_block, 0);
@@ -371,10 +371,10 @@ describe('ProtocolChanges @regression @tier3', function () {
         });
 
         it('a pre-reader (v1.x) node treats it as not-yet-active; gateway stays null', async function () {
-            const pc1 = pcFor('regtest', '1.9.9');
+            const pc1 = pcFor('regtest', '0.1.9');
             indexer.decoderDb.getBlockTime.resolves(1);
             assert.strictEqual(await pc1.isEnabled('VM_BALANCE_TOKENINFO', 0), false,
-                'below the 2.0.0 consensus version the gate is inactive; gateway sees null');
+                'below the 0.2.0 consensus version the gate is inactive; gateway sees null');
         });
     });
 
@@ -402,8 +402,8 @@ describe('ProtocolChanges @regression @tier3', function () {
         it('is registered as a v2.0.0 change keyed on block_time, not block_index', function () {
             const change = pcFor('regtest').changes['VM_ATTESTATION_GETRESPONSE'];
             assert.ok(change, 'VM_ATTESTATION_GETRESPONSE must be defined');
-            assert.strictEqual(change.version_major, 2);
-            assert.strictEqual(change.version_minor, 0);
+            assert.strictEqual(change.version_major, 0);
+            assert.strictEqual(change.version_minor, 2);
             assert.strictEqual(change.version_revision, 0);
             // Time-keyed (BTC/LTC/DOGE heights diverge by millions of blocks); all block gates stay 0.
             assert.strictEqual(change.mainnet_block, 0);
@@ -435,7 +435,7 @@ describe('ProtocolChanges @regression @tier3', function () {
         });
 
         it('a pre-reader (v1.x) node treats it as not-yet-active; getResponse stays null', async function () {
-            const pc1 = pcFor('regtest', '1.9.9');
+            const pc1 = pcFor('regtest', '0.1.9');
             indexer.decoderDb.getBlockTime.resolves(1);
             assert.strictEqual(await pc1.isEnabled('VM_ATTESTATION_GETRESPONSE', 0), false);
         });
@@ -466,8 +466,8 @@ describe('ProtocolChanges @regression @tier3', function () {
         it('is registered as a v2.0.0 change keyed on block_time, not block_index', function () {
             const change = pcFor('regtest').changes['CONTROLLER_GUARD'];
             assert.ok(change, 'CONTROLLER_GUARD must be defined');
-            assert.strictEqual(change.version_major, 2);
-            assert.strictEqual(change.version_minor, 0);
+            assert.strictEqual(change.version_major, 0);
+            assert.strictEqual(change.version_minor, 2);
             assert.strictEqual(change.version_revision, 0);
             // Time-keyed (BTC/LTC/DOGE heights diverge by millions of blocks); all block gates stay 0.
             assert.strictEqual(change.mainnet_block, 0);
@@ -511,10 +511,10 @@ describe('ProtocolChanges @regression @tier3', function () {
         });
 
         it('a pre-guard (v1.x) node treats it as not-yet-active; guard stays off', async function () {
-            const pc1 = pcFor('regtest', '1.9.9');
+            const pc1 = pcFor('regtest', '0.1.9');
             indexer.decoderDb.getBlockTime.resolves(1);
             assert.strictEqual(await pc1.isEnabled('CONTROLLER_GUARD', 0), false,
-                'below the 2.0.0 consensus version the gate is inactive; guard never runs');
+                'below the 0.2.0 consensus version the gate is inactive; guard never runs');
         });
     });
 

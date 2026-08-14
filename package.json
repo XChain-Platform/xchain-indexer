@@ -1,8 +1,8 @@
 {
   "name": "xchain-indexer",
   "description": "xchain-indexer is a free open source token platform indexer for the XChain platform",
-  "version": "2.7.17",
-  "xchainRequiresHub": "2.2.0",
+  "version": "0.9.0",
+  "xchainRequiresHub": "0.9.0",
   "license": "AGPL-3.0-or-later",
   "repository": {
     "type": "git",

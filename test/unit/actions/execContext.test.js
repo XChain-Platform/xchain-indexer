@@ -264,8 +264,8 @@ describe('execContext (injected-execution TX_HASH seam) @regression @tier2', fun
             const fs = require('fs');
             const path = require('path');
             const src = fs.readFileSync(path.join(__dirname, '../../../src/protocol_changes.js'), 'utf8');
-            const m = src.match(/this\.addChange\('SYNTH_EXEC_TX_HASH', '2\.0\.0',(\d+),(\d+),(\d+)/);
-            assert.ok(m, 'SYNTH_EXEC_TX_HASH must be registered as a 2.0.0 time-gated change');
+            const m = src.match(/this\.addChange\('SYNTH_EXEC_TX_HASH', '0\.2\.0',(\d+),(\d+),(\d+)/);
+            assert.ok(m, 'SYNTH_EXEC_TX_HASH must be registered as a 0.2.0 time-gated change');
             assert.strictEqual(parseInt(m[1]), 1786060800, 'mainnet timestamp must be the ratified anchor');
             assert.strictEqual(parseInt(m[2]), 0, 'testnet activates at genesis');
             assert.strictEqual(parseInt(m[3]), 0, 'regtest activates at genesis');

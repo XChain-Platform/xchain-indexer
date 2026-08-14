@@ -155,7 +155,33 @@ const BATCH_COST_WEIGHTING_MAINNET_TIME = 9999999999;
 // indexer boot) and by test/unit/protocol_changes.test.js, so the two cannot
 // drift apart unnoticed; that equality is what makes this change a no-op on
 // every host today (spec §7 pre-window gate).
-const CONSENSUS_VERSION = '2.7.17';
+// RENUMBERED ONTO THE PLATFORM VERSION STREAM (2026-08-14, first train).
+//
+// This repo's package version moved from its own stream (2.7.17) to the shared
+// platform stream, whose first release is 0.9.0. The pin above must equal the
+// package version, so it moved too, and the registry below had to move WITH it:
+// every change was registered at 1.0.0 or 2.0.0, and 0.9.0 is BELOW both, so
+// leaving the registry alone would have disabled all 89 changes at once and
+// made this node compute entirely different state. The gate caught exactly that.
+//
+// The registry was shifted ORDINALLY, not flattened: 1.0.0 -> 0.1.0 and
+// 2.0.0 -> 0.2.0. Flattening both tiers to one number was tried first and the
+// suite rejected it, because tests such as "a pre-consensus (v1.x) node treats
+// it as not-yet-active" depend on the two tiers being distinguishable. The shift
+// preserves that ordering exactly; it only re-expresses it underneath the
+// platform stream.
+//
+// WHY THIS IS NOT A CONSENSUS CHANGE. The version gate disabled nothing before
+// (0 of 89 at 2.7.17) and disables nothing after (0 of 89 at 0.9.0), so the
+// enabled set is identical; activation is decided by the per-network time/block
+// arguments, which were not touched. The registry and this constant live in the
+// same file and ship in the same artifact, so a node can never run one without
+// the other.
+//
+// A future change gates normally against the platform stream: register it at the
+// platform version it ships in, and nodes below that version treat it as
+// not-yet-active exactly as before.
+const CONSENSUS_VERSION = '0.9.0';
 
 // Single shared predicate for the NATIVE_FEE_PRICE_TIME_GATE flag-day, used by
 // utility.getFeeOraclePrices (query selection) and XChainIndexer (sync
@@ -252,36 +278,36 @@ class ProtocolChanges {
     parseChanges(){
 
         // Define `ACTION` commands and activation time/blocks (ALL UPPER case)
-        this.addChange('ADDRESS',    '1.0.0',0,0,0,0,0,0);
-        this.addChange('AIRDROP',    '1.0.0',0,0,0,0,0,0);
-        this.addChange('BATCH',      '1.0.0',0,0,0,0,0,0);
-        this.addChange('BET',        '1.0.0',0,0,0,0,0,0);
-        this.addChange('BROADCAST',  '1.0.0',0,0,0,0,0,0);
-        this.addChange('CALLBACK',   '1.0.0',0,0,0,0,0,0);
-        this.addChange('DESTROY',    '1.0.0',0,0,0,0,0,0);
-        this.addChange('DISPENSER',  '1.0.0',0,0,0,0,0,0);
-        this.addChange('DIVIDEND',   '1.0.0',0,0,0,0,0,0);
-        this.addChange('DISPENSE',   '1.0.0',0,0,0,0,0,0);
-        this.addChange('FILE',       '1.0.0',0,0,0,0,0,0);
-        this.addChange('ISSUE',      '1.0.0',0,0,0,0,0,0);
-        this.addChange('LINK',       '1.0.0',0,0,0,0,0,0);
-        this.addChange('LIST',       '1.0.0',0,0,0,0,0,0);
-        this.addChange('MESSAGE',    '1.0.0',0,0,0,0,0,0);
-        this.addChange('MINT',       '1.0.0',0,0,0,0,0,0);
-        this.addChange('ORDER',      '1.0.0',0,0,0,0,0,0);
-        this.addChange('SEND',       '1.0.0',0,0,0,0,0,0);
-        this.addChange('SLEEP',      '1.0.0',0,0,0,0,0,0);
-        this.addChange('SWAP',       '1.0.0',0,0,0,0,0,0);
-        this.addChange('SWEEP',      '1.0.0',0,0,0,0,0,0);
-        this.addChange('COINPAY',        '1.0.0',0,0,0,0,0,0);
-        this.addChange('COINPAY_EXPIRE', '1.0.0',0,0,0,0,0,0);
+        this.addChange('ADDRESS',    '0.1.0',0,0,0,0,0,0);
+        this.addChange('AIRDROP',    '0.1.0',0,0,0,0,0,0);
+        this.addChange('BATCH',      '0.1.0',0,0,0,0,0,0);
+        this.addChange('BET',        '0.1.0',0,0,0,0,0,0);
+        this.addChange('BROADCAST',  '0.1.0',0,0,0,0,0,0);
+        this.addChange('CALLBACK',   '0.1.0',0,0,0,0,0,0);
+        this.addChange('DESTROY',    '0.1.0',0,0,0,0,0,0);
+        this.addChange('DISPENSER',  '0.1.0',0,0,0,0,0,0);
+        this.addChange('DIVIDEND',   '0.1.0',0,0,0,0,0,0);
+        this.addChange('DISPENSE',   '0.1.0',0,0,0,0,0,0);
+        this.addChange('FILE',       '0.1.0',0,0,0,0,0,0);
+        this.addChange('ISSUE',      '0.1.0',0,0,0,0,0,0);
+        this.addChange('LINK',       '0.1.0',0,0,0,0,0,0);
+        this.addChange('LIST',       '0.1.0',0,0,0,0,0,0);
+        this.addChange('MESSAGE',    '0.1.0',0,0,0,0,0,0);
+        this.addChange('MINT',       '0.1.0',0,0,0,0,0,0);
+        this.addChange('ORDER',      '0.1.0',0,0,0,0,0,0);
+        this.addChange('SEND',       '0.1.0',0,0,0,0,0,0);
+        this.addChange('SLEEP',      '0.1.0',0,0,0,0,0,0);
+        this.addChange('SWAP',       '0.1.0',0,0,0,0,0,0);
+        this.addChange('SWEEP',      '0.1.0',0,0,0,0,0,0);
+        this.addChange('COINPAY',        '0.1.0',0,0,0,0,0,0);
+        this.addChange('COINPAY_EXPIRE', '0.1.0',0,0,0,0,0,0);
 
         // VM actions (all chains). DEPLOY covers inline (v0/v1), chunked-assemble
         // (v2/v3), and the chunk carrier (v4): all gated under this one entry.
-        this.addChange('DEPLOY',             '2.0.0',0,0,0,0,0,0);
-        this.addChange('EXECUTE',            '2.0.0',0,0,0,0,0,0);
-        this.addChange('DEPOSIT',            '2.0.0',0,0,0,0,0,0);
-        this.addChange('WITHDRAW',           '2.0.0',0,0,0,0,0,0);
+        this.addChange('DEPLOY',             '0.2.0',0,0,0,0,0,0);
+        this.addChange('EXECUTE',            '0.2.0',0,0,0,0,0,0);
+        this.addChange('DEPOSIT',            '0.2.0',0,0,0,0,0,0);
+        this.addChange('WITHDRAW',           '0.2.0',0,0,0,0,0,0);
 
         // Inline DEPLOY (v0/v1) CODE_ENCODING format. Below this activation the inline
         // contract source is decoded as HEX (the original format); at/above it as BASE64
@@ -300,52 +326,52 @@ class ProtocolChanges {
         // the SDK base64 rollout. It must stay equal to every other 2.0.0
         // contract-era entry in this file and to xchain-vm's
         // ASYNC_SURFACE_GATE_BLOCK_TIME; a wrong value is a second fork.
-        this.addChange('DEPLOY_BASE64_CODE', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('DEPLOY_BASE64_CODE', '0.2.0',1786060800,0,0,0,0,0);
 
         // Staking actions: capability variants (STAKE v1/v2, UNSTAKE v0, DELEGATE v0/v2, COLLECT) are BTC-only;
         // contract variants (STAKE v3, UNSTAKE v1, DELEGATE v1/v3) work on any chain
-        this.addChange('STAKE',              '2.0.0',0,0,0,0,0,0);
-        this.addChange('UNSTAKE',            '2.0.0',0,0,0,0,0,0);
-        this.addChange('DELEGATE',           '2.0.0',0,0,0,0,0,0);
-        this.addChange('COLLECT',            '2.0.0',0,0,0,0,0,0);
+        this.addChange('STAKE',              '0.2.0',0,0,0,0,0,0);
+        this.addChange('UNSTAKE',            '0.2.0',0,0,0,0,0,0);
+        this.addChange('DELEGATE',           '0.2.0',0,0,0,0,0,0);
+        this.addChange('COLLECT',            '0.2.0',0,0,0,0,0,0);
         // SLASH: permissionless capability-stake equivocation slashing (WI-2 bump 2). The
         // verifier only ACCEPTS proofs whose two messages carry the EQUIV header, so slashing
         // is naturally inert until the EQUIV flag-day (no coupling with the SLASH protocol gate).
-        this.addChange('SLASH',              '2.0.0',0,0,0,0,0,0);
+        this.addChange('SLASH',              '0.2.0',0,0,0,0,0,0);
 
         // PRICE action: validator oracle (v0) and user oracle (v1) pricing
         // Publishable on any chain (DOGE recommended for low fees)
-        this.addChange('PRICE',              '2.0.0',0,0,0,0,0,0);
+        this.addChange('PRICE',              '0.2.0',0,0,0,0,0,0);
 
         // VOTE action: token-weighted governance polls. Single action with
         // v0=create poll, v1=cast ballot (v2=system finalize is Phase 2).
         // Genesis-active here for regtest/testnet prototyping; mainnet gets a
         // coordinated flag-day timestamp before BTC activation.
         // (See xchain-documentation/protocol/actions/VOTE.md)
-        this.addChange('VOTE',               '2.0.0',0,0,0,0,0,0);
+        this.addChange('VOTE',               '0.2.0',0,0,0,0,0,0);
 
         // External attestation framework: single ATTEST action with v0=request, v1=response, v2=expire
         // (See xchain-documentation/protocol/actions/ATTEST.md)
-        this.addChange('ATTEST',             '2.0.0',0,0,0,0,0,0);
+        this.addChange('ATTEST',             '0.2.0',0,0,0,0,0,0);
 
         // ANCHOR: DOGE-only on-chain state commitments: v0=checkpoint,
         // v1=checkpoint+match archive, v2=archive continuation
         // (See xchain-documentation/protocol/actions/ANCHOR.md)
-        this.addChange('ANCHOR',             '2.0.0',0,0,0,0,0,0);
+        this.addChange('ANCHOR',             '0.2.0',0,0,0,0,0,0);
 
         // Cross-chain contract calls: XCALL v0=request (VM-emission-only; never
         // decoded from the wire), v2=expire (system-synthesized). The relay rows
         // ride the hub mirror; registered for consistency/documentation.
         // (See xchain-documentation/protocol/actions/XCALL.md)
-        this.addChange('XCALL',              '2.0.0',0,0,0,0,0,0);
+        this.addChange('XCALL',              '0.2.0',0,0,0,0,0,0);
 
         // NODEPROOF: full-node possession-proof verdict (v0; validator-broadcast).
         // Records which validators answered the derived possession challenge, so the
         // verified set earns the full-node oracle-round reward tranche. BTC-only.
         // (See xchain-documentation/protocol/actions/NODEPROOF.md)
-        this.addChange('NODEPROOF',          '2.0.0',0,0,0,0,0,0);
+        this.addChange('NODEPROOF',          '0.2.0',0,0,0,0,0,0);
 
-        this.addChange('UNIFIED_FEES',   '2.0.0',0,0,0,0,0,0);
+        this.addChange('UNIFIED_FEES',   '0.2.0',0,0,0,0,0,0);
         // INVENTORY-ONLY, gates nothing. Nothing calls
         // isEnabled('VM_ACTIONS'): the VM actions it nominally covered
         // (DEPLOY/EXECUTE/DEPOSIT/WITHDRAW) are gated by their own '2.0.0' action
@@ -355,11 +381,11 @@ class ProtocolChanges {
         // Genesis-active (all-zero), so there is no enablement hazard either way;
         // do NOT wire a consumer to it without a flag-day, since flipping a
         // genesis-active gate into a real one changes replay.
-        this.addChange('VM_ACTIONS',     '2.0.0',0,0,0,0,0,0);
+        this.addChange('VM_ACTIONS',     '0.2.0',0,0,0,0,0,0);
         // Cross-chain DEX gate: when enabled, ORDER/SWAP allow GET_COIN != COIN and the
         // xchain-hub federation drives cross-chain matching + mirror-delivered settlement.
         // Genesis-activated (pre-launch).
-        this.addChange('CROSS_CHAIN_DEX','2.0.0',0,0,0,0,0,0);
+        this.addChange('CROSS_CHAIN_DEX','0.2.0',0,0,0,0,0,0);
         // Origin-standing dispenser creates: the SOURCE of a prior VALID
         // dispenser create on GET_ADDRESS (its "origin") may open additional
         // dispensers on that address without the freshness check or
@@ -367,7 +393,7 @@ class ProtocolChanges {
         // many-dispenser-addresses pattern (origin already holds permanent
         // refill/close authority via the v1/v2 owner check).
         // Genesis-activated (pre-launch).
-        this.addChange('DISPENSER_ORIGIN_STANDING','2.0.0',0,0,0,0,0,0);
+        this.addChange('DISPENSER_ORIGIN_STANDING','0.2.0',0,0,0,0,0,0);
         // FIAT dispenser settlement: a dispenser carrying FIAT_CODE is priced by
         // reverse price matching rather than by GET_AMOUNT, in either mode
         // (validator PRICE v0 snapshot, or a user PRICE v1 oracle when
@@ -393,14 +419,14 @@ class ProtocolChanges {
         // exists that retrofit costs a cohort height plus a replay-compatibility
         // branch. Doing it while the set is empty costs nothing (an earlier
         // dispenser-unit correction already demonstrated the shape this will need).
-        this.addChange('FIAT_DISPENSER_PRICING','2.0.0',0,0,0,0,0,0);
+        this.addChange('FIAT_DISPENSER_PRICING','0.2.0',0,0,0,0,0,0);
         // Issuance fee activation. Mainnet turns on at the historical block 862633;
         // testnet/regtest charge from block 0 so the fee path is exercisable there.
         // mainnet_block=862633 is a BTC block height used as an 'always-on' activation
         // for LTC and DOGE (both passed this height long ago). This is intentional legacy
         // behaviour. A single cross-chain activation height is chosen from BTC; see
         // xchain-documentation/protocol/CONFIGURATION.md for the rationale.
-        this.addChange('ISSUANCE_FEE',   '1.0.0',0,0,0,862633,0,0);
+        this.addChange('ISSUANCE_FEE',   '0.1.0',0,0,0,862633,0,0);
         // VM-emitted ISSUE (IS_EMISSION) issuance-fee exemption. A contract
         // constructor (or EXECUTE) that emits an ISSUE has no XCHAIN balance on the
         // freshly deployed contract address, so charging ISSUANCE_FEE against the
@@ -422,7 +448,7 @@ class ProtocolChanges {
         // value is a second fork.
         // testnet/regtest activate at genesis (no pre-exemption history to preserve;
         // the e2e/regtest stack exercises VM emissions from block 0).
-        this.addChange('ISSUANCE_FEE_EMISSION_EXEMPT', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('ISSUANCE_FEE_EMISSION_EXEMPT', '0.2.0',1786060800,0,0,0,0,0);
 
         // VM getBalance()/getTokenInfo() reader. Below this activation the gateway
         // receives balances:null / tokenInfo:null in every execution path (the
@@ -444,7 +470,7 @@ class ProtocolChanges {
         // 00:00:00 UTC, CONFIRMED 2026-07-07); a wrong value is a fork. testnet/regtest
         // activate at genesis (no pre-reader history to preserve; the e2e/regtest
         // stack exercises VM balance reads from block 0).
-        this.addChange('VM_BALANCE_TOKENINFO', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('VM_BALANCE_TOKENINFO', '0.2.0',1786060800,0,0,0,0,0);
 
         // Programmable-policy controller guard. Below this activation the bound
         // controller's `guard` method is NEVER run: every SEND/ORDER/SWAP/DISPENSER/
@@ -472,7 +498,7 @@ class ProtocolChanges {
         // CONTROLLER-bound token is issued on mainnet; a wrong value is a fork. testnet/regtest activate
         // at genesis (no pre-guard history to preserve; the e2e/regtest stack exercises
         // controller guards from block 0).
-        this.addChange('CONTROLLER_GUARD', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('CONTROLLER_GUARD', '0.2.0',1786060800,0,0,0,0,0);
 
         // MINT-1: per-address mint allowance counts SELF-MINTED supply only.
         // Below this activation the MINT_ADDRESS_MAX check measures MINT-action
@@ -491,7 +517,7 @@ class ProtocolChanges {
         // a divergent value is a fork.
         // testnet/regtest activate at genesis (no history to preserve; the
         // e2e/regtest stack exercises the corrected measure from block 0).
-        this.addChange('MINT_SELF_MINTED_ONLY', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('MINT_SELF_MINTED_ONLY', '0.2.0',1786060800,0,0,0,0,0);
 
         // BonkDAO-class guard: a BINDING poll (VOTE v0 that names a
         // CALLBACK_CONTRACT, so its finalization can move contract-held value)
@@ -510,7 +536,7 @@ class ProtocolChanges {
         // DEPLOY_BASE64_CODE above; a divergent value is
         // a fork. testnet/regtest activate at genesis (no history to preserve;
         // the e2e/regtest stack exercises the requirement from block 0).
-        this.addChange('VOTE_BINDING_MINIMUMS', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('VOTE_BINDING_MINIMUMS', '0.2.0',1786060800,0,0,0,0,0);
 
         // BonkDAO lesson 3: optional timelock between poll finalization
         // and the binding callback's execution. v0 gains a trailing
@@ -532,7 +558,7 @@ class ProtocolChanges {
         // value is a fork. testnet/regtest activate at
         // genesis (no history to preserve; the e2e/regtest stack exercises the
         // timelock from block 0).
-        this.addChange('VOTE_CALLBACK_TIMELOCK', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('VOTE_CALLBACK_TIMELOCK', '0.2.0',1786060800,0,0,0,0,0);
 
         // VOTE-SLEEP-1: VOTE respects the self-sleep gate. SLEEP v0
         // freezes an address ("pauses actions on an ADDRESS") and every sibling
@@ -554,7 +580,7 @@ class ProtocolChanges {
         // coordinated anchor 1786060800 (2026-08-07 00:00:00 UTC), the
         // confirmed 2.0.0 contract-era cohort; a divergent value is a fork.
         // testnet/regtest activate at genesis.
-        this.addChange('VOTE_RESPECTS_SLEEP', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('VOTE_RESPECTS_SLEEP', '0.2.0',1786060800,0,0,0,0,0);
 
         // BonkDAO lesson 4: expose a poll's electorate TICK to
         // contracts so a binding-poll callback can verify WHICH token decided
@@ -578,7 +604,7 @@ class ProtocolChanges {
         // stated at DEPLOY_BASE64_CODE above; a divergent value is a fork. testnet/regtest
         // activate at genesis (no history to preserve; the e2e/regtest stack
         // exercises the visible tick from block 0).
-        this.addChange('VOTE_POLL_TICK_VISIBLE', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('VOTE_POLL_TICK_VISIBLE', '0.2.0',1786060800,0,0,0,0,0);
 
         // ATTEST v1 canonical id-case normalization. Below this activation
         // the canonical signing bytes (and the EQUIV ROUND_ID) use the RAW wire
@@ -599,7 +625,7 @@ class ProtocolChanges {
         // a fork. testnet/regtest activate at genesis (no history to preserve;
         // the e2e/regtest stack exercises the self-contained canonical from
         // block 0).
-        this.addChange('ATTEST_CANONICAL_LOWERCASE_ID', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('ATTEST_CANONICAL_LOWERCASE_ID', '0.2.0',1786060800,0,0,0,0,0);
 
         // Attestation Phase 5 (spec §12): the origin-side half of the
         // cross-chain relay. Below this activation an ATTEST v0 emitted by an
@@ -626,7 +652,7 @@ class ProtocolChanges {
         // Phase 5 (accepting v3/v4 on the wire) rides ATTEST_RELAY_ACTIVATION in
         // attest_relay_activation.js; either order of the two is safe, see the
         // note there. testnet/regtest activate at genesis.
-        this.addChange('ATTEST_RELAY_ORIGIN', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('ATTEST_RELAY_ORIGIN', '0.2.0',1786060800,0,0,0,0,0);
 
         // VM xchain.attestation.getResponse(requestId) reader. Below this
         // activation the VM snapshot's attestationData is always null, so
@@ -647,7 +673,7 @@ class ProtocolChanges {
         // fork. testnet/regtest
         // activate at genesis (no pre-reader history to preserve; the e2e/regtest
         // stack exercises getResponse from block 0).
-        this.addChange('VM_ATTESTATION_GETRESPONSE', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('VM_ATTESTATION_GETRESPONSE', '0.2.0',1786060800,0,0,0,0,0);
 
         // Synthesized-execution TX_HASH on the injected-callback seam. Four
         // sites inject a system EXECUTE that runs a contract callback (attest.js v1
@@ -672,7 +698,7 @@ class ProtocolChanges {
         // testnet/regtest activate at genesis (no hashless-callback history to
         // preserve; the e2e/regtest stack exercises the synthesized hash from
         // block 0).
-        this.addChange('SYNTH_EXEC_TX_HASH', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('SYNTH_EXEC_TX_HASH', '0.2.0',1786060800,0,0,0,0,0);
 
         // Dispenser auto-close compares remaining inventory against the
         // PER-UNIT price, not a buyer's aggregate purchase. The legacy check
@@ -694,7 +720,7 @@ class ProtocolChanges {
         // divergent value is a fork. testnet/regtest activate at genesis (no
         // early-close history to preserve; the e2e/regtest stack exercises the
         // per-unit close from block 0).
-        this.addChange('DISPENSER_CLOSE_PER_UNIT', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('DISPENSER_CLOSE_PER_UNIT', '0.2.0',1786060800,0,0,0,0,0);
 
         // Mode B (user PRICE v1 oracle) dispenser settlement prices one TOKEN, not
         // one FILL. Below this activation actions/dispense.js takes the affordable
@@ -736,7 +762,7 @@ class ProtocolChanges {
         // testnet/regtest activate at genesis (the per-fill reading has no history
         // worth preserving there, and the regtest stack is where the defect was
         // measured).
-        this.addChange('DISPENSER_ORACLE_PER_TOKEN_PRICE', '2.0.0',1789430400,0,0,0,0,0);
+        this.addChange('DISPENSER_ORACLE_PER_TOKEN_PRICE', '0.2.0',1789430400,0,0,0,0,0);
 
         // Cross-chain royalty enforcement, layered on CONTROLLER_GUARD. Once the guard
         // produces royalty payout_legs (post-CONTROLLER_GUARD), a CROSS-CHAIN listing of
@@ -766,7 +792,7 @@ class ProtocolChanges {
         // regtest nodes with different overrides fork each other, which is fine for a
         // one-node drill and unacceptable anywhere else.
         let ccRoyaltyRegtestTime = parseInt(process.env.CROSS_CHAIN_ROYALTY_REGTEST_TIME) || 0;
-        this.addChange('CROSS_CHAIN_ROYALTY', '2.0.0',1798761600,0,ccRoyaltyRegtestTime,0,0,0);
+        this.addChange('CROSS_CHAIN_ROYALTY', '0.2.0',1798761600,0,ccRoyaltyRegtestTime,0,0,0);
 
         // Async/Promise contract surface (VM CONSENSUS_VERSION '2'). Below this
         // activation the on-chain deploy validator (validateSyntax) ACCEPTS a
@@ -795,7 +821,7 @@ class ProtocolChanges {
         // mainnet; a wrong value is a fork. testnet/regtest activate at genesis (no
         // pre-activation history to preserve; the e2e/regtest stack has run with the
         // rule live, so genesis activation preserves its current behaviour).
-        this.addChange('VM_BANNED_ASYNC', '2.0.0',VM_BANNED_ASYNC_MAINNET_TIME,0,0,0,0,0);
+        this.addChange('VM_BANNED_ASYNC', '0.2.0',VM_BANNED_ASYNC_MAINNET_TIME,0,0,0,0,0);
 
         // VM deploy-linter hardening: one gate for the
         // six hardened lint-core rules (exponentiation `**`/`**=` ban, reserved
@@ -811,7 +837,7 @@ class ProtocolChanges {
         // test/unit/flagdayPlaceholderGuard.test.js. testnet/regtest activate at
         // genesis (no pre-activation history to preserve). A divergent value is
         // a fork.
-        this.addChange('VM_LINT_HARDENING', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('VM_LINT_HARDENING', '0.2.0',1786060800,0,0,0,0,0);
 
         // ISSUE validity: strict LOCK_MAX_SUPPLY guard. Before this activation the guard used
         // a truthy check, so an explicit LOCK_MAX_SUPPLY=0 field (a no-op lock intent with no
@@ -823,7 +849,7 @@ class ProtocolChanges {
         // mainnet_time of 0 would flip the verdict on binary version alone, forking a skewed
         // fleet on any ISSUE carrying an explicit LOCK_MAX_SUPPLY=0 and diverging a
         // from-genesis replay. testnet/regtest activate at genesis (all zeros).
-        this.addChange('LOCK_MAX_SUPPLY_EXACT', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('LOCK_MAX_SUPPLY_EXACT', '0.2.0',1786060800,0,0,0,0,0);
 
         // ISSUE validity: a NULL/absent prior lock value counts as UNSET.
         // getTokenInfo rebuilds token state by replaying the `issues` rows and SKIPS a
@@ -864,7 +890,7 @@ class ProtocolChanges {
         // verdict flips from 'invalid' to 'valid' on replay surfaces in the §3.1
         // snapshot diff and is adjudicated in the deploy report, which is exactly the
         // mechanism the redesign put there for this class of change.
-        this.addChange('LOCK_NULL_PRIOR_UNSET', '2.0.0',0,0,0,0,0,0);
+        this.addChange('LOCK_NULL_PRIOR_UNSET', '0.2.0',0,0,0,0,0,0);
 
         // DEPLOY validity: integer COOLDOWN_BLOCKS. Before this activation the staking
         // cooldown was gated only by isNumeric + range, so a fractional value ('50.5')
@@ -877,7 +903,7 @@ class ProtocolChanges {
         // flag-day: mainnet pins the same coordinated contract-era flag-day as the
         // sibling validity gates (2026-08-07 00:00:00 UTC); testnet/regtest activate
         // at genesis (all zeros).
-        this.addChange('COOLDOWN_BLOCKS_INTEGER', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('COOLDOWN_BLOCKS_INTEGER', '0.2.0',1786060800,0,0,0,0,0);
 
         // DEPLOY validity (Pkg6 / dede7788): an EXPLICIT SLASH_DESTINATION on a stakeable
         // DEPLOY (v1/v3) must resolve to a well-formed chain address. Before this activation
@@ -893,7 +919,7 @@ class ProtocolChanges {
         // and breaks from-genesis replay byte-identity on the first stakeable DEPLOY carrying a
         // malformed SLASH_DESTINATION. mainnet pins the coordinated contract-era flag-day
         // (2026-08-07 00:00:00 UTC); testnet/regtest activate at genesis (all zeros).
-        this.addChange('DEPLOY_SLASH_DEST_ADDRESS_VALID', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('DEPLOY_SLASH_DEST_ADDRESS_VALID', '0.2.0',1786060800,0,0,0,0,0);
 
         // UNSTAKE validity (Pkg6 / 048fdea9 + ce6a484f): strict contract-cooldown derivation.
         // _parseContractUnstake historically computed COOLDOWN_END_BLOCK from
@@ -910,7 +936,7 @@ class ProtocolChanges {
         // replay / heterogeneous fleet reproduces the historic (phantom-1000) error-row values
         // below the flag-day. mainnet pins the coordinated contract-era flag-day (2026-08-07
         // 00:00:00 UTC); testnet/regtest activate at genesis (all zeros).
-        this.addChange('UNSTAKE_CONTRACT_COOLDOWN_STRICT', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('UNSTAKE_CONTRACT_COOLDOWN_STRICT', '0.2.0',1786060800,0,0,0,0,0);
 
         // ISSUE validity: cumulative MINT_SUPPLY cap. Before this activation the only guard on
         // an ISSUE's MINT_SUPPLY was a single-shot `MINT_SUPPLY > MAX_SUPPLY` check, which
@@ -925,7 +951,7 @@ class ProtocolChanges {
         // Same coordinated contract-era flag-day timestamp as the other tightening consensus
         // fixes in this window (2026-08-07 00:00:00 UTC); testnet/regtest activate at genesis
         // (all zeros) so the check is in force from block 0 there and in the unit/e2e suites.
-        this.addChange('ISSUE_MINT_SUPPLY_CUMULATIVE_CAP', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('ISSUE_MINT_SUPPLY_CUMULATIVE_CAP', '0.2.0',1786060800,0,0,0,0,0);
 
         // SLEEP validity: honor the token's LOCK_SLEEP flag. Before this activation the SLEEP
         // handler never inspected tokenInfo['LOCK_SLEEP'], so a token issued with LOCK_SLEEP=1
@@ -937,7 +963,7 @@ class ProtocolChanges {
         // valid SLEEP becomes invalid), so the fleet and any from-genesis replay must flip at one
         // coordinated block. Same contract-era flag-day timestamp as the other tightening fixes
         // (2026-08-07 00:00:00 UTC); testnet/regtest activate at genesis.
-        this.addChange('SLEEP_RESPECTS_LOCK_SLEEP', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('SLEEP_RESPECTS_LOCK_SLEEP', '0.2.0',1786060800,0,0,0,0,0);
 
         // COINPAY_EXPIRE escrow-release amount correctness. A native-coin ORDER_MATCH
         // escrows the SELLER's token leg (order_matches give/get amount) and records a
@@ -961,7 +987,7 @@ class ProtocolChanges {
         // contract-era flag-day as the other tightening fixes in this window (2026-08-07
         // 00:00:00 UTC); testnet/regtest activate at genesis (all zeros) so the correct
         // release is in force from block 0 there and in the unit/e2e suites.
-        this.addChange('COINPAY_EXPIRE_TOKEN_AMOUNT', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('COINPAY_EXPIRE_TOKEN_AMOUNT', '0.2.0',1786060800,0,0,0,0,0);
 
         // COINPAY native-coin match reciprocity + role detection. A native-coin ORDER_MATCH
         // settles two-phase: order_match.js reserves the token seller's escrowed leg and
@@ -991,7 +1017,7 @@ class ProtocolChanges {
         // Same coordinated contract-era flag-day (2026-08-07 00:00:00 UTC); testnet/regtest
         // activate at genesis (all zeros) so the correct routing holds from block 0 there and in
         // the unit/e2e suites.
-        this.addChange('COINPAY_NATIVE_RECIPROCITY', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('COINPAY_NATIVE_RECIPROCITY', '0.2.0',1786060800,0,0,0,0,0);
 
         // UNSTAKE cooldown-completion action attribution. When a capability/contract
         // UNSTAKE cooldown elapses, processCooldownCompletions credits the returned
@@ -1012,7 +1038,7 @@ class ProtocolChanges {
         // CONFIRMED 2026-07-07, aligned with the fleet upgrade; a wrong value forks).
         // testnet/regtest activate at genesis (all zeros); the e2e/regtest stack must
         // be rebuilt fresh so no pre-activation cooldown-completion blocks remain.
-        this.addChange('UNSTAKE_COOLDOWN_COMPLETION_ACTION', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('UNSTAKE_COOLDOWN_COMPLETION_ACTION', '0.2.0',1786060800,0,0,0,0,0);
 
         // FIX_OUTPUT_FANOUT: collapse the reader-side per-output fan-out for data-bearing,
         // non-COINPAY transactions. getDecoderBlockData (db.js) LEFT JOINs transaction_outputs
@@ -1033,7 +1059,7 @@ class ProtocolChanges {
         // affected native-coin payment/dispenser flows settle on BTC, LTC and DOGE whose heights
         // diverge, so no single height names one cutover. testnet/regtest activate at genesis
         // (all zeros) so the collapse is in force from block 0 there and in the unit/e2e suites.
-        this.addChange('FIX_OUTPUT_FANOUT', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('FIX_OUTPUT_FANOUT', '0.2.0',1786060800,0,0,0,0,0);
 
         // Staking-family stress-sweep fixes (2026-07-09). All three are consensus-visible
         // validity/derivation changes, gated on the same coordinated contract-era flag-day
@@ -1046,7 +1072,7 @@ class ProtocolChanges {
         // reads. At/after this flag-day the revoke mirrors the v3 path: NO insert, deactivate the
         // parent only. Changes the delegations table that feeds _stakeWeightsSql/stakes_root, so
         // it is a hashed-derivation change (flag-day, not a query tweak).
-        this.addChange('DELEGATE_REVOKE_NO_REINSERT', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('DELEGATE_REVOKE_NO_REINSERT', '0.2.0',1786060800,0,0,0,0,0);
 
         // STAKE-1: the contract-targeted TARGET_CONTRACT_INDEX was validated with /^[0-9]+$/, which
         // accepts non-canonical leading-zero forms ('007'). Benign at runtime (Number-coerced
@@ -1063,7 +1089,7 @@ class ProtocolChanges {
         // accepted. Same gate because it is the same validity change (an index form that is
         // valid today stops being valid), and it also rejects indexes past the safe-integer
         // range, whose Number() rounding is the same divergence class.
-        this.addChange('CONTRACT_INDEX_CANONICAL', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('CONTRACT_INDEX_CANONICAL', '0.2.0',1786060800,0,0,0,0,0);
 
         // DEL-2 (#4366): a DELEGATE v1 signing-key rotation wrote contract_delegations but NEVER
         // reached contract_stakes, so the rotated key owned nothing the protocol actually reads.
@@ -1092,7 +1118,7 @@ class ProtocolChanges {
         // rendered into the docs by xchain-documentation/bin/generate-flag-days.js; every
         // indexer and sync process must be deployed before mainnet crosses it.
         // testnet/regtest are live from genesis, exactly like the sibling contract-era gates.
-        this.addChange('CONTRACT_DELEGATION_MATERIALIZE', '2.0.0',1789430400,0,0,0,0,0);
+        this.addChange('CONTRACT_DELEGATION_MATERIALIZE', '0.2.0',1789430400,0,0,0,0,0);
 
         // SLASH-1: slashCapabilityStake Pass 1 filtered `activation_block <= block`, so a
         // pending-activation capability top-up (debited at STAKE time) escaped the equivocation bond
@@ -1104,7 +1130,7 @@ class ProtocolChanges {
         // slashing ran with the old (incomplete) burn. Height-gated so the fix goes live exactly when
         // slashing does. slashCapabilityStake is indexer-only (the follower mirrors the zeroed rows),
         // so this is not a byte-locked twin.
-        this.addChange('SLASH_BURNS_PENDING_STAKE', '2.0.0',0,0,0,961000,0,0);
+        this.addChange('SLASH_BURNS_PENDING_STAKE', '0.2.0',0,0,0,961000,0,0);
 
         // SLASH-2: an XORACLE equivocation proof must agree on the ORACLE ROUND
         // carried in the signed JSON, not just on the BTC height in the EQUIV key. Oracle
@@ -1118,7 +1144,7 @@ class ProtocolChanges {
         // where the rule it narrows can first fire. Gated rather than unconditional because
         // this REJECTS proofs a pre-fix node accepts, and a half-upgraded fleet disagreeing
         // on a SLASH's validity is a ledger fork.
-        this.addChange('SLASH_ORACLE_ROUND_DISCRIMINATED', '2.0.0',0,0,0,961000,0,0);
+        this.addChange('SLASH_ORACLE_ROUND_DISCRIMINATED', '0.2.0',0,0,0,961000,0,0);
 
         // H-3: deterministic price_snapshots selection for native-coin fee
         // validation on NON-reference chains. Price rounds are anchored to BTC
@@ -1136,7 +1162,7 @@ class ProtocolChanges {
         // utility.getFeeOraclePrices / XChainIndexer via the shared
         // isNativeFeePriceTimeGateActive() below (one predicate, no drift);
         // registered here so the flag-day inventory carries it.
-        this.addChange('NATIVE_FEE_PRICE_TIME_GATE', '2.0.0', NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME,0,0,0,0,0);
+        this.addChange('NATIVE_FEE_PRICE_TIME_GATE', '0.2.0', NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME,0,0,0,0,0);
 
         // DEPLOY_INIT_STRICT (F-14 follow-on): a contract that exports `initialize`
         // (a constructor) deployed with NO CONSTRUCTOR_PARAMS today runs no
@@ -1150,7 +1176,7 @@ class ProtocolChanges {
         // contract-era cohort (CONTROLLER_GUARD / VM_BANNED_ASYNC); testnet/regtest
         // genesis-on. Indexer-only verdict (uses the VM readManifest `hasInitialize`
         // flag), so not a byte-locked twin; the VM readManifest change ships alongside.
-        this.addChange('DEPLOY_INIT_STRICT', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('DEPLOY_INIT_STRICT', '0.2.0',1786060800,0,0,0,0,0);
 
         // BATCH sub-action normalization: the top-level dispatcher
         // (actions.js) rewrites ACTION aliases (TRANSFER->SEND, ADDR->ADDRESS,
@@ -1170,7 +1196,7 @@ class ProtocolChanges {
         // on the first aliased or legacy-format sub-action). Keyed on block
         // TIME with the ratified 2026-08-07 contract-era cohort;
         // testnet/regtest activate at genesis (all zeros).
-        this.addChange('BATCH_SUBACTION_NORMALIZATION', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('BATCH_SUBACTION_NORMALIZATION', '0.2.0',1786060800,0,0,0,0,0);
 
         // BATCH issuance limits v2. One entry gating the whole rework so a fleet can never
         // run half of it:
@@ -1205,7 +1231,7 @@ class ProtocolChanges {
         // MAINNET IS ARMED at 2026-08-16T00:00:00Z (see BATCH_ISSUANCE_LIMITS_MAINNET_TIME
         // above for the instant and the deploy dependency it carries);
         // testnet/regtest activate at genesis (all zeros).
-        this.addChange('BATCH_ISSUANCE_LIMITS', '2.0.0',BATCH_ISSUANCE_LIMITS_MAINNET_TIME,0,0,0,0,0);
+        this.addChange('BATCH_ISSUANCE_LIMITS', '0.2.0',BATCH_ISSUANCE_LIMITS_MAINNET_TIME,0,0,0,0,0);
 
         // Weighted per-BATCH cost budget (BATCH_COST_WEIGHTING). Replaces the flat
         // 250-command cap registered immediately above with a budget over per-action
@@ -1217,7 +1243,7 @@ class ProtocolChanges {
         // sentinel and for why this is a second flag day rather than a widening of the
         // entry above); testnet/regtest activate at genesis (all zeros), so drills and
         // suites run the post-flag-day rules.
-        this.addChange('BATCH_COST_WEIGHTING', '2.0.0',BATCH_COST_WEIGHTING_MAINNET_TIME,0,0,0,0,0);
+        this.addChange('BATCH_COST_WEIGHTING', '0.2.0',BATCH_COST_WEIGHTING_MAINNET_TIME,0,0,0,0,0);
 
         // Numeric legacy-fee db_hits accumulation. The legacy
         // (non-UNIFIED_FEES) transaction-fee model in dividend.js / callback.js / sweep.js
@@ -1243,7 +1269,7 @@ class ProtocolChanges {
         // testnet/regtest activate at genesis (all zeros) so the numeric model holds from
         // block 0 there and in the unit/e2e suites (the regtest stack is rebuilt fresh, so
         // no pre-activation fee-bearing blocks remain to replay).
-        this.addChange('LEGACY_FEE_NUMERIC_DBHITS', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('LEGACY_FEE_NUMERIC_DBHITS', '0.2.0',1786060800,0,0,0,0,0);
 
         // Partial claim + partial unstake. UNSTAKE v0/v1 and COLLECT v0 gain a
         // trailing OPTIONAL AMOUNT field (no new action versions):
@@ -1271,7 +1297,7 @@ class ProtocolChanges {
         // contract-era anchor 1786060800 (2026-08-07 00:00:00 UTC); a divergent value is a
         // fork. testnet/regtest activate at genesis (no partial-era history to preserve;
         // the e2e/regtest stack exercises partials from block 0).
-        this.addChange('PARTIAL_UNSTAKE_COLLECT', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('PARTIAL_UNSTAKE_COLLECT', '0.2.0',1786060800,0,0,0,0,0);
 
         // Retirement of XCALL result rows the source chain can never deliver.
         // A mirrored, finalized result row that matches no local XCALL v0 request (or
@@ -1298,7 +1324,7 @@ class ProtocolChanges {
         // (2026-08-07 00:00:00 UTC); testnet/regtest activate at genesis (no
         // orphaned-result history worth preserving there, and the drill venue needs the
         // rule from block 0).
-        this.addChange('XCALL_RESULT_ORPHAN_RETIREMENT', '2.0.0',1786060800,0,0,0,0,0);
+        this.addChange('XCALL_RESULT_ORPHAN_RETIREMENT', '0.2.0',1786060800,0,0,0,0,0);
 
         // MAX_SUPPLY=0 is the UNCAPPED sentinel, so the supply ceiling is not
         // applied at all on a token that declares no cap. MAX_SUPPLY is stored as 0 when
@@ -1328,7 +1354,7 @@ class ProtocolChanges {
         // operator's 2026-08-11 ruling settled the product direction, not the flag day.
         // testnet/regtest activate at genesis (all zeros) so the exemption is in force from
         // block 0 there and in the unit/e2e suites.
-        this.addChange('UNCAPPED_MAX_SUPPLY_ZERO', '2.0.0',UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME,0,0,0,0,0);
+        this.addChange('UNCAPPED_MAX_SUPPLY_ZERO', '0.2.0',UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME,0,0,0,0,0);
 
         // Per-block cap on the CROSS_SETTLE pass
         // (CROSS_SETTLE_MAX_PER_BLOCK in protocol/constants.js). With the
@@ -1355,7 +1381,7 @@ class ProtocolChanges {
         // settled the ROUTE, not the flag day, and the anchor is still the operator's
         // to ratify. testnet/regtest activate at genesis (all zeros) so the cap is in
         // force from block 0 there and in the unit/e2e suites.
-        this.addChange('CROSS_SETTLE_PER_BLOCK_CAP', '2.0.0',CROSS_SETTLE_CAP_MAINNET_TIME,0,0,0,0,0);
+        this.addChange('CROSS_SETTLE_PER_BLOCK_CAP', '0.2.0',CROSS_SETTLE_CAP_MAINNET_TIME,0,0,0,0,0);
 
         // Per-subcommand root discriminator for the ATTEST request_id / XCALL call_id
         // preimages.
@@ -1389,7 +1415,7 @@ class ProtocolChanges {
         // ruled the REMEDY on 2026-08-11 and naming the activation instant is a separate
         // act that has not happened yet. testnet/regtest activate at genesis (all zeros),
         // so the discriminator is in force from block 0 there and in the unit/e2e suites.
-        this.addChange('BATCH_SUBCOMMAND_ROOT_DISCRIMINATOR', '2.0.0',BATCH_ROOT_SUB_INDEX_MAINNET_TIME,0,0,0,0,0);
+        this.addChange('BATCH_SUBCOMMAND_ROOT_DISCRIMINATOR', '0.2.0',BATCH_ROOT_SUB_INDEX_MAINNET_TIME,0,0,0,0,0);
 
         // NOTE: STAKE_WEIGHTED_QUORUM (WI-1) is deliberately NOT registered here.
         // Standard activations gate on the LOCAL processing block via isEnabled();
