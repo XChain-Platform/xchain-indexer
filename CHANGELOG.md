@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-08-14
+
+First release of the XChain Platform release train. Every component in the train
+now shares one platform version, so "XChain 0.9.0" names an exact, reproducible
+set of software rather than a rough era.
+
+### Changed
+- Adopted the platform version stream. This component moves from `2.7.17` to
+  `0.9.0`. **The number is lower but the release is newer**: the platform stream
+  starts at 0.9.0 for the testnet series, and 1.0.0 is reserved for mainnet.
+- The minimum hub version this component requires (`xchainRequiresHub`) is
+  rewritten from `2.2.0` to `0.9.0` for the same reason. Left at `2.2.0` it would
+  have refused every hub on the platform stream, since `0.9.0` sorts below it, and
+  no indexer update would have installed again.
+
+<!-- ------------------------------------------------------------------------
+     Versions BELOW this line are this component's own legacy stream, from
+     before the release train. They are kept for history and are NOT comparable
+     to the platform versions above: a higher legacy number is an older release.
+     ------------------------------------------------------------------------ -->
+
 ## [2.7.17] - 2026-08-13
 
 ### Fixed
