@@ -347,11 +347,16 @@ class Database {
         let files = fs.readdirSync(dir);
         let file  = null;
         let db    = await this.getConnection();
+        // One summary line instead of a per-table pair; error paths below still
+        // name the table, so a failure stays attributable.
+        console.log('Verifying database and tables...');
+        let checked = 0;
+        let created = 0;
         // Loop through SQL files
         for (file of files){
             if(file.indexOf('.sql') !== -1){
                 let table   = file.substring(0, file.indexOf('.sql'));
-                console.log('Verifying ' + table + ' table exists...');
+                checked++;
                 try {
                     let results = await db.query("SELECT * FROM information_schema.tables WHERE table_schema = ? AND table_name = ?",[this.dbName, table]);
                     if(results.length > 0){
@@ -367,6 +372,7 @@ class Database {
                         await this.reconcileTableIndexes(file, db);
                     } else {
                         await this.createTable(file);
+                        created++;
                     }
                 } catch(e){
                     this.util.throwError('Error while trying to verify ' + table + ' table exists!');
@@ -375,6 +381,7 @@ class Database {
             }
         }
         await db.release();
+        console.log('Database and tables verified (' + checked + ' tables, ' + created + ' created).');
         return true;
     }
 
@@ -1257,7 +1264,6 @@ class Database {
         // bogus standalone query and fails schema creation (observed: a semicolon in
         // attests.sql's header split its comment, crash-looping the indexer).
         const queries = this.splitSqlStatements(data);
-        console.log('Creating ' + table + ' table and indexes...');
 
         const MAX_ATTEMPTS = 5;
         let lastErr = null;

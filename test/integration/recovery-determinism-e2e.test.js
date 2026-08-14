@@ -243,7 +243,7 @@ async function freshDb(name) {
     await a.end();
     const db = new Database(DB_HOST, DB_PORT, name, DB_USER, DB_PASS, { config: getTestConfig(), util });
     // verifyTables() is the canonical schema loader (creates every src/sql table). Silence
-    // its 100+ "Verifying ... table exists" lines for a readable test run.
+    // its summary lines and any drift-reconcile chatter for a readable test run.
     const realLog = console.log;
     console.log = () => {};
     try { await db.verifyTables(); } finally { console.log = realLog; }
