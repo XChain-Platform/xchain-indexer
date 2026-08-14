@@ -20,7 +20,7 @@
  * because the gates it covers are not all keyed on the same thing:
  *   - a TIME half. The 2026-07-15 hardening gates in protocol_changes.js moved
  *     off the 1798761600 (2027-01-01) placeholder onto the ratified timestamp,
- *     joining the confirmed 2.0.0 contract-era cohort. That timestamp has since
+ *     joining the confirmed 0.2.0 contract-era cohort. That timestamp has since
  * been repinned twice (, then) and now reads 1786060800
  *     (2026-08-07);
  *   - a BTC-HEIGHT half, for the gates keyed on a snapshot_block rather than a
@@ -80,8 +80,8 @@ describe('flag-day placeholder guard @regression @tier1', function () {
     it('the timestamp gates are armed on the ratified 2026-08-07 anchor', function () {
         for (const gate of XC104_TS_GATES) {
             const m = pcSource.match(new RegExp(
-                "this\\.addChange\\('" + gate + "', '2\\.0\\.0',(\\d+)"));
-            assert.ok(m, gate + ' must be registered as a 2.0.0 time-gated change');
+                "this\\.addChange\\('" + gate + "', '0\\.2\\.0',(\\d+)"));
+            assert.ok(m, gate + ' must be registered as a 0.2.0 time-gated change');
             assert.strictEqual(parseInt(m[1]), RATIFIED_ANCHOR_TS,
                 gate + ' mainnet timestamp must be the ratified anchor; a divergent value is a fork');
         }
@@ -170,7 +170,7 @@ describe('flag-day placeholder guard @regression @tier1', function () {
         // Bind the two so a re-arm of the EQUIV anchor cannot silently leave this gate behind.
         const equivMainnet = require(path.join(SRC, 'equivocation_header.js')).EQUIV_HEADER_ACTIVATION.mainnet;
         const m = pcSource.match(new RegExp(
-            "this\\.addChange\\('SLASH_BURNS_PENDING_STAKE', '2\\.0\\.0',\\d+,\\d+,\\d+,(\\d+)"));
+            "this\\.addChange\\('SLASH_BURNS_PENDING_STAKE', '0\\.2\\.0',\\d+,\\d+,\\d+,(\\d+)"));
         assert.ok(m, 'SLASH_BURNS_PENDING_STAKE must be registered with a mainnet_block gate');
         assert.strictEqual(parseInt(m[1]), equivMainnet,
             'SLASH_BURNS_PENDING_STAKE mainnet_block must equal EQUIV_HEADER_ACTIVATION.mainnet; divergence reopens the burn-pending window the gate exists to close');
@@ -183,7 +183,7 @@ describe('flag-day placeholder guard @regression @tier1', function () {
         // honest price validator's two distinct rounds at one BTC tip burn its whole bond.
         const equivMainnet = require(path.join(SRC, 'equivocation_header.js')).EQUIV_HEADER_ACTIVATION.mainnet;
         const m = pcSource.match(new RegExp(
-            "this\\.addChange\\('SLASH_ORACLE_ROUND_DISCRIMINATED', '2\\.0\\.0',\\d+,\\d+,\\d+,(\\d+)"));
+            "this\\.addChange\\('SLASH_ORACLE_ROUND_DISCRIMINATED', '0\\.2\\.0',\\d+,\\d+,\\d+,(\\d+)"));
         assert.ok(m, 'SLASH_ORACLE_ROUND_DISCRIMINATED must be registered with a mainnet_block gate');
         assert.strictEqual(parseInt(m[1]), equivMainnet,
             'SLASH_ORACLE_ROUND_DISCRIMINATED mainnet_block must equal EQUIV_HEADER_ACTIVATION.mainnet');

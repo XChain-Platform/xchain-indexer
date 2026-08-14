@@ -59,7 +59,7 @@ const YEAR_2100 = 4102444800;
 function pcFor(network){
     const indexer = createMockIndexer();
     indexer.config.NETWORK = network;
-    return { pc: new ProtocolChanges(indexer, '2.0.0'), indexer };
+    return { pc: new ProtocolChanges(indexer, '0.2.0'), indexer };
 }
 
 describe('BATCH per-subcommand root discriminator flag day @regression @tier1', function(){
@@ -76,8 +76,8 @@ describe('BATCH per-subcommand root discriminator flag day @regression @tier1', 
         it('is a time-keyed 2.0.0 change, genesis-active on testnet and regtest', function(){
             const change = pcFor('regtest').pc.changes[GATE];
             assert.ok(change, GATE + ' must be registered');
-            assert.strictEqual(change.version_major, 2);
-            assert.strictEqual(change.version_minor, 0);
+            assert.strictEqual(change.version_major, 0);
+            assert.strictEqual(change.version_minor, 2);
             assert.strictEqual(change.version_revision, 0);
             // Time-keyed: EXECUTE runs on BTC, LTC and DOGE, whose heights diverge by
             // millions of blocks, so no single height names one cutover across all three.

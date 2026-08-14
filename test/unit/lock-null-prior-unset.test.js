@@ -360,8 +360,8 @@ describe('LOCK_NULL_PRIOR_UNSET @regression @tier1', function () {
 
         it('it ships in the 2.0.0 contract era, matching its ISSUE-validity siblings', function () {
             const change = makeChanges().changes['LOCK_NULL_PRIOR_UNSET'];
-            assert.strictEqual(change.version_major, 2);
-            assert.strictEqual(change.version_minor, 0);
+            assert.strictEqual(change.version_major, 0);
+            assert.strictEqual(change.version_minor, 2);
             assert.strictEqual(change.version_revision, 0);
         });
     });
