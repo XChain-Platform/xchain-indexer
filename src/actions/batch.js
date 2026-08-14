@@ -26,6 +26,12 @@
  ********************************************************************/
 
 
+// Resolved at CALL time, never at module load: actions.js requires this file while it is
+// still being evaluated, so a top-level require here would bind an empty exports object.
+function probeForbiddenSubAction(action){
+    return require('../actions.js').isBatchProbeForbiddenSubAction(action);
+}
+
 class Batch {
 
     constructor(action){
@@ -567,6 +573,26 @@ class Batch {
                     oracleFeeConsumed:  {}
                 };
 
+            // Public BATCH pre-flight collectors (spec row 46). data['FEE_PROBE'] is set ONLY
+            // on the synthetic transaction the read-only quote surfaces build (actions.js
+            // sources it from tx.fee_probe), so it is false for every decoded transaction and
+            // nothing in this block can move a consensus value. Seeded here, above the
+            // baseKeys snapshot, for the same reason the value ledger is: the per-sub-command
+            // field clear below would otherwise delete them before the second command ran.
+            //
+            //   PROBE_SUB_VERDICTS - each dispatched sub-command's own verdict, in list order.
+            //   PROBE_ORACLE_FEES  - per-oracle fees owed, filled in by dispenser.js.
+            //
+            // Both are probe-LOCAL and deliberately separate from BATCH_VALUE_LEDGER: that
+            // key's PRESENCE is how coinpay.js, dispense.js and validateOracleFee recognise
+            // "inside a flagged batch", and its CONTENTS are consensus state a read-only
+            // surface must never write. Nothing below writes to it.
+            let isProbe = data['FEE_PROBE'] === true;
+            if(isProbe){
+                data['PROBE_SUB_VERDICTS'] = [];
+                data['PROBE_ORACLE_FEES']  = {};
+            }
+
             let baseKeys = new Set(Object.keys(data));
 
             let batchPosition = -1;
@@ -604,9 +630,52 @@ class Batch {
                 // the clear above, which drops every non-base key each iteration.
                 data['BATCH_POSITION'] = batchPosition;
 
+                // STRUCTURAL VM REFUSAL on the public pre-flight path (spec row 46). This is
+                // what lets BATCH be pre-flighted at all without lifting it out of
+                // FEE_QUOTE_DENYLIST: the batch runs for real here, minus the commit, while
+                // holding the block-loop transaction mutex, so dispatching a sub-command that
+                // enters the VM would hand an unauthenticated caller exactly the block-loop-
+                // stalling compute primitive that denylist exists to close.
+                //
+                // Placed HERE, immediately above the dispatch, on the SAME `action` variable
+                // processAction receives - after the uppercase and after normalizeSubAction's
+                // alias rewrite. A pre-scan of the wire string (actions.js
+                // _batchProbeForbiddenSubAction) refuses the batch earlier and more cheaply,
+                // but only this one is impossible to spell around, because there is no further
+                // transformation between the check and the call.
+                if(isProbe && probeForbiddenSubAction(action)){
+                    data['PROBE_SUB_VERDICTS'].push({
+                        position: batchPosition,
+                        action:   action,
+                        status:   null,
+                        refused:  'VM action not dispatched on the public pre-flight'
+                    });
+                    continue;
+                }
+
+                // Probe only: clear the previous sub-command's verdict so a handler that
+                // returns without recording one (a settlement leg that skips, e.g. coinpay.js
+                // on an unmatched payee) reports null rather than inheriting its predecessor's
+                // status. STATUS is a base key, so the field clear above never touches it.
+                if(isProbe) delete data['STATUS'];
+
                 await this.actions.processAction(action, params, data, error);
+
+                if(isProbe)
+                    data['PROBE_SUB_VERDICTS'].push({
+                        position: batchPosition,
+                        action:   action,
+                        status:   (data['STATUS'] === undefined) ? null : data['STATUS'],
+                        refused:  null
+                    });
             }
         }
+
+        // Probe only: the dispatch loop leaves data['STATUS'] holding the LAST sub-command's
+        // verdict, so restore the BATCH's own. Without this the pre-flight would answer for
+        // whichever command happened to come last - which reads as a verdict on the batch and
+        // is not one. Per-sub-command verdicts are reported separately in PROBE_SUB_VERDICTS.
+        if(data['FEE_PROBE'] === true) data['STATUS'] = status;
     }
 }
 

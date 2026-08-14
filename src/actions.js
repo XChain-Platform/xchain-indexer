@@ -58,6 +58,26 @@ const FEE_QUOTE_DENYLIST = new Set(['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']);
 // which carries no pricing fields by design; callers reach it via the SDK's getFeeQuote.
 const FEE_QUOTE_STATIC = new Set(['DEPLOY', 'EXECUTE']);
 
+// Actions that can reach the VM but that classifyFeeQuoteAction does NOT already mark 'denied'.
+// Used only by the BATCH sub-command pre-flight (isBatchProbeForbiddenSubAction): the batch probe
+// dispatches REAL sub-handlers, so "denied at top level" is not a wide enough net - an action the
+// top-level gate lets through for its own reasons still enters the VM when a batch runs it.
+//   ATTEST - v1 response injects a callback EXECUTE (attest.js _injectCallbackExecute).
+//   VOTE   - a v2 finalize on a binding poll injects a callback EXECUTE (vote.js
+//            _injectCallbackExecute), and VOTE is 'quotable', so the fee-quote classes do not
+//            cover it. That reach is NOT open today: vote.js refuses a v2 whose data is not
+//            IS_SYNTHETIC, which no probe sets, so this is defence in depth rather than a fix.
+//            It is deliberately kept anyway: that refusal exists to stop a user finalizing
+//            someone else's poll, which is a different question from "may an unauthenticated
+//            dry-run enter the VM", and relaxing it would silently open this door. The cost is
+//            named honestly: a batch of legitimate VOTE v0/v1 sub-commands loses its
+//            pre-flight, which is the safe direction of a real parity trade.
+//   XCALL  - injects a callback EXECUTE (xcall.js). Already 'exempt', listed so the set is a
+//            complete statement of VM reach rather than a residue of another gate's choices.
+// Kept as an explicit literal, and bound to the dispatch table by
+// test/unit/ActionManifestConformance.test.js so a new action cannot default into 'allowed'.
+const PROBE_VM_REACHING_ACTIONS = new Set(['ATTEST', 'VOTE', 'XCALL']);
+
 // Settlement and lifecycle legs that stage NO protocol fee: the fee was already charged when
 // the originating ORDER/SWAP/DISPENSER was created, so there is nothing for feequote to price.
 // They also can't be dry-run through the synthetic-tx harness: COINPAY/DISPENSE only settle
@@ -107,6 +127,30 @@ function classifyFeeQuoteAction(action){
     if(FEE_QUOTE_DENYLIST.has(a)) return 'denied';
     if(FEE_QUOTE_EXEMPT.has(a))   return 'exempt';
     return 'quotable';
+}
+
+// True for a sub-action a BATCH pre-flight must never dispatch on the public probe path.
+//
+// The public BATCH pre-flight (computePreflight) runs the REAL batch handler under a forced
+// rollback while holding the block-loop transaction mutex, so anything it dispatches runs for
+// real minus the commit. FEE_QUOTE_DENYLIST alone is the wrong net twice over: it is not a
+// statement about VM reach (BATCH is on it because it can SMUGGLE one, not because it runs
+// code) and it lets through actions that are 'exempt'/'quotable' for unrelated reasons and
+// still inject an EXECUTE. So the refusal is the UNION of the denylist and the explicit
+// VM-reach set above, applied to the SAME normalization dispatch uses.
+//
+// This is the reason BATCH may be pre-flighted at all: it replaces "lift BATCH out of the
+// denylist" (which re-opens exactly the unauthenticated VM-compute-under-mutex the denylist
+// exists to close) with a per-sub-command refusal. It is checked TWICE on purpose - once as a
+// wire-string pre-scan before the mutex is ever taken (_batchProbeForbiddenSubAction) and once
+// inside batch.js's dispatch loop against the exact name being dispatched. The second is the
+// load-bearing one: it reads the variable passed to processAction, after alias rewrite and
+// case folding, so no spelling can route around it.
+function isBatchProbeForbiddenSubAction(action){
+    let a = String(action == null ? '' : action).trim().toUpperCase();
+    if(Object.prototype.hasOwnProperty.call(ACTION_ALIASES, a))
+        a = ACTION_ALIASES[a];
+    return FEE_QUOTE_DENYLIST.has(a) || PROBE_VM_REACHING_ACTIONS.has(a);
 }
 
 // How long a public read-only dry-run waits for the block-processing transaction mutex before
@@ -792,6 +836,10 @@ class Actions {
         };
 
         let status = null, feeRecord = null, dryRunError = null, sourceFeeBalance = null;
+        // Probe-only disclosures the BATCH pre-flight collects on `data` (batch.js seeds them
+        // before its baseKeys snapshot, so the per-sub-command field clear preserves them).
+        // Both stay null for every other action and for every decoded transaction.
+        let subCommands = null, oracleFeesOwed = null;
         // beginTransaction acquires the db transaction mutex (serializes against block processing
         // and reorgs); the finally guarantees rollback + lock release even on a handler throw.
         // Outside the try on purpose: a TX_LOCK_BUSY give-up opened no transaction, so it must
@@ -857,6 +905,12 @@ class Actions {
                 : ((resultData && resultData['ACTION_INDEX'] !== undefined) ? resultData['ACTION_INDEX'] : null);
             if(actionIndex !== null)
                 feeRecord = await this.indexerDb.getFeeRecord(actionIndex);
+            if(resultData && Array.isArray(resultData['PROBE_SUB_VERDICTS']))
+                subCommands = resultData['PROBE_SUB_VERDICTS'];
+            if(resultData && resultData['PROBE_ORACLE_FEES'] &&
+               typeof resultData['PROBE_ORACLE_FEES'] === 'object' &&
+               Object.keys(resultData['PROBE_ORACLE_FEES']).length > 0)
+                oracleFeesOwed = resultData['PROBE_ORACLE_FEES'];
         } catch(e){
             dryRunError = 'handler threw: ' + ((e && e.message) ? e.message : e);
         } finally {
@@ -870,7 +924,9 @@ class Actions {
             error:      dryRunError,
             xchainFee:  feeRecord ? String(feeRecord.amount)
                        : ((status === 'valid') ? '0' : null),
-            sourceFeeBalance: sourceFeeBalance
+            sourceFeeBalance: sourceFeeBalance,
+            subCommands:      subCommands,
+            oracleFeesOwed:   oracleFeesOwed
         };
     }
 
@@ -1279,6 +1335,33 @@ class Actions {
         return result;
     }
 
+    // Wire-string pre-scan for the BATCH pre-flight: the FIRST sub-command the probe path must
+    // refuse to dispatch, or null when every sub-command is safe to run.
+    //
+    // Reproduces batch.js's own command split exactly - `TX_DATA.split(';')`, then strip the
+    // `BATCH|<format>|` prefix off element 0, then take `split('|')[0]` - so the names scanned
+    // here are the names that loop will dispatch. Two deliberate asymmetries, both in the
+    // REFUSING direction: this trims and de-aliases unconditionally (batch.js only de-aliases
+    // at/after BATCH_SUBACTION_NORMALIZATION), and an unrecognized FORMAT leaves the prefix
+    // unstripped so element 0 reads as `BATCH`, which is itself forbidden. It can therefore
+    // refuse a batch the loop would have found harmless, and never the reverse.
+    //
+    // This runs BEFORE the dry-run takes the block-loop mutex, so a batch carrying a VM
+    // sub-action costs the node one string scan rather than a transaction. It is NOT the
+    // load-bearing guard: batch.js re-checks each dispatched name (see
+    // isBatchProbeForbiddenSubAction).
+    _batchProbeForbiddenSubAction(params){
+        let format   = this.util.getFormatVersion(params[0]);
+        let commands = ['BATCH'].concat(params).join('|').split(';');
+        commands[0]  = commands[0].replace('BATCH|' + format + '|', '');
+        for(let command of commands){
+            let name = String(command).split('|')[0];
+            if(isBatchProbeForbiddenSubAction(name))
+                return String(name).trim().toUpperCase();
+        }
+        return null;
+    }
+
     // Public validity-first pre-flight. Answers "would the indexer accept this action?"
     // decoupled from native-coin fee support: unlike computeFeeQuote (which returns
     // supported:false when no FEE_DESTINATION is configured, conflating "no fee config" with
@@ -1334,7 +1417,29 @@ class Actions {
 
         // Same classification path as the fee-quote gate (deny-before-exempt).
         let feeClass = classifyFeeQuoteAction(action);
-        if(feeClass === 'denied')
+
+        // BATCH gets a SUB-COMMAND-LEVEL pre-flight rather than the flat refusal, which is
+        // the whole point: a wallet composing a batch could get no chain verdict at all, so
+        // every batch-only rule (the per-payee COINPAY resolution, the cumulative fee ledger,
+        // the command cap) was unreachable from a client and the SDK's Tier 1 fell through to
+        // static checks. The safe door is per-sub-command refusal, NOT lifting BATCH out of
+        // FEE_QUOTE_DENYLIST: the batch still cannot carry anything that reaches the VM, so
+        // the unauthenticated compute primitive the denylist exists to close stays closed.
+        //
+        // computeFeeQuote deliberately still refuses BATCH. Its refusal has an INDEPENDENT
+        // reason this does not answer (a batch's native fee is the SUM of its sub-actions'
+        // state-dependent fees, and a partial quote UNDER-SIZES the output, which burns the
+        // payer's miner fee on a guaranteed-invalid transaction). Validity and pricing are
+        // separate questions and only the validity one is closed here.
+        if(action === 'BATCH'){
+            let forbidden = this._batchProbeForbiddenSubAction(params);
+            if(forbidden)
+                return Object.assign(base, { supported: false, denied: true, valid: null,
+                    deniedSubAction: forbidden,
+                    error: 'BATCH is not available on the public pre-flight endpoint with a ' +
+                           forbidden + ' sub-command (it would run caller-supplied code in the ' +
+                           'VM; use the authenticated dry-run)' });
+        } else if(feeClass === 'denied')
             return Object.assign(base, { supported: false, denied: true, valid: null,
                 error: action + ' is not available on the public pre-flight endpoint (VM action; use the authenticated dry-run)' });
         if(feeClass === 'exempt')
@@ -1433,6 +1538,21 @@ class Actions {
             blockTime:  run.blockTime
         });
 
+        // BATCH only. `subCommands` is each sub-command's own verdict in list order, which is
+        // what a batch pre-flight actually owes a composer: sub-commands are NOT atomic, so
+        // "the BATCH is valid" says nothing about which of them will settle.
+        if(run.subCommands) result.subCommands = run.subCommands;
+
+        // Oracle usage fees this batch owes, per oracle address, summed over its Mode B
+        // DISPENSER sub-commands. DISCLOSED, not judged: a probe carries no transaction and
+        // therefore no oracle fee outputs, so the handler's own check (util.validateOracleFee)
+        // is unreachable here and dispenser.js answers from util.quoteOracleFee, which reads no
+        // output at all. That answer is OPTIMISTIC by construction and stays optimistic per
+        // sub-command - N DISPENSERs naming one oracle each quote the same single fee valid,
+        // where the chain wants the output to cover all N. Rather than fake a verdict the probe
+        // cannot compute, report the TOTAL owed per oracle so a composer can size the outputs.
+        if(run.oracleFeesOwed) result.oracleFeesOwed = run.oracleFeesOwed;
+
         this._preflightMemo.set(memoKey, result);
         return result;
     }
@@ -1494,6 +1614,11 @@ module.exports.classifyFeeQuoteAction = classifyFeeQuoteAction;
 module.exports.getFeeQuoteDenylist    = () => new Set(FEE_QUOTE_DENYLIST);
 module.exports.getFeeQuoteExempt      = () => new Set(FEE_QUOTE_EXEMPT);
 module.exports.getFeeQuoteStatic      = () => new Set(FEE_QUOTE_STATIC);
+// The BATCH probe-path sub-action refusal, exported for batch.js (which cannot require this
+// module at load time - actions.js requires batch.js, so the cycle would resolve to an empty
+// exports object) and for the conformance test that binds the policy to the dispatch table.
+module.exports.isBatchProbeForbiddenSubAction = isBatchProbeForbiddenSubAction;
+module.exports.getProbeVmReachingActions      = () => new Set(PROBE_VM_REACHING_ACTIONS);
 // Pure consensus-runtime gate, exported so its fail-closed contract is unit-testable
 // without a real off-pin engine.
 module.exports.assertConsensusRuntime = assertConsensusRuntime;

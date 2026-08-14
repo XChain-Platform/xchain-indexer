@@ -48,6 +48,7 @@ function makeCtx(util, { dryRun, blockIndex = 100 } = {}){
                                    xchainFee: '0', sourceFeeBalance: null }, dryRun || {});
         },
         _nativeFeeMandatory: Actions.prototype._nativeFeeMandatory,
+        _batchProbeForbiddenSubAction: Actions.prototype._batchProbeForbiddenSubAction,
         computePreflight: Actions.prototype.computePreflight
     };
     return { ctx, calls };
@@ -67,13 +68,32 @@ describe('public pre-flight (computePreflight) @regression @tier1', function () 
 
         it('VM actions stay denylisted (never run the engine)', async function () {
             let { ctx, calls } = makeCtx(makeUtil('BTC', FEE_DEST));
-            for(const a of ['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']){
+            for(const a of ['DEPLOY', 'EXECUTE', 'XEXEC']){
                 let r = await ctx.computePreflight({ action: a, params: '0|x' });
                 assert.strictEqual(r.supported, false, a + ' supported');
                 assert.strictEqual(r.denied, true, a + ' denied');
                 assert.strictEqual(r.valid, null, a + ' valid');
             }
             assert.strictEqual(calls.dryRuns, 0, 'denied actions must not run the dry-run');
+        });
+
+        // BATCH moved from a flat refusal to a sub-command-level one (spec row 46): a batch
+        // that can reach the VM is still refused, a batch that cannot is pre-flighted. The full
+        // policy, its spellings and the dispatch-loop guard behind it are in
+        // test/unit/batchProbePreflight.test.js; this pins the classification seam only.
+        it('BATCH is refused per sub-command, never as a lifted denylist entry', async function () {
+            let { ctx, calls } = makeCtx(makeUtil('BTC', FEE_DEST));
+            let denied = await ctx.computePreflight({ action: 'BATCH', params: '0|DEPLOY|0|code' });
+            assert.strictEqual(denied.supported, false);
+            assert.strictEqual(denied.denied, true);
+            assert.strictEqual(denied.valid, null);
+            assert.strictEqual(denied.deniedSubAction, 'DEPLOY');
+            assert.strictEqual(calls.dryRuns, 0, 'a VM-carrying batch must not run the dry-run');
+
+            let ok = await ctx.computePreflight({ action: 'BATCH', params: '0|SEND|0|JDOG|1|addr' });
+            assert.strictEqual(ok.supported, true);
+            assert.strictEqual(ok.denied, undefined);
+            assert.strictEqual(calls.dryRuns, 1);
         });
 
         it('settlement/lifecycle actions are feeExempt with no fake verdict', async function () {

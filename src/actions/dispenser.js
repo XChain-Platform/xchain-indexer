@@ -271,6 +271,24 @@ class Dispenser {
                     : await this.util.validateOracleFee(data, feeDispenser, this.indexerDb);
                 if(!feeCheck.valid)
                     error = feeCheck.error;
+
+                // Probe-only disclosure (spec row 46). quoteOracleFee reads no output, so it
+                // cannot see what a SIBLING sub-command in the same batch already owes the same
+                // oracle: N Mode B DISPENSERs naming one oracle each quote the same single fee
+                // as covered, where validateOracleFee makes N commands' worth cover exactly N.
+                // The probe cannot close that by tallying against an output it does not have,
+                // so it reports the SUM owed per oracle instead and leaves the judgement to the
+                // composer. A probe-LOCAL object, never data['BATCH_VALUE_LEDGER']: writing
+                // that one would be a read-only surface mutating consensus state, and its
+                // presence is what three other readers use to mean "inside a batch".
+                // Accumulated only when a fee is actually owed, matching validateOracleFee's
+                // own belowDust early-return, which spends nothing and tallies nothing.
+                if(data['FEE_PROBE'] && feeCheck.valid && !feeCheck.belowDust){
+                    if(!data['PROBE_ORACLE_FEES']) data['PROBE_ORACLE_FEES'] = {};
+                    let owed = data['PROBE_ORACLE_FEES'][oracleAddress] || '0';
+                    data['PROBE_ORACLE_FEES'][oracleAddress] =
+                        this.util.bcformat(this.util.bcadd(owed, feeCheck.expectedFee, 8), 8);
+                }
             }
         }
 

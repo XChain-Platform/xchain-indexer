@@ -186,4 +186,75 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
             }
         });
     });
+
+    // Spec row 46: the BATCH pre-flight dispatches REAL sub-handlers on an unauthenticated
+    // read-only surface while the dry-run holds the block-loop transaction mutex, so every
+    // dispatched sub-action is a decision about whether a caller may run it there. Bind that
+    // decision to the dispatch table for the same reason the fee-quote classes are bound: a
+    // NEW action defaults to ALLOWED, and an action with a VM reach that nobody classified
+    // re-opens the compute primitive FEE_QUOTE_DENYLIST exists to close.
+    describe('BATCH probe sub-action policy conformance @regression', function () {
+        const Actions = require('../../src/actions.js');
+
+        // Hand-written, like EXPECTED_FEE_QUOTE_CLASS above and for the same reason: deriving
+        // it from getFeeQuoteDenylist()/getProbeVmReachingActions() would compare the policy
+        // against itself. `true` means "the public BATCH pre-flight must never dispatch it".
+        const EXPECTED_PROBE_FORBIDDEN = {
+            // Run caller-supplied code in the VM, or can carry something that does.
+            BATCH: true, DEPLOY: true, EXECUTE: true, XEXEC: true,
+            // Reach the VM by INJECTING an EXECUTE, which the fee-quote classes do not
+            // capture: ATTEST and XCALL are 'exempt' and VOTE is outright 'quotable'.
+            ATTEST: true, VOTE: true, XCALL: true,
+
+            ADDRESS: false, AIRDROP: false, ANCHOR: false, BET: false, BET_EXPIRE: false,
+            BROADCAST: false, CALLBACK: false, COINPAY: false, COINPAY_EXPIRE: false,
+            COLLECT: false, CROSS_SETTLE: false, DELEGATE: false, DEPOSIT: false,
+            DESTROY: false, DISPENSE: false, DISPENSER: false, DISPENSER_CLOSE: false,
+            DISPENSER_EXPIRE: false, DIVIDEND: false, FILE: false, ISSUE: false, LINK: false,
+            LIST: false, MESSAGE: false, MINT: false, NODEPROOF: false, ORDER: false,
+            ORDER_EXPIRE: false, ORDER_MATCH: false, PRICE: false, SEND: false, SLASH: false,
+            SLEEP: false, STAKE: false, SWAP: false, SWAP_EXPIRE: false, SWAP_MATCH: false,
+            SWEEP: false, UNSTAKE: false, WITHDRAW: false,
+        };
+
+        it('(f1) every dispatched action carries an explicit batch-probe decision', function () {
+            const undecided = localIndexerSet().filter(
+                a => !Object.prototype.hasOwnProperty.call(EXPECTED_PROBE_FORBIDDEN, a));
+            assert.deepStrictEqual(undecided, [],
+                'These actions are dispatched by src/actions.js but nobody decided whether the PUBLIC ' +
+                'BATCH pre-flight may run them as a sub-command, so they default to ALLOWED. If the ' +
+                'action can reach the VM (directly, or by injecting an EXECUTE the way ATTEST/VOTE/XCALL ' +
+                'do) add it to PROBE_VM_REACHING_ACTIONS in src/actions.js. Then record the decision ' +
+                'here: ' + JSON.stringify(undecided));
+        });
+
+        it('(f2) every dispatched action is classified exactly as expected', function () {
+            const mismatches = localIndexerSet()
+                .filter(a => Object.prototype.hasOwnProperty.call(EXPECTED_PROBE_FORBIDDEN, a))
+                .map(a => ({ action: a, want: EXPECTED_PROBE_FORBIDDEN[a],
+                             got: Actions.isBatchProbeForbiddenSubAction(a) }))
+                .filter(m => m.want !== m.got);
+            assert.deepStrictEqual(mismatches, [],
+                'The BATCH probe policy of these actions changed. A true -> false move lets an ' +
+                'unauthenticated caller run them inside a dry-run holding the block-loop mutex; a ' +
+                'false -> true move silently stops pre-flighting a batch shape users compose:\n' +
+                mismatches.map(m => `  ${m.action}: want ${m.want}, got ${m.got}`).join('\n'));
+        });
+
+        it('(f3) the policy map names no action the dispatch table dropped', function () {
+            const dispatched = new Set(localIndexerSet());
+            const orphans = Object.keys(EXPECTED_PROBE_FORBIDDEN).filter(a => !dispatched.has(a));
+            assert.deepStrictEqual(orphans, [],
+                'dead entries would silently re-waive (f1) if a name were reused: ' + JSON.stringify(orphans));
+        });
+
+        it('(f4) the refusal is a SUPERSET of the fee-quote denylist', function () {
+            // The denylist is not a statement about VM reach (BATCH is on it because it can
+            // SMUGGLE one), so the probe policy must never be narrower than it.
+            const missed = [...Actions.getFeeQuoteDenylist()]
+                .filter(a => !Actions.isBatchProbeForbiddenSubAction(a));
+            assert.deepStrictEqual(missed, [],
+                'denylisted actions the BATCH probe would dispatch: ' + JSON.stringify(missed));
+        });
+    });
 });
