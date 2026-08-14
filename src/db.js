@@ -15483,6 +15483,58 @@ Database.MIGRATION_CHECKSUM_REBASELINES = {
         ],
         to: '5adb9505a4986bd5a0d0c82bf1fff46a39621c7a2d17b4846d5d51eb224bc20e',
     },
+    // The licence-header sweep (f1161ec) rewrote the comment block at the top of every
+    // migration file AFTER the fleet had applied these ten, so every database that ran
+    // them before the sweep records the pre-sweep hash. Verified one by one rather than
+    // assumed: strip `--` lines and blanks and the residue hashes IDENTICALLY to HEAD for
+    // all ten, so no executable SQL moved and the ordinary contract above is met.
+    //
+    // FIVE of the ten had to be recovered from ORPHANED BLOBS: the published-history
+    // rewrite left their pre-sweep revisions unreachable from any commit, so a `git log`
+    // range finds nothing and only a scan of the whole object store (6241 blob candidates)
+    // turns them up. Note the recorded value is a SHA-256 of CONTENT while git object names
+    // are SHA-1, which is why the recorded hash never appears as an object name.
+    // BTC, LTC and DOGE mainnet all record the SAME hash per file, so one `from` each.
+    '2026-07-05-polls-binding-callback-columns.sql': {
+        from: '2c6bb959768a2fd2c87bbefadefdd51710c305652c31146cdb8f8996ad0b38e4',
+        to:   'abcd714f3fbf1e42919b09240329165cc1a811b5615d7c993e9534ed97dcfa73',
+    },
+    '2026-07-16-mirror-id-unsigned-align.sql': {
+        from: '9e03175bbec77d4143e32ee5cbe71324937fac970291a65b041a964bf93aafa0',
+        to:   '59fa518e404d94638b802c2a1db7ec2cc67df5ce4575148eca265048a794b92a',
+    },
+    '2026-07-18-status-tables-status-action-composite-idx.sql': {
+        from: 'e85523f8acb1baa97d62d10f638de660ab850eb453a11411a9da3b8199aeede0',
+        to:   '4cf53571267b133ca276dc5dd83b12e3ca94befd009757d6c2c1c9fe213459ae',
+    },
+    '2026-07-21-anchor-reward-attestations-table.sql': {
+        from: '3ccac829d5c9ad0a0f4f8e3c216ad15c1923ebd4bc61e747dd76928c3d3f8e3d',
+        to:   '5574ccc85e4a11dc24956fc2ea2efac4846c4768b03a24bba442cd7c1f2efe00',
+    },
+    '2026-07-26-bet-cancel-resolve-status-tables.sql': {
+        from: '4fa4a1ad6f5c31b8ba1417159110263d94f6b63f83636e42c089238fbf49eead',
+        to:   'd24b3fe5395e7d77a8640822efaa6239779d538cc705d67fec48999276cded85',
+    },
+    '2026-07-28-escrow-leaf-journal-table.sql': {
+        from: '8d55e8c4e54cdfe63339ba6acc8a5e719c1a4a3a00953906704a1d6ea63a46f2',
+        to:   '7bc8813dee9e63245b65f4ec91a377ff47ecbad031286ce5d04a69ccad21fe2e',
+    },
+    '2026-07-28-state-tree-roots-contract-state-root.sql': {
+        from: '85dcb71f52a46f18a37f25949b04d3fc6b3b98b0bb31e43a3fd5a1d9b7220ac5',
+        to:   'c3d1c8e4ef77a026de76b4fc17024cb043315e42f059f15b70727212e83aa7d5',
+    },
+    '2026-07-28-state-tree-roots-escrow-shadow.sql': {
+        from: 'd83b25e94261e24b7a545999e0332aab44364d5a1efc39c9a36786daae53bc10',
+        to:   '3240968ff925d609b9a5d699f16f7226f05bda884cc4b367d29923352a5c3c64',
+    },
+    '2026-07-29-gated-files-threshold-and-publisher.sql': {
+        from: '2e93b7eda5ca01be23dfc18c9ea137cbf72d3c4c0279150be9930e46f28b72b9',
+        to:   '6d900aac43b92e41c6fac1ee3ea1fb27785803751ec1e94b9440919a64621b36',
+    },
+    '2026-07-30-attests-add-relay-origin-columns.sql': {
+        from: '27a69b77def4039fc199963c2c4523e45db5e896c36f5ca34c43a81f07b5d9d7',
+        to:   'e8c3645589499c3d5331bb1a7d4e2d4afd8cf52230f2db149508a35db16e554b',
+    },
 };
 
 // One-time ledger rename map (old undated filename -> new dated filename). Three
