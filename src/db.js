@@ -632,6 +632,10 @@ class Database {
     // half-migrated with no operator signal: too narrow, an uncompressed key is
     // truncated to 66 chars under non-strict sql_mode or rejected with errno 1406.
     // Skips silently when the column is absent (table not created yet).
+    //
+    // This assertion is REGISTERED in Database.STARTUP_ASSERTED_MIGRATIONS, which is
+    // what lets a deploy discover the requirement before it recreates a container
+    // rather than after (see that constant for the 2026-08-09 outage it closes).
     async _assertPubkeyColumnIsUncompressedWide(){
         const UNCOMPRESSED_PUBKEY_HEX_LENGTH = 130;
         let conn;
@@ -647,10 +651,16 @@ class Database {
             // guard cannot reason about, so leave it to the column's own contract.
             if(len == null || Number.isNaN(len)) return;
             if(len < UNCOMPRESSED_PUBKEY_HEX_LENGTH){
+                // Name the exact file. The old text said only "node src/migrate.js", which
+                // on an aged fleet DB means "apply every pending manual migration" - nine of
+                // them on mainnet in August 2026, one a DROP COLUMN - so the operator either
+                // ran far more than the halt required or had to work out which file it meant
+                // while three chains were down.
                 throw new Error(
                     'pubkeys.pubkey holds ' + len + ' chars but VARCHAR(' + UNCOMPRESSED_PUBKEY_HEX_LENGTH + ') is required ' +
                     'for uncompressed keys; narrower silently NULLs or truncates the source_pubkey seam field. ' +
-                    'Run the pending migration: node src/migrate.js'
+                    'Run the pending migration: node src/migrate.js --file ' +
+                    Database.startupAssertedMigrationFile('_assertPubkeyColumnIsUncompressedWide')
                 );
             }
         } finally {
@@ -15588,6 +15598,16 @@ Database.MIGRATION_CHECKSUM_REBASELINES = {
         from: '27a69b77def4039fc199963c2c4523e45db5e896c36f5ca34c43a81f07b5d9d7',
         to:   'e8c3645589499c3d5331bb1a7d4e2d4afd8cf52230f2db149508a35db16e554b',
     },
+    // Added the `deploy-precondition=required` header tag (and the comment explaining
+    // it) so the deploy tool can see, from the source tree it is about to deploy, that
+    // this migration is a startup-assertion precondition. Comment lines only; the
+    // executable ALTER is byte-identical. All three mainnet indexers applied this file
+    // on 2026-08-09 and recorded the single pre-tag revision (68b65e7, its only
+    // committed revision), so one `from` covers the fleet.
+    '2026-07-24-pubkeys-widen-uncompressed.sql': {
+        from: '2275f44bb043fe473b7781f08e5ce30253c1148e52ba2709efb5fb1214f282d2',
+        to:   '45a8fd3f4ce71360a1777bd1b86f14eb534259cffa651f76be5c15afafd50657',
+    },
 };
 
 // One-time ledger rename map (old undated filename -> new dated filename). Three
@@ -15652,6 +15672,76 @@ Database.backdatedFrontierViolation = function(pendingName, appliedNames){
     }
     if(frontier === null) return null;
     return (String(pendingName) < frontier) ? frontier : null;
+};
+
+// The header token that marks a migration as a DEPLOY PRECONDITION: code in this
+// tree asserts it at startup, so a build carrying that assertion must not be
+// deployed against a database that has not applied it. It rides on the existing
+// `-- xchain:migration` directive line, next to `mode=`:
+//
+//   -- xchain:migration mode=manual deploy-precondition=required
+//
+// Only a mode=manual file needs it. An `auto` file applies itself at the first
+// startup that sees it, so it can never be the missing precondition.
+Database.DEPLOY_PRECONDITION_TAG = 'deploy-precondition=required';
+
+// Migrations this tree ASSERTS at startup: the service refuses to run when the
+// target database has not applied them.
+//
+// WHY THIS LIST EXISTS
+// --------------------
+// 2026-08-09: deploying 3bc9771 put all three mainnet indexers (BTC, DOGE, LTC)
+// into Restarting(1) crash-loops on _assertPubkeyColumnIsUncompressedWide, because
+// 2026-07-24-pubkeys-widen-uncompressed.sql is mode=manual and had never been
+// applied on mainnet. Both halves were individually right - the migration is a COPY
+// rebuild under a metadata lock, so it wants the writer quiesced, and the assertion
+// is what stops a narrow column silently truncating source_pubkey - but they shipped
+// with nothing checking the precondition at DEPLOY time, so the only thing that
+// discovered the requirement was a production outage.
+//
+// The registry is the in-code half of the fix. The machine-readable half is the
+// DEPLOY_PRECONDITION_TAG in each listed migration's own header, which the deploy
+// tool (xchain-node's MigrationPreconditionService) reads out of the source tree it
+// is about to deploy and checks against the target DB's schema_migrations BEFORE the
+// container is recreated. test/unit/migration-preconditions.test.js keeps the halves
+// in step: every entry here must exist, be mode=manual, and carry the tag.
+//
+// ADDING A STARTUP ASSERTION: register it here and tag its migration file, or the
+// next fleet deploy discovers the requirement the way 2026-08-09 did.
+Database.STARTUP_ASSERTED_MIGRATIONS = [
+    {
+        file:      '2026-07-24-pubkeys-widen-uncompressed.sql',
+        assertion: '_assertPubkeyColumnIsUncompressedWide',
+        symptom:   'Fatal indexer error: pubkeys.pubkey holds 66 chars but VARCHAR(130) is required'
+    }
+];
+
+// Registry lookup by assertion method name. Throws rather than returning undefined:
+// an assertion that names a migration nobody registered would otherwise render as
+// "--file undefined" in the very error an operator reads mid-outage.
+Database.startupAssertedMigrationFile = function(assertion){
+    const entry = Database.STARTUP_ASSERTED_MIGRATIONS.find(m => m.assertion === assertion);
+    if(!entry) throw new Error('startupAssertedMigrationFile: ' + assertion +
+        ' is not registered in Database.STARTUP_ASSERTED_MIGRATIONS');
+    return entry.file;
+};
+
+// Does this migration file's header declare itself a deploy precondition?
+// Prologue-anchored exactly like _migrationMode (the scan stops at the first
+// non-blank, non-comment line), so a token buried in body prose or a data literal
+// cannot arm it. Pure string logic, unit-tested directly.
+//
+// Twin: xchain-node/src/services/MigrationPreconditionService.js carries the same
+// parser, because the deploy tool reads these files from a source tree it has only
+// cloned and cannot require this module. Keep the two in step.
+Database.migrationDeclaresDeployPrecondition = function(raw){
+    const prologue = [];
+    for(const line of String(raw).split('\n')){
+        const trimmed = line.trim();
+        if(trimmed === '' || trimmed.startsWith('--')){ prologue.push(line); continue; }
+        break;
+    }
+    return /^\s*--\s*xchain:migration\b[^\n]*\bdeploy-precondition\s*=\s*required\b/im.test(prologue.join('\n'));
 };
 
 // Exposed for the unit suite (and the sync-twin drift check): the weightless-row
