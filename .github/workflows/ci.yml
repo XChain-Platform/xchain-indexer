@@ -29,9 +29,14 @@ jobs:
   # workflow because it needs a DB service container and the canonical decoder
   # schema (test/integration/setup/db-connection.js loads xchain-decoder's
   # src/sql/*.sql so the harness can never drift from the real decoder schema).
-  # No xchain-vm is provisioned here (the dir is gitignored); the indexer
-  # degrades gracefully and the whole tier is written to pass without a VM
-  # (EXECUTE paths are e2e-suite territory).
+  #
+  # xchain-vm IS provisioned here, and the ordering is the trap: the indexer
+  # declares `"xchain-vm": "file:./xchain-vm"`, a gitignored path. `npm ci`
+  # SUCCEEDS against the missing path and every require('xchain-vm') then
+  # fails at run time, which is why the contract-reorg scenario (a real DEPLOY)
+  # sat red with `deploy VM executor unavailable`. So: clone the canonical
+  # sibling, stage it with vendor:vm (which also npm-installs inside the staged
+  # copy, compiling isolated-vm for this runner), and only THEN npm ci.
   integration:
     runs-on: ubuntu-latest
     services:
@@ -76,6 +81,24 @@ jobs:
         with:
           node-version: "22"
           cache: npm
+
+      # Sibling clone + vendor BEFORE `npm ci` (see the job header). The clone
+      # goes beside the workspace, matching the developer layout vendor-vm.sh
+      # resolves (../xchain-vm), and is unauthenticated because the sibling is
+      # public post-flip.
+      - name: Stage the vendored xchain-vm from its canonical sibling
+        env:
+          SIBLINGS_REF: ${{ github.ref == 'refs/heads/master' && 'master' || 'develop' }}
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/.."
+          rm -rf xchain-vm
+          url="https://github.com/${{ github.repository_owner }}/xchain-vm.git"
+          git clone --quiet --depth 1 --branch "$SIBLINGS_REF" "$url" xchain-vm 2>/dev/null \
+            || git clone --quiet --depth 1 "$url" xchain-vm
+          echo "sibling xchain-vm @ $(git -C xchain-vm rev-parse --abbrev-ref HEAD) $(git -C xchain-vm rev-parse --short HEAD)"
+          cd "$GITHUB_WORKSPACE"
+          npm run vendor:vm
 
       - name: Install dependencies
         run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
