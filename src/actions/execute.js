@@ -506,11 +506,24 @@ class Execute {
             gasUsed = execCeiling;
         }
 
+        // ...and enforce the same ceiling on EVERY path, success included. The clamp above
+        // only fires for a resource TERMINATION, but a SUCCESS result carries the VM's
+        // gasUsed verbatim, and the tracker adds a charge to `used` before deciding whether
+        // it exhausted the limit, so a swallowed charge-site throw returns success with
+        // gasUsed a charge over the ceiling. Unclamped that bills a caller-funded run past
+        // its own reservation and, for a cross-contract callee, makes VM_GAS_UNUSED_SUBTREE
+        // below under-refund the parent. Same shape runControllerGuard already settles on
+        // (Math.min against guardCeiling), and a no-op whenever the VM honours the ceiling:
+        // the pre-VM value here is VM_EXECUTE_BASE, which is below MIN_CALL_GAS, the floor
+        // every reservation is validated against. execCeiling, never GAS_CEILING: clamping a
+        // callee to the protocol ceiling would diverge the parent's refund settlement.
+        gasUsed = Math.min(gasUsed, execCeiling);
+
         // Gas settlement. gasBilled = this run's metered usage minus the unused
         // reservations refunded by its completed callees. By induction each
         // callee's gasUnusedSubtree already nets ITS children, so subtracting the
-        // direct children here settles the whole subtree. Bounds (guarded anyway):
-        // 0 <= gasBilled <= gasUsed <= execCeiling.
+        // direct children here settles the whole subtree. Bounds (now enforced above,
+        // not merely assumed): 0 <= gasBilled <= gasUsed <= execCeiling.
         let gasBilled = Math.max(0, gasUsed - nestedGasUnused);
 
         // Recalculate fee based on billed gas

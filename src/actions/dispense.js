@@ -293,7 +293,20 @@ class Dispense {
                 if(this.util.bclt(available, dispenser['GET_AMOUNT']))
                     error = 'invalid: GET_AMOUNT (insufficient funds)';
                 if(!error){
-                    multiplier = this.util.bcfloor(this.util.bcdiv(available, dispenser['GET_AMOUNT'], 64));
+                    // Saturating, not throwing: this ratio is attacker-chosen on both sides.
+                    // GET_AMOUNT is validated only against GET_TICK's DECIMALS, and a tick may
+                    // be issued with up to MAX_TOKEN_DECIMALS (18), so a dispenser priced at
+                    // 1e-18 triggered by a token SEND of ~0.01 (utility.js processDispenserSends
+                    // puts the SEND's own amount in COIN_AMOUNT) drives available/GET_AMOUNT past
+                    // 2^53-1. A throw here fires BEFORE any status is recorded, escapes parse()
+                    // into the block loop, and that loop rolls back and retries the same block
+                    // forever - every indexer on the chain wedged for the price of two
+                    // transactions. Saturating needs no activation gate: the two helpers agree on
+                    // every input that does not overflow, and the behavior it replaces on the
+                    // inputs that do is "no node commits this block at all", so no committed
+                    // history can contain one. The GIVE_REMAINING clamp below bounds the
+                    // saturated count to the dispenser's real capacity.
+                    multiplier = this.util.bcfloorSaturating(this.util.bcdiv(available, dispenser['GET_AMOUNT'], 64));
                     // Non-FIAT prices a fill directly in coin: GET_AMOUNT per fill.
                     if(ledger)
                         unitCoinCost = dispenser['GET_AMOUNT'];
@@ -575,14 +588,19 @@ class Dispense {
             let closeThreshold = perUnitClose ? dispenser['GIVE_AMOUNT'] : dispense['GIVE_AMOUNT'];
             if(status=='valid' && this.util.bclt(dispenser['GIVE_REMAINING'], closeThreshold)){
                 let action = 'DISPENSER_CLOSE';
-                let data = {};
-                data['ACTION']                 = action;
-                data['BLOCK_INDEX']            = block_index;
-                data['BLOCK_TIME']             = block_time;
-                data['TX_INDEX']               = tx_index;
-                data['DISPENSER_ACTION_INDEX'] = dispenser['ACTION_INDEX'];
-                data['DISPENSER_STATUS']       = 'empty';
-                await this.actions.processAction(action, null, data, null);
+                // cdata, not data: `data` is parse()'s own transaction object, and a local
+                // by that name shadows it for the rest of this block, so a later edit
+                // reaching for the transaction's SOURCE / FEE_PROBE would silently read the
+                // synthetic close payload instead. Matches the MAX_DISPENSES branch below,
+                // which already names it this way for the same reason.
+                let cdata = {};
+                cdata['ACTION']                 = action;
+                cdata['BLOCK_INDEX']            = block_index;
+                cdata['BLOCK_TIME']             = block_time;
+                cdata['TX_INDEX']               = tx_index;
+                cdata['DISPENSER_ACTION_INDEX'] = dispenser['ACTION_INDEX'];
+                cdata['DISPENSER_STATUS']       = 'empty';
+                await this.actions.processAction(action, null, cdata, null);
             } else if(status=='valid' && dispenserCaps.isDispenserCapsActive(block_time, this.config['NETWORK'])){
                 // MAX_DISPENSES cap (see dispenser_caps_activation.js). The dispense
                 // that reaches the cap already executed above; now the dispenser auto-closes

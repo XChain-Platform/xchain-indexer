@@ -303,6 +303,46 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             assert.strictEqual(stateArg.STATE_VALUE, null);
         });
 
+        // The ceiling clamp used to fire only for a resource TERMINATION, so a success result
+        // reporting more gas than the run's ceiling billed unclamped: the gas tracker adds a
+        // charge to `used` before deciding it exhausted the limit, so a swallowed charge-site
+        // throw returns success one charge over. The settlement's own stated bound
+        // (0 <= gasBilled <= gasUsed <= execCeiling) has to be enforced, not assumed.
+        it('clamps an over-ceiling SUCCESS gasUsed to the protocol ceiling', async function () {
+            actionsCtx.vm = makeVm({
+                execute: sinon.stub().resolves({
+                    success: true,
+                    gasUsed: 1000000 + 4096,       // GAS_CEILING plus one charge
+                    stateChanges: [], stateDeletes: [], emittedActions: [],
+                }),
+            });
+            handler = new Execute(actionsCtx);
+
+            const data = executeData({ FORMAT: 0 });
+            await handler.parse(['0', String(CONTRACT), 'run', ''], data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(data['VM_GAS_BILLED'], 1000000);
+        });
+
+        // A cross-contract callee settles against its CALLER-FUNDED reservation, not the
+        // protocol ceiling, and the parent's refund reads execCeiling - gasBilled: an
+        // unclamped callee both overbills and zeroes out the parent's refund.
+        it('clamps an over-ceiling SUCCESS to the caller-funded reservation, not the protocol ceiling', async function () {
+            actionsCtx.vm = makeVm({
+                execute: sinon.stub().resolves({
+                    success: true,
+                    gasUsed: 60000,
+                    stateChanges: [], stateDeletes: [], emittedActions: [],
+                }),
+            });
+            handler = new Execute(actionsCtx);
+
+            const data = executeData({ FORMAT: 0, IS_EMISSION: true, VM_GAS_LIMIT: 50000 });
+            await handler.parse(['0', String(CONTRACT), 'run', ''], data, null);
+            assert.strictEqual(data['VM_GAS_BILLED'], 50000);
+            assert.strictEqual(data['VM_GAS_UNUSED_SUBTREE'], 0);
+        });
+
     });
 
     describe('VM failure paths', function () {

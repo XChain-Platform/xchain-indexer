@@ -97,6 +97,24 @@ function hubConfigStaleness(lastHubConfigFetchAt, now){
 // clock passes it and the stall persists, the mirror really is stuck and the normal
 // grace-window verdict applies again. This is a HEALTH verdict only: it changes no
 // hashed value and no barrier waits any differently for it.
+// Top-level key of the hub's configs tree for a coin. The hub keys that tree by FULL
+// lowercase coin name ('bitcoin'), never by the ticker config['COIN'] carries ('BTC'):
+// its rows are written from xchain-node's full-name config tree (constants.js Coin) and
+// every hub-side reader of the same tree maps the ticker through COIN_FULL_NAME first
+// (XChainHub getFeeQuote, _resolveIndexerUrl, db normalizeCoin). Indexing it with the raw
+// ticker resolves undefined on every poll, so the overlay delivers nothing and says
+// nothing. Falls back to the raw value for a coin absent from the registry.
+//
+// Not every hub-served map is this shape: _checkHubConsensusHash reads
+// coin_consensus_hashes, which is genuinely ticker-keyed and must NOT be mapped.
+//
+// Module-level rather than a method so the prototype-borrowed
+// `_mergeHubParams.call(stub, tree)` the consensus soft-fork guard uses keeps working
+// against a bare `{ config }` stub.
+function hubConfigCoinKey(coinTicker){
+    return require('./coins').COIN_FULL_NAME[coinTicker] || coinTicker;
+}
+
 function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null){
     if(!stallReason) return false;
     if(lastBlockCommittedAt == null) return false;
@@ -592,11 +610,14 @@ class XChainIndexer {
             }
         }
 
-        // Start the durable hub-push retry queue. Both PRICE hub pushes (v0 round
-        // and v1 oracle price) enqueue into pending_hub_pushes on failure so a
-        // transient hub outage can't permanently drop the row; this poller drains
-        // the queue with exponential backoff. No-op when no hub is configured
-        // (nothing ever enqueues in that case).
+        // Start the durable hub-push retry queue. Both PRICE hub pushes (v0 round and v1
+        // oracle price) are write-ahead: price.js enqueues the pending_hub_pushes row
+        // UNCONDITIONALLY inside the open block transaction, so it commits atomically with
+        // the prices row. Live delivery runs post-commit (_deliverStagedHubPushes) and drops
+        // the row only on success, so neither a crash in that window nor a transient hub
+        // outage can permanently drop it; this poller drains whatever survives, with
+        // exponential backoff. No-op when no hub is configured (nothing ever enqueues in
+        // that case).
         this.hubPushQueue = new HubPushQueue(this);
         this.hubPushQueue.start();
 
@@ -1400,7 +1421,7 @@ class XChainIndexer {
         const SCALAR_PARAMS = [];
         const BLOB_PARAMS   = [];
 
-        let coin    = this.config.COIN;
+        let coin    = hubConfigCoinKey(this.config.COIN);
         let network = this.config.NETWORK;
         let hubParams = (allConfigs && allConfigs[coin] && allConfigs[coin][network] && allConfigs[coin][network]['xchain-indexer']) || {};
 
@@ -1657,3 +1678,4 @@ module.exports.effectiveHubConfigPollIntervalMs      = effectiveHubConfigPollInt
 module.exports.hubConfigStalenessLimitMs             = hubConfigStalenessLimitMs;
 module.exports.hubConfigStaleness                    = hubConfigStaleness;
 module.exports.stallWedged                           = stallWedged;
+module.exports.hubConfigCoinKey                      = hubConfigCoinKey;

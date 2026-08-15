@@ -9941,6 +9941,13 @@ class Database {
     // TODO: Circle back and add support for cross-chain market data (different coin_id)
     async getMarkets(block_index, update){
         let markets    = [];
+        // Orientation-free keys of the pairs already collected, so the dedupe below is a lookup
+        // instead of a full rescan of `markets` per row (the old scan never broke on a hit, so
+        // the cost was O(rows x pairs) on the block path). Spans every order type, matching the
+        // array it shadows. NULL tick ids are deliberately left OUT of the key set: a NULL never
+        // loose-equalled a stored Number, so the old scan pushed those rows unconditionally, and
+        // both consumers (createMarket / updateMarkets) are idempotent on the repeats.
+        let marketKeys = new Set();
         let args       = [block_index];
         let counts     = false;
         let query      = '';
@@ -10027,17 +10034,17 @@ class Database {
                 let results = await this.doQuery(query, args);
                 if(results.length > 0){
                     for(let row of results){
-                        // Check if this pair already exists
-                        let found = false;
-                        for(let pair of markets){
-                            if((pair.tick1_id == row.tick1_id && pair.tick2_id == row.tick2_id) || (pair.tick1_id == row.tick2_id && pair.tick2_id == row.tick1_id))
-                                found = true;
-                        }
-                        if(!found){
-                            markets.push({
-                                tick1_id: Number(row.tick1_id),
-                                tick2_id: Number(row.tick2_id)
-                            });
+                        // Check if this pair already exists (either orientation)
+                        let tick1_id = Number(row.tick1_id);
+                        let tick2_id = Number(row.tick2_id);
+                        // order_matches carries a NULL tick id on the native-coin side of a
+                        // COINPay match; keep those rows on the old unconditional-push path.
+                        let keyed = !this.util.isNull(row.tick1_id) && !this.util.isNull(row.tick2_id);
+                        let key   = Math.min(tick1_id, tick2_id) + ':' + Math.max(tick1_id, tick2_id);
+                        if(!keyed || !marketKeys.has(key)){
+                            if(keyed)
+                                marketKeys.add(key);
+                            markets.push({ tick1_id, tick2_id });
                         }
                     }
                 }
@@ -11621,7 +11628,17 @@ class Database {
             '                    WHERE vr.reward_type = ara.reward_type ' +
             '                      AND vr.round_reference = ara.round_reference ' +
             '                      AND pk.pubkey <= LOWER(ara.publisher)) ' +
-            ' ORDER BY ara.reward_type, ara.round_reference, ara.publisher, ara.id',
+            // Tiebreak on snapshot_block, the remaining component of uq_reward_tuple, BEFORE
+            // ara.id. Two rows can share (reward_type, round_reference, publisher) and differ
+            // only in snapshot_block, and deriveAnchorRewards upserts each one in this order
+            // while validator_rewards' UNIQUE key omits snapshot_block, so the LAST row
+            // processed decides the reward's earn-block block_index. ara.id is a per-node
+            // AUTO_INCREMENT (arrival order on this mirror, reassigned by a from-genesis
+            // re-mirror), so leaving it as the deciding term let two nodes credit the reward at
+            // different heights, which COLLECT's `block_index <= ?` SUM and the block-scoped
+            // rollback both read: a ledger-hash fork. Same discipline getOraclePrice states.
+            // ara.id stays last only as a total-order fallback; it can no longer decide.
+            ' ORDER BY ara.reward_type, ara.round_reference, ara.publisher, ara.snapshot_block, ara.id',
             [network, maxSnapshotBlock]);
     }
 

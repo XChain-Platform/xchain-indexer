@@ -519,8 +519,12 @@ class Utility {
         // .toNumber() above Number.MAX_SAFE_INTEGER (2^53-1) silently rounds to a
         // nearby double, corrupting a value that then flows into consensus math.
         // Mirror the encoder's parseSatoshiAmount fail-fast: throw loudly rather
-        // than return a lossy integer (covers dispense.js multiplier and the
-        // rawTokens/rawMultiplier unit math at :1964/:1991).
+        // than return a lossy integer (covers the rawTokens/rawMultiplier unit
+        // math at :1964/:1991, and dispense.js's GIVE_REMAINING clamp, which is
+        // reached only when capacity is already below an in-range multiplier).
+        // Every dispenser FILL count uses bcfloorSaturating instead: those ratios
+        // are attacker-reachable, and a throw on the block-processing path wedges
+        // the block loop rather than rejecting one action.
         const floored = this.bcnum(num).floor();
         if(floored.gt(Number.MAX_SAFE_INTEGER))
             throw new RangeError(`bcfloor result (${floored.toString()}) exceeds the maximum safe integer (${Number.MAX_SAFE_INTEGER}) and cannot be represented without precision loss`);
@@ -529,16 +533,24 @@ class Utility {
 
     // bcfloor, but saturating at Number.MAX_SAFE_INTEGER instead of throwing.
     //
-    // For the FIAT dispenser unit counts ONLY. Those are
+    // For every dispenser fill count, FIAT and non-FIAT alike. The FIAT ones are
     //   Mode A: coin_amount / (FIAT_AMOUNT / coin_price)
     //   Mode B: (coin_amount * coin_price) / oracle_price
-    // so unlike the non-FIAT coin_amount / GET_AMOUNT they scale with an
-    // externally-chosen price and can run many orders of magnitude higher. PRICE
-    // v1 validates VALUE only as a positive 8-decimal string (actions/price.js),
-    // so a 0.00000001 quote on a high-magnitude fiat pair pushes the count past
-    // 2^53-1 for well under one coin of payment, sent to an address the dispenser
-    // operator controls: the coin comes straight back and the attack costs a
-    // transaction fee.
+    // which scale with an externally-chosen price and can run many orders of
+    // magnitude higher than the payment. PRICE v1 validates VALUE only as a
+    // positive 8-decimal string (actions/price.js), so a 0.00000001 quote on a
+    // high-magnitude fiat pair pushes the count past 2^53-1 for well under one
+    // coin of payment, sent to an address the dispenser operator controls: the
+    // coin comes straight back and the attack costs a transaction fee.
+    //
+    // This comment used to scope the helper to FIAT ONLY, on the premise that the
+    // non-FIAT coin_amount / GET_AMOUNT could not run that high. That premise was
+    // false: GET_AMOUNT is validated only against GET_TICK's DECIMALS, a tick may
+    // be issued with up to MAX_TOKEN_DECIMALS (18), and the token-SEND trigger
+    // channel puts an attacker-chosen SEND amount in COIN_AMOUNT
+    // (processDispenserSends), so a 1e-18 price against a ~0.01 SEND clears 2^53-1
+    // for two cheap transactions. dispense.js's non-FIAT branch saturates for that
+    // reason.
     //
     // Throwing there is worse than saturating. A throw on the block-processing
     // path rolls the block back and the loop retries the SAME block forever (the

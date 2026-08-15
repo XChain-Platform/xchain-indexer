@@ -34,8 +34,19 @@ class Dispenser_Close {
 
     async parse(params, data, error){
 
-        // Get info on the dispenser
-        let dispenser = await this.indexerDb.getDispenserInfo(this.config['COIN'], data['DISPENSER_ACTION_INDEX']);
+        // Get info on the dispenser.
+        //
+        // BLOCK_TIME is the third argument on purpose: getDispenserInfo threads it into
+        // getDispenserEdits, whose ALLOW_LIST / BLOCK_LIST activation compare is
+        // bcgt(block_time, edit.block_time + DISPENSER_LIST_DELAY). Omitted, it coerced
+        // to 0 (bcnum) and that compare silently read false, so this path alone held a
+        // dispenser object with the list overlay never applied. Behavior-neutral today
+        // (nothing below reads ALLOW_LIST or BLOCK_LIST, and EXPIRATION / give_escrow
+        // overlay unconditionally); passed so the object matches what dispense.js and
+        // dispenser.js get, and so a future reader of the list fields here is not handed
+        // a stale view by a NaN-as-zero compare. Every dispatch path sets BLOCK_TIME
+        // (utility.js processCancellations, both dispense.js auto-closes).
+        let dispenser = await this.indexerDb.getDispenserInfo(this.config['COIN'], data['DISPENSER_ACTION_INDEX'], data['BLOCK_TIME']);
 
         // Only proceed if we have a valid dispenser
         if(dispenser){

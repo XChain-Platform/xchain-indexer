@@ -215,7 +215,10 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
             STAKING: { ACTIVATION_DELAY_BLOCKS: 6, COOLDOWN_BLOCKS: 1000 }
         }};
         // Hub commits divergent values for every consensus param this finding covers.
-        const hubAttempt = { BTC: { regtest: { 'xchain-indexer': {
+        // Full-name-keyed, the way the hub actually serves its configs tree. A ticker-keyed
+        // tree here would make this guard pass for the wrong reason: the overlay would find
+        // nothing to apply rather than deliberately refusing to apply it.
+        const hubAttempt = { bitcoin: { regtest: { 'xchain-indexer': {
             EXPIRATION_FEE_PER_DAY: '9.99999999',
             ACTIVATION_DELAY_BLOCKS: 999,
             STAKING: { ACTIVATION_DELAY_BLOCKS: 999, COOLDOWN_BLOCKS: 1 }

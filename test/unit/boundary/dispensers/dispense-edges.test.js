@@ -295,4 +295,58 @@ describe('DISPENSE edge-case tests @regression @tier2', function () {
                 'expected DISPENSER_CLOSE to be triggered when dispenser empties exactly');
         });
     });
+
+    describe('DSP-06: dust-priced non-FIAT dispenser does not wedge the block loop', function () {
+        let indexer, actionsCtx, handler;
+
+        // A GET_TICK issued with the maximum 18 decimals may legally price a dispenser at
+        // 1e-18, and the token-SEND trigger channel puts an attacker-chosen SEND amount in
+        // COIN_AMOUNT. available / GET_AMOUNT is then ~1e16, past Number.MAX_SAFE_INTEGER.
+        // The throwing bcfloor raised a RangeError out of parse() here, BEFORE any status
+        // was recorded, and the block loop rolls back and retries the same block forever.
+        beforeEach(function () {
+            indexer    = createMockIndexer();
+            actionsCtx = makeActionsCtx(indexer);
+            handler    = new Dispense(actionsCtx);
+
+            const dispenser = makeDispenserInfo({
+                GET_TICK:       'DUST',
+                GET_TICK_ID:    2,
+                GET_AMOUNT:     '0.000000000000000001',
+                GIVE_AMOUNT:    '10',
+                GIVE_REMAINING: '100',
+            });
+
+            indexer.indexerDb.findMatchingDispensers.resolves([100]);
+            indexer.indexerDb.getDispenserInfo.resolves(dispenser);
+            indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', DECIMALS: 0 }));
+        });
+
+        afterEach(function () { sinon.restore(); });
+
+        it('settles against dispenser capacity instead of throwing a RangeError', async function () {
+            const data = createBaseData({
+                ACTION:           'DISPENSE',
+                SOURCE,
+                COIN_DESTINATION: OWNER,
+                COIN_TICK:        'DUST',
+                COIN_AMOUNT:      '0.01',
+                DISPENSE_TYPE:    'SEND',
+                ACTION_INDEX:     1,
+            });
+
+            await handler.parse(null, data, null);
+
+            assert.strictEqual(indexer.indexerDb.createDispense.callCount, 1,
+                'expected createDispense to be called exactly once');
+
+            const dispenseArg = indexer.indexerDb.createDispense.getCall(0).args[0];
+            assert.strictEqual(dispenseArg['STATUS'], 'valid',
+                'expected the dispense to settle rather than escape as a throw');
+            // The saturated fill count is clamped to real capacity:
+            // floor(GIVE_REMAINING 100 / GIVE_AMOUNT 10) = 10 fills = 100 tokens.
+            assert.strictEqual(parseFloat(dispenseArg['GIVE_AMOUNT'].toString()), 100,
+                'expected the fill count to be clamped to floor(GIVE_REMAINING / GIVE_AMOUNT)');
+        });
+    });
 });

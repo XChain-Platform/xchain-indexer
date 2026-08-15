@@ -240,6 +240,22 @@ describe('XChainIndexer hub config overlay', function () {
         delete require.cache[require.resolve('../../src/XChainIndexer.js')];
     });
 
+    // The hub keys its configs tree by FULL lowercase coin name, never by the ticker
+    // config.COIN carries, so the overlay must map the ticker before indexing the tree.
+    // Without the mapping the lookup resolves undefined on every poll and the overlay
+    // silently delivers nothing, which would also make every exclusion test below pass
+    // for the wrong reason (the param absent rather than deliberately withheld). The
+    // hub stubs in this block are full-name-keyed for that reason.
+    it('resolves the hub configs-tree key as the full coin name, not the ticker', function () {
+        const { hubConfigCoinKey } = require('../../src/XChainIndexer.js');
+        indexer = makeIndexer();
+        assert.strictEqual(indexer.config.COIN, 'BTC');
+        assert.strictEqual(hubConfigCoinKey('BTC'), 'bitcoin');
+        assert.strictEqual(hubConfigCoinKey('LTC'), 'litecoin');
+        assert.strictEqual(hubConfigCoinKey('DOGE'), 'dogecoin');
+        assert.strictEqual(hubConfigCoinKey('NOPE'), 'NOPE'); // unregistered coin passes through
+    });
+
     it('does NOT apply hub-served EXPIRATION_FEE_PER_DAY (consensus-critical, local-only)', async function () {
         indexer = makeIndexer();
         let localFee = indexer.config.EXPIRATION_FEE_PER_DAY;
@@ -248,7 +264,7 @@ describe('XChainIndexer hub config overlay', function () {
         // live hub swap would let federation nodes charge divergent fees within the poll window
         // (soft fork). It changes only via a coordinated node upgrade.
         let hubStub = { enabled: true, _call: sinon.stub().resolves({
-            BTC: { regtest: { 'xchain-indexer': { EXPIRATION_FEE_PER_DAY: '0.00999999' } } }
+            bitcoin: { regtest: { 'xchain-indexer': { EXPIRATION_FEE_PER_DAY: '0.00999999' } } }
         })};
         indexer.hubClient = hubStub;
 
@@ -267,7 +283,7 @@ describe('XChainIndexer hub config overlay', function () {
         // would let nodes diverge within the poll window (soft fork). These change only via a
         // coordinated node upgrade.
         let hubStub = { enabled: true, _call: sinon.stub().resolves({
-            BTC: { regtest: { 'xchain-indexer': {
+            bitcoin: { regtest: { 'xchain-indexer': {
                 GAS_PRICE:    '0.00099',
                 GAS_SCHEDULE: JSON.stringify({ ISSUE: 999999, ISSUE_SUBTOKEN: 999999 })
             } } }
@@ -299,7 +315,7 @@ describe('XChainIndexer hub config overlay', function () {
         let pushed = { COOLDOWN_BLOCKS: 2000, ACTIVATION_DELAY_BLOCKS: 12 };
 
         let hubStub = { enabled: true, _call: sinon.stub().resolves({
-            BTC: { regtest: { 'xchain-indexer': { STAKING: JSON.stringify(pushed) } } }
+            bitcoin: { regtest: { 'xchain-indexer': { STAKING: JSON.stringify(pushed) } } }
         })};
         indexer.hubClient = hubStub;
 
@@ -330,7 +346,7 @@ describe('XChainIndexer hub config overlay', function () {
         // The wrapper's job is to record the committed seq (the health age signal depends on it);
         // any consensus param it happens to carry must NOT be applied.
         let hubStub = { enabled: true, _call: sinon.stub().resolves({
-            configs: { BTC: { regtest: { 'xchain-indexer': { EXPIRATION_FEE_PER_DAY: '0.00077000' } } } },
+            configs: { bitcoin: { regtest: { 'xchain-indexer': { EXPIRATION_FEE_PER_DAY: '0.00077000' } } } },
             seq: 5
         })};
         indexer.hubClient = hubStub;
@@ -349,7 +365,7 @@ describe('XChainIndexer hub config overlay', function () {
             // Startup: seq 5.
             let hubStub = { enabled: true, _call: sinon.stub() };
             hubStub._call.onCall(0).resolves({
-                configs: { BTC: { regtest: { 'xchain-indexer': { EXPIRATION_FEE_PER_DAY: '0.00010000' } } } }, seq: 5
+                configs: { bitcoin: { regtest: { 'xchain-indexer': { EXPIRATION_FEE_PER_DAY: '0.00010000' } } } }, seq: 5
             });
             indexer.hubClient = hubStub;
             await indexer._applyHubConfigOverlay();
@@ -361,7 +377,7 @@ describe('XChainIndexer hub config overlay', function () {
 
             // Tick 1: same seq (5); must NOT re-apply (stale guard).
             hubStub._call.onCall(1).resolves({
-                configs: { BTC: { regtest: { 'xchain-indexer': { EXPIRATION_FEE_PER_DAY: '0.99999999' } } } }, seq: 5
+                configs: { bitcoin: { regtest: { 'xchain-indexer': { EXPIRATION_FEE_PER_DAY: '0.99999999' } } } }, seq: 5
             });
             await clock.tickAsync(60000);
             assert.strictEqual(indexer.lastHubConfigSeq, 5, 'unchanged seq must not advance');
@@ -369,7 +385,7 @@ describe('XChainIndexer hub config overlay', function () {
             // Tick 2: seq advances to 6. Bookkeeping updates, but the consensus param the hub
             // pushes is still ignored (no soft fork even across a committed re-apply).
             hubStub._call.onCall(2).resolves({
-                configs: { BTC: { regtest: { 'xchain-indexer': { EXPIRATION_FEE_PER_DAY: '0.00022000' } } } }, seq: 6
+                configs: { bitcoin: { regtest: { 'xchain-indexer': { EXPIRATION_FEE_PER_DAY: '0.00022000' } } } }, seq: 6
             });
             await clock.tickAsync(60000);
             assert.strictEqual(indexer.lastHubConfigSeq, 6, 'advanced seq must update bookkeeping');
@@ -427,7 +443,7 @@ describe('XChainIndexer hub config overlay', function () {
             let hubStub = { enabled: true, _call: sinon.stub() };
             // Startup: seq 0, watermark 1000.
             hubStub._call.onCall(0).resolves({
-                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 0, watermark: 1000
+                configs: { bitcoin: { regtest: { 'xchain-indexer': {} } } }, seq: 0, watermark: 1000
             });
             indexer.hubClient = hubStub;
             await indexer._applyHubConfigOverlay();
@@ -442,7 +458,7 @@ describe('XChainIndexer hub config overlay', function () {
             // treated as a same-second redelivery and re-applies the idempotent merge (see
             // the dedicated redelivery test below); it is not a no-op on a watermark-bearing hub.
             hubStub._call.onCall(1).resolves({
-                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 0, watermark: 1000
+                configs: { bitcoin: { regtest: { 'xchain-indexer': {} } } }, seq: 0, watermark: 1000
             });
             await clock.tickAsync(60000);
             assert.strictEqual(mergeSpy.called, true, 'equal non-zero watermark re-applies (same-second redelivery)');
@@ -450,7 +466,7 @@ describe('XChainIndexer hub config overlay', function () {
 
             // Tick 2: seq still 0, watermark advances to 2000 -> re-apply fires.
             hubStub._call.onCall(2).resolves({
-                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 0, watermark: 2000
+                configs: { bitcoin: { regtest: { 'xchain-indexer': {} } } }, seq: 0, watermark: 2000
             });
             await clock.tickAsync(60000);
             assert.strictEqual(mergeSpy.called, true, 'advanced watermark must re-apply even with seq stuck at 0');
@@ -477,7 +493,7 @@ describe('XChainIndexer hub config overlay', function () {
             let hubStub = { enabled: true, _call: sinon.stub() };
             // Startup: seq 40, watermark 9000.
             hubStub._call.onCall(0).resolves({
-                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 40, watermark: 9000
+                configs: { bitcoin: { regtest: { 'xchain-indexer': {} } } }, seq: 40, watermark: 9000
             });
             indexer.hubClient = hubStub;
             await indexer._applyHubConfigOverlay();
@@ -490,7 +506,7 @@ describe('XChainIndexer hub config overlay', function () {
 
             // Tick 1: the hub comes back from an older snapshot - both cursors regress.
             hubStub._call.onCall(1).resolves({
-                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 12, watermark: 3000
+                configs: { bitcoin: { regtest: { 'xchain-indexer': {} } } }, seq: 12, watermark: 3000
             });
             await clock.tickAsync(60000);
             assert.strictEqual(mergeSpy.called, true, 'a regressed hub must still re-apply its config');
@@ -503,7 +519,7 @@ describe('XChainIndexer hub config overlay', function () {
             // Tick 2: a normal advance past the RESET cursor re-fires; pre-fix this needed
             // the hub to climb back past the stale 40/9000 high-water mark first.
             hubStub._call.onCall(2).resolves({
-                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 13, watermark: 3100
+                configs: { bitcoin: { regtest: { 'xchain-indexer': {} } } }, seq: 13, watermark: 3100
             });
             await clock.tickAsync(60000);
             assert.strictEqual(mergeSpy.called, true, 'an advance past the reset cursor must re-apply');
@@ -526,7 +542,7 @@ describe('XChainIndexer hub config overlay', function () {
         try {
             let hubStub = { enabled: true, _call: sinon.stub() };
             hubStub._call.onCall(0).resolves({
-                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 40
+                configs: { bitcoin: { regtest: { 'xchain-indexer': {} } } }, seq: 40
             });
             indexer.hubClient = hubStub;
             await indexer._applyHubConfigOverlay();
@@ -537,7 +553,7 @@ describe('XChainIndexer hub config overlay', function () {
             indexer._startHubConfigPolling();
 
             hubStub._call.onCall(1).resolves({
-                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 7
+                configs: { bitcoin: { regtest: { 'xchain-indexer': {} } } }, seq: 7
             });
             await clock.tickAsync(60000);
             assert.strictEqual(mergeSpy.called, true, 'a regressed seq-only hub must still re-apply');
@@ -558,7 +574,7 @@ describe('XChainIndexer hub config overlay', function () {
         try {
             let hubStub = { enabled: true, _call: sinon.stub() };
             hubStub._call.onCall(0).resolves({
-                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 5   // no watermark field
+                configs: { bitcoin: { regtest: { 'xchain-indexer': {} } } }, seq: 5   // no watermark field
             });
             indexer.hubClient = hubStub;
             await indexer._applyHubConfigOverlay();
@@ -570,7 +586,7 @@ describe('XChainIndexer hub config overlay', function () {
             indexer._startHubConfigPolling();
 
             hubStub._call.onCall(1).resolves({
-                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 6   // still no watermark
+                configs: { bitcoin: { regtest: { 'xchain-indexer': {} } } }, seq: 6   // still no watermark
             });
             await clock.tickAsync(60000);
             assert.strictEqual(mergeSpy.called, true, 'seq advance alone must still re-apply');
@@ -596,7 +612,7 @@ describe('XChainIndexer hub config overlay', function () {
             let hubStub = { enabled: true, _call: sinon.stub() };
             // Startup: seq 0, watermark 1000.
             hubStub._call.onCall(0).resolves({
-                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 0, watermark: 1000
+                configs: { bitcoin: { regtest: { 'xchain-indexer': {} } } }, seq: 0, watermark: 1000
             });
             indexer.hubClient = hubStub;
             await indexer._applyHubConfigOverlay();
@@ -608,7 +624,7 @@ describe('XChainIndexer hub config overlay', function () {
 
             // Tick 1: same non-zero watermark 1000 (a same-second redelivered write) -> must re-apply.
             hubStub._call.onCall(1).resolves({
-                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 0, watermark: 1000
+                configs: { bitcoin: { regtest: { 'xchain-indexer': {} } } }, seq: 0, watermark: 1000
             });
             await clock.tickAsync(60000);
             assert.strictEqual(mergeSpy.called, true, 'equal non-zero watermark must re-apply (redelivery)');
@@ -631,7 +647,7 @@ describe('XChainIndexer hub config overlay', function () {
         try {
             let hubStub = { enabled: true, _call: sinon.stub() };
             hubStub._call.onCall(0).resolves({
-                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 5   // no watermark field
+                configs: { bitcoin: { regtest: { 'xchain-indexer': {} } } }, seq: 5   // no watermark field
             });
             indexer.hubClient = hubStub;
             await indexer._applyHubConfigOverlay();
@@ -643,7 +659,7 @@ describe('XChainIndexer hub config overlay', function () {
 
             // Tick: seq unchanged at 5, still no watermark -> must NOT re-merge.
             hubStub._call.onCall(1).resolves({
-                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 5   // still no watermark
+                configs: { bitcoin: { regtest: { 'xchain-indexer': {} } } }, seq: 5   // still no watermark
             });
             await clock.tickAsync(60000);
             assert.strictEqual(mergeSpy.called, false, 'seq-only hub with no watermark must not re-merge on an unchanged seq');
