@@ -49,7 +49,11 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
 
     const N        = 100;          // rollback target: orphan everything at/after this block
     const VALID_ID = 7;            // arbitrary status id returned for 'valid'
-    const PROV     = 'provider-1';
+    // A REAL provider id: the recompute resolves that provider's block-anchored
+    // min_stake_xchain floor (XC-083) and, on the weighted path, drops sources below
+    // it. An invented id resolves no floor and correctly fails the recompute closed,
+    // which would make this suite assert on an empty set rather than on the rule.
+    const PROV     = 'http_get';
 
     const pkA = 'aa'.repeat(33);   // affected: touched in orphaned range, survives partially
     const pkB = 'bb'.repeat(33);   // untouched: last touch pre-N, must be left exactly as-is
@@ -104,7 +108,9 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
         // isStakeWeightedQuorumActive, mirroring attest.js) so the responsible set is
         // [pkA] regardless of which branch the activation height selects.
         indexer.indexerDb.getValidatorsByCapability = sinon.stub().resolves([{ pubkey: pkA }]);
-        indexer.indexerDb.getStakeWeightsByCapability = sinon.stub().resolves([{ pubkey: pkA }]);
+        // Weight clears the http_get floor of 10000, so the weighted branch exercises
+        // the dedupe + ranking rather than the floor's fail-closed path.
+        indexer.indexerDb.getStakeWeightsByCapability = sinon.stub().resolves([{ pubkey: pkA, source: 'srcA', weight: '50000' }]);
         indexer.indexerDb.getStatusId = sinon.stub().resolves(VALID_ID);
 
         indexer.indexerDb.doQuery = sinon.stub().callsFake(async (query, args) => {

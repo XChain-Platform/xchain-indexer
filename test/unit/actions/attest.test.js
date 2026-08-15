@@ -22,6 +22,7 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 const Attest  = require('../../../src/actions/attest.js');
 const swq     = require('../../../src/stake_weighted_quorum.js');
 const attestAdmission = require('../../../src/attest_admission_activation.js');
+const attestBcastFee  = require('../../../src/attest_broadcast_fee_activation.js');
 const srb     = require('../../../src/snapshot_reorg_buffer.js');
 // Same module instance Attest holds a reference to (Node module cache); stubbing
 // `verify` here controls signature acceptance inside the handler.
@@ -126,6 +127,10 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         // 'valid'; the gate's own describe below re-enables it. (regtest arms the
         // gate at genesis, so this must be stubbed off here, mirroring swq above.)
         sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(false);
+        // Same treatment for the §11 broadcast-fee carve-out: regtest arms it at genesis, so
+        // the fixtures above would otherwise settle through the carve-out path and every
+        // legacy split assertion would move. Its own describe below re-enables it.
+        sinon.stub(attestBcastFee, 'isAttestBroadcastFeeActive').returns(false);
     });
 
     afterEach(function () {
@@ -1201,6 +1206,169 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 assert.ok(indexer.indexerDb.createCredit.notCalled);
             });
         });
+
+        // XC-084: spec §11 leader broadcast-fee reimbursement. The escrow now pays the
+        // broadcaster its native-coin cost back BEFORE the equal split, converted to XCHAIN
+        // at the settle block's oracle price, bounded by a per-provider cap, and gated on a
+        // flag-day so replay below the height is byte-identical to the pre-XC-084 ledger.
+        describe('§11: leader broadcast-fee reimbursement', function () {
+
+            // cap 0.0001 BTC × (50000 USD/BTC) ÷ (2.5 USD/XCHAIN) = 2 XCHAIN
+            const COIN_USD   = '50000';
+            const XCHAIN_USD = '2.5';
+
+            // The hash-sorted responsible set the handler derives for REQ_ID over
+            // {A,B,C}: element 0 is the broadcaster the carve-out must pay.
+            function hashOrder(pubkeys) {
+                return pubkeys
+                    .map(pk => ({ pk, h: crypto.createHash('sha256').update(REQ_ID, 'utf8').update(pk, 'utf8').digest('hex') }))
+                    .sort((a, b) => (a.h < b.h ? -1 : a.h > b.h ? 1 : 0))
+                    .map(v => v.pk);
+            }
+
+            function rewardsByType(type) {
+                return indexer.indexerDb.createValidatorReward.getCalls()
+                    .filter(c => c.args[2] === type)
+                    .map(c => ({ pubkey: c.args[0], roundRef: c.args[1], amount: String(c.args[3]), block: c.args[4] }));
+            }
+
+            beforeEach(function () {
+                sinon.stub(ed25519, 'verify').returns(true);
+                attestBcastFee.isAttestBroadcastFeeActive.returns(true);
+                // Production XCHAIN genesis is 8dp; the carve-out and the split floor to the
+                // same grid, so assert on that grid rather than the 0dp regtest default.
+                indexer.indexerDb.getTokenDecimalPrecision.resolves(8);
+                sinon.stub(indexer.util, 'getFeeOraclePrices').resolves({
+                    coinUsdPrice: COIN_USD, xchainUsdPrice: XCHAIN_USD, oracleRound: 7,
+                });
+            });
+
+            it('pays the lowest-hash responsible member a converted reimbursement, then splits the rest', async function () {
+                indexer.indexerDb.getAttestationRequestById.resolves(feeRequestRow({ redundancy: 1 }));
+                const data = v1FeeData();
+                await handler.parse(v1FeeParams([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+                assert.strictEqual(data['STATUS'], 'valid');
+
+                const bcast = rewardsByType('attest_bcast');
+                assert.strictEqual(bcast.length, 1, 'one broadcast reimbursement row');
+                assert.strictEqual(bcast[0].pubkey, PUBKEY_A, 'paid to the responsible set head');
+                assert.strictEqual(bcast[0].amount, '2', '0.0001 BTC at 50000/2.5 = 2 XCHAIN');
+                assert.strictEqual(bcast[0].roundRef, 42, 'keyed on the REQUEST action_index');
+                assert.strictEqual(bcast[0].block, data['BLOCK_INDEX'], 'stamped at the settle block');
+
+                const split = rewardsByType('attest_fee');
+                assert.strictEqual(split.length, 1);
+                assert.strictEqual(split[0].amount, '4', 'escrow 6 minus the 2 carved out');
+
+                // The pool credit is still the FULL escrow; the rows only reference it.
+                assert.strictEqual(String(indexer.indexerDb.createCredit.firstCall.args[2]), '6.00000000');
+            });
+
+            it('the reimbursement is ON TOP of the broadcaster share (REDUNDANCY 3)', async function () {
+                indexer.indexerDb.getValidatorsByCapability.resolves([
+                    { pubkey: PUBKEY_A }, { pubkey: PUBKEY_B }, { pubkey: PUBKEY_C },
+                ]);
+                indexer.indexerDb.getAttestationRequestById.resolves(feeRequestRow({ redundancy: 3 }));
+                const data = v1FeeData();
+                await handler.parse(v1FeeParams([
+                    { pubkey: PUBKEY_A, sig: SIG_A },
+                    { pubkey: PUBKEY_B, sig: SIG_B },
+                    { pubkey: PUBKEY_C, sig: SIG_C },
+                ]), data, null);
+                assert.strictEqual(data['STATUS'], 'valid');
+
+                const leader = hashOrder([PUBKEY_A, PUBKEY_B, PUBKEY_C])[0];
+                const bcast  = rewardsByType('attest_bcast');
+                assert.strictEqual(bcast.length, 1);
+                assert.strictEqual(bcast[0].pubkey, leader, 'lowest SHA256(request_id||pubkey) wins');
+                assert.strictEqual(bcast[0].amount, '2');
+
+                const split = rewardsByType('attest_fee');
+                assert.strictEqual(split.length, 3, 'every responsible member still gets a share');
+                // (6 - 2) / 3 floored to 8dp
+                for (const row of split) assert.strictEqual(row.amount, '1.33333333');
+                // The leader holds both rows, which is exactly "additionally receives".
+                assert.ok(split.some(r => r.pubkey === leader));
+            });
+
+            it('a missing/stale oracle price reimburses 0 and never wedges the settle', async function () {
+                indexer.util.getFeeOraclePrices.resolves({ error: 'no current oracle price for BTC/USD' });
+                indexer.indexerDb.getAttestationRequestById.resolves(feeRequestRow({ redundancy: 1 }));
+                const data = v1FeeData();
+                await handler.parse(v1FeeParams([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+
+                assert.strictEqual(data['STATUS'], 'valid', 'settle still completes');
+                assert.strictEqual(rewardsByType('attest_bcast').length, 0);
+                const split = rewardsByType('attest_fee');
+                assert.strictEqual(split.length, 1);
+                assert.strictEqual(split[0].amount, '6', 'whole escrow falls through to the split');
+            });
+
+            it('an oracle read that THROWS reimburses 0 rather than failing the block', async function () {
+                indexer.util.getFeeOraclePrices.rejects(new Error('price table unavailable'));
+                indexer.indexerDb.getAttestationRequestById.resolves(feeRequestRow({ redundancy: 1 }));
+                const data = v1FeeData();
+                await handler.parse(v1FeeParams([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+
+                assert.strictEqual(data['STATUS'], 'valid');
+                assert.strictEqual(rewardsByType('attest_bcast').length, 0);
+                assert.strictEqual(rewardsByType('attest_fee')[0].amount, '6');
+            });
+
+            it('clamps the reimbursement to the escrow when the escrow is thinner than the allowance', async function () {
+                indexer.indexerDb.getAttestationRequestById.resolves(
+                    feeRequestRow({ redundancy: 1, fee_amount: '0.50000000' }));
+                const data = v1FeeData();
+                await handler.parse(v1FeeParams([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+
+                const bcast = rewardsByType('attest_bcast');
+                assert.strictEqual(bcast.length, 1);
+                assert.strictEqual(bcast[0].amount, '0.5', 'never pays out more than was escrowed');
+                assert.strictEqual(rewardsByType('attest_fee').length, 0, 'nothing left to split');
+            });
+
+            it('below the flag-day the whole escrow still goes to the split (replay parity)', async function () {
+                attestBcastFee.isAttestBroadcastFeeActive.returns(false);
+                indexer.indexerDb.getAttestationRequestById.resolves(feeRequestRow({ redundancy: 1 }));
+                const data = v1FeeData();
+                await handler.parse(v1FeeParams([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+
+                assert.strictEqual(rewardsByType('attest_bcast').length, 0);
+                assert.strictEqual(rewardsByType('attest_fee')[0].amount, '6');
+                assert.ok(indexer.util.getFeeOraclePrices.notCalled, 'no oracle read below the gate');
+            });
+
+            it('a feeless request pays no reimbursement (nothing is escrowed to carve from)', async function () {
+                indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
+                const data = v1FeeData();
+                await handler.parse(v1FeeParams([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+
+                assert.strictEqual(data['STATUS'], 'valid');
+                assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
+            });
+
+            it('a non-ok terminal status refunds the payer and pays no reimbursement', async function () {
+                indexer.indexerDb.getAttestationRequestById.resolves(feeRequestRow({ redundancy: 1 }));
+                const data = v1FeeData();
+                await handler.parse(v1FeeParams([{ pubkey: PUBKEY_A, sig: SIG_A }], 'expired'), data, null);
+
+                assert.strictEqual(rewardsByType('attest_bcast').length, 0);
+                assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
+                assert.strictEqual(indexer.indexerDb.createCredit.firstCall.args[3], FEE_PAYER);
+            });
+
+            it('reads the oracle at the SETTLE block, not the request block', async function () {
+                indexer.indexerDb.getAttestationRequestById.resolves(feeRequestRow({ redundancy: 1 }));
+                const data = v1FeeData({ BLOCK_INDEX: 175, BLOCK_TIME: 1700009999 });
+                await handler.parse(v1FeeParams([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+
+                assert.ok(indexer.util.getFeeOraclePrices.calledOnce);
+                const [, coin, blockIndex, refTime] = indexer.util.getFeeOraclePrices.firstCall.args;
+                assert.strictEqual(coin, 'BTC');
+                assert.strictEqual(blockIndex, 175, 'request row block_index is 90; the settle block is what counts');
+                assert.strictEqual(refTime, 1700009999);
+            });
+        });
     });
 
     describe('version dispatch', function () {
@@ -1452,14 +1620,16 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         it('selects at most one responsible slot per staking source', async function () {
             // S1 delegates THREE keys; S2 and S3 one each. redundancy 3.
             indexer.indexerDb.getStakeWeightsByCapability.resolves([
-                { pubkey: 'k1a', source: 'S1', weight: '100' },
-                { pubkey: 'k1b', source: 'S1', weight: '100' },
-                { pubkey: 'k1c', source: 'S1', weight: '100' },
-                { pubkey: 'k2',  source: 'S2', weight: '100' },
-                { pubkey: 'k3',  source: 'S3', weight: '100' },
+                { pubkey: 'k1a', source: 'S1', weight: '50000' },
+                { pubkey: 'k1b', source: 'S1', weight: '50000' },
+                { pubkey: 'k1c', source: 'S1', weight: '50000' },
+                { pubkey: 'k2',  source: 'S2', weight: '50000' },
+                { pubkey: 'k3',  source: 'S3', weight: '50000' },
             ]);
             const srcOf = { k1a: 'S1', k1b: 'S1', k1c: 'S1', k2: 'S2', k3: 'S3' };
-            const resp = await handler._computeResponsibleSet('req-1', 3, 90);
+            // Weights clear the http_get provider floor (10000) so this vector isolates the
+            // source-dedupe rule; the floor itself is exercised in its own describe below.
+            const resp = await handler._computeResponsibleSet('req-1', 3, 90, 'http_get');
             const sources = resp.map(pk => srcOf[pk]);
             assert.strictEqual(new Set(sources).size, sources.length, 'a source occupied >1 responsible slot');
             assert.deepStrictEqual([...new Set(sources)].sort(), ['S1', 'S2', 'S3']);
@@ -1468,17 +1638,17 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         it('SECURITY: a source with many delegated keys cannot dominate the responsible set', async function () {
             // S1 delegates 5 keys; only S2 besides. redundancy 3, but just 2 sources.
             indexer.indexerDb.getStakeWeightsByCapability.resolves([
-                ...['a', 'b', 'c', 'd', 'e'].map(s => ({ pubkey: 'k1' + s, source: 'S1', weight: '100' })),
-                { pubkey: 'k2', source: 'S2', weight: '100' },
+                ...['a', 'b', 'c', 'd', 'e'].map(s => ({ pubkey: 'k1' + s, source: 'S1', weight: '50000' })),
+                { pubkey: 'k2', source: 'S2', weight: '50000' },
             ]);
-            const resp = await handler._computeResponsibleSet('req-2', 3, 90);
+            const resp = await handler._computeResponsibleSet('req-2', 3, 90, 'http_get');
             assert.strictEqual(resp.filter(pk => pk.startsWith('k1')).length, 1, 'S1 took more than one slot');
             assert.strictEqual(resp.length, 2, 'responsible set capped at the number of distinct sources');
         });
 
         it('uses the source-keyed query (not the count query) when weighted', async function () {
-            indexer.indexerDb.getStakeWeightsByCapability.resolves([{ pubkey: 'k1', source: 'S1', weight: '100' }]);
-            await handler._computeResponsibleSet('req-3', 1, 90);
+            indexer.indexerDb.getStakeWeightsByCapability.resolves([{ pubkey: 'k1', source: 'S1', weight: '50000' }]);
+            await handler._computeResponsibleSet('req-3', 1, 90, 'http_get');
             // the declared block 90 is resolved at its buried height; the
             // stake-weighted flag-day still keys on the declared 90 (see snapshotReorgBuffer.test.js).
             assert.ok(indexer.indexerDb.getStakeWeightsByCapability.calledWith(
@@ -1538,9 +1708,9 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             // sources < redundancy 3, the exact 87441a53 liveness hole.
             swq.isStakeWeightedQuorumActive.returns(true);
             indexer.indexerDb.getStakeWeightsByCapability.resolves([
-                { pubkey: 'k1a', source: 'S1', weight: '100' },
-                { pubkey: 'k1b', source: 'S1', weight: '100' },
-                { pubkey: 'k2',  source: 'S2', weight: '100' },
+                { pubkey: 'k1a', source: 'S1', weight: '50000' },
+                { pubkey: 'k1b', source: 'S1', weight: '50000' },
+                { pubkey: 'k2',  source: 'S2', weight: '50000' },
             ]);
             const data = v0Data();
             await handler.parse(v0Params(validReqId(data), 3), data, null);
@@ -1603,8 +1773,8 @@ describe('ATTEST responsible-set is BTC-anchored (#3233) @regression @tier1', fu
         // Both lookups return a NON-empty set, so the test can observe which branch
         // ran. At HEAD these are empty off BTC, which is exactly what hides the bug.
         db.getStakeWeightsByCapability = sinon.stub().resolves([
-            { pubkey: 'a'.repeat(64), source: 'src1' },
-            { pubkey: 'b'.repeat(64), source: 'src2' }
+            { pubkey: 'a'.repeat(64), source: 'src1', weight: '50000' },
+            { pubkey: 'b'.repeat(64), source: 'src2', weight: '50000' }
         ]);
         db.getValidatorsByCapability = sinon.stub().resolves([
             { pubkey: 'a'.repeat(64) },
@@ -1622,7 +1792,7 @@ describe('ATTEST responsible-set is BTC-anchored (#3233) @regression @tier1', fu
     for (const coin of ['LTC', 'DOGE']) {
         it(`${coin}: returns an empty set without consulting the BTC-anchored gate`, async function () {
             const { handler, db } = handlerForCoin(coin);
-            const out = await handler._computeResponsibleSet('req-1', 2, PAST_ANCHOR);
+            const out = await handler._computeResponsibleSet('req-1', 2, PAST_ANCHOR, 'http_get');
             assert.deepStrictEqual(out, [],
                 'capability staking is BTC-only; a non-BTC indexer has no responsible set');
             assert.strictEqual(db.getStakeWeightsByCapability.called, false,
@@ -1634,7 +1804,7 @@ describe('ATTEST responsible-set is BTC-anchored (#3233) @regression @tier1', fu
 
     it('BTC: still evaluates the gate, because there the local height IS a BTC height', async function () {
         const { handler, db } = handlerForCoin('BTC');
-        const out = await handler._computeResponsibleSet('req-1', 2, PAST_ANCHOR);
+        const out = await handler._computeResponsibleSet('req-1', 2, PAST_ANCHOR, 'http_get');
         assert.strictEqual(out.length, 2, 'BTC must still resolve a responsible set');
         assert.strictEqual(db.getStakeWeightsByCapability.called, true,
             'past the anchor on BTC the weighted branch is correct and must still run');
@@ -1642,7 +1812,7 @@ describe('ATTEST responsible-set is BTC-anchored (#3233) @regression @tier1', fu
 
     it('BTC below the anchor takes the legacy unweighted branch', async function () {
         const { handler, db } = handlerForCoin('BTC');
-        await handler._computeResponsibleSet('req-1', 2, 900000);
+        await handler._computeResponsibleSet('req-1', 2, 900000, 'http_get');
         assert.strictEqual(db.getValidatorsByCapability.called, true);
         assert.strictEqual(db.getStakeWeightsByCapability.called, false,
             'below 961000 the gate is off, so replay of pre-anchor history is unchanged');
