@@ -497,6 +497,21 @@ class Actions {
         // synthetic tx carries; ALWAYS false for real decoded transactions.
         data['FEE_PROBE']        = tx.fee_probe === true;
 
+        // Per-TRANSACTION top-level issuance budget (EMISSION_ISSUANCE_LIMITS, XC-1456).
+        // Seeded HERE, at the transaction, because that is the only scope the rule can have:
+        // a VM emission's own data object is built fresh per emission (execute.js
+        // processEmission) and a BATCH sub-command's is cleared down to `baseKeys` between
+        // commands, so a counter living in either would reset exactly where the abuse
+        // accumulates. Being present before batch.js takes its baseKeys snapshot is what
+        // makes the batch loop preserve it, the same way it preserves BATCH_VALUE_LEDGER.
+        //
+        // Consumed by issue.js (the single choke point every ISSUE reaches, wire or emitted).
+        // Held as an OBJECT rather than a number so the reference threads unchanged through
+        // the emission contexts (execute.js emissionData/guardCtxData, deploy.js
+        // emissionContext) and every nested EXECUTE shares one tally rather than a copy.
+        // Below the flag nothing reads it and nothing writes it.
+        data['ISSUANCE_LIMIT_LEDGER'] = { topLevel: 0 };
+
         // Treat plain BTC transactions (empty data) as DISPENSE triggers
         // The decoder records these when the destination matches an active dispenser address
         if(action == '' && !this.util.isNull(destination)){
@@ -678,6 +693,18 @@ class Actions {
             // A case here would be unreachable dead code.
             default:          return null;
         }
+    }
+
+    // Public name for the map above, so a caller OUTSIDE this class can ask the same
+    // question the address pre-pass asks: "does this ACTION have a fixed positional wire
+    // layout I may read a field out of?" batch.js's D10 fee pre-check (nominalDurationFee)
+    // is the caller: it reads EXPIRATION's index out of the handler's own format string
+    // instead of hardcoding a position, so a format change moves the pre-check with it.
+    // Deliberately a delegator rather than a rename: _setActionParamHandler is referenced by
+    // the pre-pass and by its tests, and one seam with two honest names is cheaper than a
+    // rename that touches a consensus path.
+    setActionParamHandler(action){
+        return this._setActionParamHandler(action);
     }
 
     // Pre-pass: assign deterministic, value-sorted index ids to the NEW wire-field
