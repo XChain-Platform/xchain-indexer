@@ -11467,7 +11467,7 @@ class Database {
     //     on reindex from the ANCHOR archive via recovery.js
     // pubkeyHex: 64-char hex Ed25519 signing pubkey of the validator that earned the reward
     // roundReference: round number (oracle_round) or attestation index
-    // rewardType: 'oracle_round', 'attest_fee', 'anchor_<chain>', 'anchor_archive'
+    // rewardType: 'oracle_round', 'attest_fee', 'attest_bcast', 'anchor_<chain>', 'anchor_archive'
     // amount: reward amount as decimal string
     // blockIndex: block height when the reward was earned
     // Resolve the source_id (index_addresses id) of the active staking source

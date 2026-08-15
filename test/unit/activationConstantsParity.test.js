@@ -39,6 +39,11 @@ const GATES = [
     ['cross_chain_royalty_activation.js',   'CROSS_CHAIN_ROYALTY_ACTIVATION'],
     ['attest_admission_activation.js',      'ATTEST_ADMISSION_ACTIVATION'],
     ['attest_relay_activation.js',          'ATTEST_RELAY_ACTIVATION'],
+    ['attest_broadcast_fee_activation.js',  'ATTEST_BROADCAST_FEE_ACTIVATION'],
+    // Not an activation MAP but a consensus constant the same gate reads: the cap clamps the
+    // escrow carve-out, so a one-sided edit changes the amount paid at the flag-day exactly as a
+    // one-sided height edit changes when it is paid.
+    ['attest_broadcast_fee_activation.js',  'ATTEST_BROADCAST_FEE_CAP'],
     ['anchor_reward_activation.js',         'ANCHOR_REWARD_DERIVE_ACTIVATION'],
     ['price_pair_activation.js',            'PRICE_PAIR_WIDEN_ACTIVATION'],
     ['price_sig_tally_activation.js',       'PRICE_SIG_TALLY_ACTIVATION'],
