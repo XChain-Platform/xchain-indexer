@@ -78,6 +78,7 @@ function genValidator() {
 describe('Cross-chain royalty: create-side gate + signed-legs settlement (real DB + real VM) @phaseE', function () {
     this.timeout(600000);
     let seeder, indexer, royalIdx, segIdx, sellOrderIdx, plainOrderIdx;
+    let priorFeeDestination, priorCoin, priorNetwork;
 
     async function contractIndexByCode(code) {
         const h = sha(code);
@@ -117,6 +118,12 @@ describe('Cross-chain royalty: create-side gate + signed-legs settlement (real D
         try { require('xchain-vm'); } catch (e) { return this.skip(); }
         // Off-BTC on purpose (see header): the injected capability_snapshots rows are the
         // validator set cross_settle verifies the match signatures against.
+        // Saved and restored in after(), the way multi-chain.js's withCoin() does it.
+        // These are PROCESS-wide, so leaving LTC pinned puts every later file in the
+        // run onto a native-fee-only chain, where a setup ISSUE that pays no native
+        // output is rejected for a reason that has nothing to do with what it tests.
+        priorCoin    = process.env.INDEXER_COIN;
+        priorNetwork = process.env.INDEXER_NETWORK;
         process.env.INDEXER_COIN    = 'LTC';
         process.env.INDEXER_NETWORK = 'regtest';
         await createDatabases();
@@ -136,7 +143,13 @@ describe('Cross-chain royalty: create-side gate + signed-legs settlement (real D
         // LTC is native-fee-only; this scenario is about royalty legs, not fee mode, so pin
         // the xchain-balance fee path (scenario 11's forceXchainFeeMode: a placeholder
         // FEE_DESTINATION short-circuits detectFeePaymentMode to 'xchain'; the config
-        // snapshot is shared with util, so one mutation covers both).
+        // snapshot is shared with util, so one mutation covers both). Shared means
+        // shared across FILES too, so the prior value is saved and restored in
+        // after(): leaving the placeholder pinned puts every later scenario in this
+        // process into native-fee mode with a fee destination nothing pays, which
+        // reads as "insufficient fee (native coin output required)" on a setup ISSUE
+        // that has nothing to do with fee mode.
+        priorFeeDestination = indexer.config.ADDRESS.FEE_DESTINATION;
         indexer.config.ADDRESS.FEE_DESTINATION = 'X'.repeat(34);
         await processBlocks(indexer);
         royalIdx = await contractIndexByCode(ROYAL);
@@ -152,7 +165,13 @@ describe('Cross-chain royalty: create-side gate + signed-legs settlement (real D
     });
 
     after(async function () {
+        if (indexer && priorFeeDestination !== undefined)
+            indexer.config.ADDRESS.FEE_DESTINATION = priorFeeDestination;
         if (indexer) await destroyIndexer(indexer);
+        if (priorCoin === undefined) delete process.env.INDEXER_COIN;
+        else process.env.INDEXER_COIN = priorCoin;
+        if (priorNetwork === undefined) delete process.env.INDEXER_NETWORK;
+        else process.env.INDEXER_NETWORK = priorNetwork;
         await closeAll();
     });
 
