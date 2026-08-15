@@ -35,6 +35,7 @@ const stateKeyCollation = require('./state_key_collation_activation');
 const snapshotAgeCausality = require('./oracle_snapshot_age_causality_activation');
 const listEditResolution = require('./list_edit_resolution_activation');
 const caretRefStrict = require('./caret_ref_strict_activation');
+const ledgerPrecision = require('./ledger_amount_precision_activation');
 // Per-block cap on the ATTEST deadline-expiry sweep. Vendored
 // byte-identical from xchain-documentation/protocol/constants.js, same convention
 // as the XCALL_MAX_CALLS_PER_BLOCK sibling it mirrors.
@@ -3474,9 +3475,20 @@ class Database {
             sql += " AND m.action_index < ?";
             args.push(parseInt(action_index));
         }
+        // Each component is summed EXACTLY (18 dp) and the combination is rounded
+        // ONCE at the tick's own scale (XC-1459). Rounding each component first
+        // and then combining is not the same number: round(C) - round(D) + round(E)
+        // can differ from round(C - D + E) by a whole unit when the ledger carries
+        // amounts finer than the tick (fees at 8 dp against a 0-decimal gas tick),
+        // and the balances-side projection in sanityCheck rounds only once, so a
+        // per-component rounding here forks the two sides into a SanityError.
+        // On rows written before the exact-ledger flag-day every amount is already
+        // an exact multiple of 10^-decimals, so this is value-identical to the old
+        // per-row SUM(CAST(m.amount AS DECIMAL(60,decimals))).
+        let sumExpr = ledgerPrecision.exactSumSql('m.amount');
         // Get Credits
         query = `SELECT
-                    SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as credits
+                    ` + sumExpr + ` as credits
                 FROM
                     credits m
                     INNER JOIN actions a ON (a.action_index=m.action_index)
@@ -3487,7 +3499,7 @@ class Database {
             credits = results[0].credits;
         // Get Debits
         query = `SELECT
-                    SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as debits
+                    ` + sumExpr + ` as debits
                 FROM
                     debits m
                     INNER JOIN actions a ON (a.action_index=m.action_index)
@@ -3498,7 +3510,7 @@ class Database {
             debits = results[0].debits;
         // Get Escrows
         query = `SELECT
-                    SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as escrows
+                    ` + sumExpr + ` as escrows
                 FROM
                     escrows m
                     INNER JOIN actions a ON (a.action_index=m.action_index)
@@ -3507,8 +3519,9 @@ class Database {
         results = await this.doQuery(query, args);
         if(results.length > 0 && !this.util.isNull(results[0].escrows))
             escrows = results[0].escrows;
-        // Determine total supply ((credits - debits) + escrows)
-        supply = this.util.bcadd(this.util.bcsub(credits, debits, decimals), escrows, decimals);
+        // Determine total supply ((credits - debits) + escrows), rounded once.
+        let exact = ledgerPrecision.LEDGER_AMOUNT_PRECISION;
+        supply = this.util.bcadd(this.util.bcsub(credits, debits, exact), escrows, decimals);
         return supply;
     }
 
@@ -3565,8 +3578,9 @@ class Database {
         // Get the tick_id for the given ticker
         if(!this.util.isNull(tick) && this.util.isNull(tick_id))
             tick_id = await this.createTicker(tick);
-        // Get info on decimal precision
-        let decimals = await this.getTokenDecimalPrecision(tick_id);
+        // NOTE: the tick's decimal precision is no longer read here. Holder
+        // balances are netted at the exact ledger scale (below), so the lookup
+        // was a wasted round-trip per call.
         // Add tick_id to SQL query arguments
         args.push(tick_id);
         // If a block_index was given, only lookup tokens created before or in given block_index
@@ -3579,9 +3593,16 @@ class Database {
             sql += " AND m.action_index < ?";
             args.push(parseInt(action_index));
         }
-        // Get Credits 
-        query = `SELECT 
-                    SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as credits,
+        // Per-holder credits and debits are summed EXACTLY (18 dp) and netted at
+        // that scale, matching getAddressBalances / getNetBalance (XC-1459). The
+        // former per-row cast to the tick's scale made sum-of-rounded-holdings
+        // drift from the rounded ledger sum as soon as any row was finer than the
+        // tick; on pre-flag-day rows (already on the tick's grid) it is identical.
+        let holderSumExpr = ledgerPrecision.exactSumSql('m.amount');
+        let exact         = ledgerPrecision.LEDGER_AMOUNT_PRECISION;
+        // Get Credits
+        query = `SELECT
+                    ` + holderSumExpr + ` as credits,
                     a2.address
                 FROM 
                     credits m
@@ -3594,9 +3615,9 @@ class Database {
         if(results.length > 0)
             for(let row of results)
                 holders[row.address] = row.credits;
-        // Get Debits 
-        query = `SELECT 
-                    SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as debits,
+        // Get Debits
+        query = `SELECT
+                    ` + holderSumExpr + ` as debits,
                     a2.address
                 FROM 
                     debits m
@@ -3608,7 +3629,7 @@ class Database {
         results = await this.doQuery(query, args);
         if(results.length > 0){
             for(let row of results){
-                let balance = this.util.bcsub(holders[row.address], row.debits, decimals);
+                let balance = this.util.bcsub(holders[row.address], row.debits, exact);
                 if(this.util.bcgt(balance, 0))
                     holders[row.address] = balance;
                 else
@@ -4105,12 +4126,25 @@ class Database {
             if(canonTick != null && canonTick !== '' && canonAddr != null && canonAddr !== '')
                 this._smtTouched.add(canonAddr + '\t' + canonTick);
         }
-        // Round amount to the tick's actual decimal precision before storing.
-        // Without this, fractional amounts (e.g. VM gas fees calculated at 8
-        // decimals against a tick issued with fewer) drift between ledger sums
-        // (rounded once at SUM time) and per-address balance sums (rounded per
-        // row by updateAddressBalance) - triggering the supply SanityError.
-        let decimals = await this.getTokenDecimalPrecision(tick_id);
+        // Quantize the amount before storing.
+        //
+        // LEGACY rule: round to the TICK's own decimal precision. That kept the
+        // stored row on the same grid the supply projections rounded to, which is
+        // why it stopped the SanityError, but it also OVERCHARGED every fee finer
+        // than the gas tick can express: fees are computed at 8 dp, so a 0.5 XCHAIN
+        // fee against a decimals=0 XCHAIN was recorded as 0.5 in `fees` and debited
+        // as 1, and a 51-sub-command batch spent 51 rather than 25.5 (XC-1459).
+        //
+        // EXACT rule (flag-day, ledger_amount_precision_activation.js): store the
+        // amount at 18 dp, i.e. exactly, and let the projections round ONCE. The
+        // aggregation sites below (getTokenSupply / getHolders / sanityCheck /
+        // getAddressCreditDebit) sum at 18 dp and round once at the tick's scale,
+        // so ledger, balances+escrows and tokens.supply still agree; see that
+        // module for why round(C)-round(D)+round(E) != round(C-D+E) is the whole
+        // reason the legacy write-side rounding was load-bearing.
+        let decimals = ledgerPrecision.ledgerWriteScale(
+            await this.getTokenDecimalPrecision(tick_id),
+            this.blockIndex, this.config['NETWORK'], this.config['COIN']);
         amount = this.util.bcadd(amount, 0, decimals);
         // Convert any BigNumber amount to a plain decimal string before inserting.
         // Must be normal notation: String() renders sub-1e-7 amounts exponentially
@@ -4352,7 +4386,15 @@ class Database {
                 for(let row of results){
                     if(!data[row.tick_id])
                         data[row.tick_id] = 0;
-                    data[row.tick_id] = this.util.bcadd(data[row.tick_id], row.amount, row.decimals);
+                    // Accumulate at the exact ledger scale, NOT the tick's own
+                    // decimals (XC-1459). Rounding the RUNNING TOTAL per row is
+                    // what made a 0.5-XCHAIN fee meter as a whole unit against a
+                    // decimals=0 gas tick, and it compounds: 51 rows of 0.5 came
+                    // out as 51, not 25.5. Rows written before the exact-ledger
+                    // flag-day are already exact multiples of 10^-decimals, so
+                    // this is value-identical for them.
+                    data[row.tick_id] = this.util.bcadd(
+                        data[row.tick_id], row.amount, ledgerPrecision.LEDGER_AMOUNT_PRECISION);
                 }
             }
         }
@@ -4815,36 +4857,39 @@ class Database {
         let tickList = Object.keys(tickers);
         if(tickList.length === 0)
             return;
-        // tick_id -> tick name, tick_ids grouped by decimal scale, and the flat id list.
-        let idToTick     = {};
-        let idsByDecimals = {};
-        let allIds        = [];
+        // tick_id -> tick name, and the flat id list.
+        let idToTick = {};
+        let allIds   = [];
         for(let tick of tickList){
             let id = tickers[tick];
-            let d  = decimals[tick];
             idToTick[id] = tick;
-            (idsByDecimals[d] = idsByDecimals[d] || []).push(id);
             allIds.push(id);
         }
-        // Run one GROUP BY SUM per distinct decimal scale over the touched-tick set for a
-        // table. joinActions mirrors getTokenSupply's `INNER JOIN actions` for the ledger
-        // credit/debit/escrow sums; the balances and escrow-TOTAL sums are unjoined, exactly
-        // like getTokenSupplyBalance/getTokenSupplyEscrow. Returns tick_id -> summed string.
+        // Run ONE GROUP BY SUM over the touched-tick set per table. joinActions mirrors
+        // getTokenSupply's `INNER JOIN actions` for the ledger credit/debit/escrow sums;
+        // the balances and escrow-TOTAL sums are unjoined, exactly like
+        // getTokenSupplyBalance/getTokenSupplyEscrow. Returns tick_id -> summed string.
+        //
+        // Summed at the EXACT ledger scale (18 dp), not per-tick DECIMAL(60,d)
+        // (XC-1459), so the per-decimal query grouping is gone with it. The three
+        // projections compared below each round ONCE, at the tick's own scale: the
+        // ledger side rounds when escrows are folded in, the total side when
+        // balances and escrows are added. That is the only shape that agrees when
+        // the ledger carries amounts finer than the tick (fees at 8 dp against a
+        // 0-decimal gas tick), because round(C) - round(D) + round(E) is not
+        // round(C - D + E). Pre-flag-day rows sit on the tick's own grid, so both
+        // shapes give the same number for them.
         let sumByTick = async (table, joinActions) => {
-            let out = {};
-            for(let d in idsByDecimals){
-                let ids          = idsByDecimals[d];
-                let dec          = parseInt(d, 10);
-                let placeholders = ids.map(() => '?').join(', ');
-                let from         = joinActions
-                    ? table + ' m INNER JOIN actions a ON (a.action_index=m.action_index)'
-                    : table + ' m';
-                let q = 'SELECT m.tick_id AS tick_id, SUM(CAST(m.amount AS DECIMAL(60,' + dec + '))) AS s'
-                      + ' FROM ' + from + ' WHERE m.tick_id IN (' + placeholders + ') GROUP BY m.tick_id';
-                let rows = await this.doQuery(q, ids);
-                for(let row of rows){
-                    if(!this.util.isNull(row.s)) out[Number(row.tick_id)] = row.s;
-                }
+            let out          = {};
+            let placeholders = allIds.map(() => '?').join(', ');
+            let from         = joinActions
+                ? table + ' m INNER JOIN actions a ON (a.action_index=m.action_index)'
+                : table + ' m';
+            let q = 'SELECT m.tick_id AS tick_id, ' + ledgerPrecision.exactSumSql('m.amount') + ' AS s'
+                  + ' FROM ' + from + ' WHERE m.tick_id IN (' + placeholders + ') GROUP BY m.tick_id';
+            let rows = await this.doQuery(q, allIds);
+            for(let row of rows){
+                if(!this.util.isNull(row.s)) out[Number(row.tick_id)] = row.s;
             }
             return out;
         };
@@ -4871,8 +4916,10 @@ class Database {
             let credits = (creditsById[tick_id]       != null) ? creditsById[tick_id]       : 0;
             let debitsV = (debitsById[tick_id]        != null) ? debitsById[tick_id]        : 0;
             let escLdg  = (escrowsLedgerById[tick_id] != null) ? escrowsLedgerById[tick_id] : 0;
-            // Ledger (credits - debits + escrows), identical to getTokenSupply's final bcadd/bcsub.
-            let ledger  = this.util.bcnum(this.util.bcadd(this.util.bcsub(credits, debitsV, d), escLdg, d));
+            // Ledger (credits - debits + escrows), identical to getTokenSupply's final
+            // bcadd/bcsub: net at the exact scale, round ONCE at the tick's decimals.
+            let ledger  = this.util.bcnum(this.util.bcadd(
+                this.util.bcsub(credits, debitsV, ledgerPrecision.LEDGER_AMOUNT_PRECISION), escLdg, d));
             let token   = this.util.bcnum((tokenById[tick_id]        != null) ? tokenById[tick_id]        : 0); // Supply from tokens
             let balance = this.util.bcnum((balancesById[tick_id]     != null) ? balancesById[tick_id]     : 0); // Supply from balances
             let escrow  = this.util.bcnum((escrowsTotalById[tick_id] != null) ? escrowsTotalById[tick_id] : 0); // Supply from escrows
