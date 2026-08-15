@@ -76,9 +76,9 @@
     "qs": "^6.15.2",
     "fast-uri": "^3.1.5",
     "ip-address": "^10.3.1",
-    "brace-expansion": "^5.0.8",
+    "brace-expansion": "^5.0.9",
     "minimatch": "^10.2.5",
-    "js-yaml": "^4.3.0"
+    "js-yaml": "^4.3.1"
   },
   "engines": {
     "comment": "Bounded to Node 22: the vendored xchain-vm dependency pulls isolated-vm 5.0.4, whose native binding fails node-gyp on Node 24 (removed V8 API). Node 22 also matches the node:22-bookworm image the indexer ships in. See .nvmrc.",
