@@ -176,6 +176,16 @@ async function processBlocks(indexer) {
         // to the F-1/F-2 index-id bug class.
         indexer.indexerDb.blockIndex = lastIndexerBlock;
         try {
+            // Mirror production (XChainIndexer.js, first statement inside the block's
+            // transaction): install a fresh per-block VM compilation cache. Without it
+            // vm._blockCache stays null for the whole harness run, so every VM-touching
+            // scenario executes contracts on a cache rhythm the fleet never runs: cold
+            // compile per execute instead of compile-once-per-block. That hides both the
+            // cache's own bugs (a stale entry surviving into the next block) and any
+            // consensus-visible difference between a cached and an uncached execute.
+            if (indexer.actions.vm)
+                indexer.actions.vm.beginBlock();
+
             // Mirror production: genesis ledger bootstrap runs before the block's real
             // transactions at the configured genesis block (no-op otherwise). See genesis.js.
             if (indexer.genesis && Number(lastIndexerBlock) === Number(indexer.config['GENESIS_BLOCK']))
@@ -190,6 +200,13 @@ async function processBlocks(indexer) {
             // cross_chain_matches rows; scenario 26 injects signed matches directly.
             await indexer.util.processCrossChainSettlements(indexer.actions, indexer.indexerDb, lastIndexerBlock, blockTime);
             await indexer.util.processCancellations(indexer.actions, indexer.indexerDb, lastIndexerBlock, blockTime);
+            // Mirror production: clear the per-block VM compilation cache after the last
+            // pass that can execute contract code and BEFORE createBlock, so nothing
+            // compiled this block can be reused by the next one. A block that throws
+            // skips this exactly as production does; the next block's beginBlock installs
+            // a fresh cache either way.
+            if (indexer.actions.vm)
+                indexer.actions.vm.endBlock();
             await indexer.indexerDb.createBlock(lastIndexerBlock, blockTime);
             await indexer.util.processMarketUpdates(indexer.indexerDb, lastIndexerBlock, blockTime);
             await indexer.indexerDb.sanityCheck(lastIndexerBlock);
