@@ -22,8 +22,8 @@
 // (match_batch_seq, head author), so a chunk is judged against the earliest head
 // authored by the SAME address, and a foreign head governs nothing. That is
 // status-agnostic (no mirrored/unmirrored fork) and deterministic. It moves
-// consensus-visible verdicts, so it is flag-day gated: armed on regtest from
-// genesis, INERT placeholders on mainnet/testnet.
+// consensus-visible verdicts, so it is flag-day gated: armed at genesis on regtest
+// and on testnet (2026-08-11 operator ruling), INERT placeholder on mainnet.
 
 process.env.INDEXER_COIN = 'DOGE';
 process.env.INDEXER_NETWORK = 'regtest';
@@ -44,8 +44,8 @@ const ATTACKER  = 'mzBc4XEFSdzCDcTxAgf6EZXgsZWpztRhef';
 
 // The DOGE height the archive head landed at (anchor_actions.block_index_doge, NOT
 // block_index, which is the CHECKPOINTED height on the checkpointed chain). At/after
-// the regtest activation, which is armed at 0; the legacy pins switch network instead,
-// because mainnet/testnet still carry inert placeholders.
+// the regtest activation, which is armed at 0; the legacy pins switch network to
+// MAINNET instead, the only network still carrying an inert placeholder.
 const ARMED_BLOCK = 500;
 
 const PUBKEY_A = 'a'.repeat(64);
@@ -262,11 +262,20 @@ describe('ANCHOR archive batch capture by a junk head @regression @tier1', funct
         assert.doesNotMatch(gate, /\bh\.block_index\b(?!_doge)/i);
     });
 
-    it('activation is network-keyed, armed on regtest, inert on mainnet/testnet', function () {
+    it('activation is network-keyed, armed on regtest/testnet, inert on mainnet', function () {
         assert.strictEqual(abs.isArchiveBatchAuthorActive(0, 'regtest'), true);
         assert.strictEqual(abs.isArchiveBatchAuthorActive(999999998, 'mainnet'), false);
-        assert.strictEqual(abs.isArchiveBatchAuthorActive(999999998, 'testnet'), false);
+        // Testnet armed at genesis by the 2026-08-11 operator ruling: the publisher-scoped
+        // rule is live from block 0 there, so the unratified path is exercised on a real
+        // network before mainnet pins a height.
+        assert.strictEqual(abs.ARCHIVE_BATCH_AUTHOR_ACTIVATION.testnet, 0);
+        assert.strictEqual(abs.isArchiveBatchAuthorActive(0, 'testnet'), true);
+        assert.strictEqual(abs.isArchiveBatchAuthorActive(999999998, 'testnet'), true);
+        // Mainnet is the one placeholder left; flipping it is a ratification, not a chore.
+        assert.strictEqual(abs.ARCHIVE_BATCH_AUTHOR_ACTIVATION.mainnet, 999999999);
         assert.strictEqual(abs.isArchiveBatchAuthorActive(NaN, 'regtest'), false);
+        // Fails closed on an armed network too: NaN must never read as ">= 0".
+        assert.strictEqual(abs.isArchiveBatchAuthorActive(NaN, 'testnet'), false);
         assert.strictEqual(abs.isArchiveBatchAuthorActive(0, 'nosuchnet'), false);
     });
 });

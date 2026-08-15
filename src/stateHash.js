@@ -265,14 +265,20 @@ const ARCHIVE_HEAD_VERSIONS_SQL = 'IN (' + ARCHIVE_HEAD_VERSIONS.join(', ') + ')
 // archives circulate, and deploy every indexer + sync process BEFORE the
 // earliest chain crosses its height. No STATE_HASH_VERSION bump: a block is
 // unambiguously pre- or post-activation on a given network. Keep
-// byte-identical to the xchain-sync twin.
+// byte-identical to the xchain-sync twin. TESTNET IS ARMED AT 0 (operator ruling
+// 2026-08-11, applied 2026-08-14): the re-genesised testnet carries no pre-flag
+// blocks, so there is no legacy preimage to stay byte-identical with, and arming at
+// genesis makes testnet the network that actually exercises the widened class before
+// mainnet ratifies a height. Every testnet indexer AND sync follower must run this
+// code, since a straggler on the v1-only predicate recomputes a different preimage
+// and halts.
 const ARCHIVE_INVALID_STATE_HASH_ACTIVATION = {
     'BTC:mainnet':  999999999,  // INERT placeholder; pin before ARCHIVE_REWARD archives circulate
     'LTC:mainnet':  999999999,  // INERT placeholder
     'DOGE:mainnet': 999999999,  // INERT placeholder (DOGE is the anchor chain; arm first here)
-    'BTC:testnet':  999999999,  // INERT placeholder
-    'LTC:testnet':  999999999,  // INERT placeholder
-    'DOGE:testnet': 999999999,  // INERT placeholder
+    'BTC:testnet':  0,          // armed from genesis 2026-08-11 ruling
+    'LTC:testnet':  0,          // armed from genesis 2026-08-11 ruling
+    'DOGE:testnet': 0,          // armed from genesis 2026-08-11 ruling
     regtest: 0,                 // armed from genesis: fresh regtest stacks exercise the widened class end to end
 };
 
