@@ -17,8 +17,8 @@
  * (publisher-bearing, ARCHIVE_REWARD flag-day) parent was invisible to the
  * follower's recompute: a dropped upsert diverged with no halt. The fix
  * widens the predicate to the shared ARCHIVE_HEAD_VERSIONS set, gated on
- * the ARCHIVE_INVALID_STATE_HASH activation (default INERT on mainnet/
- * testnet; regtest armed from genesis) so the pre-flag preimage stays
+ * the ARCHIVE_INVALID_STATE_HASH activation (INERT on mainnet; testnet and
+ * regtest armed from genesis) so the pre-flag preimage stays
  * byte-identical. Asserts: (a) the shared constant's value and SQL shape;
  * (b) the gate function's per-chain lookup and fail-inert paths; (c) the
  * class's SQL keeps the legacy v1-only predicate below the threshold and
@@ -99,11 +99,27 @@ describe('state_hash anchor_invalid class: archive-head v6 coverage @regression'
         assert.strictEqual(ARCHIVE_HEAD_VERSIONS_SQL, 'IN (1, 6)');
     });
 
-    it('gate: regtest armed from genesis; mainnet/testnet keys present but INERT placeholders pending; fail-inert paths', function(){
+    it('gate: regtest and every testnet chain armed from genesis; mainnet keys INERT placeholders; fail-inert paths', function(){
         assert.strictEqual(isArchiveInvalidStateHashActive(0, 'regtest'), true, 'regtest armed at 0');
         for(const key of ['BTC:mainnet', 'LTC:mainnet', 'DOGE:mainnet', 'BTC:testnet', 'LTC:testnet', 'DOGE:testnet']){
             const h = ARCHIVE_INVALID_STATE_HASH_ACTIVATION[key];
             assert.ok(Number.isFinite(h), `${key} must carry a numeric height`);
+        }
+        // Testnet armed at genesis on ALL THREE chains by the 2026-08-11 operator ruling.
+        // Per-chain, because the widened class is keyed on the chain's own local height:
+        // one chain left inert would recompute a different preimage from its siblings.
+        for(const coin of ['BTC', 'LTC', 'DOGE']){
+            assert.strictEqual(ARCHIVE_INVALID_STATE_HASH_ACTIVATION[`${coin}:testnet`], 0,
+                `${coin}:testnet must be armed at genesis`);
+            assert.strictEqual(isArchiveInvalidStateHashActive(0, 'testnet', coin), true,
+                `${coin}:testnet active at block 0`);
+            // Still fails closed on an armed key: NaN must never read as ">= 0".
+            assert.strictEqual(isArchiveInvalidStateHashActive('not-a-number', 'testnet', coin), false);
+        }
+        // Mainnet keeps its placeholder; flipping it is a ratification, not a chore.
+        for(const coin of ['BTC', 'LTC', 'DOGE']){
+            assert.strictEqual(ARCHIVE_INVALID_STATE_HASH_ACTIVATION[`${coin}:mainnet`], 999999999,
+                `${coin}:mainnet must stay an inert placeholder`);
         }
         const h = ARCHIVE_INVALID_STATE_HASH_ACTIVATION['BTC:mainnet'];
         assert.strictEqual(isArchiveInvalidStateHashActive(h - 1, 'mainnet', 'BTC'), false, 'below threshold');

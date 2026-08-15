@@ -1,0 +1,104 @@
+# Train tag gate: every vX.Y.Z tag in this repo must be signed by the XChain
+# Platform release key, and must name the version the commit actually carries.
+#
+# WHY THIS EXISTS. The release-manifest chain starts at the tag: the tag
+# signature proves who cut the release, SHA256SUMS.asc proves the asset set is
+# theirs, the manifest pins every component, and clone verification proves the
+# installed tree is that commit. An unsigned train tag is not a style lapse, it
+# is the root of that chain missing, and it cannot be fixed after the fact:
+# re-signing means deleting and re-pushing the tag, which branch protection
+# refuses and which breaks the sparse-tag invariant. A tag cut unsigned stays
+# unsigned, so this gate has to exist before a train is cut, not after.
+#
+# THIS FILE IS A TWIN. It is byte-identical in every train repo (nothing in it
+# is repo-specific) and a platform-side test enforces that. Edit it in one place
+# and re-copy; a per-repo edit is how nine gates stop being one gate.
+#
+# NOT the wallet's keys. The wallet signs its tags with K14 and its release
+# manifests with K1, and confusing the three is a named hazard. This gate pins
+# the PLATFORM key by fingerprint, from a file in this repo.
+name: Verify tag
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Never cancel a tag verification in flight: a cancelled run reads as "nothing
+# went wrong" and this is the one check that must have said yes out loud.
+concurrency:
+  group: verify-tag-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # actions/checkout recreates the TRIGGERING tag as a lightweight ref
+      # pointing straight at the commit, which discards the annotated tag object
+      # and with it the signature. Every check below would then fail as "cannot
+      # verify a non-tag object of type commit": not because the tag is
+      # unsigned, but because the runner no longer has a tag to verify. Re-fetch
+      # by force so what gets verified is the object the maintainer signed.
+      # (Learned the hard way in xchain-wallet's first release run.)
+      - name: Restore the annotated tag object (checkout flattens it)
+        run: git fetch --force origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+
+      - name: Tag must be signed by the XChain Platform release key
+        run: |
+          set -euo pipefail
+          KEY="tools/release/release-signing-key.asc"
+          FPR_FILE="tools/release/release-signing-fingerprint.txt"
+
+          EXPECTED="$(tr -d ' \n' < "$FPR_FILE" || true)"
+
+          # A real fingerprint or nothing: a placeholder, an empty file or any
+          # other malformed value is refused rather than read as "unpinned, so
+          # allow". A gate that defaults to allow when unconfigured is not a gate.
+          if ! printf '%s' "$EXPECTED" | grep -qiE '^[0-9A-F]{40}$'; then
+            echo "::error::the release key is not pinned"
+            echo "  $FPR_FILE reads '${EXPECTED}', not a 40-hex fingerprint."
+            exit 1
+          fi
+
+          gpg --batch --import "$KEY"
+          # Trust the pinned key ultimately so verification fails on the
+          # SIGNATURE rather than on the web of trust.
+          echo "${EXPECTED}:6:" | gpg --batch --import-ownertrust
+
+          if ! git verify-tag --raw "${GITHUB_REF_NAME}" 2>verify.txt; then
+            echo "::error::tag ${GITHUB_REF_NAME} is not signed by a key we trust"
+            sed 's/^/  /' verify.txt
+            exit 1
+          fi
+
+          # `git verify-tag` succeeding is not the verdict: it passes for ANY
+          # key in the keyring. Bind it to the pinned fingerprint explicitly.
+          if ! grep -q "VALIDSIG ${EXPECTED}" verify.txt; then
+            echo "::error::tag ${GITHUB_REF_NAME} is signed, but not by the pinned release key"
+            echo "  expected fingerprint: ${EXPECTED}"
+            sed 's/^/  /' verify.txt
+            exit 1
+          fi
+
+          echo "tag ${GITHUB_REF_NAME} verified against ${EXPECTED}"
+
+      - name: Tag must match the committed version
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="v$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$VERSION" ]; then
+            echo "::error::tag $TAG does not match package.json version $VERSION"
+            echo "  A train tag is cut on the master merge commit that carries the"
+            echo "  version bump; a mismatch means the tag was cut from the wrong SHA."
+            exit 1
+          fi
+          echo "$TAG matches package.json at $(git rev-parse HEAD)"

@@ -161,9 +161,26 @@ function isArchiveRewardActive(snapshotBlock, network){
 // fleet-wide before ratifying a mainnet/testnet height, or a lagging node
 // keeps the old earn-block-only scoping and forks the COLLECT rail after a
 // reorg.
+//
+// TESTNET IS ARMED AT 0 (operator ruling 2026-08-11, applied 2026-08-14). The
+// deploy-first-then-flip window this table was held null for is a MAINNET
+// concern: mainnet carries live COLLECT-spendable history, so flipping under a
+// partially-upgraded fleet could fork the rail. Testnet was re-genesised with no
+// pre-flag history, so there is no legacy set to diverge from and no mid-upgrade
+// window to protect; what testnet has instead is the only chance to run the
+// relocated derive path (hub attestation write, XANCREWARD federation, BTC-side
+// re-verification, mirror-maturity deferral) on a real multi-host network before
+// mainnet ratifies a height. Mainnet stays null until the operator picks one.
+//
+// TESTNET DEPLOY ORDER, unchanged by the arming: every testnet hub and indexer
+// must carry BOTH schema migrations
+// (2026-08-12-validator-rewards-derive-block-index.sql and
+// 2026-08-13-anchor-reward-attestations-doge-anchor-txid.sql) before it processes
+// an anchor, since a node on the old schema scopes the reorg delete on the
+// earn-block alone and cannot bind the mined-anchor txid.
 const ANCHOR_REWARD_DERIVE_ACTIVATION = {
     mainnet: null,        // INERT placeholder: the operator owns this height; the three blockers above have landed, ratification has not
-    testnet: null,        // INERT placeholder: the operator owns this height; the three blockers above have landed, ratification has not
+    testnet: 0,           // ARMED at genesis 2026-08-14 per the 2026-08-11 operator ruling; see the testnet note above
     regtest: 0,
 };
 

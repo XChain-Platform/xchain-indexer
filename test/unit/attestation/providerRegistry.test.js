@@ -130,4 +130,64 @@ describe('ProviderRegistry @regression @tier2', function () {
             assert.strictEqual(fresh.getDeadlineWindows().http_get, 100);
         });
     });
+
+    // ---- block-anchored provider stake floor (XC-083) -----------------------
+    // The floor is consensus input at/above STAKE_WEIGHTED_QUORUM: the responsible-set
+    // derivation drops sources below it, so a node that resolves a different floor for
+    // the same block selects different responsible validators and forks.
+    describe('getMinStake (block-anchored provider stake floor)', function () {
+
+        it('ships the spec floors: http_get 10000, llm 25000', function () {
+            const r = new ProviderRegistry();
+            assert.strictEqual(r.getMinStake('http_get', 100, 'regtest'), '10000');
+            assert.strictEqual(r.getMinStake('llm', 100, 'regtest'), '25000');
+        });
+
+        it('the llm floor is strictly above the http_get one (it is a per-provider bar, not a copy of the capability one)', function () {
+            const r = new ProviderRegistry();
+            assert.ok(Number(r.getMinStake('llm', 100, 'regtest')) > Number(r.getMinStake('http_get', 100, 'regtest')));
+        });
+
+        it('resolves the same floor at every block, because no activation is armed', function () {
+            const r = new ProviderRegistry();
+            for (const b of [0, 1, 960999, 961000, 5000000])
+                assert.strictEqual(r.getMinStake('http_get', b, 'mainnet'), '10000',
+                    'the frozen activation table is empty; a change here is a consensus flag day');
+        });
+
+        it('returns null for an unknown provider (caller must fail closed)', function () {
+            const r = new ProviderRegistry();
+            assert.strictEqual(r.getMinStake('nope', 100, 'regtest'), null);
+        });
+
+        it('returns null when an overlay entry carries no floor', function () {
+            // An overlay REPLACES the default wholesale, so one that omits
+            // min_stake_xchain leaves the provider floorless. That must read as
+            // "unknown", never as 0, which would silently widen the serving set.
+            const cfg = { ATTESTATION: { PROVIDERS: { http_get: {
+                provider_id: 'http_get', version: 1, consensus_strategy: 'byte_equality',
+                max_request_bytes: 1, max_response_bytes: 1, allowed_redundancy: [1], deadline_window_blocks: 1
+            } } } };
+            assert.strictEqual(new ProviderRegistry(cfg).getMinStake('http_get', 100, 'regtest'), null);
+        });
+
+        it('an overlay may set its own floor', function () {
+            const cfg = { ATTESTATION: { PROVIDERS: { http_get: {
+                provider_id: 'http_get', version: 1, consensus_strategy: 'byte_equality',
+                max_request_bytes: 1, max_response_bytes: 1, allowed_redundancy: [1],
+                min_stake_xchain: '777.5', deadline_window_blocks: 1
+            } } } };
+            assert.strictEqual(new ProviderRegistry(cfg).getMinStake('http_get', 100, 'regtest'), '777.5');
+        });
+
+        it('an armed activation takes effect only at and above its block', function () {
+            // Exercised through the operator/test override rather than by editing the
+            // frozen table, which is what the module documents as the only safe way in.
+            const r = new ProviderRegistry();
+            const override = { http_get: [{ activation_block: 500, value: '40000' }] };
+            assert.strictEqual(r.getMinStake('http_get', 499, 'regtest', override), '10000');
+            assert.strictEqual(r.getMinStake('http_get', 500, 'regtest', override), '40000');
+            assert.strictEqual(r.getMinStake('http_get', 900, 'regtest', override), '40000');
+        });
+    });
 });

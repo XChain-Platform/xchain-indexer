@@ -1568,6 +1568,178 @@ describe('Batch @regression @tier3', function () {
             });
         });
 
+        describe('VM actions carry the ratified weight of 30 (D8, operator 2026-08-15)', function () {
+
+            // DEPLOY, EXECUTE and XEXEC run contract code, which is the one class whose
+            // per-sub-command cost is not bounded by a row count. 30 is the operator-ratified
+            // consensus constant, derived in bin/measure-batch-execute-cost.js: it is the
+            // smallest round weight at which a full batch of worst-case VM sub-commands stays
+            // under the status-quo bound of 250 ordinary ones at EVERY ratio measured (8 admitted
+            // x 27.4 = 219 ordinary-equivalents; weight 25 would admit 10, i.e. 274).
+            //
+            // 250 / 30 = 8.33, so 8 fit (240) and 9 do not (270). Those two numbers are written
+            // out below rather than computed from the table, so a retune of the weight reddens
+            // these tests instead of silently re-deriving whatever the code now believes.
+
+            const VM_WEIGHT = 30;
+
+            // A funded source with the GAS token seeded. At/after this same flag the R4 spam
+            // collapse prices EXECUTE at its acceptance floor, so an unfunded all-EXECUTE batch
+            // would collapse to one invalid record for a reason that has nothing to do with the
+            // budget. Paying its way is what makes "valid" here mean "the WEIGHT admitted it".
+            function fundedForVm() {
+                indexer.indexerDb.getTokenInfo
+                    .withArgs('XCHAIN', sinon.match.any, sinon.match.any)
+                    .resolves(createTokenInfo({ TICK: 'XCHAIN', TICK_ID: 1, DECIMALS: 8 }));
+                indexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
+            }
+
+            // The R7 helper's gate stub does not know the VM actions, and an unknown ACTION
+            // reports 'invalid: ACTION (unknown)' instead of the budget string. This block needs
+            // them known, so a VALID verdict is a real verdict rather than an activation artefact.
+            function stubVmGates(weightsOn) {
+                const known = ['BATCH', 'SEND', 'DEPLOY', 'EXECUTE', 'XEXEC', 'ISSUANCE_FEE', 'UNIFIED_FEES'];
+                actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(async (name) => {
+                    if (name === 'BATCH_SUBACTION_NORMALIZATION') return true;
+                    if (name === 'BATCH_ISSUANCE_LIMITS') return true;
+                    if (name === 'BATCH_COST_WEIGHTING') return weightsOn;
+                    return known.includes(name);
+                });
+                handler = new Batch(actionsCtx);
+            }
+
+            async function runVm(weightsOn, commands) {
+                stubVmGates(weightsOn);
+                fundedForVm();
+                const data = createBaseData({
+                    ACTION:  'BATCH',
+                    FORMAT:  0,
+                    SOURCE,
+                    TX_DATA: 'BATCH|0|' + commands.join(';'),
+                });
+                indexer.indexerDb.isActionAllowed.resolves(true);
+                await handler.parse(['0'], data, null);
+                return data;
+            }
+
+            const execs   = (n) => Array.from({ length: n }, (_, i) => 'EXECUTE|0|7|m' + i + '|');
+            const xexecs  = (n) => Array.from({ length: n }, (_, i) => 'XEXEC|0|7|m' + i + '|');
+            const deploys = (n) => Array.from({ length: n }, (_, i) => 'DEPLOY|0|base64|100000|' + i);
+
+            it('the table pins 30 for DEPLOY, EXECUTE and XEXEC', async function () {
+                // The constant itself, asserted once. It decides verdicts, so moving it is a
+                // consensus change and must be a deliberate edit rather than a side effect.
+                stubVmGates(true);
+                for (const action of ['DEPLOY', 'EXECUTE', 'XEXEC'])
+                    assert.strictEqual(
+                        await handler.subCommandWeight(action, action + '|0|7|m|', {}, true), VM_WEIGHT,
+                        action + ' must weigh the ratified ' + VM_WEIGHT);
+            });
+
+            it('8 EXECUTEs fit the budget exactly and all of them dispatch', async function () {
+                const data = await runVm(true, execs(8));
+
+                assert.strictEqual(data['STATUS'], 'valid');
+                assert.strictEqual(actionsCtx.processAction.callCount, 8);
+            });
+
+            it('9 EXECUTEs exceed it, as ONE record rather than nine', async function () {
+                // The hole D8 exists to close: today 250 EXECUTEs are admitted, each of which
+                // may emit up to 50 fee-exempt VM-originated ISSUEs.
+                const data = await runVm(true, execs(9));
+
+                assert.strictEqual(data['STATUS'], 'invalid: COMMAND (limit)');
+                assert.strictEqual(actionsCtx.processAction.callCount, 0);
+                assert.strictEqual(indexer.indexerDb.createBatch.callCount, 1, 'one whole-batch record');
+                assert.strictEqual(indexer.indexerDb.createActionIndex.callCount, 0);
+            });
+
+            it('XEXEC cannot dodge the bound by being the other spelling', async function () {
+                // XEXEC runs the same contract code an EXECUTE does, so leaving it at the default
+                // 1 would bound the VM class for one spelling and leave it unbounded for the
+                // other. This is deliberately the OPPOSITE of its treatment in the R4 fee
+                // predicate, where XEXEC is fee-less and pricing it would over-charge.
+                const data = await runVm(true, xexecs(9));
+
+                assert.strictEqual(data['STATUS'], 'invalid: COMMAND (limit)');
+                assert.strictEqual(actionsCtx.processAction.callCount, 0);
+            });
+
+            it('the two VM spellings are summed together, not bounded per action', async function () {
+                // 5 EXECUTE + 4 XEXEC = 270. Neither spelling breaches anything on its own,
+                // which is the entire point of a budget rather than a pair of caps.
+                const data = await runVm(true, execs(5).concat(xexecs(4)));
+
+                assert.strictEqual(data['STATUS'], 'invalid: COMMAND (limit)');
+            });
+
+            it('8 EXECUTEs from a paying source are admitted, so the WEIGHT is what rejects 9', async function () {
+                // Paired with the 9 case above on purpose: one test alone cannot tell "the budget
+                // stopped it" from "the spam collapse stopped it", and both are live at this flag.
+                const data = await runVm(true, execs(8));
+
+                assert.strictEqual(data['STATUS'], 'valid');
+                assert.strictEqual(indexer.indexerDb.createBatch.callCount, 1);
+            });
+
+            it('one DEPLOY may still carry companions, up to 220 of them', async function () {
+                // 30 + 220 = 250. The COST half of D5: a DEPLOY is no longer free to sit beside
+                // 249 sub-commands, but it is nowhere near the solo-batch action that weighing it
+                // at the whole budget would have made it.
+                const data = await runVm(true, deploys(1).concat(sends(220)));
+
+                assert.strictEqual(data['STATUS'], 'valid');
+                assert.strictEqual(actionsCtx.processAction.callCount, 221);
+            });
+
+            it('one DEPLOY plus 221 companions is one over', async function () {
+                const data = await runVm(true, deploys(1).concat(sends(221)));
+
+                assert.strictEqual(data['STATUS'], 'invalid: COMMAND (limit)');
+            });
+
+            it('A3: two DEPLOYs still reject as "invalid: DEPLOY (limit)", weights and all', async function () {
+                // The acceptance criterion the spec's "D5 is subsumed" claim was written for.
+                // Two DEPLOYs weigh 60, well inside the budget, so the verdict still comes from
+                // the per-action cap loop and the consensus STRING does not move. That is why
+                // gatedActionLimits['DEPLOY'] stays: no weight can reproduce a conjunction of
+                // caps (2w > 250 needs w >= 126, while "1 DEPLOY + 249 SENDs" valid needs w <= 1).
+                const data = await runVm(true, deploys(2));
+
+                assert.strictEqual(data['STATUS'], 'invalid: DEPLOY (limit)');
+                assert.strictEqual(actionsCtx.processAction.callCount, 0);
+                assert.strictEqual(indexer.indexerDb.createBatch.callCount, 1);
+            });
+
+            it('9 DEPLOYs report the budget, not the cap, and that string move is deliberate', async function () {
+                // 9 x 30 = 270, and the budget check runs FIRST because it is the only bound on
+                // the O(N) scans behind it. So a batch that is invalid under BOTH rules reports
+                // 'COMMAND (limit)' at/after this flag where it reported 'DEPLOY (limit)' before.
+                // The VERDICT is unchanged in every case; only the reason moves, and only for
+                // batches carrying enough VM weight to blow the budget outright.
+                const data = await runVm(true, deploys(9));
+
+                assert.strictEqual(data['STATUS'], 'invalid: COMMAND (limit)');
+
+                const off = await runVm(false, deploys(9));
+                assert.strictEqual(off['STATUS'], 'invalid: DEPLOY (limit)');
+            });
+
+            it('below the weighting flag every one of these batches keeps its old verdict', async function () {
+                // The byte-identity half. A replay of the pre-flag era has to reproduce all of
+                // this, including the 250 EXECUTEs the flat cap admitted.
+                const nine = await runVm(false, execs(9));
+                assert.strictEqual(nine['STATUS'], 'valid');
+                assert.strictEqual(actionsCtx.processAction.callCount, 9);
+
+                const wide = await runVm(false, deploys(1).concat(sends(249)));
+                assert.strictEqual(wide['STATUS'], 'valid');
+
+                const many = await runVm(false, execs(250));
+                assert.strictEqual(many['STATUS'], 'valid');
+            });
+        });
+
         describe('the weight >= 1 invariant, which the count pre-filter depends on', function () {
 
             it('an action absent from the table weighs the default 1', async function () {
@@ -1619,5 +1791,449 @@ describe('Batch @regression @tier3', function () {
                 assert.strictEqual(spy.callCount, 1);
             });
         });
+    });
+
+    describe('D10 spam collapse widened to duration-metered creates (BATCH_COST_WEIGHTING)', function () {
+
+        const ADDR = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
+
+        // createBaseData's BLOCK_TIME. The fee is a pure function of (EXPIRATION - BLOCK_TIME),
+        // so the two are written together here and nowhere else in this block.
+        const BLOCK_TIME = 1700000000;
+        const day        = (n) => String(BLOCK_TIME + (n * 86400));
+
+        // BTC regtest, unified lane: UNIFIED_EXPIRATION_FEE_FREE_DAYS 90, EXPIRATION_PER_DAY 550
+        // gas, GAS_PRICE 0.00001 XCHAIN. A 100-day create is 10 chargeable days = 5500 gas =
+        // 0.055 XCHAIN, and a 90-day create is inside the free window and costs nothing.
+        // Written out rather than recomputed, so a schedule change reddens these tests instead
+        // of silently re-deriving whatever the code now believes.
+        const CREATE_FEE = '0.05500000';
+        const EXP_PAID   = day(100);
+        const EXP_FREE   = day(90);
+
+        // Real ORDER / SWAP / DISPENSER handlers, so the EXPIRATION position under test is the
+        // one their OWN format strings declare (index 10, 10 and 13 today). A hand-written
+        // format string here would let the pre-check and the handlers drift apart in exactly
+        // the way reading the format string exists to prevent.
+        const Order     = require('../../../src/actions/order.js');
+        const Swap      = require('../../../src/actions/swap.js');
+        const Dispenser = require('../../../src/actions/dispenser.js');
+
+        function stubGates(weightsOn) {
+            const known = ['BATCH', 'SEND', 'ISSUE', 'MINT', 'ORDER', 'SWAP', 'DISPENSER',
+                           'EXECUTE', 'ISSUANCE_FEE', 'UNIFIED_FEES'];
+            actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(async (name) => {
+                if (name === 'BATCH_SUBACTION_NORMALIZATION') return true;
+                if (name === 'BATCH_ISSUANCE_LIMITS') return true;
+                if (name === 'BATCH_COST_WEIGHTING') return weightsOn;
+                return known.includes(name);
+            });
+            // The seam batch.js reads positions through. Mirrors actions.js's own map.
+            const paramHandlers = {
+                ORDER:     new Order(actionsCtx),
+                SWAP:      new Swap(actionsCtx),
+                DISPENSER: new Dispenser(actionsCtx),
+            };
+            actionsCtx.setActionParamHandler = (action) => paramHandlers[action] || null;
+            handler = new Batch(actionsCtx);
+        }
+
+        // Wire shapes. Positions are NOT restated here beyond what a real encoder would emit;
+        // the trailing field is EXPIRATION in each create format.
+        const orderCreate     = (exp) => 'ORDER|0|BTC|TEST|10|0|BTC|OTHER|20|0|' + ADDR + '|' + exp;
+        const swapCreate      = (exp) => 'SWAP|0|BTC|TEST|10|0|BTC|OTHER|20|0|' + ADDR + '|' + exp;
+        // Three empty fields between GET_ADDRESS and EXPIRATION: FIAT_CODE, FIAT_AMOUNT,
+        // ORACLE_ADDRESS. That gap is the point of the DISPENSER case below.
+        const dispenserCreate = (exp) => 'DISPENSER|0|BTC|TEST|10|0|0|BTC|OTHER|1|' + ADDR + '||||' + exp;
+
+        function repeat(fn, n, exp) {
+            const out = [];
+            for (let i = 0; i < n; i++) out.push(fn(exp));
+            return out;
+        }
+
+        async function run(weightsOn, commands, balance) {
+            stubGates(weightsOn);
+            const data = createBaseData({
+                ACTION:  'BATCH',
+                FORMAT:  0,
+                SOURCE,
+                TX_DATA: 'BATCH|0|' + commands.join(';'),
+            });
+            indexer.indexerDb.isActionAllowed.resolves(true);
+            indexer.indexerDb.getAddressBalances.resolves(balance === null ? {} : { 1: balance });
+            await handler.parse(['0'], data, null);
+            return data;
+        }
+
+        it('gate OFF: an all-ORDER no-gas batch keeps the pre-flag verdict, N records and all', async function () {
+            // The pre-D10 predicate bails on the first non-ISSUE sub-command, so this batch is
+            // valid and every command runs. This is the byte-identity half of the pair: the
+            // widening may not move a single verdict below its own flag.
+            const data = await run(false, repeat(orderCreate, 3, EXP_PAID), '0.00000000');
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(actionsCtx.processAction.callCount, 3);
+            assert.strictEqual(indexer.indexerDb.getAddressBalances.callCount, 0,
+                'the widened pre-check must not even read a balance below its flag');
+        });
+
+        it('gate ON: an all-ORDER no-gas batch collapses to ONE invalid record (A7)', async function () {
+            const data = await run(true, repeat(orderCreate, 3, EXP_PAID), '0.00000000');
+
+            assert.strictEqual(data['STATUS'], 'invalid: GAS (insufficient)');
+            assert.strictEqual(actionsCtx.processAction.callCount, 0, 'no sub-command runs');
+            assert.strictEqual(indexer.indexerDb.createBatch.callCount, 1, 'one whole-batch record, not three invalid rows');
+            assert.strictEqual(indexer.indexerDb.createActionIndex.callCount, 0);
+        });
+
+        it('gate ON: exactly the create fee is affordable (boundary)', async function () {
+            const data = await run(true, repeat(orderCreate, 3, EXP_PAID), CREATE_FEE);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(actionsCtx.processAction.callCount, 3, 'the handlers decide which of the three can pay');
+        });
+
+        it('gate ON: one satoshi under the create fee is rejected (no off-by-one)', async function () {
+            const data = await run(true, repeat(orderCreate, 3, EXP_PAID), '0.05499999');
+
+            assert.strictEqual(data['STATUS'], 'invalid: GAS (insufficient)');
+        });
+
+        it('gate ON: a create inside the free expiration window is FREE, so nothing collapses', async function () {
+            // A positively-known cost of ZERO is the opposite of an unknown cost: the
+            // sub-command really can be valid on an empty balance.
+            const data = await run(true, repeat(orderCreate, 3, EXP_FREE), '0.00000000');
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(actionsCtx.processAction.callCount, 3);
+        });
+
+        it('gate ON: a create carrying NO expiration is free, and one of them exempts the batch', async function () {
+            const data = await run(true, ['ISSUE|0|JDOG.1', 'ISSUE|0|JDOG.2', orderCreate('')], '0.00000000');
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(actionsCtx.processAction.callCount, 3);
+        });
+
+        it('gate ON: an EDIT is not priceable here, so the batch proceeds', async function () {
+            // Format 2 prices the DIFFERENCE against the stored record's EXPIRATION, which
+            // needs a read this pre-check refuses to make. Unknown cost, no collapse.
+            const data = await run(true, ['ORDER|2|5|' + EXP_PAID, 'ORDER|2|6|' + EXP_PAID], '0.00000000');
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(actionsCtx.processAction.callCount, 2);
+        });
+
+        it('gate ON: a CANCEL is not priceable here, so the batch proceeds', async function () {
+            const data = await run(true, ['ORDER|1|5', 'ORDER|1|6'], '0.00000000');
+
+            assert.strictEqual(data['STATUS'], 'valid');
+        });
+
+        it('gate ON: an unparseable EXPIRATION is UNKNOWN, neither free nor costly', async function () {
+            const data = await run(true, repeat(orderCreate, 3, 'soon'), '0.00000000');
+
+            assert.strictEqual(data['STATUS'], 'valid', 'a garbage field may never manufacture a collapse');
+        });
+
+        it('gate ON: SWAP creates are priced by the same rule', async function () {
+            const data = await run(true, repeat(swapCreate, 3, EXP_PAID), '0.00000000');
+
+            assert.strictEqual(data['STATUS'], 'invalid: GAS (insufficient)');
+
+            const funded = await run(true, repeat(swapCreate, 3, EXP_PAID), CREATE_FEE);
+            assert.strictEqual(funded['STATUS'], 'valid');
+        });
+
+        it('gate ON: DISPENSER EXPIRATION is read from ITS OWN format string, not ORDER\'s position', async function () {
+            // DISPENSER carries EXPIRATION at index 13; ORDER and SWAP carry it at 10. Both
+            // halves are needed: the first alone cannot tell "read from the format string" from
+            // "hardcoded 13", and the second alone cannot tell "correctly ignored" from
+            // "DISPENSER is not priced at all".
+            const priced = await run(true, repeat(dispenserCreate, 3, EXP_PAID), '0.00000000');
+            assert.strictEqual(priced['STATUS'], 'invalid: GAS (insufficient)');
+
+            // Same timestamp, but sitting in FIAT_CODE (index 10) with EXPIRATION absent. A
+            // pre-check hardcoded to ORDER's position would price it and wrongly collapse.
+            const misread = await run(true, ['DISPENSER|0|BTC|TEST|10|0|0|BTC|OTHER|1|' + ADDR + '|' + EXP_PAID], '0.00000000');
+            assert.strictEqual(misread['STATUS'], 'valid');
+        });
+
+        it('gate ON: MINT is deliberately NOT priced, because a MINT is free', async function () {
+            const data = await run(true, ['MINT|0|TEST|10'], '0.00000000');
+
+            assert.strictEqual(data['STATUS'], 'valid');
+        });
+
+        it('gate ON: the cheapest sub-command still sets the bar across mixed classes', async function () {
+            // A child ISSUE costs 0.5 and a 100-day create costs 0.055. A source holding the
+            // create's price can land the create, so rejecting the batch would destroy work
+            // that really would have succeeded.
+            const data = await run(true, ['ISSUE|0|JDOG.1', orderCreate(EXP_PAID)], CREATE_FEE);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(actionsCtx.processAction.callCount, 2);
+
+            const broke = await run(true, ['ISSUE|0|JDOG.1', orderCreate(EXP_PAID)], '0.05499999');
+            assert.strictEqual(broke['STATUS'], 'invalid: GAS (insufficient)');
+        });
+
+        it('gate ON: pricing a create costs NO database read', async function () {
+            // The whole reason the duration classes are priceable at all is that the fee is a
+            // pure function of EXPIRATION and BLOCK_TIME. If this ever needs a read, the check
+            // has started doing the O(commands x reads) work it exists to avoid.
+            await run(true, repeat(orderCreate, 250, EXP_PAID), '0.00000000');
+
+            assert.strictEqual(indexer.indexerDb.getTokenInfo.callCount, 0, 'no token probes for the duration classes');
+            assert.strictEqual(indexer.indexerDb.getAddressBalances.callCount, 1, 'one balance read for the whole batch');
+        });
+
+        it('gate ON: native-coin fee mode stays out of scope for the new classes too', async function () {
+            stubGates(true);
+            const data = createBaseData({
+                ACTION:     'BATCH',
+                FORMAT:     0,
+                SOURCE,
+                TX_DATA:    'BATCH|0|' + repeat(orderCreate, 3, EXP_PAID).join(';'),
+                TX_OUTPUTS: [{ address: indexer.config['ADDRESS']['FEE_DESTINATION'], value: '0.001' }],
+            });
+            indexer.indexerDb.isActionAllowed.resolves(true);
+            indexer.indexerDb.getAddressBalances.resolves({});
+
+            await handler.parse(['0'], data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(indexer.indexerDb.getAddressBalances.callCount, 0, 'no gas read at all in native mode');
+        });
+
+        it('gate ON: an earlier verdict still short-circuits the widened check', async function () {
+            const data = await run(true, repeat(orderCreate, 251, EXP_PAID), '0.00000000');
+
+            assert.strictEqual(data['STATUS'], 'invalid: COMMAND (limit)');
+            assert.strictEqual(indexer.indexerDb.getAddressBalances.callCount, 0);
+        });
+
+        it('gate ON: a missing positional-layout seam is UNKNOWN cost, never a collapse', async function () {
+            // An Actions without setActionParamHandler (an older build, a partial double) must
+            // degrade to the pre-D10 verdict rather than to a hardcoded position.
+            stubGates(true);
+            delete actionsCtx.setActionParamHandler;
+            handler = new Batch(actionsCtx);
+            const data = createBaseData({
+                ACTION: 'BATCH', FORMAT: 0, SOURCE,
+                TX_DATA: 'BATCH|0|' + repeat(orderCreate, 3, EXP_PAID).join(';'),
+            });
+            indexer.indexerDb.isActionAllowed.resolves(true);
+            indexer.indexerDb.getAddressBalances.resolves({});
+
+            await handler.parse(['0'], data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+        });
+
+    });
+
+    describe('D10 spam collapse widened to the EXECUTE floor (BATCH_COST_WEIGHTING)', function () {
+
+        // VM_EXECUTE_BASE 1000 gas x GAS_PRICE 0.00001 XCHAIN. Written out rather than
+        // recomputed from the config, so a schedule change reddens these tests instead of
+        // silently re-deriving whatever the code now believes. This is the SAME number
+        // execute.js (~209-211) charges before it enters the VM.
+        const EXECUTE_FEE = '0.01000000';
+
+        const exec  = (n) => 'EXECUTE|0|7|method' + n + '|';
+        const xexec = (n) => 'XEXEC|0|7|method' + n + '|';
+
+        function stubGates(weightsOn) {
+            const known = ['BATCH', 'SEND', 'ISSUE', 'MINT', 'ORDER', 'EXECUTE', 'XEXEC',
+                           'ISSUANCE_FEE', 'UNIFIED_FEES'];
+            actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(async (name) => {
+                if (name === 'BATCH_SUBACTION_NORMALIZATION') return true;
+                if (name === 'BATCH_ISSUANCE_LIMITS') return true;
+                if (name === 'BATCH_COST_WEIGHTING') return weightsOn;
+                return known.includes(name);
+            });
+            handler = new Batch(actionsCtx);
+        }
+
+        // The GAS token, as-of this block. execute.js gates its whole fee block on this same
+        // read (`tokenInfo &&`), so the floor is knowable only when the token exists; every
+        // test that expects a price must therefore seed it, and the one that does not seed it
+        // is the negative case below.
+        function gasTokenExists() {
+            indexer.indexerDb.getTokenInfo
+                .withArgs('XCHAIN', sinon.match.any, sinon.match.any)
+                .resolves(createTokenInfo({ TICK: 'XCHAIN', TICK_ID: 1, DECIMALS: 8 }));
+        }
+
+        function repeat(fn, n) {
+            const out = [];
+            for (let i = 0; i < n; i++) out.push(fn(i));
+            return out;
+        }
+
+        async function run(weightsOn, commands, balance, extra) {
+            stubGates(weightsOn);
+            const data = createBaseData(Object.assign({
+                ACTION:  'BATCH',
+                FORMAT:  0,
+                SOURCE,
+                TX_DATA: 'BATCH|0|' + commands.join(';'),
+            }, extra || {}));
+            indexer.indexerDb.isActionAllowed.resolves(true);
+            indexer.indexerDb.getAddressBalances.resolves(balance === null ? {} : { 1: balance });
+            await handler.parse(['0'], data, null);
+            return data;
+        }
+
+        it('gate OFF: an all-EXECUTE no-gas batch keeps the pre-flag verdict, N records and all', async function () {
+            // The byte-identity half of the pair. Below its own flag the widening may not move
+            // a single verdict, and it may not even read a balance to decide that.
+            gasTokenExists();
+            const data = await run(false, repeat(exec, 3), '0.00000000');
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(actionsCtx.processAction.callCount, 3);
+            assert.strictEqual(indexer.indexerDb.getAddressBalances.callCount, 0,
+                'the widened pre-check must not even read a balance below its flag');
+        });
+
+        it('gate ON: an all-EXECUTE no-gas batch collapses to ONE invalid record (A7)', async function () {
+            // The vector this whole spec exists for: 250 EXECUTEs a source cannot pay for
+            // currently buy 250 invalid rows of block-loop work for nothing.
+            gasTokenExists();
+            const data = await run(true, repeat(exec, 3), '0.00000000');
+
+            assert.strictEqual(data['STATUS'], 'invalid: GAS (insufficient)');
+            assert.strictEqual(actionsCtx.processAction.callCount, 0, 'no sub-command runs');
+            assert.strictEqual(indexer.indexerDb.createBatch.callCount, 1,
+                'one whole-batch record, not three invalid rows');
+            assert.strictEqual(indexer.indexerDb.createActionIndex.callCount, 0);
+        });
+
+        it('gate ON: exactly the acceptance floor is affordable (boundary)', async function () {
+            gasTokenExists();
+            const data = await run(true, repeat(exec, 3), EXECUTE_FEE);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(actionsCtx.processAction.callCount, 3,
+                'the handlers decide which of the three can actually pay');
+        });
+
+        it('gate ON: one satoshi under the floor is rejected (no off-by-one)', async function () {
+            gasTokenExists();
+            const data = await run(true, repeat(exec, 3), '0.00999999');
+
+            assert.strictEqual(data['STATUS'], 'invalid: GAS (insufficient)');
+        });
+
+        it('gate ON: XEXEC is deliberately NOT priced, because it is fee-less on this chain', async function () {
+            // xexec.js injects with IS_EMISSION true and pays nothing here (:213, :221): it runs
+            // against the cross-chain request's gas_escrow, not a wallet. Pricing it would be an
+            // OVER-estimate, the one error this predicate may never make. This test is what
+            // makes that a decision rather than an accident: adding XEXEC to vmBaseFeeActions
+            // reddens it.
+            gasTokenExists();
+            const data = await run(true, repeat(xexec, 3), '0.00000000');
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(actionsCtx.processAction.callCount, 3);
+        });
+
+        it('gate ON: no GAS token as-of this block means the floor is UNKNOWN, never a collapse', async function () {
+            // Deliberately does NOT call gasTokenExists(). execute.js charges nothing when the
+            // gas token has no valid issuance, so an EXECUTE really can be valid on an empty
+            // balance and quoting a positive fee would be an over-estimate.
+            const data = await run(true, repeat(exec, 3), '0.00000000');
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(actionsCtx.processAction.callCount, 3);
+        });
+
+        it('gate ON: an EXECUTE beside an unpriceable sub-command still lets the batch through', async function () {
+            // SEND's cost is not knowable here, and one unknown is enough to bail: R4 collapses
+            // only when EVERY sub-command is provably fee-bearing.
+            gasTokenExists();
+            const data = await run(true, [exec(0), 'SEND|0|TEST|10|' + SOURCE], '0.00000000');
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(actionsCtx.processAction.callCount, 2);
+        });
+
+        it('gate ON: the EXECUTE floor sets the bar when it is the cheapest class', async function () {
+            // A child ISSUE costs 0.5 and the EXECUTE floor 0.01. A source holding 0.01 can land
+            // the EXECUTE, so collapsing the batch would destroy work that would have succeeded.
+            gasTokenExists();
+            const data = await run(true, ['ISSUE|0|JDOG.1', exec(0)], EXECUTE_FEE);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(actionsCtx.processAction.callCount, 2);
+
+            const broke = await run(true, ['ISSUE|0|JDOG.1', exec(0)], '0.00999999');
+            assert.strictEqual(broke['STATUS'], 'invalid: GAS (insufficient)');
+        });
+
+        it('gate ON: a full batch of EXECUTEs pays for ONE token probe, not one per sub-command', async function () {
+            // The floor is a schedule constant, identical for every sub-command, so the one read
+            // it needs is memoized for the whole batch. Without that, the pre-check would buy a
+            // database read per sub-command - precisely the O(commands x reads) work it exists
+            // to avoid.
+            //
+            // EIGHT, not 250, and the number moved for a REASON worth recording: at this same
+            // flag the VM cost weight is 30, so 8 is the largest all-EXECUTE batch that clears
+            // the budget at all. A 250-EXECUTE fixture now dies at the budget check before this
+            // pre-check is ever reached, which would leave the memoization untested rather than
+            // proven. "A full batch" still means exactly that, it is just a smaller full batch.
+            gasTokenExists();
+            await run(true, repeat(exec, 8), '0.00000000');
+
+            assert.strictEqual(indexer.indexerDb.getTokenInfo.callCount, 1,
+                'one GAS-token probe for the whole batch');
+            assert.strictEqual(indexer.indexerDb.getAddressBalances.callCount, 1,
+                'one balance read for the whole batch');
+        });
+
+        it('gate ON: an emitted transaction never reaches the floor at all', async function () {
+            // execute.js sets skipFee for IS_EMISSION, so an emitted EXECUTE pays nothing. The
+            // predicate bails on IS_EMISSION at the TRANSACTION level, and batch.js dispatches
+            // every sub-command off that one data object, so the flag can never differ per
+            // sub-command and the skipFee case cannot be mispriced.
+            gasTokenExists();
+            const data = await run(true, repeat(exec, 3), '0.00000000', { IS_EMISSION: true });
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(indexer.indexerDb.getAddressBalances.callCount, 0);
+        });
+
+        it('gate ON: native-coin fee mode stays out of scope for the VM floor too', async function () {
+            gasTokenExists();
+            stubGates(true);
+            const data = createBaseData({
+                ACTION:     'BATCH',
+                FORMAT:     0,
+                SOURCE,
+                TX_DATA:    'BATCH|0|' + repeat(exec, 3).join(';'),
+                TX_OUTPUTS: [{ address: indexer.config['ADDRESS']['FEE_DESTINATION'], value: '0.001' }],
+            });
+            indexer.indexerDb.isActionAllowed.resolves(true);
+            indexer.indexerDb.getAddressBalances.resolves({});
+
+            await handler.parse(['0'], data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(indexer.indexerDb.getAddressBalances.callCount, 0,
+                'no gas read at all in native mode');
+        });
+
+        it('gate ON: an earlier verdict still short-circuits the VM floor', async function () {
+            gasTokenExists();
+            const data = await run(true, repeat(exec, 251), '0.00000000');
+
+            assert.strictEqual(data['STATUS'], 'invalid: COMMAND (limit)');
+            assert.strictEqual(indexer.indexerDb.getTokenInfo.callCount, 0);
+            assert.strictEqual(indexer.indexerDb.getAddressBalances.callCount, 0);
+        });
+
     });
 });

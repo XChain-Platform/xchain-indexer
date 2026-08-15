@@ -28,7 +28,7 @@
     "check:consensus-time": "if grep -rn 'getCurrentTime(' src/actions/ 2>/dev/null; then echo 'ERROR: getCurrentTime() (wall-clock Date.now) must never be called inside src/actions/. Block processing must use the deterministic block timestamp (data[\"BLOCK_TIME\"]); a wall-clock value here diverges consensus state across validator instances'; exit 1; else echo 'OK: no wall-clock time usage in src/actions/'; fi",
     "test": "mocha --timeout 30000 --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js' 'test/security/**/*.test.js'",
     "coverage": "c8 --reporter=text --reporter=html --include 'src/**/*.js' mocha --timeout 30000 --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js' --exit",
-    "coverage:check": "c8 --check-coverage --lines 86.4 --statements 86.4 --branches 83.3 --functions 81.2 --reporter=text-summary --include 'src/**/*.js' mocha --timeout 30000 --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js' --exit",
+    "coverage:check": "c8 --check-coverage --lines 87 --statements 87 --branches 83.6 --functions 81.4 --reporter=text-summary --include 'src/**/*.js' mocha --timeout 30000 --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js' --exit",
     "ci": "npm run check:vm && mocha --timeout 30000 --recursive --exit 'test/unit/**/*.test.js' 'test/unit/*.test.js' 'test/security/**/*.test.js'",
     "test:integration": "mocha --timeout 30000 --recursive 'test/integration/**/*.test.js'",
     "test:integration:ci": "mocha --no-config --timeout 120000 --exit 'test/integration/**/*.test.js'",
@@ -76,9 +76,9 @@
     "qs": "^6.15.2",
     "fast-uri": "^3.1.5",
     "ip-address": "^10.3.1",
-    "brace-expansion": "^5.0.8",
+    "brace-expansion": "^5.0.9",
     "minimatch": "^10.2.5",
-    "js-yaml": "^4.3.0"
+    "js-yaml": "^4.3.1"
   },
   "engines": {
     "comment": "Bounded to Node 22: the vendored xchain-vm dependency pulls isolated-vm 5.0.4, whose native binding fails node-gyp on Node 24 (removed V8 API). Node 22 also matches the node:22-bookworm image the indexer ships in. See .nvmrc.",

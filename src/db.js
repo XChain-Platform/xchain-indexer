@@ -35,6 +35,7 @@ const stateKeyCollation = require('./state_key_collation_activation');
 const snapshotAgeCausality = require('./oracle_snapshot_age_causality_activation');
 const listEditResolution = require('./list_edit_resolution_activation');
 const caretRefStrict = require('./caret_ref_strict_activation');
+const ledgerPrecision = require('./ledger_amount_precision_activation');
 // Per-block cap on the ATTEST deadline-expiry sweep. Vendored
 // byte-identical from xchain-documentation/protocol/constants.js, same convention
 // as the XCALL_MAX_CALLS_PER_BLOCK sibling it mirrors.
@@ -347,11 +348,16 @@ class Database {
         let files = fs.readdirSync(dir);
         let file  = null;
         let db    = await this.getConnection();
+        // One summary line instead of a per-table pair; error paths below still
+        // name the table, so a failure stays attributable.
+        console.log('Verifying database and tables...');
+        let checked = 0;
+        let created = 0;
         // Loop through SQL files
         for (file of files){
             if(file.indexOf('.sql') !== -1){
                 let table   = file.substring(0, file.indexOf('.sql'));
-                console.log('Verifying ' + table + ' table exists...');
+                checked++;
                 try {
                     let results = await db.query("SELECT * FROM information_schema.tables WHERE table_schema = ? AND table_name = ?",[this.dbName, table]);
                     if(results.length > 0){
@@ -367,6 +373,7 @@ class Database {
                         await this.reconcileTableIndexes(file, db);
                     } else {
                         await this.createTable(file);
+                        created++;
                     }
                 } catch(e){
                     this.util.throwError('Error while trying to verify ' + table + ' table exists!');
@@ -375,6 +382,7 @@ class Database {
             }
         }
         await db.release();
+        console.log('Database and tables verified (' + checked + ' tables, ' + created + ' created).');
         return true;
     }
 
@@ -624,6 +632,10 @@ class Database {
     // half-migrated with no operator signal: too narrow, an uncompressed key is
     // truncated to 66 chars under non-strict sql_mode or rejected with errno 1406.
     // Skips silently when the column is absent (table not created yet).
+    //
+    // This assertion is REGISTERED in Database.STARTUP_ASSERTED_MIGRATIONS, which is
+    // what lets a deploy discover the requirement before it recreates a container
+    // rather than after (see that constant for the 2026-08-09 outage it closes).
     async _assertPubkeyColumnIsUncompressedWide(){
         const UNCOMPRESSED_PUBKEY_HEX_LENGTH = 130;
         let conn;
@@ -639,10 +651,16 @@ class Database {
             // guard cannot reason about, so leave it to the column's own contract.
             if(len == null || Number.isNaN(len)) return;
             if(len < UNCOMPRESSED_PUBKEY_HEX_LENGTH){
+                // Name the exact file. The old text said only "node src/migrate.js", which
+                // on an aged fleet DB means "apply every pending manual migration" - nine of
+                // them on mainnet in August 2026, one a DROP COLUMN - so the operator either
+                // ran far more than the halt required or had to work out which file it meant
+                // while three chains were down.
                 throw new Error(
                     'pubkeys.pubkey holds ' + len + ' chars but VARCHAR(' + UNCOMPRESSED_PUBKEY_HEX_LENGTH + ') is required ' +
                     'for uncompressed keys; narrower silently NULLs or truncates the source_pubkey seam field. ' +
-                    'Run the pending migration: node src/migrate.js'
+                    'Run the pending migration: node src/migrate.js --file ' +
+                    Database.startupAssertedMigrationFile('_assertPubkeyColumnIsUncompressedWide')
                 );
             }
         } finally {
@@ -1257,7 +1275,6 @@ class Database {
         // bogus standalone query and fails schema creation (observed: a semicolon in
         // attests.sql's header split its comment, crash-looping the indexer).
         const queries = this.splitSqlStatements(data);
-        console.log('Creating ' + table + ' table and indexes...');
 
         const MAX_ATTEMPTS = 5;
         let lastErr = null;
@@ -3468,9 +3485,20 @@ class Database {
             sql += " AND m.action_index < ?";
             args.push(parseInt(action_index));
         }
+        // Each component is summed EXACTLY (18 dp) and the combination is rounded
+        // ONCE at the tick's own scale (XC-1459). Rounding each component first
+        // and then combining is not the same number: round(C) - round(D) + round(E)
+        // can differ from round(C - D + E) by a whole unit when the ledger carries
+        // amounts finer than the tick (fees at 8 dp against a 0-decimal gas tick),
+        // and the balances-side projection in sanityCheck rounds only once, so a
+        // per-component rounding here forks the two sides into a SanityError.
+        // On rows written before the exact-ledger flag-day every amount is already
+        // an exact multiple of 10^-decimals, so this is value-identical to the old
+        // per-row SUM(CAST(m.amount AS DECIMAL(60,decimals))).
+        let sumExpr = ledgerPrecision.exactSumSql('m.amount');
         // Get Credits
         query = `SELECT
-                    SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as credits
+                    ` + sumExpr + ` as credits
                 FROM
                     credits m
                     INNER JOIN actions a ON (a.action_index=m.action_index)
@@ -3481,7 +3509,7 @@ class Database {
             credits = results[0].credits;
         // Get Debits
         query = `SELECT
-                    SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as debits
+                    ` + sumExpr + ` as debits
                 FROM
                     debits m
                     INNER JOIN actions a ON (a.action_index=m.action_index)
@@ -3492,7 +3520,7 @@ class Database {
             debits = results[0].debits;
         // Get Escrows
         query = `SELECT
-                    SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as escrows
+                    ` + sumExpr + ` as escrows
                 FROM
                     escrows m
                     INNER JOIN actions a ON (a.action_index=m.action_index)
@@ -3501,8 +3529,9 @@ class Database {
         results = await this.doQuery(query, args);
         if(results.length > 0 && !this.util.isNull(results[0].escrows))
             escrows = results[0].escrows;
-        // Determine total supply ((credits - debits) + escrows)
-        supply = this.util.bcadd(this.util.bcsub(credits, debits, decimals), escrows, decimals);
+        // Determine total supply ((credits - debits) + escrows), rounded once.
+        let exact = ledgerPrecision.LEDGER_AMOUNT_PRECISION;
+        supply = this.util.bcadd(this.util.bcsub(credits, debits, exact), escrows, decimals);
         return supply;
     }
 
@@ -3559,8 +3588,9 @@ class Database {
         // Get the tick_id for the given ticker
         if(!this.util.isNull(tick) && this.util.isNull(tick_id))
             tick_id = await this.createTicker(tick);
-        // Get info on decimal precision
-        let decimals = await this.getTokenDecimalPrecision(tick_id);
+        // NOTE: the tick's decimal precision is no longer read here. Holder
+        // balances are netted at the exact ledger scale (below), so the lookup
+        // was a wasted round-trip per call.
         // Add tick_id to SQL query arguments
         args.push(tick_id);
         // If a block_index was given, only lookup tokens created before or in given block_index
@@ -3573,9 +3603,16 @@ class Database {
             sql += " AND m.action_index < ?";
             args.push(parseInt(action_index));
         }
-        // Get Credits 
-        query = `SELECT 
-                    SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as credits,
+        // Per-holder credits and debits are summed EXACTLY (18 dp) and netted at
+        // that scale, matching getAddressBalances / getNetBalance (XC-1459). The
+        // former per-row cast to the tick's scale made sum-of-rounded-holdings
+        // drift from the rounded ledger sum as soon as any row was finer than the
+        // tick; on pre-flag-day rows (already on the tick's grid) it is identical.
+        let holderSumExpr = ledgerPrecision.exactSumSql('m.amount');
+        let exact         = ledgerPrecision.LEDGER_AMOUNT_PRECISION;
+        // Get Credits
+        query = `SELECT
+                    ` + holderSumExpr + ` as credits,
                     a2.address
                 FROM 
                     credits m
@@ -3588,9 +3625,9 @@ class Database {
         if(results.length > 0)
             for(let row of results)
                 holders[row.address] = row.credits;
-        // Get Debits 
-        query = `SELECT 
-                    SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as debits,
+        // Get Debits
+        query = `SELECT
+                    ` + holderSumExpr + ` as debits,
                     a2.address
                 FROM 
                     debits m
@@ -3602,7 +3639,7 @@ class Database {
         results = await this.doQuery(query, args);
         if(results.length > 0){
             for(let row of results){
-                let balance = this.util.bcsub(holders[row.address], row.debits, decimals);
+                let balance = this.util.bcsub(holders[row.address], row.debits, exact);
                 if(this.util.bcgt(balance, 0))
                     holders[row.address] = balance;
                 else
@@ -4099,12 +4136,25 @@ class Database {
             if(canonTick != null && canonTick !== '' && canonAddr != null && canonAddr !== '')
                 this._smtTouched.add(canonAddr + '\t' + canonTick);
         }
-        // Round amount to the tick's actual decimal precision before storing.
-        // Without this, fractional amounts (e.g. VM gas fees calculated at 8
-        // decimals against a tick issued with fewer) drift between ledger sums
-        // (rounded once at SUM time) and per-address balance sums (rounded per
-        // row by updateAddressBalance) - triggering the supply SanityError.
-        let decimals = await this.getTokenDecimalPrecision(tick_id);
+        // Quantize the amount before storing.
+        //
+        // LEGACY rule: round to the TICK's own decimal precision. That kept the
+        // stored row on the same grid the supply projections rounded to, which is
+        // why it stopped the SanityError, but it also OVERCHARGED every fee finer
+        // than the gas tick can express: fees are computed at 8 dp, so a 0.5 XCHAIN
+        // fee against a decimals=0 XCHAIN was recorded as 0.5 in `fees` and debited
+        // as 1, and a 51-sub-command batch spent 51 rather than 25.5 (XC-1459).
+        //
+        // EXACT rule (flag-day, ledger_amount_precision_activation.js): store the
+        // amount at 18 dp, i.e. exactly, and let the projections round ONCE. The
+        // aggregation sites below (getTokenSupply / getHolders / sanityCheck /
+        // getAddressCreditDebit) sum at 18 dp and round once at the tick's scale,
+        // so ledger, balances+escrows and tokens.supply still agree; see that
+        // module for why round(C)-round(D)+round(E) != round(C-D+E) is the whole
+        // reason the legacy write-side rounding was load-bearing.
+        let decimals = ledgerPrecision.ledgerWriteScale(
+            await this.getTokenDecimalPrecision(tick_id),
+            this.blockIndex, this.config['NETWORK'], this.config['COIN']);
         amount = this.util.bcadd(amount, 0, decimals);
         // Convert any BigNumber amount to a plain decimal string before inserting.
         // Must be normal notation: String() renders sub-1e-7 amounts exponentially
@@ -4346,7 +4396,15 @@ class Database {
                 for(let row of results){
                     if(!data[row.tick_id])
                         data[row.tick_id] = 0;
-                    data[row.tick_id] = this.util.bcadd(data[row.tick_id], row.amount, row.decimals);
+                    // Accumulate at the exact ledger scale, NOT the tick's own
+                    // decimals (XC-1459). Rounding the RUNNING TOTAL per row is
+                    // what made a 0.5-XCHAIN fee meter as a whole unit against a
+                    // decimals=0 gas tick, and it compounds: 51 rows of 0.5 came
+                    // out as 51, not 25.5. Rows written before the exact-ledger
+                    // flag-day are already exact multiples of 10^-decimals, so
+                    // this is value-identical for them.
+                    data[row.tick_id] = this.util.bcadd(
+                        data[row.tick_id], row.amount, ledgerPrecision.LEDGER_AMOUNT_PRECISION);
                 }
             }
         }
@@ -4809,36 +4867,39 @@ class Database {
         let tickList = Object.keys(tickers);
         if(tickList.length === 0)
             return;
-        // tick_id -> tick name, tick_ids grouped by decimal scale, and the flat id list.
-        let idToTick     = {};
-        let idsByDecimals = {};
-        let allIds        = [];
+        // tick_id -> tick name, and the flat id list.
+        let idToTick = {};
+        let allIds   = [];
         for(let tick of tickList){
             let id = tickers[tick];
-            let d  = decimals[tick];
             idToTick[id] = tick;
-            (idsByDecimals[d] = idsByDecimals[d] || []).push(id);
             allIds.push(id);
         }
-        // Run one GROUP BY SUM per distinct decimal scale over the touched-tick set for a
-        // table. joinActions mirrors getTokenSupply's `INNER JOIN actions` for the ledger
-        // credit/debit/escrow sums; the balances and escrow-TOTAL sums are unjoined, exactly
-        // like getTokenSupplyBalance/getTokenSupplyEscrow. Returns tick_id -> summed string.
+        // Run ONE GROUP BY SUM over the touched-tick set per table. joinActions mirrors
+        // getTokenSupply's `INNER JOIN actions` for the ledger credit/debit/escrow sums;
+        // the balances and escrow-TOTAL sums are unjoined, exactly like
+        // getTokenSupplyBalance/getTokenSupplyEscrow. Returns tick_id -> summed string.
+        //
+        // Summed at the EXACT ledger scale (18 dp), not per-tick DECIMAL(60,d)
+        // (XC-1459), so the per-decimal query grouping is gone with it. The three
+        // projections compared below each round ONCE, at the tick's own scale: the
+        // ledger side rounds when escrows are folded in, the total side when
+        // balances and escrows are added. That is the only shape that agrees when
+        // the ledger carries amounts finer than the tick (fees at 8 dp against a
+        // 0-decimal gas tick), because round(C) - round(D) + round(E) is not
+        // round(C - D + E). Pre-flag-day rows sit on the tick's own grid, so both
+        // shapes give the same number for them.
         let sumByTick = async (table, joinActions) => {
-            let out = {};
-            for(let d in idsByDecimals){
-                let ids          = idsByDecimals[d];
-                let dec          = parseInt(d, 10);
-                let placeholders = ids.map(() => '?').join(', ');
-                let from         = joinActions
-                    ? table + ' m INNER JOIN actions a ON (a.action_index=m.action_index)'
-                    : table + ' m';
-                let q = 'SELECT m.tick_id AS tick_id, SUM(CAST(m.amount AS DECIMAL(60,' + dec + '))) AS s'
-                      + ' FROM ' + from + ' WHERE m.tick_id IN (' + placeholders + ') GROUP BY m.tick_id';
-                let rows = await this.doQuery(q, ids);
-                for(let row of rows){
-                    if(!this.util.isNull(row.s)) out[Number(row.tick_id)] = row.s;
-                }
+            let out          = {};
+            let placeholders = allIds.map(() => '?').join(', ');
+            let from         = joinActions
+                ? table + ' m INNER JOIN actions a ON (a.action_index=m.action_index)'
+                : table + ' m';
+            let q = 'SELECT m.tick_id AS tick_id, ' + ledgerPrecision.exactSumSql('m.amount') + ' AS s'
+                  + ' FROM ' + from + ' WHERE m.tick_id IN (' + placeholders + ') GROUP BY m.tick_id';
+            let rows = await this.doQuery(q, allIds);
+            for(let row of rows){
+                if(!this.util.isNull(row.s)) out[Number(row.tick_id)] = row.s;
             }
             return out;
         };
@@ -4865,8 +4926,10 @@ class Database {
             let credits = (creditsById[tick_id]       != null) ? creditsById[tick_id]       : 0;
             let debitsV = (debitsById[tick_id]        != null) ? debitsById[tick_id]        : 0;
             let escLdg  = (escrowsLedgerById[tick_id] != null) ? escrowsLedgerById[tick_id] : 0;
-            // Ledger (credits - debits + escrows), identical to getTokenSupply's final bcadd/bcsub.
-            let ledger  = this.util.bcnum(this.util.bcadd(this.util.bcsub(credits, debitsV, d), escLdg, d));
+            // Ledger (credits - debits + escrows), identical to getTokenSupply's final
+            // bcadd/bcsub: net at the exact scale, round ONCE at the tick's decimals.
+            let ledger  = this.util.bcnum(this.util.bcadd(
+                this.util.bcsub(credits, debitsV, ledgerPrecision.LEDGER_AMOUNT_PRECISION), escLdg, d));
             let token   = this.util.bcnum((tokenById[tick_id]        != null) ? tokenById[tick_id]        : 0); // Supply from tokens
             let balance = this.util.bcnum((balancesById[tick_id]     != null) ? balancesById[tick_id]     : 0); // Supply from balances
             let escrow  = this.util.bcnum((escrowsTotalById[tick_id] != null) ? escrowsTotalById[tick_id] : 0); // Supply from escrows
@@ -11461,7 +11524,7 @@ class Database {
     //     on reindex from the ANCHOR archive via recovery.js
     // pubkeyHex: 64-char hex Ed25519 signing pubkey of the validator that earned the reward
     // roundReference: round number (oracle_round) or attestation index
-    // rewardType: 'oracle_round', 'attest_fee', 'anchor_<chain>', 'anchor_archive'
+    // rewardType: 'oracle_round', 'attest_fee', 'attest_bcast', 'anchor_<chain>', 'anchor_archive'
     // amount: reward amount as decimal string
     // blockIndex: block height when the reward was earned
     // Resolve the source_id (index_addresses id) of the active staking source
@@ -15535,6 +15598,16 @@ Database.MIGRATION_CHECKSUM_REBASELINES = {
         from: '27a69b77def4039fc199963c2c4523e45db5e896c36f5ca34c43a81f07b5d9d7',
         to:   'e8c3645589499c3d5331bb1a7d4e2d4afd8cf52230f2db149508a35db16e554b',
     },
+    // Added the `deploy-precondition=required` header tag (and the comment explaining
+    // it) so the deploy tool can see, from the source tree it is about to deploy, that
+    // this migration is a startup-assertion precondition. Comment lines only; the
+    // executable ALTER is byte-identical. All three mainnet indexers applied this file
+    // on 2026-08-09 and recorded the single pre-tag revision (68b65e7, its only
+    // committed revision), so one `from` covers the fleet.
+    '2026-07-24-pubkeys-widen-uncompressed.sql': {
+        from: '2275f44bb043fe473b7781f08e5ce30253c1148e52ba2709efb5fb1214f282d2',
+        to:   '45a8fd3f4ce71360a1777bd1b86f14eb534259cffa651f76be5c15afafd50657',
+    },
 };
 
 // One-time ledger rename map (old undated filename -> new dated filename). Three
@@ -15599,6 +15672,76 @@ Database.backdatedFrontierViolation = function(pendingName, appliedNames){
     }
     if(frontier === null) return null;
     return (String(pendingName) < frontier) ? frontier : null;
+};
+
+// The header token that marks a migration as a DEPLOY PRECONDITION: code in this
+// tree asserts it at startup, so a build carrying that assertion must not be
+// deployed against a database that has not applied it. It rides on the existing
+// `-- xchain:migration` directive line, next to `mode=`:
+//
+//   -- xchain:migration mode=manual deploy-precondition=required
+//
+// Only a mode=manual file needs it. An `auto` file applies itself at the first
+// startup that sees it, so it can never be the missing precondition.
+Database.DEPLOY_PRECONDITION_TAG = 'deploy-precondition=required';
+
+// Migrations this tree ASSERTS at startup: the service refuses to run when the
+// target database has not applied them.
+//
+// WHY THIS LIST EXISTS
+// --------------------
+// 2026-08-09: deploying 3bc9771 put all three mainnet indexers (BTC, DOGE, LTC)
+// into Restarting(1) crash-loops on _assertPubkeyColumnIsUncompressedWide, because
+// 2026-07-24-pubkeys-widen-uncompressed.sql is mode=manual and had never been
+// applied on mainnet. Both halves were individually right - the migration is a COPY
+// rebuild under a metadata lock, so it wants the writer quiesced, and the assertion
+// is what stops a narrow column silently truncating source_pubkey - but they shipped
+// with nothing checking the precondition at DEPLOY time, so the only thing that
+// discovered the requirement was a production outage.
+//
+// The registry is the in-code half of the fix. The machine-readable half is the
+// DEPLOY_PRECONDITION_TAG in each listed migration's own header, which the deploy
+// tool (xchain-node's MigrationPreconditionService) reads out of the source tree it
+// is about to deploy and checks against the target DB's schema_migrations BEFORE the
+// container is recreated. test/unit/migration-preconditions.test.js keeps the halves
+// in step: every entry here must exist, be mode=manual, and carry the tag.
+//
+// ADDING A STARTUP ASSERTION: register it here and tag its migration file, or the
+// next fleet deploy discovers the requirement the way 2026-08-09 did.
+Database.STARTUP_ASSERTED_MIGRATIONS = [
+    {
+        file:      '2026-07-24-pubkeys-widen-uncompressed.sql',
+        assertion: '_assertPubkeyColumnIsUncompressedWide',
+        symptom:   'Fatal indexer error: pubkeys.pubkey holds 66 chars but VARCHAR(130) is required'
+    }
+];
+
+// Registry lookup by assertion method name. Throws rather than returning undefined:
+// an assertion that names a migration nobody registered would otherwise render as
+// "--file undefined" in the very error an operator reads mid-outage.
+Database.startupAssertedMigrationFile = function(assertion){
+    const entry = Database.STARTUP_ASSERTED_MIGRATIONS.find(m => m.assertion === assertion);
+    if(!entry) throw new Error('startupAssertedMigrationFile: ' + assertion +
+        ' is not registered in Database.STARTUP_ASSERTED_MIGRATIONS');
+    return entry.file;
+};
+
+// Does this migration file's header declare itself a deploy precondition?
+// Prologue-anchored exactly like _migrationMode (the scan stops at the first
+// non-blank, non-comment line), so a token buried in body prose or a data literal
+// cannot arm it. Pure string logic, unit-tested directly.
+//
+// Twin: xchain-node/src/services/MigrationPreconditionService.js carries the same
+// parser, because the deploy tool reads these files from a source tree it has only
+// cloned and cannot require this module. Keep the two in step.
+Database.migrationDeclaresDeployPrecondition = function(raw){
+    const prologue = [];
+    for(const line of String(raw).split('\n')){
+        const trimmed = line.trim();
+        if(trimmed === '' || trimmed.startsWith('--')){ prologue.push(line); continue; }
+        break;
+    }
+    return /^\s*--\s*xchain:migration\b[^\n]*\bdeploy-precondition\s*=\s*required\b/im.test(prologue.join('\n'));
 };
 
 // Exposed for the unit suite (and the sync-twin drift check): the weightless-row

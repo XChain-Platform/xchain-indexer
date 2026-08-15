@@ -297,7 +297,7 @@ class AnchorRecovery {
         // archives, treated as empty). Reward rows carry no per-row signatures; they are
         // bound by the wrapper CRC+quorum, and the archiving followers re-derived
         // each one from deterministic election state before co-signing. ONLY
-        // anchor publish rewards are restorable. oracle_round and attest_fee are
+        // anchor publish rewards are restorable. oracle_round, attest_fee and attest_bcast are
         // re-derived from the chain parse itself, so an archive that claims them
         // is malformed (or malicious) and the batch is rejected.
         for(let r of (archive.rewards || [])){

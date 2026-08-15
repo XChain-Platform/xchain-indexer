@@ -818,7 +818,12 @@ class Execute {
             // Mark emissions from this guard run so they are not themselves re-guarded by their
             // OWN controller (no guard-of-guard): see Utility.maybeRunControllerGuard. They still
             // carry IS_EMISSION (fee already skipped) and depth-cap on cross-controlled-token moves.
-            IS_GUARD_EMISSION:     true
+            IS_GUARD_EMISSION:     true,
+            // Guard emissions draw from the guarded TRANSACTION's issuance budget too
+            // (EMISSION_ISSUANCE_LIMITS, XC-1456): a controller guard is another VM path to
+            // the ISSUE handler, so leaving it off this context would leave the hole open on
+            // the one emission path that runs without an EXECUTE at all.
+            ISSUANCE_LIMIT_LEDGER: hostData['ISSUANCE_LIMIT_LEDGER']
         };
 
         let savepoint = await this.indexerDb.createSavepoint('controller_guard_' + parseInt(hostData['ACTION_INDEX']) + '_' + contractIndex + '_' + (parseInt(opts.seq) || 0) + '_' + (this.guardSavepointCounter++));
@@ -1074,6 +1079,13 @@ class Execute {
             // which ARE still subject to their token's controller). Lets maybeRunControllerGuard
             // skip re-guarding a controller's emission of its own controlled token.
             IS_GUARD_EMISSION:  executionData['IS_GUARD_EMISSION'] ? true : false,
+            // Per-TRANSACTION top-level issuance budget (EMISSION_ISSUANCE_LIMITS, XC-1456),
+            // seeded in actions.js. Threaded by REFERENCE so this emission, its siblings and
+            // every nested EXECUTE below it draw from ONE tally: copying the count here would
+            // give each emission its own budget and re-open the hole the flag closes. Consumed
+            // in issue.js. Undefined on any context that never passed through a transaction
+            // (issue.js then enforces nothing, which is the pre-flag behaviour).
+            ISSUANCE_LIMIT_LEDGER: executionData['ISSUANCE_LIMIT_LEDGER'],
             EMITTER:            executionData['CONTRACT_ACTION_INDEX'],
             EMITTER_POSITION:   position,   // index within this EXECUTE's emission list; used by ATTEST v0 (request) to verify deterministic request_id
             // The EMITTING execution's call-path. Disambiguates nested runs of the same

@@ -20,6 +20,8 @@
 
 const crypto    = require('crypto');
 const swq       = require('./stake_weighted_quorum.js');
+const pmsh      = require('./attestation/providerMinStakeHistory.js');
+const ProviderRegistry = require('./attestation/providerRegistry.js');
 const lifecycle = require('./tableLifecycle.js');
 const { ARCHIVE_HEAD_VERSIONS_SQL } = require('./stateHash.js');
 
@@ -33,6 +35,11 @@ class Rollback {
 
         // Parse in indexer configuration
         this.config    = indexer.config;
+
+        // Same effective provider map actions/attest.js builds (DEFAULTS overlaid with
+        // config.ATTESTATION.PROVIDERS), so the reorg recompute of missed_count resolves
+        // the identical provider stake floor the live expiry path did (XC-083).
+        this.providerRegistry = new ProviderRegistry(this.config);
 
         // Setup alias to the indexer database connection
         this.decoderDb = indexer.decoderDb;
@@ -1631,7 +1638,12 @@ class Rollback {
                     cached = { weighted: cached_weighted, validators: vs || [] };
                     validatorsByBlock.set(reqBlock, cached);
                 }
-                responsible = this._responsibleSet(String(req.request_id), cached.validators, Number(req.redundancy), cached.weighted);
+                // The provider floor (XC-083) is a PER-REQUEST bar, so it cannot ride the
+                // per-block validator cache above: two requests at the same block against
+                // different providers filter that one snapshot differently. Resolve it here
+                // and let _responsibleSet apply it, keeping the cache provider-agnostic.
+                responsible = this._responsibleSet(String(req.request_id), cached.validators, Number(req.redundancy), cached.weighted,
+                                                   this.providerRegistry.getMinStake(String(req.provider_id), Number(req.block_index), this.config['NETWORK']));
             }
             let provider    = String(req.provider_id);
             let expiryBlock  = Number(req.deadline_block) + 1;
@@ -1667,11 +1679,24 @@ class Rollback {
     // _computeResponsibleSet byte-for-byte (sort by SHA256(request_id || pubkey),
     // when stake-weighted dedup to one slot per source keeping the lowest hash,
     // then take the top REDUNDANCY) or reorg-recomputed missed_count diverges from
-    // the live expiry path. `validators` are the raw capability rows ({pubkey, source});
-    // `weighted` is swq.isStakeWeightedQuorumActive for the request block.
-    _responsibleSet(requestId, validators, redundancy, weighted){
+    // the live expiry path. `validators` are the raw capability rows ({pubkey, source},
+    // plus `weight` when weighted); `weighted` is swq.isStakeWeightedQuorumActive for
+    // the request block. `minStake` is the request provider's block-anchored
+    // min_stake_xchain floor at the request block (XC-083), applied on the weighted path
+    // only and BEFORE the ranking, exactly as attest.js._providerFloorFilter does; null
+    // fails the recompute closed to an empty set the same way the live path does, so a
+    // reorg cannot charge missed_count to validators the live expiry never held
+    // responsible.
+    _responsibleSet(requestId, validators, redundancy, weighted, minStake){
         if(!validators || validators.length === 0)
             return [];
+        if(weighted){
+            if(minStake === null || minStake === undefined)
+                return [];
+            validators = validators.filter(v => pmsh.meetsProviderFloor(v && v.weight, minStake));
+            if(validators.length === 0)
+                return [];
+        }
         let withHash = validators.map(v => {
             let pk = String(v.pubkey).toLowerCase();
             let h  = crypto.createHash('sha256').update(String(requestId), 'utf8').update(pk, 'utf8').digest('hex');

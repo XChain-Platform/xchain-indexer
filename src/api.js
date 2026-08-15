@@ -1402,7 +1402,7 @@ async function startApi(){
         },
 
         // Receive validator reward records pushed from xchain-hub (anchor publish
-        // rails only). oracle_round and attest_fee are DERIVED deterministically
+        // rails only). oracle_round, attest_fee and attest_bcast are DERIVED deterministically
         // during block processing; accepting a push for them would let a stale
         // hub race the derivation and open a replay-divergence window, so they
         // are rejected outright.

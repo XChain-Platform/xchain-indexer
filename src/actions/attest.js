@@ -48,9 +48,11 @@ const ed25519 = require('../ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
 const attestAdmission = require('../attest_admission_activation.js');
 const attestRelay     = require('../attest_relay_activation.js');
+const attestBcastFee  = require('../attest_broadcast_fee_activation.js');
 const eq      = require('../equivocation_header.js');
 const srb     = require('../snapshot_reorg_buffer.js');
 const ProviderRegistry = require('../attestation/providerRegistry.js');
+const pmsh    = require('../attestation/providerMinStakeHistory.js');
 const { rethrowIfInfraFault } = require('./faultGuard.js');
 const { buildInjectedExecContext, SYNTH_EXEC_TX_HASH, SYNTH_TAGS } = require('./execContext.js');
 
@@ -291,7 +293,7 @@ class Attest {
         // difference must not be "corrected" without its own flag-day.
         if(!error && !relayOrigin && attestAdmission.isAttestAdmissionActive(data['BLOCK_INDEX'], this.config['NETWORK'])){
             admissionSet = await this._computeResponsibleSet(
-                String(data['REQUEST_ID'] || '').toLowerCase(), data['REDUNDANCY'], data['BLOCK_INDEX']);
+                String(data['REQUEST_ID'] || '').toLowerCase(), data['REDUNDANCY'], data['BLOCK_INDEX'], data['PROVIDER_ID']);
             let neededSlots = Math.max(1, Number(data['REDUNDANCY']) || 1);
             if(admissionSet.length < neededSlots)
                 error = 'invalid: REDUNDANCY (responsible set ' + admissionSet.length + ' < ' + neededSlots + ' at request block)';
@@ -347,7 +349,7 @@ class Attest {
         // (Reuses the admission-gate set when the gate already computed it.)
         if(data['REQUEST_STATUS'] === 'pending'){
             let responsibleSet = admissionSet !== null ? admissionSet : await this._computeResponsibleSet(
-                String(data['REQUEST_ID'] || '').toLowerCase(), data['REDUNDANCY'], data['BLOCK_INDEX']);
+                String(data['REQUEST_ID'] || '').toLowerCase(), data['REDUNDANCY'], data['BLOCK_INDEX'], data['PROVIDER_ID']);
             data['RESPONSIBLE_SET_JSON'] = JSON.stringify(responsibleSet);
         }
 
@@ -525,7 +527,7 @@ class Attest {
             // responsible set (admission, the persisted RESPONSIBLE_SET_JSON, the expiry
             // missed_count charge, the fulfilled fee split, and here) resolves ONE set.
             let responsible = new Set(await this._computeResponsibleSet(
-                requestId, request.redundancy, declaredBlock
+                requestId, request.redundancy, declaredBlock, request.provider_id
             ));
             verifiedSigs = verifiedSigs.filter(s => responsible.has(s.pubkey));
             validSigs    = verifiedSigs.length;
@@ -677,7 +679,7 @@ class Attest {
         // Mark missed_count on each responsible validator (deterministic by SHA256(request_id || pubkey))
         try {
             let responsible = await this._computeResponsibleSet(
-                requestId, request.redundancy, Number(request.block_index)
+                requestId, request.redundancy, Number(request.block_index), request.provider_id
             );
             for(let pk of responsible){
                 await this.indexerDb.incrementAttestationValidatorStat(
@@ -717,7 +719,14 @@ class Attest {
     // source-keyed set; below activation, the legacy per-key selection. The
     // within-subset quorum stays count-based. CONSENSUS-CRITICAL: must match the
     // hub's AttestationRound._computeResponsibleSet byte-for-byte or validation forks.
-    async _computeResponsibleSet(requestId, redundancy, blockIndex){
+    //
+    // PROVIDER STAKE FLOOR (XC-083): on the SAME weighted path, and only there, drop
+    // staking sources whose aggregate weight is below the request provider's
+    // block-anchored min_stake_xchain before selecting. `providerId` is therefore
+    // REQUIRED at/above STAKE_WEIGHTED_QUORUM; omitting it fails closed to an empty
+    // set. See _providerFloorFilter for why the floor rides the SWQ gate rather than
+    // a new flag day, and providerMinStakeHistory.js for where the value comes from.
+    async _computeResponsibleSet(requestId, redundancy, blockIndex, providerId){
         // The SWQ gate is BTC-ANCHORED, so only evaluate it where `blockIndex`
         // actually is a BTC height.
         //
@@ -769,6 +778,14 @@ class Attest {
             ? await this.indexerDb.getStakeWeightsByCapability('attestation', resolveBlock)
             : await this.indexerDb.getValidatorsByCapability('attestation', resolveBlock);
         if(!validators || validators.length === 0) return [];
+        // Provider floor, weighted path only. Applied BEFORE the hash ranking so the
+        // slot the filter frees is filled by the next qualifying validator, exactly as
+        // the hub does; every key of a source carries the source's aggregate weight, so
+        // this removes whole sources and the source-dedupe below is unaffected by it.
+        if(weighted){
+            validators = this._providerFloorFilter(validators, providerId, blockIndex);
+            if(validators.length === 0) return [];
+        }
         let withHash = validators.map(v => {
             let pk = String(v.pubkey).toLowerCase();
             let h  = crypto.createHash('sha256').update(String(requestId), 'utf8').update(pk, 'utf8').digest('hex');
@@ -785,6 +802,38 @@ class Attest {
             });
         }
         return withHash.slice(0, Math.max(1, Number(redundancy) || 1)).map(v => v.pubkey);
+    }
+
+    // Drop weighted-snapshot rows whose staking source does not clear the provider's
+    // block-anchored min_stake_xchain floor at `blockIndex`. Returns [] when the floor
+    // cannot be resolved (unknown/absent provider id, or an ATTESTATION.PROVIDERS
+    // overlay entry with no floor), which fails the whole request closed.
+    //
+    // WHY THE SWQ GATE CARRIES THIS. The floor needs per-validator stake, and only the
+    // weighted snapshot ({pubkey, source, weight}) carries the SOURCE-AGGREGATE amount
+    // the floor is defined against; the unweighted rows are per-key and would price a
+    // delegating source's stake once per key. Riding STAKE_WEIGHTED_QUORUM (mainnet
+    // 961000, testnet/regtest 0) means the enforcement flips on an already-armed,
+    // fleet-coordinated anchor, so no new flag-day height is minted and the hub, this
+    // indexer, rollback's recompute and AttestationPublisher all start filtering on the
+    // same block. Below the gate the capability threshold remains the only bar, which
+    // is the pre-XC-083 behaviour, so replay of historical blocks is bit-identical.
+    //
+    // The floor resolves at the DECLARED block (the raw `blockIndex`), not the buried
+    // one: a governance activation height is a cutover, and burying a cutover is its own
+    // fork, the same reasoning the SWQ gate itself is evaluated on the declared height.
+    _providerFloorFilter(validators, providerId, blockIndex){
+        let pid = (providerId === null || providerId === undefined) ? '' : String(providerId);
+        let floor = pid ? this.providerRegistry.getMinStake(pid, blockIndex, this.config['NETWORK']) : null;
+        if(floor === null){
+            // Loud, because on a healthy federation this never happens: v0/v3 admission
+            // already rejects an unknown PROVIDER_ID, so reaching here means either a
+            // caller forgot the provider id or an operator overlay stripped the floor.
+            console.warn('Attestation responsible set: no provider stake floor for "' + pid +
+                         '" at block ' + blockIndex + '; failing closed (empty responsible set)');
+            return [];
+        }
+        return validators.filter(v => pmsh.meetsProviderFloor(v && v.weight, floor));
     }
 
     // Cross-chain relay (spec §12, framework Phase 5)
@@ -1054,7 +1103,7 @@ class Attest {
         // determinism check that reads it back) resolves exactly as it would for a
         // natively emitted request.
         if(data['REQUEST_STATUS'] === 'pending'){
-            let responsibleSet = await this._computeResponsibleSet(requestId, redundancy, data['BLOCK_INDEX']);
+            let responsibleSet = await this._computeResponsibleSet(requestId, redundancy, data['BLOCK_INDEX'], providerId);
             data['RESPONSIBLE_SET_JSON'] = JSON.stringify(responsibleSet);
         }
 
@@ -1221,7 +1270,14 @@ class Attest {
     //                          split across the responsible set (floor to GAS
     //                          decimals; remainder dust stays in the pool;
     //                          COLLECT only ever pays what validator_rewards
-    //                          reference, so the pool stays solvent).
+    //                          reference, so the pool stays solvent). At/above
+    //                          ATTEST_BROADCAST_FEE the spec §11 leader
+    //                          broadcast-fee reimbursement is carved out FIRST
+    //                          and the split runs on what is left; the pool
+    //                          credit stays the FULL escrow either way, so the
+    //                          solvency argument is unchanged (carve-out +
+    //                          N*share <= escrow by construction, both floored
+    //                          onto the same decimal grid).
     //   'errored'/'expired'  → escrow → refund to FEE_PAYER.
     // Feeless requests (fee_amount NULL/0) are a no-op.
     async _settleRequestFee(request, data, terminalStatus){
@@ -1247,8 +1303,9 @@ class Attest {
             credits.push([gas, feeAmount, rewardPool]);
 
             let responsible = await this._computeResponsibleSet(
-                String(request.request_id), request.redundancy, Number(request.block_index)
+                String(request.request_id), request.redundancy, Number(request.block_index), request.provider_id
             );
+            let broadcastFee = '0';
             if(responsible.length > 0){
                 // Equal split, floored to GAS decimals (feeCap = min(8, gasDecimals)),
                 // matching the precision cap applied at parse time (line 146). Deterministic
@@ -1257,8 +1314,35 @@ class Attest {
                     await this.indexerDb.getTickerId(gas)
                 );
                 let feeCap = Math.min(8, gasDecimals);
+
+                // §11 leader broadcast-fee reimbursement, flag-day gated. Carved out of the
+                // escrow BEFORE the split, because it reimburses a cost the broadcaster
+                // already paid a miner rather than rewarding the work the split pays for.
+                // Below the gate it is '0' and the split sees the whole fee, byte-identically
+                // to the pre-flag-day ledger. See attest_broadcast_fee_activation.js.
+                broadcastFee = await this._broadcastFeeReimbursement(request, data, responsible, feeAmount, feeCap);
+                // Below the gate (and on any request that reimburses nothing) the escrow is
+                // handed to the split UNTOUCHED rather than round-tripped through bcsub: a
+                // parse-valid FEE_AMOUNT already sits on the feeCap grid, but bcsub renders at
+                // fixed precision and therefore ROUNDS, so keeping the legacy path arithmetic-
+                // free is what makes "byte-identical below the flag-day" true by construction
+                // instead of by argument. Above the gate both operands are on that same grid,
+                // so the subtraction is exact and the pool stays solvent.
+                let splitPool = feeAmount;
+
+                if(this.util.bcgt(broadcastFee, '0')){
+                    splitPool = this.util.bcsub(feeAmount, broadcastFee, feeCap);
+                    // The broadcaster is a responsible-set member, so it collects this row
+                    // ON TOP of its equal share below ("additionally receives", spec §11).
+                    // A distinct reward_type keeps the two rows apart under the
+                    // (source, pubkey, type, round_reference) unique key.
+                    await this.indexerDb.createValidatorReward(
+                        responsible[0], Number(request.action_index), 'attest_bcast', broadcastFee, data['BLOCK_INDEX'], true
+                    );
+                }
+
                 let perValidator = this.util.bcmulfloor(
-                    this.util.bcdiv(feeAmount, String(responsible.length), 18), '1', feeCap
+                    this.util.bcdiv(splitPool, String(responsible.length), 18), '1', feeCap
                 );
                 if(this.util.bcgt(perValidator, '0')){
                     for(let pk of responsible){
@@ -1272,7 +1356,9 @@ class Attest {
                 }
             }
             console.log("\t ATTEST fee : " + feeAmount + ' ' + gas + ' → REWARD pool, split ' +
-                        responsible.length + ' way(s) [request ' + String(request.request_id).substring(0,16) + '...]');
+                        responsible.length + ' way(s)' +
+                        (this.util.bcgt(broadcastFee, '0') ? ', broadcast reimbursement ' + broadcastFee : '') +
+                        ' [request ' + String(request.request_id).substring(0,16) + '...]');
         } else {
             // errored / expired: service not rendered, refund the payer
             credits.push([gas, feeAmount, feePayer]);
@@ -1285,6 +1371,76 @@ class Attest {
             addresses = Object.keys(this.util.getAddressesList());
         await this.indexerDb.updateBalances(addresses);
         await this.indexerDb.updateTokens(tickers);
+    }
+
+    // The XCHAIN-denominated broadcast-fee reimbursement owed to the leader for this
+    // fulfilled settle (spec §11), or '0' when the flag-day has not armed, no price is
+    // available, or the escrow cannot cover a positive amount. Never throws and never
+    // fails a settle: every unusable input resolves to '0' and the legacy full-escrow
+    // split runs unchanged.
+    //
+    // The three pinned decisions this implements (denomination, broadcaster identity,
+    // amount bound) and why each is shaped the way it is live in
+    // attest_broadcast_fee_activation.js; only the mechanics are here.
+    //
+    //   `data`        the SETTLING action (v1 response or v4 relay response). Its
+    //                 BLOCK_INDEX/BLOCK_TIME anchor both the flag-day test and the
+    //                 oracle read, so the conversion is pinned to a block every node
+    //                 replays identically rather than to wall-clock time.
+    //   `responsible` the request's responsible set, already hash-sorted, so element 0
+    //                 IS the lowest-hash member. Callers pass the SAME set the split
+    //                 uses; re-deriving it here could not diverge but would double the
+    //                 stake query on every fulfilled settle.
+    //   `feeCap`      GAS decimals cap, min(8, gasDecimals). The reimbursement is
+    //                 floored onto the same decimal grid the split uses, so
+    //                 reimbursement + N*share can never exceed the escrow by a ULP.
+    async _broadcastFeeReimbursement(request, data, responsible, feeAmount, feeCap){
+        if(!responsible || responsible.length === 0) return '0';
+        if(!attestBcastFee.isAttestBroadcastFeeActive(data['BLOCK_INDEX'], this.config['NETWORK']))
+            return '0';
+
+        let providerId  = String(request.provider_id || '');
+        let capNative   = attestBcastFee.broadcastFeeCapNative(
+            providerId, this.providerRegistry.getProvider(providerId));
+        if(!this.util.bcgt(capNative, '0')) return '0';
+
+        // Same block-gated, staleness-guarded oracle read the native-coin fee check runs
+        // (utility.validateNativeCoinFee), anchored on the settle block's own height and
+        // time. A missing or stale feed reimburses ZERO rather than wedging the settle:
+        // see the ORACLE LIVENESS note in attest_broadcast_fee_activation.js.
+        let maxPriceAgeSeconds = parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800;
+        let prices;
+        try {
+            prices = await this.util.getFeeOraclePrices(
+                this.indexerDb, this.config['COIN'], data['BLOCK_INDEX'], data['BLOCK_TIME'], maxPriceAgeSeconds);
+        } catch(e){
+            // An infra fault must still fail the block loudly; anything else is a
+            // no-reimbursement, not a settle failure.
+            rethrowIfInfraFault(e);
+            console.warn('Attestation broadcast-fee reimbursement: oracle read failed, reimbursing 0:', e.message);
+            return '0';
+        }
+        if(!prices || prices.error){
+            console.warn('Attestation broadcast-fee reimbursement: ' +
+                         ((prices && prices.error) || 'no prices') + '; reimbursing 0 [request ' +
+                         String(request.request_id).substring(0,16) + '...]');
+            return '0';
+        }
+
+        // native → XCHAIN at the settle block: cap * (COIN/USD) / (XCHAIN/USD), floored
+        // onto the GAS decimal grid in one bignumber operation (bcmuldivfloor) so no
+        // intermediate rounding can differ between nodes.
+        let reimbursement = this.util.bcmuldivfloor(
+            capNative, prices.coinUsdPrice, prices.xchainUsdPrice, feeCap);
+        if(!this.util.bcgt(reimbursement, '0')) return '0';
+
+        // Escrow is the hard ceiling. An author whose escrow is thinner than the
+        // allowance reimburses what there is and the split gets nothing, which is the
+        // §11 ordering: the broadcaster's out-of-pocket cost is settled before the
+        // reward it is not owed.
+        if(this.util.bcgt(reimbursement, feeAmount))
+            reimbursement = this.util.bcmulfloor(feeAmount, '1', feeCap);
+        return String(reimbursement);
     }
 
     // Synthesize an EXECUTE that runs the contract's callback method (v1 response path).

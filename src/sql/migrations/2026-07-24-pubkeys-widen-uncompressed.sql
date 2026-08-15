@@ -12,7 +12,14 @@
 --
 --********************************************************************
 
--- xchain:migration mode=manual
+-- xchain:migration mode=manual deploy-precondition=required
+-- (deploy-precondition=required: src/db.js asserts this column's width at startup
+--  (_assertPubkeyColumnIsUncompressedWide), so code carrying that assertion CANNOT run
+--  against a database that has not applied this file - it crash-loops on boot. The
+--  deploy tool reads this tag out of the source tree it is about to deploy and refuses
+--  the deploy while the target DB's schema_migrations lacks this row, instead of
+--  discovering the requirement as a production outage the way 2026-08-09 did.)
+--
 -- (manual: the statement is a safe column WIDEN that preserves every existing value,
 --  but `MODIFY ... NOT NULL` is indistinguishable from a narrowing to the auto-apply
 --  destructive-DDL classifier, and widening past 85 chars forces a COPY table rebuild

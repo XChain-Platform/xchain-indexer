@@ -17,7 +17,7 @@ CREATE TABLE validator_rewards (
     id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     source_id           BIGINT UNSIGNED NOT NULL,        -- staking address
     signing_pubkey_id   BIGINT UNSIGNED NOT NULL,        -- FK to index_pubkeys
-    reward_type         VARCHAR(20) NOT NULL,             -- 'oracle_round' (legacy/share=0), 'oracle_base' + 'oracle_full_node' (two-tranche split), 'attest_fee', 'anchor_<chain>' (e.g. 'anchor_BTC'), 'anchor_archive'
+    reward_type         VARCHAR(20) NOT NULL,             -- 'oracle_round' (legacy/share=0), 'oracle_base' + 'oracle_full_node' (two-tranche split), 'attest_fee', 'attest_bcast' (spec §11 leader broadcast-fee reimbursement; a separate type so the leader's carve-out and its equal share coexist under reward_unique), 'anchor_<chain>' (e.g. 'anchor_BTC'), 'anchor_archive'
     round_reference     BIGINT UNSIGNED,                  -- round number or attestation ref
     amount              VARCHAR(250) NOT NULL,
     block_index         BIGINT UNSIGNED NOT NULL,
@@ -29,7 +29,7 @@ CREATE TABLE validator_rewards (
     -- scope: the reward survives a reorg a clean replay would not yet have derived, and it stays
     -- COLLECT-spendable. Stamping the creating block here gives rollback a second, correct
     -- scoping key (DELETE ... WHERE derive_block_index >= H). NULL for every reward whose
-    -- earn-block IS its materialization block (oracle_*, attest_fee, the legacy hub push, and
+    -- earn-block IS its materialization block (oracle_*, attest_fee, attest_bcast, the legacy hub push, and
     -- the DOGE-side anchor write below the derive flag-day), so the column changes nothing until
     -- ANCHOR_REWARD_DERIVE_ACTIVATION arms.
     derive_block_index  BIGINT UNSIGNED DEFAULT NULL

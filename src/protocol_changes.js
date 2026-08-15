@@ -137,6 +137,35 @@ const BATCH_ISSUANCE_LIMITS_MAINNET_TIME = 1786838400;
 // so test/unit/batchCostWeightingGate.test.js asserts it per network.
 const BATCH_COST_WEIGHTING_MAINNET_TIME = 9999999999;
 
+// Mainnet arm for EMISSION_ISSUANCE_LIMITS (XC-1456): VM-emitted ISSUEs counted against
+// the SAME per-transaction top-level issuance limit the wire path has always carried.
+//
+// UNARMED, on the house sentinel (9999999999, year 2286), and deliberately so.
+//
+// WHAT IT GATES. Every ISSUE, whatever emitted it, draws from one per-TRANSACTION budget
+// of ONE top-level (undotted) tick; dotted child ticks stay exempt exactly as batch.js
+// exempts them, and a caret TICK is never exempt (its dot is a decimal, not a namespace
+// separator). Below the flag nothing counts and every historical verdict replays
+// byte-identically.
+//
+// WHY IT EXISTS. execute.js routes a VM emission straight to the ISSUE handler, past the
+// per-BATCH limit scan that is the only place top-level issuance was ever counted, and
+// ISSUANCE_FEE_EMISSION_EXEMPT (armed) makes those emissions fee-free. One EXECUTE could
+// therefore register up to maxEmissions (50) top-level names for nothing, and a BATCH of
+// 250 EXECUTEs up to 12,450 - which is the namespace the dotted/undotted rule exists to
+// protect. Operator decision 2026-08-15: count them, rather than charge them or widen the
+// per-EXECUTE emission cap.
+//
+// WHY IT IS ITS OWN FLAG rather than a widening of BATCH_ISSUANCE_LIMITS above: that entry
+// arms at 2026-08-16T00:00:00Z, and a node still on pre-arm code would apply the old rules
+// past the boundary and fork. A tightening that lands after an armed instant needs its own
+// boundary, never a retroactive edit of an armed one.
+//
+// Keyed on block TIME like every sibling issuance gate: ISSUE runs on BTC, LTC and DOGE,
+// whose heights diverge by millions of blocks, so no single height names one cutover
+// across all three but a single timestamp does.
+const EMISSION_ISSUANCE_LIMITS_MAINNET_TIME = 9999999999;
+
 // Consensus protocol version, COMPILED IN.
 //
 // isEnabled() compares this against the version registered on every protocol
@@ -1245,6 +1274,21 @@ class ProtocolChanges {
         // suites run the post-flag-day rules.
         this.addChange('BATCH_COST_WEIGHTING', '0.2.0',BATCH_COST_WEIGHTING_MAINNET_TIME,0,0,0,0,0);
 
+        // Per-TRANSACTION top-level issuance budget that VM emissions draw from too
+        // (EMISSION_ISSUANCE_LIMITS, XC-1456). One transaction may register ONE top-level
+        // (undotted) tick, counting wire sub-commands and VM-emitted ISSUEs alike; dotted
+        // child ticks are exempt exactly as the BATCH classifier exempts them, and a caret
+        // TICK is never exempt. The wire path is already capped at one per BATCH by
+        // actionLimits['ISSUE'], so this entry moves no wire verdict: it closes the emission
+        // path, which routes past that scan and is fee-exempt under
+        // ISSUANCE_FEE_EMISSION_EXEMPT.
+        //
+        // MAINNET IS UNARMED (see EMISSION_ISSUANCE_LIMITS_MAINNET_TIME above for the
+        // sentinel and for why this is its own flag day rather than a widening of
+        // BATCH_ISSUANCE_LIMITS, which is already armed); testnet/regtest activate at
+        // genesis (all zeros), so drills and suites run the post-flag-day rules.
+        this.addChange('EMISSION_ISSUANCE_LIMITS', '0.2.0',EMISSION_ISSUANCE_LIMITS_MAINNET_TIME,0,0,0,0,0);
+
         // Numeric legacy-fee db_hits accumulation. The legacy
         // (non-UNIFIED_FEES) transaction-fee model in dividend.js / callback.js / sweep.js
         // accumulates a db_hits count and prices it via getTransactionFee. The original
@@ -1583,3 +1627,4 @@ module.exports.BATCH_ROOT_SUB_INDEX_MAINNET_TIME = BATCH_ROOT_SUB_INDEX_MAINNET_
 // armed at a guessed instant, and that it never precedes BATCH_SUBACTION_NORMALIZATION.
 module.exports.BATCH_ISSUANCE_LIMITS_MAINNET_TIME = BATCH_ISSUANCE_LIMITS_MAINNET_TIME;
 module.exports.BATCH_COST_WEIGHTING_MAINNET_TIME = BATCH_COST_WEIGHTING_MAINNET_TIME;
+module.exports.EMISSION_ISSUANCE_LIMITS_MAINNET_TIME = EMISSION_ISSUANCE_LIMITS_MAINNET_TIME;

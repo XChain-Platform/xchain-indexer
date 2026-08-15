@@ -728,7 +728,12 @@ class Deploy {
                     TX_VOUT:               data['TX_VOUT'],
                     CALL_PATH:             '',
                     CALL_DEPTH:            0,
-                    IS_CONSTRUCTOR:        true   // cross-chain calls are disallowed from constructors (v1)
+                    IS_CONSTRUCTOR:        true,  // cross-chain calls are disallowed from constructors (v1)
+                    // Constructor emissions draw from the DEPLOY transaction's top-level
+                    // issuance budget (EMISSION_ISSUANCE_LIMITS, XC-1456). A constructor is a
+                    // VM path to the ISSUE handler like any other, and a BATCH may carry a
+                    // DEPLOY beside EXECUTEs, so all of them must share one tally.
+                    ISSUANCE_LIMIT_LEDGER: data['ISSUANCE_LIMIT_LEDGER']
                 };
                 for(let i = 0; i < constructorResult.emittedActions.length; i++){
                     let emission = constructorResult.emittedActions[i];

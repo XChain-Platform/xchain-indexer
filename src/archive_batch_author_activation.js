@@ -40,6 +40,14 @@
  * activation train and deploy every indexer (and any recovery host) before
  * the network crosses its height.
  *
+ * TESTNET IS ARMED AT 0 (operator ruling 2026-08-11, applied 2026-08-14).
+ * The gate exists so a ratified mainnet height can be coordinated, not so the
+ * rule stays unexercised: a flag day nobody ever crosses is a path nobody ever
+ * tests. Testnet was re-genesised with no pre-flag history, so arming it at
+ * block 0 costs no replay compatibility (there is nothing below the threshold
+ * to stay byte-identical with) and buys a live network that runs the
+ * publisher-scoped rule end to end. Mainnet stays inert until ratified.
+ *
  * KEYED ON THE DOGE BLOCK INDEX OF THE BATCH'S CANONICAL HEAD, per network,
  * not on SNAPSHOT_BLOCK like the anchor-reward family: a v2 chunk carries no
  * snapshot block, and gating on the chunk's own block would let a head and
@@ -51,11 +59,12 @@
 'use strict';
 
 // Per-network activation, interpreted against the DOGE block_index of the batch's
-// canonical archive head. Placeholders are INERT (no live network can reach them);
-// regtest is armed from genesis so fresh regtest stacks exercise the rule end to end.
+// canonical archive head. The mainnet placeholder is INERT (no live network can reach
+// it); testnet and regtest are armed from genesis so both exercise the rule end to end
+// before mainnet ratifies a height.
 const ARCHIVE_BATCH_AUTHOR_ACTIVATION = {
     mainnet: 999999999,   // INERT placeholder; pin to a real height on the coordinated mainnet activation train before arming
-    testnet: 999999999,   // INERT placeholder
+    testnet: 0,           // ARMED at genesis 2026-08-14 per the 2026-08-11 operator ruling; the re-genesised testnet has no pre-flag history to keep byte-identical
     regtest: 0,           // armed from genesis
 };
 

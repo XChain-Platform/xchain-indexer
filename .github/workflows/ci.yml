@@ -19,7 +19,7 @@ on:
 
 jobs:
   ci:
-    uses: XChain-Platform/.github/.github/workflows/ci-reusable.yml@e2d578827928e79ec71c9b6afc4595025dc025fe # pin: XChain-Platform/.github @ master 2026-08-13; bump deliberately
+    uses: XChain-Platform/.github/.github/workflows/ci-reusable.yml@6f4d39ae85787fc31e90a31588d87610a2c33103 # pin: XChain-Platform/.github @ master 2026-08-14; bump deliberately
     # Override the Node version for a repo if ever needed:
     # with:
     #   node-version: "20"
@@ -29,9 +29,14 @@ jobs:
   # workflow because it needs a DB service container and the canonical decoder
   # schema (test/integration/setup/db-connection.js loads xchain-decoder's
   # src/sql/*.sql so the harness can never drift from the real decoder schema).
-  # No xchain-vm is provisioned here (the dir is gitignored); the indexer
-  # degrades gracefully and the whole tier is written to pass without a VM
-  # (EXECUTE paths are e2e-suite territory).
+  #
+  # xchain-vm IS provisioned here, and the ordering is the trap: the indexer
+  # declares `"xchain-vm": "file:./xchain-vm"`, a gitignored path. `npm ci`
+  # SUCCEEDS against the missing path and every require('xchain-vm') then
+  # fails at run time, which is why the contract-reorg scenario (a real DEPLOY)
+  # sat red with `deploy VM executor unavailable`. So: clone the canonical
+  # sibling, stage it with vendor:vm (which also npm-installs inside the staged
+  # copy, compiling isolated-vm for this runner), and only THEN npm ci.
   integration:
     runs-on: ubuntu-latest
     services:
@@ -76,6 +81,24 @@ jobs:
         with:
           node-version: "22"
           cache: npm
+
+      # Sibling clone + vendor BEFORE `npm ci` (see the job header). The clone
+      # goes beside the workspace, matching the developer layout vendor-vm.sh
+      # resolves (../xchain-vm), and is unauthenticated because the sibling is
+      # public post-flip.
+      - name: Stage the vendored xchain-vm from its canonical sibling
+        env:
+          SIBLINGS_REF: ${{ github.ref == 'refs/heads/master' && 'master' || 'develop' }}
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/.."
+          rm -rf xchain-vm
+          url="https://github.com/${{ github.repository_owner }}/xchain-vm.git"
+          git clone --quiet --depth 1 --branch "$SIBLINGS_REF" "$url" xchain-vm 2>/dev/null \
+            || git clone --quiet --depth 1 "$url" xchain-vm
+          echo "sibling xchain-vm @ $(git -C xchain-vm rev-parse --abbrev-ref HEAD) $(git -C xchain-vm rev-parse --short HEAD)"
+          cd "$GITHUB_WORKSPACE"
+          npm run vendor:vm
 
       - name: Install dependencies
         run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
@@ -251,6 +274,30 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+
+      # The ratchet re-runs the unit suite, so it needs the same siblings the gate
+      # gets. Without them the vendored-VM stage has no canonical source and the
+      # suite runs a fraction of itself: measured 32.1% lines against an 86.4%
+      # floor, which reads as a coverage collapse and is really a missing checkout.
+      - name: Check out declared sibling repositories
+        env:
+          SIBLINGS_REF: ${{ github.ref == 'refs/heads/master' && 'master' || 'develop' }}
+        run: |
+          set -euo pipefail
+          repos=$(sed 's/#.*//' .ci-siblings | tr -d '\r' | awk 'NF')
+          cd "$GITHUB_WORKSPACE/.."
+          for repo in $repos; do
+            rm -rf "$repo"
+            url="https://github.com/${{ github.repository_owner }}/$repo.git"
+            git clone --quiet --depth 1 --branch "$SIBLINGS_REF" "$url" "$repo" 2>/dev/null \
+              || git clone --quiet --depth 1 "$url" "$repo"
+            echo "sibling $repo @ $(git -C "$repo" rev-parse --abbrev-ref HEAD) $(git -C "$repo" rev-parse --short HEAD)"
+            if [ -f "$repo/package.json" ]; then
+              ( cd "$repo" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund >/dev/null 2>&1 ) \
+                || ( cd "$repo" && npm install --omit=dev --ignore-scripts --no-audit --no-fund >/dev/null 2>&1 ) \
+                || echo "sibling $repo: dependency install failed"
+            fi
+          done
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4

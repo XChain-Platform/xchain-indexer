@@ -80,6 +80,15 @@ class Issue {
         // bind time and is the friction on a later drop. See Controller_Bound_Tokens.md.
         this.formats[6] = 'VERSION|TICK|CONTROLLER|ACTION_CLASS|COOLDOWN_BLOCKS|UNBIND|MEMO';
 
+        // Top-level (undotted) issuances allowed per TRANSACTION under
+        // EMISSION_ISSUANCE_LIMITS (XC-1456). Deliberately the SAME number as batch.js's
+        // actionLimits['ISSUE'], and deliberately a separate constant rather than a reach
+        // into that handler: this budget is counted over a different population (every
+        // ISSUE that reaches this handler, wire or VM-emitted) at a different moment (parse
+        // time, not the pre-dispatch scan), so the two rules only happen to agree on the
+        // value. Moving one must be a decision about the other, not a side effect of it.
+        this.topLevelIssuanceLimit = 1;
+
         // Define lists of various fields
         this.fieldList = {};
 
@@ -88,8 +97,27 @@ class Issue {
         this.fieldList['LOCK']   = ['LOCK_MAX_SUPPLY', 'LOCK_MINT', 'LOCK_MINT_SUPPLY', 'LOCK_MAX_MINT', 'LOCK_DESCRIPTION', 'LOCK_SLEEP', 'LOCK_CALLBACK'];
     }
 
-    // XC-1454 (BATCH_ISSUANCE_LIMITS), R6/F11: the shared intern-gating wrapper for
-    // every getTokenInfo call this action makes (parent TICK, TICK itself, CALLBACK_TICK).
+    // Does this TICK consume a TOP-LEVEL issuance slot (EMISSION_ISSUANCE_LIMITS, XC-1456)?
+    //
+    // The rule is batch.js's classifyLimitAction, restated over the parsed TICK instead of a
+    // raw sub-command string, and it must keep answering the same way for the same tick or
+    // the two limits disagree about what a namespace registration is:
+    //   - a DOTTED tick (JDOG.1) is a CHILD of a name its issuer already owns and is exempt,
+    //     which is what keeps bulk child issuance working;
+    //   - a CARET tick (^12) is NEVER exempt even when it contains a dot: the caret form is an
+    //     id reference whose dot is a decimal, not a namespace separator (XC-1457).
+    // Anything else, including a malformed or missing tick, counts as top-level: exemption is
+    // granted on positive evidence only.
+    isTopLevelIssuance(tick){
+        let str = String(tick === undefined || tick === null ? '' : tick);
+        if(str.charAt(0) == '^')
+            return true;
+        return !str.includes('.');
+    }
+
+    // XC-1454 (BATCH_ISSUANCE_LIMITS), R6/F11: the intern-gating wrapper for the TICK and
+    // CALLBACK_TICK lookups (the parent lookup has its own wrapper below, for a reason
+    // spelled out there).
     // getTokenInfo interns any unseen name into index_tickers via createTicker BEFORE this
     // action's validity is known. Once `error` is already set the ISSUE cannot land valid
     // no matter what tokenInfo comes back, so minting a fresh dense ticker id for it is
@@ -111,6 +139,43 @@ class Issue {
     async gatedGetTokenInfo(tick, blockIndex, actionIndex, error, gateActive){
         if(!error || !gateActive)
             return await this.indexerDb.getTokenInfo(tick, blockIndex, actionIndex);
+        return await this.resolveOnlyGetTokenInfo(tick, blockIndex, actionIndex);
+    }
+
+    // The PARENT lookup's own wrapper, and it suppresses on the gate ALONE rather than on
+    // `error` (XC-1457, second pass: driven on BTC regtest 2026-08-14, where an ISSUE of
+    // "FOO.1" with no FOO in existence was correctly rejected `invalid: TICK (parent
+    // unknown)` and STILL left "FOO" interned as a fresh ticker id).
+    //
+    // The reason gatedGetTokenInfo cannot cover this call site: the parent lookup is the
+    // FIRST thing in the TICK block that can produce an error, so `error` is necessarily
+    // still unset when it runs and the error-conditioned wrapper is a guaranteed
+    // passthrough there. The suppression condition has to be structural instead, and it is
+    // available: a parent that EXISTS is already interned (a token row is keyed by its
+    // tick_id), so a parent this lookup would have to INSERT is by definition one that does
+    // not exist, i.e. one whose ISSUE is about to be rejected. Interning it is therefore
+    // always waste - and unlike the TICK and CALLBACK_TICK names, the parent name is not
+    // stored on the row either (createIssue interns only those two), so nothing downstream
+    // needs it. `isOwnershipEscrowed(parent)` runs only when parentInfo came back truthy,
+    // which means the name resolved.
+    //
+    // What this does NOT claim to fix, deliberately: the ATTEMPTED TICK of a rejected ISSUE
+    // is still interned, because db.js's createIssue calls createTicker to store the
+    // rejected row at all. That is the platform-wide storage convention for every action
+    // type, not an ISSUE defect, and changing it is a db.js/schema question outside this
+    // rule's scope (spec row 6 is explicitly issue.js-only).
+    //
+    // Gated behind BATCH_ISSUANCE_LIMITS: skipping an insert shifts every later ticker id,
+    // so below the flag this stays a transparent passthrough and a from-genesis replay
+    // reproduces the historical ids byte-for-byte.
+    async parentGetTokenInfo(tick, blockIndex, actionIndex, gateActive){
+        if(!gateActive)
+            return await this.indexerDb.getTokenInfo(tick, blockIndex, actionIndex);
+        return await this.resolveOnlyGetTokenInfo(tick, blockIndex, actionIndex);
+    }
+
+    // The suppression mechanics the two wrappers above share.
+    async resolveOnlyGetTokenInfo(tick, blockIndex, actionIndex){
         let prior = this.indexerDb.suppressIndexIdCreation;
         this.indexerDb.suppressIndexIdCreation = true;
         try {
@@ -199,7 +264,7 @@ class Issue {
             parent = parts.slice(0,-1).join('.');
 
             // Get information on parent TICK
-            parentInfo = await this.gatedGetTokenInfo(parent, data['BLOCK_INDEX'], data['ACTION_INDEX'], error, batchIssuanceLimitsV2);
+            parentInfo = await this.parentGetTokenInfo(parent, data['BLOCK_INDEX'], data['ACTION_INDEX'], batchIssuanceLimitsV2);
 
             // Verify parent TICK exists
             if(!error && !parentInfo)
@@ -269,6 +334,43 @@ class Issue {
         // play-money gas on any chain.
         if(!error && String(data['TICK']).toUpperCase()==this.config['GAS'] && this.config['COIN']!='BTC' && this.config['NETWORK']!='regtest')
             error = 'invalid: TICK (BTC-only)';
+
+        // Per-TRANSACTION top-level issuance budget (EMISSION_ISSUANCE_LIMITS, XC-1456).
+        //
+        // THIS is the choke point the rule needs and the pre-dispatch BATCH scan is not: every
+        // ISSUE arrives here, whether it came off the wire as a sub-command or was emitted by
+        // a contract (execute.js processEmission routes an emission straight to this handler,
+        // past that scan), and VM-emitted issuances are fee-exempt under
+        // ISSUANCE_FEE_EMISSION_EXEMPT, so before this check one EXECUTE could register up to
+        // maxEmissions (50) top-level names for nothing and a 250-command BATCH of EXECUTEs
+        // up to 12,450. Operator decision 2026-08-15 (option a): count them.
+        //
+        // NO WIRE VERDICT MOVES. batch.js caps top-level ISSUE sub-commands at 1 per BATCH
+        // (actionLimits['ISSUE'], in force below the BATCH_ISSUANCE_LIMITS flag as well) and a
+        // non-BATCH transaction carries exactly one action, so at most ONE wire ISSUE ever
+        // reaches this counter and it can only ever consume the first slot.
+        //
+        // Placed BEFORE the token-info read below so a refused issuance reaches
+        // gatedGetTokenInfo with `error` already set and therefore interns no ticker id for a
+        // name it never registers - the same free-consumption-of-dense-id-space economy that
+        // wrapper exists for. Below it, the read has already happened.
+        //
+        // Counted on ARRIVAL rather than on success, matching the BATCH scan, which counts
+        // sub-commands without regard to their validity. An ISSUE that consumes the slot and
+        // then fails a later check has still spent it - deterministically, on every node, so
+        // the ledger is a consensus value like any other.
+        //
+        // GENESIS IS EXEMPT: the bootstrap registers ~240k names from one synthetic source and
+        // is not a spam surface (genesis.js is the only caller that can set IS_GENESIS). A
+        // missing ledger is likewise inert: any caller that never came through a transaction
+        // or an injected-execution context enforces nothing, which is the pre-flag behaviour.
+        let issuanceLedger = data['ISSUANCE_LIMIT_LEDGER'];
+        if(!error && !data['IS_GENESIS'] && issuanceLedger && this.isTopLevelIssuance(data['TICK']) &&
+           await this.actions.protocolChanges.isEnabled('EMISSION_ISSUANCE_LIMITS', data['BLOCK_INDEX'])){
+            issuanceLedger.topLevel = (Number(issuanceLedger.topLevel) || 0) + 1;
+            if(issuanceLedger.topLevel > this.topLevelIssuanceLimit)
+                error = 'invalid: ISSUE (limit)';
+        }
 
         // Get information on token, then check distribution passing tokenInfo to avoid a second getTokenInfo call
         let tokenInfo     = await this.gatedGetTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX'], error, batchIssuanceLimitsV2);

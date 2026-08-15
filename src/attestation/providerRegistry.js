@@ -34,6 +34,8 @@
  *
  ********************************************************************/
 
+const pmsh = require('./providerMinStakeHistory.js');
+
 const PROVIDERS = {
     http_get: {
         provider_id:            'http_get',
@@ -42,6 +44,15 @@ const PROVIDERS = {
         max_request_bytes:      2048,
         max_response_bytes:     32768,
         allowed_redundancy:     [1, 3, 5],
+        // GENESIS provider stake floor. Consensus input at/above
+        // STAKE_WEIGHTED_QUORUM: the responsible-set derivation drops staking
+        // sources whose aggregate weight is below it. MUST equal xchain-hub
+        // ProviderRegistry DEFAULTS.http_get.min_stake_xchain, which seeds the
+        // hub's block-0 history entry; the two are the same genesis value read
+        // from two codebases, and a silent edit to one forks the responsible set.
+        // Governance changes are block-anchored, never an edit here: see
+        // providerMinStakeHistory.js.
+        min_stake_xchain:       '10000',
         deadline_window_blocks: 100
     },
     // Hub performs the actual LLM API call and consensus judgment; this entry
@@ -53,6 +64,10 @@ const PROVIDERS = {
         max_request_bytes:      8192,
         max_response_bytes:     16384,
         allowed_redundancy:     [1, 3, 5],
+        // Higher than http_get by design: serving an llm attestation is a costlier,
+        // more subjective judgment, so it is priced at a higher stake bar. Mirrors
+        // xchain-hub ProviderRegistry DEFAULTS.llm.min_stake_xchain.
+        min_stake_xchain:       '25000',
         deadline_window_blocks: 20
     }
 };
@@ -92,6 +107,29 @@ class ProviderRegistry {
 
     getProvider(providerId) {
         return this.providers[providerId] || null;
+    }
+
+    // The provider's min_stake_xchain floor effective AT `blockIndex` on `network`:
+    // the genesis value from this registry's effective provider map, moved by any
+    // block-anchored governance activation in providerMinStakeHistory.js (empty on
+    // every network today). Mirror of xchain-hub
+    // ProviderRegistry.getMinStake(providerId, blockIndex).
+    //
+    // Returns a decimal STRING, or null for an unknown provider or a definition
+    // carrying no usable floor (which an operator ATTESTATION.PROVIDERS overlay can
+    // produce: an overlay entry REPLACES the default wholesale, so one that omits
+    // min_stake_xchain leaves the provider floorless). A CONSENSUS caller must treat
+    // null as fail-closed and return an EMPTY responsible set rather than substitute
+    // 0: substituting would let a node with a thin overlay admit validators the rest
+    // of the federation excludes, which is precisely the fork the floor is anchored
+    // to prevent.
+    //
+    // `override` is the operator/test escape hatch documented in
+    // providerMinStakeHistory.historyFor; production callers pass nothing.
+    getMinStake(providerId, blockIndex, network, override) {
+        let p = this.providers[providerId];
+        if (!p) return null;
+        return pmsh.providerMinStakeAt(providerId, blockIndex, network, p.min_stake_xchain, override);
     }
 
     isRedundancyAllowed(providerId, redundancy) {
