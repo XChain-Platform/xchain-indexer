@@ -235,9 +235,11 @@ describe('Issue: caret-dot TICK rejection and ticker-intern gating (XC-1457/R6) 
             const tickCall   = calls.find(c => c.tick === 'ORPHAN.1');
             assert.ok(parentCall, 'parent lookup must have run');
             assert.ok(tickCall, 'TICK lookup must have run');
-            // error is not yet set when the PARENT lookup itself runs (its result is what
-            // decides the error), so that call must be un-suppressed.
-            assert.strictEqual(parentCall.suppress, undefined, 'parent lookup must not be suppressed (error not yet set)');
+            // The PARENT lookup runs BEFORE any error can be set (its own result is what
+            // decides that error), so it is suppressed on the gate alone - see
+            // parentGetTokenInfo. Asserting it un-suppressed here is what let the live
+            // regtest run of 2026-08-14 intern "BILA3DkEqyyYxq" off a rejected ISSUE.
+            assert.strictEqual(parentCall.suppress, true, 'parent lookup must be intern-suppressed under the flag');
             // error IS already set by the time the main TICK lookup runs; the intern must
             // be suppressed.
             assert.strictEqual(tickCall.suppress, true, 'TICK lookup must be intern-suppressed once error is set');
@@ -256,9 +258,68 @@ describe('Issue: caret-dot TICK rejection and ticker-intern gating (XC-1457/R6) 
 
             assert.strictEqual(data.STATUS, 'invalid: TICK (parent unknown)');
 
-            const tickCall = calls.find(c => c.tick === 'ORPHAN.1');
+            const tickCall   = calls.find(c => c.tick === 'ORPHAN.1');
+            const parentCall = calls.find(c => c.tick === 'ORPHAN');
             assert.ok(tickCall, 'TICK lookup must have run');
+            assert.ok(parentCall, 'parent lookup must have run');
             assert.notStrictEqual(tickCall.suppress, true, 'below the flag the intern must NOT be suppressed (pre-flag behavior)');
+            assert.notStrictEqual(parentCall.suppress, true, 'below the flag the parent intern must NOT be suppressed either');
+        });
+    });
+
+    // XC-1457 second pass. The wrapper above is conditioned on `error`, and the parent
+    // lookup is the one call site where `error` can never yet be set, so it needed a
+    // suppression condition of its own. These cases pin that the condition is the GATE,
+    // not the error, and that it costs the valid paths nothing.
+    describe('Defect B2: the parent lookup interns nothing on its own', function(){
+
+        it('suppresses the parent-name intern even though no error has been set yet', async function(){
+            const seen = [];
+            indexer.indexerDb.getTokenInfo = sinon.stub().callsFake(async (tick) => {
+                seen.push({ tick, suppress: indexer.indexerDb.suppressIndexIdCreation });
+                return null;
+            });
+            const handler = new Issue(makeActionsCtx(indexer, { batchLimitsActive: true }));
+
+            await handler.parse(makeFormat0Params({ TICK: 'ORPHAN.1' }), makeData(), null);
+
+            const parentCall = seen.find(c => c.tick === 'ORPHAN');
+            assert.ok(parentCall, 'parent lookup must have run');
+            assert.strictEqual(parentCall.suppress, true,
+                'an unknown parent must never be interned: the ISSUE naming it is always rejected');
+            assert.strictEqual(indexer.indexerDb.suppressIndexIdCreation, undefined,
+                'suppression must not leak past the call');
+        });
+
+        it('still resolves an EXISTING parent through the suppressed lookup, so valid children are unaffected', async function(){
+            // Resolve-only suppression blocks the INSERT, never the SELECT. A parent that
+            // exists is already interned, so a valid child issuance reads it back normally.
+            indexer.indexerDb.getTokenInfo = sinon.stub().callsFake(async (tick) => {
+                if(tick === 'JDOG')
+                    return createTokenInfo({ TICK: 'JDOG', OWNER: SOURCE });
+                return null;
+            });
+            const handler = new Issue(makeActionsCtx(indexer, { batchLimitsActive: true }));
+            const data    = makeData();
+
+            await handler.parse(makeFormat0Params({ TICK: 'JDOG.1' }), data, null);
+
+            assert.strictEqual(data.STATUS, 'valid');
+        });
+
+        it('reports the parent-unknown verdict identically with the flag on and off', async function(){
+            // The suppression changes a side effect only; the verdict must not move, or
+            // this would be a consensus change in the verdicts rather than in the ids.
+            for(const batchLimitsActive of [true, false]){
+                indexer.indexerDb.getTokenInfo = sinon.stub().resolves(null);
+                const handler = new Issue(makeActionsCtx(indexer, { batchLimitsActive }));
+                const data    = makeData();
+
+                await handler.parse(makeFormat0Params({ TICK: 'ORPHAN.1' }), data, null);
+
+                assert.strictEqual(data.STATUS, 'invalid: TICK (parent unknown)',
+                    'verdict must be identical with the flag ' + (batchLimitsActive ? 'on' : 'off'));
+            }
         });
     });
 });

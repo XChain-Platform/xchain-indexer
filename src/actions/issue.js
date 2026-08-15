@@ -88,8 +88,9 @@ class Issue {
         this.fieldList['LOCK']   = ['LOCK_MAX_SUPPLY', 'LOCK_MINT', 'LOCK_MINT_SUPPLY', 'LOCK_MAX_MINT', 'LOCK_DESCRIPTION', 'LOCK_SLEEP', 'LOCK_CALLBACK'];
     }
 
-    // XC-1454 (BATCH_ISSUANCE_LIMITS), R6/F11: the shared intern-gating wrapper for
-    // every getTokenInfo call this action makes (parent TICK, TICK itself, CALLBACK_TICK).
+    // XC-1454 (BATCH_ISSUANCE_LIMITS), R6/F11: the intern-gating wrapper for the TICK and
+    // CALLBACK_TICK lookups (the parent lookup has its own wrapper below, for a reason
+    // spelled out there).
     // getTokenInfo interns any unseen name into index_tickers via createTicker BEFORE this
     // action's validity is known. Once `error` is already set the ISSUE cannot land valid
     // no matter what tokenInfo comes back, so minting a fresh dense ticker id for it is
@@ -111,6 +112,43 @@ class Issue {
     async gatedGetTokenInfo(tick, blockIndex, actionIndex, error, gateActive){
         if(!error || !gateActive)
             return await this.indexerDb.getTokenInfo(tick, blockIndex, actionIndex);
+        return await this.resolveOnlyGetTokenInfo(tick, blockIndex, actionIndex);
+    }
+
+    // The PARENT lookup's own wrapper, and it suppresses on the gate ALONE rather than on
+    // `error` (XC-1457, second pass: driven on BTC regtest 2026-08-14, where an ISSUE of
+    // "FOO.1" with no FOO in existence was correctly rejected `invalid: TICK (parent
+    // unknown)` and STILL left "FOO" interned as a fresh ticker id).
+    //
+    // The reason gatedGetTokenInfo cannot cover this call site: the parent lookup is the
+    // FIRST thing in the TICK block that can produce an error, so `error` is necessarily
+    // still unset when it runs and the error-conditioned wrapper is a guaranteed
+    // passthrough there. The suppression condition has to be structural instead, and it is
+    // available: a parent that EXISTS is already interned (a token row is keyed by its
+    // tick_id), so a parent this lookup would have to INSERT is by definition one that does
+    // not exist, i.e. one whose ISSUE is about to be rejected. Interning it is therefore
+    // always waste - and unlike the TICK and CALLBACK_TICK names, the parent name is not
+    // stored on the row either (createIssue interns only those two), so nothing downstream
+    // needs it. `isOwnershipEscrowed(parent)` runs only when parentInfo came back truthy,
+    // which means the name resolved.
+    //
+    // What this does NOT claim to fix, deliberately: the ATTEMPTED TICK of a rejected ISSUE
+    // is still interned, because db.js's createIssue calls createTicker to store the
+    // rejected row at all. That is the platform-wide storage convention for every action
+    // type, not an ISSUE defect, and changing it is a db.js/schema question outside this
+    // rule's scope (spec row 6 is explicitly issue.js-only).
+    //
+    // Gated behind BATCH_ISSUANCE_LIMITS: skipping an insert shifts every later ticker id,
+    // so below the flag this stays a transparent passthrough and a from-genesis replay
+    // reproduces the historical ids byte-for-byte.
+    async parentGetTokenInfo(tick, blockIndex, actionIndex, gateActive){
+        if(!gateActive)
+            return await this.indexerDb.getTokenInfo(tick, blockIndex, actionIndex);
+        return await this.resolveOnlyGetTokenInfo(tick, blockIndex, actionIndex);
+    }
+
+    // The suppression mechanics the two wrappers above share.
+    async resolveOnlyGetTokenInfo(tick, blockIndex, actionIndex){
         let prior = this.indexerDb.suppressIndexIdCreation;
         this.indexerDb.suppressIndexIdCreation = true;
         try {
@@ -199,7 +237,7 @@ class Issue {
             parent = parts.slice(0,-1).join('.');
 
             // Get information on parent TICK
-            parentInfo = await this.gatedGetTokenInfo(parent, data['BLOCK_INDEX'], data['ACTION_INDEX'], error, batchIssuanceLimitsV2);
+            parentInfo = await this.parentGetTokenInfo(parent, data['BLOCK_INDEX'], data['ACTION_INDEX'], batchIssuanceLimitsV2);
 
             // Verify parent TICK exists
             if(!error && !parentInfo)
