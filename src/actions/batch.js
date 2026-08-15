@@ -148,6 +148,112 @@ class Batch {
         this.commandWeights['AIRDROP']  = 25;
         this.commandWeights['DIVIDEND'] = 25;
 
+        // VM actions (D8 for EXECUTE/XEXEC, D5's cost half for DEPLOY). RATIFIED AT 30 BY THE
+        // OPERATOR ON 2026-08-15, on the measurement in bin/measure-batch-execute-cost.js and
+        // claude/reports/2026-08-14_batch-execute-cost-measurement.md. This is a consensus
+        // constant: it decides verdicts, so it may only move behind a flag day.
+        //
+        // WHY 30, stated so a future retune can re-derive it rather than guess. A worst-case
+        // EXECUTE measured 10.7x to 27.4x an ordinary sub-command (pooled 17.9x / 14.9x /
+        // 18.7x), and a worst-case DEPLOY 13.0x to 29.5x. 30 is the SMALLEST ROUND WEIGHT at
+        // which a full batch of worst-case VM sub-commands stays under the status-quo bound of
+        // 250 ordinary ones AT EVERY RATIO OBSERVED: it admits 8 per batch, and 8 x 27.4 is 219
+        // ordinary-equivalents. Weight 25 admits 10, which is 274 at the same ratio, over by 10%.
+        // The pooled parity floor is 19, so 30 is above every ratio measured and far below the
+        // 250 the spec's original table proposed for DEPLOY.
+        //
+        // TWO PROPERTIES OF THE MEASUREMENT THAT MUST TRAVEL WITH THE NUMBER:
+        //  - the cost curve is LINEAR from N=1 to N=50 (r^2 0.9987 / 0.9994), because
+        //    ProcessExecutor forks one worker and dispatches sequentially and beginBlock/endBlock
+        //    scope the compile cache per block. So a per-sub-command constant is the right shape
+        //    and there is no unamortized setup a weight would have to absorb;
+        //  - WALL TIME IS NOT BOUNDED BY GAS (xchain-vm/src/index.js ~304-306 records a shape
+        //    burning ~13.5s at ~540k gas, held only by a NON-consensus maxCpuTimeMs), so the
+        //    architectural worst case is well above the measured one. Any future widening of VM
+        //    metering coverage moves this number's grounding and it must be re-derived, never
+        //    inherited.
+        //
+        // XEXEC RIDES WITH EXECUTE HERE, which is the OPPOSITE of its treatment in
+        // vmBaseFeeActions above, and the difference is not an inconsistency - the two tables
+        // measure different things. That one is about what a sub-command COSTS ITS SOURCE, and
+        // XEXEC is fee-less on this chain, so pricing it there would be an over-estimate and
+        // wrong. This one is about what a sub-command COSTS THE INDEXER, and an XEXEC runs the
+        // same contract code an EXECUTE does; leaving it at the default 1 would leave the VM
+        // class bounded for one spelling and unbounded for the other.
+        //
+        // DEPLOY IS WEIGHED, AND IT ALSO KEEPS ITS CAP OF 1 (gatedActionLimits above). The spec
+        // claimed D5 would be "subsumed with IDENTICAL behavior" by weighing DEPLOY at the whole
+        // budget; that claim is FALSE, and the proof is short enough to keep here. Today's rule
+        // is a CONJUNCTION of two independent caps (count <= 250 AND deploys <= 1). For a DEPLOY
+        // weight w, refusing two DEPLOYs needs 2w > 250, i.e. w >= 126, while keeping the
+        // valid-today "1 DEPLOY + 249 SENDs" valid needs w + 249 <= 250, i.e. w <= 1. The two are
+        // contradictory, so NO weight reproduces today's DEPLOY behaviour: a weighted SUM cannot
+        // express a conjunction of caps. The cap therefore stays exactly where it is - which is
+        // also what keeps 'invalid: DEPLOY (limit)' being reported from its own loop - and the
+        // weight expresses only the COST half, i.e. how many companions one DEPLOY may carry
+        // (220 at weight 30, against 249 today).
+        //
+        // CHUNKED DEPLOY (deploy.js format 4) IS DELIBERATELY NOT DISCOUNTED. A chunk carrier
+        // runs no constructor and is really a row write, so 30 over-charges it. That is the safe
+        // direction for a weight and it is left over-charged ON PURPOSE: discounting it needs the
+        // weight scan to derive a FORMAT from the wire, a second place format derivation could
+        // drift from the handler, and lowering a weight later is a loosening and cheap while
+        // raising one is a tightening that risks forking a replay. Revisit only with the same
+        // asymmetry in mind.
+        this.commandWeights['DEPLOY']  = 30;
+        this.commandWeights['EXECUTE'] = 30;
+        this.commandWeights['XEXEC']   = 30;
+
+        // DURATION-METERED CREATE actions whose nominal fee the R4 spam collapse can price
+        // from the WIRE ALONE (D10, gated on BATCH_COST_WEIGHTING - see isGasProvablyUnaffordable).
+        //
+        // All three charge one and the same creation fee: getUnifiedExpirationFee's format-0
+        // branch, which is getUnifiedDurationFee(EXPIRATION, BLOCK_TIME, 'EXPIRATION_PER_DAY'),
+        // a PURE function of one wire field and the transaction's own BLOCK_TIME. No database
+        // read, no handler state, so pricing them here costs nothing and cannot drift into the
+        // O(commands x reads) work the pre-check exists to avoid.
+        //
+        // The three actions the spec's D10 sentence ALSO named are deliberately absent, each
+        // for a measured reason rather than an oversight:
+        //  - MINT is FREE. mint.js calls neither getUnifiedTransactionFee nor
+        //    validateNativeCoinFee; its only gas is an optional controller guardFee defined by
+        //    contract code, which is not knowable from params. An all-MINT batch is never
+        //    provably unaffordable, so the spec's "all-MINT no-gas batch" case cannot arise.
+        //  - EXECUTE is priced, but NOT positionally and NOT from a duration: its floor is a
+        //    schedule constant, so it has its own table below (vmBaseFeeActions) rather than a
+        //    seat here.
+        //  - SEND / ISSUE / SWEEP / DEPLOY use bespoke parsing (repeating recipients,
+        //    variable-length constructor params), which is exactly why actions.js's
+        //    _setActionParamHandler omits them. ISSUE is priced here by its own dedicated
+        //    path (nominalIssueFee), not positionally.
+        this.durationFeeActions = ['ORDER', 'SWAP', 'DISPENSER'];
+
+        // VM actions whose ACCEPTANCE fee is a schedule CONSTANT, so the R4 spam collapse can
+        // price them without parsing a single param (D10, gated on BATCH_COST_WEIGHTING - see
+        // isGasProvablyUnaffordable and nominalExecuteFee).
+        //
+        // THE FLOOR IS VERIFIED, NOT ASSUMED, and the earlier reading of this code that said
+        // EXECUTE had no knowable floor was wrong in a way worth writing down. execute.js
+        // (~209-243) computes `fee = vmGasCost(schedule,'EXECUTE',0) * GAS_PRICE` BEFORE the VM
+        // runs, i.e. VM_EXECUTE_BASE priced through the one arithmetic the static quote also
+        // uses, and refuses the sub-command with 'invalid: insufficient funds (GAS)' when the
+        // SOURCE cannot cover it. Metered gas re-prices only the RECORDED fee afterwards
+        // (execute.js ~498-517, and utility.js vmGasCost says so in as many words), and it can
+        // only ever raise the bill. So the constant is a true LOWER bound on what an EXECUTE
+        // costs its SOURCE, which is the only direction this predicate may err in.
+        //
+        // XEXEC IS DELIBERATELY ABSENT, and that is a code fact rather than caution: xexec.js
+        // injects its executions with IS_EMISSION true and is "fee-less on THIS chain" (:213,
+        // :221) because it runs against the cross-chain request's gas_escrow, not a wallet.
+        // Pricing it would be an OVER-estimate, the one error this predicate may never make.
+        //
+        // The two escape hatches execute.js's own fee block has are honoured by
+        // nominalExecuteFee and by the transaction-level gates at the top of the predicate:
+        // IS_EMISSION (skipFee) and native-coin fee mode both bail before any of this is
+        // reached, and a batch's sub-commands inherit both from the ONE data object the
+        // dispatch loop mutates, so neither can differ per sub-command.
+        this.vmBaseFeeActions = ['EXECUTE'];
+
         // Counting bucket for child (dotted-TICK) ISSUE sub-commands. Deliberately not a
         // legal ACTION name, so it can never collide with an entry in actionLimits and
         // child issuance stays uncapped no matter what actions are added later.
@@ -352,6 +458,108 @@ class Batch {
         return child ? this.config['ISSUANCE_FEE_SUBTOKEN'] : this.config['ISSUANCE_FEE_TOKEN'];
     }
 
+    // Nominal creation fee of ONE duration-metered sub-command (D10, BATCH_COST_WEIGHTING).
+    //
+    // Returns a fee AMOUNT (which may legitimately be 0, meaning "free and therefore always
+    // affordable"), or null meaning THE COST IS NOT POSITIVELY KNOWN. The caller must treat
+    // null as "let the batch through": R4 collapses on positive price evidence only.
+    //
+    // WHY IT IS A LOWER BOUND, AND WHY THAT IS THE ONLY SAFE DIRECTION. The handler's real
+    // fee for a create is the expiration fee PLUS, on some shapes, an ownership-escrow premium
+    // (order.js getOwnershipEscrowFee) and a controller guardFee, both of which are derived
+    // from database state this pre-check refuses to read. Omitting them can only UNDER-state
+    // the cost. Under-stating is safe in exactly one direction and it is this one: the caller
+    // collapses only when the balance is below the cheapest cost, so a cost quoted too low can
+    // only SUPPRESS a collapse, never cause a wrong one. An over-estimate would reject a
+    // sub-command that would have succeeded, which this predicate may never do.
+    //
+    // ONLY THE CREATE FORMAT IS PRICEABLE. Format 1 is a cancel (no fee at all) and format 2 is
+    // an EDIT, whose fee is the DIFFERENCE against the stored record's EXPIRATION and so needs
+    // a read; both return null. FORMAT is derived with util.getFormatVersion off params[0],
+    // byte-for-byte the derivation the dispatch loop performs, so this and the handler can
+    // never disagree about which format a sub-command is.
+    //
+    // The EXPIRATION POSITION is read out of the HANDLER'S OWN format string rather than
+    // hardcoded (it is index 10 for ORDER/SWAP and 13 for DISPENSER today), through the same
+    // actions.js seam - _setActionParamHandler - that already exists to say which handlers have
+    // a fixed positional layout. A format string that gains or loses a field therefore moves
+    // this pre-check with it instead of silently mispricing. If the seam is absent (a partial
+    // test double, an older Actions), the answer is null: unpriceable, no collapse.
+    //
+    // Never throws, for the same reason every other helper in this file does not: a crash here
+    // would halt block processing, and the safe fallback is null, which is the pre-flag verdict.
+    nominalDurationFee(action, parts, data, unified){
+        try {
+            if(typeof this.actions.setActionParamHandler !== 'function')
+                return null;
+            let handler = this.actions.setActionParamHandler(action);
+            if(!handler || !handler.formats)
+                return null;
+            // Only the CREATE format is priceable; see above.
+            if(this.util.getFormatVersion(parts[0]) !== 0)
+                return null;
+            let fields = String(handler.formats[0]).split('|');
+            let idx    = fields.indexOf('EXPIRATION');
+            if(idx < 1)
+                return null;
+            // Same read setActionParams performs: positional, trimmed, absent means null.
+            let expiration = (typeof parts[idx] === 'undefined') ? null : String(parts[idx]).trim();
+            // No EXPIRATION is the free case, and it is a POSITIVE answer of zero rather than
+            // "unknown": the handler skips its whole fee block, so the sub-command really can
+            // be valid on an empty balance and the caller must not collapse the batch.
+            if(this.util.isNull(expiration))
+                return 0;
+            if(!this.util.isNumeric(expiration) || this.util.isNull(data['BLOCK_TIME']))
+                return null;
+            if(unified)
+                return this.util.getUnifiedDurationFee(expiration, data['BLOCK_TIME'], 'EXPIRATION_PER_DAY').fee;
+            // Legacy lane: getExpirationFee's format-0 branch reads only EXPIRATION, BLOCK_TIME
+            // and config, so a minimal data object reproduces it exactly. `info` is unused on
+            // that branch and is passed null rather than fabricated.
+            return this.util.getExpirationFee({ FORMAT: 0, EXPIRATION: expiration, BLOCK_TIME: data['BLOCK_TIME'] }, null);
+        } catch(e) {
+            return null;
+        }
+    }
+
+    // Nominal ACCEPTANCE fee of ONE EXECUTE sub-command (D10, BATCH_COST_WEIGHTING).
+    //
+    // Returns a fee AMOUNT (0 is a legitimate positive answer meaning "free, therefore always
+    // affordable"), or null meaning THE COST IS NOT POSITIVELY KNOWN, which the caller must
+    // treat as "let the batch through".
+    //
+    // WHY THIS IS A LOWER BOUND. It is the SAME arithmetic execute.js runs before it enters the
+    // VM: vmGasCost(schedule,'EXECUTE',0) priced at GAS_PRICE. What the handler bills at
+    // settlement is gas actually CONSUMED, which starts at this base and only grows, so quoting
+    // the base can only UNDER-state the real cost. Under-stating is the one safe direction:
+    // the caller collapses only when the balance is below the cheapest cost, so a cost quoted
+    // too low can only SUPPRESS a collapse, never cause a wrong one.
+    //
+    // THE ONE READ, AND WHY IT IS NOT OPTIONAL. execute.js gates its whole fee block on
+    // `tokenInfo` for the GAS token: on a chain where the gas token has no valid issuance
+    // as-of this block, an EXECUTE is charged NOTHING and really can be valid on an empty
+    // balance. Quoting a positive fee there would be an over-estimate, so the token is probed
+    // (through probeTokenInfo, which suppresses ticker interning exactly as the ISSUE path
+    // does) and its absence answers "unknown". The caller memoizes this, so a 250-EXECUTE
+    // batch pays for ONE read, not 250.
+    //
+    // No param is read at all, which is why EXECUTE needs no positional seam: the floor does
+    // not depend on the contract, the method or the arguments. Never throws, for the same
+    // reason its siblings do not - a crash here would halt block processing - and the fallback
+    // is null, which is the pre-D10 verdict.
+    async nominalExecuteFee(data){
+        try {
+            let gasCost = this.util.vmGasCost(this.config['GAS_SCHEDULE'], 'EXECUTE', 0);
+            if(gasCost === null || !this.util.isNumeric(gasCost))
+                return null;
+            if(!await this.probeTokenInfo(this.config['GAS'], data))
+                return null;
+            return this.util.bcmul(gasCost, this.config['GAS_PRICE'], 8);
+        } catch(e) {
+            return null;
+        }
+    }
+
     // Aggregate gas pre-check (BATCH_ISSUANCE_LIMITS / R4, spec decision D3 2026-08-13).
     //
     // WHAT IT IS: a conservative LOWER-BOUND collapse of the no-gas spam case. True only when
@@ -370,12 +578,25 @@ class Batch {
     // the balance is below the MINIMUM cost, so that predicate is both safe AND the strongest
     // safe one: the sum can only add false positives, never extra collapses.
     //
-    // WHAT IS COVERED: ISSUE of a non-caret TICK that does not already exist. Everything else
-    // returns false (let it through) on FIRST sight, because its nominal cost is not knowable
-    // here:
-    //  - non-ISSUE actions: ORDER/SWAP/DISPENSER/BET price off EXPIRATION days and escrow
-    //    state, AIRDROP/DIVIDEND off recipient counts, CALLBACK/SWEEP off db_hits, DEPLOY off
-    //    code bytes. Each is computed by the handler from params it alone parses.
+    // WHAT IS COVERED: ISSUE of a non-caret TICK that does not already exist, and - at/after
+    // BATCH_COST_WEIGHTING only (D10) - a duration-metered CREATE of an ORDER, SWAP or
+    // DISPENSER, priced by nominalDurationFee from EXPIRATION and BLOCK_TIME with no database
+    // read, plus EXECUTE at its schedule-constant acceptance floor (nominalExecuteFee, one
+    // memoized read for the whole batch). EXECUTE is the case the whole weighting spec exists
+    // for: it runs VM code, it is capped at nothing, and an attacker who cannot pay for one of
+    // them currently buys N invalid rows for free. Everything else returns false (let it
+    // through) on FIRST sight, because its nominal cost is not knowable here:
+    //  - non-ISSUE actions BELOW the weighting flag: unchanged, every one of them exits here,
+    //    which is what keeps this predicate byte-identical on a pre-flag replay. The widening
+    //    rides BATCH_COST_WEIGHTING and NOT BATCH_ISSUANCE_LIMITS deliberately: the latter is
+    //    already armed on mainnet, and hanging an unrehearsed consensus change off an arming
+    //    flag would ship it with no replay evidence behind it.
+    //  - AIRDROP/DIVIDEND price off recipient counts, CALLBACK/SWEEP off db_hits, DEPLOY off
+    //    code bytes. Each is computed by the handler from state or params it alone has; see
+    //    durationFeeActions for why the three that ARE priced positionally are the only three
+    //    that can be.
+    //  - XEXEC is system-injected and fee-less on this chain (xexec.js:213/:221), so pricing it
+    //    would be an over-estimate; see vmBaseFeeActions.
     //  - caret TICKs (^<id>): an id reference, resolved (not interned) by db.js, and R6 rejects
     //    the caret-dot form outright; no positive price evidence, so no evidence of cost.
     //  - the GAS tick itself: its genesis issuance is fee-exempt (chicken-and-egg).
@@ -397,7 +618,12 @@ class Batch {
     // set exactly as they stand before the first sub-command runs - and are read-only. The
     // command loop is bounded ONLY by the 250-command cap, which is why that cap is the first
     // check in parse() and why this runs behind `!error`.
-    async isGasProvablyUnaffordable(commands, data, normalize){
+    //
+    // `weightsActive` is the BATCH_COST_WEIGHTING verdict parse() already resolved once for
+    // this batch. It is a PARAMETER rather than a second isEnabled call so every gated site in
+    // this file reads ONE verdict, and it defaults to false so any caller written against the
+    // pre-D10 signature keeps exactly the pre-D10 behaviour.
+    async isGasProvablyUnaffordable(commands, data, normalize, weightsActive = false){
         if(data['IS_GENESIS'] || data['IS_EMISSION'])
             return false;
         if(this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']) !== 'xchain')
@@ -409,6 +635,11 @@ class Batch {
         let gasTick  = String(this.config['GAS']).toUpperCase();
         let priced   = {};   // TICK -> nominal fee, memoized so a repeated TICK costs one read
         let cheapest = null;
+        // EXECUTE's floor is the same number for every sub-command in the batch, and computing
+        // it costs one GAS-token probe. `undefined` means not computed yet; `null` means
+        // computed and NOT positively known. Memoized here rather than in the constructor
+        // because the probe is as-of THIS batch's (BLOCK_INDEX, ACTION_INDEX).
+        let vmFloor;
 
         for(let command of commands){
             let parts  = String(command).split('|');
@@ -418,20 +649,44 @@ class Batch {
             // ISSUE formats, after the implied legacy VERSION 0 is injected).
             if(normalize)
                 action = this.normalizeSubAction(action, parts);
-            if(action !== 'ISSUE')
-                return false;
 
-            let tick = (parts[1] === undefined || parts[1] === null) ? '' : String(parts[1]).trim();
-            if(tick === '' || tick.charAt(0) == '^' || tick.toUpperCase() === gasTick)
-                return false;
+            // The nominal cost of THIS sub-command, or a bail-out. Every branch either
+            // establishes a positively-known cost or returns false, which is the rule the
+            // whole predicate rests on: no positive price evidence, no collapse.
+            let cost = null;
 
-            if(priced[tick] === undefined){
-                if(await this.probeTokenInfo(tick, data))
+            if(action === 'ISSUE'){
+                let tick = (parts[1] === undefined || parts[1] === null) ? '' : String(parts[1]).trim();
+                if(tick === '' || tick.charAt(0) == '^' || tick.toUpperCase() === gasTick)
                     return false;
-                priced[tick] = this.nominalIssueFee(tick, unified);
+
+                if(priced[tick] === undefined){
+                    if(await this.probeTokenInfo(tick, data))
+                        return false;
+                    priced[tick] = this.nominalIssueFee(tick, unified);
+                }
+                cost = priced[tick];
+            } else if(weightsActive && this.durationFeeActions.includes(action)){
+                // D10. null means "not positively known" (an edit, a cancel, an unparseable
+                // EXPIRATION), which is a bail-out exactly like an unknown action.
+                cost = this.nominalDurationFee(action, parts, data, unified);
+                if(cost === null)
+                    return false;
+            } else if(weightsActive && this.vmBaseFeeActions.includes(action)){
+                // D10, the VM floor. Params are not read at all: the acceptance fee is a
+                // schedule constant, so every EXECUTE in the batch quotes the same number and
+                // one probe answers for all of them.
+                if(vmFloor === undefined)
+                    vmFloor = await this.nominalExecuteFee(data);
+                if(vmFloor === null)
+                    return false;
+                cost = vmFloor;
+            } else {
+                return false;
             }
-            if(cheapest === null || this.util.bclt(priced[tick], cheapest))
-                cheapest = priced[tick];
+
+            if(cheapest === null || this.util.bclt(cost, cheapest))
+                cheapest = cost;
         }
 
         // No commands at all, or a schedule that prices an issuance at zero: nothing is provable.
@@ -641,7 +896,12 @@ class Batch {
         // the cap, the per-ACTION limits or the activation scan reports THAT error, never this
         // one. See isGasProvablyUnaffordable for why the predicate is the cheapest sub-command
         // and not the sum.
-        if(!error && limitsActive && await this.isGasProvablyUnaffordable(commands, data, normalize))
+        //
+        // `weightsActive` is threaded in for D10: at/after BATCH_COST_WEIGHTING the predicate
+        // can also price an ORDER/SWAP/DISPENSER create, so an all-ORDER no-gas batch collapses
+        // to one invalid record the same way an all-ISSUE one already does. Below that flag the
+        // argument is false and the predicate is byte-identical to its pre-D10 self.
+        if(!error && limitsActive && await this.isGasProvablyUnaffordable(commands, data, normalize, weightsActive))
             error = 'invalid: GAS (insufficient)';
 
         let status = (error) ? error : 'valid';
