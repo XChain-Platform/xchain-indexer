@@ -1,0 +1,15 @@
+# Databases the DB-backed tiers name for themselves (integration, perf).
+#
+# They are NOT the .env-rendered ci_* schema the gate makes from .env.example:
+# test/integration/setup/db-connection.js picks its own names and creates them,
+# so without this file the gate never provisions them and the suite falls back
+# to a literal xchain_test_* name the venue's ci user may create but cannot
+# index (measured 2026-08-15: "INDEX command denied ... xchain_test_decoder").
+#
+# The `name=ENV_VAR` form is the isolated one: the gate creates
+# ci_<name>_<run-id> and exports the variable, so a gate run and a hand run on
+# the same venue can never collide, and the database sits inside the ci_%
+# grant the venue already has.
+xchain_test_decoder=TEST_DECODER_DB
+xchain_test_indexer=TEST_INDEXER_DB
+xchain_test_indexer_b=TEST_INDEXER_DB_B
