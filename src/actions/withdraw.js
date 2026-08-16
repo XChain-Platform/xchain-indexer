@@ -109,7 +109,7 @@ class Withdraw {
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
-        console.log("\t WITHDRAW : contract=" + data['CONTRACT_ACTION_INDEX'] + ' : ' + data['TICK'] + ' : ' + data['AMOUNT'] + ' : ' + data['STATUS']);
+        console.log("\t WITHDRAW : contract=" + data['CONTRACT_ACTION_INDEX'] + ' : ' + data['TICK'] + ' : ' + this.util.logAmount(data['AMOUNT']) + ' : ' + data['STATUS']);
 
         await this.indexerDb.createWithdrawal(data);
 

@@ -260,7 +260,7 @@ class Order_Match {
                 data['STATUS'] = isNativeCoinMatch ? 'pending_coinpay' : 'valid';
                 data['SETTLEMENT_TYPE'] = isNativeCoinMatch ? 'coinpay' : 'instant';
 
-                console.log("\t ORDER_MATCH : " + give_amount + ' ' + orderInfo['GIVE_COIN'] + ':' + (orderInfo['GIVE_TICK'] || orderInfo['GIVE_COIN']) + ' = '  + get_amount + ' ' + data['GET_COIN'] + ':' + (data['GET_TICK'] || data['GET_COIN']) + ' : ' + data['STATUS']);
+                console.log("\t ORDER_MATCH : " + this.util.logAmount(give_amount) + ' ' + orderInfo['GIVE_COIN'] + ':' + (orderInfo['GIVE_TICK'] || orderInfo['GIVE_COIN']) + ' = '  + this.util.logAmount(get_amount) + ' ' + data['GET_COIN'] + ':' + (data['GET_TICK'] || data['GET_COIN']) + ' : ' + data['STATUS']);
 
                 let credits = [],
                     debits  = [],

@@ -1363,7 +1363,7 @@
         "columns": [
           "action_index"
         ],
-        "unique": true
+        "unique": false
       },
       {
         "name": "memo_id",

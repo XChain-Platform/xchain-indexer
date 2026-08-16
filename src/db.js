@@ -3826,6 +3826,10 @@ class Database {
         let list_type         = data['TYPE'];
         let list_edit         = data['EDIT'];
         let list_action_index = data['LIST_ACTION_INDEX'];
+        // LIST carries an optional MEMO like every other action; createMemo returns
+        // NULL for an absent one, which is also what a pre-MEMO list row holds, so
+        // the two are indistinguishable and there is nothing to backfill.
+        let memo_id           = await this.createMemo(data['MEMO']);
         // Check if record already exists for this token
         let query  = "SELECT action_index FROM lists WHERE action_index=? LIMIT 1";
         let args   = [action_index];
@@ -3841,14 +3845,15 @@ class Database {
                             type=?,
                             edit=?,
                             list_action_index=?,
+                            memo_id=?,
                             status_id=?
-                        WHERE 
+                        WHERE
                             action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO lists (type, edit, list_action_index, status_id, action_index) values (?, ?, ?, ?, ?)`;
+            query = `INSERT INTO lists (type, edit, list_action_index, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
         }
-        args    = [list_type, list_edit, list_action_index, status_id, action_index];
+        args    = [list_type, list_edit, list_action_index, memo_id, status_id, action_index];
         results = await this.doQuery(query, args);
     }
 
@@ -5034,22 +5039,30 @@ class Database {
         if(results.length > 0)
             exists = true;
         if(exists){
-            // UPDATE record
+            // UPDATE record, scoped to the LEG the exists-check matched.
+            //
+            // A multi-send puts several legs under one ACTION_INDEX (that is why the
+            // sends index is non-unique), so `WHERE action_index=?` rewrote EVERY leg
+            // of the action with this leg's values. On a re-parse of the same block
+            // that also cascaded: once leg 1's update had stamped its values over the
+            // other rows, leg 2's per-leg exists-check no longer matched anything and
+            // INSERTed a duplicate. Same leg identity the exists-check above uses.
             query = `UPDATE
                         sends
                     SET
-                        tick_id=?,
-                        destination_id=?,
-                        amount=?,
                         memo_id=?,
                         status_id=?
-                    WHERE 
-                        action_index=?`;
+                    WHERE
+                        action_index=? AND
+                        tick_id=? AND
+                        destination_id=? AND
+                        amount=?`;
+            args = [memo_id, status_id, action_index, tick_id, destination_id, amount];
         } else {
             // INSERT record
             query = `INSERT INTO sends (tick_id, destination_id, amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
+            args = [tick_id, destination_id, amount, memo_id, status_id, action_index];
         }
-        args = [tick_id, destination_id, amount, memo_id, status_id, action_index];
         results = await this.doQuery(query, args);
     }
 
@@ -5326,34 +5339,47 @@ class Database {
         let status_id      = await this.createStatus(data['STATUS']);
         let action_index   = data['ACTION_INDEX'];
         let amount         = data['AMOUNT'];
-        // Check if record already exists for this destroy
+        // Check if record already exists for THIS LEG of the destroy.
+        //
+        // A multi-destroy (FORMAT 1/2) settles several TICK legs under one
+        // ACTION_INDEX, exactly like a multi-send. Keyed on action_index alone,
+        // leg 2 matched leg 1's row and UPDATEd it, so every leg but the last was
+        // overwritten and an N-tick destroy recorded a single destruction. The
+        // parse consolidates legs by TICK|MEMO before anything is written here, so
+        // (action_index, tick_id, memo_id) is the leg identity and cannot repeat;
+        // AMOUNT and STATUS are the values a re-parse of the block may rewrite.
+        // memo_id is compared NULL-safely because createMemo returns NULL for an
+        // absent MEMO, and `memo_id=NULL` is never true.
         let query  = `SELECT
                             action_index
                         FROM
                             destroys
                         WHERE
-                            action_index=?`;
-        let args = [action_index];
+                            action_index=? AND
+                            tick_id=? AND
+                            memo_id<=>?`;
+        let args = [action_index, tick_id, memo_id];
         let exists = false;
         let results = await this.doQuery(query, args);
         if(results.length > 0)
             exists = true;
         if(exists){
-            // UPDATE record
+            // UPDATE record (scoped to this leg, never the whole action)
             query = `UPDATE
                         destroys
                     SET
-                        tick_id=?,
                         amount=?,
-                        memo_id=?,
                         status_id=?
-                    WHERE 
-                        action_index=?`;
+                    WHERE
+                        action_index=? AND
+                        tick_id=? AND
+                        memo_id<=>?`;
+            args  = [amount, status_id, action_index, tick_id, memo_id];
         } else {
             // INSERT record
             query = `INSERT INTO destroys (tick_id, amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?)`;
+            args  = [tick_id, amount, memo_id, status_id, action_index];
         }
-        args    = [tick_id, amount, memo_id, status_id, action_index];
         results = await this.doQuery(query, args);
     }
 

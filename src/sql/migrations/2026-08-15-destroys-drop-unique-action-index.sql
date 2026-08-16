@@ -1,0 +1,33 @@
+-- xchain:migration mode=auto
+-- Migration: relax the destroys `action_index` index from UNIQUE to non-unique.
+--
+-- A multi-destroy (DESTROY FORMAT 1 / FORMAT 2) burns several TICK legs under ONE
+-- action_index, the same shape a multi-send has always had. `sends` records one row
+-- per leg behind a NON-unique action_index index; `destroys` carried a UNIQUE one, so
+-- createDestroy's exists-check matched the first leg's row for every later leg and
+-- UPDATEd it. Every leg but the last was overwritten and an N-tick destroy recorded a
+-- single destruction, with the wrong TICK and AMOUNT on it. Balances were always
+-- debited correctly (the action loop debits per leg in memory), so this is a
+-- record/reporting defect in the destroys projection, not a ledger one.
+--
+-- destroys is a DERIVED table (src/tableLifecycle.js): a deterministic projection of
+-- hashed actions, in no hash class of its own, rolled back by `action_index >= ?`
+-- which is already row-count agnostic. Replicas clone this DDL from the source via
+-- SHOW CREATE TABLE, and the explorer reads destroys exactly as it reads sends
+-- (row-per-record list), so neither needs a change to accept the extra rows.
+--
+-- Fresh installs get the corrected non-unique index from src/sql/destroys.sql. This
+-- migration relaxes it on already-provisioned databases. Relaxing UNIQUE to
+-- non-unique can never fail on existing data (every prior row was already distinct).
+-- Idempotent: the DROP is IF EXISTS and the recreate follows it, so the index is
+-- always present afterward as non-unique.
+--
+-- NOTE: this does not retroactively restore legs that were already dropped on the
+-- way in. A database that indexed multi-destroys under the old code needs a reindex
+-- from below the first such action to repopulate them.
+--
+-- HOW TO RUN (manual path)
+--   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-08-15-destroys-drop-unique-action-index.sql
+
+ALTER TABLE destroys DROP INDEX IF EXISTS action_index;
+CREATE INDEX action_index ON destroys (action_index);

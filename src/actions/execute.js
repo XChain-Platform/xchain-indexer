@@ -1249,8 +1249,10 @@ class Execute {
                         params.gateTicker || '', params.encryptionMethod || '', params.keyHash || '',
                         params.gateMinAmount || '', ''];
             case 'LIST':
-                // FORMAT: VERSION|TYPE|ITEM
-                return [0, params.type || '', params.item || ''];
+                // FORMAT: VERSION|TYPE|MEMO|ITEM
+                // MEMO precedes the variadic ITEM tail (a trailing memo could not be
+                // told apart from one more item), so it holds a slot even when empty.
+                return [0, params.type || '', params.memo || '', params.item || ''];
             case 'COINPAY':
                 // FORMAT: VERSION|ORDER_MATCH_ACTION_INDEX
                 return [0, params.orderMatchActionIndex];

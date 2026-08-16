@@ -537,7 +537,7 @@ class Dispense {
                 dispenser['GIVE_REMAINING'] = this.util.bcsub(dispenser['GIVE_REMAINING'], dispense['GIVE_AMOUNT'], 64);
 
             // Print status message
-            console.log("\t DISPENSE : " + dispense['GIVE_AMOUNT'] + ' ' + dispenser['GIVE_TICK'] + ' : ' + dispense['STATUS']);
+            console.log("\t DISPENSE : " + this.util.logAmount(dispense['GIVE_AMOUNT']) + ' ' + dispenser['GIVE_TICK'] + ' : ' + dispense['STATUS']);
 
             // Create record in the dispenses table
             await this.indexerDb.createDispense(dispense);

@@ -140,7 +140,7 @@ class Stake {
         data['STATUS'] = status;
 
         let label = (format === 2) ? 'STAKE topup' : 'STAKE';
-        console.log("\t " + label + " : amount=" + data['AMOUNT'] + ' : pubkey=' + String(data['SIGNING_PUBKEY']).substring(0, 16) + '... : ' + data['STATUS']);
+        console.log("\t " + label + " : amount=" + this.util.logAmount(data['AMOUNT']) + ' : pubkey=' + String(data['SIGNING_PUBKEY']).substring(0, 16) + '... : ' + data['STATUS']);
 
         await this.indexerDb.createStake(data);
 
@@ -298,7 +298,7 @@ class Stake {
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
-        console.log("\t STAKE v3 : amount=" + data['AMOUNT'] +
+        console.log("\t STAKE v3 : amount=" + this.util.logAmount(data['AMOUNT']) +
             ' : pubkey=' + String(data['SIGNING_PUBKEY']).substring(0, 16) +
             '... : target=' + data['TARGET_CONTRACT_INDEX'] +
             ' : tick=' + data['TICK'] +

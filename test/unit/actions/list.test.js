@@ -54,7 +54,7 @@ describe('List @regression @tier3', function () {
 
             const data   = createBaseData({ ACTION: 'LIST', FORMAT: 0, SOURCE });
             // TYPE=2 (address), items are ADDR1 and ADDR2
-            const params = ['0', '2', ADDR1, ADDR2];
+            const params = ['0', '2', '', ADDR1, ADDR2];
 
             await handler.parse(params, data, null);
 
@@ -70,7 +70,7 @@ describe('List @regression @tier3', function () {
 
             const data   = createBaseData({ ACTION: 'LIST', FORMAT: 0, SOURCE });
             // TYPE=1 (tick), item is TEST
-            const params = ['0', '1', 'TEST'];
+            const params = ['0', '1', '', 'TEST'];
 
             await handler.parse(params, data, null);
 
@@ -83,7 +83,7 @@ describe('List @regression @tier3', function () {
             indexer.indexerDb.isActionAllowed.resolves(true);
 
             const data   = createBaseData({ ACTION: 'LIST', FORMAT: 0, SOURCE });
-            const params = ['0', '99', ADDR1];  // TYPE=99 is unknown
+            const params = ['0', '99', '', ADDR1];  // TYPE=99 is unknown
 
             await handler.parse(params, data, null);
 
@@ -113,7 +113,7 @@ describe('List @regression @tier3', function () {
             const data   = createBaseData({ ACTION: 'LIST', FORMAT: 1, SOURCE });
             // FORMAT 1: VERSION|EDIT|LIST_ACTION_INDEX|ITEM...
             // EDIT=1 (add), LIST_ACTION_INDEX=5
-            const params = ['1', '1', '5', ADDR2];
+            const params = ['1', '1', '5', '', ADDR2];
 
             await handler.parse(params, data, null);
 
@@ -128,7 +128,7 @@ describe('List @regression @tier3', function () {
 
             const data   = createBaseData({ ACTION: 'LIST', FORMAT: 1, SOURCE });
             // EDIT=2 (remove)
-            const params = ['1', '2', '5', ADDR1];
+            const params = ['1', '2', '5', '', ADDR1];
 
             await handler.parse(params, data, null);
 
@@ -142,7 +142,7 @@ describe('List @regression @tier3', function () {
             indexer.indexerDb.isActionAllowed.resolves(true);
 
             const data   = createBaseData({ ACTION: 'LIST', FORMAT: 1, SOURCE });
-            const params = ['1', '1', '9999', ADDR1];
+            const params = ['1', '1', '9999', '', ADDR1];
 
             await handler.parse(params, data, null);
 
@@ -158,7 +158,7 @@ describe('List @regression @tier3', function () {
             indexer.indexerDb.isActionAllowed.resolves(true);
 
             const data   = createBaseData({ ACTION: 'LIST', FORMAT: 1, SOURCE, BLOCK_INDEX: 4242 });
-            const params = ['1', '1', '5', ADDR2];
+            const params = ['1', '1', '5', '', ADDR2];
 
             await handler.parse(params, data, null);
 
@@ -177,7 +177,7 @@ describe('List @regression @tier3', function () {
             indexer.indexerDb.getListRootIndex.withArgs(7).resolves(5);
 
             const data   = createBaseData({ ACTION: 'LIST', FORMAT: 1, SOURCE });
-            const params = ['1', '1', '7', ADDR2];
+            const params = ['1', '1', '7', '', ADDR2];
 
             await handler.parse(params, data, null);
 
@@ -195,7 +195,7 @@ describe('List @regression @tier3', function () {
             indexer.indexerDb.isListEditResolutionActive.returns(false);
 
             const data   = createBaseData({ ACTION: 'LIST', FORMAT: 1, SOURCE });
-            const params = ['1', '1', '7', ADDR2];
+            const params = ['1', '1', '7', '', ADDR2];
 
             await handler.parse(params, data, null);
 
@@ -211,7 +211,7 @@ describe('List @regression @tier3', function () {
             indexer.indexerDb.isActionAllowed.resolves(true);
 
             const data   = createBaseData({ ACTION: 'LIST', FORMAT: 1, SOURCE });
-            const params = ['1', '2', '5', ADDR1];  // EDIT=2 (remove) ADDR1
+            const params = ['1', '2', '5', '', ADDR1];  // EDIT=2 (remove) ADDR1
 
             await handler.parse(params, data, null);
 
@@ -227,7 +227,7 @@ describe('List @regression @tier3', function () {
             indexer.indexerDb.isActionAllowed.resolves(true);
 
             const data   = createBaseData({ ACTION: 'LIST', FORMAT: 1, SOURCE });
-            const params = ['1', '2', '5', ADDR1];
+            const params = ['1', '2', '5', '', ADDR1];
 
             await handler.parse(params, data, null);
 
@@ -243,7 +243,7 @@ describe('List @regression @tier3', function () {
 
             const data   = createBaseData({ ACTION: 'LIST', FORMAT: 1, SOURCE });
             // EDIT=99 is unknown
-            const params = ['1', '99', '5', ADDR1];
+            const params = ['1', '99', '5', '', ADDR1];
 
             await handler.parse(params, data, null);
 
@@ -261,7 +261,7 @@ describe('List @regression @tier3', function () {
 
             const data   = createBaseData({ ACTION: 'LIST', FORMAT: 0, SOURCE });
             // TYPE=1 (tick), item UNKNOWN does not exist
-            const params = ['0', '1', 'UNKNOWN'];
+            const params = ['0', '1', '', 'UNKNOWN'];
 
             await handler.parse(params, data, null);
 
@@ -276,7 +276,7 @@ describe('List @regression @tier3', function () {
             indexer.indexerDb.isActionAllowed.resolves(true);
 
             const data   = createBaseData({ ACTION: 'LIST', FORMAT: 0, SOURCE });
-            const params = ['0', '1', 'TEST'];
+            const params = ['0', '1', '', 'TEST'];
 
             await handler.parse(params, data, null);
 
@@ -292,7 +292,7 @@ describe('List @regression @tier3', function () {
             indexer.indexerDb.isActionAllowed.resolves(true);
 
             const data   = createBaseData({ ACTION: 'LIST', FORMAT: 0, SOURCE });
-            const params = ['0', '1', 'TEST', 'INVALID'];
+            const params = ['0', '1', '', 'TEST', 'INVALID'];
 
             await handler.parse(params, data, null);
 
@@ -310,7 +310,7 @@ describe('List @regression @tier3', function () {
 
             const data   = createBaseData({ ACTION: 'LIST', FORMAT: 0, SOURCE });
             // TYPE=2, item is not a valid crypto address
-            const params = ['0', '2', 'not-a-real-address'];
+            const params = ['0', '2', '', 'not-a-real-address'];
 
             await handler.parse(params, data, null);
 
@@ -323,7 +323,7 @@ describe('List @regression @tier3', function () {
             indexer.indexerDb.isActionAllowed.resolves(true);
 
             const data   = createBaseData({ ACTION: 'LIST', FORMAT: 0, SOURCE });
-            const params = ['0', '2', ADDR1];
+            const params = ['0', '2', '', ADDR1];
 
             await handler.parse(params, data, null);
 
@@ -342,7 +342,7 @@ describe('List @regression @tier3', function () {
             });
 
             const data   = createBaseData({ ACTION: 'LIST', FORMAT: 0, SOURCE });
-            const params = ['0', '2', ADDR1];
+            const params = ['0', '2', '', ADDR1];
 
             await handler.parse(params, data, null);
 
@@ -357,7 +357,7 @@ describe('List @regression @tier3', function () {
             indexer.indexerDb.isActionAllowed.resolves(true);
 
             const data   = createBaseData({ ACTION: 'LIST', FORMAT: 0, SOURCE });
-            const params = ['0', '99', ADDR1];  // invalid TYPE
+            const params = ['0', '99', '', ADDR1];  // invalid TYPE
 
             await handler.parse(params, data, null);
 
@@ -368,11 +368,97 @@ describe('List @regression @tier3', function () {
             indexer.indexerDb.isActionAllowed.resolves(true);
 
             const data   = createBaseData({ ACTION: 'LIST', FORMAT: 0, SOURCE });
-            const params = ['0', '2', ADDR1];
+            const params = ['0', '2', '', ADDR1];
 
             await handler.parse(params, data, null);
 
             assert.ok(indexer.mapper.createMappings.called);
+        });
+
+    });
+    // LIST was the one action with no MEMO support. MEMO was added in place on
+    // v0/v1 (a pre-launch amendment, not new format versions) and sits BEFORE the
+    // variadic ITEM tail, because a trailing memo cannot be told apart from one
+    // more item. That position is the whole risk in the change: get it wrong and
+    // the first item is eaten as the memo, or the memo is stored as a list member.
+    describe('MEMO', function () {
+
+        it('stores the MEMO and does NOT treat it as a list item (format 0)', async function () {
+            indexer.indexerDb.isActionAllowed.resolves(true);
+
+            const data   = createBaseData({ ACTION: 'LIST', FORMAT: 0, SOURCE });
+            const params = ['0', '2', 'my allow list', ADDR1, ADDR2];
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(data['MEMO'], 'my allow list');
+            const items = indexer.indexerDb.createListItem.getCalls().map(c => c.args[1]);
+            assert.deepStrictEqual(items.sort(), [ADDR1, ADDR2].sort(),
+                'the memo must not appear as a list item, and no item may be swallowed by it');
+        });
+
+        it('stores the MEMO and does NOT treat it as a list item (format 1)', async function () {
+            indexer.indexerDb.isActionAllowed.resolves(true);
+            indexer.indexerDb.getListType.resolves('2');
+            indexer.indexerDb.getList.resolves([]);
+
+            const data   = createBaseData({ ACTION: 'LIST', FORMAT: 1, SOURCE });
+            const params = ['1', '1', '5', 'adding a partner', ADDR1];
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(data['MEMO'], 'adding a partner');
+            const items = indexer.indexerDb.createListItem.getCalls().map(c => c.args[1]);
+            assert.deepStrictEqual(items, [ADDR1]);
+        });
+
+        it('an empty MEMO slot is a null memo, not an empty-string list item', async function () {
+            indexer.indexerDb.isActionAllowed.resolves(true);
+
+            const data   = createBaseData({ ACTION: 'LIST', FORMAT: 0, SOURCE });
+            const params = ['0', '2', '', ADDR1];
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(data['MEMO'], null, 'setActionParams nulls an empty field');
+            const items = indexer.indexerDb.createListItem.getCalls().map(c => c.args[1]);
+            assert.deepStrictEqual(items, [ADDR1]);
+        });
+
+        it('rejects a MEMO carrying the action delimiter', async function () {
+            indexer.indexerDb.isActionAllowed.resolves(true);
+
+            const data   = createBaseData({ ACTION: 'LIST', FORMAT: 0, SOURCE });
+            const params = ['0', '2', 'one;two', ADDR1];
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data['STATUS'], 'invalid: MEMO (semicolon)');
+        });
+
+        it('rejects a MEMO longer than MAX_MEMO_LENGTH', async function () {
+            indexer.indexerDb.isActionAllowed.resolves(true);
+
+            const data   = createBaseData({ ACTION: 'LIST', FORMAT: 0, SOURCE });
+            const params = ['0', '2', 'x'.repeat(indexer.config['MAX_MEMO_LENGTH'] + 1), ADDR1];
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data['STATUS'], 'invalid: MEMO (length)');
+        });
+
+        it('accepts a MEMO of exactly MAX_MEMO_LENGTH', async function () {
+            indexer.indexerDb.isActionAllowed.resolves(true);
+
+            const data   = createBaseData({ ACTION: 'LIST', FORMAT: 0, SOURCE });
+            const params = ['0', '2', 'x'.repeat(indexer.config['MAX_MEMO_LENGTH']), ADDR1];
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
         });
 
     });

@@ -396,6 +396,32 @@ class Utility {
         return this.bcnum(num).toFixed();
     }
 
+    // Render an amount for a CONSOLE LOG line without exponential notation.
+    //
+    // Action loggers interpolate amounts straight into a template, and by the time
+    // they run setNumberFormats has replaced the parsed string with a bignumber,
+    // whose String()/toString() flips to exponential below 1e-7. So a valid
+    // 0.00000003 destroy/order/send printed as "3e-8" in the indexer log - the
+    // operator-facing record of what the chain did - even though the stored and
+    // hashed byte-form was correct (those paths already go through bcstr).
+    //
+    // Deliberately NOT bcstr: bcstr coerces anything non-numeric to "0", and these
+    // sites legitimately print undefined/null/'' for a field an invalid action never
+    // supplied. Turning that into "0" would read as a real zero amount.
+    //
+    // Only a value that ALREADY renders exponentially is rewritten, so every other
+    // log line stays byte-identical to what it printed before. A blanket
+    // bignumber round-trip would also normalize plain strings ('1.50' -> '1.5'),
+    // silently disagreeing with the amount as the action supplied it.
+    logAmount(value){
+        let str = String(value);
+        if(str.indexOf('e')==-1 && str.indexOf('E')==-1)
+            return str;
+        if(!this.isNumeric(value))
+            return str;
+        return this.bcnum(value).toFixed();
+    }
+
     // Handle returning a number to a given decimal point precision
     bcformat(num, decimals){
         let d = (!this.isNull(decimals)) ? parseInt(decimals) : 0;

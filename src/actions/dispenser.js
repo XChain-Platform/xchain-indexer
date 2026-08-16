@@ -526,7 +526,7 @@ class Dispenser {
 
         // Print status message
         if(format==0)
-            console.log("\t DISPENSER : " + data['GIVE_AMOUNT'] + ' ' + this.config['COIN'] + ':' + data['GIVE_TICK'] + ' = '  +  data['GET_AMOUNT'] + ' ' + data['GET_COIN'] + ':' + data['GET_TICK'] + ' : ' + data['STATUS']);
+            console.log("\t DISPENSER : " + this.util.logAmount(data['GIVE_AMOUNT']) + ' ' + this.config['COIN'] + ':' + data['GIVE_TICK'] + ' = '  +  this.util.logAmount(data['GET_AMOUNT']) + ' ' + data['GET_COIN'] + ':' + data['GET_TICK'] + ' : ' + data['STATUS']);
         if(format==1)
             console.log("\t DISPENSER_CANCEL : " + this.config['COIN'] + ':' + data['DISPENSER_ACTION_INDEX'] + ' : ' + data['STATUS']);
         if(format==2)

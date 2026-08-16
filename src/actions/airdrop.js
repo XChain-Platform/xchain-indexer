@@ -305,7 +305,7 @@ class Airdrop {
             let status = (error) ? error : 'valid';
             data['STATUS'] = airdrop['STATUS'] = status;
 
-            console.log("\t AIRDROP : " + airdrop['TICK'] + ' : ' + airdrop['AMOUNT'] + ' : '+ airdrop['STATUS']);
+            console.log("\t AIRDROP : " + airdrop['TICK'] + ' : ' + this.util.logAmount(airdrop['AMOUNT']) + ' : '+ airdrop['STATUS']);
 
             await this.indexerDb.createAirdrop(airdrop);
 

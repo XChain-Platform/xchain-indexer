@@ -430,10 +430,10 @@ describe('04 complex actions – BATCH, SLEEP, SWEEP, DESTROY, LIST, AIRDROP @re
             const seeder = ctx.seeder;
 
             // Block 100 – create an address list with ADDR2 and ADDR3
-            // FORMAT: LIST|0|TYPE|ITEM1|ITEM2|...
+            // FORMAT: LIST|0|TYPE|MEMO|ITEM1|ITEM2|...
             await seeder.seedBlock(100, T0, [
                 { source: ADDR1, destination: null, amount: '0',
-                  data: 'LIST|0|2|' + ADDR2 + '|' + ADDR3 },
+                  data: 'LIST|0|2||' + ADDR2 + '|' + ADDR3 },
             ]);
 
             await processBlocks(indexer);
@@ -496,7 +496,7 @@ describe('04 complex actions – BATCH, SLEEP, SWEEP, DESTROY, LIST, AIRDROP @re
             // Block 102 – create address list containing ADDR2 and ADDR3
             await seeder.seedBlock(102, T0 + 1200, [
                 { source: ADDR1, destination: null, amount: '0',
-                  data: 'LIST|0|2|' + ADDR2 + '|' + ADDR3 },
+                  data: 'LIST|0|2||' + ADDR2 + '|' + ADDR3 },
             ]);
 
             // Get list action_index (will be the next action after block 102)
@@ -572,7 +572,7 @@ describe('04 complex actions – BATCH, SLEEP, SWEEP, DESTROY, LIST, AIRDROP @re
             // Block 102 – ADDR1 creates address list with ADDR2, ADDR3, ADDR4
             await seeder.seedBlock(102, T0 + 1200, [
                 { source: ADDR1, destination: null, amount: '0',
-                  data: 'LIST|0|2|' + ADDR2 + '|' + ADDR3 + '|' + ADDR4 },
+                  data: 'LIST|0|2||' + ADDR2 + '|' + ADDR3 + '|' + ADDR4 },
             ]);
 
             // Process up to block 102 to get the LIST action_index
