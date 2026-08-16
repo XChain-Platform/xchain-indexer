@@ -246,6 +246,32 @@ function dedupeArchiveChunks(rows) {
     return Array.from(byIndex.values());
 }
 
+// Exact index-coverage completeness for a reassembled archive batch. Given the
+// continuation-chunk rows (already deduped to one per index by dedupeArchiveChunks /
+// getAnchorChunks) and the head's TOTAL_CHUNKS, returns the rows for indices
+// 1..totalChunks-1 in ascending index order when the set covers that range EXACTLY,
+// else null. Out-of-range indices (< 1 or >= totalChunks) are DROPPED rather than
+// counted: a bare length test (chunks.length === totalChunks-1) both accepted a set
+// missing a real in-range index but padded to length by a stray out-of-range orphan
+// chunk (which then corrupts the reassembled byte order and the CRC verdict) and
+// blocked a genuinely complete set that an extra stray chunk pushed over the count.
+// With one row per in-range index and size === need, coverage of {1..need} is exact
+// by pigeonhole. Shared verbatim by the head-side gate, the chunk-side gate, and
+// recovery so the three reassembly paths cannot drift on completeness or byte order.
+function archiveChunkCoverage(chunks, totalChunks) {
+    let need = Number(totalChunks) - 1;
+    if (!(need >= 1)) return null;
+    let byIndex = new Map();
+    for (let c of (chunks || [])) {
+        let i = Number(c.chunk_index);
+        if (i >= 1 && i <= need && !byIndex.has(i)) byIndex.set(i, c);
+    }
+    if (byIndex.size !== need) return null;
+    let ordered = [];
+    for (let i = 1; i <= need; i++) ordered.push(byIndex.get(i));
+    return ordered;
+}
+
 // Validate the getanchoraction request shape. Returns
 // {ok:true, block_index, checkpoint_seq, txid, version} on success (txid/version
 // null when not supplied), or {ok:false, error} otherwise.
@@ -556,7 +582,7 @@ function buildArchiveAnchorResponse(config, latest, head, chunkRows) {
 module.exports = {
     CHECKPOINT_VERSIONS, ANCHOR_ROW_LIMIT, ANCHOR_ACTIONS_SQL,
     ARCHIVE_HEAD_AUTHOR_SQL, ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
-    ARCHIVE_HEAD_GATE_SQL, dedupeArchiveChunks,
+    ARCHIVE_HEAD_GATE_SQL, dedupeArchiveChunks, archiveChunkCoverage,
     ARCHIVE_HEAD_VERSIONS, ARCHIVE_CRC_RE, ARCHIVE_ANCHOR_ROW_LIMIT,
     ARCHIVE_ANCHOR_BY_CONTENT_SQL, validateArchiveAnchorParams, selectArchiveHeadRow,
     presentChunkIndexes, buildArchiveAnchorResponse,

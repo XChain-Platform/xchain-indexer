@@ -115,4 +115,53 @@ describe('Anchor head-side reassembly gate @regression', function () {
         assert.ok(indexer.indexerDb.setAnchorArchiveStatus.notCalled,
             'with the completing chunks not yet present the chunk-side gate (not the head) owns the check');
     });
+
+    // Status axis: a node with no mirrored oracle_publish snapshot stores every v1/v6
+    // head 'unverified' (oracleN === 0). The chunk-side path runs regardless of the
+    // parent head's status, so the head-side gate must too, or head-last ordering skips
+    // the CRC check on exactly those nodes and re-opens the ordering nondeterminism.
+    it('unverified head (snapshot-less node), chunks-before-head, corrupt blob: still flags invalid_archive', async function () {
+        indexer.indexerDb.getValidatorsByCapability.resolves([]); // no snapshot -> head stored 'unverified'
+        indexer.indexerDb.getAnchorChunks.resolves([chunk1, chunk2]);
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE', ACTION_INDEX: 11 });
+        await handler.parse(v1HeadParams({ batch_seq: '9', crc: '00000000', total_chunks: '3', head_b64: headSlice }), data, null);
+        assert.strictEqual(data['STATUS'], 'unverified');
+        assert.ok(indexer.indexerDb.setAnchorArchiveStatus.calledWith(11, 'invalid_archive'),
+            'an unverified head must run the same head-side CRC check as a valid one');
+    });
+
+    it('unverified head, chunks-before-head, sound blob: verifies and does not flag', async function () {
+        indexer.indexerDb.getValidatorsByCapability.resolves([]);
+        indexer.indexerDb.getAnchorChunks.resolves([chunk1, chunk2]);
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE', ACTION_INDEX: 12 });
+        await handler.parse(v1HeadParams({ batch_seq: '9', crc: crc32Hex(ARCHIVE_JSON), total_chunks: '3', head_b64: headSlice }), data, null);
+        assert.strictEqual(data['STATUS'], 'unverified');
+        assert.ok(indexer.indexerDb.setAnchorArchiveStatus.notCalled, 'a CRC-sound unverified reassembly must not be flagged');
+    });
+
+    // Coverage axis: completeness is exact index coverage of {1..TOTAL_CHUNKS-1}, not a
+    // bare chunk count. A stray out-of-range orphan chunk squatting an impossible slot
+    // must neither mask a missing in-range index nor block a genuinely complete set.
+    it('stray out-of-range chunk masking a missing index: count would fire, coverage does not', async function () {
+        // Need indices {1,2}; present are {1} and a stray {5}. Count === 2 === TOTAL_CHUNKS-1
+        // (the old bug) but index 2 is missing, so the batch is NOT complete.
+        let stray = { chunk_index: 5, archive_b64: 'ZZZZ' };
+        indexer.indexerDb.getAnchorChunks.resolves([chunk1, stray]);
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE', ACTION_INDEX: 13 });
+        // Sound CRC for the real (still-incomplete) batch: a false reassembly would mismatch and wrongly flag.
+        await handler.parse(v1HeadParams({ batch_seq: '9', crc: crc32Hex(ARCHIVE_JSON), total_chunks: '3', head_b64: headSlice }), data, null);
+        assert.ok(indexer.indexerDb.setAnchorArchiveStatus.notCalled,
+            'an incomplete batch padded to length by a stray out-of-range chunk must not be reassembled');
+    });
+
+    it('complete set plus a stray out-of-range chunk, corrupt blob: coverage still runs the check', async function () {
+        // {1,2} complete plus a stray {5}: count === 3 !== TOTAL_CHUNKS-1 blocked the check
+        // forever under the old count test; coverage drops the stray and verifies.
+        let stray = { chunk_index: 5, archive_b64: 'ZZZZ' };
+        indexer.indexerDb.getAnchorChunks.resolves([chunk1, chunk2, stray]);
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE', ACTION_INDEX: 14 });
+        await handler.parse(v1HeadParams({ batch_seq: '9', crc: '00000000', total_chunks: '3', head_b64: headSlice }), data, null);
+        assert.ok(indexer.indexerDb.setAnchorArchiveStatus.calledWith(14, 'invalid_archive'),
+            'a complete in-range set must be verified even when an extra out-of-range chunk is present');
+    });
 });

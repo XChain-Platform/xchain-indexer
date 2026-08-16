@@ -70,7 +70,8 @@ const abas    = require('./archive_batch_author_activation.js');
 const srb     = require('./snapshot_reorg_buffer.js');
 const cmsh    = require('./capability_min_stake_history.js');
 const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
-        ARCHIVE_HEAD_GATE_SQL, dedupeArchiveChunks } = require('./anchor-action-query.js');
+        ARCHIVE_HEAD_GATE_SQL, dedupeArchiveChunks,
+        archiveChunkCoverage } = require('./anchor-action-query.js');
 // Archive-head version set, spliced rather than hand-copied: recovery must replay the
 // SAME heads the live mirror path reads, so a new publisher-bearing version added to
 // ARCHIVE_HEAD_VERSIONS cannot reach one path and silently skip the other.
@@ -227,10 +228,19 @@ class AnchorRecovery {
                 ? await this.db.doQuery(ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL, [Number(v1.match_batch_seq), scope])
                 : await this.db.doQuery(ARCHIVE_CHUNK_SET_SQL,
                     [Number(v1.match_batch_seq), Number(v1.match_batch_seq)]);
-            let chunks = dedupeArchiveChunks(rows);
-            if(chunks.length !== totalChunks - 1)
-                throw new Error('incomplete batch: ' + chunks.length + '/' + (totalChunks - 1) + ' continuation chunks');
-            for(let c of chunks) b64 += c.archive_b64;
+            // Completeness is exact index coverage of {1..totalChunks-1}, NOT a bare chunk
+            // count — byte-identical to the live head/chunk gates via archiveChunkCoverage,
+            // so recovery and the live path never disagree on whether a batch assembles or on
+            // the reassembled byte order. Out-of-range chunks are dropped rather than counted,
+            // so a stray orphan can neither inflate the count past totalChunks-1 ('incomplete
+            // batch' forever) nor pad a set missing a real index up to length.
+            let chunks  = dedupeArchiveChunks(rows);
+            let ordered = archiveChunkCoverage(chunks, totalChunks);
+            if(!ordered){
+                let inRange = chunks.filter(c => { let i = Number(c.chunk_index); return i >= 1 && i <= totalChunks - 1; }).length;
+                throw new Error('incomplete batch: ' + inRange + '/' + (totalChunks - 1) + ' continuation chunks');
+            }
+            for(let c of ordered) b64 += c.archive_b64;
         }
 
         // CRC binds the blob to the signed structure.
