@@ -11,7 +11,10 @@
  * legal@dankest.llc.
  *
  **********************************************************************
- * test/unit/retraction_signing_activation.regression.test.js
+ * test/regression/retraction_signing_activation.test.js
+ *
+ * INCIDENT: signed-retraction flag-day (mainnet anchor RE-PINNED 2026-08-12
+ * off 969500 onto the shared pre-freeze train boundary, 963000).
  *
  * Signed-retraction flag-day, consensus-surface regression pins.
  *
@@ -32,7 +35,7 @@
 const assert = require('assert');
 const gate   = require('../../src/retraction_signing_activation.js');
 
-describe('Signed-retraction flag-day @regression @tier1', function () {
+describe('[regression:p0] Signed-retraction flag-day @regression @tier1', function () {
 
     describe('activation map (arming heights are a fleet-wide contract)', function () {
         it('mainnet is armed to the ratified 963000 BTC snapshot_block anchor', function () {

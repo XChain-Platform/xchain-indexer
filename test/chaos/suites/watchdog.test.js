@@ -22,9 +22,12 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const Utility = require('../../../src/utility.js');
-// A deliberately slow promise, built from the shared fixed-delay helper, drives
-// the watchdog past its budget; there is no event to poll for here.
-const { sleep } = require('../../helpers/wait.js');
+
+// The "slow operation" these cases hand the watchdog is a promise that never
+// settles, not a timed one. withTimeout() races it against its own deadline, so
+// the only thing the operand has to do is stay pending; a fixed-delay timer would
+// add a dangling handle and a second clock the assertion never reads.
+const neverSettles = () => new Promise(() => {});
 
 describe('Chaos: Watchdog Timeout', function () {
     this.timeout(10000);
@@ -41,7 +44,7 @@ describe('Chaos: Watchdog Timeout', function () {
     });
 
     it('WD-02: rejects with timeout error when promise exceeds timeout', async function () {
-        const slow = sleep(5000);
+        const slow = neverSettles();
         try {
             await util.withTimeout(slow, 50, 'slow-op');
             assert.fail('Should have thrown');
@@ -51,7 +54,7 @@ describe('Chaos: Watchdog Timeout', function () {
     });
 
     it('WD-03: timeout error message includes label', async function () {
-        const slow = sleep(5000);
+        const slow = neverSettles();
         try {
             await util.withTimeout(slow, 50, 'block 12345');
             assert.fail('Should have thrown');
@@ -82,7 +85,7 @@ describe('Chaos: Watchdog Timeout', function () {
 
     it('WD-06: very short timeout rejects near-immediately', async function () {
         const start = Date.now();
-        const slow = sleep(10000);
+        const slow = neverSettles();
         try {
             await util.withTimeout(slow, 1, 'instant');
             assert.fail('Should have thrown');
