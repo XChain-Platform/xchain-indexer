@@ -33,6 +33,7 @@ const swqCap = require('./swq_source_cap_activation');
 const dispenseCancellingMatch = require('./dispense_cancelling_match_activation');
 const stateKeyCollation = require('./state_key_collation_activation');
 const snapshotAgeCausality = require('./oracle_snapshot_age_causality_activation');
+const staleRoundVisibility = require('./oracle_stale_round_visibility_activation');
 const listEditResolution = require('./list_edit_resolution_activation');
 const caretRefStrict = require('./caret_ref_strict_activation');
 const ledgerPrecision = require('./ledger_amount_precision_activation');
@@ -15259,21 +15260,47 @@ class Database {
                            ) m ON t.coin_pair = m.coin_pair AND t.round_number = m.mr
                            WHERE t.status = 'finalized' AND t.price IS NOT NULL`;
         let latestRows = await this.doQuery(latestQuery, [blockCap]);
+        // Stale-round visibility gate (oracle_stale_round_visibility_activation.js).
+        // Below the height a stale tip is dropped from `prices` entirely, so
+        // getPrice() returns null while getPriceAtRound() still carries the very
+        // same round - the two views disagree about whether the round EXISTS, and
+        // a liveness guard that reads getPrice() (the price-bet family's
+        // "has the oracle produced a qualifying round yet?") voids a bet that
+        // consensus history already decided. At/after the height the row is kept
+        // with its PRICE WITHHELD instead: identity and consensus timestamp stay
+        // readable, the stale value does not. VM-observable, hence height-gated.
+        let staleVisible = staleRoundVisibility.isOracleStaleRoundVisibilityActive(
+            blockIndex, this.config['NETWORK'], this.config['COIN']);
         for(let r of latestRows){
-            // Stale prices surface as no-price (null), as before; contracts can
+            let stale = isStale(Number(r.block_timestamp));
+            // Legacy path: stale prices surface as no-price (null); contracts can
             // still read getSnapshotAge() for the staleness signal.
-            if(isStale(Number(r.block_timestamp))) continue;
+            if(stale && !staleVisible) continue;
             prices[String(r.coin_pair)] = {
-                price:       r.price,
+                price:       stale ? null : r.price,
                 roundNumber: Number(r.round_number),
                 timestamp:   Number(r.block_timestamp)
             };
+            // Marker only on withheld rows, so a fresh row stays byte-identical
+            // to the pre-gate shape across the whole activation boundary.
+            if(stale) prices[String(r.coin_pair)].stale = true;
         }
 
         // getPriceAtRound(): historical finalized rounds at/<= block. NOTE: this
         // now respects block causality (reference_block <= block) - an improvement
         // over the old unfiltered query (which was non-functional anyway). Capped
         // for safety; a hit is LOGGED, never silently truncated.
+        //
+        // Deliberately NOT row-filtered by isStale(). Staleness is measured
+        // against the block being processed, so it is true of ALL history older
+        // than maxAge: filtering rows here would empty getPriceAtRound() of
+        // everything but the last few minutes, break the immutable-history
+        // contract the accessor exists to provide, move a timestamp-settled bet
+        // onto a LATER round than consensus history designates, and make every
+        // round-number bet reclaimable by its loser (that template's void guard
+        // is "getPriceAtRound(settleRound) === null"). The prices/rounds
+        // asymmetry is closed on the `prices` side above (stale tips are kept
+        // with the price withheld) rather than by hiding history here.
         let rounds = {};
         const MAX_ORACLE_ROUNDS = 50000;
         let roundQuery = `SELECT coin_pair, price, round_number, block_timestamp
