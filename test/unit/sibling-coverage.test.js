@@ -139,8 +139,15 @@ describe('cross-repo sibling coverage (what this run could NOT verify)', functio
     it('declares every sibling it lists in .ci-siblings, so the venue ships them', function () {
         const declFile = path.join(REPO_ROOT, '.ci-siblings');
         assert.ok(fs.existsSync(declFile), '.ci-siblings is missing from ' + REPO_ROOT);
+        // A declaration may carry modifiers: `name@branch` pins the branch the
+        // harness ships, `name+scripts` gives a sibling a scripts-running
+        // install (xchain-vm, whose isolated-vm binding this suite executes).
+        // The NAME is the declaration, so read past both. Matching the whole
+        // line read a modified entry as undeclared, which fails the run for the
+        // one thing that was not wrong with it.
         const declared = fs.readFileSync(declFile, 'utf8').split('\n')
-            .map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+            .map(l => l.trim()).filter(l => l && !l.startsWith('#'))
+            .map(l => l.split('+')[0].split('@')[0]);
         const undeclared = results.map(r => r.repo).filter(r => !declared.includes(r));
         assert.deepStrictEqual(undeclared, [],
             'these siblings carry cross-repo guards but are not declared in .ci-siblings, so the '
