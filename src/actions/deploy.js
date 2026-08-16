@@ -38,6 +38,7 @@ const DeployChunk = require('./deploy_chunk.js');
 const ProviderRegistry = require('../attestation/providerRegistry.js');
 const { rethrowIfInfraFault } = require('./faultGuard.js');
 const vmDeployLintPkg3 = require('../vm_deploy_lint_pkg3_activation.js');
+const vmLintGlobalAlias = require('../vm_lint_global_alias_activation.js');
 // Per-root discriminator for the ATTEST request_id / XCALL call_id preimages, shared
 // with execute.js so a constructor's emissions derive ids the same way an EXECUTE's do.
 const { resolveRootDiscriminator } = require('../batch_root_discriminator.js');
@@ -380,7 +381,15 @@ class Deploy {
             let enforcePkg3DeployLint = vmDeployLintPkg3.isVmDeployLintPkg3Active(data['BLOCK_INDEX'], this.config['NETWORK'], this.config['COIN']);
             let enforceBannedGenerator = enforcePkg3DeployLint;
             let enforceBannedWasm = enforcePkg3DeployLint;
-            let syntaxResult = this.actions.vm.validateSyntax(code, { enforceBannedAsync, enforceLintHardening, enforceBannedGenerator, enforceBannedWasm });
+            // The global-alias refinement of banned-async + banned-wasm (sloppy-mode
+            // `this` and the globalThis self-reference chain both read the global
+            // binding) rides a THIRD, per-coin height gate of its own. It cannot ride
+            // either gate above: VM_LINT_HARDENING is already open on every network and
+            // the Pkg 3 heights are in the past, so reusing either would retroactively
+            // reject contracts the chain already accepted. Mainnet is still unarmed, so
+            // this resolves false there and mainnet replay is byte-identical.
+            let enforceLintGlobalAlias = vmLintGlobalAlias.isVmLintGlobalAliasActive(data['BLOCK_INDEX'], this.config['NETWORK'], this.config['COIN']);
+            let syntaxResult = this.actions.vm.validateSyntax(code, { enforceBannedAsync, enforceLintHardening, enforceBannedGenerator, enforceBannedWasm, enforceLintGlobalAlias });
             if(!syntaxResult.valid)
                 error = 'invalid: CODE_ENCODING (' + syntaxResult.error + ')';
 

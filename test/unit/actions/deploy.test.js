@@ -237,6 +237,36 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             assert.ok('enforceLintHardening' in opts, 'enforceLintHardening must still be threaded');
             assert.ok('enforceBannedGenerator' in opts && 'enforceBannedWasm' in opts, 'new flags must be threaded');
         });
+
+        // The global-alias refinement of banned-async + banned-wasm (sloppy-mode `this` and
+        // the globalThis self-reference chain both read the global binding) rides a THIRD,
+        // separate per-coin height gate. It cannot ride either gate above: VM_LINT_HARDENING
+        // is already open on every network and the Pkg 3 heights are in the past, so reusing
+        // either would retroactively reject contracts the chain already accepted. Mainnet is
+        // still unarmed, which is what these assertions pin.
+
+        it('threads enforceLintGlobalAlias as its own flag', async function () {
+            const { opts } = await optsFor('regtest', 'BTC', 0);
+            assert.ok('enforceLintGlobalAlias' in opts, 'enforceLintGlobalAlias must be threaded');
+            assert.strictEqual(opts.enforceLintGlobalAlias, true, 'regtest is genesis-armed');
+        });
+
+        it('is OFF on mainnet at every height while the epoch is unarmed', async function () {
+            for (const [coin, height] of [['BTC', 961000], ['LTC', 3154250], ['DOGE', 6319000]]) {
+                const { data, opts } = await optsFor('mainnet', coin, height);
+                assert.strictEqual(opts.enforceLintGlobalAlias, false,
+                    coin + ' mainnet must stay pre-activation while the epoch is unarmed');
+                assert.strictEqual(data['STATUS'], 'valid', 'the mainnet deploy verdict must be unchanged');
+            }
+        });
+
+        it('does NOT track the Pkg 3 gate (a separate epoch, resolved separately)', async function () {
+            // At the BTC Pkg 3 height the Pkg 3 flags are ON and the alias flag is OFF.
+            // If someone collapses the two gates, this is the assertion that reddens.
+            const { opts } = await optsFor('mainnet', 'BTC', 961000);
+            assert.strictEqual(opts.enforceBannedWasm, true);
+            assert.strictEqual(opts.enforceLintGlobalAlias, false);
+        });
     });
 
     describe('source sleeping', function () {
