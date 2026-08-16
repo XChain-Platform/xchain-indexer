@@ -22,12 +22,7 @@ xchain-sync
 xchain-documentation
 # The lint and metering vendored copies, consensus params, and the controller
 # integration scenarios.
-# +scripts: xchain-vm ships isolated-vm, a NATIVE addon, and this suite EXECUTES
-# it rather than reading its source. The venue installs adjacent siblings with
-# --ignore-scripts, which leaves no compiled binding and fails at load with
-# "Cannot find module ./out/isolated_vm"; the marker gets it a scripts-running
-# install, matching the explicit vm-dependency install step in ci.yml (XC-1520).
-xchain-vm+scripts
+xchain-vm
 # The action roundtrip golden, address-ref field conformance, the merkle twin.
 xchain-sdk
 # The decoder schema the integration scenarios build their fixtures from
