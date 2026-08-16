@@ -684,6 +684,99 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.ok(String(data['STATUS']).includes('insufficient'));
         });
 
+        // STAKE_WEIGHTED_QUORUM: the v1 eligibility pre-filter must be derived from
+        // the SAME query the responsible set is, or a responsible signer is dropped
+        // before it is counted. getValidatorsByCapability / hasCapability qualify a
+        // PUBKEY on its own aggregate; getStakeWeightsByCapability qualifies a SOURCE
+        // on its aggregate and emits all of that source's keys, so a source clearing
+        // MIN_STAKE only across sub-threshold keys is responsible yet was ineligible.
+        // The responsible set is exactly REDUNDANCY keys, so one dropped member made
+        // the request permanently unfulfillable, burning a fee on every retry.
+        describe('STAKE_WEIGHTED_QUORUM: v1 signer eligibility follows the responsible-set derivation', function () {
+
+            // The stake-split source: in the weighted (source-aggregate) set, absent
+            // from the pubkey-aggregate set, and holding no delegation row.
+            function stakeSplitSource() {
+                indexer.indexerDb.getValidatorsByCapability.resolves([]);
+                indexer.indexerDb.hasCapability.resolves(false);
+                indexer.indexerDb.getStakeWeightsByCapability.resolves([
+                    { pubkey: PUBKEY_A, source: 'S1', weight: '50000' },
+                ]);
+            }
+
+            it('counts a responsible signer the pubkey-aggregate set excludes', async function () {
+                swq.isStakeWeightedQuorumActive.returns(true);
+                stakeSplitSource();
+                indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
+                const data = v1Data();
+                await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+                assert.strictEqual(data['VALID_SIGS'], 1,
+                    'a weighted responsible-set member must not be dropped by the eligibility gate: ' + data['STATUS']);
+                assert.strictEqual(data['STATUS'], 'valid');
+            });
+
+            it('reads eligibility from the weighted query, at the BURIED height', async function () {
+                swq.isStakeWeightedQuorumActive.returns(true);
+                stakeSplitSource();
+                indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1, block_index: 90 }));
+                await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }]), v1Data({ BLOCK_INDEX: 100 }), null);
+                // Declared 90 buried once (snapshotBlock is already buried; burying it a
+                // second time here would resolve a different set than the hub signed).
+                assert.ok(indexer.indexerDb.getStakeWeightsByCapability.calledWith(
+                    'attestation', srb.buriedSnapshotBlock(90, 'regtest')));
+                assert.ok(indexer.indexerDb.getStakeWeightsByCapability.neverCalledWith('attestation', 90),
+                    'the declared height is the flag-day plane only, never the resolve height');
+                assert.ok(indexer.indexerDb.getValidatorsByCapability.notCalled,
+                    'the pubkey-aggregate query must not gate eligibility above the flag-day');
+            });
+
+            it('a TRUNCATED weighted read is used as it stands, never re-probed per signer', async function () {
+                // hasCapability sums per signing_pubkey_id, the pubkey aggregate again, so a
+                // per-signer fallback would reinstate the bug exactly where the federation is
+                // largest. _computeResponsibleSet reads the same truncated set at the same
+                // block, so eligibility still covers it.
+                swq.isStakeWeightedQuorumActive.returns(true);
+                indexer.indexerDb.getValidatorsByCapability.resolves([]);
+                indexer.indexerDb.hasCapability.resolves(false);
+                const capped = [{ pubkey: PUBKEY_A, source: 'S1', weight: '50000' }];
+                capped.truncated = true;
+                indexer.indexerDb.getStakeWeightsByCapability.resolves(capped);
+                indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
+                const data = v1Data();
+                await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+                assert.strictEqual(
+                    indexer.indexerDb.hasCapability.getCalls().filter(c => c.args[1] === 'attestation').length, 0,
+                    'no pubkey-aggregate probe may run on the weighted branch');
+                assert.strictEqual(data['STATUS'], 'valid');
+            });
+
+            it('below the flag-day the pubkey-aggregate gate is byte-preserved', async function () {
+                swq.isStakeWeightedQuorumActive.returns(false);
+                stakeSplitSource();
+                indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
+                const data = v1Data();
+                await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+                assert.ok(indexer.indexerDb.getStakeWeightsByCapability.notCalled,
+                    'pre-flag-day replay must never consult the weighted query');
+                assert.strictEqual(data['VALID_SIGS'], 0);
+                assert.ok(String(data['STATUS']).includes('insufficient'));
+            });
+
+            it('off BTC the BTC-anchored gate is never evaluated against a local height', async function () {
+                // isStakeWeightedQuorumActive compares against a BTC height; an LTC/DOGE
+                // local height is already past it, so consulting the gate there resolves
+                // TRUE out of band. _computeResponsibleSet returns [] off BTC for the same
+                // reason, so the two stay on one plane.
+                swq.isStakeWeightedQuorumActive.returns(true);
+                indexer.config['COIN'] = 'LTC';
+                stakeSplitSource();
+                indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
+                await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }]), v1Data(), null);
+                assert.ok(indexer.indexerDb.getStakeWeightsByCapability.notCalled,
+                    'the weighted eligibility read is BTC-only');
+            });
+        });
+
         //
         // Quorum requires signers from the request's deterministic responsible
         // set: top-REDUNDANCY validators ranked by SHA256(request_id || pubkey),

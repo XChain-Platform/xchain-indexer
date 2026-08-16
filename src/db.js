@@ -15552,7 +15552,15 @@ Database.MIGRATION_CHECKSUM_REBASELINES = {
     // position contract_state.sql declares it (column-order convergence, aged vs fresh).
     // A DB that already applied the old file has the column at the tail; the clause is
     // guarded by IF NOT EXISTS, so re-reading the new file is a no-op there and only the
-    // ledger checksum needs to heal.
+    // ledger checksum needs to heal. The tail position itself is converged by a SEPARATE
+    // migration, 2026-07-16-reposition-state-key-bin.sql (MODIFY ... AFTER state_key,
+    // mode=manual), which is what makes an aged install match a fresh SHOW CREATE TABLE;
+    // this entry heals the ledger only and moves no column.
+    //
+    // NOT A PRECEDENT. It is the one executable edit rebaselined here, and only because
+    // IF NOT EXISTS makes the re-read a true no-op AND that follow-up migration carries the
+    // real convergence. An executable edit that changes what an already-applied file DOES
+    // still needs its own dated migration, never an entry in this table.
     '2026-07-10-contract-state-bin-key-index.sql': {
         from: '04656bbe931851e254f51c2f4552e8e0ab2c47067cb7eb39dcbb7f4695d38dd1',
         to:   '15599a2f13a372767468cd72ec05b7dff50d03e095e77cd40ee16bcba52754c6',

@@ -273,12 +273,15 @@ describe('Hash coverage guard @regression', function () {
 
         it('excluded columns name real, deliberately-unreplicated values', function () {
             // blocks.id is the local AUTO_INCREMENT surrogate the sync applier strips;
-            // contract_state.state_key_bin is database-GENERATED. Hashing either would
-            // turn a by-design difference into a permanent false alarm.
+            // contract_state.state_key_bin is database-GENERATED; sync_meta.id and
+            // sync_meta.logged_at are omitted from the streamed row ServerPoller builds
+            // by hand, so the follower assigns its own. Hashing any of them would turn a
+            // by-design difference into a permanent false alarm.
             assert.deepStrictEqual(Object.keys(lifecycle.CONTENT_PARITY_EXCLUDED_COLUMNS).sort(),
-                ['blocks', 'contract_state']);
+                ['blocks', 'contract_state', 'sync_meta']);
             assert.deepStrictEqual(lifecycle.contentParityExcludedColumns('blocks'), ['id']);
             assert.deepStrictEqual(lifecycle.contentParityExcludedColumns('contract_state'), ['state_key_bin']);
+            assert.deepStrictEqual(lifecycle.contentParityExcludedColumns('sync_meta'), ['id', 'logged_at']);
             assert.ok(/state_key_bin/.test(read('src/sql/contract_state.sql')),
                 'contract_state.state_key_bin is no longer in the schema; the exclusion is stale');
             assert.deepStrictEqual(lifecycle.contentParityExcludedColumns('actions'), [],

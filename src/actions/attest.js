@@ -486,14 +486,50 @@ class Attest {
         let validSigs    = 0;
         let verifiedSigs = [];
         if(!error){
-            // Resolve the attestation-capable set ONCE (hasCapability is ~5 sequential
-            // queries per signer). getValidatorsByCapability, NOT the stake-weighted
-            // variant: _stakeWeightsSql gates MIN_STAKE on the SOURCE aggregate while
-            // hasCapability gates on the PUBKEY aggregate, so the weighted set can be
-            // strictly larger and would admit signers this gate rejects today. On a
-            // truncated read fall back per-signer rather than drop a capable co-signer.
-            let capableRows = await this.indexerDb.getValidatorsByCapability('attestation', snapshotBlock);
-            let capableSet  = (capableRows && capableRows.truncated === true)
+            // Resolve the attestation-eligible set ONCE (hasCapability is ~5 sequential
+            // queries per signer), from the SAME derivation the responsible-set filter
+            // below uses. The two MUST agree on eligibility or a responsible signer is
+            // discarded here, before it is ever counted.
+            //
+            // At/above STAKE_WEIGHTED_QUORUM _computeResponsibleSet selects
+            // getStakeWeightsByCapability, whose _stakeWeightsSql qualifies a staking
+            // SOURCE on its aggregate and then emits ALL of that source's effective keys,
+            // while getValidatorsByCapability / hasCapability qualify each PUBKEY on its
+            // own aggregate (_effectiveCapabilitySetSql GROUP BY ip.pubkey HAVING, whose
+            // only widening branch is a `delegations` row). A source clearing MIN_STAKE
+            // only in aggregate across sub-threshold stake keys is therefore IN the
+            // weighted responsible set and OUT of the pubkey-aggregate set, so its valid
+            // signatures were dropped here and validSigs could never reach redundancy:
+            // the responsible set is exactly REDUNDANCY keys, so losing even one made the
+            // request permanently unfulfillable while every retry burned a real fee and
+            // expiry charged missed_count to the whole set, honest signers included.
+            //
+            // Selecting the weighted query here widens eligibility only UP TO the weighted
+            // set, and the responsible filter below is derived from that same query at
+            // this same block, so it still clips acceptance to the deterministic
+            // top-REDUNDANCY selection: no coalition that was not already responsible can
+            // land a response. Gated exactly as _computeResponsibleSet is, and for its
+            // reasons: BTC ONLY, because the SWQ anchor is a BTC height and evaluating it
+            // against an LTC/DOGE local height resolves TRUE out of band; and on the
+            // DECLARED height, because moving a flag-day boundary by the reorg buffer is
+            // its own fork. `snapshotBlock` is ALREADY the buried resolve height (see the
+            // note above), so it must NOT be buried a second time here.
+            let weighted    = (this.config['COIN'] === 'BTC')
+                           && swq.isStakeWeightedQuorumActive(declaredBlock, this.config['NETWORK']);
+            let capableRows = weighted
+                            ? await this.indexerDb.getStakeWeightsByCapability('attestation', snapshotBlock)
+                            : await this.indexerDb.getValidatorsByCapability('attestation', snapshotBlock);
+            // A truncated read has silently-dropped rows. Below the gate, fall back
+            // per-signer to hasCapability rather than drop a capable co-signer: that probe
+            // is the same pubkey aggregate the unweighted set is built from, so the two
+            // still agree. On the weighted branch there is NO per-signer equivalent -
+            // hasCapability sums WHERE s.signing_pubkey_id = ?, the pubkey aggregate
+            // again, so falling back to it would reinstate this exact bug on precisely the
+            // truncated read where the federation is largest. Take the truncated rows as
+            // they stand instead: _computeResponsibleSet resolves the responsible set from
+            // the SAME truncated read at the same block, so eligibility still covers it and
+            // the responsible filter stays the binding gate.
+            let capableSet  = (!weighted && capableRows && capableRows.truncated === true)
                             ? null
                             : new Set((capableRows || []).map(v => String(v.pubkey).toLowerCase()));
             let seenPubkey = new Set();
