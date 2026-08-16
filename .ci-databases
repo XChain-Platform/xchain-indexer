@@ -13,3 +13,16 @@
 xchain_test_decoder=TEST_DECODER_DB
 xchain_test_indexer=TEST_INDEXER_DB
 xchain_test_indexer_b=TEST_INDEXER_DB_B
+
+# Single-file tiers that stand up a database of their own. Same reason, same
+# form; the four DB_NAME constants were literals until this landed and are now
+# env-overridable like the three above.
+xchain_anchor_reward_late_publisher=TEST_ANCHOR_REWARD_DB
+xchain_archive_watermarks=TEST_ARCHIVE_WATERMARKS_DB
+xchain_attest_relay_identity=TEST_ATTEST_RELAY_DB
+xchain_recovery_id_drill=TEST_RECOVERY_DRILL_DB
+
+# A NAMESPACE, not a single database: recovery-determinism-e2e derives several
+# schema names from it. Mapping it still works, because every derived name then
+# starts with the ci_ prefix the venue grant covers.
+xchain_recdet=TEST_DB_NS

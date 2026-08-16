@@ -49,7 +49,7 @@ const DB_HOST = process.env.TEST_DB_HOST || '127.0.0.1';
 const DB_PORT = parseInt(process.env.TEST_DB_PORT) || 3306;
 const DB_USER = process.env.TEST_DB_USER || 'root';
 const DB_PASS = process.env.TEST_DB_PASS;            // undefined => self-skip
-const DB_NAME = 'xchain_recovery_id_drill';
+const DB_NAME = process.env.TEST_RECOVERY_DRILL_DB || 'xchain_recovery_id_drill';
 
 const SQL_DIR = path.join(__dirname, '../../src/sql');
 // The apply hook touches index_addresses + index_pubkeys + validator_rewards, and reads the

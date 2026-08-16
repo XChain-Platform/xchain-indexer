@@ -64,7 +64,7 @@ const DB_HOST = process.env.TEST_DB_HOST || '127.0.0.1';
 const DB_PORT = parseInt(process.env.TEST_DB_PORT) || 3306;
 const DB_USER = process.env.TEST_DB_USER || 'root';
 const DB_PASS = process.env.TEST_DB_PASS;            // undefined => self-skip
-const DB_NAME = 'xchain_attest_relay_identity';
+const DB_NAME = process.env.TEST_ATTEST_RELAY_DB || 'xchain_attest_relay_identity';
 
 const SQL_DIR = path.join(__dirname, '../../src/sql');
 const MIGRATION = path.join(SQL_DIR, 'migrations', '2026-08-11-attests-relay-identity-index.sql');
