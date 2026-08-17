@@ -121,7 +121,7 @@ function buildInjectedExecContext(opts){
         IS_EMISSION:  true,
         EMITTER:      o.emitter,
         // Top-level issuance budget for this injected execution's whole emission subtree
-        // (EMISSION_ISSUANCE_LIMITS, XC-1456), consumed in issue.js. An injected callback has
+        // (EMISSION_ISSUANCE_LIMITS), consumed in issue.js. An injected callback has
         // no transaction of its own to draw from, and it IS a root execution, so it gets a
         // fresh budget rather than inheriting one - the same scope a real transaction has.
         // Built here rather than at the four injector sites for the reason this module

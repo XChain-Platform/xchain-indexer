@@ -9,5 +9,5 @@
 # Kept out of .ci-siblings deliberately: that file is read verbatim as a list
 # of repo NAMES by the shared ci-reusable.yml clone loop, by per-repo workflow
 # loops and by roster guards, so a modifier written in-line there reaches
-# GitHub as a repository that does not exist. XC-1520.
+# GitHub as a repository that does not exist.
 xchain-vm

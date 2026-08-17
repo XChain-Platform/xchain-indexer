@@ -11,7 +11,7 @@
  *
  **********************************************************************
  *
- * A7: BELOW-THE-FLAG REPLAY EQUIVALENCE for BATCH_ISSUANCE_LIMITS (XC-1454).
+ * A7: BELOW-THE-FLAG REPLAY EQUIVALENCE for BATCH_ISSUANCE_LIMITS.
  *
  * WHY THIS EXISTS. BATCH_ISSUANCE_LIMITS carries a loosening (the dotted-TICK
  * exemption) AND several tightenings (the 250-command cap, the batch-cumulative
@@ -68,7 +68,7 @@
  *   2. a 251-command BATCH                          (A2: the cap)
  *   3. an exactly-250-command BATCH                 (A2: the cap NOT tripped)
  *   4. two undotted ISSUEs in one BATCH             (A2: the pre-existing limit)
- *   5. a lone caret-dot ISSUE  ^<id>.<n>            (A3 / XC-1457)
+ *   5. a lone caret-dot ISSUE  ^<id>.<n>            (A3)
  *   6. a dotted ISSUE with no parent                (R6: the free ticker intern)
  *   7. a single-ISSUE BATCH from a gasless source   (R4: the aggregate pre-check)
  *   8. TWO dispensers behind ONE paid address       (row 19: ordinary-path tally)
@@ -376,7 +376,7 @@ function corpus() {
         'ISSUE|0|UNDOT1|1000|100|0|a', 'ISSUE|0|UNDOT2|1000|100|0|b',
     ]) }] });
 
-    // 106: SHAPE 5 - the caret-dot escape (XC-1457). `^<id>.<n>` passes every guard
+    // 106: SHAPE 5 - the caret-dot escape. `^<id>.<n>` passes every guard
     // below the flag because the caret-id check is isNumeric over the tail; above it
     // issue.js rejects it as `invalid: TICK (caret dot)`. The id must reference a tick
     // A1 OWNS or the ISSUE dies on the ownership guard before the escape is reached:
@@ -644,7 +644,7 @@ async function tickExists(q, tick) {
     return rows.length > 0;
 }
 // ISSUE verdicts in one block, addressed by BLOCK rather than by TICK: a caret-form
-// ISSUE can land with a NULL tick_id (that is the XC-1457 defect), so a tick join
+// ISSUE can land with a NULL tick_id (a known defect), so a tick join
 // would silently return nothing and read as "no such issue".
 async function issueStatusAtBlock(q, blockIndex) {
     const rows = await q(

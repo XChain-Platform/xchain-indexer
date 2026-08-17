@@ -756,7 +756,7 @@ class Attest {
     // within-subset quorum stays count-based. CONSENSUS-CRITICAL: must match the
     // hub's AttestationRound._computeResponsibleSet byte-for-byte or validation forks.
     //
-    // PROVIDER STAKE FLOOR (XC-083): on the SAME weighted path, and only there, drop
+    // PROVIDER STAKE FLOOR: on the SAME weighted path, and only there, drop
     // staking sources whose aggregate weight is below the request provider's
     // block-anchored min_stake_xchain before selecting. `providerId` is therefore
     // REQUIRED at/above STAKE_WEIGHTED_QUORUM; omitting it fails closed to an empty
@@ -853,7 +853,7 @@ class Attest {
     // fleet-coordinated anchor, so no new flag-day height is minted and the hub, this
     // indexer, rollback's recompute and AttestationPublisher all start filtering on the
     // same block. Below the gate the capability threshold remains the only bar, which
-    // is the pre-XC-083 behaviour, so replay of historical blocks is bit-identical.
+    // is the pre-flag behaviour, so replay of historical blocks is bit-identical.
     //
     // The floor resolves at the DECLARED block (the raw `blockIndex`), not the buried
     // one: a governance activation height is a cutover, and burying a cutover is its own

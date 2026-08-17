@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/issueCaretDotAndIntern.test.js
  *
- * XC-1457 / R6 (frontier row 6 of claude/specs/batch-issuance-limits.md), gated
+ * Batch-issuance defect pair, gated
  * behind BATCH_ISSUANCE_LIMITS:
  *
  *   - Defect A: the caret-id guard in issue.js (`^<tail>`) is isNumeric()
@@ -109,7 +109,7 @@ function baseSetup(indexer) {
     indexer.indexerDb.getTokenSupply.resolves('0');
 }
 
-describe('Issue: caret-dot TICK rejection and ticker-intern gating (XC-1457/R6) @regression @tier1', function(){
+describe('Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1', function(){
 
     let indexer;
 
@@ -267,7 +267,7 @@ describe('Issue: caret-dot TICK rejection and ticker-intern gating (XC-1457/R6) 
         });
     });
 
-    // XC-1457 second pass. The wrapper above is conditioned on `error`, and the parent
+    // The wrapper above is conditioned on `error`, and the parent
     // lookup is the one call site where `error` can never yet be set, so it needed a
     // suppression condition of its own. These cases pin that the condition is the GATE,
     // not the error, and that it costs the valid paths nothing.

@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// XC-084 / attestation framework spec §11. Two consensus surfaces live in this
+// Attestation framework spec §11. Two consensus surfaces live in this
 // module and both are asserted here: the flag-day predicate that decides WHEN the
 // leader broadcast-fee carve-out applies, and the per-provider cap resolver that
 // decides HOW MUCH it may ever be. The cap is the bound that keeps a hostile

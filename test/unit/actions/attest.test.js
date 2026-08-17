@@ -1300,10 +1300,10 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             });
         });
 
-        // XC-084: spec §11 leader broadcast-fee reimbursement. The escrow now pays the
+        // Spec §11 leader broadcast-fee reimbursement. The escrow now pays the
         // broadcaster its native-coin cost back BEFORE the equal split, converted to XCHAIN
         // at the settle block's oracle price, bounded by a per-provider cap, and gated on a
-        // flag-day so replay below the height is byte-identical to the pre-XC-084 ledger.
+        // flag-day so replay below the height is byte-identical to the pre-flag ledger.
         describe('§11: leader broadcast-fee reimbursement', function () {
 
             // cap 0.0001 BTC × (50000 USD/BTC) ÷ (2.5 USD/XCHAIN) = 2 XCHAIN

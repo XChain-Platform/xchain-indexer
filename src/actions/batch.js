@@ -169,13 +169,11 @@ class Batch {
         //    and there is no unamortized setup a weight would have to absorb;
         //  - WALL TIME IS NOT BOUNDED BY GAS (xchain-vm/src/index.js ~304-306 records a shape
         //    burning ~13.5s at ~540k gas), so the architectural worst case is well above the
-        //    measured one. It is now BOUNDED, and identically on every node: XC-1491 made the
-        //    per-execution wall-clock budget a consensus constant (xchain-vm
-        //    CONSENSUS_MAX_WALL_MS, 30000 ms) instead of the per-node maxCpuTimeMs this comment
-        //    used to name. That fixes the ceiling this weight is measured against but does not
-        //    lower it: 30 s is ~40x the measured worst case, so any future widening of VM
-        //    metering coverage still moves this number's grounding and it must be re-derived,
-        //    never inherited.
+        //    measured one. It IS bounded, identically on every node, by the consensus constant
+        //    CONSENSUS_MAX_WALL_MS (xchain-vm, 30000 ms), which is the ceiling this weight is
+        //    measured against: 30 s is ~40x the measured worst case, so any future widening of
+        //    VM metering coverage still moves this number's grounding and it must be
+        //    re-derived, never inherited.
         //
         // XEXEC RIDES WITH EXECUTE HERE, which is the OPPOSITE of its treatment in
         // vmBaseFeeActions above, and the difference is not an inconsistency - the two tables
@@ -407,7 +405,7 @@ class Batch {
     // DISTINCTNESS IS JUDGED ON THE RESOLVED TICKER ID, NEVER THE LITERAL STRING. `JDOG` and
     // `^614` can name the SAME token, so comparing raw strings would let a minter spell one
     // scarce tick both ways and take two bites at it: precisely the bypass this rule exists to
-    // prevent, and the same aliasing hole XC-1457 closed on the ISSUE path.
+    // prevent, and the same aliasing hole closed on the ISSUE path.
     //
     // A TICK THAT RESOLVES TO NO ID gets no evidence that it is distinct from anything, so ALL
     // unresolvable ticks share ONE bucket: at most one such MINT per batch, which is exactly

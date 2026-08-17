@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/emissionIssuanceLimits.test.js
  *
- * XC-1456: VM-emitted ISSUEs counted against the per-transaction top-level
+ * VM-emitted ISSUEs counted against the per-transaction top-level
  * issuance budget.
  *
  * THE DEFECT. execute.js routes a contract's emitted action straight to the

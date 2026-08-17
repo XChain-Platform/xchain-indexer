@@ -81,7 +81,7 @@ class Issue {
         this.formats[6] = 'VERSION|TICK|CONTROLLER|ACTION_CLASS|COOLDOWN_BLOCKS|UNBIND|MEMO';
 
         // Top-level (undotted) issuances allowed per TRANSACTION under
-        // EMISSION_ISSUANCE_LIMITS (XC-1456). Deliberately the SAME number as batch.js's
+        // EMISSION_ISSUANCE_LIMITS. Deliberately the SAME number as batch.js's
         // actionLimits['ISSUE'], and deliberately a separate constant rather than a reach
         // into that handler: this budget is counted over a different population (every
         // ISSUE that reaches this handler, wire or VM-emitted) at a different moment (parse
@@ -97,7 +97,7 @@ class Issue {
         this.fieldList['LOCK']   = ['LOCK_MAX_SUPPLY', 'LOCK_MINT', 'LOCK_MINT_SUPPLY', 'LOCK_MAX_MINT', 'LOCK_DESCRIPTION', 'LOCK_SLEEP', 'LOCK_CALLBACK'];
     }
 
-    // Does this TICK consume a TOP-LEVEL issuance slot (EMISSION_ISSUANCE_LIMITS, XC-1456)?
+    // Does this TICK consume a TOP-LEVEL issuance slot (EMISSION_ISSUANCE_LIMITS)?
     //
     // The rule is batch.js's classifyLimitAction, restated over the parsed TICK instead of a
     // raw sub-command string, and it must keep answering the same way for the same tick or
@@ -105,7 +105,7 @@ class Issue {
     //   - a DOTTED tick (JDOG.1) is a CHILD of a name its issuer already owns and is exempt,
     //     which is what keeps bulk child issuance working;
     //   - a CARET tick (^12) is NEVER exempt even when it contains a dot: the caret form is an
-    //     id reference whose dot is a decimal, not a namespace separator (XC-1457).
+    //     id reference whose dot is a decimal, not a namespace separator.
     // Anything else, including a malformed or missing tick, counts as top-level: exemption is
     // granted on positive evidence only.
     isTopLevelIssuance(tick){
@@ -115,7 +115,7 @@ class Issue {
         return !str.includes('.');
     }
 
-    // XC-1454 (BATCH_ISSUANCE_LIMITS), R6/F11: the intern-gating wrapper for the TICK and
+    // BATCH_ISSUANCE_LIMITS, R6/F11: the intern-gating wrapper for the TICK and
     // CALLBACK_TICK lookups (the parent lookup has its own wrapper below, for a reason
     // spelled out there).
     // getTokenInfo interns any unseen name into index_tickers via createTicker BEFORE this
@@ -143,9 +143,9 @@ class Issue {
     }
 
     // The PARENT lookup's own wrapper, and it suppresses on the gate ALONE rather than on
-    // `error` (XC-1457, second pass: driven on BTC regtest 2026-08-14, where an ISSUE of
-    // "FOO.1" with no FOO in existence was correctly rejected `invalid: TICK (parent
-    // unknown)` and STILL left "FOO" interned as a fresh ticker id).
+    // `error`: an ISSUE of "FOO.1" with no FOO in existence is correctly rejected
+    // `invalid: TICK (parent unknown)` but would still leave "FOO" interned as a fresh
+    // ticker id without this suppression.
     //
     // The reason gatedGetTokenInfo cannot cover this call site: the parent lookup is the
     // FIRST thing in the TICK block that can produce an error, so `error` is necessarily
@@ -237,10 +237,10 @@ class Issue {
         // Create the fees object
         let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
 
-        // XC-1454 (BATCH_ISSUANCE_LIMITS): governs both the caret-dot TICK rejection
-        // below (XC-1457/R6) and the ticker-intern gating on every getTokenInfo call in
-        // this action (R6/F11 - see gatedGetTokenInfo). Computed once, early, so every
-        // consumer below sees the same activation state for this action's BLOCK_INDEX.
+        // BATCH_ISSUANCE_LIMITS: governs both the caret-dot TICK rejection below (R6) and
+        // the ticker-intern gating on every getTokenInfo call in this action (R6/F11 -
+        // see gatedGetTokenInfo). Computed once, early, so every consumer below sees the
+        // same activation state for this action's BLOCK_INDEX.
         // Both are consensus tightenings: below the flag every historical verdict
         // (including the two defects it closes) must replay identically from genesis.
         let batchIssuanceLimitsV2 = await this.actions.protocolChanges.isEnabled('BATCH_ISSUANCE_LIMITS', data['BLOCK_INDEX']);
@@ -292,7 +292,7 @@ class Issue {
         if(!error && str.substring(0,1)=='^' && !this.util.isNumeric(tid))
             error = 'invalid: TICK (id)';
 
-        // XC-1457 / R6 caret rule (review F4): isNumeric() is parseFloat-based, so a caret
+        // R6 caret rule (review F4): isNumeric() is parseFloat-based, so a caret
         // tail containing '.' (e.g. "^12.5" or "^1.0") reads as a number and slips past the
         // check above, landing a status=valid ISSUE with a NULL ticker id (createTicker
         // never inserts a literal "^..." row - see db.js createTicker). Because the TICK
@@ -335,7 +335,7 @@ class Issue {
         if(!error && String(data['TICK']).toUpperCase()==this.config['GAS'] && this.config['COIN']!='BTC' && this.config['NETWORK']!='regtest')
             error = 'invalid: TICK (BTC-only)';
 
-        // Per-TRANSACTION top-level issuance budget (EMISSION_ISSUANCE_LIMITS, XC-1456).
+        // Per-TRANSACTION top-level issuance budget (EMISSION_ISSUANCE_LIMITS).
         //
         // THIS is the choke point the rule needs and the pre-dispatch BATCH scan is not: every
         // ISSUE arrives here, whether it came off the wire as a sub-command or was emitted by

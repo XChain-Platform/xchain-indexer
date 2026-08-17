@@ -38,7 +38,7 @@ class Rollback {
 
         // Same effective provider map actions/attest.js builds (DEFAULTS overlaid with
         // config.ATTESTATION.PROVIDERS), so the reorg recompute of missed_count resolves
-        // the identical provider stake floor the live expiry path did (XC-083).
+        // the identical provider stake floor the live expiry path did.
         this.providerRegistry = new ProviderRegistry(this.config);
 
         // Setup alias to the indexer database connection
@@ -1648,7 +1648,7 @@ class Rollback {
                     cached = { weighted: cached_weighted, validators: vs || [] };
                     validatorsByBlock.set(reqBlock, cached);
                 }
-                // The provider floor (XC-083) is a PER-REQUEST bar, so it cannot ride the
+                // The provider floor is a PER-REQUEST bar, so it cannot ride the
                 // per-block validator cache above: two requests at the same block against
                 // different providers filter that one snapshot differently. Resolve it here
                 // and let _responsibleSet apply it, keeping the cache provider-agnostic.
@@ -1692,7 +1692,7 @@ class Rollback {
     // the live expiry path. `validators` are the raw capability rows ({pubkey, source},
     // plus `weight` when weighted); `weighted` is swq.isStakeWeightedQuorumActive for
     // the request block. `minStake` is the request provider's block-anchored
-    // min_stake_xchain floor at the request block (XC-083), applied on the weighted path
+    // min_stake_xchain floor at the request block, applied on the weighted path
     // only and BEFORE the ranking, exactly as attest.js._providerFloorFilter does; null
     // fails the recompute closed to an empty set the same way the live path does, so a
     // reorg cannot charge missed_count to validators the live expiry never held

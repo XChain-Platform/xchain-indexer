@@ -3487,7 +3487,7 @@ class Database {
             args.push(parseInt(action_index));
         }
         // Each component is summed EXACTLY (18 dp) and the combination is rounded
-        // ONCE at the tick's own scale (XC-1459). Rounding each component first
+        // ONCE at the tick's own scale. Rounding each component first
         // and then combining is not the same number: round(C) - round(D) + round(E)
         // can differ from round(C - D + E) by a whole unit when the ledger carries
         // amounts finer than the tick (fees at 8 dp against a 0-decimal gas tick),
@@ -3605,7 +3605,7 @@ class Database {
             args.push(parseInt(action_index));
         }
         // Per-holder credits and debits are summed EXACTLY (18 dp) and netted at
-        // that scale, matching getAddressBalances / getNetBalance (XC-1459). The
+        // that scale, matching getAddressBalances / getNetBalance. The
         // former per-row cast to the tick's scale made sum-of-rounded-holdings
         // drift from the rounded ledger sum as soon as any row was finer than the
         // tick; on pre-flag-day rows (already on the tick's grid) it is identical.
@@ -4149,7 +4149,7 @@ class Database {
         // why it stopped the SanityError, but it also OVERCHARGED every fee finer
         // than the gas tick can express: fees are computed at 8 dp, so a 0.5 XCHAIN
         // fee against a decimals=0 XCHAIN was recorded as 0.5 in `fees` and debited
-        // as 1, and a 51-sub-command batch spent 51 rather than 25.5 (XC-1459).
+        // as 1, and a 51-sub-command batch spent 51 rather than 25.5.
         //
         // EXACT rule (flag-day, ledger_amount_precision_activation.js): store the
         // amount at 18 dp, i.e. exactly, and let the projections round ONCE. The
@@ -4403,7 +4403,7 @@ class Database {
                     if(!data[row.tick_id])
                         data[row.tick_id] = 0;
                     // Accumulate at the exact ledger scale, NOT the tick's own
-                    // decimals (XC-1459). Rounding the RUNNING TOTAL per row is
+                    // decimals. Rounding the RUNNING TOTAL per row is
                     // what made a 0.5-XCHAIN fee meter as a whole unit against a
                     // decimals=0 gas tick, and it compounds: 51 rows of 0.5 came
                     // out as 51, not 25.5. Rows written before the exact-ledger
@@ -4886,8 +4886,8 @@ class Database {
         // the balances and escrow-TOTAL sums are unjoined, exactly like
         // getTokenSupplyBalance/getTokenSupplyEscrow. Returns tick_id -> summed string.
         //
-        // Summed at the EXACT ledger scale (18 dp), not per-tick DECIMAL(60,d)
-        // (XC-1459), so the per-decimal query grouping is gone with it. The three
+        // Summed at the EXACT ledger scale (18 dp), not per-tick DECIMAL(60,d), so
+        // the per-decimal query grouping is gone with it. The three
         // projections compared below each round ONCE, at the tick's own scale: the
         // ledger side rounds when escrows are folded in, the total side when
         // balances and escrows are added. That is the only shape that agrees when

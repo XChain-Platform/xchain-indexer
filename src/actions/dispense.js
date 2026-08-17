@@ -210,11 +210,11 @@ class Dispense {
                     // 35 XCHAIN, i.e. 7 fills at $1.50 each and $0.317 a token.
                     //
                     // A PRICE v1 oracle publishes the price of one TOKEN, and that reading is
-                    // canonical (operator decision 2026-08-11, XC-993): the docs, the XC-650
-                    // oracle-fee base (`oracle_price x GIVE_ESCROW`, which only holds if the
-                    // fiat cost of one dispense is `oracle_price x GIVE_AMOUNT`) and the
-                    // wallet's publishing form all state it, and two of those are what an
-                    // oracle operator is paid on. So SETTLEMENT is the side that moves:
+                    // canonical: the docs, the oracle-fee base (`oracle_price x GIVE_ESCROW`,
+                    // which only holds if the fiat cost of one dispense is `oracle_price x
+                    // GIVE_AMOUNT`) and the wallet's publishing form all state it, and two of
+                    // those are what an oracle operator is paid on. So SETTLEMENT is the side
+                    // that moves:
                     // divide the affordable tokens by GIVE_AMOUNT to get whole fills.
                     //
                     // Gated because it is consensus: the same payment against the same

@@ -347,14 +347,13 @@ class Actions {
                 gasSchedule: this.config['GAS_SCHEDULE'],
                 gasCeiling:  1000000,
                 limits: {
-                    // NOT the binding wall-clock constraint for a chain execution:
-                    // at/after the VM's flag-day every node runs one execution against
-                    // the consensus constant CONSENSUS_MAX_WALL_MS (xchain-vm
-                    // src/consensus-wall-clock.js, XC-1491) whatever this says, because a
-                    // per-node budget made status and gasUsed (fee debit, contract
-                    // checkpoint) an operator setting. Kept equal to the constant so this
-                    // indexer's ungated/legacy-replay path behaves the same as its gated
-                    // one; changing it moves neither.
+                    // NOT the binding wall-clock constraint: at/after the VM's flag-day every
+                    // node runs one execution against the consensus constant
+                    // CONSENSUS_MAX_WALL_MS (xchain-vm src/consensus-wall-clock.js) whatever
+                    // this says, because a per-node budget made status and gasUsed (fee
+                    // debit, contract checkpoint) an operator setting. Kept equal to the
+                    // constant so this indexer's ungated/legacy-replay path behaves the same
+                    // as its gated one; changing it moves neither.
                     maxCpuTimeMs:      30000,
                     maxMemory:         8,
                     maxEmissions:      50,
@@ -505,7 +504,7 @@ class Actions {
         // synthetic tx carries; ALWAYS false for real decoded transactions.
         data['FEE_PROBE']        = tx.fee_probe === true;
 
-        // Per-TRANSACTION top-level issuance budget (EMISSION_ISSUANCE_LIMITS, XC-1456).
+        // Per-TRANSACTION top-level issuance budget (EMISSION_ISSUANCE_LIMITS).
         // Seeded HERE, at the transaction, because that is the only scope the rule can have:
         // a VM emission's own data object is built fresh per emission (execute.js
         // processEmission) and a BATCH sub-command's is cleared down to `baseKeys` between

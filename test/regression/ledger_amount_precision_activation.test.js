@@ -13,7 +13,7 @@
  **********************************************************************
  * test/regression/ledger_amount_precision_activation.test.js
  *
- * INCIDENT: XC-1459, the exact-ledger flag-day.
+ * The exact-ledger flag-day.
  *
  * db.createLedgerChangeRecord quantized every credit / debit / escrow row to
  * the TICK's own decimals on the way in. Fees are computed at 8 dp, so on a
@@ -54,7 +54,7 @@ const assert = require('assert');
 const Utility         = require('../../src/utility');
 const ledgerPrecision = require('../../src/ledger_amount_precision_activation');
 
-describe('[regression:p0] XC-1459 exact-ledger flag module @money @regression @tier1', function () {
+describe('[regression:p0] exact-ledger flag module @money @regression @tier1', function () {
 
     describe('the exact scale is a pinned constant, not a tunable', function () {
         it('LEDGER_AMOUNT_PRECISION is exactly 18', function () {
@@ -140,7 +140,7 @@ describe('[regression:p0] XC-1459 exact-ledger flag module @money @regression @t
         });
 
         it('the measured batch: 51 fees of 0.5 total 25.5 live and 51 under the legacy scale', function () {
-            // The XC-1459 field measurement, in numbers: one parent plus 50
+            // The measured overcharge, in numbers: one parent plus 50
             // children. 51 is the overcharge, 25.5 is the fee schedule.
             const util   = new Utility();
             const exact  = ledgerPrecision.LEDGER_AMOUNT_PRECISION;

@@ -833,7 +833,7 @@ class Execute {
             // carry IS_EMISSION (fee already skipped) and depth-cap on cross-controlled-token moves.
             IS_GUARD_EMISSION:     true,
             // Guard emissions draw from the guarded TRANSACTION's issuance budget too
-            // (EMISSION_ISSUANCE_LIMITS, XC-1456): a controller guard is another VM path to
+            // (EMISSION_ISSUANCE_LIMITS): a controller guard is another VM path to
             // the ISSUE handler, so leaving it off this context would leave the hole open on
             // the one emission path that runs without an EXECUTE at all.
             ISSUANCE_LIMIT_LEDGER: hostData['ISSUANCE_LIMIT_LEDGER']
@@ -1092,7 +1092,7 @@ class Execute {
             // which ARE still subject to their token's controller). Lets maybeRunControllerGuard
             // skip re-guarding a controller's emission of its own controlled token.
             IS_GUARD_EMISSION:  executionData['IS_GUARD_EMISSION'] ? true : false,
-            // Per-TRANSACTION top-level issuance budget (EMISSION_ISSUANCE_LIMITS, XC-1456),
+            // Per-TRANSACTION top-level issuance budget (EMISSION_ISSUANCE_LIMITS),
             // seeded in actions.js. Threaded by REFERENCE so this emission, its siblings and
             // every nested EXECUTE below it draw from ONE tally: copying the count here would
             // give each emission its own budget and re-open the hole the flag closes. Consumed

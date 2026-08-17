@@ -251,7 +251,6 @@ describe('Utility FIAT dispenser price matching @regression', function () {
         // twice and under-credits a sub-1 GIVE_AMOUNT dispenser (see dispense.js).
         it('reports the un-floored affordability beside the whole-token count', async function () {
             // 1 PEPECASH = $1.50, 1 BTC = $30, pays 0.37 BTC => $11.10 => 7.4 tokens.
-            // These are the values measured on LTC regtest 2026-07-31 (XC-993).
             const db = fakeDb([snap('30', NOW - 600)], [oracle('1.5', NOW - 600)]);
             const r = await util.reverseOraclePriceMatch(
                 '0.37', '1OracleAddr', 'BTC', 'PEPECASH', 'USD', NOW, WINDOW, db);
