@@ -454,8 +454,16 @@ class Utility {
 
     // Multiply two bignumber strings and floor the result to d decimal places.
     // Uses Decimal.js native .floor() (via bcnum) to avoid mathjs.format()'s
-    // banker's rounding, which rounds half-to-even and can credit holders more
-    // than their strict proportional entitlement at midpoint fractional values.
+    // rounding, which credits holders more than their strict proportional
+    // entitlement at midpoint fractional values.
+    //
+    // That rounding is HALF-UP (away from zero), NOT banker's/half-even, which
+    // earlier revisions of this comment claimed. Measured: at 8 decimals
+    // '0.000000025' -> '0.00000003' (half-even would give '0.00000002'), and at
+    // 0 decimals '2.5' -> '3', '3.5' -> '4', '-2.5' -> '-3'. The correction makes
+    // the case for flooring STRONGER, not weaker: half-even would at least split
+    // midpoint ties evenly, while half-up rounds every one of them up, so the
+    // over-credit accumulates in one direction across a payout set.
     bcmulfloor(numA, numB, decimals){
         let a = (!this.isNull(numA)) ? numA : 0;
         let b = (!this.isNull(numB)) ? numB : 0;
@@ -474,7 +482,7 @@ class Utility {
     // Determinism: the product and quotient are computed at the house-wide mathjs
     // bignumber precision (64 significant digits) that every consensus math path
     // already uses (bcdiv/getPrice), then floored with Decimal.js native .floor()
-    // like bcmulfloor (never mathjs.format's banker's rounding). Every node runs
+    // like bcmulfloor (never mathjs.format's half-up rounding). Every node runs
     // the same arithmetic at the same precision, so results are node-identical by
     // construction. C = 0 returns 0 (bcdiv convention).
     bcmuldivfloor(numA, numB, numC, decimals){
