@@ -285,24 +285,7 @@ jobs:
       # suite runs a fraction of itself: measured 32.1% lines against an 86.4%
       # floor, which reads as a coverage collapse and is really a missing checkout.
       - name: Check out declared sibling repositories
-        env:
-          SIBLINGS_REF: ${{ github.ref == 'refs/heads/master' && 'master' || 'develop' }}
-        run: |
-          set -euo pipefail
-          repos=$(sed 's/#.*//' .ci-siblings | tr -d '\r' | awk 'NF')
-          cd "$GITHUB_WORKSPACE/.."
-          for repo in $repos; do
-            rm -rf "$repo"
-            url="https://github.com/${{ github.repository_owner }}/$repo.git"
-            git clone --quiet --depth 1 --branch "$SIBLINGS_REF" "$url" "$repo" 2>/dev/null \
-              || git clone --quiet --depth 1 "$url" "$repo"
-            echo "sibling $repo @ $(git -C "$repo" rev-parse --abbrev-ref HEAD) $(git -C "$repo" rev-parse --short HEAD)"
-            if [ -f "$repo/package.json" ]; then
-              ( cd "$repo" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund >/dev/null 2>&1 ) \
-                || ( cd "$repo" && npm install --omit=dev --ignore-scripts --no-audit --no-fund >/dev/null 2>&1 ) \
-                || echo "sibling $repo: dependency install failed"
-            fi
-          done
+        uses: XChain-Platform/.github/actions/checkout-siblings@master # one definition for every call site; see the action for why this tracks master
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
