@@ -31,8 +31,13 @@ class Dispenser_Expire {
 
     async parse(params, data, error){
 
-        // Get info on the dispenser
-        let dispenser = await this.indexerDb.getDispenserInfo(this.config['COIN'], data['ACTION_INDEX']);
+        // Get info on the dispenser. BLOCK_TIME is threaded through to
+        // getDispenserEdits' ALLOW_LIST / BLOCK_LIST activation compare; omitted it
+        // coerced to 0 and the compare silently read false, leaving this path with the
+        // list overlay never applied. Behavior-neutral today (nothing below reads those
+        // two fields) and set on every dispatch (utility.js processExpirations); see the
+        // fuller note in dispenser_close.js.
+        let dispenser = await this.indexerDb.getDispenserInfo(this.config['COIN'], data['ACTION_INDEX'], data['BLOCK_TIME']);
 
         // Only proceed if we have a valid dispenser
         if(dispenser){

@@ -53,6 +53,8 @@ const eq      = require('../equivocation_header.js');
 const ckpt    = require('../checkpoint_commitment_activation.js');
 const ar      = require('../anchor_reward_activation.js');
 const abas    = require('../archive_batch_author_activation.js');
+const ahug    = require('../archive_head_unverified_gate_activation.js');
+const aaq     = require('../anchor-action-query.js');
 
 const ALLOWED_CHAINS = ['BTC', 'LTC', 'DOGE'];
 
@@ -463,19 +465,39 @@ class Anchor {
         // fires when the parent v1/v6 head already exists, so when the completing
         // continuation chunk is broadcast BEFORE its head every stored chunk is 'orphan' and
         // the reassembly CRC is never checked. Re-run the completeness + CRC check here when
-        // the head lands last, byte-identical to the chunk-side reassembly, so results stay
-        // deterministic across nodes. Safe without a flag-day: in this ordering the stamped
-        // head has no 'valid' v2 child, so the invalid_archive stamp is invisible to the
-        // block state hash (which requires a v2 child with status 'valid').
-        if(!error && (format === 1 || format === 6) && data['STATUS'] === 'valid' &&
+        // the head lands last, applying the SAME status handling and index-coverage rule as
+        // the chunk-side path (via aaq.archiveChunkCoverage) so results stay deterministic
+        // across nodes.
+        //
+        // The head's own status may be 'valid' OR, at/after the flag day below,
+        // 'unverified': a node with no mirrored oracle_publish snapshot stores every v1/v6
+        // head 'unverified', yet the head still carries the same signed BATCH_CRC32 and the
+        // chunk-side path verifies regardless of the parent head's status, so 'valid' alone
+        // leaves the ordering nondeterminism open on exactly those nodes.
+        //
+        // That widening is GATED, and must never be re-landed ungated (operator ruling
+        // 2026-08-16). It is preimage-moving and it does not move the two node classes
+        // together: a MIRRORED node holding the snapshot has a THIRD outcome on the same
+        // head (the quorum branch above sets error = 'invalid: insufficient signer stake' /
+        // 'insufficient valid signatures'), on which this gate never runs and no stamp
+        // lands, while a snapshot-less node's same head is 'unverified' with error null and
+        // DOES stamp. invalid_archive is projected by stateHash.js class 6, so ungated the
+        // two classes silently fork wherever ARCHIVE_INVALID_STATE_HASH_ACTIVATION is armed.
+        // Rationale and the pinning train live in archive_head_unverified_gate_activation.js;
+        // do not re-argue it here.
+        let admitUnverifiedHead = ahug.isArchiveHeadUnverifiedGateActive(
+            Number(data['BLOCK_INDEX']), this.config['NETWORK']);
+        if(!error && (format === 1 || format === 6) &&
+           (data['STATUS'] === 'valid' || (admitUnverifiedHead && data['STATUS'] === 'unverified')) &&
            Number(data['TOTAL_CHUNKS']) > 1){
             // At/after the publisher-scoped-archive flag day, the head reassembles its OWN
             // publisher's chunks. Below it, the canonical-head rule (whatever it selects) is kept.
             let scope = await this._archiveAuthorScope(data['MATCH_BATCH_SEQ'], data['SOURCE']);
             let chunks = await this.indexerDb.getAnchorChunks(Number(data['MATCH_BATCH_SEQ']), scope);
-            if(chunks.length === Number(data['TOTAL_CHUNKS']) - 1){
+            let ordered = aaq.archiveChunkCoverage(chunks, Number(data['TOTAL_CHUNKS']));
+            if(ordered){
                 let b64 = String(data['ARCHIVE_B64'] || '');
-                for(let c of chunks.sort((a, b) => Number(a.chunk_index) - Number(b.chunk_index))) b64 += c.archive_b64;
+                for(let c of ordered) b64 += c.archive_b64;
                 let crc = this._archiveCrc(b64);
                 if(crc === null || crc !== String(data['BATCH_CRC32'])){
                     console.warn("\t ANCHOR v" + format + " : batch " + data['MATCH_BATCH_SEQ'] + ' head-side reassembly CRC mismatch, flagging invalid_archive');
@@ -588,12 +610,22 @@ class Anchor {
         await this.indexerDb.createAnchorAction(data);
 
         // When the last chunk lands, verify the reassembled archive against the
-        // parent v1's signed CRC and flag the parent if the blob doesn't bind.
-        if(!error && parent && data['STATUS'] === 'valid'){
+        // parent v1's signed CRC and flag the parent if the blob doesn't bind. Status
+        // handling and completeness are IDENTICAL to the head-side gate above (via
+        // aaq.archiveChunkCoverage): the completing chunk's own status is 'valid' here (a
+        // chunk is never stored 'unverified', since only _parseCheckpoint's snapshot-less
+        // branch assigns that status, so the '|| unverified' term is unreachable on this
+        // path and carries no flag day of its own; the head-side twin's 'unverified' term
+        // IS gated, see archive_head_unverified_gate_activation.js, because there it is
+        // reachable and preimage-moving). Completeness is decided by index coverage, never
+        // by a bare chunk count, so a stray out-of-range orphan can neither pad an
+        // incomplete set to length nor block a complete one.
+        if(!error && parent && (data['STATUS'] === 'valid' || data['STATUS'] === 'unverified')){
             let chunks = await this.indexerDb.getAnchorChunks(Number(data['MATCH_BATCH_SEQ']), scope);
-            if(chunks.length === Number(data['TOTAL_CHUNKS']) - 1){
+            let ordered = aaq.archiveChunkCoverage(chunks, Number(data['TOTAL_CHUNKS']));
+            if(ordered){
                 let b64 = String(parent.archive_b64 || '');
-                for(let c of chunks.sort((a, b) => Number(a.chunk_index) - Number(b.chunk_index))) b64 += c.archive_b64;
+                for(let c of ordered) b64 += c.archive_b64;
                 let crc = this._archiveCrc(b64);
                 if(crc === null || crc !== String(parent.batch_crc32)){
                     console.warn("\t ANCHOR v2 : batch " + data['MATCH_BATCH_SEQ'] + ' reassembly CRC mismatch, flagging invalid_archive');

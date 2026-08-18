@@ -1564,10 +1564,16 @@ async function startApi(){
         // no committed block inside the grace window; a stalled-but-advancing
         // indexer stays 200 with degraded:true. isSynced=false alone likewise
         // stays 200: a healthy initial catch-up must not trip restart loops.
+        let now       = Date.now();
         let stalled   = !!indexer.stallReason;
         let wedged    = XChainIndexer.stallWedged(indexer.stallReason, indexer.lastBlockCommittedAt,
-                                                  indexer.healthStallGraceMs, Date.now(),
+                                                  indexer.healthStallGraceMs, now,
                                                   indexer.stallClearsAt);
+        // Discriminate the healthy future-stamped-block wait from real degradation. One
+        // clock read for all three so the fields can never disagree with each other.
+        let futureWait  = XChainIndexer.waitingOnFutureBlock(indexer.stallReason, indexer.stallClearsAt, now);
+        let stallClass  = XChainIndexer.stallClassOf(indexer.stallReason, indexer.lastBlockCommittedAt,
+                                                     indexer.healthStallGraceMs, now, indexer.stallClearsAt);
         let unhealthy = indexerDbUnreachable || wedged;
         res.status(unhealthy ? 503 : 200).json({
             indexerBlock: indexerBlock,
@@ -1577,6 +1583,14 @@ async function startApi(){
                             ? decoderBlock - indexerBlock
                             : null,
             isSynced:     indexer.isSynced(),
+            // true when every block consensus currently PERMITS this indexer to commit is
+            // committed: level with the decoder tip, or the only thing in the way is a
+            // future-stamped block it must legally wait out. Read this, not isSynced, before
+            // concluding a non-zero lag means the indexer is behind: a testnet4 miner stamping
+            // each block ~20 min ahead pins lag at ~6 blocks forever with isSynced stuck false,
+            // while the indexer commits every block the instant it becomes processable.
+            atProcessableTip: XChainIndexer.atProcessableTip(indexer.isSynced(), indexer.stallReason,
+                                                             indexer.stallClearsAt, now),
             // Why the block counter is not advancing, or null when advancing normally:
             // a hub-sync barrier timeout (price/oracle/match/call/snapshot) or a VM
             // executor host fault. Lets a monitoring probe tell these stalls apart from
@@ -1591,7 +1605,20 @@ async function startApi(){
             // true when a sync barrier is deferring blocks but the counter is still
             // advancing (healthy-degraded, stays 200); distinct from a wedge, which is
             // stalled AND making no progress inside the grace window (503).
+            // NOTE it stays true during the future-stamped-block wait too, deliberately:
+            // consumers keyed on `degraded === false` treat that as the wedge case, so
+            // flipping it would UPGRADE a healthy wait to a critical alert. Read
+            // waitingOnFutureBlock / stallClass to tell the two apart.
             degraded:     stalled && !wedged,
+            // true when the stall is only a wait for wall clock to reach a future-stamped
+            // block (stallClearsAt still ahead). Healthy and self-clearing: the indexer has
+            // committed everything consensus lets it commit and will take the rest the
+            // moment their stamps arrive. A monitor should not alert on this.
+            waitingOnFutureBlock: futureWait,
+            // Single machine-readable verdict on the counter, so a probe does not have to
+            // join stallReason/degraded/stallClearsAt: 'none' | 'future_block_wait' |
+            // 'barrier_defer' | 'wedged'.
+            stallClass:   stallClass,
             // epoch-ms of the most recent successful block commit (null until the first),
             // so a probe can read advance-recency directly rather than infer it from lag.
             lastBlockCommittedAt: indexer.lastBlockCommittedAt || null,

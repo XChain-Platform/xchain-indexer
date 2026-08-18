@@ -44,8 +44,11 @@ describe('Security: remediated dependency advisories @regression @tier4', functi
     // number of results but not their total length, so a few KB of chained brace
     // groups exhausts the heap and kills the process with an uncatchable OOM.
     // Affects <=5.0.7 across every release line, and no 1.x/2.x/3.x/4.x carries
-    // the patch, so every entry has to move to 5.0.8. Reaches this tree dev-only
-    // through minimatch (mocha, glob, stryker, test-exclude).
+    // the patch, so every entry has to move onto the 5.x line. Reaches this tree
+    // dev-only through minimatch (mocha, glob, stryker, test-exclude). The first
+    // patch, 5.0.8, capped the result count but still materialised the whole
+    // expansion before truncating it, so the same input exhausted the heap one
+    // step later; 5.0.9 is the floor that actually holds.
     //
     // Everything below this point is the second wave: HIGH advisories no
     // lockfile splice could reach, because the safe version was a real upgrade
@@ -59,8 +62,10 @@ describe('Security: remediated dependency advisories @regression @tier4', functi
     // the rest of this list axios is a direct runtime dependency of most
     // services, so it is pinned in dependencies rather than through overrides.
     //
-    // js-yaml <4.3.0: merge-key ("<<") chains expand quadratically, so a small
+    // js-yaml <4.3.1: merge-key ("<<") chains expand quadratically, so a small
     // document forces unbounded CPU. Dev-only here, via mocha's config loader.
+    // 4.3.0 fixed the plain-mapping case and left the same blowup reachable
+    // through an !!omap, so the floor is 4.3.1 rather than 4.3.0.
     //
     // serialize-javascript <=7.0.4: RCE via RegExp.flags and
     // Date.prototype.toISOString, plus CPU exhaustion on crafted array-likes.
@@ -86,14 +91,14 @@ describe('Security: remediated dependency advisories @regression @tier4', functi
     // rate-limit bucket than its canonical address.
     const advisories = [
         { name: 'fast-uri', minSafe: [3, 1, 5], majorSeries: 3 },
-        { name: 'brace-expansion', minSafe: [5, 0, 8], majorSeries: 5 },
+        { name: 'brace-expansion', minSafe: [5, 0, 9], majorSeries: 5 },
         // Coupled to the entry above: brace-expansion 5.x dropped its CommonJS
         // default export, so only minimatch >=10 (named `import { expand }`)
         // can consume it. Pinning minimatch here keeps the pair from drifting
         // apart into a tree that installs but throws on first glob match.
         { name: 'minimatch', minSafe: [10, 2, 5], majorSeries: 10 },
         { name: 'axios', minSafe: [1, 18, 0], majorSeries: 1 },
-        { name: 'js-yaml', minSafe: [4, 3, 0], majorSeries: 4 },
+        { name: 'js-yaml', minSafe: [4, 3, 1], majorSeries: 4 },
         { name: 'serialize-javascript', minSafe: [7, 0, 5], majorSeries: 7 },
         { name: 'shell-quote', minSafe: [1, 9, 0], majorSeries: 1 },
         { name: 'form-data', minSafe: [4, 0, 6], majorSeries: 4 },

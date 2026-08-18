@@ -22,7 +22,9 @@ describe('Rollback @regression @tier3', function () {
 
     beforeEach(function () {
         indexer = createMockIndexer();
-        // Rollback accesses indexer.protocolChanges; set a stub
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
         indexer.protocolChanges = {
             isDefined: sinon.stub().returns(true),
             isEnabled: sinon.stub().resolves(true),

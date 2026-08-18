@@ -33,6 +33,7 @@ const swqCap = require('./swq_source_cap_activation');
 const dispenseCancellingMatch = require('./dispense_cancelling_match_activation');
 const stateKeyCollation = require('./state_key_collation_activation');
 const snapshotAgeCausality = require('./oracle_snapshot_age_causality_activation');
+const staleRoundVisibility = require('./oracle_stale_round_visibility_activation');
 const listEditResolution = require('./list_edit_resolution_activation');
 const caretRefStrict = require('./caret_ref_strict_activation');
 const ledgerPrecision = require('./ledger_amount_precision_activation');
@@ -3486,7 +3487,7 @@ class Database {
             args.push(parseInt(action_index));
         }
         // Each component is summed EXACTLY (18 dp) and the combination is rounded
-        // ONCE at the tick's own scale (XC-1459). Rounding each component first
+        // ONCE at the tick's own scale. Rounding each component first
         // and then combining is not the same number: round(C) - round(D) + round(E)
         // can differ from round(C - D + E) by a whole unit when the ledger carries
         // amounts finer than the tick (fees at 8 dp against a 0-decimal gas tick),
@@ -3604,7 +3605,7 @@ class Database {
             args.push(parseInt(action_index));
         }
         // Per-holder credits and debits are summed EXACTLY (18 dp) and netted at
-        // that scale, matching getAddressBalances / getNetBalance (XC-1459). The
+        // that scale, matching getAddressBalances / getNetBalance. The
         // former per-row cast to the tick's scale made sum-of-rounded-holdings
         // drift from the rounded ledger sum as soon as any row was finer than the
         // tick; on pre-flag-day rows (already on the tick's grid) it is identical.
@@ -3826,6 +3827,10 @@ class Database {
         let list_type         = data['TYPE'];
         let list_edit         = data['EDIT'];
         let list_action_index = data['LIST_ACTION_INDEX'];
+        // LIST carries an optional MEMO like every other action; createMemo returns
+        // NULL for an absent one, which is also what a pre-MEMO list row holds, so
+        // the two are indistinguishable and there is nothing to backfill.
+        let memo_id           = await this.createMemo(data['MEMO']);
         // Check if record already exists for this token
         let query  = "SELECT action_index FROM lists WHERE action_index=? LIMIT 1";
         let args   = [action_index];
@@ -3841,14 +3846,15 @@ class Database {
                             type=?,
                             edit=?,
                             list_action_index=?,
+                            memo_id=?,
                             status_id=?
-                        WHERE 
+                        WHERE
                             action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO lists (type, edit, list_action_index, status_id, action_index) values (?, ?, ?, ?, ?)`;
+            query = `INSERT INTO lists (type, edit, list_action_index, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
         }
-        args    = [list_type, list_edit, list_action_index, status_id, action_index];
+        args    = [list_type, list_edit, list_action_index, memo_id, status_id, action_index];
         results = await this.doQuery(query, args);
     }
 
@@ -4143,7 +4149,7 @@ class Database {
         // why it stopped the SanityError, but it also OVERCHARGED every fee finer
         // than the gas tick can express: fees are computed at 8 dp, so a 0.5 XCHAIN
         // fee against a decimals=0 XCHAIN was recorded as 0.5 in `fees` and debited
-        // as 1, and a 51-sub-command batch spent 51 rather than 25.5 (XC-1459).
+        // as 1, and a 51-sub-command batch spent 51 rather than 25.5.
         //
         // EXACT rule (flag-day, ledger_amount_precision_activation.js): store the
         // amount at 18 dp, i.e. exactly, and let the projections round ONCE. The
@@ -4397,7 +4403,7 @@ class Database {
                     if(!data[row.tick_id])
                         data[row.tick_id] = 0;
                     // Accumulate at the exact ledger scale, NOT the tick's own
-                    // decimals (XC-1459). Rounding the RUNNING TOTAL per row is
+                    // decimals. Rounding the RUNNING TOTAL per row is
                     // what made a 0.5-XCHAIN fee meter as a whole unit against a
                     // decimals=0 gas tick, and it compounds: 51 rows of 0.5 came
                     // out as 51, not 25.5. Rows written before the exact-ledger
@@ -4880,8 +4886,8 @@ class Database {
         // the balances and escrow-TOTAL sums are unjoined, exactly like
         // getTokenSupplyBalance/getTokenSupplyEscrow. Returns tick_id -> summed string.
         //
-        // Summed at the EXACT ledger scale (18 dp), not per-tick DECIMAL(60,d)
-        // (XC-1459), so the per-decimal query grouping is gone with it. The three
+        // Summed at the EXACT ledger scale (18 dp), not per-tick DECIMAL(60,d), so
+        // the per-decimal query grouping is gone with it. The three
         // projections compared below each round ONCE, at the tick's own scale: the
         // ledger side rounds when escrows are folded in, the total side when
         // balances and escrows are added. That is the only shape that agrees when
@@ -5034,22 +5040,30 @@ class Database {
         if(results.length > 0)
             exists = true;
         if(exists){
-            // UPDATE record
+            // UPDATE record, scoped to the LEG the exists-check matched.
+            //
+            // A multi-send puts several legs under one ACTION_INDEX (that is why the
+            // sends index is non-unique), so `WHERE action_index=?` rewrote EVERY leg
+            // of the action with this leg's values. On a re-parse of the same block
+            // that also cascaded: once leg 1's update had stamped its values over the
+            // other rows, leg 2's per-leg exists-check no longer matched anything and
+            // INSERTed a duplicate. Same leg identity the exists-check above uses.
             query = `UPDATE
                         sends
                     SET
-                        tick_id=?,
-                        destination_id=?,
-                        amount=?,
                         memo_id=?,
                         status_id=?
-                    WHERE 
-                        action_index=?`;
+                    WHERE
+                        action_index=? AND
+                        tick_id=? AND
+                        destination_id=? AND
+                        amount=?`;
+            args = [memo_id, status_id, action_index, tick_id, destination_id, amount];
         } else {
             // INSERT record
             query = `INSERT INTO sends (tick_id, destination_id, amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
+            args = [tick_id, destination_id, amount, memo_id, status_id, action_index];
         }
-        args = [tick_id, destination_id, amount, memo_id, status_id, action_index];
         results = await this.doQuery(query, args);
     }
 
@@ -5326,34 +5340,47 @@ class Database {
         let status_id      = await this.createStatus(data['STATUS']);
         let action_index   = data['ACTION_INDEX'];
         let amount         = data['AMOUNT'];
-        // Check if record already exists for this destroy
+        // Check if record already exists for THIS LEG of the destroy.
+        //
+        // A multi-destroy (FORMAT 1/2) settles several TICK legs under one
+        // ACTION_INDEX, exactly like a multi-send. Keyed on action_index alone,
+        // leg 2 matched leg 1's row and UPDATEd it, so every leg but the last was
+        // overwritten and an N-tick destroy recorded a single destruction. The
+        // parse consolidates legs by TICK|MEMO before anything is written here, so
+        // (action_index, tick_id, memo_id) is the leg identity and cannot repeat;
+        // AMOUNT and STATUS are the values a re-parse of the block may rewrite.
+        // memo_id is compared NULL-safely because createMemo returns NULL for an
+        // absent MEMO, and `memo_id=NULL` is never true.
         let query  = `SELECT
                             action_index
                         FROM
                             destroys
                         WHERE
-                            action_index=?`;
-        let args = [action_index];
+                            action_index=? AND
+                            tick_id=? AND
+                            memo_id<=>?`;
+        let args = [action_index, tick_id, memo_id];
         let exists = false;
         let results = await this.doQuery(query, args);
         if(results.length > 0)
             exists = true;
         if(exists){
-            // UPDATE record
+            // UPDATE record (scoped to this leg, never the whole action)
             query = `UPDATE
                         destroys
                     SET
-                        tick_id=?,
                         amount=?,
-                        memo_id=?,
                         status_id=?
-                    WHERE 
-                        action_index=?`;
+                    WHERE
+                        action_index=? AND
+                        tick_id=? AND
+                        memo_id<=>?`;
+            args  = [amount, status_id, action_index, tick_id, memo_id];
         } else {
             // INSERT record
             query = `INSERT INTO destroys (tick_id, amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?)`;
+            args  = [tick_id, amount, memo_id, status_id, action_index];
         }
-        args    = [tick_id, amount, memo_id, status_id, action_index];
         results = await this.doQuery(query, args);
     }
 
@@ -9941,6 +9968,13 @@ class Database {
     // TODO: Circle back and add support for cross-chain market data (different coin_id)
     async getMarkets(block_index, update){
         let markets    = [];
+        // Orientation-free keys of the pairs already collected, so the dedupe below is a lookup
+        // instead of a full rescan of `markets` per row (the old scan never broke on a hit, so
+        // the cost was O(rows x pairs) on the block path). Spans every order type, matching the
+        // array it shadows. NULL tick ids are deliberately left OUT of the key set: a NULL never
+        // loose-equalled a stored Number, so the old scan pushed those rows unconditionally, and
+        // both consumers (createMarket / updateMarkets) are idempotent on the repeats.
+        let marketKeys = new Set();
         let args       = [block_index];
         let counts     = false;
         let query      = '';
@@ -10027,17 +10061,17 @@ class Database {
                 let results = await this.doQuery(query, args);
                 if(results.length > 0){
                     for(let row of results){
-                        // Check if this pair already exists
-                        let found = false;
-                        for(let pair of markets){
-                            if((pair.tick1_id == row.tick1_id && pair.tick2_id == row.tick2_id) || (pair.tick1_id == row.tick2_id && pair.tick2_id == row.tick1_id))
-                                found = true;
-                        }
-                        if(!found){
-                            markets.push({
-                                tick1_id: Number(row.tick1_id),
-                                tick2_id: Number(row.tick2_id)
-                            });
+                        // Check if this pair already exists (either orientation)
+                        let tick1_id = Number(row.tick1_id);
+                        let tick2_id = Number(row.tick2_id);
+                        // order_matches carries a NULL tick id on the native-coin side of a
+                        // COINPay match; keep those rows on the old unconditional-push path.
+                        let keyed = !this.util.isNull(row.tick1_id) && !this.util.isNull(row.tick2_id);
+                        let key   = Math.min(tick1_id, tick2_id) + ':' + Math.max(tick1_id, tick2_id);
+                        if(!keyed || !marketKeys.has(key)){
+                            if(keyed)
+                                marketKeys.add(key);
+                            markets.push({ tick1_id, tick2_id });
                         }
                     }
                 }
@@ -11621,7 +11655,17 @@ class Database {
             '                    WHERE vr.reward_type = ara.reward_type ' +
             '                      AND vr.round_reference = ara.round_reference ' +
             '                      AND pk.pubkey <= LOWER(ara.publisher)) ' +
-            ' ORDER BY ara.reward_type, ara.round_reference, ara.publisher, ara.id',
+            // Tiebreak on snapshot_block, the remaining component of uq_reward_tuple, BEFORE
+            // ara.id. Two rows can share (reward_type, round_reference, publisher) and differ
+            // only in snapshot_block, and deriveAnchorRewards upserts each one in this order
+            // while validator_rewards' UNIQUE key omits snapshot_block, so the LAST row
+            // processed decides the reward's earn-block block_index. ara.id is a per-node
+            // AUTO_INCREMENT (arrival order on this mirror, reassigned by a from-genesis
+            // re-mirror), so leaving it as the deciding term let two nodes credit the reward at
+            // different heights, which COLLECT's `block_index <= ?` SUM and the block-scoped
+            // rollback both read: a ledger-hash fork. Same discipline getOraclePrice states.
+            // ara.id stays last only as a total-order fallback; it can no longer decide.
+            ' ORDER BY ara.reward_type, ara.round_reference, ara.publisher, ara.snapshot_block, ara.id',
             [network, maxSnapshotBlock]);
     }
 
@@ -15216,21 +15260,47 @@ class Database {
                            ) m ON t.coin_pair = m.coin_pair AND t.round_number = m.mr
                            WHERE t.status = 'finalized' AND t.price IS NOT NULL`;
         let latestRows = await this.doQuery(latestQuery, [blockCap]);
+        // Stale-round visibility gate (oracle_stale_round_visibility_activation.js).
+        // Below the height a stale tip is dropped from `prices` entirely, so
+        // getPrice() returns null while getPriceAtRound() still carries the very
+        // same round - the two views disagree about whether the round EXISTS, and
+        // a liveness guard that reads getPrice() (the price-bet family's
+        // "has the oracle produced a qualifying round yet?") voids a bet that
+        // consensus history already decided. At/after the height the row is kept
+        // with its PRICE WITHHELD instead: identity and consensus timestamp stay
+        // readable, the stale value does not. VM-observable, hence height-gated.
+        let staleVisible = staleRoundVisibility.isOracleStaleRoundVisibilityActive(
+            blockIndex, this.config['NETWORK'], this.config['COIN']);
         for(let r of latestRows){
-            // Stale prices surface as no-price (null), as before; contracts can
+            let stale = isStale(Number(r.block_timestamp));
+            // Legacy path: stale prices surface as no-price (null); contracts can
             // still read getSnapshotAge() for the staleness signal.
-            if(isStale(Number(r.block_timestamp))) continue;
+            if(stale && !staleVisible) continue;
             prices[String(r.coin_pair)] = {
-                price:       r.price,
+                price:       stale ? null : r.price,
                 roundNumber: Number(r.round_number),
                 timestamp:   Number(r.block_timestamp)
             };
+            // Marker only on withheld rows, so a fresh row stays byte-identical
+            // to the pre-gate shape across the whole activation boundary.
+            if(stale) prices[String(r.coin_pair)].stale = true;
         }
 
         // getPriceAtRound(): historical finalized rounds at/<= block. NOTE: this
         // now respects block causality (reference_block <= block) - an improvement
         // over the old unfiltered query (which was non-functional anyway). Capped
         // for safety; a hit is LOGGED, never silently truncated.
+        //
+        // Deliberately NOT row-filtered by isStale(). Staleness is measured
+        // against the block being processed, so it is true of ALL history older
+        // than maxAge: filtering rows here would empty getPriceAtRound() of
+        // everything but the last few minutes, break the immutable-history
+        // contract the accessor exists to provide, move a timestamp-settled bet
+        // onto a LATER round than consensus history designates, and make every
+        // round-number bet reclaimable by its loser (that template's void guard
+        // is "getPriceAtRound(settleRound) === null"). The prices/rounds
+        // asymmetry is closed on the `prices` side above (stale tips are kept
+        // with the price withheld) rather than by hiding history here.
         let rounds = {};
         const MAX_ORACLE_ROUNDS = 50000;
         let roundQuery = `SELECT coin_pair, price, round_number, block_timestamp
@@ -15509,7 +15579,15 @@ Database.MIGRATION_CHECKSUM_REBASELINES = {
     // position contract_state.sql declares it (column-order convergence, aged vs fresh).
     // A DB that already applied the old file has the column at the tail; the clause is
     // guarded by IF NOT EXISTS, so re-reading the new file is a no-op there and only the
-    // ledger checksum needs to heal.
+    // ledger checksum needs to heal. The tail position itself is converged by a SEPARATE
+    // migration, 2026-07-16-reposition-state-key-bin.sql (MODIFY ... AFTER state_key,
+    // mode=manual), which is what makes an aged install match a fresh SHOW CREATE TABLE;
+    // this entry heals the ledger only and moves no column.
+    //
+    // NOT A PRECEDENT. It is the one executable edit rebaselined here, and only because
+    // IF NOT EXISTS makes the re-read a true no-op AND that follow-up migration carries the
+    // real convergence. An executable edit that changes what an already-applied file DOES
+    // still needs its own dated migration, never an entry in this table.
     '2026-07-10-contract-state-bin-key-index.sql': {
         from: '04656bbe931851e254f51c2f4552e8e0ab2c47067cb7eb39dcbb7f4695d38dd1',
         to:   '15599a2f13a372767468cd72ec05b7dff50d03e095e77cd40ee16bcba52754c6',

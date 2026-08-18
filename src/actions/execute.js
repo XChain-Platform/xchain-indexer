@@ -506,11 +506,24 @@ class Execute {
             gasUsed = execCeiling;
         }
 
+        // ...and enforce the same ceiling on EVERY path, success included. The clamp above
+        // only fires for a resource TERMINATION, but a SUCCESS result carries the VM's
+        // gasUsed verbatim, and the tracker adds a charge to `used` before deciding whether
+        // it exhausted the limit, so a swallowed charge-site throw returns success with
+        // gasUsed a charge over the ceiling. Unclamped that bills a caller-funded run past
+        // its own reservation and, for a cross-contract callee, makes VM_GAS_UNUSED_SUBTREE
+        // below under-refund the parent. Same shape runControllerGuard already settles on
+        // (Math.min against guardCeiling), and a no-op whenever the VM honours the ceiling:
+        // the pre-VM value here is VM_EXECUTE_BASE, which is below MIN_CALL_GAS, the floor
+        // every reservation is validated against. execCeiling, never GAS_CEILING: clamping a
+        // callee to the protocol ceiling would diverge the parent's refund settlement.
+        gasUsed = Math.min(gasUsed, execCeiling);
+
         // Gas settlement. gasBilled = this run's metered usage minus the unused
         // reservations refunded by its completed callees. By induction each
         // callee's gasUnusedSubtree already nets ITS children, so subtracting the
-        // direct children here settles the whole subtree. Bounds (guarded anyway):
-        // 0 <= gasBilled <= gasUsed <= execCeiling.
+        // direct children here settles the whole subtree. Bounds (now enforced above,
+        // not merely assumed): 0 <= gasBilled <= gasUsed <= execCeiling.
         let gasBilled = Math.max(0, gasUsed - nestedGasUnused);
 
         // Recalculate fee based on billed gas
@@ -820,7 +833,7 @@ class Execute {
             // carry IS_EMISSION (fee already skipped) and depth-cap on cross-controlled-token moves.
             IS_GUARD_EMISSION:     true,
             // Guard emissions draw from the guarded TRANSACTION's issuance budget too
-            // (EMISSION_ISSUANCE_LIMITS, XC-1456): a controller guard is another VM path to
+            // (EMISSION_ISSUANCE_LIMITS): a controller guard is another VM path to
             // the ISSUE handler, so leaving it off this context would leave the hole open on
             // the one emission path that runs without an EXECUTE at all.
             ISSUANCE_LIMIT_LEDGER: hostData['ISSUANCE_LIMIT_LEDGER']
@@ -1079,7 +1092,7 @@ class Execute {
             // which ARE still subject to their token's controller). Lets maybeRunControllerGuard
             // skip re-guarding a controller's emission of its own controlled token.
             IS_GUARD_EMISSION:  executionData['IS_GUARD_EMISSION'] ? true : false,
-            // Per-TRANSACTION top-level issuance budget (EMISSION_ISSUANCE_LIMITS, XC-1456),
+            // Per-TRANSACTION top-level issuance budget (EMISSION_ISSUANCE_LIMITS),
             // seeded in actions.js. Threaded by REFERENCE so this emission, its siblings and
             // every nested EXECUTE below it draw from ONE tally: copying the count here would
             // give each emission its own budget and re-open the hole the flag closes. Consumed
@@ -1236,8 +1249,10 @@ class Execute {
                         params.gateTicker || '', params.encryptionMethod || '', params.keyHash || '',
                         params.gateMinAmount || '', ''];
             case 'LIST':
-                // FORMAT: VERSION|TYPE|ITEM
-                return [0, params.type || '', params.item || ''];
+                // FORMAT: VERSION|TYPE|MEMO|ITEM
+                // MEMO precedes the variadic ITEM tail (a trailing memo could not be
+                // told apart from one more item), so it holds a slot even when empty.
+                return [0, params.type || '', params.memo || '', params.item || ''];
             case 'COINPAY':
                 // FORMAT: VERSION|ORDER_MATCH_ACTION_INDEX
                 return [0, params.orderMatchActionIndex];

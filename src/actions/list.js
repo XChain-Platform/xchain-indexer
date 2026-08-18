@@ -19,14 +19,21 @@
  * PARAMS:
  * - VERSION            -  Format Version
  * - TYPE               -  List type (1=TICK, 2=ADDRESS)
+ * - MEMO               -  An optional memo to include
  * - ITEM               -  Any valid `TICK` or `ADDRESS`
  * - EDIT               -  Edit action (1=ADD, 2=REMOVE)
  * - LIST_ACTION_INDEX  -  `ACTION_INDEX` of existing `LIST`
- * 
+ *
  * FORMATS:
  * - 0 = Create LIST
  * - 1 = Edit LIST
- * 
+ *
+ * MEMO sits BEFORE the ITEM tail rather than last, where every other action
+ * puts it. That placement is forced, not a style choice: ITEM is variadic, so a
+ * trailing memo cannot be told apart from one more item. It costs an empty
+ * segment on a memo-less LIST (`LIST|0|1||JDOG|BRRR`), which is the price of
+ * having the field at all.
+ *
  ********************************************************************/
 
 class List {
@@ -40,8 +47,18 @@ class List {
         this.mapper    = action.mapper;
 
         this.formats = {};
-        this.formats[0] = 'VERSION|TYPE|ITEM';
-        this.formats[1] = 'VERSION|EDIT|LIST_ACTION_INDEX|ITEM';
+        this.formats[0] = 'VERSION|TYPE|MEMO|ITEM';
+        this.formats[1] = 'VERSION|EDIT|LIST_ACTION_INDEX|MEMO|ITEM';
+
+        // First params index carrying an ITEM, per format. ITEM is a variadic tail,
+        // so the item loop below cannot read its position from the format string the
+        // way a fixed field does - it has to know where the fixed prefix ends. Kept
+        // beside the formats so the two cannot drift: inserting a field above without
+        // moving these silently swallows the first item as a fixed field, or reads a
+        // fixed field back as an item.
+        this.itemStartIndex = {};
+        this.itemStartIndex[0] = 3;   // VERSION|TYPE|MEMO|...
+        this.itemStartIndex[1] = 4;   // VERSION|EDIT|LIST_ACTION_INDEX|MEMO|...
 
         // Define array of list types (1=Tick, 2=Address)
         this.listTypes = [1,2];
@@ -110,14 +127,29 @@ class List {
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
+        // Verify no pipe in MEMO (pipe is field delimiter)
+        if(!error && String(data['MEMO']).indexOf('|')!=-1)
+            error = 'invalid: MEMO (pipe)';
+
+        // Verify no semicolon in MEMO (semicolon is action delimiter)
+        if(!error && String(data['MEMO']).indexOf(';')!=-1)
+            error = 'invalid: MEMO (semicolon)';
+
+        // Verify MEMO is shorter than MAX_MEMO_LENGTH
+        if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
+            error = 'invalid: MEMO (length)';
+
         if(!error){
 
             // Build out array of edit items and status for each
+            let firstItemIndex = this.itemStartIndex[format];
             for(let idx in params){
                 let status = 'valid';
                 let item   = params[idx];
-                // Get list items
-                if((format==0 && idx > 1)||(format==1 && idx > 2)){
+                // Get list items (everything from the end of the fixed prefix onward).
+                // `idx` is a string here (for..in over an array), so compare numerically
+                // rather than leaning on coercion.
+                if(Number(idx) >= firstItemIndex){
 
                     // Verify TICK 
                     if(data['TYPE']==1){

@@ -63,10 +63,12 @@ class AnchorProofClient {
                                 || this.config['DOGE_INDEXER_URL'] || '');
         this.apiKey    = String(o.apiKey || process.env.DOGE_INDEXER_API_KEY || this.config['DOGE_INDEXER_API_KEY'] || '');
         this.timeoutMs = parseInt(o.timeoutMs || process.env.ANCHOR_PROOF_TIMEOUT_MS || '15000', 10);
-        // Per-txid verdict memo. A confirmed anchor is immutable chain data and a block can
-        // be re-attempted many times behind a barrier, so re-asking DOGE for every attempt
-        // is pure load. Only DECIDED verdicts are memoized: 'unknown' must be re-asked,
-        // since it is exactly the state that is expected to change.
+        // Per-REWARD-TUPLE verdict memo (see _memoKey; NOT per-txid, which let one tuple's
+        // verdict answer for a different tuple naming the same txid). A confirmed anchor is
+        // immutable chain data and a block can be re-attempted many times behind a barrier,
+        // so re-asking DOGE for every attempt is pure load. Only DECIDED verdicts are
+        // memoized: 'unknown' must be re-asked, since it is exactly the state that is
+        // expected to change.
         this._memo = new Map();
     }
 
@@ -141,7 +143,8 @@ class AnchorProofClient {
         if(!/^[0-9a-f]{64}$/.test(txid)) return 'rejected';
         if(!this.url) return 'unknown';                       // fail closed: defer, never pay unproven
 
-        if(this._memo.has(txid)) return this._memo.get(txid);
+        let memoKey = this._memoKey(txid, e);
+        if(this._memo.has(memoKey)) return this._memo.get(memoKey);
 
         let result = await this._fetch(txid);
         if(!result) return 'unknown';
@@ -152,8 +155,28 @@ class AnchorProofClient {
         }
 
         let verdict = this._judge(result.anchors, e);
-        if(verdict !== 'unknown') this._memo.set(txid, verdict);
+        if(verdict !== 'unknown') this._memo.set(memoKey, verdict);
         return verdict;
+    }
+
+    // Cache key for a DECIDED verdict. The verdict is a function of the whole reward tuple,
+    // never of the txid alone, so the key carries every field _judge reads. One DOGE txid can
+    // be named by more than one anchor_reward_attestations row (a failover double-publish
+    // inserts one row per publisher, and a per-chain v4/v5 anchor can share a transaction with
+    // the v6 archive leg), and doge_anchor_txid is NOT covered by the XANCPUB canonical
+    // rewardCanonical() re-verifies, so a txid-only key let a 'verified' for one tuple mint an
+    // unproven reward for another, and a 'rejected' suppress a legitimate one. Because the memo
+    // is process-lifetime state, that leak also made the derived set restart-dependent, which
+    // is a COLLECT-rail fork. Normalize exactly as _judge does, or two spellings of one tuple
+    // miss each other. A field added to _judge must be added here too.
+    _memoKey(txid, e){
+        return [txid,
+                String(e.rewardType),
+                Number(e.roundReference),
+                Number(e.snapshotBlock),
+                String(e.publisher || '').toLowerCase(),
+                String(e.network || ''),
+                Number(e.minConfirmations)].join('|');
     }
 
     // Bind the anchors a txid carries to the reward tuple. Pure, so the whole binding rule

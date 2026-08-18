@@ -1,0 +1,13 @@
+# Siblings that must be installed WITH their scripts on the CI venue.
+#
+# The venue installs adjacent siblings with --ignore-scripts, because they are
+# normally require()'d as source. xchain-vm ships isolated-vm, a NATIVE addon,
+# and this repo EXECUTES it: without the compiled binding the suite dies at
+# load with "Cannot find module ./out/isolated_vm" before a test runs. GitHub's
+# own job installs the vm's dependencies in an explicit step for this reason.
+#
+# Kept out of .ci-siblings deliberately: that file is read verbatim as a list
+# of repo NAMES by the shared ci-reusable.yml clone loop, by per-repo workflow
+# loops and by roster guards, so a modifier written in-line there reaches
+# GitHub as a repository that does not exist.
+xchain-vm

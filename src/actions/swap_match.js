@@ -113,7 +113,7 @@ class Swap_Match {
 
                 data['STATUS'] = 'valid';
 
-                console.log("\t SWAP_MATCH : " + swapInfo['GIVE_AMOUNT'] + ' ' + swapInfo['GIVE_COIN'] + ':' + swapInfo['GIVE_TICK'] + ' = '  +  swapInfo['GET_AMOUNT'] + ' ' + swapInfo['GET_COIN'] + ':' + swapInfo['GET_TICK'] + ' : ' + data['STATUS']);
+                console.log("\t SWAP_MATCH : " + this.util.logAmount(swapInfo['GIVE_AMOUNT']) + ' ' + swapInfo['GIVE_COIN'] + ':' + swapInfo['GIVE_TICK'] + ' = '  +  this.util.logAmount(swapInfo['GET_AMOUNT']) + ' ' + swapInfo['GET_COIN'] + ':' + swapInfo['GET_TICK'] + ' : ' + data['STATUS']);
 
                 let credits = [],
                     debits  = [],

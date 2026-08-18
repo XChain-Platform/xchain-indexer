@@ -1,0 +1,31 @@
+-- xchain:migration mode=auto
+-- Migration: add `memo_id` to the lists table.
+--
+-- LIST was the one action with no MEMO support: every other action carries an
+-- optional memo and LIST did not, so a list could not say why it exists or what
+-- it is for. The wire format gains MEMO in place on v0 and v1 (pre-launch
+-- amendment, not new versions):
+--
+--   v0  VERSION|TYPE|MEMO|...ITEM
+--   v1  VERSION|EDIT|LIST_ACTION_INDEX|MEMO|...ITEM
+--
+-- MEMO sits BEFORE the ITEM rest field rather than last, where every other
+-- action puts it. That placement is forced: ITEM is variadic, so a trailing memo
+-- is indistinguishable from one more item.
+--
+-- Additive and idempotent (IF NOT EXISTS on both), which is what makes it safe to
+-- apply unattended on the validator fleet. Existing rows keep memo_id NULL, which
+-- is exactly what createList writes for a LIST that carries no memo, so a
+-- pre-migration list and a post-migration memo-less list are indistinguishable -
+-- there is nothing to backfill.
+--
+-- The startup drift reconciler (verifyTables) would add the COLUMN on its own,
+-- but this migration exists for the INDEX, which it never adds, and for replicas
+-- bootstrapped from a SQL snapshot that the reconciler does not run against. See
+-- src/sql/lists.sql for the canonical definition.
+--
+-- HOW TO RUN (manual path)
+--   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-08-15-lists-add-memo.sql
+
+ALTER TABLE lists ADD COLUMN IF NOT EXISTS memo_id BIGINT UNSIGNED AFTER list_action_index;
+CREATE INDEX IF NOT EXISTS memo_id ON lists (memo_id);

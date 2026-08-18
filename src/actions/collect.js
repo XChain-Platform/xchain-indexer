@@ -128,7 +128,7 @@ class Collect {
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
-        console.log("\t COLLECT : amount=" + data['AMOUNT'] + ' : ' + data['STATUS']);
+        console.log("\t COLLECT : amount=" + this.util.logAmount(data['AMOUNT']) + ' : ' + data['STATUS']);
 
         await this.indexerDb.createRewardClaim(data);
 

@@ -131,7 +131,7 @@ describe('ProviderRegistry @regression @tier2', function () {
         });
     });
 
-    // ---- block-anchored provider stake floor (XC-083) -----------------------
+    // ---- block-anchored provider stake floor ----------------------------
     // The floor is consensus input at/above STAKE_WEIGHTED_QUORUM: the responsible-set
     // derivation drops sources below it, so a node that resolves a different floor for
     // the same block selects different responsible validators and forks.

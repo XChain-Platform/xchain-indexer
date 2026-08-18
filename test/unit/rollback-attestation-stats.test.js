@@ -50,7 +50,7 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
     const N        = 100;          // rollback target: orphan everything at/after this block
     const VALID_ID = 7;            // arbitrary status id returned for 'valid'
     // A REAL provider id: the recompute resolves that provider's block-anchored
-    // min_stake_xchain floor (XC-083) and, on the weighted path, drops sources below
+    // min_stake_xchain floor and, on the weighted path, drops sources below
     // it. An invented id resolves no floor and correctly fails the recompute closed,
     // which would make this suite assert on an empty set rather than on the rule.
     const PROV     = 'http_get';

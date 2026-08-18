@@ -93,7 +93,7 @@ const BATCH_ROOT_SUB_INDEX_MAINNET_TIME = 9999999999;
 //     test/unit/batchIssuanceLimitsGate.test.js is what actually holds that ordering.
 //
 // OPERATIONAL DEPENDENCY, and it is the real one: every mainnet indexer must be running
-// this code BEFORE the instant. Per XC-792 the mainnet indexers deliberately do not track
+// this code BEFORE the instant. The mainnet indexers deliberately do not track
 // master, so this does not reach them by `xchain-node update` on its own - it is an
 // explicit deploy. A node still on the pre-arm code at 2026-08-16T00:00:00Z applies the
 // old rules past the boundary and forks from the ones that did.
@@ -137,7 +137,7 @@ const BATCH_ISSUANCE_LIMITS_MAINNET_TIME = 1786838400;
 // so test/unit/batchCostWeightingGate.test.js asserts it per network.
 const BATCH_COST_WEIGHTING_MAINNET_TIME = 9999999999;
 
-// Mainnet arm for EMISSION_ISSUANCE_LIMITS (XC-1456): VM-emitted ISSUEs counted against
+// Mainnet arm for EMISSION_ISSUANCE_LIMITS: VM-emitted ISSUEs counted against
 // the SAME per-transaction top-level issuance limit the wire path has always carried.
 //
 // UNARMED, on the house sentinel (9999999999, year 2286), and deliberately so.
@@ -759,10 +759,9 @@ class ProtocolChanges {
         // its oracle published. At/above it the affordable token count is divided by
         // GIVE_AMOUNT first, so the published figure is what one token costs.
         //
-        // Per-token is the canonical reading (operator decision 2026-08-11,
-        // XC-993), and settlement was the only one of four surfaces disagreeing with
-        // it: the protocol docs' Mode A and Mode B examples, the wallet's oracle
-        // publishing form ("Price of one <TICK> in <FIAT>") and the XC-650
+        // Per-token is the canonical reading, and settlement was the only one of four
+        // surfaces disagreeing with it: the protocol docs' Mode A and Mode B examples,
+        // the wallet's oracle publishing form ("Price of one <TICK> in <FIAT>") and the
         // oracle-fee base all state the per-token price. That last one is money: the
         // fee is FEE x (oracle_price x GIVE_ESCROW) / coin_price, which is only the
         // projected proceeds if one dispense costs oracle_price x GIVE_AMOUNT, so
@@ -1275,7 +1274,7 @@ class ProtocolChanges {
         this.addChange('BATCH_COST_WEIGHTING', '0.2.0',BATCH_COST_WEIGHTING_MAINNET_TIME,0,0,0,0,0);
 
         // Per-TRANSACTION top-level issuance budget that VM emissions draw from too
-        // (EMISSION_ISSUANCE_LIMITS, XC-1456). One transaction may register ONE top-level
+        // (EMISSION_ISSUANCE_LIMITS). One transaction may register ONE top-level
         // (undotted) tick, counting wire sub-commands and VM-emitted ISSUEs alike; dotted
         // child ticks are exempt exactly as the BATCH classifier exempts them, and a caret
         // TICK is never exempt. The wire path is already capped at one per BATCH by

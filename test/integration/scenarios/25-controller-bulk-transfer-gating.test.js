@@ -100,7 +100,7 @@ describe('Controller: AIRDROP/DIVIDEND/SWEEP gated by the transfer controller (r
             { source: OWNER, data: `ISSUE|0|${PLAIN}|1000|1000|0|plain token|1000` },
             { source: OWNER, data: `DEPLOY|0|${b64(DENY)}|300000|` },
             { source: OWNER, data: `DEPLOY|0|${b64(ALLOW)}|300000|` },
-            { source: OWNER, data: `LIST|0|2|${RECIP}` },
+            { source: OWNER, data: `LIST|0|2||${RECIP}` },
         ]);
         indexer = await initIndexer();
         await processBlocks(indexer);

@@ -405,7 +405,7 @@ class Bet {
         if(format==1)
             console.log("\t BET_FEED_CANCEL : " + this.config['COIN'] + ':' + data['FEED_ACTION_INDEX'] + ' : ' + data['STATUS']);
         if(format==2)
-            console.log("\t BET : " + data['AMOUNT'] + ' ' + (feedInfo ? feedInfo['TICK'] : '?') + ' on ' + data['OUTCOME'] + ' @ ' + this.config['COIN'] + ':' + data['FEED_ACTION_INDEX'] + ' : ' + data['STATUS']);
+            console.log("\t BET : " + this.util.logAmount(data['AMOUNT']) + ' ' + (feedInfo ? feedInfo['TICK'] : '?') + ' on ' + data['OUTCOME'] + ' @ ' + this.config['COIN'] + ':' + data['FEED_ACTION_INDEX'] + ' : ' + data['STATUS']);
         if(format==3)
             console.log("\t BET_RESOLVE : " + this.config['COIN'] + ':' + data['FEED_ACTION_INDEX'] + ' -> ' + data['OUTCOME'] + ' : ' + data['STATUS']);
 

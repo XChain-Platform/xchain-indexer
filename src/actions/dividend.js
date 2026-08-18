@@ -243,7 +243,7 @@ class Dividend {
         data['STATUS'] = dividend['STATUS'] = status;
 
         // Print status message 
-        console.log("\t DIVIDEND : " + dividend['TICK'] + ' : ' + dividend['DIVIDEND_TICK'] + ' : ' + dividend['AMOUNT'] + ' : ' + dividend['STATUS']);
+        console.log("\t DIVIDEND : " + dividend['TICK'] + ' : ' + dividend['DIVIDEND_TICK'] + ' : ' + this.util.logAmount(dividend['AMOUNT']) + ' : ' + dividend['STATUS']);
 
         // Create record in dividends table
         await this.indexerDb.createDividend(dividend);

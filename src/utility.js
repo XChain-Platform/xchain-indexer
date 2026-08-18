@@ -396,6 +396,32 @@ class Utility {
         return this.bcnum(num).toFixed();
     }
 
+    // Render an amount for a CONSOLE LOG line without exponential notation.
+    //
+    // Action loggers interpolate amounts straight into a template, and by the time
+    // they run setNumberFormats has replaced the parsed string with a bignumber,
+    // whose String()/toString() flips to exponential below 1e-7. So a valid
+    // 0.00000003 destroy/order/send printed as "3e-8" in the indexer log - the
+    // operator-facing record of what the chain did - even though the stored and
+    // hashed byte-form was correct (those paths already go through bcstr).
+    //
+    // Deliberately NOT bcstr: bcstr coerces anything non-numeric to "0", and these
+    // sites legitimately print undefined/null/'' for a field an invalid action never
+    // supplied. Turning that into "0" would read as a real zero amount.
+    //
+    // Only a value that ALREADY renders exponentially is rewritten, so every other
+    // log line stays byte-identical to what it printed before. A blanket
+    // bignumber round-trip would also normalize plain strings ('1.50' -> '1.5'),
+    // silently disagreeing with the amount as the action supplied it.
+    logAmount(value){
+        let str = String(value);
+        if(str.indexOf('e')==-1 && str.indexOf('E')==-1)
+            return str;
+        if(!this.isNumeric(value))
+            return str;
+        return this.bcnum(value).toFixed();
+    }
+
     // Handle returning a number to a given decimal point precision
     bcformat(num, decimals){
         let d = (!this.isNull(decimals)) ? parseInt(decimals) : 0;
@@ -428,8 +454,16 @@ class Utility {
 
     // Multiply two bignumber strings and floor the result to d decimal places.
     // Uses Decimal.js native .floor() (via bcnum) to avoid mathjs.format()'s
-    // banker's rounding, which rounds half-to-even and can credit holders more
-    // than their strict proportional entitlement at midpoint fractional values.
+    // rounding, which credits holders more than their strict proportional
+    // entitlement at midpoint fractional values.
+    //
+    // That rounding is HALF-UP (away from zero), NOT banker's/half-even, which
+    // earlier revisions of this comment claimed. Measured: at 8 decimals
+    // '0.000000025' -> '0.00000003' (half-even would give '0.00000002'), and at
+    // 0 decimals '2.5' -> '3', '3.5' -> '4', '-2.5' -> '-3'. The correction makes
+    // the case for flooring STRONGER, not weaker: half-even would at least split
+    // midpoint ties evenly, while half-up rounds every one of them up, so the
+    // over-credit accumulates in one direction across a payout set.
     bcmulfloor(numA, numB, decimals){
         let a = (!this.isNull(numA)) ? numA : 0;
         let b = (!this.isNull(numB)) ? numB : 0;
@@ -448,7 +482,7 @@ class Utility {
     // Determinism: the product and quotient are computed at the house-wide mathjs
     // bignumber precision (64 significant digits) that every consensus math path
     // already uses (bcdiv/getPrice), then floored with Decimal.js native .floor()
-    // like bcmulfloor (never mathjs.format's banker's rounding). Every node runs
+    // like bcmulfloor (never mathjs.format's half-up rounding). Every node runs
     // the same arithmetic at the same precision, so results are node-identical by
     // construction. C = 0 returns 0 (bcdiv convention).
     bcmuldivfloor(numA, numB, numC, decimals){
@@ -519,8 +553,12 @@ class Utility {
         // .toNumber() above Number.MAX_SAFE_INTEGER (2^53-1) silently rounds to a
         // nearby double, corrupting a value that then flows into consensus math.
         // Mirror the encoder's parseSatoshiAmount fail-fast: throw loudly rather
-        // than return a lossy integer (covers dispense.js multiplier and the
-        // rawTokens/rawMultiplier unit math at :1964/:1991).
+        // than return a lossy integer (covers the rawTokens/rawMultiplier unit
+        // math at :1964/:1991, and dispense.js's GIVE_REMAINING clamp, which is
+        // reached only when capacity is already below an in-range multiplier).
+        // Every dispenser FILL count uses bcfloorSaturating instead: those ratios
+        // are attacker-reachable, and a throw on the block-processing path wedges
+        // the block loop rather than rejecting one action.
         const floored = this.bcnum(num).floor();
         if(floored.gt(Number.MAX_SAFE_INTEGER))
             throw new RangeError(`bcfloor result (${floored.toString()}) exceeds the maximum safe integer (${Number.MAX_SAFE_INTEGER}) and cannot be represented without precision loss`);
@@ -529,16 +567,24 @@ class Utility {
 
     // bcfloor, but saturating at Number.MAX_SAFE_INTEGER instead of throwing.
     //
-    // For the FIAT dispenser unit counts ONLY. Those are
+    // For every dispenser fill count, FIAT and non-FIAT alike. The FIAT ones are
     //   Mode A: coin_amount / (FIAT_AMOUNT / coin_price)
     //   Mode B: (coin_amount * coin_price) / oracle_price
-    // so unlike the non-FIAT coin_amount / GET_AMOUNT they scale with an
-    // externally-chosen price and can run many orders of magnitude higher. PRICE
-    // v1 validates VALUE only as a positive 8-decimal string (actions/price.js),
-    // so a 0.00000001 quote on a high-magnitude fiat pair pushes the count past
-    // 2^53-1 for well under one coin of payment, sent to an address the dispenser
-    // operator controls: the coin comes straight back and the attack costs a
-    // transaction fee.
+    // which scale with an externally-chosen price and can run many orders of
+    // magnitude higher than the payment. PRICE v1 validates VALUE only as a
+    // positive 8-decimal string (actions/price.js), so a 0.00000001 quote on a
+    // high-magnitude fiat pair pushes the count past 2^53-1 for well under one
+    // coin of payment, sent to an address the dispenser operator controls: the
+    // coin comes straight back and the attack costs a transaction fee.
+    //
+    // This comment used to scope the helper to FIAT ONLY, on the premise that the
+    // non-FIAT coin_amount / GET_AMOUNT could not run that high. That premise was
+    // false: GET_AMOUNT is validated only against GET_TICK's DECIMALS, a tick may
+    // be issued with up to MAX_TOKEN_DECIMALS (18), and the token-SEND trigger
+    // channel puts an attacker-chosen SEND amount in COIN_AMOUNT
+    // (processDispenserSends), so a 1e-18 price against a ~0.01 SEND clears 2^53-1
+    // for two cheap transactions. dispense.js's non-FIAT branch saturates for that
+    // reason.
     //
     // Throwing there is worse than saturating. A throw on the block-processing
     // path rolls the block back and the loop retries the SAME block forever (the
@@ -1172,7 +1218,7 @@ class Utility {
     // That per-dispense premise is what SETTLEMENT does only at/above
     // DISPENSER_ORACLE_PER_TOKEN_PRICE. Below it, dispense.js spent the published price
     // as the price of one whole FILL, so the fee an oracle was paid and the proceeds the
-    // dispenser could actually take in differed by a factor of giveAmount (XC-993). This
+    // dispenser could actually take in differed by a factor of giveAmount. This
     // function is unchanged either side of that flag day: per-token is the canonical
     // reading and this is the surface that already had it right.
     //

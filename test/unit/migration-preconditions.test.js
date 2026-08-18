@@ -13,7 +13,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Deploy-precondition contract (XC-1335).
+ * Deploy-precondition contract.
  *
  * A startup assertion that requires an operator-GATED migration is a deploy
  * precondition: build the code, ship it to a database that never applied the

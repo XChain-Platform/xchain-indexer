@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/db.ledger-amount-precision.test.js
  *
- * CONSENSUS REGRESSION GUARD for the exact-ledger flag-day (XC-1459).
+ * CONSENSUS REGRESSION GUARD for the exact-ledger flag-day.
  *
  * db.createLedgerChangeRecord quantized every credit/debit/escrow row to the
  * TICK's own decimals on the way in. Fees are computed at 8 dp, so wherever the
@@ -125,7 +125,7 @@ describe('createLedgerChangeRecord amount quantization @money @regression @tier1
         db.blockIndex = 500;
         await db.createLedgerChangeRecord('debits', 900, 'XCHAIN', '0.5', 'bcrt1qpayer');
         assert.strictEqual(inserted(), '0.5',
-            'the debited amount must equal the amount recorded in `fees` (XC-1459)');
+            'the debited amount must equal the amount recorded in `fees`');
     });
 
     it('LIVE: 51 batch sub-command fees debit 25.5 in total, not 51', async function () {

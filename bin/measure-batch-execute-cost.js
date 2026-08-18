@@ -12,7 +12,7 @@
  **********************************************************************
  *
  * MEASURE WHAT AN `EXECUTE` SUB-COMMAND COSTS THE BLOCK LOOP, RELATIVE TO AN
- * ORDINARY SUB-COMMAND (XC-1469 row 1, spec claude/specs/batch-cost-weighting.md).
+ * ORDINARY SUB-COMMAND.
  *
  * WHY THIS EXISTS. The weighted BATCH budget prices every ordinary sub-command at
  * 1 and needs a number for `EXECUTE`/`XEXEC`. The spec refuses to guess it and

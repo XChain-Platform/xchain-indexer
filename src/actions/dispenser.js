@@ -46,6 +46,7 @@
 const divergenceMetrics = require('../dispenserDivergenceMetrics.js');
 const dispenserFreshness = require('../dispenser_freshness_activation.js');
 const dispenserCaps = require('../dispenser_caps_activation.js');
+const dispenserGiveAmount = require('../dispenser_give_amount_activation.js');
 
 class Dispenser {
 
@@ -210,6 +211,25 @@ class Dispenser {
             else if(await this.indexerDb.isOwnershipEscrowed(data['GIVE_TICK']))
                 error = "invalid: GIVE_TICK (ownership already escrowed)";
         }
+
+        // A balance dispenser must hand out something. Empty or "0" GIVE_AMOUNT
+        // passed every check above (the format rule at 184 only runs when the field
+        // is present, and the block above binds only GIVE_OWNERSHIP=1), and opened a
+        // dispenser that settles buyer payments as VALID fills crediting nothing:
+        // every downstream guard reads a non-positive GIVE_AMOUNT as "ownership
+        // dispenser" and skips (dispense.js giveAmountIsPositive clamp, the
+        // bcgt(GIVE_AMOUNT,0) credit/escrow branch), while the auto-close threshold
+        // is that same non-positive value, so it never closes and keeps absorbing
+        // payments. GIVE_ESCROW is deliberately NOT constrained here: an empty
+        // escrow is a legitimate open-now-refill-later dispenser, and with a
+        // positive GIVE_AMOUNT the clamp drives the multiplier to 0 so the dispense
+        // settles invalid and consumes nothing. Gated (see
+        // dispenser_give_amount_activation.js): this rejects creates the engine used
+        // to accept, so replay below the flag-day stays byte-identical.
+        if(!error && format==0 && !isOwnershipGive &&
+           dispenserGiveAmount.isDispenserGiveAmountActive(data['BLOCK_TIME'], this.config['NETWORK']) &&
+           (this.util.isNull(data['GIVE_AMOUNT']) || !this.util.bcgt(data['GIVE_AMOUNT'], '0')))
+            error = "invalid: GIVE_AMOUNT (required and greater than 0 when GIVE_OWNERSHIP=0)";
 
         // Verify GET_AMOUNT format
         if(!error && format==0 && !this.util.isNull(data['GET_AMOUNT']) && getTokenInfo && !this.util.isValidAmountFormat(getTokenInfo['DECIMALS'], data['GET_AMOUNT']))
@@ -526,7 +546,7 @@ class Dispenser {
 
         // Print status message
         if(format==0)
-            console.log("\t DISPENSER : " + data['GIVE_AMOUNT'] + ' ' + this.config['COIN'] + ':' + data['GIVE_TICK'] + ' = '  +  data['GET_AMOUNT'] + ' ' + data['GET_COIN'] + ':' + data['GET_TICK'] + ' : ' + data['STATUS']);
+            console.log("\t DISPENSER : " + this.util.logAmount(data['GIVE_AMOUNT']) + ' ' + this.config['COIN'] + ':' + data['GIVE_TICK'] + ' = '  +  this.util.logAmount(data['GET_AMOUNT']) + ' ' + data['GET_COIN'] + ':' + data['GET_TICK'] + ' : ' + data['STATUS']);
         if(format==1)
             console.log("\t DISPENSER_CANCEL : " + this.config['COIN'] + ':' + data['DISPENSER_ACTION_INDEX'] + ' : ' + data['STATUS']);
         if(format==2)

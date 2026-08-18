@@ -38,7 +38,7 @@ class Rollback {
 
         // Same effective provider map actions/attest.js builds (DEFAULTS overlaid with
         // config.ATTESTATION.PROVIDERS), so the reorg recompute of missed_count resolves
-        // the identical provider stake floor the live expiry path did (XC-083).
+        // the identical provider stake floor the live expiry path did.
         this.providerRegistry = new ProviderRegistry(this.config);
 
         // Setup alias to the indexer database connection
@@ -71,8 +71,14 @@ class Rollback {
         // so every use is null-guarded.
         this.hubPushQueue = indexer.hubPushQueue || null;
 
-        // Setup alias to the indexer protocol changes instance
-        this.protocolChanges = indexer.protocolChanges;
+        // Deliberately NO alias to indexer.protocolChanges. That registry answers
+        // isEnabled(name, block_index) against a LOCAL height, and during an unwind there is no
+        // single unambiguous height to hand it: the rolled-back tip, the target block and the
+        // block a restored row was earned in all differ. A handle here is therefore a footgun,
+        // not a convenience, so it is left off the surface rather than left present-and-unread.
+        // Rollback's flag-day gating goes through the snapshot-anchored twin predicates instead
+        // (swq.isStakeWeightedQuorumActive above, keyed on the row's OWN snapshot block), which
+        // is the only reading a re-derivation can make without inventing a height.
 
         // Generic rollback table lists, generated from the table-lifecycle
         // registry (src/tableLifecycle.js): dataTables are deleted by
@@ -175,6 +181,14 @@ class Rollback {
 
         // Placeholder for market pairs
         let markets = [];
+        // Orientation-free keys of the pairs already collected in `markets`. The dedupe below
+        // used to rescan the whole array per row, without breaking on a hit, so collecting pairs
+        // cost O(rows x pairs) inside the reorg stall window where every block is deferred. The
+        // key is min:max over the two tick ids, which is exactly the either-orientation match the
+        // scan performed; pairs are still pushed in the orientation they were first seen, so the
+        // contents and order of `markets` are unchanged. Deliberately spans the whole per-table
+        // read loop, matching the array it shadows (dedupe is across tables, not per table).
+        let marketKeys = new Set();
 
         // Get the first action_index at or after the given block
         let query = `SELECT
@@ -388,16 +402,12 @@ class Rollback {
                             this.util.addAddressTicker(row.address3, row.tick);
                         // Build out list of DEX market pairs
                         if(!this.util.isNull(row.tick1_id) && !this.util.isNull(row.tick2_id)){
-                            let found = false;
-                            for(let pair of markets){
-                                if((pair.tick1_id == row.tick1_id && pair.tick2_id == row.tick2_id) || (pair.tick1_id == row.tick2_id && pair.tick2_id == row.tick1_id))
-                                    found = true;
-                            }
-                            if(!found){
-                                markets.push({
-                                    tick1_id: Number(row.tick1_id),
-                                    tick2_id: Number(row.tick2_id)
-                                });
+                            let tick1_id = Number(row.tick1_id);
+                            let tick2_id = Number(row.tick2_id);
+                            let key      = Math.min(tick1_id, tick2_id) + ':' + Math.max(tick1_id, tick2_id);
+                            if(!marketKeys.has(key)){
+                                marketKeys.add(key);
+                                markets.push({ tick1_id, tick2_id });
                             }
                         }
                     }
@@ -1638,7 +1648,7 @@ class Rollback {
                     cached = { weighted: cached_weighted, validators: vs || [] };
                     validatorsByBlock.set(reqBlock, cached);
                 }
-                // The provider floor (XC-083) is a PER-REQUEST bar, so it cannot ride the
+                // The provider floor is a PER-REQUEST bar, so it cannot ride the
                 // per-block validator cache above: two requests at the same block against
                 // different providers filter that one snapshot differently. Resolve it here
                 // and let _responsibleSet apply it, keeping the cache provider-agnostic.
@@ -1682,7 +1692,7 @@ class Rollback {
     // the live expiry path. `validators` are the raw capability rows ({pubkey, source},
     // plus `weight` when weighted); `weighted` is swq.isStakeWeightedQuorumActive for
     // the request block. `minStake` is the request provider's block-anchored
-    // min_stake_xchain floor at the request block (XC-083), applied on the weighted path
+    // min_stake_xchain floor at the request block, applied on the weighted path
     // only and BEFORE the ranking, exactly as attest.js._providerFloorFilter does; null
     // fails the recompute closed to an empty set the same way the live path does, so a
     // reorg cannot charge missed_count to validators the live expiry never held

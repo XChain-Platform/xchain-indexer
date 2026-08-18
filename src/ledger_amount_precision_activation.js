@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Exact ledger amounts flag-day (XC-1459).
+ * Exact ledger amounts flag-day.
  *
  * THE DEFECT. db.createLedgerChangeRecord quantized every credit / debit /
  * escrow row to the TICK's own decimal places on the way in
@@ -39,9 +39,9 @@
  * WHY A FLAG-DAY OF ITS OWN. This changes fee arithmetic platform-wide, for
  * every action family, not just the batch work that found it. A replay of
  * history under the new rule writes different credits/debits rows, moves
- * balances, and therefore moves balances_root. Operator verdict 2026-08-13:
- * it does NOT ride BATCH_ISSUANCE_LIMITS (XC-1454) - folding it in would widen
- * an already-large consensus change late and entangle its replay evidence with
+ * balances, and therefore moves balances_root. It does NOT ride
+ * BATCH_ISSUANCE_LIMITS: folding it in would widen an already-large consensus
+ * change late and entangle its replay evidence with
  * everything else there. Spec: claude/specs/ledger-amount-precision.md.
  *
  * MAINNET AND TESTNET ARE DELIBERATELY UNPINNED. `null` means inert: below any
@@ -70,7 +70,7 @@ const LEDGER_AMOUNT_PRECISION = 18;
 // `null` = NOT YET PINNED = inert (legacy per-row quantization, byte-identical
 // replay). Only regtest is armed, so fresh regtest stacks exercise the exact-fee
 // path end to end; mainnet/testnet heights are pinned at flag-day assembly with
-// the replay evidence XC-1459 requires.
+// the replay evidence this item requires.
 const LEDGER_AMOUNT_PRECISION_ACTIVATION = {
     'BTC:mainnet':  null,
     'LTC:mainnet':  null,

@@ -47,7 +47,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 const crypto = require('crypto');
 
-const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
+const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
 
 const Batch  = require('../../../src/actions/batch.js');
 const Attest = require('../../../src/actions/attest.js');
@@ -104,6 +104,18 @@ describe('two-EXECUTE BATCH ATTEST request_id collision @regression @tier1', fun
         batch = new Batch(actionsCtx);
         indexer.util.resetLists();
         indexer.indexerDb.isActionAllowed.resolves(true);
+        // At/after BATCH_COST_WEIGHTING the R4 spam collapse prices EXECUTE at its acceptance
+        // floor (batch.js vmBaseFeeActions), so a two-EXECUTE batch from a source that cannot
+        // cover it collapses to ONE invalid record and no sub-command reaches a handler. Every
+        // gate is ON in this fixture, so the SOURCE is funded and the GAS token seeded: these
+        // tests are about ROOT DERIVATION, and what they claim is that a BATCH does not bound
+        // EXECUTE BY COUNT, which is exactly as true for a source that pays its way. Left to
+        // the bare mock they would keep passing only because its GAS token does not exist,
+        // which is an incidental reason and would break on the next fixture change.
+        indexer.indexerDb.getTokenInfo
+            .withArgs('XCHAIN', sinon.match.any, sinon.match.any)
+            .resolves(createTokenInfo({ TICK: 'XCHAIN', TICK_ID: 1, DECIMALS: 8 }));
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
     });
 
     afterEach(function(){

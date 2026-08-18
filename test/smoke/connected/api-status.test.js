@@ -34,8 +34,27 @@ const helmet     = require('helmet');
 function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null){
     if(!stallReason) return false;
     if(lastBlockCommittedAt == null) return false;
-    if(Number.isFinite(stallClearsAtMs) && now < stallClearsAtMs) return false;   
+    if(Number.isFinite(stallClearsAtMs) && now < stallClearsAtMs) return false;
     return (now - lastBlockCommittedAt) > graceMs;
+}
+
+// Standalone copies of the status discriminators, same rationale as above; the
+// canonical functions are unit-tested in test/unit/stall-health.test.js.
+function waitingOnFutureBlock(stallReason, stallClearsAtMs, now){
+    if(!stallReason) return false;
+    if(!Number.isFinite(stallClearsAtMs)) return false;
+    return now < stallClearsAtMs;
+}
+
+function stallClassOf(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null){
+    if(!stallReason) return 'none';
+    if(waitingOnFutureBlock(stallReason, stallClearsAtMs, now)) return 'future_block_wait';
+    if(stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs)) return 'wedged';
+    return 'barrier_defer';
+}
+
+function atProcessableTip(isSynced, stallReason, stallClearsAtMs, now){
+    return !!isSynced || waitingOnFutureBlock(stallReason, stallClearsAtMs, now);
 }
 
 function getJson(port, path) {
@@ -81,9 +100,10 @@ function buildApp(indexer) {
         // Same status-code contract as api.js: 503 on DB-unreachable/wedge so the
         // http_get container healthcheck can observe unhealthy; a not-synced catch-up
         // AND a stalled-but-still-advancing barrier defer (degraded) both stay 200.
+        let now       = Date.now();
         let stalled   = !!indexer.stallReason;
         let wedged    = stallWedged(indexer.stallReason, indexer.lastBlockCommittedAt,
-                                    indexer.healthStallGraceMs, Date.now(), indexer.stallClearsAt);
+                                    indexer.healthStallGraceMs, now, indexer.stallClearsAt);
         let unhealthy = indexerDbUnreachable || wedged;
         res.status(unhealthy ? 503 : 200).json({
             indexerBlock: indexerBlock,
@@ -92,8 +112,14 @@ function buildApp(indexer) {
                             ? decoderBlock - indexerBlock
                             : null,
             isSynced:     indexer.isSynced(),
+            atProcessableTip: atProcessableTip(indexer.isSynced(), indexer.stallReason,
+                                               indexer.stallClearsAt, now),
             stallReason:  indexer.stallReason || null,
+            stallClearsAt: indexer.stallClearsAt || null,
             degraded:     stalled && !wedged,
+            waitingOnFutureBlock: waitingOnFutureBlock(indexer.stallReason, indexer.stallClearsAt, now),
+            stallClass:   stallClassOf(indexer.stallReason, indexer.lastBlockCommittedAt,
+                                       indexer.healthStallGraceMs, now, indexer.stallClearsAt),
             lastBlockCommittedAt: indexer.lastBlockCommittedAt || null
         });
     });
@@ -193,6 +219,8 @@ describe('Smoke: REST /status', function () {
             assert.strictEqual(status, 503, `Expected HTTP 503 when wedged but got ${status}`);
             assert.strictEqual(body.stallReason, 'hub-sync barrier timeout');
             assert.strictEqual(body.degraded, false, 'a wedge is not degraded');
+            assert.strictEqual(body.stallClass, 'wedged');
+            assert.strictEqual(body.waitingOnFutureBlock, false, 'a wedge is not a future-stamp wait');
         } finally {
             server.close();
         }
@@ -215,6 +243,66 @@ describe('Smoke: REST /status', function () {
             assert.strictEqual(status, 200, `Expected HTTP 200 while advancing-but-barrier-deferring but got ${status}`);
             assert.strictEqual(body.degraded, true, 'a barrier defer over an advancing counter is degraded');
             assert.strictEqual(body.stallReason, 'price_sync_barrier');
+        } finally {
+            server.close();
+        }
+    });
+
+    // -------------------------------------------------------------------------
+    // SM-05g: the testnet4 future-stamped-block steady state. A miner
+    // stamping each block ~20 min ahead of wall clock pins lag at ~6 blocks
+    // indefinitely, so isSynced is false and degraded is true forever on an indexer
+    // that is committing every processable block within milliseconds. /status has to
+    // say so distinctly or every monitor reads a permanent fault.
+    // -------------------------------------------------------------------------
+    it('SM-05g: GET /status marks a future-stamped-block wait distinctly and stays 200', async function () {
+        const now = Date.now();
+        const futureWait = {
+            indexerDb: { async getLatestBlockIndex() { return 148642; } },
+            lastDecoderBlock: 148648,
+            isSynced() { return false; },
+            stallReason: 'anchor_attest_barrier',
+            healthStallGraceMs: 120000,
+            // last commit is well past the grace window, the shape that used to read as a wedge
+            lastBlockCommittedAt: now - 900000,
+            // the head block is stamped 16 minutes ahead
+            stallClearsAt: now + 960000,
+        };
+        let { server, port } = await listen(futureWait);
+        try {
+            const { status, body } = await getJson(port, '/status');
+            assert.strictEqual(status, 200, `Expected HTTP 200 during a future-stamp wait but got ${status}`);
+            assert.strictEqual(body.waitingOnFutureBlock, true, 'the future-stamp wait must be reported distinctly');
+            assert.strictEqual(body.stallClass, 'future_block_wait');
+            assert.strictEqual(body.atProcessableTip, true, 'every consensus-processable block is committed');
+            assert.strictEqual(body.lag, 6, 'lag pins at ~6 blocks in this steady state');
+            // isSynced/degraded keep their existing meanings; the new fields are what
+            // separate this from a fault.
+            assert.strictEqual(body.isSynced, false);
+            assert.strictEqual(body.degraded, true);
+            assert.strictEqual(body.stallClearsAt, futureWait.stallClearsAt);
+        } finally {
+            server.close();
+        }
+    });
+
+    it('SM-05h: a real barrier defer is NOT reported as a future-stamp wait', async function () {
+        const now = Date.now();
+        const { server, port } = await listen({
+            indexerDb: { async getLatestBlockIndex() { return 959283; } },
+            lastDecoderBlock: 959284,
+            isSynced() { return false; },
+            stallReason: 'price_sync_barrier',
+            healthStallGraceMs: 120000,
+            lastBlockCommittedAt: now - 5000,
+            stallClearsAt: null,
+        });
+        try {
+            const { status, body } = await getJson(port, '/status');
+            assert.strictEqual(status, 200);
+            assert.strictEqual(body.waitingOnFutureBlock, false);
+            assert.strictEqual(body.stallClass, 'barrier_defer');
+            assert.strictEqual(body.atProcessableTip, false, 'a mirror-lag defer is not "caught up"');
         } finally {
             server.close();
         }

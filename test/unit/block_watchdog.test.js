@@ -39,9 +39,12 @@ const assert = require('assert');
 process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 const Utility = require('../../src/utility.js');
-// A deliberately slow promise, built from the shared fixed-delay helper, drives
-// the watchdog past its budget; there is no event to poll for here.
-const { sleep } = require('../helpers/wait.js');
+
+// The stand-in for a hung block is a promise that never settles, not a timed one.
+// withTimeout() races the operand against its own deadline, so the operand's only
+// job is to stay pending; a fixed-delay timer would add a dangling handle and a
+// second clock that no assertion here reads.
+const hungBlock = () => new Promise(() => {});
 
 describe('Block-processing watchdog (withTimeout) @regression @tier1', function () {
     let util;
@@ -53,7 +56,7 @@ describe('Block-processing watchdog (withTimeout) @regression @tier1', function 
     });
 
     it('rejects with a labeled Watchdog timeout when processing exceeds the budget', async function () {
-        const slow = sleep(200).then(() => 'too late');
+        const slow = hungBlock();
         await assert.rejects(
             () => util.withTimeout(slow, 20, 'block 7'),
             (err) => {
@@ -74,7 +77,7 @@ describe('Block-processing watchdog (withTimeout) @regression @tier1', function 
     });
 
     it('defaults the label to "operation" when none is given', async function () {
-        const slow = sleep(200);
+        const slow = hungBlock();
         await assert.rejects(() => util.withTimeout(slow, 10), /Watchdog timeout: operation exceeded 10ms/);
     });
 });

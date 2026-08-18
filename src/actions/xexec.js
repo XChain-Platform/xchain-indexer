@@ -217,7 +217,7 @@ class Xexec {
             CROSS_HOPS:   Number(c.cross_hops) || 0,
             IS_CROSS_CALL: true,
             // Fresh top-level issuance budget for this injected call's emission subtree
-            // (EMISSION_ISSUANCE_LIMITS, XC-1456), consumed in issue.js. The injected
+            // (EMISSION_ISSUANCE_LIMITS), consumed in issue.js. The injected
             // execution is fee-less on THIS chain, so without a budget it is the cheapest
             // path in the system to free top-level names; it is a root execution, so it gets
             // its own budget rather than inheriting the delivering transaction's.

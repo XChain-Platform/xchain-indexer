@@ -119,7 +119,7 @@ class Unstake {
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
-        console.log("\t UNSTAKE : pubkey=" + String(data['SIGNING_PUBKEY']).substring(0, 16) + '... : amount=' + data['AMOUNT'] + ' : ' + data['STATUS']);
+        console.log("\t UNSTAKE : pubkey=" + String(data['SIGNING_PUBKEY']).substring(0, 16) + '... : amount=' + this.util.logAmount(data['AMOUNT']) + ' : ' + data['STATUS']);
 
         await this.indexerDb.createUnstake(data);
 

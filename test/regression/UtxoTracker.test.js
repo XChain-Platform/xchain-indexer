@@ -8,7 +8,9 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// test/unit/UtxoTracker.regression.test.js
+// test/regression/UtxoTracker.test.js
+//
+// INCIDENT: XC-DISP-FRESH (DISPENSER fresh-address exception oracle).
 //
 // UtxoTracker is the oracle behind the DISPENSER fresh-address exception:
 // getFirstSeen(address) answers "has this address ever appeared on chain?",
@@ -36,7 +38,7 @@ function makeFetch(body, opts){
     });
 }
 
-describe('UtxoTracker DISPENSER fresh-address oracle @regression @tier1', function(){
+describe('[regression:p0] UtxoTracker DISPENSER fresh-address oracle @regression @tier1', function(){
 
     let origFetch;
 

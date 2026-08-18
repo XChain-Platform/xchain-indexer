@@ -143,6 +143,28 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
             assert.strictEqual(calls2, 2, 'unknown is exactly the state expected to change, so it must be re-asked');
         });
 
+        // The memo caches a TUPLE's verdict, not a txid's. One DOGE txid can be named by more
+        // than one attestation row (a failover double-publish inserts one row per publisher,
+        // and the per-chain and archive legs can share a transaction) and doge_anchor_txid is
+        // not covered by the XANCPUB canonical, so a txid-only key let a 'verified' for one
+        // tuple mint an unproven reward for another, and a 'rejected' suppress a legitimate one.
+        it('does not leak a decided verdict to a different reward tuple on the same txid', async function () {
+            const c = client();
+            // The transaction carries ONLY the publisher-aa / seq-7 anchor.
+            c._fetch = async () => ({ exists: true, anchors: [anchor()] });
+            assert.strictEqual(await c.proveMined(expectation()), 'verified');
+            // A different publisher's row naming the same txid is a positively-detected
+            // mis-bind and must still be judged, not answered from the first row's memo.
+            assert.strictEqual(
+                await c.proveMined(expectation({ publisher: 'bb'.repeat(32) })), 'rejected');
+
+            // Same shape the other way round: a rejected tuple must not poison the legitimate one.
+            const c2 = client();
+            c2._fetch = async () => ({ exists: true, anchors: [anchor()] });
+            assert.strictEqual(await c2.proveMined(expectation({ roundReference: 8 })), 'rejected');
+            assert.strictEqual(await c2.proveMined(expectation()), 'verified');
+        });
+
         it('treats an unreachable DOGE indexer as unknown (defer), not as absent', async function () {
             const c = client();
             c._fetch = async () => null;

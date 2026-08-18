@@ -29,7 +29,8 @@
  *   - v0 request_status flips (attests/xcalls)
  *   - cooldown-maturity status flips (unstakes/contract_unstakes)
  *   - backdated cooldown refund credits (capability GAS + contract own-tick)
- *   - invalid_archive stamp on anchor_actions v1 parent rows (CRC-failed chunked batches)
+ *   - invalid_archive stamp on anchor_actions archive-head parent rows (CRC-failed
+ *     chunked batches; version set and completing-chunk height key both flag-day gated)
  *   - VOTE poll finalization flips on surviving polls rows (flag-day gated per chain)
  *   - tokens.supply refreshes on surviving token rows (flag-day gated per chain; the
  *     hash twin of the updated_rows tokens-supply replication class)
@@ -293,6 +294,69 @@ function isArchiveInvalidStateHashActive(blockIndex, network, coin){
     return b >= threshold;
 }
 
+// ── invalid_archive chunk-height key repair state-hash flag-day ───────────────
+// Class 6 scopes the invalid_archive stamp to the block the COMPLETING v2 chunk
+// landed in. It has always keyed that scope on `c.block_index`, and that column
+// is NEVER populated on a v2 row: `block_index` carries BLOCK_INDEX_CHECKPOINTED
+// (the checkpointed height on the OTHER chain, see anchor_actions.sql), which is
+// assigned only in anchor.js `_parseCheckpoint`; `_parseContinuation` never sets
+// it, and db.js binds the column NULL when the key is absent. `NULL BETWEEN x AND
+// y` is never true, so the class has selected ZERO rows on every node since it
+// landed, on every network. The completing chunk's real height is
+// `block_index_doge` (the DOGE block the ANCHOR action landed in, NOT NULL by
+// schema), the same height the class is being scoped to, and the same distinction
+// anchor.js `_archiveAuthorScope` already draws.
+//
+// Repairing the key CHANGES THE PREIMAGE the moment a stamped batch exists: a
+// node on the repaired predicate hashes the parent row, a node on the broken one
+// hashes nothing, and the fleet halts at that block. So the repair is a flag day
+// like every other class-shape change here, gated per chain on the chain's OWN
+// local block_index, DEFAULT INERT: below the threshold the query keeps the
+// broken `c.block_index` key and the preimage stays byte-identical to what every
+// deployed node computes today.
+//
+// Every mainnet AND testnet key is an INERT placeholder on purpose. This repair
+// and the head-side archive reassembly gate in actions/anchor.js are both
+// preimage-moving and ride ONE flag-day train, so neither height is chosen alone;
+// pin them together at ratification. Deploy order at that ratification is not
+// free either: xchain-sync updatedRows.js carries the SAME broken key on the
+// replication side (fixed there un-gated, since shipping a row is not a preimage)
+// and must be live FIRST, or a follower is asked to hash a stamped parent row it
+// was never sent. Testnet is NOT armed at genesis the way the v6-coverage gate
+// above was: that ruling was made one day after the testnet re-genesis, and
+// testnet has run for a week since, so a height of 0 here would be retroactive
+// rather than a flag day. regtest is armed at 0 so fresh regtest stacks exercise
+// the repaired class end to end. No STATE_HASH_VERSION bump: a block is
+// unambiguously pre- or post-activation. Keep byte-identical to the
+// xchain-sync twin.
+const ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION = {
+    'BTC:mainnet':  999999999,  // INERT placeholder; pinned with the sibling call at ratification
+    'LTC:mainnet':  999999999,  // INERT placeholder
+    'DOGE:mainnet': 999999999,  // INERT placeholder (DOGE is the anchor chain; arm first here)
+    'BTC:testnet':  999999999,  // INERT placeholder
+    'LTC:testnet':  999999999,  // INERT placeholder
+    'DOGE:testnet': 999999999,  // INERT placeholder
+    regtest: 0,                 // armed from genesis: fresh regtest stacks exercise the repaired class end to end
+};
+
+// The column class 6 scopes the completing v2 chunk by, as a SQL fragment. Broken
+// legacy key below the flag day, repaired key at/after it. Exported so the twin
+// repos and the drift guards can assert on ONE definition rather than a literal.
+const ARCHIVE_CHUNK_HEIGHT_COL        = 'c.block_index_doge';
+const ARCHIVE_CHUNK_HEIGHT_COL_LEGACY = 'c.block_index';
+
+// Whether class 6 scopes the completing v2 chunk by the repaired
+// `block_index_doge` key at `blockIndex` on `network` for `coin`. Below the
+// threshold / unknown network -> off (safe; the class keeps the legacy
+// `block_index` key, so the preimage is byte-identical to the pre-repair shape).
+function isArchiveInvalidHeightKeyActive(blockIndex, network, coin){
+    let b = parseInt(blockIndex);
+    if(!Number.isFinite(b)) return false;
+    let threshold = _activationThreshold(ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION, network, coin);
+    if(threshold === undefined) return false;
+    return b >= threshold;
+}
+
 const DEACTIVATION_TABLES = ['stakes', 'delegations', 'contract_stakes', 'contract_delegations'];
 const SLASH_SPECS = [
     { table: 'stakes',            debits: 'capability_slash_debits', target: 'stakes'            },
@@ -411,7 +475,15 @@ async function buildStateHashData(db, blockIndex, opts){
     //    Version predicate GATED: legacy v1-only below the
     //    ARCHIVE_INVALID_STATE_HASH activation, the full ARCHIVE_HEAD_VERSIONS set
     //    at/after it, so the pre-flag preimage stays byte-identical.
+    //    Chunk-height key ALSO GATED, on its own separate flag day: the legacy
+    //    `c.block_index` key is NEVER populated on a v2 continuation row, so this
+    //    class matched nothing on every node from the day it landed. At/after
+    //    ARCHIVE_INVALID_HEIGHT_KEY it uses `c.block_index_doge`, the height the
+    //    completing chunk actually landed at. See the constant for why the two
+    //    gates are separate and why repairing it is preimage-moving.
     let archiveInvalidActive = isArchiveInvalidStateHashActive(B, network, coin);
+    let chunkHeightCol = isArchiveInvalidHeightKeyActive(B, network, coin)
+                            ? ARCHIVE_CHUNK_HEIGHT_COL : ARCHIVE_CHUNK_HEIGHT_COL_LEGACY;
     let anchor_invalid = [];
     try {
         anchor_invalid = await db.doQuery(
@@ -420,7 +492,7 @@ async function buildStateHashData(db, blockIndex, opts){
             "JOIN index_statuses s ON s.id = p.status_id AND s.status = 'invalid_archive' " +
             "JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid' " +
             "WHERE p.version " + (archiveInvalidActive ? ARCHIVE_HEAD_VERSIONS_SQL : "= 1") +
-            " AND c.block_index BETWEEN ? AND ? " +
+            " AND " + chunkHeightCol + " BETWEEN ? AND ? " +
             "ORDER BY p.action_index ASC",
             [B, B]);
     } catch(e){ if(e && typeof e.errno === 'number' && e.errno !== 1146 && e.errno !== 1054) throw e; /* table/columns may not exist on older schemas */ }
@@ -570,4 +642,6 @@ module.exports = { buildStateHashData, STATE_HASH_VERSION,
                    TOKEN_SUPPLY_STATE_HASH_ACTIVATION, isTokenSupplyStateHashActive,
                    BET_STATUS_STATE_HASH_ACTIVATION, isBetStatusStateHashActive,
                    ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL,
-                   ARCHIVE_INVALID_STATE_HASH_ACTIVATION, isArchiveInvalidStateHashActive };
+                   ARCHIVE_INVALID_STATE_HASH_ACTIVATION, isArchiveInvalidStateHashActive,
+                   ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION, isArchiveInvalidHeightKeyActive,
+                   ARCHIVE_CHUNK_HEIGHT_COL, ARCHIVE_CHUNK_HEIGHT_COL_LEGACY };

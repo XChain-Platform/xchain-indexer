@@ -422,7 +422,7 @@ class Send {
             let status = (error) ? error : 'valid';
             data['STATUS'] = send['STATUS'] = status;
 
-            console.log("\t SEND : " + send['TICK'] + ' : ' + send['AMOUNT'] + ' : ' + send['DESTINATION'] + ' : '+ data['STATUS']);
+            console.log("\t SEND : " + send['TICK'] + ' : ' + this.util.logAmount(send['AMOUNT']) + ' : ' + send['DESTINATION'] + ' : '+ data['STATUS']);
 
             await this.indexerDb.createSend(send);
 

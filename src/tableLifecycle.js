@@ -365,7 +365,7 @@ const TABLES = [
       note: 'Hub-mirrored, append-only, never retracted: written only after the XANCPUB quorum resolves for a FINALIZED checkpoint, so there is no un-finalize to retract. The derived validator_rewards row (block_index = snapshot_block) rolls back normally as a dataTable and re-derives idempotently on replay; a DOGE reorg cannot un-quorum an already-attested publish.' },
     { table: 'state_tree_nodes', owner: 'indexer', replication: 'snapshot', rollback: 'exempt', replicaRollback: 'exempt',
       hashed: { classes: ['state_commitment'], note: 'Content-addressed SMT node store; nodes are keyed by their own hash.' },
-      note: 'Copy-on-write: a node surviving a reorg is harmless (re-apply INSERT-IGNOREs the same hashes) and the surviving fork-point root in state_tree_roots anchors the correct tree. Orphans await a mark-and-sweep pruner; per-block deletion is impossible (no block_index, nodes shared across blocks).' },
+      note: 'Copy-on-write: a node surviving a reorg is harmless (re-apply INSERT-IGNOREs the same hashes) and the surviving fork-point root in state_tree_roots anchors the correct tree. Orphans are reclaimed by the indexer\'s opt-in mark-and-sweep pruner (retention.js computeReachable/reclaimOrphanNodes, off unless STATE_ROOT_RETENTION_BLOCKS is positive AND STATE_NODE_RECLAIM is set, and serialized against block processing via runExclusive so a forward insert cannot re-reference a node between the mark and the delete); per-block deletion is impossible (no block_index, nodes shared across blocks).' },
 
     // ── Inert append-only lookups ──────────────────────────────────────
     // Id-keyed dedup lookups. Orphaned rows are harmless because block
@@ -478,10 +478,19 @@ const CONTENT_PARITY_CARVE_OUTS = Object.freeze([
 // the applier strips before insert (localSurrogateIdTables), so the two sides
 // legitimately disagree on it, and `contract_state.state_key_bin` is a
 // database-GENERATED column the applier never names (generatedColumns.js).
-// Hashing either would turn a by-design difference into a permanent alarm.
+// `sync_meta.id` and `sync_meta.logged_at` are the same class: ServerPoller
+// builds the streamed sync_meta row by hand from the block hashes and omits
+// both, so the follower auto-assigns its own id and stamps its own insert
+// wall-clock, and the two id counters drift further apart after any reorg
+// because both sides delete and re-insert while InnoDB never reuses ids. The
+// replicated columns block_index/block_time/ledger_hash/actions_hash/
+// contract_hash stay in the preimage, so parity still covers every column the
+// two sides must agree on.
+// Hashing any of these would turn a by-design difference into a permanent alarm.
 const CONTENT_PARITY_EXCLUDED_COLUMNS = Object.freeze({
     blocks:         Object.freeze(['id']),
     contract_state: Object.freeze(['state_key_bin']),
+    sync_meta:      Object.freeze(['id', 'logged_at']),
 });
 
 // ── Derivation helpers ──────────────────────────────────────────────────

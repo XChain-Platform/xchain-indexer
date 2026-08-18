@@ -23,8 +23,12 @@
  * table, so a dropped push used to permanently remove the row from the hub's
  * oracle_prices / price_snapshots and from every indexer that mirrors the hub.
  *
- * To make those pushes durable, a failed push is persisted to the
- * `pending_hub_pushes` table. This poller drains that table on a fixed interval,
+ * To make those pushes durable, EVERY push is persisted to the
+ * `pending_hub_pushes` table up front (write-ahead), inside the same block
+ * transaction that writes the `prices` row, and the row is dropped only once the
+ * hub has accepted it. Delivery is attempted live post-commit; a row that was not
+ * delivered live (push failure, hub outage, or a crash in that window) survives
+ * for this poller. It drains that table on a fixed interval,
  * re-sending each row with exponential backoff until the hub accepts it (the
  * hub's pushpriceround / pushoracleprice handlers dedupe, so a replay the hub
  * already has returns cleanly). A `price_round` row that keeps failing past the

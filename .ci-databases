@@ -1,0 +1,28 @@
+# Databases the DB-backed tiers name for themselves (integration, perf).
+#
+# They are NOT the .env-rendered ci_* schema the gate makes from .env.example:
+# test/integration/setup/db-connection.js picks its own names and creates them,
+# so without this file the gate never provisions them and the suite falls back
+# to a literal xchain_test_* name the venue's ci user may create but cannot
+# index (measured 2026-08-15: "INDEX command denied ... xchain_test_decoder").
+#
+# The `name=ENV_VAR` form is the isolated one: the gate creates
+# ci_<name>_<run-id> and exports the variable, so a gate run and a hand run on
+# the same venue can never collide, and the database sits inside the ci_%
+# grant the venue already has.
+xchain_test_decoder=TEST_DECODER_DB
+xchain_test_indexer=TEST_INDEXER_DB
+xchain_test_indexer_b=TEST_INDEXER_DB_B
+
+# Single-file tiers that stand up a database of their own. Same reason, same
+# form; the four DB_NAME constants were literals until this landed and are now
+# env-overridable like the three above.
+xchain_anchor_reward_late_publisher=TEST_ANCHOR_REWARD_DB
+xchain_archive_watermarks=TEST_ARCHIVE_WATERMARKS_DB
+xchain_attest_relay_identity=TEST_ATTEST_RELAY_DB
+xchain_recovery_id_drill=TEST_RECOVERY_DRILL_DB
+
+# A NAMESPACE, not a single database: recovery-determinism-e2e derives several
+# schema names from it. Mapping it still works, because every derived name then
+# starts with the ci_ prefix the venue grant covers.
+xchain_recdet=TEST_DB_NS

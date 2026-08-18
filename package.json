@@ -26,10 +26,10 @@
     "vendor:vm": "bash bin/vendor-vm.sh",
     "check:vm": "bash bin/vendor-vm.sh check",
     "check:consensus-time": "if grep -rn 'getCurrentTime(' src/actions/ 2>/dev/null; then echo 'ERROR: getCurrentTime() (wall-clock Date.now) must never be called inside src/actions/. Block processing must use the deterministic block timestamp (data[\"BLOCK_TIME\"]); a wall-clock value here diverges consensus state across validator instances'; exit 1; else echo 'OK: no wall-clock time usage in src/actions/'; fi",
-    "test": "mocha --timeout 30000 --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js' 'test/security/**/*.test.js'",
-    "coverage": "c8 --reporter=text --reporter=html --include 'src/**/*.js' mocha --timeout 30000 --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js' --exit",
-    "coverage:check": "c8 --check-coverage --lines 87 --statements 87 --branches 83.6 --functions 81.4 --reporter=text-summary --include 'src/**/*.js' mocha --timeout 30000 --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js' --exit",
-    "ci": "npm run check:vm && mocha --timeout 30000 --recursive --exit 'test/unit/**/*.test.js' 'test/unit/*.test.js' 'test/security/**/*.test.js'",
+    "test": "mocha --timeout 30000 --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js' 'test/regression/**/*.test.js' 'test/security/**/*.test.js'",
+    "coverage": "c8 --reporter=text --reporter=html --include 'src/**/*.js' mocha --timeout 30000 --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js' 'test/regression/**/*.test.js' --exit",
+    "coverage:check": "c8 --check-coverage --lines 87 --statements 87 --branches 83.6 --functions 81.4 --reporter=text-summary --include 'src/**/*.js' mocha --timeout 30000 --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js' 'test/regression/**/*.test.js' --exit",
+    "ci": "npm run check:vm && mocha --timeout 30000 --recursive --exit 'test/unit/**/*.test.js' 'test/unit/*.test.js' 'test/regression/**/*.test.js' 'test/security/**/*.test.js'",
     "test:integration": "mocha --timeout 30000 --recursive 'test/integration/**/*.test.js'",
     "test:integration:ci": "mocha --no-config --timeout 120000 --exit 'test/integration/**/*.test.js'",
     "test:e2e": "mocha --no-config --timeout 60000 --exit 'test/e2e/scenarios/**/*.test.js'",
@@ -56,10 +56,11 @@
     "test:mutation:tier1": "mocha --no-config --timeout 10000 --grep @tier1 'test/mutation/suites/*.test.js'",
     "test:mutation:report": "MUTATION_REPORT=1 mocha --no-config --timeout 10000 --recursive 'test/mutation/suites/*.test.js'",
     "test:regression": "mocha --no-config --timeout 30000 --exit --grep @regression --recursive 'test/**/*.test.js'",
-    "test:regression:fast": "mocha --no-config --timeout 5000 --exit --grep '@regression.*(tier1|tier4)' --recursive 'test/unit/**/*.test.js'",
+    "test:regression:fast": "mocha --no-config --timeout 5000 --exit --grep '@regression.*(tier1|tier4)' --recursive 'test/unit/**/*.test.js' 'test/regression/**/*.test.js'",
     "test:regression:full": "mocha --no-config --timeout 60000 --exit --grep @regression --recursive 'test/**/*.test.js'",
     "test:nodb": "npm run check:consensus-time && npm test && npm run test:chaos && npm run test:mutation && npm run test:fuzz:quick",
-    "test:full": "npm run check:consensus-time && npm test && npm run test:integration && npm run test:e2e && npm run test:smoke && npm run test:chaos && npm run test:mutation && npm run test:fuzz:quick"
+    "test:full": "npm run check:consensus-time && npm test && npm run test:integration && npm run test:e2e && npm run test:smoke && npm run test:chaos && npm run test:mutation && npm run test:fuzz:quick",
+    "ci:full": "bash bin/ci-full.sh"
   },
   "devDependencies": {
     "c8": "^11.0.0",

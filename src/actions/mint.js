@@ -224,7 +224,7 @@ class Mint {
         let status = (error) ? error : 'valid';
         data['STATUS'] = mint['STATUS'] = status;
 
-        console.log("\t MINT : " + data['TICK'] + ' : '  +  data['AMOUNT'] + ' : ' + data['STATUS']);
+        console.log("\t MINT : " + data['TICK'] + ' : '  +  this.util.logAmount(data['AMOUNT']) + ' : ' + data['STATUS']);
 
         await this.indexerDb.createMint(mint);
 

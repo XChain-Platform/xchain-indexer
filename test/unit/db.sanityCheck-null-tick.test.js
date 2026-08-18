@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/db.sanityCheck-null-tick.test.js
  *
- * XC-1457, the halt question: a ledger row with a NULL tick_id - the residue a
+ * The halt question: a ledger row with a NULL tick_id - the residue a
  * caret-dot ISSUE ("^42.1") lands below the BATCH_ISSUANCE_LIMITS flag, because
  * createTicker hands any ^-led name to getTickerId and never interns it - must NOT
  * be able to trip the per-block balances-vs-ledger sanityCheck. A throw there is a
@@ -84,7 +84,7 @@ afterEach(function () {
     sinon.restore();
 });
 
-describe('Database.sanityCheck() is blind to NULL tick_id ledger rows (XC-1457 halt question) @regression @tier1', function () {
+describe('Database.sanityCheck() is blind to NULL tick_id ledger rows (NULL-tick halt question) @regression @tier1', function () {
 
     it('joins the touched-tick set to tokens AND index_tickers with NULL-eliminating INNER JOINs', async function () {
         const db   = makeDb();

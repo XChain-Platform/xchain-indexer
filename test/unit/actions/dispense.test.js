@@ -631,7 +631,7 @@ describe('Dispense action handler @regression @tier2', function () {
         });
     });
 
-    // DISPENSER_ORACLE_PER_TOKEN_PRICE (XC-993, operator decision 2026-08-11).
+    // DISPENSER_ORACLE_PER_TOKEN_PRICE.
     //
     // A PRICE v1 oracle publishes the price of one TOKEN. Below the activation
     // dispense.js used the affordable TOKEN count as the FILL multiplier and then

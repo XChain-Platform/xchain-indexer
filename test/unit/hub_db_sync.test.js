@@ -2016,7 +2016,7 @@ describe('HubDbSync._applyRetraction signed retractions @regression @tier1', fun
     });
 });
 
-// ── Anchor-reward attestation mirror-completeness barrier (XC-1404 / AML #4172) ──
+// ── Anchor-reward attestation mirror-completeness barrier ──
 //
 // The BTC indexer mints COLLECT-spendable anchor rewards at a height fixed fleet-wide
 // (snapshot_block + ANCHOR_REWARD_MIRROR_MATURITY). That fixed height is only safe when a

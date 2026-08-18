@@ -553,6 +553,58 @@ describe('Utility @regression @tier1', function () {
         });
     });
 
+    // The twin of bcfloor for the ONE caller that must never throw: an over-large dispenser
+    // multiplier on the block-processing path. bcfloor's RangeError there rolls the block back
+    // and the loop retries the same block forever, wedging every indexer on the chain, so this
+    // one saturates instead. The saturate-vs-throw boundary is the whole contract.
+    describe('bcfloorSaturating()', function () {
+        it('floors like bcfloor below the boundary', function () {
+            assert.strictEqual(util.bcfloorSaturating('5.9'), 5);
+            assert.strictEqual(util.bcfloorSaturating('0.5'), 0);
+        });
+        it('returns the exact integer AT the safe-integer boundary', function () {
+            assert.strictEqual(util.bcfloorSaturating(String(Number.MAX_SAFE_INTEGER)), Number.MAX_SAFE_INTEGER);
+        });
+        it('saturates above the boundary instead of throwing, where bcfloor throws', function () {
+            const over = util.bcnum(String(Number.MAX_SAFE_INTEGER)).plus(2); // 2^53 + 1, exact
+            assert.throws(() => util.bcfloor(over), /exceeds the maximum safe integer/);
+            assert.strictEqual(util.bcfloorSaturating(over), Number.MAX_SAFE_INTEGER);
+        });
+        it('saturates a value far past the boundary to the same bound, never a lossy double', function () {
+            assert.strictEqual(util.bcfloorSaturating('1e40'), Number.MAX_SAFE_INTEGER);
+        });
+        it('floors toward negative infinity, matching bcfloor rather than truncating toward zero', function () {
+            assert.strictEqual(util.bcfloorSaturating('-0.5'), -1);
+        });
+    });
+
+    // Backs the quadratic VOTE weight mode (db.weightFor: weight = sqrt(close_balance)).
+    // sqrt is irrational, so the fixed-precision truncation IS the consensus rule: two nodes
+    // that round it differently tally different ballots.
+    describe('bcsqrt()', function () {
+        it('returns an exact root exactly', function () {
+            assert.strictEqual(String(util.bcsqrt('9', 18)), '3');
+        });
+        it('TRUNCATES an irrational root at the requested decimals, never rounds it', function () {
+            // sqrt(2) = 1.41421356237309504880...; the 19th digit (8) must be dropped, not
+            // carried into the 18th (which rounding would make ...095049).
+            assert.strictEqual(String(util.bcsqrt('2', 18)), '1.414213562373095048');
+        });
+        it('honours a decimals argument of 0 by flooring to a whole number', function () {
+            assert.strictEqual(String(util.bcsqrt('2', 0)), '1');
+        });
+        it('is 0 at 0', function () {
+            assert.strictEqual(String(util.bcsqrt('0', 18)), '0');
+        });
+        it('clamps a negative input to 0 rather than producing NaN', function () {
+            assert.strictEqual(String(util.bcsqrt('-5', 18)), '0');
+        });
+        it('treats a null/undefined balance as 0', function () {
+            assert.strictEqual(String(util.bcsqrt(null, 18)), '0');
+            assert.strictEqual(String(util.bcsqrt(undefined, 18)), '0');
+        });
+    });
+
     describe('bcgt()', function () {
         it('should return true when a > b', function () {
             assert.strictEqual(util.bcgt(5, 3), true);
