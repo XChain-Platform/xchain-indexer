@@ -210,7 +210,11 @@ const EMISSION_ISSUANCE_LIMITS_MAINNET_TIME = 9999999999;
 // A future change gates normally against the platform stream: register it at the
 // platform version it ships in, and nodes below that version treat it as
 // not-yet-active exactly as before.
-const CONSENSUS_VERSION = '0.9.0';
+
+// The registry stays put across the 0.9.0 -> 0.10.0 move: every change registers
+// at 0.1.0 or 0.2.0, and isEnabled() ranks components numerically rather than
+// lexically, so 0.10.0 outranks both and the enabled set holds at 90 of 90.
+const CONSENSUS_VERSION = '0.10.0';
 
 // Predicate for the NATIVE_FEE_PRICE_TIME_GATE flag-day. Its ONE consumer is
 // utility.getFeeOraclePrices (query selection); nothing else in src/ consults it.
