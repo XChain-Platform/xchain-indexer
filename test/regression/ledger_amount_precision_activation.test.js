@@ -88,13 +88,24 @@ describe('[regression:p0] exact-ledger flag module @money @regression @tier1', f
                  'LTC:mainnet', 'LTC:testnet', 'regtest']);
         });
 
-        it('every mainnet and testnet entry is a DEFINED null (present, deliberately inert)', function () {
-            for (const key of ['BTC:mainnet', 'LTC:mainnet', 'DOGE:mainnet',
-                               'BTC:testnet', 'LTC:testnet', 'DOGE:testnet']) {
+        it('every mainnet entry is a DEFINED null (present, deliberately inert)', function () {
+            for (const key of ['BTC:mainnet', 'LTC:mainnet', 'DOGE:mainnet']) {
                 assert.ok(key in ledgerPrecision.LEDGER_AMOUNT_PRECISION_ACTIVATION,
                     key + ' must stay in the map so its null shadows the bare network key');
                 assert.strictEqual(ledgerPrecision.LEDGER_AMOUNT_PRECISION_ACTIVATION[key], null,
                     key + ' must stay unpinned until its flag day is measured and ratified');
+            }
+        });
+
+        it('every testnet entry is ARMED at genesis (ratified 2026-08-18)', function () {
+            // Pre-launch ruling: every feature active on testnet. Safe at 0 only because
+            // testnet indexer state is rebuilt from the chain before launch, so no row
+            // written under the legacy per-row quantization survives to disagree.
+            for (const key of ['BTC:testnet', 'LTC:testnet', 'DOGE:testnet']) {
+                assert.ok(key in ledgerPrecision.LEDGER_AMOUNT_PRECISION_ACTIVATION,
+                    key + ' must stay in the map so it shadows the bare network key');
+                assert.strictEqual(ledgerPrecision.LEDGER_AMOUNT_PRECISION_ACTIVATION[key], 0,
+                    key + ' must be armed at genesis for the testnet launch');
             }
         });
 

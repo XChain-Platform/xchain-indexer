@@ -47,6 +47,7 @@ const crypto  = require('crypto');
 const ed25519 = require('../ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
 const attestAdmission = require('../attest_admission_activation.js');
+const attestRequestCap = require('../attest_request_cap_activation.js');
 const attestRelay     = require('../attest_relay_activation.js');
 const attestBcastFee  = require('../attest_broadcast_fee_activation.js');
 const eq      = require('../equivocation_header.js');
@@ -297,6 +298,30 @@ class Attest {
             let neededSlots = Math.max(1, Number(data['REDUNDANCY']) || 1);
             if(admissionSet.length < neededSlots)
                 error = 'invalid: REDUNDANCY (responsible set ' + admissionSet.length + ' < ' + neededSlots + ' at request block)';
+        }
+
+        // Framework spec §11.1 per-block admission caps (flag-day gated). An admitted
+        // request obliges REDUNDANCY validators to make a provider call, which for the
+        // `llm` provider is a real invoice on each operator's own vendor account, while
+        // the requester pays the same flat VM_ATTEST_REQUEST gas either way. Fees bound
+        // that on a fee-bearing network; on testnet nothing is scarce, so the bound has
+        // to be this rule. Rejection rather than deferral, because the action is already
+        // in this block and there is no later block to carry it to - see the semantics
+        // note in attest_request_cap_activation.js.
+        //
+        // Checked LAST among the admission rules, and only for an otherwise-valid
+        // request, so a structurally invalid one never consumes a capped slot. Same
+        // LOCAL-HEIGHT plane as the responsible-set gate directly above.
+        if(!error && attestRequestCap.isAttestRequestCapActive(data['BLOCK_INDEX'], this.config['NETWORK'])){
+            let caps   = attestRequestCap.ATTEST_REQUEST_CAPS;
+            let counts = await this.indexerDb.getAttestationAdmissionCounts(
+                data['BLOCK_INDEX'], data['ACTION_INDEX'], data['CONTRACT_INDEX']);
+            if(counts.byContract >= caps.perContract)
+                error = 'invalid: ATTEST cap (contract already has ' + counts.byContract +
+                        ' request(s) this block, max ' + caps.perContract + ')';
+            else if(counts.total >= caps.perBlock)
+                error = 'invalid: ATTEST cap (block already has ' + counts.total +
+                        ' request(s), max ' + caps.perBlock + ')';
         }
 
         let status = (error) ? error : 'valid';

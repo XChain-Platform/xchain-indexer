@@ -14435,6 +14435,40 @@ class Database {
         return rows.length > 0 ? rows[0] : null;
     }
 
+    // Per-block ATTEST v0 admission counts, for the spec §11.1 caps
+    // (attest_request_cap_activation.js). Returns { total, byContract }: admitted v0
+    // requests EARLIER IN THIS BLOCK, and how many of those came from `contractIndex`.
+    //
+    // Deterministic by construction, which is the whole requirement for a consensus
+    // gate. Every node processes a block's actions in action_index order inside one
+    // transaction, so `action_index < ?` selects exactly the earlier admissions of this
+    // block and nothing else; action_index is unique, so the order is total and every
+    // node sees the same prefix at the same action. A from-genesis replay reproduces it.
+    //
+    // 'rejected' rows are excluded for the same reason the relay lookup below excludes
+    // them: a refused request never escrowed a fee and was never served, so it consumed
+    // no slot. Counting them would let one malformed request burn capacity, which turns
+    // an anti-abuse cap into an abuse vector.
+    //
+    // doQueryStrict, not doQuery: a swallowed DB fault here would silently return zero
+    // counts and admit past the cap. A throw rolls the block back and retries it, which
+    // is the correct answer to a DB fault on a consensus path.
+    async getAttestationAdmissionCounts(blockIndex, actionIndex, contractIndex){
+        let query = `SELECT COUNT(*) AS total,
+                            COALESCE(SUM(CASE WHEN contract_index = ? THEN 1 ELSE 0 END), 0) AS by_contract
+                     FROM attests
+                     WHERE version = 0
+                       AND block_index = ?
+                       AND action_index < ?
+                       AND request_status <> 'rejected'`;
+        let rows = await this.doQueryStrict(query, [contractIndex, Number(blockIndex), Number(actionIndex)]);
+        let row  = (rows && rows.length > 0) ? rows[0] : {};
+        return {
+            total:      Number(row.total || 0),
+            byContract: Number(row.by_contract || 0)
+        };
+    }
+
     // Cross-chain relay: look up the ATTEST v0 row that already materialized a given relay
     // identity (origin_chain, origin_action_index) on this chain. This is the exactly-once
     // key the v3 admission guard needs and request_id cannot supply: request_id derives

@@ -162,6 +162,7 @@ describe('Callback injection infra-fault propagation @regression @tier2', functi
             indexer = createMockIndexer();
             const db = indexer.indexerDb;
             db.getContract                         = sinon.stub().resolves({ contract_index: 5 });
+            db.getAttestationAdmissionCounts = sinon.stub().resolves({ total: 0, byContract: 0 });
             db.getAttestationRequestById           = sinon.stub().resolves(makeRequestRow());
             db.hasCapability                       = sinon.stub().resolves(true);
             db.createAttestationResponse           = sinon.stub().resolves();

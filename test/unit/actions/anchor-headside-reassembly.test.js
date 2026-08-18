@@ -221,11 +221,12 @@ describe('Anchor head-side reassembly gate: unverified flag-day @regression', fu
         return { stamped: indexer.indexerDb.setAnchorArchiveStatus.calledWith(21, 'invalid_archive'), status: data['STATUS'] };
     }
 
-    it('every mainnet and testnet key is INERT, regtest armed at 0', function () {
-        for (const net of ['mainnet', 'testnet']) {
-            assert.strictEqual(ahug.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION[net], 999999999,
-                net + ' must stay an INERT placeholder until the class-6 height-key repair is pinned on the same train');
-        }
+    it('mainnet stays INERT while testnet and regtest are armed at 0', function () {
+        assert.strictEqual(ahug.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION.mainnet, 999999999,
+            'mainnet must stay an INERT placeholder until the class-6 height-key repair is pinned on the same train');
+        // Testnet is armed from genesis: its indexer state is rebuilt from the chain, so the
+        // widened gate contradicts nothing already indexed under the narrower rule.
+        assert.strictEqual(ahug.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION.testnet, 0, 'testnet armed at genesis');
         assert.strictEqual(ahug.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION.regtest, 0, 'regtest armed at genesis');
     });
 
@@ -234,20 +235,29 @@ describe('Anchor head-side reassembly gate: unverified flag-day @regression', fu
         assert.strictEqual(ahug.isArchiveHeadUnverifiedGateActive(null, 'regtest'), false);
         assert.strictEqual(ahug.isArchiveHeadUnverifiedGateActive(0, 'nosuchnet'), false);
         assert.strictEqual(ahug.isArchiveHeadUnverifiedGateActive(0, 'regtest'), true);
-        assert.strictEqual(ahug.isArchiveHeadUnverifiedGateActive(999999998, 'testnet'), false);
+        assert.strictEqual(ahug.isArchiveHeadUnverifiedGateActive(0, 'testnet'), true);
+        // mainnet is now the network carrying the inert sentinel.
+        assert.strictEqual(ahug.isArchiveHeadUnverifiedGateActive(999999998, 'mainnet'), false);
     });
 
-    it('gate INERT (testnet), unverified head, corrupt blob: deployed valid-only rule stands, no stamp', async function () {
-        let r = await stampedAt('testnet', 100, true);
+    it('gate INERT (mainnet), unverified head, corrupt blob: deployed valid-only rule stands, no stamp', async function () {
+        let r = await stampedAt('mainnet', 100, true);
         assert.strictEqual(r.status, 'unverified');
         assert.strictEqual(r.stamped, false,
             'below the flag day the head-side gate must keep its deployed valid-only rule, or the widening forks the fleet ungated');
     });
 
-    it('gate INERT (testnet), VALID head, corrupt blob: the always-on half of the gate still stamps', async function () {
-        let r = await stampedAt('testnet', 100, false);
+    it('gate INERT (mainnet), VALID head, corrupt blob: the always-on half of the gate still stamps', async function () {
+        let r = await stampedAt('mainnet', 100, false);
         assert.strictEqual(r.status, 'valid');
         assert.strictEqual(r.stamped, true, 'the flag day governs ONLY the unverified admission, never the valid path');
+    });
+
+    it('gate ARMED (testnet), unverified head, corrupt blob: stamps from genesis', async function () {
+        let r = await stampedAt('testnet', 100, true);
+        assert.strictEqual(r.status, 'unverified');
+        assert.strictEqual(r.stamped, true,
+            'testnet is armed at 0, so an unverified head runs the same CRC check as a valid one');
     });
 
     it('gate ARMED (regtest), unverified head, corrupt blob: stamps', async function () {

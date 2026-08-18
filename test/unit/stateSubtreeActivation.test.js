@@ -176,9 +176,11 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
             assert.strictEqual(SUB.isSubtreeActive('contract_state_root', 146500, 'testnet', coin), false,
                 'arming BTC testnet must not arm ' + coin + ' testnet');
         assert.strictEqual(SUB.isSubtreeActive('contract_state_root', 146500, 'mainnet', 'BTC'), false);
-        // The escrow leaf is a SEPARATE flag day and did NOT come along: Stage B
-        // stays regtest-only until BTC:testnet has crossed this height.
-        assert.strictEqual(SUB.isEscrowLockedLeafActive(146500, 'testnet', 'BTC'), false,
+        // The escrow leaf is a SEPARATE flag day from Stage A, and this pins that it does
+        // not ride along with a Stage A arming. The assertion is made against MAINNET,
+        // which carries a Stage A height and no escrow arming, so it is the network where
+        // a silent ride-along would actually change a committed root.
+        assert.strictEqual(SUB.isEscrowLockedLeafActive(146500, 'mainnet', 'BTC'), false,
             'Stage B must not ride along with a Stage A arming');
     });
 
@@ -202,7 +204,12 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
         for(const coin of COINS)
             for(const network of NETWORKS)
                 for(const h of HEIGHTS){
-                    const armed = (coin === 'BTC' && network === 'regtest' && h >= 11200);
+                    // Armed set as of 2026-08-18: BTC:regtest from 11200, plus ALL THREE
+                    // testnet chains from genesis (pre-launch ruling, every feature live on
+                    // testnet). Still scoped rather than blanket-removed, so an unintended
+                    // arming on any other chain is still a failure.
+                    const armed = (coin === 'BTC' && network === 'regtest' && h >= 11200)
+                                  || network === 'testnet';
                     assert.strictEqual(SUB.isEscrowLockedLeafActive(h, network, coin), armed,
                         coin + '/' + network + '@' + h);
                 }
@@ -230,11 +237,17 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
         assert.deepStrictEqual(Object.keys(SUB.ESCROW_LOCKED_LEAF_SHADOW), ['BTC:testnet']);
         // The one open chain, at its exact boundary, so an off-by-one in the
         // threshold cannot hide behind the sweep's coarse height list.
+        // The shadow entry still names BTC:testnet, but the chain is now ARMED FROM
+        // GENESIS (2026-08-18), and ARMED WINS, so the window can never open again: the
+        // predicate answers false on BOTH sides of its own threshold. Kept as an entry
+        // rather than deleted, because deleting map keys mid-suite is the exact footgun
+        // the scratch-arm block below documents.
         assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(147999, 'testnet', 'BTC'), false);
-        assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(148000, 'testnet', 'BTC'), true);
-        // A SHADOW is not an arming, and this is the property the whole window
-        // rests on: nothing about BTC:testnet's committed output may change.
-        assert.strictEqual(SUB.isEscrowLockedLeafActive(148000, 'testnet', 'BTC'), false);
+        assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(148000, 'testnet', 'BTC'), false);
+        // The committed output DID change, deliberately: the leaf is live at every
+        // testnet height so the launch exercises locked-balance proofs for real.
+        assert.strictEqual(SUB.isEscrowLockedLeafActive(148000, 'testnet', 'BTC'), true);
+        assert.strictEqual(SUB.isEscrowLockedLeafActive(0, 'testnet', 'BTC'), true);
         // Scratch-arm both: shadow answers true only BETWEEN its own height and
         // the armed height, so each height uses exactly one column and nothing
         // ever computes twice (spec §7; same contract as isSubtreeShadowActive).
@@ -281,7 +294,12 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
                 for(const h of HEIGHTS){
                     const threshold = (ARMED.contract_state_root || {})[coin + ':' + network];
                     const armed = (threshold !== undefined) && h >= threshold;
-                    assert.strictEqual(SUB.stateRootVersion(h, network, coin), armed ? 2 : 1,
+                    // stateRootVersion is 2 when ANY reserved slot OR the escrow leaf is live,
+                    // so an expectation derived from contract_state_root alone under-predicts
+                    // on the testnet chains, where the escrow leaf is armed from genesis.
+                    const escrowArmed = SUB.isEscrowLockedLeafActive(h, network, coin);
+                    assert.strictEqual(SUB.stateRootVersion(h, network, coin),
+                        (armed || escrowArmed) ? 2 : 1,
                         coin + '/' + network + '@' + h + ' version');
                 }
         // The version is DERIVED, so each armed chain flips at exactly its own
@@ -289,8 +307,16 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
         // threshold would still satisfy one of them.
         assert.strictEqual(SUB.stateRootVersion(9999,   'regtest', 'BTC'), 1);
         assert.strictEqual(SUB.stateRootVersion(10000,  'regtest', 'BTC'), 2);
-        assert.strictEqual(SUB.stateRootVersion(146499, 'testnet', 'BTC'), 1);
+        // BTC:testnet has no version boundary at its Stage A height, because the escrow
+        // leaf is armed there from genesis and any live slot mints version 2. The
+        // per-chain-boundary property is carried by BTC:regtest above, which flips at
+        // exactly 10000.
+        assert.strictEqual(SUB.stateRootVersion(146499, 'testnet', 'BTC'), 2);
         assert.strictEqual(SUB.stateRootVersion(146500, 'testnet', 'BTC'), 2);
+        assert.strictEqual(SUB.stateRootVersion(0, 'testnet', 'BTC'), 2);
+        // Mainnet is the network with no armed slot at all, so it is the one that still
+        // proves the version is not simply hardcoded to 2.
+        assert.strictEqual(SUB.stateRootVersion(999999999, 'mainnet', 'BTC'), 1);
         // The frozen wire constant still declares 1: it is the FLOOR every chain
         // starts at, not a claim about armed chains, and merkle.js does not know
         // about heights. The per-height value is what api.js reports.
@@ -306,7 +332,11 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
         // Stage A holds, and 11200 > 10000 pins that ordering here rather than in prose.
         // It is deliberately still REGTEST-ONLY: each stage is its own flag day, so a
         // Stage A testnet arming must not drag Stage B onto testnet with it.
-        assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_ACTIVATION, { 'BTC:regtest': 11200 });
+        assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_ACTIVATION,
+            // All three testnet chains armed at genesis 2026-08-18 (pre-launch ruling:
+            // every feature live on testnet). Pinned exactly, so an arming anywhere else
+            // - mainnet above all - still fails here.
+            { 'BTC:regtest': 11200, 'BTC:testnet': 0, 'LTC:testnet': 0, 'DOGE:testnet': 0 });
         assert.ok(SUB.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'] >
                   SUB.STATE_SUBTREE_ACTIVATION.contract_state_root['BTC:regtest'],
             'Stage B must not arm below the Stage A height on the same chain');

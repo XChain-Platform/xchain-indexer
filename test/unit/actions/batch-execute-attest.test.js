@@ -190,6 +190,7 @@ describe('two-EXECUTE BATCH ATTEST request_id collision @regression @tier1', fun
             const db = indexer.indexerDb;
             db.getContract                       = sinon.stub().resolves({ contract_index: CONTRACT });
             db.createAttestationRequest          = sinon.stub().resolves();
+            db.getAttestationAdmissionCounts = sinon.stub().resolves({ total: 0, byContract: 0 });
             db.getAttestationRequestById         = sinon.stub().resolves(null);
             db.hasCapability                     = sinon.stub().resolves(true);
             db.getValidatorsByCapability         = sinon.stub().resolves([{ pubkey: 'a'.repeat(64) }]);

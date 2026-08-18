@@ -133,13 +133,21 @@ describe('XCHAIN_ESC locked leaf: inertness @regression', function(){
         // Was "ships inert everywhere", correct while the map was empty and replaced
         // rather than deleted the moment BTC:regtest armed. The mainnet half is the
         // assertion that must never be relaxed.
-        assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_ACTIVATION, { 'BTC:regtest': 11200 });
+        assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_ACTIVATION,
+            // All three testnet chains armed at genesis 2026-08-18 (pre-launch ruling:
+            // every feature live on testnet). Pinned exactly, so an arming anywhere else
+            // - mainnet above all - still fails here.
+            { 'BTC:regtest': 11200, 'BTC:testnet': 0, 'LTC:testnet': 0, 'DOGE:testnet': 0 });
         for(const key of Object.keys(SUB.ESCROW_LOCKED_LEAF_ACTIVATION))
             assert.ok(!/mainnet/.test(key), 'the escrow leaf is armed on mainnet (' + key + ')');
         for(const coin of ['BTC', 'LTC', 'DOGE'])
             for(const network of ['mainnet', 'testnet', 'regtest'])
                 for(const h of [0, 1, 958500, 962500, 6335000, 999999999]){
-                    const armed = (coin === 'BTC' && network === 'regtest' && h >= 11200);
+                    // Armed set as of 2026-08-18: BTC:regtest from 11200, plus ALL THREE
+                    // testnet chains from genesis. Mainnet remains the half that must never
+                    // relax, and the sweep still proves it.
+                    const armed = (coin === 'BTC' && network === 'regtest' && h >= 11200)
+                                  || network === 'testnet';
                     assert.strictEqual(SUB.isEscrowLockedLeafActive(h, network, coin), armed,
                         coin + '/' + network + '@' + h);
                 }

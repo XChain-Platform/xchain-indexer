@@ -75,9 +75,15 @@ const LEDGER_AMOUNT_PRECISION_ACTIVATION = {
     'BTC:mainnet':  null,
     'LTC:mainnet':  null,
     'DOGE:mainnet': null,
-    'BTC:testnet':  null,
-    'LTC:testnet':  null,
-    'DOGE:testnet': null,
+    // TESTNET ARMED AT GENESIS, operator-ratified 2026-08-18. The pre-launch ruling is
+    // that every platform feature must be ACTIVE on testnet, and block 0 is safe here
+    // because that chain's indexer state is rebuilt from the chain itself before launch: a
+    // rebuild recomputes every row under this rule, so no row written under the legacy one
+    // survives to disagree with it. Without the rebuild a genesis height is NOT safe here,
+    // which is why a network with history carries a measured height instead.
+    'BTC:testnet':  0,
+    'LTC:testnet':  0,
+    'DOGE:testnet': 0,
     regtest: 0,
 };
 

@@ -38,6 +38,10 @@ const GATES = [
     ['checkpoint_commitment_activation.js', 'CHECKPOINT_COMMITMENT_ACTIVATION'],
     ['cross_chain_royalty_activation.js',   'CROSS_CHAIN_ROYALTY_ACTIVATION'],
     ['attest_admission_activation.js',      'ATTEST_ADMISSION_ACTIVATION'],
+    ['attest_request_cap_activation.js',    'ATTEST_REQUEST_CAP_ACTIVATION'],
+    // Not an activation MAP but the consensus constants that gate reads: the caps decide
+    // which requests are admitted at the flag-day exactly as the heights decide when.
+    ['attest_request_cap_activation.js',    'ATTEST_REQUEST_CAPS'],
     ['attest_relay_activation.js',          'ATTEST_RELAY_ACTIVATION'],
     ['attest_broadcast_fee_activation.js',  'ATTEST_BROADCAST_FEE_ACTIVATION'],
     // Not an activation MAP but a consensus constant the same gate reads: the cap clamps the

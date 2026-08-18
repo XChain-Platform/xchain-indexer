@@ -24,21 +24,25 @@ describe('ATTEST broadcast-fee activation (spec §11) @regression', function () 
 
     describe('isAttestBroadcastFeeActive', function () {
 
-        it('is INERT on mainnet and testnet: the operator still owns the height', function () {
+        it('is INERT on mainnet: the operator still owns that height', function () {
             assert.strictEqual(abf.ATTEST_BROADCAST_FEE_ACTIVATION.mainnet, null);
-            assert.strictEqual(abf.ATTEST_BROADCAST_FEE_ACTIVATION.testnet, null);
             // A null threshold must read as OFF at every height, including absurd ones:
             // a `blockIndex >= null` coercion would read 0 and arm the gate from genesis.
             for (const h of [0, 1, 961000, 999999999])
                 assert.strictEqual(abf.isAttestBroadcastFeeActive(h, 'mainnet'), false,
                     'an unallocated height must never arm at ' + h);
-            assert.strictEqual(abf.isAttestBroadcastFeeActive(999999999, 'testnet'), false);
         });
 
-        it('is armed from genesis on regtest so the e2e venue exercises the carve-out', function () {
-            assert.strictEqual(abf.ATTEST_BROADCAST_FEE_ACTIVATION.regtest, 0);
-            assert.strictEqual(abf.isAttestBroadcastFeeActive(0, 'regtest'), true);
-            assert.strictEqual(abf.isAttestBroadcastFeeActive(12345, 'regtest'), true);
+        it('is armed from genesis on testnet and regtest so both exercise the carve-out', function () {
+            // testnet 0 is operator-ratified (2026-08-18) and safe by MEASUREMENT: this gate
+            // only changes how a fulfilled settle splits its escrow, and the live explorer
+            // reports zero attestation rows ever recorded on any testnet chain, so there is
+            // no historical reward split to reinterpret.
+            for (const net of ['testnet', 'regtest']) {
+                assert.strictEqual(abf.ATTEST_BROADCAST_FEE_ACTIVATION[net], 0, net + ' must be armed at genesis');
+                assert.strictEqual(abf.isAttestBroadcastFeeActive(0, net), true);
+                assert.strictEqual(abf.isAttestBroadcastFeeActive(12345, net), true);
+            }
         });
 
         it('an unknown network fails closed rather than defaulting to on', function () {

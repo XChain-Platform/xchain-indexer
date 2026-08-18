@@ -20,12 +20,14 @@
  * state_root_version 1 commits the first two for real and the last three as
  * EMPTY_SMT_ROOT. This module is the gate that decides, per slot and per chain,
  * when a reserved slot may stop being EMPTY. What is armed today:
- *   BTC:regtest  contract_state_root from 10000, escrow locked leaf from 11200
- *   BTC:testnet  contract_state_root from 146500 (Stage A only; the escrow leaf
- *                is a SEPARATE flag day and has NOT followed it onto testnet)
+ *   BTC:regtest   contract_state_root from 10000, escrow locked leaf from 11200
+ *   BTC:testnet   contract_state_root from 146500, escrow locked leaf from genesis
+ *   LTC/DOGE:testnet  escrow locked leaf from genesis
  * Every other chain, network and slot answers "off", and MAINNET IS UNARMED for
  * every slot, so their committed state_root stays byte-identical to the
- * two-sub-root v1 assembly.
+ * two-sub-root v1 assembly. The escrow leaf remains a SEPARATE flag day from
+ * Stage A: it arms on its own heights, and its arming on a chain says nothing
+ * about that chain's reserved slots.
  *
  * Why a gate and not a plain version flip: the chains flip at different heights
  * (they always have - see state_commitment_activation.js), so one map per slot
@@ -190,7 +192,27 @@ const STATE_SUBTREE_SHADOW = {
 // below the armed height using ITS carrier of this file, and the SDK verifier
 // independently refuses using its own, so neither a lagging nor a hostile
 // server can turn "not committed" into a verified absence (spec §4).
-const ESCROW_LOCKED_LEAF_ACTIVATION = { 'BTC:regtest': 11200 };
+// Armed from genesis on every testnet chain, and on regtest at 11200.
+//
+// Two conditions make a genesis height correct here rather than merely convenient. Stage A
+// (contract_state_root) must already be live on the chain, since this leaf moves
+// balances_root and Stage B is defined to follow Stage A; on the testnet chains it is.
+// And the chain's key collation must be genesis-active, which it is on all three.
+//
+// A genesis height also removes the arming BOUNDARY entirely: there is no below-arming
+// region for a locked-balance proof to fall into, so the seeding order that matters when
+// arming mid-chain does not apply. That holds only where indexer state is rebuilt from the
+// chain, which is a precondition of this height.
+//
+// The derivation carries no coin gate (see escrowLeafSubtree.js and escrowJournalWriter.js),
+// so the three chains arm together. Mainnet stays unarmed because live light clients depend
+// on balances_root there, which is the whole reason this is staged at all.
+const ESCROW_LOCKED_LEAF_ACTIVATION = {
+    'BTC:regtest':  11200,
+    'BTC:testnet':  0,
+    'LTC:testnet':  0,
+    'DOGE:testnet': 0,
+};
 
 // SHADOW-COMPUTE WINDOW for the escrow leaf (spec §7 step 1, Stage B). INERT.
 //
