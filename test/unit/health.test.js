@@ -165,4 +165,60 @@ describe('health() response builder', function(){
         assert.strictEqual(res.stallReason, 'price-barrier-timeout');
     });
 
+    // A testnet4 miner stamping each block ~20 min ahead keeps a fully caught-up
+    // indexer at synced:false + degraded:true + a named barrier permanently. health() has to
+    // separate that from a fault, or the next ops session re-opens the same non-incident.
+    it('future-stamped-block wait: waitingOnFutureBlock/stallClass/atProcessableTip mark it healthy', async function(){
+        const NOW = 1_000_000;
+        const res = await call(makeIndexer({
+            stallReason:          'anchor_attest_barrier',
+            healthStallGraceMs:   120000,
+            lastBlockCommittedAt: NOW - 900000,     // 15 min ago: wedge-shaped without the instant
+            stallClearsAt:        NOW + 960000      // head block stamped 16 min ahead
+        }), { now: NOW });
+        assert.strictEqual(res.waitingOnFutureBlock, true);
+        assert.strictEqual(res.stallClass, 'future_block_wait');
+        assert.strictEqual(res.atProcessableTip, true, 'every consensus-processable block is committed');
+        // The pre-existing fields keep their meanings, which is exactly why the new ones
+        // are needed: on their own they still spell "fault".
+        assert.strictEqual(res.synced, false);
+        assert.strictEqual(res.degraded, true);
+        assert.strictEqual(res.stallReason, 'anchor_attest_barrier');
+    });
+
+    it('an advancing barrier defer is barrier_defer, not a future-stamp wait', async function(){
+        const NOW = 1_000_000;
+        const res = await call(makeIndexer({
+            stallReason:          'price_sync_barrier',
+            healthStallGraceMs:   120000,
+            lastBlockCommittedAt: NOW - 5000,
+            stallClearsAt:        null
+        }), { now: NOW });
+        assert.strictEqual(res.waitingOnFutureBlock, false);
+        assert.strictEqual(res.stallClass, 'barrier_defer');
+        assert.strictEqual(res.atProcessableTip, false);
+        assert.strictEqual(res.degraded, true);
+    });
+
+    it('a genuine wedge is stallClass wedged and never a future-stamp wait', async function(){
+        const NOW = 1_000_000;
+        const res = await call(makeIndexer({
+            stallReason:          'vm_executor_unavailable',
+            healthStallGraceMs:   120000,
+            lastBlockCommittedAt: NOW - 900000,
+            stallClearsAt:        null
+        }), { now: NOW });
+        assert.strictEqual(res.waitingOnFutureBlock, false);
+        assert.strictEqual(res.stallClass, 'wedged');
+        assert.strictEqual(res.atProcessableTip, false);
+        assert.strictEqual(res.degraded, false);
+    });
+
+    it('a healthy no-stall indexer reports stallClass none and no future-block wait', async function(){
+        const res = await call(makeIndexer({ isSynced: () => true }));
+        assert.strictEqual(res.stallClass, 'none');
+        assert.strictEqual(res.waitingOnFutureBlock, false);
+        assert.strictEqual(res.atProcessableTip, true, 'level with the decoder tip is at the tip');
+    });
+
 });

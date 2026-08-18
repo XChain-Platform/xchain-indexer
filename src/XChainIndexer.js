@@ -122,6 +122,53 @@ function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClear
     return (now - lastBlockCommittedAt) > graceMs;
 }
 
+// True when the current stall is nothing but a wait for WALL CLOCK to reach a
+// future-stamped block. stallClearsAt is set only by the time-keyed barriers, and only
+// to (block_time + watermark grace); a value still ahead of `now` therefore means the
+// block at the head of the queue is stamped in the future and no amount of local health
+// can make it processable sooner. Consensus forbids committing it, so this is the
+// indexer working exactly as designed, not degradation.
+//
+// It is a steady state, not a blip: a BTC-testnet4 miner stamping every block ~20 min
+// ahead rides the 2-hour future-time cap forever, so lag PINS at ~6 blocks and each block
+// commits (in milliseconds) the instant its stamp arrives. Reported distinctly so a
+// monitor and the next ops session read "waiting out miner clock skew" instead of the
+// fault that `degraded:true` + `isSynced:false` + a named stallReason otherwise spell.
+// HEALTH REPORTING ONLY: hashes nothing, and no barrier waits any differently for it.
+function waitingOnFutureBlock(stallReason, stallClearsAtMs, now){
+    if(!stallReason) return false;
+    if(!Number.isFinite(stallClearsAtMs)) return false;
+    return now < stallClearsAtMs;
+}
+
+// One machine-readable verdict on the block counter, so a probe reads a single field
+// rather than joining stallReason/degraded/stallClearsAt itself (and drawing the wrong
+// conclusion when the answer is the healthy future-stamp wait). Values:
+//   'none'              - advancing normally, no stall.
+//   'future_block_wait' - waiting out a future-stamped block; healthy and self-clearing,
+//                         with stallClearsAt naming the instant it can first move.
+//   'barrier_defer'     - a real barrier defer (mirror behind, host fault), still
+//                         advancing inside the grace window.
+//   'wedged'            - stalled with no commit for longer than the grace window.
+// 'future_block_wait' and 'wedged' cannot collide: stallWedged() already declines to
+// wedge a stall whose clear instant is still ahead.
+function stallClassOf(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null){
+    if(!stallReason) return 'none';
+    if(waitingOnFutureBlock(stallReason, stallClearsAtMs, now)) return 'future_block_wait';
+    if(stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs)) return 'wedged';
+    return 'barrier_defer';
+}
+
+// True when the indexer has committed every block consensus currently PERMITS it to
+// commit: either it is level with the decoder tip (isSynced), or the only thing between
+// it and the tip is a future-stamped block it must legally wait out. `isSynced` keeps its
+// literal decoder-tip-parity meaning for existing consumers; this is the "functionally
+// caught up" signal an operator actually wants, and it is the field to read before
+// concluding a non-zero lag means the indexer is behind.
+function atProcessableTip(isSynced, stallReason, stallClearsAtMs, now){
+    return !!isSynced || waitingOnFutureBlock(stallReason, stallClearsAtMs, now);
+}
+
 class XChainIndexer {
 
     constructor(decoderDbHost, decoderDbPort, decoderDbName, decoderDbUser, decoderDbPass, indexerDbHost, indexerDbPort, indexerDbName, indexerDbUser, indexerDbPass, hubDbHost, hubDbPort, hubDbName, hubDbUser, hubDbPass, utxoTrackerUrl, utxoTrackerPort){
@@ -1678,4 +1725,7 @@ module.exports.effectiveHubConfigPollIntervalMs      = effectiveHubConfigPollInt
 module.exports.hubConfigStalenessLimitMs             = hubConfigStalenessLimitMs;
 module.exports.hubConfigStaleness                    = hubConfigStaleness;
 module.exports.stallWedged                           = stallWedged;
+module.exports.waitingOnFutureBlock                  = waitingOnFutureBlock;
+module.exports.stallClassOf                          = stallClassOf;
+module.exports.atProcessableTip                      = atProcessableTip;
 module.exports.hubConfigCoinKey                      = hubConfigCoinKey;

@@ -23,7 +23,7 @@
 'use strict';
 
 const assert = require('assert');
-const { stallWedged } = require('../../src/XChainIndexer');
+const { stallWedged, waitingOnFutureBlock, stallClassOf, atProcessableTip } = require('../../src/XChainIndexer');
 
 describe('stallWedged() healthcheck discriminator', function () {
     const GRACE = 120000; // 2 min
@@ -102,5 +102,104 @@ describe('stallWedged() future-stamped-block deadline', function () {
         // a host fault has no instant at which it clears on its own.
         assert.strictEqual(stallWedged('vm_executor_unavailable', LONG_STALL, GRACE, NOW, null), true);
         assert.strictEqual(stallWedged('call_presence_barrier',   LONG_STALL, GRACE, NOW, null), true);
+    });
+});
+
+/*
+ * Telling the healthy future-stamped-block wait apart from degradation.
+ *
+ * Measured on BTC testnet4: the miner stamps each block ~20 min ahead of the previous
+ * one, riding the consensus 2-hour future-time cap, so the time-keyed barriers hold the
+ * head block until wall clock reaches its stamp. Lag pins at ~6 blocks forever and the
+ * indexer commits each block in milliseconds the moment it becomes processable. On the
+ * old surface that reads as isSynced:false + degraded:true + a named stallReason, i.e.
+ * a permanent fault to any monitor. These pin the discriminators that say otherwise.
+ */
+describe('waitingOnFutureBlock() / stallClassOf() / atProcessableTip()', function () {
+    const GRACE = 120000;
+    const NOW   = 1_000_000_000;
+    const LONG_STALL = NOW - 900000;   // 15 min with no commit
+    const RECENT     = NOW - 5000;
+
+    describe('waitingOnFutureBlock()', function () {
+        it('a still-future clear instant with a stall set is a future-block wait', function () {
+            assert.strictEqual(waitingOnFutureBlock('anchor_attest_barrier', NOW + 1, NOW), true);
+            // the real shape: a 16 minute skew
+            assert.strictEqual(waitingOnFutureBlock('anchor_attest_barrier', NOW + 960000, NOW), true);
+        });
+
+        it('no stall is never a future-block wait, however far ahead the instant', function () {
+            assert.strictEqual(waitingOnFutureBlock(null, NOW + 960000, NOW), false);
+        });
+
+        it('a reached or passed instant is no longer a wait', function () {
+            assert.strictEqual(waitingOnFutureBlock('anchor_attest_barrier', NOW, NOW), false);
+            assert.strictEqual(waitingOnFutureBlock('anchor_attest_barrier', NOW - 1, NOW), false);
+        });
+
+        it('barriers with no wall-clock instant are never a future-block wait', function () {
+            for (const d of [undefined, null, NaN, Infinity, -Infinity, 'soon']) {
+                assert.strictEqual(waitingOnFutureBlock('call_presence_barrier', d, NOW), false,
+                                   'must not claim a future wait for stallClearsAt=' + String(d));
+            }
+        });
+    });
+
+    describe('stallClassOf()', function () {
+        it('no stall classifies as none', function () {
+            assert.strictEqual(stallClassOf(null, RECENT, GRACE, NOW, null), 'none');
+            assert.strictEqual(stallClassOf(null, LONG_STALL, GRACE, NOW, NOW + 960000), 'none');
+        });
+
+        it('the testnet4 steady state classifies as future_block_wait, not wedged', function () {
+            // no commit for 15 min against a 2 min grace, but the head block is stamped
+            // 16 min ahead: the old surface called this a wedge-shaped degradation
+            assert.strictEqual(stallClassOf('anchor_attest_barrier', LONG_STALL, GRACE, NOW, NOW + 960000),
+                               'future_block_wait');
+        });
+
+        it('an advancing barrier defer with no wall-clock instant classifies as barrier_defer', function () {
+            assert.strictEqual(stallClassOf('price_sync_barrier', RECENT, GRACE, NOW, null), 'barrier_defer');
+        });
+
+        it('a real wedge still classifies as wedged', function () {
+            assert.strictEqual(stallClassOf('vm_executor_unavailable', LONG_STALL, GRACE, NOW, null), 'wedged');
+            // and once the clear instant has passed and the stall persists
+            assert.strictEqual(stallClassOf('anchor_attest_barrier', LONG_STALL, GRACE, NOW, NOW - 1), 'wedged');
+        });
+
+        it('the class never contradicts stallWedged()', function () {
+            const cases = [
+                ['anchor_attest_barrier', LONG_STALL, NOW + 960000],
+                ['anchor_attest_barrier', LONG_STALL, NOW - 1],
+                ['price_sync_barrier',    RECENT,     null],
+                ['vm_executor_unavailable', LONG_STALL, null],
+                [null,                    LONG_STALL, null]
+            ];
+            for (const [reason, committedAt, clearsAt] of cases) {
+                const wedged = stallWedged(reason, committedAt, GRACE, NOW, clearsAt);
+                const cls    = stallClassOf(reason, committedAt, GRACE, NOW, clearsAt);
+                assert.strictEqual(cls === 'wedged', wedged,
+                                   `class ${cls} disagrees with stallWedged=${wedged} for ${String(reason)}`);
+            }
+        });
+    });
+
+    describe('atProcessableTip()', function () {
+        it('level with the decoder tip is at the processable tip', function () {
+            assert.strictEqual(atProcessableTip(true, null, null, NOW), true);
+        });
+
+        it('a future-stamped block in the way still counts as caught up', function () {
+            // the point of the field: lag is 6, isSynced is false, and the indexer holds
+            // every block consensus permits it to hold
+            assert.strictEqual(atProcessableTip(false, 'anchor_attest_barrier', NOW + 960000, NOW), true);
+        });
+
+        it('an ordinary catch-up or mirror-lag defer is NOT at the processable tip', function () {
+            assert.strictEqual(atProcessableTip(false, null, null, NOW), false);
+            assert.strictEqual(atProcessableTip(false, 'price_sync_barrier', null, NOW), false);
+            assert.strictEqual(atProcessableTip(false, 'anchor_attest_barrier', NOW - 1, NOW), false);
+        });
     });
 });
