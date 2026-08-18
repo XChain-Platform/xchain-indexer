@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-08-18
+
+Consensus-affecting changes in this release ship behind per-chain activation
+points; behavior below each activation height is unchanged.
+
+### Added
+- LIST actions carry a MEMO, with multi-destroy and exponential amounts now logged correctly (activation-gated).
+- `/status` and the health RPC report the future-stamped-block wait distinctly from stalls (`waitingOnFutureBlock`, `stallClass`, `atProcessableTip`), so a miner riding the future-time cap no longer reads as degradation.
+
+### Changed
+- Head-side archive reassembly widening is gated behind a per-network flag day.
+- The previously dead `invalid_archive` state-hash class is repaired behind a per-chain flag-day gate.
+- VM lint global-alias hardening is gated behind a per-coin activation epoch.
+- A stale oracle tip stays visible with its price withheld, behind a new activation gate.
+- `xchainRequiresHub` moves to `0.10.0`, the hub's version in this release.
+
+### Fixed
+- The archive reassembly CRC gate is deterministic across nodes.
+- Code-review round fixes across actions, API, and state code (two rounds, 29 files).
+
+### Security
+- Raised the brace-expansion and js-yaml dependency floors and the advisory guards that pin them.
+
 ## [0.9.0] - 2026-08-14
 
 First release of the XChain Platform release train. Every component in the train
