@@ -26,3 +26,4 @@ CREATE UNIQUE INDEX action_index ON files (action_index);
 CREATE        INDEX type_id      ON files (type_id);
 CREATE        INDEX memo_id      ON files (memo_id);
 CREATE        INDEX status_id    ON files (status_id);
+CREATE        INDEX name         ON files (name);

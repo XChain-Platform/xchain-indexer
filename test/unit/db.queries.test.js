@@ -1578,6 +1578,19 @@ describe('Database.reconcileTableIndexes() prefix/direction-preserving DDL @regr
         assert.deepStrictEqual(idxs[0].columns, ['a', 'b']);
         assert.deepStrictEqual(idxs[0].directions, ['ASC', 'DESC']);
     });
+
+    // files.name shipped UNINDEXED; the by-name query mode added a standalone
+    // `CREATE INDEX name ON files (name);` so reconcileTableIndexes self-heals it
+    // on an existing install (verifyTables calls it at boot), not just on a fresh
+    // install of files.sql.
+    it('recreates a missing files.name index on an existing install', async function () {
+        const dbc = { query: noIndexes() };
+        await db.reconcileTableIndexes('files.sql', dbc);
+        const alters = dbc.query.getCalls().map(c => c.args[0]).filter(s => /^ALTER TABLE/i.test(s));
+        const name   = alters.find(s => /ADD INDEX `name`/.test(s));
+        assert.ok(name, 'the declared files.name index must be added: ' + alters.join(' | '));
+        assert.match(name, /\(`name`\)/, 'no width may be invented for a full-column index: ' + name);
+    });
 });
 
 // #4359: relaxing NOT NULL -> NULL with a bare MODIFY restates the whole column, so every
