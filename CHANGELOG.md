@@ -11,10 +11,12 @@ Consensus-affecting changes in this release ship behind per-chain activation
 points; behavior below each activation height is unchanged.
 
 ### Added
+- Per-contract and network-wide per-block ceilings on attestation requests, rejected at admission rather than deferred (activation-gated).
 - LIST actions carry a MEMO, with multi-destroy and exponential amounts now logged correctly (activation-gated).
 - `/status` and the health RPC report the future-stamped-block wait distinctly from stalls (`waitingOnFutureBlock`, `stallClass`, `atProcessableTip`), so a miner riding the future-time cap no longer reads as degradation.
 
 ### Changed
+- The pending testnet flag days are armed at genesis, so a public testnet runs with every rule in force: exact ledger amounts, the widened archive-head gate, snapshot reorg burial, the attestation broadcast-fee carve-out, and the escrow locked-balance leaf.
 - Head-side archive reassembly widening is gated behind a per-network flag day.
 - The previously dead `invalid_archive` state-hash class is repaired behind a per-chain flag-day gate.
 - VM lint global-alias hardening is gated behind a per-coin activation epoch.
