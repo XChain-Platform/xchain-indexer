@@ -21,8 +21,7 @@
  * EMPTY_SMT_ROOT. This module is the gate that decides, per slot and per chain,
  * when a reserved slot may stop being EMPTY. What is armed today:
  *   BTC:regtest   contract_state_root from 10000, escrow locked leaf from 11200
- *   BTC:testnet   contract_state_root from 146500, escrow locked leaf from genesis
- *   LTC/DOGE:testnet  escrow locked leaf from genesis
+ *   BTC/LTC/DOGE:testnet  contract_state_root and escrow locked leaf from genesis
  * Every other chain, network and slot answers "off", and MAINNET IS UNARMED for
  * every slot, so their committed state_root stays byte-identical to the
  * two-sub-root v1 assembly. The escrow leaf remains a SEPARATE flag day from
@@ -94,10 +93,23 @@ const RESERVED_SUBTREES = ['ownership_root', 'tokens_root', 'contract_state_root
 // OWN block_index. At/after the height the slot MAY carry a real sub-root; below
 // it (and for any chain absent from the map) the slot commits EMPTY_SMT_ROOT.
 //
-// *** ARMED: contract_state_root on BTC:regtest at 10000 (2026-07-28) and on
-// *** BTC:testnet at 146500 (2026-07-30).
+// *** ARMED: contract_state_root on BTC:regtest at 10000 (2026-07-28) and from
+// *** GENESIS on BTC, LTC and DOGE testnet.
+// The testnet entries read 0 rather than a measured height because those chains
+// are rebuilt from chain before launch, so every block is derived under this rule
+// and no row written without it survives to disagree. BTC:testnet held 146500
+// until the 2026-08-10 re-genesis moved firstBlock above it, which left the
+// height inert but readable as a boundary that no longer exists; LTC and DOGE had
+// no entry at all. Genesis on all three states the intent directly and matches
+// the escrow leaf below, so one reindex covers both stages.
+//
+// The ordering rule is satisfied at 0: a slot must never arm below its chain's
+// state_key_collation_activation height, or the SMT is built over a
+// collation-FOLDED key set and forks. All three testnets are genesis-active
+// there too (see state_key_collation_activation.js), so nothing precedes it.
+//
 // Everything else is still inert, on every chain and network. MAINNET IS UNARMED
-// for every slot, and stays that way until arms on 2026-08-17.
+// for every slot.
 //
 // Regtest armed FIRST and alone, and only once the derivation existed. The
 // earlier rule here ("a slot stays off even on regtest, because an armed slot
@@ -107,36 +119,35 @@ const RESERVED_SUBTREES = ['ownership_root', 'tokens_root', 'contract_state_root
 // is where being wrong costs a chain reset and nothing more, so it is the venue
 // that earns the right to arm testnet, and testnet earns mainnet.
 //
-// BTC:testnet 146500 joins it (2026-07-30). Both hard preconditions hold, and
-// they hold for DIFFERENT reasons than on regtest (spec §3 Stage A):
-//   1. collation: state_key_collation_activation arms BTC:testnet at 146000, and
-//      146500 is above it, so the SMT is built over the binary-collation key set
-//      rather than a collation-FOLDED one. Regtest satisfies the same rule
-//      trivially, being armed from genesis (0).
+// All three testnet chains join it from genesis. Both hard preconditions hold,
+// and they hold for DIFFERENT reasons than on regtest (spec §3 Stage A):
+//   1. collation: state_key_collation_activation is genesis-active on BTC, LTC
+//      and DOGE testnet, so at height 0 nothing precedes it and the SMT is built
+//      over the binary-collation key set rather than a collation-FOLDED one.
+//      Regtest satisfies the same rule trivially, being armed from genesis too.
 //   2. NUL keys: isStateKeyNulRejectActive returns true unconditionally for
 //      testnet AND regtest (xchain-vm), so on neither network can a contract
 //      plant a key that throws in joinFields and halts the arming block's
-// buildFull. Mainnet is a DATE (2026-08-17) and is why no mainnet
-//      height may be set here yet.
+//      buildFull. Mainnet is a DATE and is why no mainnet height may be set
+//      here yet.
 //
-// Why BTC:testnet and not the other two testnet chains, which is a measurement
-// rather than a preference:
-//   - LTC:testnet is BELOW its own collation height (tip ~4,825,000 against
-//     4,890,000) and at its measured ~4.7 blocks/hour will not reach it for
-//     roughly 575 days, so precondition 1 forbids it outright today.
-//   - DOGE:testnet is eligible (tip ~67.79M over a 67.5M collation height) but
-// has NO follower: it is SYNC_EXCLUDE'd on the sync client, so
-//     arming it exercises the source alone. BTC:testnet is the only testnet
-//     chain with a live source-plus-follower pair, which makes it the only one
-//     whose arming boundary gets a cross-twin check.
+// No per-chain argument separates the three: since the fresh testnet genesis
+// their collation heights are all 0, so precondition 1 is satisfied identically
+// and none of them is closer to or further from eligibility than another.
 //
-// Honest limit on what this height proves: BTC:testnet holds ZERO contract_state
-// rows, so the armed slot commits EMPTY_SMT_ROOT and state_root does not move at
-// all (a named-but-empty slot is byte-identical to a padded one, see the header).
-// What the boundary really exercises is the version path: state_root_version
-// flips 1 -> 2 and flows through getblockhashes into the signed checkpoint
-// canonical. Exercising the DERIVATION on testnet needs contract state on the
-// chain first.
+// DOGE:testnet is SYNC_EXCLUDE'd on the sync client, so its arming exercises the
+// source alone. That bounds the EVIDENCE, not the eligibility: BTC:testnet is
+// the only testnet chain with a live source-plus-follower pair, so it is the one
+// whose arming gets a cross-twin check, and the chain to read when asking
+// whether the twins agree.
+//
+// Honest limit on what genesis arming proves: a testnet chain with no
+// contract_state rows commits EMPTY_SMT_ROOT for the slot, so state_root does
+// not move at all (a named-but-empty slot is byte-identical to a padded one, see
+// the header). What arming really exercises there is the version path:
+// state_root_version reads 2 and flows through getblockhashes into the signed
+// checkpoint canonical. Exercising the DERIVATION needs contract state on the
+// chain first, which BTC:testnet now has and the other two do not.
 //
 // Arming order is fixed by the design doc: contract_state_root first (Stage A,
 // and never below that chain's state_key_collation_activation height, or the SMT
@@ -144,7 +155,12 @@ const RESERVED_SUBTREES = ['ownership_root', 'tokens_root', 'contract_state_root
 const STATE_SUBTREE_ACTIVATION = {
     ownership_root:      {},
     tokens_root:         {},
-    contract_state_root: { 'BTC:regtest': 10000, 'BTC:testnet': 146500 },
+    contract_state_root: {
+        'BTC:regtest':  10000,
+        'BTC:testnet':  0,
+        'LTC:testnet':  0,
+        'DOGE:testnet': 0,
+    },
 };
 
 // SHADOW-COMPUTE WINDOW (spec §7 step 1). INERT: every map empty.
@@ -246,11 +262,18 @@ const ESCROW_LOCKED_LEAF_ACTIVATION = {
 // (97 live keys, incremental against arming replay, measured 2026-08-11), but
 // only the incremental path is the one no public chain has ever exercised.
 //
-// Nothing here is committed. balances_root stays byte-identical to v1 while
-// this is a shadow, and every locked-balance proof stays refused, because
-// ESCROW_LOCKED_LEAF_ACTIVATION above is what the explorer and the SDK
-// verifier gate on and it is untouched.
-const ESCROW_LOCKED_LEAF_SHADOW = { 'BTC:testnet': 148000 };
+// Nothing here is committed. balances_root stays byte-identical to v1 while a
+// chain is only shadowing, and its locked-balance proofs stay refused, because
+// ESCROW_LOCKED_LEAF_ACTIVATION above is what the explorer and the SDK verifier
+// gate on.
+//
+// EMPTY, and deliberately so. The BTC:testnet entry that sat here at 148000 was
+// dead the moment the leaf armed at genesis on all three testnets: ARMED WINS
+// over a shadow, so the window could never open, while the surrounding prose
+// still read as though the leaf were unarmed there. A shadow height below its
+// own chain's arming height is unreachable by construction, so leaving it in
+// place taught the next reader something false about what testnet commits.
+const ESCROW_LOCKED_LEAF_SHADOW = {};
 
 // Resolve a per-chain threshold out of one map. '<COIN>:<network>' is the ONLY
 // key shape (no bare-network fallback, see header). Unknown -> undefined ->
