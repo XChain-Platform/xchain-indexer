@@ -15,8 +15,11 @@
 DROP TABLE IF EXISTS bet_feeds;
 CREATE TABLE bet_feeds (
     action_index   BIGINT UNSIGNED NOT NULL, -- Unique action index
-    label          VARCHAR(250),             -- Feed label (market title)
-    outcomes       VARCHAR(1100),            -- Canonical comma-joined outcome labels (trimmed, no surrounding whitespace)
+    -- utf8mb4: market title and outcome labels are free-form user content, so a 4-byte
+    -- character is legal. Neither is indexed, and 250+1100 chars at 4 bytes stays far
+    -- inside the 65535-byte row limit.
+    label          VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci, -- Feed label (market title)
+    outcomes       VARCHAR(1100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci, -- Canonical comma-joined outcome labels (trimmed, no surrounding whitespace)
     tick_id        BIGINT UNSIGNED,          -- id of record in index_tickers table (wager token)
     fee            VARCHAR(11),              -- Oracle fee as a PERCENT of the total pot (2dp; '1.00' = 1%)
     deadline       BIGINT UNSIGNED,          -- unix timestamp betting closes / earliest resolve (64-bit per Y2038 discipline)
@@ -26,7 +29,9 @@ CREATE TABLE bet_feeds (
     min_amount     VARCHAR(250),             -- Minimum stake per bet (NULL = none)
     allow_list     BIGINT UNSIGNED,          -- action_index of a list from the lists table (only members may bet)
     block_list     BIGINT UNSIGNED,          -- action_index of a list from the lists table (members may NOT bet; block wins)
-    details        TEXT,                     -- Market definition JSON, base64 as landed on the wire (NULL = none)
+    -- utf8mb4: nominally base64, but the value is stored as it landed on the wire with
+    -- no charset validation, so a 4-byte character reaches the column on an invalid feed.
+    details        TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci, -- Market definition JSON, base64 as landed on the wire (NULL = none)
     memo_id        BIGINT UNSIGNED,          -- id of record in index_memos table
     status_id      BIGINT UNSIGNED,          -- id of record in index_statuses table (parse status of the create tx)
     feed_status_id BIGINT UNSIGNED,          -- id of record in index_statuses table (current feed lifecycle status:

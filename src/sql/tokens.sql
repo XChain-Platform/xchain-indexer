@@ -22,7 +22,8 @@ CREATE TABLE tokens (
     max_supply         VARCHAR(250),                         -- Maximum Supply
     max_mint           VARCHAR(250),                         -- Supply minted
     decimals           TINYINT(2),                           -- 0=non-divisible, 1-18=divisible
-    description        VARCHAR(250),                         -- token description, or a URL to a TIS JSON document (Token Information Standard); not an icon URL
+    -- utf8mb4: DESCRIPTION is free-form user content, so a 4-byte character is legal.
+    description        VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci, -- token description, or a URL to a TIS JSON document (Token Information Standard); not an icon URL
     lock_max_supply    TINYINT(1) NOT NULL DEFAULT 0,        -- Locks MAX_SUPPLY
     lock_mint          TINYINT(1) NOT NULL DEFAULT 0,        -- Locks MINT
     lock_mint_supply   TINYINT(1) NOT NULL DEFAULT 0,        -- Locks MINT_SUPPLY

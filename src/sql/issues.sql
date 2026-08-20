@@ -19,7 +19,8 @@ CREATE TABLE issues (
     max_supply          VARCHAR(250),             -- Maximum token supply (1000000000000000000000.000000000000000000 = 40 Characters)
     max_mint            VARCHAR(250),             -- Maximum amount of supply a MINT transaction can issue
     decimals            VARCHAR(2),               -- Number of decimal places token should have (max: 18, default: 0)
-    description         VARCHAR(250),             -- URL to a an icon to use for this token (48x48 standard size)
+    -- utf8mb4: DESCRIPTION is free-form user content, so a 4-byte character is legal.
+    description         VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci, -- URL to a an icon to use for this token (48x48 standard size)
     mint_supply         VARCHAR(250),             -- Maximum amount of supply a MINT transaction can issue
     transfer_id         BIGINT UNSIGNED,          -- id of record in index_addresses table
     transfer_supply_id  BIGINT UNSIGNED,          -- id of record in index_addresses table
