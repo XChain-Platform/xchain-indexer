@@ -37,7 +37,7 @@ const crypto = require('crypto');
 const { createDatabases, createDecoderSchema, decoderQuery, indexerQuery,
         closeAll } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
-const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
+const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
 const { seedGas } = require('../setup/gas-seeder');
 
 const OWNER  = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD'; // issues tokens, binds, airdrops/dividends
@@ -87,7 +87,7 @@ describe('Controller: AIRDROP/DIVIDEND/SWEEP gated by the transfer controller (r
         try { require('xchain-vm'); } catch (e) { return this.skip(); }
         process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
         process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
         seeder = new DecoderSeeder(decoderQuery);
         await seedGas(seeder, { addresses: [OWNER, SW1, SW2], amount: '1000' });
@@ -128,6 +128,7 @@ describe('Controller: AIRDROP/DIVIDEND/SWEEP gated by the transfer controller (r
 
     after(async function () {
         if (indexer) await destroyIndexer(indexer);
+        await destroyFileIndexers(__filename);
         await closeAll();
     });
 

@@ -35,7 +35,7 @@ const fc = require('fast-check');
 const { decoderQuery, indexerQuery, createDatabases, createDecoderSchema,
         resetDecoderDb, resetIndexerDb, closeAll } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
-const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
+const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
 const { seedGas } = require('../setup/gas-seeder');
 const { assertStateInvariants } = require('../setup/state-invariants');
 
@@ -188,11 +188,12 @@ describe('12 Randomized action sequences preserve ledger invariants @tier3', fun
     this.timeout(0);
 
     before(async function () {
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
     });
 
     after(async function () {
+        await destroyFileIndexers(__filename);
         await closeAll();
     });
 

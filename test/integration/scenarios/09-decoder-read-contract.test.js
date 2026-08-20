@@ -42,6 +42,7 @@ const assert = require('assert');
 const { decoderQuery, createDatabases, createDecoderSchema,
         resetDecoderDb, getConnectionParams, closeAll } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
+const { destroyFileIndexers } = require('../setup/indexer-launcher');
 
 // Build a standalone decoder-DB handle exactly the way XChainIndexer does
 // (db.js Database needs only indexer.config + indexer.util).
@@ -77,7 +78,7 @@ describe('Decoder->indexer DB read contract @regression @tier1', function () {
     before(async function () {
         process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
         process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();   // loads xchain-decoder/src/sql/*.sql (the REAL DDL)
 
         const p = getConnectionParams();
@@ -90,6 +91,7 @@ describe('Decoder->indexer DB read contract @regression @tier1', function () {
 
     after(async function () {
         if (decoderDb && decoderDb.pool) await decoderDb.pool.end();
+        await destroyFileIndexers(__filename);
         await closeAll();
     });
 

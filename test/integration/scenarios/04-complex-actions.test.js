@@ -28,7 +28,7 @@ const {
     resetDecoderDb, resetIndexerDb, closeAll,
 } = require('../setup/db-connection');
 const DecoderSeeder    = require('../setup/decoder-seeder');
-const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
+const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
 const helpers = require('../setup/assertion-helpers');
 
 const ADDR1 = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD';
@@ -72,11 +72,12 @@ async function seedGasToken(seeder, addr, amount) {
 
 before(async function () {
     this.timeout(30000);
-    await createDatabases();
+    await createDatabases(__filename);
     await createDecoderSchema();
 });
 
 after(async function () {
+    await destroyFileIndexers(__filename);
     await closeAll();
 });
 

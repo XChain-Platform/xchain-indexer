@@ -39,7 +39,7 @@ const assert = require('assert');
 const {
     createDatabases, resetIndexerDb, closeAll,
 } = require('../setup/db-connection');
-const { initIndexer, destroyIndexer } = require('../setup/indexer-launcher');
+const { initIndexer, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
 
 // 30-char addresses (valid P2PKH length, matching the other scenarios)
 const PAYER = 'mvBF62avYXhcRZGtQsrE11qByVdDSuMhss';
@@ -49,13 +49,14 @@ let indexer;
 
 before(async function () {
     this.timeout(30000);
-    await createDatabases();
+    await createDatabases(__filename);
     await resetIndexerDb();
     indexer = await initIndexer();
 });
 
 after(async function () {
     await destroyIndexer(indexer);
+    await destroyFileIndexers(__filename);
     await closeAll();
 });
 

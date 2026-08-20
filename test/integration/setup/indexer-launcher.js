@@ -20,7 +20,14 @@
  * Both modes use the real XChainIndexer code against real MariaDB databases.
  */
 
-const { getConnectionParams } = require('./db-connection');
+const { getConnectionParams, activeFileKey, fileKey } = require('./db-connection');
+
+// Instances handed out by initIndexer() and not yet destroyed, each against the
+// test file whose schemas were active when it was made. Ownership matters:
+// 07-expiry-ordering and 27-expiry-pushdown build their indexer in a ROOT hook,
+// which mocha runs before any suite, so those instances are live for the whole
+// tier and must survive every other file's teardown. See destroyFileIndexers().
+const liveIndexers = new Map();
 
 // Ensure env is set before requiring indexer modules
 process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
@@ -93,6 +100,7 @@ async function initIndexer(opts = {}) {
     indexer.genesis = new Genesis(indexer.actions, indexer.indexerDb, indexer.config, indexer.util);
 
     // Create and verify databases and tables
+    liveIndexers.set(indexer, activeFileKey());
     await indexer.indexerDb.createDatabase();
     await indexer.indexerDb.verifyTables();
 
@@ -228,6 +236,7 @@ async function processBlocks(indexer) {
  */
 async function destroyIndexer(indexer) {
     if (!indexer) return;
+    liveIndexers.delete(indexer);
     try {
         if (indexer.decoderDb && indexer.decoderDb.pool) await indexer.decoderDb.pool.end();
     } catch (e) { /* ignore */ }
@@ -236,4 +245,20 @@ async function destroyIndexer(indexer) {
     } catch (e) { /* ignore */ }
 }
 
-module.exports = { createIndexer, initIndexer, processBlocks, destroyIndexer };
+/**
+ * Destroy every instance this test file made and did not destroy. Pass
+ * __filename, and call it from the file's after hook.
+ *
+ * Scenarios init and destroy in sequence rather than try/finally, so a test
+ * that throws or times out between the two leaves the instance and its pool
+ * live. Sweeping at the end of the file makes teardown complete no matter which
+ * test failed, so no connection pool and no in-flight schema work is still
+ * holding the file's schemas when the next file starts.
+ */
+async function destroyFileIndexers(testFile) {
+    const owner = fileKey(testFile);
+    for (const [indexer, key] of Array.from(liveIndexers))
+        if (key === owner) await destroyIndexer(indexer);
+}
+
+module.exports = { createIndexer, initIndexer, processBlocks, destroyIndexer, destroyFileIndexers };

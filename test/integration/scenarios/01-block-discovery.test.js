@@ -24,7 +24,7 @@ const assert = require('assert');
 const { decoderQuery, indexerQuery, createDatabases, createDecoderSchema,
         resetDecoderDb, resetIndexerDb, closeAll } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
-const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
+const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
 const { seedGas } = require('../setup/gas-seeder');
 const { assertBlockCount, assertHashChain, countRows,
         getActionIndex } = require('../setup/assertion-helpers');
@@ -44,7 +44,7 @@ describe('Block Discovery and Sync @regression @tier3', function () {
     let seeder, indexer;
 
     before(async function () {
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
     });
 
@@ -60,6 +60,7 @@ describe('Block Discovery and Sync @regression @tier3', function () {
     });
 
     after(async function () {
+        await destroyFileIndexers(__filename);
         await closeAll();
     });
 

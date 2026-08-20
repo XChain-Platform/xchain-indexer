@@ -37,7 +37,7 @@ const assert = require('assert');
 const { decoderQuery, indexerQuery, createDatabases, createDecoderSchema,
         resetDecoderDb, resetIndexerDb, closeAll } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
-const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
+const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
 const { assertBalance, countRows } = require('../setup/assertion-helpers');
 const { seedGas } = require('../setup/gas-seeder');
 
@@ -54,7 +54,7 @@ describe('28 output fan-out collapse: a multi-output data-bearing tx runs ONCE @
     let indexer;
 
     before(async function () {
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
         await resetDecoderDb();
         await resetIndexerDb();
@@ -87,6 +87,7 @@ describe('28 output fan-out collapse: a multi-output data-bearing tx runs ONCE @
 
     after(async function () {
         await destroyIndexer(indexer);
+        await destroyFileIndexers(__filename);
         await closeAll();
     });
 

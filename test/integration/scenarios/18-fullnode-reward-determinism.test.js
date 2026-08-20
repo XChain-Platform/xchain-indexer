@@ -56,7 +56,7 @@ const crypto = require('crypto');
 const { decoderQuery, indexerQuery, createDatabases, createDecoderSchema,
         resetDecoderDb, resetIndexerDb, closeAll } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
-const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
+const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
 const ed25519 = require('../../../src/ed25519.js');
 const eq      = require('../../../src/equivocation_header.js');
 
@@ -248,7 +248,7 @@ describe('Integration: full-node reward-tranche determinism @regression @tier1',
             { FULLNODE_GENESIS_VERIFIERS: verifiers.map(v => v.pub).join(',') });
         for (const k of Object.keys(env)) { _savedEnv[k] = process.env[k]; process.env[k] = env[k]; }
 
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
         firstRun = await runCorpus();
     });
@@ -258,6 +258,7 @@ describe('Integration: full-node reward-tranche determinism @regression @tier1',
             if (_savedEnv[k] === undefined) delete process.env[k];
             else process.env[k] = _savedEnv[k];
         }
+        await destroyFileIndexers(__filename);
         await closeAll();
     });
 

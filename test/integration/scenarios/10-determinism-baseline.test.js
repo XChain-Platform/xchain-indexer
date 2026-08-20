@@ -43,7 +43,7 @@ const path = require('path');
 const { decoderQuery, indexerQuery, createDatabases, createDecoderSchema,
         resetDecoderDb, resetIndexerDb, closeAll } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
-const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
+const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
 const { seedGas } = require('../setup/gas-seeder');
 
 const BASELINE_PATH = path.join(__dirname, '..', 'INDEXER_STATE_BASELINE.json');
@@ -117,12 +117,13 @@ describe('Indexer cross-node determinism baseline @regression @tier1', function 
     before(async function () {
         process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
         process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
         firstChain = await runCorpus();
     });
 
     after(async function () {
+        await destroyFileIndexers(__filename);
         await closeAll();
     });
 

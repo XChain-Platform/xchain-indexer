@@ -39,10 +39,10 @@ const {
     decoderQuery, indexerQuery, indexerBQuery,
     createDatabases, createDecoderSchema,
     resetDecoderDb, resetIndexerDb, resetIndexerDbB,
-    closeAll, INDEXER_DB_B,
+    closeAll, indexerDbNameB,
 } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
-const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
+const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
 const { seedGas } = require('../setup/gas-seeder');
 const { assertStateInvariants } = require('../setup/state-invariants');
 const { readHashChain, assertHashChainsEqual, assertIndexerDbsEquivalent }
@@ -103,7 +103,7 @@ async function deleteDecoderBlocksFrom(blockIndex) {
 
 /** Run a fresh node B over the current decoder DB and return its hash chain. */
 async function runNodeB() {
-    const nodeB = await initIndexer({ indexerName: INDEXER_DB_B });
+    const nodeB = await initIndexer({ indexerName: indexerDbNameB() });
     try {
         await processBlocks(nodeB);
         return await readHashChain(indexerBQuery);
@@ -118,11 +118,12 @@ describe('13 – Cross-node equivalence @regression @tier1', function () {
     before(async function () {
         process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
         process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
     });
 
     after(async function () {
+        await destroyFileIndexers(__filename);
         await closeAll();
     });
 

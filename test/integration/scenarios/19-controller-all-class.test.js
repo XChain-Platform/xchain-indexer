@@ -37,7 +37,7 @@ const crypto = require('crypto');
 const { createDatabases, createDecoderSchema, decoderQuery, indexerQuery,
         closeAll } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
-const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
+const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
 const { seedGas } = require('../setup/gas-seeder');
 
 const OWNER = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD'; // valid regtest P2PKH
@@ -85,7 +85,7 @@ describe("Controller 'all' action class: fallback + override (real DB + real VM)
         try { require('xchain-vm'); } catch (e) { return this.skip(); }
         process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
         process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
         seeder = new DecoderSeeder(decoderQuery);
         await seedGas(seeder, { addresses: [OWNER], amount: '1000' });
@@ -105,6 +105,7 @@ describe("Controller 'all' action class: fallback + override (real DB + real VM)
 
     after(async function () {
         if (indexer) await destroyIndexer(indexer);
+        await destroyFileIndexers(__filename);
         await closeAll();
     });
 

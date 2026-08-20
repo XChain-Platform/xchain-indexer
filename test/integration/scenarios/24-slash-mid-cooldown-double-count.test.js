@@ -44,7 +44,7 @@ const crypto = require('crypto');
 const { decoderQuery, indexerQuery, createDatabases, createDecoderSchema,
         resetDecoderDb, resetIndexerDb, closeAll } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
-const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
+const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
 const eq = require('../../../src/equivocation_header.js');
 
 const FUNDER = 'mgash6jYSKAR3Q5HPpDgNX2BYr18q9N6GQ'; // configs/BTC.js ADDRESS.GAS (fee-exempt gas funder)
@@ -137,12 +137,12 @@ describe('Integration: SLASH mid-cooldown must burn the bond once (real DB + rea
         process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
         process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
         offender = genKey();
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
         run = await runCorpus();
     });
 
-    after(async function () { await closeAll(); });
+    after(async function () { await destroyFileIndexers(__filename); await closeAll(); });
 
     it('the slash landed inside the post-unstake activation-delay window (setup sanity)', function () {
         // Exactly one stakes row, carrying a FUTURE deactivation_block > SLASH_BLOCK: this is the

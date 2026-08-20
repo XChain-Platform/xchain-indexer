@@ -42,7 +42,7 @@ const assert = require('assert');
 const {
     createDatabases, closeAll,
 } = require('../setup/db-connection');
-const { initIndexer, destroyIndexer } = require('../setup/indexer-launcher');
+const { initIndexer, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
 
 let indexer;
 let db;
@@ -269,13 +269,14 @@ async function clearBook(type) {
 
 before(async function () {
     this.timeout(60000);
-    await createDatabases();
+    await createDatabases(__filename);
     indexer = await initIndexer();
     db = indexer.indexerDb;
 });
 
 after(async function () {
     await destroyIndexer(indexer);
+    await destroyFileIndexers(__filename);
     await closeAll();
 });
 
