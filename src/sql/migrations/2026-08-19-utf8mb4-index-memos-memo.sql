@@ -30,8 +30,10 @@
 --    this ALTER fails with errno 1071 rather than applying, so check the row format
 --    first and convert the table before running this file:
 --
---      SELECT row_format FROM information_schema.innodb_tables
---       WHERE name = CONCAT(DATABASE(), '/index_memos');
+--      SELECT row_format FROM information_schema.tables
+--       WHERE table_schema = DATABASE() AND table_name = 'index_memos';
+--      -- (information_schema.innodb_tables is MySQL-8-only; on MariaDB the
+--      --  portable check above works for any user, no PROCESS privilege needed)
 --      -- if not Dynamic:
 --      ALTER TABLE index_memos ROW_FORMAT=DYNAMIC;
 --
