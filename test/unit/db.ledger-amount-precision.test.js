@@ -86,14 +86,18 @@ describe('Exact-ledger flag-day: activation map @regression @tier1', function ()
         assert.strictEqual(ledgerPrecision.isLedgerAmountPrecisionActive(500000, 'regtest', 'LTC'), true);
     });
 
-    it('mainnet is UNPINNED, so the rule is inert there', function () {
-        for (const coin of ['BTC', 'LTC', 'DOGE']) {
+    it('mainnet is pinned above the tip, so the rule is inert across all existing history', function () {
+        const PINNED = { BTC: 966500, LTC: 3175500, DOGE: 6370000 };
+        for (const [coin, height] of Object.entries(PINNED)) {
             assert.strictEqual(
-                ledgerPrecision.LEDGER_AMOUNT_PRECISION_ACTIVATION[coin + ':mainnet'], null,
-                coin + ':mainnet must stay unpinned until its flag day is measured');
+                ledgerPrecision.LEDGER_AMOUNT_PRECISION_ACTIVATION[coin + ':mainnet'], height,
+                coin + ':mainnet must carry its ratified height');
             assert.strictEqual(
-                ledgerPrecision.isLedgerAmountPrecisionActive(99999999, 'mainnet', coin), false,
-                coin + ':mainnet must not activate at any height while unpinned');
+                ledgerPrecision.isLedgerAmountPrecisionActive(height - 1, 'mainnet', coin), false,
+                coin + ':mainnet must stay legacy for every block below the height');
+            assert.strictEqual(
+                ledgerPrecision.isLedgerAmountPrecisionActive(height, 'mainnet', coin), true,
+                coin + ':mainnet must activate AT the height');
         }
     });
 
