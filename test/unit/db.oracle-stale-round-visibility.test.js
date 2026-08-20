@@ -91,7 +91,7 @@ describe('VM oracle stale-round visibility gate (getOracleDataForVM) @regression
     describe('gate: what a STALE tip round looks like to the VM', function () {
 
         it('mainnet BELOW its per-coin height drops the stale tip (legacy, byte-identical replay)', async function () {
-            const db   = dbFor('mainnet', 'BTC', STALE_TIP);   // BTC:mainnet armed at 963000
+            const db   = dbFor('mainnet', 'BTC', STALE_TIP);   // BTC:mainnet armed at 966500
             const snap = await db.getOracleDataForVM(500, BLOCK_TS, MAX_AGE);
             assert.strictEqual(snap.prices[PAIR], undefined,
                 'below the armed height a stale tip must not appear in prices at all');
@@ -110,7 +110,7 @@ describe('VM oracle stale-round visibility gate (getOracleDataForVM) @regression
 
         it('mainnet AT its per-coin height flips to the withheld-price row', async function () {
             const db   = dbFor('mainnet', 'BTC', STALE_TIP);
-            const snap = await db.getOracleDataForVM(963000, BLOCK_TS, MAX_AGE);
+            const snap = await db.getOracleDataForVM(966500, BLOCK_TS, MAX_AGE);
             assert.ok(snap.prices[PAIR], 'at the armed height the stale tip becomes visible');
             assert.strictEqual(snap.prices[PAIR].price, null);
             assert.strictEqual(snap.prices[PAIR].roundNumber, 42);
@@ -185,19 +185,23 @@ describe('VM oracle stale-round visibility gate (getOracleDataForVM) @regression
         });
 
         it('mainnet is armed per coin: inert below the height, active at/after it', function () {
-            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(962999, 'mainnet', 'BTC'), false);
-            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(963000, 'mainnet', 'BTC'), true);
-            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(3161999, 'mainnet', 'LTC'), false);
-            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(3162000, 'mainnet', 'LTC'), true);
-            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(6337999, 'mainnet', 'DOGE'), false);
-            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(6338000, 'mainnet', 'DOGE'), true);
+            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(966499, 'mainnet', 'BTC'), false);
+            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(966500, 'mainnet', 'BTC'), true);
+            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(3175499, 'mainnet', 'LTC'), false);
+            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(3175500, 'mainnet', 'LTC'), true);
+            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(6369999, 'mainnet', 'DOGE'), false);
+            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(6370000, 'mainnet', 'DOGE'), true);
         });
 
-        it('pinned to the shared pre-freeze deploy-train boundary', function () {
+        it('is pinned ahead of the tip the first carrying fleet deploys at', function () {
+            // The heights are the gate's whole safety property: a flag day at or
+            // below the tip that first carries this code has a retroactive window,
+            // in which a node that reindexes derives different contract state from
+            // one that does not. Pin them exactly, so a re-pin has to come here.
             assert.deepStrictEqual(srv.ORACLE_STALE_ROUND_VISIBILITY_ACTIVATION, {
-                'BTC:mainnet':  963000,
-                'LTC:mainnet':  3162000,
-                'DOGE:mainnet': 6338000,
+                'BTC:mainnet':  966500,
+                'LTC:mainnet':  3175500,
+                'DOGE:mainnet': 6370000,
                 testnet: 0,
                 regtest: 0
             });
