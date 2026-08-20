@@ -46,8 +46,8 @@
  * so substituting the whole file (the shape a predecessor tool uses for a quiet
  * file) would roll those back too and the comparison would be about something
  * else. Reverse-applying the original commit is no better: a later sweep rewrote
- * comment text inside the very hunks that carry the change, so the patch no longer
- * applies and would have to be forced.
+ * comment text inside the very hunks that carry the change, so the patch does not
+ * apply cleanly and would have to be forced.
  *
  * So the old side is rebuilt from a table of exact call-site substitutions, and
  * each one is CHECKED rather than trusted:
@@ -83,6 +83,17 @@
  * `fees` and rounded UP to a whole unit in `debits`. The synthetic corpus below
  * puts exactly that shape on the chain, together with controls whose amounts sit
  * on their tick's own grid and therefore must NOT move.
+ *
+ * AND WHERE IT SURFACES, which is not the table a reader reaches for first. The
+ * rows move in `credits`, `debits` and `balances`. The block-level consensus
+ * commitment moves too, but `blocks` records its four hashes BY REFERENCE: each
+ * column holds an id into `index_transactions`, and the hash STRING is interned
+ * there. Two sides that reach the same verdicts intern in the same order, so they
+ * assign the same ids, and `blocks` comes out byte-identical while the hashes those
+ * ids name differ. The divergent bytes therefore land in `index_transactions`, and
+ * the fork is read through the RESOLVED chain (readHashChain). N2 below asserts on
+ * both, and asserts the reference mechanism itself rather than leaving a reader to
+ * wonder why the block table stood still while the ledger forked.
  *
  * ------------------------------------------------------------------------------
  * TWO CORPORA, BECAUSE NEITHER ONE ALONE IS THE WHOLE CLAIM
@@ -132,6 +143,15 @@
  * ------------------------------------------------------------------------------
  * WHAT IT DOES NOT COVER - read this before quoting a green run.
  *
+ *   - THE LIGHT-CLIENT STATE COMMITMENT IS OUTSIDE THIS HARNESS ENTIRELY. The
+ *     balances_root and its siblings in `state_tree_roots` are built from the
+ *     per-block touched-key set that the ledger choke point feeds, and that set is
+ *     armed by the production block loop in XChainIndexer.start. The integration
+ *     launcher this tool drives does not arm it, so the hook stays inert and no
+ *     root is computed for any block of any corpus here. This run therefore says
+ *     NOTHING about the SMT root, on either side of the flag, and a green run must
+ *     not be quoted as if it did. Covering it needs a harness that runs the
+ *     production loop, which is a different tool.
  *   - The read-side projections are compared as they are REACHED by this corpus.
  *     A projection no block in the corpus calls is not measured here, and the run
  *     prints its row counts so a thin corpus cannot be quoted as a broad claim.
@@ -717,6 +737,20 @@ async function gasDebitTotal(q, gasTickId) {
     return rows.length && rows[0].s !== null ? norm(rows[0].s) : '0';
 }
 
+// The four hash ids each block row carries. `blocks` names its consensus hashes by
+// reference into index_transactions, so this is the pointer half of the commitment and
+// the resolved chain is the value half. N2 needs both to tell "the block table stood
+// still because the ids match" apart from "the block table stood still because nothing
+// about the ledger moved".
+async function blockHashPointers(q) {
+    const rows = await q(
+        'SELECT block_index, ledger_hash_id, actions_hash_id, contract_hash_id, state_hash_id ' +
+        'FROM blocks ORDER BY block_index');
+    return rows.map(r => [r.block_index, r.ledger_hash_id, r.actions_hash_id,
+                          r.contract_hash_id, r.state_hash_id]
+        .map(v => (v === null || v === undefined) ? 'null' : String(v)).join('|'));
+}
+
 async function countRows(q, table) {
     const rows = await q('SELECT COUNT(*) AS n FROM `' + table + '`');
     return Number(rows[0].n);
@@ -903,7 +937,7 @@ async function main() {
              (reports[s.key].ms / 1000).toFixed(1) + 's');
     }
 
-    // ---- N1: the gate really was where we said it was ---------------------
+    // ---- N1: the gate sits where this run claims it sits ------------------
     section('N1 gate state proven per side');
     check(reports.OLD.gate.modulePresent === false,
         'OLD ran a tree with no activation module in it at all',
@@ -1014,11 +1048,41 @@ async function main() {
                     'above is weaker than it looks');
 
     // The write path is where this rule lives, so the control has to move the write
-    // path's own tables. Balances and their commitment are what a fork actually costs.
+    // path's own rows AND the consensus hash interned over them. A fee finer than its
+    // tick is a DEBIT, it moves that address's BALANCE, and it changes the block's
+    // ledger hash, whose string lives in INDEX_TRANSACTIONS. Those three hold on any
+    // corpus the rule bites at all. `credits` moves here as well, but whether a fee
+    // credits a destination or is destroyed is a fee-preference question, so it is
+    // reported in the table list above instead of demanded.
     const movedTables = new Set(dOnOld.map(d => d.table));
-    for (const t of ['debits', 'balances', 'blocks'])
-        check(movedTables.has(t), 'control moves `' + t + '` (the surface this rule changes)',
+    for (const t of ['debits', 'balances', 'index_transactions'])
+        check(movedTables.has(t), 'control moves `' + t + '` (a surface this rule changes)',
             movedTables.has(t) ? '' : 'the corpus does not reach the gated write path for ' + t);
+
+    // WHICH hash forked, not merely that one did. `ledger` is the hash computed over the
+    // credit / debit / escrow amounts, so a control that forked `actions` or `contracts`
+    // instead would be moving something other than the rule under test.
+    check(forkPoint !== null && forkPoint.field === 'ledger',
+        'the fork is on the LEDGER hash, the one computed over credit/debit/escrow amounts',
+        forkPoint === null ? 'no fork at all'
+                           : 'first divergence is on ' + forkPoint.field + ' at block ' + forkPoint.block);
+
+    // `blocks` carries four ids into index_transactions rather than the hashes themselves,
+    // so two sides that intern in the same order hold identical rows there while naming
+    // different hashes. Asserted rather than footnoted: if the block table stands still
+    // for any OTHER reason, that reason is a hole in this control.
+    const ptrOLD = await blockHashPointers(q.OLD);
+    const ptrON  = await blockHashPointers(q.ON);
+    const samePointers = JSON.stringify(ptrOLD) === JSON.stringify(ptrON);
+    const forkedBlocks = chainOLD.filter((b, i) => chainON[i] && b.ledger !== chainON[i].ledger).length;
+    check(movedTables.has('blocks') || (samePointers && forkedBlocks > 0),
+        '`blocks` stands still only because it names its hashes by id: same ids, different hashes',
+        movedTables.has('blocks')
+            ? 'blocks moved directly on this corpus, so the reference argument carries no weight here'
+            : 'identical hash ids across ' + ptrOLD.length + ' blocks, and the ledger hash they name ' +
+              'differs at ' + forkedBlocks + ' of them' +
+              (samePointers && forkedBlocks > 0 ? ''
+                : ' (samePointers=' + samePointers + ', forkedBlocks=' + forkedBlocks + ')'));
 
     check(wOn.mismatches.length === 0,
         'control is ATTRIBUTABLE: with the rule ON every gas debit equals the fee charged',
@@ -1054,9 +1118,13 @@ async function main() {
         info('  credits, debits and escrows, and the four read-side projections the replay');
         info('  reaches (token supply, per-holder balances, the per-address credit/debit');
         info('  rollup and the per-block supply sanity check), over a gas tick coarser than');
-        info('  the fees denominated in it, plus on-grid controls that must not move.');
-        info('NOT COVERED: any projection this corpus never calls, and any tick shape it does');
-        info('  not contain. The row counts printed above are the whole of what was measured.');
+        info('  the fees denominated in it, plus on-grid controls that must not move, and the');
+        info('  consensus ledger hash interned over the rows in index_transactions.');
+        info('NOT COVERED: the light-client state commitment. The touched-key set that feeds');
+        info('  balances_root is armed by the production block loop, not by the launcher this');
+        info('  tool drives, so state_tree_roots stays empty on every side and no root was');
+        info('  compared. Also uncovered: any projection this corpus never calls, and any tick');
+        info('  shape it does not contain. The row counts above are the whole of what moved.');
     } else {
         info('COVERED: every action this chain actually produced, replayed from its first');
         info('  block by both code paths, including whatever tick precisions it carries.');
