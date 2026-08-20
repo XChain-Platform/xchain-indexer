@@ -1636,6 +1636,40 @@ describe('Batch @regression @tier3', function () {
                         action + ' must weigh the ratified ' + VM_WEIGHT);
             });
 
+            it('a chunk-carrier DEPLOY (format 4) weighs 1; every constructor format keeps 30', async function () {
+                // Format 4 never reaches the VM: deploy.js short-circuits it into
+                // DeployChunk.parse() before the constructor path, so its real cost is a row
+                // write. The format is read with the same util.getFormatVersion(params[0])
+                // derivation the dispatcher uses, so the scan and the handler cannot disagree.
+                stubVmGates(true);
+                assert.strictEqual(
+                    await handler.subCommandWeight('DEPLOY', 'DEPLOY|4|deadbeef|0|2|aGVsbG8=', {}, true), 1,
+                    'a chunk carrier must take the default row-write weight');
+                for (const fmt of [0, 1, 2, 3])
+                    assert.strictEqual(
+                        await handler.subCommandWeight('DEPLOY', 'DEPLOY|' + fmt + '|base64|100000|', {}, true), VM_WEIGHT,
+                        'format ' + fmt + ' must keep the VM weight');
+                assert.strictEqual(
+                    await handler.subCommandWeight('DEPLOY', 'DEPLOY', {}, true), VM_WEIGHT,
+                    'an unparseable DEPLOY must fall through to the full weight (format 0 default)');
+            });
+
+            it('the discount decides companions: 249 fit beside a chunk carrier, 221 overflow a constructor DEPLOY', async function () {
+                const RCPT = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
+                const sends = (n) => Array.from({ length: n }, () => 'SEND|0|T|1|' + RCPT);
+
+                // 1 + 249 = 250: exactly the budget, so the whole batch dispatches.
+                let data = await runVm(true, ['DEPLOY|4|deadbeef|0|2|aGVsbG8='].concat(sends(249)));
+                assert.strictEqual(data['STATUS'], 'valid');
+                assert.strictEqual(actionsCtx.processAction.callCount, 250);
+
+                // 30 + 221 = 251: one over, refused as ONE record before any dispatch.
+                actionsCtx.processAction.resetHistory();
+                data = await runVm(true, ['DEPLOY|0|base64|100000|'].concat(sends(221)));
+                assert.strictEqual(data['STATUS'], 'invalid: COMMAND (limit)');
+                assert.strictEqual(actionsCtx.processAction.callCount, 0);
+            });
+
             it('8 EXECUTEs fit the budget exactly and all of them dispatch', async function () {
                 const data = await runVm(true, execs(8));
 

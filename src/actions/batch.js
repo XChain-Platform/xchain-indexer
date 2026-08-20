@@ -195,13 +195,17 @@ class Batch {
         // weight expresses only the COST half, i.e. how many companions one DEPLOY may carry
         // (220 at weight 30, against 249 today).
         //
-        // CHUNKED DEPLOY (deploy.js format 4) IS DELIBERATELY NOT DISCOUNTED. A chunk carrier
-        // runs no constructor and is really a row write, so 30 over-charges it. That is the safe
-        // direction for a weight and it is left over-charged ON PURPOSE: discounting it needs the
-        // weight scan to derive a FORMAT from the wire, a second place format derivation could
-        // drift from the handler, and lowering a weight later is a loosening and cheap while
-        // raising one is a tightening that risks forking a replay. Revisit only with the same
-        // asymmetry in mind.
+        // CHUNKED DEPLOY (deploy.js format 4) IS DISCOUNTED TO THE DEFAULT WEIGHT OF 1
+        // (operator ruling 2026-08-20; subCommandWeight below). A chunk carrier runs no
+        // constructor - deploy.js short-circuits format 4 into DeployChunk.parse() before the
+        // VM path - so it is really a row write, and 30 charged VM cost for work that has none.
+        // The drift objection that first kept it over-charged does not hold up: the format is
+        // read with the SAME util.getFormatVersion(params[0]) call the dispatcher (actions.js)
+        // uses to set data['FORMAT'], one shared derivation rather than a second one, and
+        // DEPLOY is outside normalizeSubAction's legacy VERSION injection so params[0] is
+        // always the explicit version field. The asymmetry still binds for the change itself:
+        // lowering a weight is a loosening (it can only accept more), applied while the flag is
+        // unarmed on mainnet.
         this.commandWeights['DEPLOY']  = 30;
         this.commandWeights['EXECUTE'] = 30;
         this.commandWeights['XEXEC']   = 30;
@@ -732,6 +736,13 @@ class Batch {
         try {
             let weight = this.commandWeights[action];
             if(weight === undefined)
+                return 1;
+            // Chunk-carrier DEPLOY (format 4) runs no constructor, so it takes the default
+            // row-write weight rather than DEPLOY's VM weight. The format comes from the same
+            // util.getFormatVersion(params[0]) derivation the dispatcher uses (see the
+            // commandWeights['DEPLOY'] note above); anything unparseable falls through to the
+            // full weight, which is the safe (over-charging) direction.
+            if(action === 'DEPLOY' && this.util.getFormatVersion(String(command).split('|')[1]) === 4)
                 return 1;
             return (Number.isInteger(weight) && weight >= 1) ? weight : 1;
         } catch(e) {
