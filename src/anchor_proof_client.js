@@ -168,7 +168,8 @@ class AnchorProofClient {
     // unproven reward for another, and a 'rejected' suppress a legitimate one. Because the memo
     // is process-lifetime state, that leak also made the derived set restart-dependent, which
     // is a COLLECT-rail fork. Normalize exactly as _judge does, or two spellings of one tuple
-    // miss each other. A field added to _judge must be added here too.
+    // miss each other. A field added to _judge must be added here too. _judge's chain term needs
+    // no entry of its own: it is derived from rewardType, which is already a term here.
     _memoKey(txid, e){
         return [txid,
                 String(e.rewardType),
@@ -188,6 +189,14 @@ class AnchorProofClient {
         let round     = Number(e.roundReference);
         let snapshot  = Number(e.snapshotBlock);
         let isArchive = String(e.rewardType) === 'anchor_archive';
+        // The chain this reward names, read out of reward_type ('anchor_<CHAIN>') and NOT out of
+        // the mirror row's own `chain` column. reward_type is inside the XANCPUB canonical
+        // rewardCanonical() re-verifies, so it is quorum-signed; `chain` is an unsigned column of
+        // the very row that also supplies doge_anchor_txid, so binding to it would only let one
+        // corrupted row agree with itself. Null on the archive leg: the archive XANCPUB canonical
+        // keys on MATCH_BATCH_SEQ and binds no chain, and a v6 head carries the chain of whatever
+        // checkpoint wrapped it, so there is no signed chain to hold it to.
+        let chain = isArchive ? null : String(e.rewardType).slice('anchor_'.length).toUpperCase();
         let sawAttested = false;
         for(let a of anchors){
             if(!ATTESTED_VERSIONS.includes(Number(a.version))) continue;   // a sibling anchor in the same tx, not our proof
@@ -197,6 +206,14 @@ class AnchorProofClient {
             if(isArchive !== (Number(a.version) === 6)) continue;
             if(/^invalid/i.test(String(a.status || ''))) continue;         // decoded-invalid never anchored anything
             if(String(a.checkpoint_network || '') !== network) continue;
+            // Every per-chain checkpoint of one round shares network, snapshot_block,
+            // checkpoint_seq (deriveCheckpointSeq IS snapshot_block) and publisher (elected per
+            // BTC height, so chain-independent). CHAIN is therefore the ONLY field separating an
+            // anchor_BTC reward's anchor from the anchor_LTC anchor it rounds with, and without
+            // it a real LTC anchor proves a BTC reward. Compared case-folded: the DOGE parse side
+            // uppercases the wire CHAIN while the hub carries it verbatim, and chain names are
+            // distinct case-insensitively, so folding can never turn a mis-bind into a match.
+            if(chain !== null && String(a.checkpoint_chain || '').toUpperCase() !== chain) continue;
             if(String(a.publisher || '').toLowerCase() !== publisher) continue;
             if(Number(a.snapshot_block) !== snapshot) continue;
             let seq = isArchive ? Number(a.match_batch_seq) : Number(a.checkpoint_seq);

@@ -737,6 +737,76 @@ describe('HubDbSync _applyRow oracle_prices generation upgrade @regression @tier
     });
 });
 
+describe('HubDbSync _applyRow cross_chain_calls generation fence @regression @tier1', function () {
+
+    // push_generation is the item-5308 reorg FENCE, not content. Assigned inside the
+    // status gate it followed the incoming finalized row in EITHER direction, so a
+    // bootstrap page fetched before a re-publish and landing AFTER the live re-published
+    // row (cross_chain_calls does not buffer during the drain; only price_snapshots does,
+    // #2422) lowered it. The fenced retraction (DELETE ... WHERE push_generation <= gen)
+    // then matched a row published ABOVE the fence and deleted it for good. The fence must
+    // only ever move up, the rule cross_chain_matches applies to a_/b_push_generation.
+
+    const CC_COLS = ['id', 'call_id', 'phase', 'status', 'snapshot_block', 'source_chain',
+                     'source_action_index', 'target_chain', 'effective_time',
+                     'validator_signatures', 'push_generation'];
+
+    function makeApplySync(localCols) {
+        const doQuery = sinon.stub();
+        doQuery.withArgs(sinon.match(/^SHOW COLUMNS/)).resolves(localCols.map(f => ({ Field: f })));
+        doQuery.resolves([]);
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        return { sync, doQuery };
+    }
+
+    function callRow(gen) {
+        return { id: 3, call_id: 'C1', phase: 'dispatch', status: 'finalized', snapshot_block: 900,
+                 source_chain: 'DOGE', source_action_index: 42, target_chain: 'BTC',
+                 effective_time: 1000, validator_signatures: '[]', push_generation: gen };
+    }
+
+    function updateClause(doQuery) {
+        const call = doQuery.getCalls().find(c => /ON DUPLICATE KEY UPDATE/.test(c.args[0]));
+        assert.ok(call, 'an upsert must run');
+        return call.args[0].split('ON DUPLICATE KEY UPDATE')[1];
+    }
+
+    it('lifts push_generation with GREATEST, so a stale finalized row can never lower the fence', async function () {
+        const { sync, doQuery } = makeApplySync(CC_COLS);
+        await sync._applyRow('cross_chain_calls', callRow(7));
+        const clause = updateClause(doQuery);
+        assert.ok(/`push_generation` = GREATEST\(COALESCE\(`push_generation`, 0\), COALESCE\(VALUES\(`push_generation`\), 0\)\)/.test(clause),
+            'the reorg fence must be monotonic: ' + clause);
+    });
+
+    it('never assigns push_generation through the status gate', async function () {
+        const { sync, doQuery } = makeApplySync(CC_COLS);
+        await sync._applyRow('cross_chain_calls', callRow(7));
+        const clause = updateClause(doQuery);
+        assert.ok(!/`push_generation` = IF\(VALUES\(status\)/.test(clause),
+            'a status-gated assignment takes the fence wherever the incoming row points it');
+    });
+
+    it('still upgrades content only when the INCOMING row is finalized, and never the unique key', async function () {
+        const { sync, doQuery } = makeApplySync(CC_COLS);
+        await sync._applyRow('cross_chain_calls', callRow(7));
+        const clause = updateClause(doQuery);
+        assert.ok(/`effective_time` = IF\(VALUES\(status\) = 'finalized', VALUES\(`effective_time`\), `effective_time`\)/.test(clause));
+        assert.ok(/status = IF\(VALUES\(status\) = 'finalized', 'finalized', status\)/.test(clause));
+        assert.ok(!/`call_id` =/.test(clause));
+        assert.ok(!/`phase` =/.test(clause));
+        assert.ok(!/`id` =/.test(clause));
+    });
+
+    it('omits the fence assignment when the mirror table carries no push_generation column', async function () {
+        const { sync, doQuery } = makeApplySync(['call_id', 'phase', 'status', 'effective_time']);
+        await sync._applyRow('cross_chain_calls',
+            { call_id: 'C1', phase: 'dispatch', status: 'finalized', effective_time: 1000 });
+        const clause = updateClause(doQuery);
+        assert.ok(!/push_generation/.test(clause), 'a pre-migration mirror must not be handed a column it lacks');
+    });
+});
+
 describe('HubDbSync _applyRow cross_chain_matches convergence upgrade @regression @tier2', function () {
 
     // Two mutations reach a mirrored match after its first delivery:

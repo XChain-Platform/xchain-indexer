@@ -1239,10 +1239,22 @@ class HubDbSync {
         // Upgrade only when the INCOMING row is finalized (keyed on VALUES(status),
         // stable regardless of ODKU assignment order), so an already-finalized local
         // row is never clobbered and re-delivery stays idempotent.
+        // push_generation is the item-5308 reorg FENCE, not ordinary content, so it is held
+        // OUT of the status gate and only ever moves UP, the same rule cross_chain_matches
+        // applies to a_/b_push_generation. Inside the gate a finalized row carrying a LOWER
+        // generation lowered it, and the fenced retraction (DELETE ... WHERE push_generation
+        // <= gen) then matched a row re-published ABOVE that fence and blew a permanent hole
+        // in the mirror. The lowering is reachable because cross_chain_calls live rows apply
+        // DURING the REST bootstrap drain (only price_snapshots buffers, #2422), so a page
+        // fetched before a re-publish can land after the live re-published row.
         if (table === 'cross_chain_calls' && cols.includes('status')) {
-            let updatable = cols.filter(c => c !== 'id' && c !== 'call_id' && c !== 'phase' && c !== 'status');
+            let fence     = cols.includes('push_generation');
+            let updatable = cols.filter(c => c !== 'id' && c !== 'call_id' && c !== 'phase' && c !== 'status'
+                                             && c !== 'push_generation');
             let sets = updatable.map(c => '`' + c + "` = IF(VALUES(status) = 'finalized', VALUES(`" + c + '`), `' + c + '`)');
             sets.push("status = IF(VALUES(status) = 'finalized', 'finalized', status)");
+            if (fence)
+                sets.push('`push_generation` = GREATEST(COALESCE(`push_generation`, 0), COALESCE(VALUES(`push_generation`), 0))');
             let query = 'INSERT INTO cross_chain_calls (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
                       + ' ON DUPLICATE KEY UPDATE ' + sets.join(', ');
             await this.hubDb.doQuery(query, args);

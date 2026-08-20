@@ -89,6 +89,34 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
             assert.strictEqual(client()._judge([anchor({ checkpoint_network: 'testnet' })], expectation()), 'rejected');
         });
 
+        // The cross-chain mis-bind the rest of the tuple cannot see. Every per-chain checkpoint
+        // of one round shares network, snapshot_block, checkpoint_seq and publisher, so a real,
+        // buried, correctly attested LTC anchor differs from the BTC one ONLY in chain.
+        it('rejects a real anchor for a SIBLING CHAIN of the same round', function () {
+            assert.strictEqual(client()._judge([anchor({ checkpoint_chain: 'LTC' })], expectation()), 'rejected');
+        });
+
+        // The expected chain comes from reward_type, which the XANCPUB quorum signed, never from
+        // the mirror's unsigned `chain` column: a corrupted row that renames both must still
+        // produce an anchor for the chain its reward_type claims.
+        it('rejects a sibling-chain anchor even when the row also claims that chain', function () {
+            const e = expectation({ rewardType: 'anchor_BTC', chain: 'LTC' });
+            assert.strictEqual(client()._judge([anchor({ checkpoint_chain: 'LTC' })], e), 'rejected');
+        });
+
+        it('accepts a chain that differs only in case (the DOGE parse side uppercases)', function () {
+            const e = expectation({ rewardType: 'anchor_btc' });
+            assert.strictEqual(client()._judge([anchor()], e), 'verified');
+        });
+
+        // The archive XANCPUB canonical binds no chain (it keys on MATCH_BATCH_SEQ), and a v6
+        // head carries whatever checkpoint wrapped it, so the chain guard must not fire there.
+        it('does not chain-gate the archive leg', function () {
+            const a = anchor({ version: 6, checkpoint_chain: 'LTC', checkpoint_seq: 99, match_batch_seq: 12 });
+            const e = expectation({ rewardType: 'anchor_archive', roundReference: 12 });
+            assert.strictEqual(client()._judge([a], e), 'verified');
+        });
+
         it('rejects a decoded-invalid anchor (it never anchored anything)', function () {
             assert.strictEqual(client()._judge([anchor({ status: 'invalid: bad sigs' })], expectation()), 'rejected');
         });

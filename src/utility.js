@@ -2508,9 +2508,12 @@ class Utility {
     // because skipping a legitimate first refund strands a user's escrow and forks the chain,
     // while missing a novel terminal state only leaves today's latent hazard in place. Any new
     // status a settlement handler writes belongs here; dispenser-settlement-idempotency.test.js
-    // pins the four that exist.
+    // pins the four that exist, and ONLY those four belong here. A status no handler writes
+    // buys nothing and points the guard the wrong way: it can only ever suppress a legitimate
+    // first refund. 'closed' was such an entry (never written to dispenser_statuses by any
+    // version; the tree's other 'closed' rows are order and BET-feed statuses) and is gone.
     isDispenserSettled(status){
-        return ['cancelled', 'closed', 'empty', 'expired', 'max_dispenses_reached'].includes(String(status));
+        return ['cancelled', 'empty', 'expired', 'max_dispenses_reached'].includes(String(status));
     }
 
     // Reverse price match for user TOKEN/FIAT oracles (PRICE v1)

@@ -486,11 +486,18 @@ const CONTENT_PARITY_CARVE_OUTS = Object.freeze([
 // replicated columns block_index/block_time/ledger_hash/actions_hash/
 // contract_hash stay in the preimage, so parity still covers every column the
 // two sides must agree on.
+// `contract_emissions.id` is the same class again: the per-block stream selects
+// only execution_index/emitted_action/action_index/position
+// (db.getEmissionRowsForBlock, "not em.*, which would carry the AUTO_INCREMENT
+// id"), so every block a follower takes live gets a locally assigned id while
+// the parity read is a `SELECT em.*`. Those four replicated columns stay in the
+// preimage, so the check still covers everything the two sides must agree on.
 // Hashing any of these would turn a by-design difference into a permanent alarm.
 const CONTENT_PARITY_EXCLUDED_COLUMNS = Object.freeze({
-    blocks:         Object.freeze(['id']),
-    contract_state: Object.freeze(['state_key_bin']),
-    sync_meta:      Object.freeze(['id', 'logged_at']),
+    blocks:             Object.freeze(['id']),
+    contract_emissions: Object.freeze(['id']),
+    contract_state:     Object.freeze(['state_key_bin']),
+    sync_meta:          Object.freeze(['id', 'logged_at']),
 });
 
 // ── Derivation helpers ──────────────────────────────────────────────────
