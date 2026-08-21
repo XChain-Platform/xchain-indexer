@@ -174,8 +174,21 @@ function verifyEd25519(payload, sigHex, pubkeyHex) {
 // oracle resumed finalizing rounds and fresh price_snapshots began streaming.
 // Reformat any ISO-8601 datetime string to MySQL 'YYYY-MM-DD HH:MM:SS' (UTC,
 // matching how the hub stores it); leave every other value untouched.
-function coerceMirrorValue(v) {
+//
+// columnType is the LOCAL column's SHOW COLUMNS Type, lowercased (see
+// _cachedColumnType). The rewrite is keyed on that TYPE rather than on the
+// value's shape, because a shape-keyed rewrite also hits free-text columns:
+// oracle_prices.memo is unvalidated operator input (PRICE v1 validates
+// VALUE/FEE but never MEMO), so a memo that is literally an ISO timestamp was
+// rewritten in every distributed mirror while a deployment pointing hubDb
+// straight at the hub's own MariaDB kept the hub's bytes - topology-dependent
+// mirror content, against the verbatim-parity contract the mirror SQL twins
+// state (src/sql/oracle_prices.sql). An empty/unknown columnType falls back to
+// the shape rewrite, so a cache miss (or a driver that serves no Type) can
+// never regress the 22007 mirror-kill described above.
+function coerceMirrorValue(v, columnType) {
     if (typeof v !== 'string') return v;
+    if (columnType && !/^(datetime|timestamp)/.test(columnType)) return v;
     if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(v)) return v;
     // An offset-less ISO string is parsed as LOCAL time by ECMA-262, which would
     // shift the mirrored value by the node's timezone (per-node mirror drift).
@@ -1207,7 +1220,7 @@ class HubDbSync {
         if (table === 'capability_snapshots') cols = cols.filter(c => c !== 'id');
         if (cols.length === 0) return;
         let placeholders = cols.map(() => '?').join(', ');
-        let args = cols.map(c => coerceMirrorValue(row[c]));
+        let args = cols.map(c => coerceMirrorValue(row[c], this._cachedColumnType(table, c)));
 
         // price_snapshots needs an in-place upgrade path, not plain INSERT IGNORE.
         // It carries UNIQUE (round_number, coin_pair). The hub writes a 'skipped'
@@ -1411,9 +1424,30 @@ class HubDbSync {
             // not-drained and retries.
             if (!rows || rows.length === 0)
                 throw new Error('local mirror table ' + table + ' not available yet (no columns)');
-            entry = this._localColumnCache[table] = { cols: new Set(rows.map(r => r.Field)), fetchedAt: Date.now() };
+            // `types` rides along on the SAME SHOW COLUMNS result the column
+            // filter is built from, so type-aware value coercion costs no extra
+            // query. The return value stays entry.cols: both callers and every
+            // test stub of this method treat it as a plain Set of field names.
+            entry = this._localColumnCache[table] = {
+                cols:      new Set(rows.map(r => r.Field)),
+                types:     new Map(rows.map(r => [r.Field, String(r.Type == null ? '' : r.Type).toLowerCase()])),
+                fetchedAt: Date.now()
+            };
         }
         return entry.cols;
+    }
+
+    // Local column TYPE for a table already primed in the column cache. It keys
+    // mirror value coercion on the schema instead of on the value's shape.
+    // Returns '' (read as "unknown") when the table or column is absent from the
+    // cache or the driver served no Type, which keeps the coercion's legacy
+    // shape-based fallback in play. Never issues a query: _applyRow awaits
+    // _localColumns for the same table first, so the entry is primed by then,
+    // and a test that stubs _localColumns simply lands on the fallback.
+    _cachedColumnType(table, col) {
+        let entry = this._localColumnCache && this._localColumnCache[table];
+        if (!entry || !entry.types) return '';
+        return entry.types.get(col) || '';
     }
 
     // Apply a reorg retraction to the local hub DB copy. The hub deletes price

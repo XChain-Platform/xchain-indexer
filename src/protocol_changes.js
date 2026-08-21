@@ -1625,9 +1625,10 @@ module.exports.CROSS_SETTLE_CAP_MAINNET_TIME = CROSS_SETTLE_CAP_MAINNET_TIME;
 // reason: the suite asserts this consensus-preimage change is still waiting on the operator's
 // flag day rather than armed at a guessed instant.
 module.exports.BATCH_ROOT_SUB_INDEX_MAINNET_TIME = BATCH_ROOT_SUB_INDEX_MAINNET_TIME;
-// UNARMED mainnet sentinel for the BATCH issuance-limits rework, exported for the same
-// reason: the suite asserts the set is still waiting on the operator's flag day rather than
-// armed at a guessed instant, and that it never precedes BATCH_SUBACTION_NORMALIZATION.
+// ARMED mainnet instant for the BATCH issuance-limits rework (1786838400, 2026-08-16T00:00Z,
+// armed 2026-08-14 pre-launch), exported so the suite can pin the ratified value, assert it
+// was never retroactive, that it never precedes BATCH_SUBACTION_NORMALIZATION, and that it
+// equals the decoder's BATCH_SUBCOMMAND_OUTPUT_CAPTURE_ACTIVATION (one boundary).
 module.exports.BATCH_ISSUANCE_LIMITS_MAINNET_TIME = BATCH_ISSUANCE_LIMITS_MAINNET_TIME;
 module.exports.BATCH_COST_WEIGHTING_MAINNET_TIME = BATCH_COST_WEIGHTING_MAINNET_TIME;
 module.exports.EMISSION_ISSUANCE_LIMITS_MAINNET_TIME = EMISSION_ISSUANCE_LIMITS_MAINNET_TIME;

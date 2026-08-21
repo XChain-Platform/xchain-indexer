@@ -44,9 +44,16 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 
+const { loadPinnedOriginFixture } = require('../helpers/pinnedOriginFixture');
+
 const SQL_DIR = path.join(__dirname, '..', '..', 'src', 'sql');
 const MIG_DIR = path.join(SQL_DIR, 'migrations');
 const INDEX_BASELINE = path.join(__dirname, '..', 'fixtures', 'schema-index-baseline.json');
+
+// #5404: the immutable anchor the re-freeze guard measures against, plus the sha256 that
+// makes editing it a deliberate act. See the re-freeze case at the bottom of this file.
+const ORIGIN_INDEX_BASELINE        = path.join(__dirname, '..', 'fixtures', 'schema-index-baseline-origin.json');
+const ORIGIN_INDEX_BASELINE_SHA256 = 'c5da83b9fb1d9aab4d2e370b2e975022f1bbabecc3e732fe2714e4ca48d720bf';
 
 // Tables whose CREATE TABLE lives in a dated migration are ledger-covered by that
 // statement, indexes included, so they are outside the inverse direction entirely
@@ -319,5 +326,106 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
             'prefix change, and never touches an inline KEY at all), so the two schema-construction paths stop ' +
             'agreeing. Ship a dated migration that recreates the index in its new shape, and re-freeze ' +
             'test/fixtures/schema-index-baseline.json in the SAME commit:\n' + drifted.join('\n'));
+    });
+
+    // #5404: the twin of the column suite's re-freeze guard, for the same reason. The case
+    // above fires when baseline != definition and its message mandates two things - a dated
+    // migration recreating the index in its new shape AND a re-freeze of this fixture in the
+    // same commit - but only the re-freeze is machine-checked. Doing the re-freeze alone
+    // restores baseline == declared and the guard goes green with no migration behind it,
+    // while every aged DB and every replay-only replica keeps the ORIGINAL index: the boot
+    // reconciler matches by column SET (blind to a reorder or a (len) prefix change) and never
+    // touches an inline KEY at all, so nothing heals it later either.
+    //
+    // test/fixtures/schema-index-baseline-origin.json is the anchor, sha256-pinned above and
+    // seeded from the #4435 landing (01f321c1) rather than from today's baseline - an anchor
+    // copied from today would be vacuous, since nothing would differ from it. Seeded from
+    // #4435 it already carries the destroys.action_index UNIQUE -> non-unique re-freeze, which
+    // this case resolves through the real 2026-08-15-destroys-drop-unique-action-index.sql,
+    // so the guard is exercised on live data today rather than on some future commit.
+    //
+    // "Recreated" is read exactly as collectMigrationIndexes reads it, so a DROP INDEX with no
+    // recreate does not count: the aged DB must end up holding the new shape, and only the
+    // ADD/CREATE INDEX puts it there.
+    it('a re-frozen pre-ledger index is backed by a dated migration that recreates it @regression', function(){
+        const origin   = loadPinnedOriginFixture(ORIGIN_INDEX_BASELINE, ORIGIN_INDEX_BASELINE_SHA256,
+                                                 'test/unit/sql-schema-index-parity.test.js');
+        const fixture  = JSON.parse(fs.readFileSync(INDEX_BASELINE, 'utf8'));
+        const baseline = fixture.baseline || {};
+
+        // Migrations replay in lexical filename order, so when several touch one index the
+        // shape an aged DB ends up with is the last one's.
+        const lastCreated = new Map();
+        for(const a of collectMigrationIndexes().slice().sort((x, y) => (x.file < y.file ? -1 : x.file > y.file ? 1 : 0)))
+            lastCreated.set(a.table + '.' + a.index, a);
+
+        const shape = (columns, unique) => (columns || []).join(',') + ' unique=' + !!unique;
+
+        const unjustified = [];
+        const minted      = [];
+        for(const table of Object.keys(baseline)){
+            const anchored = new Map(((origin.baseline || {})[table] || [])
+                .map(e => [String(e.name).toLowerCase(), e]));
+            for(const entry of baseline[table]){
+                const index = String(entry.name).toLowerCase();
+                const o     = anchored.get(index);
+                if(!o){ minted.push(`  ${table}.${index}  (frozen as: ${shape(entry.columns, entry.unique)})`); continue; }
+                if(shape(o.columns, o.unique) === shape(entry.columns, entry.unique)) continue;
+                const m = lastCreated.get(table + '.' + index);
+                if(m && shape(m.columns, m.unique) === shape(entry.columns, entry.unique)) continue;
+                unjustified.push(`  ${table}.${index}\n    origin:    ${shape(o.columns, o.unique)}\n    ` +
+                    `re-frozen: ${shape(entry.columns, entry.unique)}\n    ` +
+                    (m ? `last migration recreate (${m.file}): ${shape(m.columns, m.unique)}`
+                       : 'no dated migration recreates this index'));
+            }
+        }
+
+        assert.deepStrictEqual(unjustified, [],
+            'These pre-ledger indexes were RE-FROZEN in test/fixtures/schema-index-baseline.json - their ' +
+            'shape no longer matches test/fixtures/schema-index-baseline-origin.json - but no dated ' +
+            'migration under src/sql/migrations/ recreates them in the re-frozen shape. The re-freeze ' +
+            'silences the shape guard above for fresh installs while every long-lived DB and every ' +
+            'replay-only replica keeps the ORIGINAL index forever, and the boot reconciler cannot heal it ' +
+            '(it matches by column SET and never reads an inline KEY). Ship the dated migration the ' +
+            'guard\'s own failure message asks for - DROP INDEX IF EXISTS followed by a CREATE INDEX in ' +
+            'the new shape, matching name, column list and UNIQUE flag - or revert the definition and the ' +
+            're-freeze together:\n' + unjustified.join('\n'));
+
+        assert.deepStrictEqual(minted, [],
+            'These indexes were ADDED to test/fixtures/schema-index-baseline.json but are absent from ' +
+            'test/fixtures/schema-index-baseline-origin.json, so they did not ship with their table\'s ' +
+            'original CREATE TABLE and the baseline is claiming a provenance they do not have. Baselining ' +
+            'exempts an index from needing a migration forever, so a replay-only replica never gets it. ' +
+            'Ship a dated CREATE INDEX migration instead, or list it under known_unledgered while its ' +
+            'migration is owed:\n' + minted.join('\n'));
+    });
+
+    // The anchor is only worth what it differs from: re-seeding it from the current baseline
+    // would leave the case above passing over an empty set forever. Pin the one re-freeze we
+    // know shipped, which that case resolves through its real migration.
+    it('sanity: the origin index anchor still differs from the live baseline (re-freeze guard is not vacuous)', function(){
+        const origin   = loadPinnedOriginFixture(ORIGIN_INDEX_BASELINE, ORIGIN_INDEX_BASELINE_SHA256,
+                                                 'test/unit/sql-schema-index-parity.test.js');
+        const fixture  = JSON.parse(fs.readFileSync(INDEX_BASELINE, 'utf8'));
+        const baseline = fixture.baseline || {};
+        const shape    = (columns, unique) => (columns || []).join(',') + ' unique=' + !!unique;
+
+        const moved = [];
+        for(const table of Object.keys(baseline)){
+            const anchored = new Map(((origin.baseline || {})[table] || [])
+                .map(e => [String(e.name).toLowerCase(), e]));
+            for(const entry of baseline[table]){
+                const index = String(entry.name).toLowerCase();
+                const o     = anchored.get(index);
+                if(o && shape(o.columns, o.unique) !== shape(entry.columns, entry.unique))
+                    moved.push(table + '.' + index);
+            }
+        }
+
+        assert.deepStrictEqual(moved, ['destroys.action_index'],
+            'The set of index baseline entries that differ from test/fixtures/schema-index-baseline-origin.json ' +
+            'changed. An EMPTY set means the anchor was re-seeded from the current baseline and the re-freeze ' +
+            'guard above now proves nothing. A LARGER set means a new re-freeze landed: confirm the case above ' +
+            'resolves it through a real dated migration, then add it here - that edit is the reviewed act.');
     });
 });

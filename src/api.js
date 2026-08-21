@@ -35,6 +35,7 @@ const rateLimit     = require('express-rate-limit');
 const XChainIndexer = require('./XChainIndexer');
 const jsonRouter    = require('express-json-rpc-router');
 const { buildHealthResponse, committedView, inFlightBlockIndex } = require('./health');
+const { createShutdown, createIndexerDrain } = require('./shutdown');
 const { getStakeSourceByPubkey } = require('./stake-source');
 const { canonicalizeRewardType } = require('./reward-push-gate');
 const anchorActionQuery = require('./anchor-action-query');
@@ -1667,18 +1668,42 @@ async function startApi(){
     // Allow JSON-RPC requests
     app.use(jsonRouter({methods: jsonRpcController}));
 
-    // Start the server
-    app.listen(INDEXER_API_PORT, () => {
+    // Start the server. The handle is kept so the shutdown drain below can stop
+    // accepting connections and let in-flight requests finish.
+    const server = app.listen(INDEXER_API_PORT, () => {
       console.log('API listening on port ' + INDEXER_API_PORT);
     });
 
-    // Start the Indexer (trap any errors and log them before exiting the indexer)
-    indexer.start().catch((error) => {
+    // Start the Indexer (trap any errors and log them before exiting the indexer).
+    // start() awaits the block loop, so this promise SETTLES when the loop breaks:
+    // on a fatal error here, or on the stopFlag the drain sets at a block boundary.
+    const indexerExited = indexer.start().catch((error) => {
         console.error('Fatal indexer error:', error);
         indexerRunning = false;
         indexerError   = error;
         process.exit(1);
     });
+
+    // Graceful shutdown. node is PID 1 in the image, so `docker stop` delivers
+    // SIGTERM to this process; before this handler existed the default action
+    // killed the block loop wherever it stood, which meant an aborted MariaDB
+    // write transaction and InnoDB crash recovery on every routine restart.
+    // The handler is bounded by its own hard-exit timer (see src/shutdown.js):
+    // installing it removes node's default terminate, so a drain that hangs must
+    // still end the process rather than linger until the supervisor's SIGKILL.
+    const shutdown = createShutdown({
+        drain: createIndexerDrain({
+            indexer:     indexer,
+            server:      server,
+            loopSettled: indexerExited,
+            // Flip BEFORE stop(): stop() only sets stopFlag and the loop may take a
+            // whole block to notice it, and /status must not report a draining
+            // indexer as running through that window.
+            onDraining:  () => { indexerRunning = false; }
+        })
+    });
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT',  () => shutdown('SIGINT'));
 
 }
 

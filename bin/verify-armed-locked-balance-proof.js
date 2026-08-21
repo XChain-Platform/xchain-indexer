@@ -175,14 +175,25 @@ function parseArgs(argv){
                 '  amount=' + p.amount + '  siblings=' + p.smt_proof.compressed.siblings.length +
                 '  slot=' + p.sub_root_path.index);
 
+    // The verifier gates escrow-leaf arming on a TRUSTED height the caller hands
+    // it, never on the server-authored `proof.height` label (which is not hashed
+    // into anything). This harness's trusted height is the block_index of the very
+    // state_tree_roots row supplying state_root, so the two travel together. Omit
+    // it and the verifier gates at height 0, which is correct-but-strictest and
+    // refuses every mid-chain arming - BTC:regtest at 11200, i.e. exactly the
+    // documented run of this bin.
+    const trustedHeight = tr.block_index;
+
     // 2. THE CHECK: an independent implementation, in another repo, accepts it.
-    const v = light.verifyLockedBalanceProof(p, tr.state_root, opts.chain, opts.network);
+    const v = light.verifyLockedBalanceProof(p, tr.state_root, opts.chain, opts.network,
+                                             null, trustedHeight);
     console.log('# SDK verifyLockedBalanceProof -> verified=' + v.verified + ' reason=' + v.reason +
                 ' amount=' + v.amount);
 
     // 3. NEGATIVE: tamper the amount, the same verifier must reject it.
     const bad = Object.assign({}, p, { amount: '999999.00000000' });
-    const bv = light.verifyLockedBalanceProof(bad, tr.state_root, opts.chain, opts.network);
+    const bv = light.verifyLockedBalanceProof(bad, tr.state_root, opts.chain, opts.network,
+                                              null, trustedHeight);
     console.log('# tampered amount -> verified=' + bv.verified + ' reason=' + bv.reason);
 
     // 4. A never-locked key must verify as ZERO LOCKED (delete-on-zero).
@@ -192,7 +203,8 @@ function parseArgs(argv){
     if(absent.error){
         console.log('# never-locked key -> proof server refused: ' + absent.error);
     } else {
-        const av = light.verifyLockedBalanceProof(absent.proof, tr.state_root, opts.chain, opts.network);
+        const av = light.verifyLockedBalanceProof(absent.proof, tr.state_root, opts.chain, opts.network,
+                                                  null, trustedHeight);
         zeroOk = (av.verified === true && String(av.amount).replace(/0+$/, '').replace(/\.$/, '') === '0');
         console.log('# never-locked key -> verified=' + av.verified + ' amount=' + av.amount);
     }

@@ -1018,6 +1018,56 @@ describe('HubDbSync _applyRow datetime coercion @regression @tier2', function ()
         assert.strictEqual(argFor(doQuery, 'oracle_prices', 'reference_block', cols), 800000);
         assert.strictEqual(argFor(doQuery, 'oracle_prices', 'price', cols), null);
     });
+
+    // A real SHOW COLUMNS result carries Type beside Field. When it does, the
+    // coercion is keyed on the column TYPE, not on the value's shape, so a
+    // free-text column whose value merely LOOKS like a timestamp lands verbatim.
+    // oracle_prices.memo is unvalidated operator input (PRICE v1 validates
+    // VALUE/FEE, never MEMO), so without this a shape-keyed rewrite hits an
+    // ISO-shaped memo in every distributed mirror while a hubDb pointed straight at the hub keeps the
+    // original bytes - mirror content that depended on deployment topology,
+    // against src/sql/oracle_prices.sql's verbatim-parity contract.
+    function makeTypedApplySync(colTypes) {
+        const doQuery = sinon.stub();
+        doQuery.withArgs(sinon.match(/^SHOW COLUMNS/)).resolves(
+            Object.keys(colTypes).map(f => ({ Field: f, Type: colTypes[f] })));
+        doQuery.resolves([]);
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        return { sync, doQuery };
+    }
+
+    it('leaves an ISO-shaped value in a VARCHAR column verbatim when the type is known', async function () {
+        const cols = ['id', 'memo', 'created_at'];
+        const { sync, doQuery } = makeTypedApplySync({
+            id: 'int(11)', memo: 'varchar(255)', created_at: 'timestamp'
+        });
+        const memo = '2026-06-16T10:33:01+09:00';
+        await sync._applyRow('oracle_prices',
+            { id: 1, memo: memo, created_at: '2026-06-16T10:33:01.000Z' });
+        assert.strictEqual(argFor(doQuery, 'oracle_prices', 'memo', cols), memo,
+            'a VARCHAR memo must mirror byte-verbatim');
+        assert.strictEqual(argFor(doQuery, 'oracle_prices', 'created_at', cols), '2026-06-16 10:33:01',
+            'a timestamp column is still reformatted for MariaDB strict mode');
+    });
+
+    it('still reformats a DATETIME column when the type is known', async function () {
+        const cols = ['id', 'created_at'];
+        const { sync, doQuery } = makeTypedApplySync({ id: 'int(11)', created_at: 'datetime' });
+        await sync._applyRow('oracle_prices', { id: 1, created_at: '2026-06-16T12:33:01+02:00' });
+        assert.strictEqual(argFor(doQuery, 'oracle_prices', 'created_at', cols), '2026-06-16 10:33:01');
+    });
+
+    it('falls back to the shape rewrite when the column type is unknown', async function () {
+        // A cache miss (or a driver that serves no Type) must never regress the
+        // 2026-06-16 ER_TRUNCATED_WRONG_VALUE mirror-kill: with no type to key on,
+        // an ISO-8601 string is still reformatted.
+        const sync = new HubDbSync({ doQuery: sinon.stub().resolves([]) }, { hubUrl: 'http://hub.test' });
+        assert.strictEqual(sync._cachedColumnType('oracle_prices', 'created_at'), '');
+        const cols = ['id', 'created_at'];
+        const { sync: s2, doQuery } = makeApplySync(cols);
+        await s2._applyRow('oracle_prices', { id: 1, created_at: '2026-06-16T10:33:01.000Z' });
+        assert.strictEqual(argFor(doQuery, 'oracle_prices', 'created_at', cols), '2026-06-16 10:33:01');
+    });
 });
 
 describe('HubDbSync mirror-table cold-start (missing table) @regression @tier2', function () {

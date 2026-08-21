@@ -1664,6 +1664,9 @@ class XChainIndexer {
                     chain: this.config['COIN'], network: this.config['NETWORK'],
                     total_nodes: stats.totalNodes, reachable_nodes: stats.reachableNodes,
                     orphan_count: stats.orphanCount, reachability_skipped: stats.reachabilitySkipped,
+                    // Publish the truncation flag or the line reads as a full-store figure:
+                    // when the mark stops at the cap, orphan_count is an UPPER bound.
+                    reachability_estimated: stats.reachabilityEstimated === true,
                     ts: Date.now()
                 }));
             } catch(err) {

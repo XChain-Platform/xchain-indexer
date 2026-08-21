@@ -19,16 +19,20 @@
  * 250-command cap, batch-cumulative fee/settlement accounting, the caret-TICK and
  * ticker-intern tightenings) so a heterogeneous fleet can never run half of it.
  *
- * This suite pins the two things nothing else can catch:
+ * This suite pins the things nothing else can catch:
  *   - the REGISTRATION: a time-keyed 2.0.0 change, genesis-active on testnet and
- *     regtest, mainnet parked on the UNARMED sentinel. The set carries a loosening
- *     AND several tightenings at once, so a guessed instant forks a from-genesis
+ *     regtest, mainnet ARMED at 1786838400 (2026-08-16T00:00:00Z, armed by the
+ *     operator 2026-08-14, pre-launch). The set carries a loosening AND several
+ *     tightenings at once, so a guessed or moved instant forks a from-genesis
  *     replay in both directions;
  *   - the ORDERING against BATCH_SUBACTION_NORMALIZATION. Classification reads the
  *     TICK out of NORMALIZED sub-command params (params[1]); below the normalization
  *     flag a legacy-format sub-action has not had its implied VERSION 0 injected, so
  *     params[1] is not the TICK and every classification is wrong. isEnabled() has no
- *     notion of one change depending on another, so the ordering lives here or nowhere.
+ *     notion of one change depending on another, so the ordering lives here or nowhere;
+ *   - the EQUALITY with the decoder's BATCH_SUBCOMMAND_OUTPUT_CAPTURE_ACTIVATION. The
+ *     canonical map states the two as one boundary; this is the indexer half of that
+ *     guard, so a one-sided move made in THIS repo fails here, not only in decoder CI.
  ********************************************************************/
 
 'use strict';
@@ -37,9 +41,18 @@ process.env.INDEXER_COIN    = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
+const fs     = require('fs');
+const path   = require('path');
 
 const { createMockIndexer } = require('../fixtures/mocks');
 const ProtocolChanges       = require('../../src/protocol_changes.js');
+
+// The decoder's vendored activation map, the other half of the one-boundary contract.
+// A plain zero-dependency constants file, so it is required straight off disk; skips
+// when the sibling checkout is absent unless XCHAIN_REQUIRE_SIBLINGS=1 (CI) hard-fails.
+const DECODER_CONSTANTS = process.env.XCHAIN_DECODER_DIR
+    ? path.join(process.env.XCHAIN_DECODER_DIR, 'src', 'protocol', 'constants.js')
+    : path.join(__dirname, '..', '..', '..', 'xchain-decoder', 'src', 'protocol', 'constants.js');
 
 const GATE          = 'BATCH_ISSUANCE_LIMITS';
 const NORMALIZATION = 'BATCH_SUBACTION_NORMALIZATION';
@@ -168,9 +181,11 @@ describe('BATCH issuance-limits flag day @regression @tier1', function(){
         // at or after this one or the output set is empty and nothing settles at all.
         // That side is asserted in the decoder's own suite; this is the indexer half.
         //
-        // Today's pins are safe (FIX_OUTPUT_FANOUT mainnet 1786060800 against this
-        // gate's unarmed sentinel; both genesis-active elsewhere), but nothing enforced
-        // it, which is the same gap the normalization ordering above exists to close.
+        // Today's pins are safe, but by a FINITE margin now rather than a far-future
+        // sentinel: FIX_OUTPUT_FANOUT mainnet 1786060800 sits 777600 s (9 days) below this gate's
+        // armed 1786838400 (both genesis-active elsewhere), so re-anchoring either value
+        // can break the ordering. Nothing enforced it before this block, which is the
+        // same gap the normalization ordering above exists to close.
         for(const network of ['mainnet','testnet','regtest']){
             it(network + ': never activates before the output-fanout fix', function(){
                 const changes = pcFor(network).pc.changes;
@@ -184,6 +199,52 @@ describe('BATCH issuance-limits flag day @regression @tier1', function(){
                     '; a multi-payee batched COINPAY would halt the block rather than settle');
                 assert.ok(gate[network + '_block'] >= fanout[network + '_block'],
                     GATE + ' must not be height-gated below ' + FANOUT + ' on ' + network);
+            });
+        }
+    });
+
+    describe('equality with the decoder BATCH_SUBCOMMAND_OUTPUT_CAPTURE_ACTIVATION', function(){
+
+        // The canonical map (xchain-documentation/protocol/constants.js) states the
+        // decoder's sub-command output capture and this settlement ledger as ONE decision,
+        // ONE boundary: the same instant on every network. A gap in either direction is
+        // a consensus window. Capture before the ledger lets N COINPAY sub-commands settle
+        // N obligations from one payment; the ledger before capture makes a batched
+        // COINPAY spend the coin and settle nothing, because capture still reads only the
+        // top-level ACTION name. The decoder's own suite asserts the equality from its
+        // side; this is the indexer half, so a move of BATCH_ISSUANCE_LIMITS made in THIS
+        // repo fails in this repo's CI rather than only when decoder CI next runs.
+        function decoderCaptureOrSkip(ctx){
+            if (!fs.existsSync(DECODER_CONSTANTS)){
+                if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                    throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but sibling not found: ' + DECODER_CONSTANTS);
+                ctx.skip();
+                return null;
+            }
+            const map = require(DECODER_CONSTANTS).BATCH_SUBCOMMAND_OUTPUT_CAPTURE_ACTIVATION;
+            assert.ok(map && typeof map === 'object',
+                'xchain-decoder/src/protocol/constants.js must export BATCH_SUBCOMMAND_OUTPUT_CAPTURE_ACTIVATION');
+            return map;
+        }
+
+        for(const network of ['mainnet','testnet','regtest']){
+            it(network + ': arms at exactly the decoder capture instant', function(){
+                const capture = decoderCaptureOrSkip(this);
+                if (capture === null) return;
+                const ledger = pcFor(network).pc.changes[GATE][network + '_time'];
+                if (capture[network] === null){
+                    // A DISARMED decoder gate may only sit under a DISARMED ledger.
+                    assert.ok(ledger >= YEAR_2100,
+                        GATE + ' is armed at ' + ledger + ' on ' + network + ' while the decoder ' +
+                        'capture gate is disarmed (null): the ledger would run with capture reading ' +
+                        'only the top-level ACTION name, so a batched COINPAY spends and settles nothing');
+                    return;
+                }
+                assert.strictEqual(ledger, capture[network],
+                    GATE + ' activates at ' + ledger + ' on ' + network + ' but the decoder ' +
+                    'BATCH_SUBCOMMAND_OUTPUT_CAPTURE_ACTIVATION is ' + capture[network] +
+                    '; the canonical map states them as one boundary, and the window between ' +
+                    'them either double-settles one payment or settles nothing from it');
             });
         }
     });
