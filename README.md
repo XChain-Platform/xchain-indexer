@@ -28,7 +28,7 @@ State-processing engine for the XChain Platform. Reads decoded blockchain transa
 - **Token-gated content**: FILE action supports AES-256-GCM gated payloads with a compact 33-byte binary key handoff; new `gated_files` table.
 - **COINPay**: native coin DEX pairs with two-phase settlement (ORDER_MATCH -> COINPAY)
 - **Unified gas fee schedule**: all protocol fees expressed in gas units, converted via GAS_PRICE to XCHAIN
-- **Multi-chain support**: Bitcoin, Litecoin, and Dogecoin on mainnet, testnet, and regtest
+- **Multi-chain support**: Bitcoin, Litecoin, and Dogecoin today on mainnet, testnet, and regtest
 - **Atomic block processing**: every block wrapped in a DB transaction; failures roll back cleanly
 - **Block reorg handling**: detects reorganizations from the Decoder DB, rolls back and re-indexes
 - **Double-entry ledger**: all token movements recorded as credits, debits, and escrows (including contract derived addresses)
