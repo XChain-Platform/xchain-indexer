@@ -121,6 +121,42 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
             assert.strictEqual(client()._judge([anchor({ status: 'invalid: bad sigs' })], expectation()), 'rejected');
         });
 
+        // The reject verdict is memoized as PERMANENT, and its whole licence to be so is
+        // that every honest DOGE node computes the status identically. Three statuses break
+        // that, and they break it in opposite directions on the SAME anchor: a DOGE node
+        // that mirrors the oracle_publish snapshot writes 'invalid: insufficient ...' where
+        // an unmirrored one writes 'unverified', and 'invalid_archive' is stamped only by a
+        // node holding the archive chunks. Reading any of them as a positive reject let two
+        // BTC nodes with different DOGE_INDEXER_URLs decide one reward tuple oppositely,
+        // forever: a derived-reward-set fork on the COLLECT rail. They are evidence of
+        // nothing, so the verdict falls through to the node-class-independent fields.
+        it('does not reject on a signature-verdict status, which is node-class-dependent', function () {
+            const c = client();
+            assert.strictEqual(c._judge([anchor({ status: 'invalid: insufficient valid signatures (1/3)' })],
+                                        expectation()), 'verified');
+            assert.strictEqual(c._judge([anchor({ status: 'invalid: insufficient signer stake' })],
+                                        expectation()), 'verified');
+        });
+
+        it('does not reject on invalid_archive, which only a chunk-holding node can stamp', function () {
+            const a = anchor({ version: 6, checkpoint_seq: 99, match_batch_seq: 12, status: 'invalid_archive' });
+            const e = expectation({ rewardType: 'anchor_archive', roundReference: 12 });
+            assert.strictEqual(client()._judge([a], e), 'verified');
+        });
+
+        it('still treats unverified as non-evidence, matching the two statuses above', function () {
+            assert.strictEqual(client()._judge([anchor({ status: 'unverified' })], expectation()), 'verified');
+        });
+
+        it('keeps rejecting the deterministic invalid reasons a node computes from the wire', function () {
+            const c = client();
+            for(const status of ['invalid: BATCH_CRC32 (archive mismatch)',
+                                 'invalid: CHECKPOINT_SEQ (stale; replay of an older checkpoint)',
+                                 'invalid: STATE_ROOT (format)',
+                                 'invalid: VERSION (unknown)'])
+                assert.strictEqual(c._judge([anchor({ status })], expectation()), 'rejected', status);
+        });
+
         // Depth is the one failure that self-heals, so it must never be terminal: the anchor
         // WILL bury. Treating it as a reject would forfeit a legitimate reward permanently.
         it('returns unknown for a tuple-matching anchor that is not yet buried deep enough', function () {

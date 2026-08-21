@@ -36,7 +36,9 @@
  * schema, so it cannot catch a column that drifted through some path other than a
  * committed migration. MODIFY-only type changes (retypes of an existing column) are
  * checked by their own case below: the MODIFY's target spec must equal the definition,
- * so both paths converge on the same column shape.
+ * so both paths converge on the same column shape. An ADD later retyped by a dated MODIFY
+ * hands its shape check to that case (see supersededAdds), because applied files are
+ * checksum-immutable and a new dated MODIFY is the only legal way to evolve such a column.
  ********************************************************************/
 
 const assert = require('assert');
@@ -214,6 +216,30 @@ function collectMigrationModifies() {
 
 const stripInlineKeys = (spec) => spec.replace(/\s+(PRIMARY\s+KEY|UNIQUE(\s+KEY)?)\b/g, '').trim();
 
+// `table.column` for every ADD COLUMN a STRICTLY LATER dated migration also MODIFYs.
+// MariaDB's MODIFY restates the whole column, so once a later file retypes it the shape a
+// replaying replica holds is the MODIFY's, never the ADD's - and applied files are
+// checksum-immutable (db.js runMigrations), so a NEW dated MODIFY is the only legal way to
+// evolve a column an old migration added. Comparing the historical ADD against today's
+// definition therefore fails on a legitimately converged column and leaves it unfixable.
+// Strictly later by filename only, because apply order is lexical filename order: an ADD and
+// a MODIFY inside ONE file stay checked, since clause order within a file is not ledger order.
+// Coverage is transferred, not dropped - the last-MODIFY-wins case below holds the definition
+// equal to that final shape, and the AFTER/FIRST position case still checks the ADD's anchor
+// (a bare MODIFY leaves position alone, but MODIFY ... AFTER/FIRST does move a column, so
+// the ADD anchor this case checks can be made stale by a later repositioning MODIFY).
+function supersededAdds() {
+    const modifies = collectMigrationModifies();
+    const out = new Set();
+    for (const c of collectMigrationColumns()) {
+        if (modifies.some(m => m.table === c.table &&
+                               m.name.toLowerCase() === c.name.toLowerCase() &&
+                               m.file > c.file))
+            out.add(c.table + '.' + c.name.toLowerCase());
+    }
+    return out;
+}
+
 describe('SQL schema column parity (definition path vs ledger path) @regression', function () {
 
     it('sanity: the parser finds migration-added columns (guard is not vacuous)', function () {
@@ -247,16 +273,36 @@ describe('SQL schema column parity (definition path vs ledger path) @regression'
 
     it('a migration-added column has the same TYPE/nullability/default as its definition', function () {
         const defs      = collectDefinitionColumns();
+        const superseded = supersededAdds();
         const mismatches = [];
         for (const c of collectMigrationColumns()) {
             const d = (defs[c.table] || []).find(x => x.name.toLowerCase() === c.name.toLowerCase());
             if (!d) continue;                                  // presence is the test above
+            // ADD(old shape) + later MODIFY(new shape) is a converged path, not a divergence:
+            // the last-MODIFY-wins case below is what holds it to the definition.
+            if (superseded.has(c.table + '.' + c.name.toLowerCase())) continue;
             if (d.spec !== c.spec) mismatches.push({ table: c.table, name: c.name, file: c.file, definition: d.spec, migration: c.spec });
         }
         assert.deepStrictEqual(mismatches, [],
             'These columns are declared with a DIFFERENT shape on the two paths, so an aged DB and a fresh ' +
             'install disagree on what the column holds:\n' +
             mismatches.map(m => `  ${m.table}.${m.name} (${m.file})\n    definition: ${m.definition}\n    migration:  ${m.migration}`).join('\n'));
+    });
+
+    // The skip above is the one place this guard can be quieted without a code change, so the
+    // exempt set is PINNED rather than merely computed: a new entry appears only when someone
+    // edits this list, which is the reviewed act. A bare "recompute and compare" assertion here
+    // would pass vacuously and give the exemption away silently.
+    it('sanity: the ADD-shape supersession exempts only the reviewed set', function () {
+        assert.deepStrictEqual([...supersededAdds()].sort(), [
+            // 2026-07-10 ADDed it, 2026-07-16-reposition-state-key-bin.sql MODIFYs it into
+            // position; the last-MODIFY-wins case holds that MODIFY equal to contract_state.sql.
+            'contract_state.state_key_bin',
+        ],
+        'The set of ADD COLUMNs exempted from the shape comparison changed. Each entry is a column ' +
+        'whose shape is now enforced ONLY through the last-MODIFY-wins case, so add one here only ' +
+        'after confirming a strictly-later dated migration really does MODIFY it to the definition ' +
+        'shape - and remove one when its superseding migration goes away.');
     });
 
     it('sanity: the parser finds migration MODIFY clauses (retype guard is not vacuous)', function () {

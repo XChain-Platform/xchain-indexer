@@ -161,3 +161,33 @@ describe('GenesisDump.read @regression', function () {
         await assert.rejects(() => gd.read(file), /missing meta header/);
     });
 });
+
+// The write() side's value normalizer. Every value in the artifact is emitted
+// through it, and the artifact's bytes are what GENESIS_DUMP_HASH pins, so a
+// value it cannot represent exactly must stop generation rather than ship
+// rounded.
+describe('GenesisDump._scalar @regression', function () {
+
+    const gd = () => new GenesisDump(mockDb(HASHES), util, { GENESIS_BLOCK: 100, GENESIS_DUMP_HASH: null });
+
+    it('passes representable values through unchanged', function () {
+        const g = gd();
+        assert.strictEqual(g._scalar(undefined), null);
+        assert.strictEqual(g._scalar(null), null);
+        assert.strictEqual(g._scalar(42), 42);
+        assert.strictEqual(g._scalar('abc'), 'abc');
+        assert.strictEqual(g._scalar(0n), 0);
+        assert.strictEqual(g._scalar(BigInt(Number.MAX_SAFE_INTEGER)), Number.MAX_SAFE_INTEGER);
+        assert.strictEqual(g._scalar(-BigInt(Number.MAX_SAFE_INTEGER)), -Number.MAX_SAFE_INTEGER);
+    });
+
+    it('throws rather than silently rounding a BigInt past 2^53-1', function () {
+        const g = gd();
+        const tooBig = BigInt(Number.MAX_SAFE_INTEGER) + 2n;
+        // Number(tooBig) rounds to a nearby double instead of failing, which is
+        // exactly the silent corruption the guard exists to stop.
+        assert.notStrictEqual(Number(tooBig).toString(), tooBig.toString());
+        assert.throws(() => g._scalar(tooBig), RangeError);
+        assert.throws(() => g._scalar(-tooBig), RangeError);
+    });
+});

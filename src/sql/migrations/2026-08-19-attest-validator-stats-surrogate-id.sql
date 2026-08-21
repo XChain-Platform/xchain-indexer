@@ -24,13 +24,22 @@
 -- recomputed wholesale from `attests` on reorg by
 -- Rollback._recomputeAttestationValidatorStats(). Nothing reads or signs over the id.
 --
--- Additive + idempotent: ADD COLUMN IF NOT EXISTS, so it is a no-op on any install whose
--- boot-time drift reconciler has already converged the column in from
--- src/sql/attest_validator_stats.sql, and it back-fills a DB converged by replaying the
--- dated migrations alone. FIRST matches the definition's column position, so both
--- schema-construction paths produce a byte-identical SHOW CREATE TABLE. The existing
--- UNIQUE INDEX validator_pubkey_provider is untouched and remains the upsert key that
--- incrementAttestationValidatorStat's ON DUPLICATE KEY UPDATE rides.
+-- Additive + idempotent: ADD COLUMN IF NOT EXISTS, so re-running the file is a no-op, and a
+-- fresh install already has the column (createTable from src/sql/attest_validator_stats.sql).
+--
+-- THIS FILE IS THE ONLY CONVERGENCE PATH FOR AN AGED INSTALL. The boot-time drift reconciler
+-- cannot add this column and never will: parseExpectedColumns reads AUTO_INCREMENT /
+-- PRIMARY KEY as NOT NULL with no DEFAULT, and alterTableForDrift skips exactly that shape
+-- ("cannot backfill existing rows safely. Skipping; add manually."). An AUTO_INCREMENT add is
+-- in fact safe - the engine backfills the sequence - but the reconciler has no way to say so.
+-- So do NOT read this file as redundant with the reconciler, and do not squash or baseline it
+-- away: every replay-converged replica would be left without the paging primary key the
+-- explorer's keyset paging needs. Pinned by test/unit/schema-drift-column-order.test.js.
+--
+-- FIRST matches the definition's column position, so both schema-construction paths produce a
+-- byte-identical SHOW CREATE TABLE. The existing UNIQUE INDEX validator_pubkey_provider is
+-- untouched and remains the upsert key that incrementAttestationValidatorStat's
+-- ON DUPLICATE KEY UPDATE rides.
 --
 -- HOW TO RUN
 --   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-08-19-attest-validator-stats-surrogate-id.sql

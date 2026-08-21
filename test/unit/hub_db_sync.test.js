@@ -1679,8 +1679,9 @@ describe('HubDbSync.ensureTables @regression @tier3', function () {
     });
 });
 
-// H-3 / NATIVE_FEE_PRICE_TIME_GATE: time-keyed price barrier for non-reference
-// chains (LTC/DOGE). Their heights are not comparable to the rounds' BTC
+// Time-keyed price barrier. It runs on every chain and is NOT conditioned on the
+// NATIVE_FEE_PRICE_TIME_GATE flag-day; H-3 named the fee-query half of that work.
+// Non-reference chains' heights are not comparable to the rounds' BTC
 // reference_block anchor, so catch-up is judged by the rounds' consensus
 // timestamps (mirror MAX(block_timestamp)) or the hub stream watermark.
 describe('HubDbSync time-keyed price barrier (H-3) @regression @tier3', function () {

@@ -29,7 +29,21 @@
 'use strict';
 
 const assert = require('assert');
+const fs     = require('fs');
+const path   = require('path');
 const { canonicalizeRewardType } = require('../../src/reward-push-gate');
+
+// api.js is a server entrypoint and exports no controller, so the handler's gate is
+// asserted the same way test/unit/api-federation-read-isolation.test.js asserts its
+// apiView routing: over the handler's own source text.
+const API_SRC = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
+const PUSH_HANDLER_SRC = (function () {
+    const start = API_SRC.indexOf('async pushvalidatorrewards(');
+    assert.notStrictEqual(start, -1, 'pushvalidatorrewards handler not found in src/api.js');
+    const end = API_SRC.indexOf('\n        // Resolve the staking source address', start);
+    assert.notStrictEqual(end, -1, 'could not bound the pushvalidatorrewards handler body');
+    return API_SRC.slice(start, end);
+})();
 
 // The exact gate the handler applies to reject a per-chain anchor push once the
 // flag-day is active (api.js pushvalidatorrewards). Kept in sync here so the test
@@ -91,5 +105,42 @@ describe('canonicalizeRewardType() forge-gate normalization @regression @tier1',
         // After canonicalization the same push is caught by the gate.
         assert.strictEqual(FLAG_DAY_CHAIN_GATE.test(canonicalizeRewardType('anchor_btc')), true,
             'canonicalized form must match the gate so the flag-day rejection fires');
+    });
+});
+
+// The gate key itself, separate from the reward_type spelling above.
+//
+// block_index arrives on the wire and is defaulted to 0 when absent, so keying the
+// flag-day retirement on it alone made the gate advisory: a key-holder sending
+// block_index 0 read every flag-day as inactive, got a wire-amount COLLECT-spendable
+// row written, and the unconditional MIN(pubkey) reconcileAnchorRewardWinner collapse
+// then DELETED the legitimately derived winner for that round. `round` is the binding
+// plane for the per-chain legs: round_reference IS CHECKPOINT_SEQ and
+// StateCheckpointEngine.deriveCheckpointSeq(snapshotBlock) returns snapshotBlock, so
+// round IS the BTC snapshot_block, and reconcileAnchorRewardWinner keys on
+// (reward_type, round_reference) - a forged row can only displace the derived winner
+// while it carries the derived (post-flag-day) round.
+describe('pushvalidatorrewards retirement gate key @regression @tier1', function () {
+
+    it('gates the per-chain leg on round as well as the wire block_index', function () {
+        const gate = PUSH_HANDLER_SRC.slice(PUSH_HANDLER_SRC.indexOf('anchor_(BTC|LTC|DOGE)'));
+        const body = gate.slice(0, gate.indexOf('push retired'));
+        assert.ok(/isAnchorRewardActive\(\s*Number\(blockIdx\)/.test(body),
+            'per-chain gate must still consult the wire block_index');
+        assert.ok(/isAnchorRewardActive\(\s*Number\(round\)/.test(body),
+            'per-chain gate must ALSO consult round, or a key-holder lowers block_index and slips it');
+    });
+
+    it('combines the two planes with OR, never with a max() that NaN can poison', function () {
+        // round is only checked for presence, never for numeric type, so Number(round) on a
+        // non-numeric round is NaN and Math.max(NaN, x) is NaN. A max()-shaped gate key would
+        // therefore hand the bypass straight back to any caller sending round: 'x'.
+        assert.ok(!/Math\.max/.test(PUSH_HANDLER_SRC),
+            'the retirement gate must not build its key with Math.max (NaN fails the gate open)');
+    });
+
+    it('still routes its writes through apiView so a push never joins the block transaction', function () {
+        assert.ok(/indexer\.indexerDb\.apiView\(\)/.test(PUSH_HANDLER_SRC),
+            'pushvalidatorrewards must write on the API view, not the block-loop connection');
     });
 });

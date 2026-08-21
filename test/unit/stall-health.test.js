@@ -203,3 +203,67 @@ describe('waitingOnFutureBlock() / stallClassOf() / atProcessableTip()', functio
         });
     });
 });
+
+/*
+ * Every barrier keys its stallClearsAt on ITS OWN grace field.
+ *
+ * The call barrier borrowed matchWatermarkGraceS long after _callSyncSatisfied
+ * had been decoupled onto callWatermarkGraceS. Both constants are 120s today, so
+ * the emitted value was identical and no behavioural test could see the slip.
+ * _barrierClearsAt coerces an unknown field to grace 0, so a rename fails silently
+ * too. Pin the mapping by source text, which is the only place the pairing exists.
+ */
+describe('barrier stallClearsAt grace-field mapping @regression', function () {
+    const fs   = require('fs');
+    const path = require('path');
+
+    const INDEXER_SRC = fs.readFileSync(
+        path.resolve(__dirname, '../../src/XChainIndexer.js'), 'utf8');
+    const SYNC_SRC = fs.readFileSync(
+        path.resolve(__dirname, '../../src/hub_db_sync.js'), 'utf8');
+
+    // Every `this.stallReason = '<name>';` in the block loop is immediately followed by
+    // the matching `this.stallClearsAt = ...;`, so a non-greedy pair scan reads the
+    // wiring exactly rather than guessing at a line window.
+    function graceWiring() {
+        const pairs = [];
+        const re = /this\.stallReason = '(\w+)';[\s\S]*?this\.stallClearsAt\s*=\s*([^;]+);/g;
+        let m;
+        while ((m = re.exec(INDEXER_SRC)) !== null) {
+            const field = /_barrierClearsAt\(blockTime,\s*'([A-Za-z]+)'\)/.exec(m[2]);
+            pairs.push([m[1], field ? field[1] : null]);
+        }
+        return pairs;
+    }
+
+    // stallReason -> grace field, or null where the barrier has no wall-clock deadline.
+    const EXPECTED = [
+        ['price_sync_barrier',    null],                          // height case can clear early
+        ['price_sync_barrier',    'priceWatermarkGraceS'],
+        ['oracle_sync_barrier',   'oracleWatermarkGraceS'],
+        ['match_sync_barrier',    'matchWatermarkGraceS'],
+        ['call_sync_barrier',     'callWatermarkGraceS'],
+        ['call_presence_barrier', null],                          // no watermark to key on
+        ['anchor_attest_barrier', 'anchorAttestWatermarkGraceS'],
+        ['snapshot_sync_barrier', null]                           // presence, not wall clock
+    ];
+
+    it('each barrier keys stallClearsAt on its own grace field', function () {
+        const actual = graceWiring().filter(p => EXPECTED.some(e => e[0] === p[0]));
+        assert.deepStrictEqual(actual, EXPECTED,
+            'barrier-to-grace wiring drifted. Borrowing a sibling barrier\'s grace ' +
+            'mis-times the /status wedge discriminator the moment the two constants ' +
+            'diverge or a regtest env override moves one, and both are 120s today so ' +
+            'no behavioural assertion can see the slip.');
+    });
+
+    it('every grace field named by a barrier exists on the HubDbSync instance', function () {
+        // _barrierClearsAt coerces an unresolvable field to grace 0, so a rename that
+        // misses a call site degrades silently rather than throwing.
+        for (const [reason, field] of EXPECTED) {
+            if (field === null) continue;
+            assert.ok(new RegExp('this\\.' + field + '\\s*=').test(SYNC_SRC),
+                field + ' (used by ' + reason + ') is not assigned in hub_db_sync.js');
+        }
+    });
+});

@@ -23,6 +23,7 @@ const NodeProof = require('../../../src/actions/nodeproof.js');
 // Same cached module NodeProof references; stubbing verify() controls which
 // verifier signatures the handler accepts toward quorum.
 const ed25519   = require('../../../src/ed25519.js');
+const srb       = require('../../../src/snapshot_reorg_buffer.js');
 
 // 64-hex pubkeys / 128-hex sigs (format-valid; verification is stubbed)
 const PUBKEY_V  = 'a'.repeat(64);   // genesis verifier (signs the verdict)
@@ -39,6 +40,12 @@ const SIG_X     = '3'.repeat(128);
 const EPOCH  = 288;          // multiple of 144
 const TARGET = EPOCH - 100;  // 188
 const SEED   = 'f'.repeat(64);
+// The height every full_node VALIDATOR-SET read resolves at. EPOCH is the DECLARED
+// height (signed preimage, verification rows, EQUIV flag-day plane) and stays raw;
+// the set reads bury it by CANONICAL_REORG_BUFFER, matching the producing hub, which
+// locks its claimant universe through CapabilitySnapshot at the same buried height.
+// Regtest arms snapshot burial from genesis, so the split is live in this suite.
+const SET_BLOCK = EPOCH - srb.CANONICAL_REORG_BUFFER;   // 282
 
 describe('NodeProof (NODEPROOF) @regression @tier3', function () {
     let indexer, actionsCtx, handler, NETWORK;
@@ -140,6 +147,31 @@ describe('NodeProof (NODEPROOF) @regression @tier3', function () {
         assert.strictEqual(args[3], TARGET);              // target_height
         assert.strictEqual(args[4], 55);                  // verdict action_index
         assert.strictEqual(args[5], 300);                 // block_index
+    });
+
+    // The producing hub locks its claimant universe below the tip (CapabilitySnapshot
+    // buries every getSnapshot) and now asks getfullnodeverifiers for the same buried
+    // height. A verifier re-deriving at the raw epoch resolved a DIFFERENT full_node
+    // set whenever stake moved inside the buffer window: it dropped the verification
+    // row for a node the hub had already challenged and quorum-signed, and it sized the
+    // 2/3+1 divisor off a tip-adjacent, reorg-unstable height. Both set reads bury; the
+    // declared height keeps riding the wire and the rows unchanged.
+    it('resolves both full_node set reads at the buried height, leaving the declared height raw', async function () {
+        const data = v0Data();
+        await handler.parse(v0Params({
+            challengeId: validChallengeId(), pass: [PUBKEY_P], sigs: [{ pubkey: PUBKEY_V, sig: SIG_V }],
+        }), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+        assert.notStrictEqual(SET_BLOCK, EPOCH, 'burial must be armed for this suite to mean anything');
+        // Eligible-verifier universe (the quorum divisor) and the PASS credit gate.
+        assert.ok(indexer.indexerDb.getVerifiedFullNodeSet.calledWith(SET_BLOCK),
+            'the eligible-verifier set must resolve below the tip, not at the raw epoch');
+        assert.ok(indexer.indexerDb.getValidatorsByCapability.getCalls()
+            .every(c => c.args[1] === SET_BLOCK),
+            'every full_node capability read must resolve at the buried height');
+        // Declared plane untouched: the row still records the epoch the wire declared.
+        assert.strictEqual(indexer.indexerDb.createNodeProofVerification.firstCall.args[2], EPOCH);
+        assert.strictEqual(indexer.indexerDb.createNodeProofVerification.firstCall.args[3], TARGET);
     });
 
     it('records one row per PASS pubkey', async function () {
@@ -286,7 +318,12 @@ describe('NodeProof (NODEPROOF) @regression @tier3', function () {
         assert.strictEqual(
             indexer.indexerDb.hasCapability.getCalls().filter(c => c.args[1] === 'full_node').length, 0,
             'no per-pubkey full_node read may survive the batched set');
-        assert.ok(indexer.indexerDb.getValidatorsByCapability.calledWith('full_node', EPOCH));
+        assert.ok(indexer.indexerDb.getValidatorsByCapability.calledWith('full_node', SET_BLOCK));
+        // And the DECLARED height never leaks into a set read: the two planes are the
+        // whole point of the burial split, so a regression that collapses them here
+        // would otherwise pass on the batched-read assertion alone.
+        assert.ok(!indexer.indexerDb.getValidatorsByCapability.calledWith('full_node', EPOCH),
+            'no full_node set read may resolve at the raw declared epoch');
     });
 
     it('a TRUNCATED capability read re-probes per pubkey rather than shrinking the divisor', async function () {
@@ -301,7 +338,7 @@ describe('NodeProof (NODEPROOF) @regression @tier3', function () {
         await handler.parse(v0Params({
             challengeId: validChallengeId(), pass: [PUBKEY_P], sigs: [{ pubkey: PUBKEY_V, sig: SIG_V }],
         }), data, null);
-        assert.ok(indexer.indexerDb.hasCapability.calledWith(PUBKEY_P, 'full_node', EPOCH),
+        assert.ok(indexer.indexerDb.hasCapability.calledWith(PUBKEY_P, 'full_node', SET_BLOCK),
             'a capped read must be re-probed, not trusted as membership');
         // V + P are both eligible → quorum floor(2*2/3)+1 = 2, and only V signed.
         assert.ok(String(data['STATUS']).includes('1/2 of 2'),

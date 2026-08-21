@@ -261,11 +261,13 @@ class HubDbSync {
         this._priceWaiters   = [];                         // pending waitForPriceSyncHeight() resolvers
 
         // Highest block_timestamp among finalized rounds in the local price_snapshots copy.
-        // Used by the time-keyed price barrier (waitForPriceSyncTime) that gates NON-reference
-        // chains (LTC/DOGE) at/after the NATIVE_FEE_PRICE_TIME_GATE flag-day: their heights are
-        // not comparable to the rounds' BTC reference_block anchor, so catch-up is judged by the
-        // rounds' consensus timestamps against the block's time instead (H-3). Refreshed together
-        // with priceSyncHeight after every successful price_snapshots sync.
+        // Used by the time-keyed price barrier (waitForPriceSyncTime), which runs on EVERY chain
+        // whenever sync is enabled and is not conditioned on the NATIVE_FEE_PRICE_TIME_GATE
+        // flag-day (XChainIndexer.js:877-903). Non-reference chains' heights are not comparable
+        // to the rounds' BTC reference_block anchor, so catch-up is judged by the rounds'
+        // consensus timestamps against the block's time instead (H-3); on BTC the time barrier
+        // is ADDITIVE to the height one, since height coverage does not imply time coverage.
+        // Refreshed together with priceSyncHeight after every successful price_snapshots sync.
         this.priceSyncMaxTimestamp = 0;
         this._priceTimeWaiters     = [];                   // pending waitForPriceSyncTime() resolvers
 
@@ -1020,7 +1022,9 @@ class HubDbSync {
     }
 
     // Whether the price mirror is caught up enough to safely process a block at
-    // blockTime on a NON-reference chain (H-3 / NATIVE_FEE_PRICE_TIME_GATE).
+    // blockTime. Applies on EVERY chain (BTC included, additively with the
+    // height-keyed barrier) and is not gated on the NATIVE_FEE_PRICE_TIME_GATE
+    // flag-day; H-3 named the fee-query half of that work, not this barrier.
     // Two satisfied cases, mirroring _priceSyncSatisfied:
     //   1. The mirror already holds a finalized round whose consensus timestamp
     //      is at/past this block's time, so every round eligible at this block
@@ -1053,13 +1057,15 @@ class HubDbSync {
         this._priceTimeWaiters = stillWaiting;
     }
 
-    // Block-processing sync barrier for native-coin fee validation on NON-reference
-    // chains (H-3). Resolves once the local price_snapshots copy holds every finalized
-    // round with block_timestamp <= this block's time, so getLatestPrice's time-gated
-    // selection reads the same round on every indexer of this chain. Rejects after
-    // timeoutMs so the caller can DEFER the block and retry; never validate fees
-    // against a stale local mirror. The reference chain (BTC) keeps the height-keyed
-    // waitForPriceSyncHeight barrier above.
+    // Block-processing sync barrier for every time-keyed reader of price_snapshots:
+    // native-coin fee validation on non-reference chains (H-3) AND FIAT dispenser
+    // settlement, which reads by time on all chains. Resolves once the local
+    // price_snapshots copy holds every finalized round with block_timestamp <= this
+    // block's time, so a time-gated selection reads the same round on every indexer of
+    // this chain. Rejects after timeoutMs so the caller can DEFER the block and retry;
+    // never settle or validate against a stale local mirror. Runs on BTC too, ADDITIVELY
+    // with the height-keyed waitForPriceSyncHeight barrier above, which is retained for
+    // the height-selected fee query below the flag-day (XChainIndexer.js:877-932).
     waitForPriceSyncTime(blockTime, timeoutMs) {
         blockTime = Number(blockTime);
         if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.priceSyncMaxTimestamp);

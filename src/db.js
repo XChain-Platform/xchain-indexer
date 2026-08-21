@@ -698,17 +698,20 @@ class Database {
     }
 
     // Destructive-DDL scan for the auto-apply path. Given a migration file's
-    // statement list (already `--`-comment-stripped and ';'-split), returns the
+    // statement list (already line-comment-stripped and ';'-split), returns the
     // first statement that can lose, truncate, or rename data - or null when the
     // file is safe to auto-run. Pure string logic (no DB), unit-tested directly.
     //
     // Flagged as destructive: DROP TABLE/DATABASE/SCHEMA, TRUNCATE, RENAME TABLE,
-    // DELETE (any form), REPLACE INTO (atomic DELETE+INSERT), UPDATE (except the
+    // DELETE (any form), REPLACE INTO (atomic DELETE+INSERT), INSERT ... ON DUPLICATE
+    // KEY UPDATE (rewrites every colliding row), LOAD DATA (rows from a file the
+    // scanner cannot read), UPDATE (except the
     // committed AUTO_INCREMENT id=0 repair), ALTER TABLE ... DROP <column|partition|bare identifier>,
     // ALTER TABLE ... RENAME (except RENAME INDEX/KEY), ALTER TABLE ... CHANGE
-    // (rename+retype), and MODIFY ... NOT NULL (the statically detectable
+    // (rename+retype), MODIFY ... NOT NULL (the statically detectable
     // narrowing; a width reduction cannot be seen without the live schema and
-    // stays covered by the manual-tag convention).
+    // stays covered by the manual-tag convention), and any ALTER TABLE PARTITION or
+    // TABLESPACE clause.
     //
     // Deliberately NOT flagged (legitimate existing auto patterns): DROP INDEX/KEY,
     // DROP FOREIGN KEY/CONSTRAINT/CHECK/DEFAULT/PRIMARY KEY (structural, no row
@@ -719,6 +722,27 @@ class Database {
         // Drops that remove metadata only; anything else after DROP inside an
         // ALTER (COLUMN, PARTITION, or a bare column identifier) loses data.
         const SAFE_ALTER_DROP = new Set(['INDEX', 'KEY', 'FOREIGN', 'CONSTRAINT', 'CHECK', 'DEFAULT', 'PRIMARY']);
+        // True when a `#` sits outside every quoted span - a line comment
+        // stripSqlLineComments should already have removed. Quote-aware so a `#`
+        // inside a string literal or a backtick identifier is not mistaken for one.
+        // Local rather than a method: runMigrations' callers build partial `this`
+        // objects, and a second prototype hop would break the guard on those.
+        const hasUnquotedHash = (s) => {
+            let q = null;
+            for(let i = 0; i < s.length; i++){
+                const c = s[i];
+                if(q){
+                    if(c === q){
+                        if(s[i + 1] === q){ i++; }
+                        else { q = null; }
+                    }
+                    continue;
+                }
+                if(c === "'" || c === '"' || c === '`'){ q = c; continue; }
+                if(c === '#') return true;
+            }
+            return false;
+        };
         for(const raw of (statements || [])){
             // Executable (versioned) comments are the one /* */ form the server RUNS:
             // MariaDB/MySQL execute `/*!50000 DROP TABLE balances */` and `/*M! ... */`
@@ -733,6 +757,12 @@ class Database {
             // gone) so a keyword inside comment prose never triggers or hides a hit.
             const stmt = String(raw).replace(/\/\*[\s\S]*?\*\//g, ' ').trim();
             if(!stmt) continue;
+            // Second layer behind stripSqlLineComments: MariaDB/MySQL honour `#` to
+            // end-of-line as a comment, so `# note\nDROP TABLE balances` is a DROP every
+            // ^-anchored check below is blind to. The strip removes it upstream; if one
+            // ever reaches here the strip has regressed, and the only safe reading of a
+            // comment introducer the classifier can still see is non-auto-eligible.
+            if(hasUnquotedHash(stmt))                            return raw;
             // Server-side indirection escapes a statement-prefix classifier: a mode=auto
             // file can smuggle destructive SQL past every keyword check below via dynamic
             // SQL (`SET @s = 'DROP TABLE balances'; PREPARE stmt FROM @s; EXECUTE stmt;`)
@@ -764,6 +794,16 @@ class Database {
             // touches - the same data-loss profile as DELETE, with no non-destructive
             // form - so match the bare keyword like DELETE above.
             if(/^REPLACE\b/i.test(stmt))                         return raw;
+            // INSERT ... ON DUPLICATE KEY UPDATE overwrites columns of every existing
+            // duplicate-key row it touches - the same data-rewrite profile the UPDATE arm
+            // below hard-blocks, reached from a keyword that arm never sees. Plain INSERT
+            // stays auto-eligible: with no ON DUPLICATE clause it only adds rows.
+            if(/^INSERT\b[\s\S]*\bON\s+DUPLICATE\s+KEY\s+UPDATE\b/i.test(stmt)) return raw;
+            // LOAD DATA ... REPLACE INTO TABLE is a DELETE+INSERT on every key collision,
+            // and the rows come from a file the classifier cannot read, so no form of it
+            // can be judged safe from the statement text. No committed auto migration
+            // loads a file; treat the whole form as non-auto-eligible.
+            if(/^LOAD\s+DATA\b/i.test(stmt))                     return raw;
             // A bare UPDATE can rewrite arbitrary row data. The one committed auto
             // pattern is the AUTO_INCREMENT id repair (`UPDATE <table> SET id = (...)
             // WHERE id = 0;` in 2026-06-10-mirror-id-autoincrement-repair.sql), which
@@ -771,6 +811,15 @@ class Database {
             // flag every other UPDATE.
             if(/^UPDATE\b/i.test(stmt) && !this._isIdRepairUpdate(stmt)) return raw;
             if(/^ALTER\s+TABLE\b/i.test(stmt)){
+                // Partition and tablespace clauses move or discard row data while carrying
+                // none of the keywords the checks below look for: TRUNCATE PARTITION empties
+                // a partition, EXCHANGE PARTITION swaps its rows out to another table,
+                // DISCARD TABLESPACE deletes the table's data file. The additive members of
+                // the class (ADD PARTITION, IMPORT TABLESPACE) are not separable from the
+                // destructive ones by prefix, and no committed migration partitions anything,
+                // so the whole class is non-auto-eligible - re-tag mode=manual to run one.
+                if(/\bPARTITION(?:ING)?\b/i.test(stmt))          return raw;
+                if(/\bTABLESPACE\b/i.test(stmt))                 return raw;
                 // Every DROP inside the ALTER must target a safe (metadata-only) object.
                 let m;
                 const dropRe = /\bDROP\s+([A-Za-z_]+|`[^`]+`)/gi;
@@ -972,6 +1021,16 @@ class Database {
             if(!cur){
                 // Column declared in the SQL source but absent from the live
                 // table (schema created before the column was introduced).
+                //
+                // BLIND SPOT, stated so migration prose stops assuming otherwise: this
+                // branch also swallows AUTO_INCREMENT / PRIMARY KEY columns, because
+                // parseExpectedColumns reads both as NOT NULL with no DEFAULT. Such an add
+                // is actually safe (the engine backfills the sequence), but the parsed
+                // shape cannot express that, so the reconciler is NOT a convergence path
+                // for a surrogate key - only a dated migration is. A migration that adds
+                // one must never be squashed or baselined as "the reconciler already did
+                // it" (attest_validator_stats.id, 2026-08-19). Pinned by
+                // test/unit/schema-drift-column-order.test.js.
                 if(exp.notNull && !exp.hasDefault){
                     console.log('Schema drift on ' + table + '.' + exp.name + ': column missing live, source is NOT NULL with no DEFAULT - cannot backfill existing rows safely. Skipping; add manually.');
                     continue;
@@ -1205,11 +1264,27 @@ class Database {
     // MariaDB hiccup during init, fatal-looped the indexer on every block).
     // Retries the whole file with exponential backoff so transient DB issues
     // don't leave half-built schema.
-    // Remove SQL `--` line comments while respecting quoted strings, so a ';'
+    // Remove SQL line comments while respecting quoted strings, so a ';'
     // appearing inside comment prose is never mistaken for a statement
     // terminator. Single/double-quote and backtick spans are preserved verbatim
-    // (doubled quotes treated as escapes); a `--` outside any quote skips to the
-    // end of its line. Newlines are kept so error positions stay meaningful.
+    // (doubled quotes treated as escapes); a `--` or `#` outside any quote or
+    // block comment skips to the end of its line. Newlines are kept so error
+    // positions stay meaningful.
+    //
+    // `#` counts because MariaDB/MySQL honour it to end-of-line exactly like
+    // `--`. Missing it made a `# note` line ahead of a destructive statement
+    // invisible to the ^-anchored checks in _destructiveAutoStatement: the
+    // chunk began with `#`, matched no keyword, scored the file auto-eligible,
+    // and the server ran the DROP unattended at startup. A `;` inside a `#`
+    // comment also tore the statement in two for both the classifier and the
+    // apply loop.
+    //
+    // `/* ... */` spans are copied through verbatim rather than scanned: a `--`
+    // or `#` inside one would otherwise swallow the closing `*/` and the rest of
+    // that line (the server does not treat either as a comment start there), and
+    // an apostrophe in block-comment prose would open a bogus quote span. The
+    // verbatim copy also keeps `/*!...*/` executable-comment payloads intact for
+    // _destructiveAutoStatement to flag.
     stripSqlLineComments(sql){
         let out = '';
         let quote = null;
@@ -1224,7 +1299,14 @@ class Database {
                 continue;
             }
             if(ch === "'" || ch === '"' || ch === '`'){ quote = ch; out += ch; continue; }
-            if(ch === '-' && sql[i + 1] === '-'){
+            if(ch === '/' && sql[i + 1] === '*'){
+                const end = sql.indexOf('*/', i + 2);
+                if(end === -1){ out += sql.slice(i); break; }   // unterminated: copy the rest as-is
+                out += sql.slice(i, end + 2);
+                i = end + 1;
+                continue;
+            }
+            if((ch === '-' && sql[i + 1] === '-') || ch === '#'){
                 while(i < sql.length && sql[i] !== '\n'){ i++; }
                 if(i < sql.length){ out += '\n'; }
                 continue;
@@ -1239,8 +1321,8 @@ class Database {
     // string literal contains a semicolon (e.g. `SET data = 'a;b'`) into invalid
     // fragments, so no migration or seed carrying a semicolon in quoted data can
     // ship, and _destructiveAutoStatement ends up classifying fragments rather than
-    // real statements. `--` line comments are stripped first (same rule as the
-    // callers used); the quote model matches stripSqlLineComments exactly
+    // real statements. `--` and `#` line comments are stripped first (same rule as
+    // the callers used); the quote model matches stripSqlLineComments exactly
     // (single/double-quote and backtick spans, doubled quotes treated as escapes).
     // Returns trimmed, non-empty statements.
     splitSqlStatements(sql){
@@ -1259,6 +1341,16 @@ class Database {
                 continue;
             }
             if(ch === "'" || ch === '"' || ch === '`'){ quote = ch; current += ch; continue; }
+            // Block comments survive the strip (the classifier needs `/*!...*/` payloads
+            // intact), so carry them across whole: an apostrophe in comment prose must not
+            // open a quote span, and a ';' inside one must not terminate the statement.
+            if(ch === '/' && stripped[i + 1] === '*'){
+                const end = stripped.indexOf('*/', i + 2);
+                if(end === -1){ current += stripped.slice(i); break; }
+                current += stripped.slice(i, end + 2);
+                i = end + 1;
+                continue;
+            }
             if(ch === ';'){ statements.push(current); current = ''; continue; }
             current += ch;
         }
@@ -11621,7 +11713,7 @@ class Database {
     // hub-to-hub federation hop), so two nodes whose mirrors differed by one row derived the
     // same reward at different heights and forked the ledger hash. See
     // anchor_reward_activation.ANCHOR_REWARD_MIRROR_MATURITY for the watermark and
-    // XChainIndexer._waitForAnchorAttestationMirror for the completeness half of the rule.
+    // HubDbSync.waitForAnchorAttestationSync for the completeness half of the rule.
     // Returned flat, ordered by (reward_type, round_reference, publisher) so the
     // caller can group each logical reward and reconcile the smallest-pubkey winner across a
     // failover double-publish. NOT-EXISTS-scoped so a group already derived is skipped and a
@@ -15719,6 +15811,21 @@ Database.MIGRATION_CHECKSUM_REBASELINES = {
     '2026-07-24-pubkeys-widen-uncompressed.sql': {
         from: '2275f44bb043fe473b7781f08e5ce30253c1148e52ba2709efb5fb1214f282d2',
         to:   '45a8fd3f4ce71360a1777bd1b86f14eb534259cffa651f76be5c15afafd50657',
+    },
+    // Corrected a FALSE provenance note. The file claimed it was a no-op "on any install
+    // whose boot-time drift reconciler has already converged the column in", but the
+    // reconciler can never converge attest_validator_stats.id: parseExpectedColumns reads
+    // AUTO_INCREMENT / PRIMARY KEY as NOT NULL with no DEFAULT and alterTableForDrift skips
+    // that shape outright, so this migration is the SOLE convergence path for an aged
+    // install. That note is what a later baselining or squash pass reads, and believing it
+    // would drop the file and strand every replay-converged replica without the paging
+    // primary key. Comment lines only; the single ALTER TABLE is byte-identical (verified by
+    // comparing the comment-stripped residue). 55a9621 is the file's only committed
+    // revision, so one `from` covers every DB that applied it; where none has, the entry is
+    // simply inert.
+    '2026-08-19-attest-validator-stats-surrogate-id.sql': {
+        from: '0f8f54622b7022134b140d1f68a86ea91d763c6a51e9886ee0b741961df34dc7',
+        to:   'ecb9c206ebda43ba932603d60d6d470ab47704db428ff81f42d16c36b983acbb',
     },
 };
 

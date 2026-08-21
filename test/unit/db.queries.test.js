@@ -1373,6 +1373,30 @@ describe('Database.stripSqlLineComments() @regression @tier1', function () {
         const out = db.stripSqlLineComments(sql);
         assert.ok(!out.includes('comment'));
     });
+
+    it('removes # comments, which MariaDB honours to end-of-line like --', function () {
+        const out = db.stripSqlLineComments('SELECT 1 # this is a comment\nFROM dual');
+        assert.ok(!out.includes('this is a comment'));
+        assert.ok(out.includes('SELECT 1'));
+        assert.ok(out.includes('FROM dual'));
+    });
+
+    it('preserves a # inside quoted strings and backtick identifiers', function () {
+        assert.ok(db.stripSqlLineComments("SELECT '# not a comment' FROM t").includes('# not a comment'));
+        assert.ok(db.stripSqlLineComments('SELECT "# not a comment" FROM t').includes('# not a comment'));
+        assert.ok(db.stripSqlLineComments('SELECT `col#1` FROM t').includes('`col#1`'));
+    });
+
+    it('copies /* */ block comments through verbatim (a # or -- inside must not eat the */)', function () {
+        const sql = '/* see issue #4373 -- and this */ SELECT 1';
+        assert.strictEqual(db.stripSqlLineComments(sql), sql);
+    });
+
+    it('does not treat an apostrophe in block-comment prose as a quote start', function () {
+        const out = db.stripSqlLineComments("/* don't do this */ SELECT 1 -- gone\nSELECT 2");
+        assert.ok(!out.includes('gone'));
+        assert.ok(out.includes('SELECT 2'));
+    });
 });
 
 // parseExpectedColumns

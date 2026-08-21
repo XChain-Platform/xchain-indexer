@@ -265,7 +265,9 @@ const price              = require('./actions/price.js');
 // External attestation framework (single action; v0=request, v1=response, v2=expire)
 const attest             = require('./actions/attest.js');
 
-// ANCHOR: DOGE-only on-chain state commitments (v0=checkpoint, v1=+archive, v2=continuation)
+// ANCHOR: DOGE-only on-chain state commitments (v0=checkpoint, v1=+archive,
+// v2=continuation, v3=+SPV roots, v4/v5=+publisher anchor-reward attestation,
+// v6=+publisher archive-reward attestation). Authoritative list: anchor.js FORMATS.
 const anchor             = require('./actions/anchor.js');
 
 // Cross-chain contract calls: XCALL (source-chain request/expiry) + XEXEC
@@ -393,7 +395,7 @@ class Actions {
         // Attestation framework action instance (single handler dispatches v0/v1/v2 internally)
         this.actionAttest           = new attest(this);
 
-        // ANCHOR action instance (single handler dispatches v0/v1/v2 internally)
+        // ANCHOR action instance (single handler dispatches v0-v6 internally)
         this.actionAnchor           = new anchor(this);
 
         // NODEPROOF: full-node possession-proof verdict handler
@@ -641,7 +643,9 @@ class Actions {
         // Attestation framework: handler dispatches on VERSION (v0=request, v1=response, v2=expire)
         if(action=='ATTEST')             await this.actionAttest.parse(params, data, error);
 
-        // ANCHOR: DOGE-only on-chain state commitments (v0=checkpoint, v1=+archive, v2=continuation)
+        // ANCHOR: DOGE-only on-chain state commitments (handler dispatches on VERSION:
+        // v0=checkpoint, v1=+archive, v2=continuation, v3=+SPV roots,
+        // v4/v5=+publisher anchor reward, v6=+publisher archive reward)
         if(action=='ANCHOR')             await this.actionAnchor.parse(params, data, error);
 
         // Cross-chain contract calls: XCALL (VM-emitted request / synthetic expiry),

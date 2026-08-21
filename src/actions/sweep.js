@@ -407,9 +407,29 @@ class Sweep {
             }
 
             if(data['BALANCES']==1){
-                for(let tick_id in balances){
+                // Ledger writes follow the SAME consensus-stable order as the controller-guard
+                // loop above: byte (binary) order of the RESOLVED tick STRING, never ascending
+                // tick_id (a local index_tickers AUTO_INCREMENT surrogate that can diverge across
+                // nodes after a reorg, so the credits/debits row ids it produces are node-local).
+                // Order-only: the same rows with the same amounts are written either way, and
+                // every hashed reader re-sorts on a pinned total order, so no hash moves. It is
+                // the WRITE order the guard-loop rationale above says must not follow the
+                // surrogate. sweptTicks from that loop is deliberately NOT reused: it is scoped to
+                // the validation phase, skips ticks whose ticker does not resolve, and predates the
+                // guard-fee debits, so reusing it would change which rows are written.
+                let settleTicks = [];
+                for(let settleTickId of Object.keys(balances))
+                    settleTicks.push({ tick_id: settleTickId, tick: await resolveTicker(settleTickId) });
+                settleTicks.sort((a, b) => {
+                    let aKey = Buffer.from(this.util.isNull(a.tick) ? '' : String(a.tick), 'utf8');
+                    let bKey = Buffer.from(this.util.isNull(b.tick) ? '' : String(b.tick), 'utf8');
+                    let cmp  = Buffer.compare(aKey, bKey);
+                    // tick_id tiebreak only keeps the sort a TOTAL order (two entries can tie only
+                    // on an unresolvable ticker); it never decides the order of resolved ticks.
+                    return (cmp !== 0) ? cmp : (Number(a.tick_id) - Number(b.tick_id));
+                });
+                for(let { tick_id, tick } of settleTicks){
                     let amount = balances[tick_id];
-                    let tick   = await resolveTicker(tick_id);
 
                     debits.push([tick,  amount, data['SOURCE']]);
                     credits.push([tick, amount, data['DESTINATION']]);

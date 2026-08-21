@@ -132,8 +132,50 @@ class MemoryNodeStore {
 }
 
 // ---- Persistent SMT engine --------------------------------------------------
+// Node-cache bound. Each entry is one 64-char hash key plus two 64-char child
+// hashes, so ~200k entries is a few hundred MB of heap worst case and the
+// engine degrades to plain store reads past it rather than growing without
+// limit. Every PersistentSMT is constructed function-locally (four sites in
+// this file, all inside one block's work), so the cache dies with the call.
+const SMT_NODE_CACHE_MAX = 200000;
+
 class PersistentSMT {
-    constructor(store){ this.store = store; }
+    // opts.nodeCacheMax = 0 disables the cache entirely (the uncached reference
+    // run the read-count regression test needs).
+    constructor(store, opts){
+        this.store         = store;
+        this._nodeCacheMax = (opts && opts.nodeCacheMax != null) ? opts.nodeCacheMax : SMT_NODE_CACHE_MAX;
+        this._nodeCache    = new Map();
+    }
+
+    // Read-through cache over the content-addressed node rows. The WRITE half of
+    // this shape was already fixed (see the putMany header above); the read half
+    // still cost one dependent round trip per level, and a present key never
+    // short-circuits, so every descent was a full SMT_DEPTH of them: once in
+    // update() and again in the prove() that _assertCommittedLeaves runs over the
+    // same keys, plus SMT_DEPTH per key on the buildFull rebuild paths.
+    //
+    // Three properties keep this a transport fix and not a consensus one:
+    //   1. POSITIVE ENTRIES ONLY. A store miss is never cached. Absence is the
+    //      fail-loud signal the M-17 strict-read note above is about, and it must
+    //      keep reaching the store every time it is asked.
+    //   2. CONTENT-ADDRESSED KEYS. node_hash = H(left||right), so a row's value can
+    //      never change under its key and a cached entry cannot go stale. A row a
+    //      concurrent retention sweep deleted still answers with the same children.
+    //   3. INSTANCE-SCOPED, BOUNDED. Never module-scoped: the cache cannot outlive
+    //      the block's work, so a rolled-back transaction discards it wholesale.
+    // A miss falls through to the identical store.get, so no root can move.
+    _cacheGet(hashHex){
+        return this._nodeCacheMax > 0 ? this._nodeCache.get(hashHex) : undefined;
+    }
+    _cachePut(hashHex, leftHex, rightHex){
+        if(this._nodeCacheMax <= 0 || this._nodeCache.has(hashHex)) return;
+        // FIFO eviction over Map insertion order. Nodes are offered leaf-first by
+        // _putBatch, so the oldest entry is the deepest and least re-read.
+        if(this._nodeCache.size >= this._nodeCacheMax)
+            this._nodeCache.delete(this._nodeCache.keys().next().value);
+        this._nodeCache.set(hashHex, { left_hash: leftHex, right_hash: rightHex });
+    }
 
     // Descend a key's path collecting the 256 siblings (hex, top-down). Returns
     // { siblings, oldLeaf } where oldLeaf is the current value leaf at the key
@@ -147,7 +189,11 @@ class PersistentSMT {
         for(let d = 0; d < M.SMT_DEPTH; d++){
             const sibEmptyHex = M.toHex(M.EMPTY[M.SMT_DEPTH - 1 - d]);
             if(empty){ siblings[d] = sibEmptyHex; continue; }
-            const row = await this.store.get(cur);
+            let row = this._cacheGet(cur);
+            if(row === undefined){
+                row = await this.store.get(cur);
+                if(row) this._cachePut(cur, row.left_hash, row.right_hash);
+            }
             if(!row){ empty = true; siblings[d] = sibEmptyHex; continue; }
             const bit = M.bitAt(keyBuf, d);
             siblings[d] = (bit === 0) ? row.right_hash : row.left_hash;
@@ -163,9 +209,15 @@ class PersistentSMT {
     async _putBatch(nodes){
         if(typeof this.store.putMany === 'function'){
             await this.store.putMany(nodes);
-            return;
+        } else {
+            for(const n of nodes) await this.store.put(n.hash, n.left, n.right);
         }
-        for(const n of nodes) await this.store.put(n.hash, n.left, n.right);
+        // Seed the read cache only AFTER the write resolved, so a throwing
+        // doQueryStrict never leaves an entry claiming a row that is not durable.
+        // This is where most of the win is: update() threads its new root into the
+        // next descend, and _assertCommittedLeaves proves the same keys back
+        // against the final root, so these nodes are re-read within the same call.
+        for(const n of nodes) this._cachePut(n.hash, n.left, n.right);
     }
 
     // Set (leafHex) or delete (null) a key, persisting new internal nodes. Returns

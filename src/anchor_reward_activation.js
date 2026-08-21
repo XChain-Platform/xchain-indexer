@@ -198,7 +198,7 @@ function isAnchorRewardDeriveActive(snapshotBlock, network){
 // The fleet-agreed mirror-completeness watermark, in BTC blocks (operator ruling (a),
 // 2026-08-11, settling AML #4172).
 //
-// Derivation used to mature a mirrored attestation the instant snapshot_block <= the BTC
+// Keying on snapshot_block alone matures a mirrored attestation the instant snapshot_block <= the BTC
 // block being processed. snapshot_block is the height the XANCPUB signing set was resolved
 // at, and it is ALREADY IN THE PAST when the row is written: the hub writes only after the
 // DOGE anchor is buried dogeConfirmations deep, after a failover ladder that can hand the
@@ -213,7 +213,7 @@ function isAnchorRewardDeriveActive(snapshotBlock, network){
 // DOGE confirmations is ~1h, plus the anchor failover ladder, plus federation). The height
 // is only half the barrier. The other half is fail-closed: a node whose attestation mirror
 // is not provably caught up DEFERS the block (wait-then-retry, never a partial-set commit;
-// see XChainIndexer._waitForAnchorAttestationMirror), so every node either derives the
+// see HubDbSync.waitForAnchorAttestationSync), so every node either derives the
 // identical set at the identical height or does not advance at all. Changing this value
 // moves the block a reward materializes at, so it is a hashed value: it is frozen with the
 // activation map above and a change needs its own flag-day.

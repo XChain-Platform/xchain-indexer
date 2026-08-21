@@ -161,12 +161,46 @@ describe('Utility @regression @tier1', function () {
         it('fetches the full effective result set and delivers at most the cap', async function () {
             // Results are fetched uncapped (so the expiry pass can see requests that are
             // deliverable this block but deferred past the cap) and the per-block cap is then
-            // applied as a deterministic slice on delivery.
+            // applied as a deterministic slice on delivery. The uncapped fetch exists ONLY to
+            // feed the expiry pass, so this block has something to expire.
             const many = Array.from({ length: CAP + 5 }, (_, i) => ({ call_id: String(i).padStart(64, '0') }));
             db.getEffectiveUnprocessedCallResults.resolves(many);
+            db.getExpiredCrossChainCallRequests.resolves([{ call_id: many[CAP + 1].call_id }]);
             await util.processCrossChainCalls(actions, db, 100, 1700000000);
             assert.ok(db.getEffectiveUnprocessedCallResults.getCall(0).args[3] > CAP, 'results fetched uncapped');
             assert.strictEqual(processResult.callCount, CAP, 'delivers exactly the per-block cap');
+        });
+
+        it('a block with nothing to expire fetches results at the cap instead of dragging the backlog', async function () {
+            // The uncapped fetch feeds a suppression map the expiry pass alone reads. With no
+            // past-deadline pending request there is no expiry pass, so the whole finalized-
+            // result backlog would be pulled across the (possibly remote hub) connection every
+            // ~5s block to serve nothing. The LIMIT-1 probe asks the SAME query as the capped
+            // expiry pass, whose set is a subset of the probe's, so an empty probe proves the
+            // suppression map is dead this block.
+            const many = Array.from({ length: CAP + 5 }, (_, i) => ({ call_id: String(i).padStart(64, '0') }));
+            db.getEffectiveUnprocessedCallResults.resolves(many);
+            db.getExpiredCrossChainCallRequests.resolves([]);
+            await util.processCrossChainCalls(actions, db, 100, 1700000000);
+            assert.strictEqual(db.getEffectiveUnprocessedCallResults.getCall(0).args[3], CAP,
+                'a quiet block must bind the per-block cap, not an unbounded limit');
+            assert.ok(db.getExpiredCrossChainCallRequests.calledWith(100, 1),
+                'the probe must ask the expiry query itself, so the two can never disagree');
+            assert.strictEqual(processResult.callCount, CAP, 'delivery is unchanged');
+        });
+
+        it('the probe never replaces the capped expiry query, so the expiry set is still cap-wide', async function () {
+            // Bounding the probe at 1 must not bound the pass: step 3 still binds the full
+            // XCALL_MAX_CALLS_PER_BLOCK, or an aligned deadline burst would expire one request
+            // per block forever.
+            const expired = Array.from({ length: 3 }, (_, i) => ({ call_id: String(i).padStart(64, 'a') }));
+            db.getExpiredCrossChainCallRequests.resolves(expired);
+            resultSuppressesExpiry.resolves(false);
+            await util.processCrossChainCalls(actions, db, 100, 1700000000);
+            assert.ok(db.getExpiredCrossChainCallRequests.calledWith(100, CAP),
+                'the cap-wide expiry query must still run');
+            assert.strictEqual(processAction.getCalls().filter(c => c.args[0] === 'XCALL').length, expired.length,
+                'every expired request in the capped set must still be synthesized');
         });
 
         it('does NOT expire a past-deadline request whose result is deliverable this block (cap-deferred)', async function () {

@@ -212,9 +212,12 @@ const EMISSION_ISSUANCE_LIMITS_MAINNET_TIME = 9999999999;
 // not-yet-active exactly as before.
 const CONSENSUS_VERSION = '0.9.0';
 
-// Single shared predicate for the NATIVE_FEE_PRICE_TIME_GATE flag-day, used by
-// utility.getFeeOraclePrices (query selection) and XChainIndexer (sync
-// barrier) so the two can never gate differently. Semantics match the
+// Predicate for the NATIVE_FEE_PRICE_TIME_GATE flag-day. Its ONE consumer is
+// utility.getFeeOraclePrices (query selection); nothing else in src/ consults it.
+// XChainIndexer's time-keyed price barrier is deliberately NOT gated on this
+// predicate: it runs on every chain whenever hub-db sync is enabled, because FIAT
+// dispenser settlement reads price_snapshots by time from day one. Rationale and
+// the divergence it closes: XChainIndexer.js:877-888. Semantics match the
 // registry entry: testnet/regtest active from genesis, mainnet at the
 // flag-day; an unknown/empty network is treated like mainnet (conservative:
 // requires the flag-day).
@@ -1183,13 +1186,14 @@ class ProtocolChanges {
         // read today's newest round instead of the round used live. At/after
         // this flag-day, non-BTC chains select by the round's consensus
         // timestamp instead (`block_timestamp <= block time`, the same pair of
-        // quantities the staleness guard already compares) and the block loop
-        // gates on the time-keyed price barrier. Keyed on block TIME (not
+        // quantities the staleness guard already compares). Keyed on block TIME (not
         // height) for the same reason as DEPLOY_BASE64_CODE: no single height
-        // names one cutover across chains. Evaluation happens in
-        // utility.getFeeOraclePrices / XChainIndexer via the shared
-        // isNativeFeePriceTimeGateActive() below (one predicate, no drift);
-        // registered here so the flag-day inventory carries it.
+        // names one cutover across chains. Evaluation happens in exactly one place,
+        // utility.getFeeOraclePrices via isNativeFeePriceTimeGateActive() above;
+        // registered here so the flag-day inventory carries it. The block loop's
+        // time-keyed price barrier is NOT a consumer of this flag: it is unconditional
+        // on every chain (XChainIndexer.js:877-888), and re-conditioning it on this
+        // flag-day would re-open the LTC/DOGE FIAT-dispense divergence window.
         this.addChange('NATIVE_FEE_PRICE_TIME_GATE', '0.2.0', NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME,0,0,0,0,0);
 
         // DEPLOY_INIT_STRICT (F-14 follow-on): a contract that exports `initialize`
@@ -1478,7 +1482,7 @@ class ProtocolChanges {
     // @param {regtest_time}  integer Regtest activation block_time
     // @param {mainnet_block} integer Mainnet activation block_index
     // @param {testnet_block} integer Testnet activation block_index
-    // @param {testnet_block} integer Testnet activation block_index
+    // @param {regtest_block} integer Regtest activation block_index
     addChange(name, version, mainnet_time, testnet_time, regtest_time, mainnet_block, testnet_block, regtest_block){
         let error = false;
         if(typeof name != 'string')

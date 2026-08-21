@@ -2417,7 +2417,23 @@ class Utility {
         // XCALL_MAX_CALLS_PER_BLOCK. Fetch the full effective set (the cap is applied here as
         // a deterministic slice) so step 3 can tell which requests already have a result
         // available this block even when the cap defers their delivery to a later block.
-        let allResults = await db.getEffectiveUnprocessedCallResults(coin, network, block_time, Number.MAX_SAFE_INTEGER);
+        //
+        // The uncapped fetch is what step 3's suppression map is built from, and on a block
+        // with nothing to expire that map is never read: the whole finalized-result backlog
+        // is dragged across the (possibly remote hub) connection every ~5s to serve nothing.
+        // Probe first with the SAME expiry predicate at LIMIT 1 and fall back to the plain
+        // per-block cap when it comes back empty. This is the identical row set either way:
+        // step 3's own expiry query is a SUBSET of this probe's, because pass 2 can only
+        // move a request OUT of the probe's set (updateCrossChainCallRequestStatus writes
+        // only the terminal 'completed'/'expired') and can never add one to it (a request
+        // created by a callback this block carries deadline_block = block_index +
+        // XCALL_MIN_DEADLINE_BLOCKS or more, so it cannot satisfy deadline_block <
+        // block_index at this height). Empty probe therefore proves empty expiry pass,
+        // which proves the map is dead. When the probe is non-empty nothing changes at all.
+        // The probe reads the same index the capped query at step 3 uses.
+        let mayExpire  = (await db.getExpiredCrossChainCallRequests(block_index, 1)).length > 0;
+        let allResults = await db.getEffectiveUnprocessedCallResults(coin, network, block_time,
+                                    mayExpire ? Number.MAX_SAFE_INTEGER : cap);
         let results = allResults.slice(0, cap);
         for(let r of results){
             let data = {};

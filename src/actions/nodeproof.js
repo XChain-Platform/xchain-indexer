@@ -33,6 +33,7 @@
 const crypto  = require('crypto');
 const ed25519 = require('../ed25519.js');
 const eq      = require('../equivocation_header.js');
+const srb     = require('../snapshot_reorg_buffer.js');
 
 class NodeProof {
 
@@ -151,13 +152,31 @@ class NodeProof {
             }
         }
 
-        // Determine the eligible verifier universe at the epoch block: previously
+        // Determine the eligible verifier universe at the epoch block: already-
         // verified full nodes plus the configured genesis verifiers (the bootstrap
         // trust anchor). Quorum = floor(2V/3)+1. V==0 → nobody can vouch yet.
+        //
+        // TWO PLANES, deliberately. `snapshotBlock` is the DECLARED height and stays
+        // raw: it is the flag-day plane for the EQUIV header gate below, exactly as
+        // attest.js evaluates its own gate against the declared block_index.
+        // `setBlock` is the height every full_node VALIDATOR-SET read resolves at, and
+        // it is buried by the canonical reorg buffer, because the producing hub does
+        // not resolve these sets at the raw epoch either: CapabilitySnapshot subtracts
+        // the buffer from the claimant universe (FullNodeChallengeRound._claimantSet)
+        // and _eligibleVerifiers passes the same buried height to getfullnodeverifiers.
+        // Re-deriving here at the raw epoch resolved a DIFFERENT set whenever full_node
+        // stake activated or deactivated inside (epoch - CANONICAL_REORG_BUFFER, epoch]:
+        // a deactivation silently dropped the verification row for a node the hub had
+        // already challenged and quorum-signed, an activation left a creditable node
+        // unchallenged, and the quorum divisor itself was read from a tip-adjacent,
+        // reorg-unstable height. Same Proposal A treatment attest.js / recovery.js /
+        // light.js already carry; flag-day gated, so below the gate this is epochHeight
+        // verbatim and acceptance is byte-preserved.
         let snapshotBlock = epochHeight;
+        let setBlock      = srb.buriedSnapshotBlock(epochHeight, this.config['NETWORK']);
         let validSigners  = 0;
         if(!error){
-            let eligible = await this._eligibleVerifierSet(snapshotBlock);
+            let eligible = await this._eligibleVerifierSet(setBlock);
             if(eligible.size === 0){
                 error = 'invalid: no eligible verifiers at epoch (feature dormant)';
             } else {
@@ -208,13 +227,16 @@ class NodeProof {
         // non-staker). Idempotent on (epoch_height, signing_pubkey).
         if(!error){
             // One batched capability read for the whole PASS list, same fallback rule
-            // as _eligibleVerifierSet: a truncated read re-probes per pubkey.
-            let capRows = await this.indexerDb.getValidatorsByCapability('full_node', snapshotBlock);
+            // as _eligibleVerifierSet: a truncated read re-probes per pubkey. Resolves
+            // at the buried setBlock, the height the hub locked the claimant universe
+            // at; crediting at the raw epoch is what dropped rows for nodes the hub had
+            // legitimately challenged (see the two-planes note above).
+            let capRows = await this.indexerDb.getValidatorsByCapability('full_node', setBlock);
             let capSet  = (capRows && capRows.truncated === true)
                         ? null
                         : new Set((capRows || []).map(v => String(v.pubkey).toLowerCase()));
             for(let pk of passList){
-                if(capSet ? !capSet.has(pk) : !await this.indexerDb.hasCapability(pk, 'full_node', snapshotBlock))
+                if(capSet ? !capSet.has(pk) : !await this.indexerDb.hasCapability(pk, 'full_node', setBlock))
                     continue;
                 await this.indexerDb.createNodeProofVerification(
                     pk, challengeId, epochHeight, targetHeight, data['ACTION_INDEX'], blockIndex
