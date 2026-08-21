@@ -88,13 +88,37 @@ describe('[regression:p0] exact-ledger flag module @money @regression @tier1', f
                  'LTC:mainnet', 'LTC:testnet', 'regtest']);
         });
 
-        it('every mainnet and testnet entry is a DEFINED null (present, deliberately inert)', function () {
-            for (const key of ['BTC:mainnet', 'LTC:mainnet', 'DOGE:mainnet',
-                               'BTC:testnet', 'LTC:testnet', 'DOGE:testnet']) {
+        it('every mainnet entry carries its ratified height', function () {
+            const PINNED = { 'BTC:mainnet': 966500, 'LTC:mainnet': 3175500, 'DOGE:mainnet': 6370000 };
+            for (const [key, height] of Object.entries(PINNED)) {
                 assert.ok(key in ledgerPrecision.LEDGER_AMOUNT_PRECISION_ACTIVATION,
-                    key + ' must stay in the map so its null shadows the bare network key');
-                assert.strictEqual(ledgerPrecision.LEDGER_AMOUNT_PRECISION_ACTIVATION[key], null,
-                    key + ' must stay unpinned until its flag day is measured and ratified');
+                    key + ' must stay in the map so its height shadows the bare network key');
+                assert.strictEqual(ledgerPrecision.LEDGER_AMOUNT_PRECISION_ACTIVATION[key], height,
+                    key + ' must carry the ratified height; moving one forks a replay across it');
+            }
+        });
+
+        it('each mainnet height is inclusive, and inert one block below it', function () {
+            const PINNED = { BTC: 966500, LTC: 3175500, DOGE: 6370000 };
+            for (const [coin, height] of Object.entries(PINNED)) {
+                assert.strictEqual(
+                    ledgerPrecision.isLedgerAmountPrecisionActive(height - 1, 'mainnet', coin), false,
+                    coin + ':mainnet must stay legacy below its height');
+                assert.strictEqual(
+                    ledgerPrecision.isLedgerAmountPrecisionActive(height, 'mainnet', coin), true,
+                    coin + ':mainnet must be live AT the height, not one past it');
+            }
+        });
+
+        it('every testnet entry is ARMED at genesis (ratified 2026-08-18)', function () {
+            // Pre-launch ruling: every feature active on testnet. Safe at 0 only because
+            // testnet indexer state is rebuilt from the chain before launch, so no row
+            // written under the legacy per-row quantization survives to disagree.
+            for (const key of ['BTC:testnet', 'LTC:testnet', 'DOGE:testnet']) {
+                assert.ok(key in ledgerPrecision.LEDGER_AMOUNT_PRECISION_ACTIVATION,
+                    key + ' must stay in the map so it shadows the bare network key');
+                assert.strictEqual(ledgerPrecision.LEDGER_AMOUNT_PRECISION_ACTIVATION[key], 0,
+                    key + ' must be armed at genesis for the testnet launch');
             }
         });
 

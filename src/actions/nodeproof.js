@@ -151,7 +151,7 @@ class NodeProof {
             }
         }
 
-        // Determine the eligible verifier universe at the epoch block: previously
+        // Determine the eligible verifier universe at the epoch block: already-
         // verified full nodes plus the configured genesis verifiers (the bootstrap
         // trust anchor). Quorum = floor(2V/3)+1. V==0 → nobody can vouch yet.
         let snapshotBlock = epochHeight;

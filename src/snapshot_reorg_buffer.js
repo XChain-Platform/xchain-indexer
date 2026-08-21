@@ -91,7 +91,13 @@ const CANONICAL_REORG_BUFFER = 6;
 // suites exercise the buried resolution from block 0).
 const SNAPSHOT_BURIAL_ACTIVATION = {
     mainnet: null,        // INERT placeholder: operator-ratify a BTC snapshot_block before arming
-    testnet: null,        // INERT placeholder: operator-ratify a BTC snapshot_block before arming
+    // ARMED AT GENESIS, operator-ratified 2026-08-18 as part of the pre-launch "every
+    // feature active on testnet" ruling. Safe because testnet's indexer state is being
+    // REBUILT from the chain before launch, and because testnet carries no artifacts
+    // signed under the current reading for this to reinterpret: the live explorer reports
+    // 0 validators, 0 capability stakes and 0 checkpoints on BTC testnet, so nothing has
+    // ever been quorum-signed there. Mainnet keeps its own ratification for that reason.
+    testnet: 0,
     regtest: 0,
 };
 

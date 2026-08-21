@@ -19,9 +19,11 @@ CREATE TABLE messages (
     coin                VARCHAR(4),               -- Destination coin network (BTC, LTC, DOGE)
     destination_id      BIGINT UNSIGNED,          -- id of record in index_addresses table
     encryption_method   VARCHAR(1),               -- Encryption Method (1=ECIES, 2=ECDH, 3=AES)
-    encryption_key      MEDIUMTEXT,               -- Public key to be used to exchange messages
-    encrypted_message   MEDIUMTEXT,               -- Encrypted Message
-    plaintext_message   MEDIUMTEXT,               -- Plaintext Message
+    -- utf8mb4: all three land on the wire verbatim and are only length-checked, so a
+    -- 4-byte character reaches the column whether or not the MESSAGE validates.
+    encryption_key      MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci, -- Public key to be used to exchange messages
+    encrypted_message   MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci, -- Encrypted Message
+    plaintext_message   MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci, -- Plaintext Message
     status_id           BIGINT UNSIGNED           -- id of record in index_statuses table
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 

@@ -98,16 +98,21 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
             assert.strictEqual(srb.buriedSnapshotBlock(3, 'regtest'), 0);
         });
 
-        it('mainnet and testnet are INERT: the declared height passes through untouched', function () {
+        it('mainnet is INERT: the declared height passes through untouched', function () {
             // Arming changes acceptance and re-reads already-anchored artifacts, so the
-            // activation height is an operator decision. Until it is ratified every
+            // activation height is an operator decision. Mainnet is unratified, so every
             // consumer must behave exactly as it did before this module existed.
             assert.strictEqual(srb.SNAPSHOT_BURIAL_ACTIVATION.mainnet, null);
-            assert.strictEqual(srb.SNAPSHOT_BURIAL_ACTIVATION.testnet, null);
             assert.strictEqual(srb.buriedSnapshotBlock(N, 'mainnet'), N);
-            assert.strictEqual(srb.buriedSnapshotBlock(N, 'testnet'), N);
             assert.strictEqual(srb.isSnapshotBurialActive(N, 'mainnet'), false);
-            assert.strictEqual(srb.isSnapshotBurialActive(N, 'testnet'), false);
+        });
+
+        it('testnet is ARMED at genesis, so burial applies from the first block', function () {
+            // Ratified 2026-08-18 (pre-launch, every feature active on testnet). Safe because
+            // testnet indexer state is rebuilt from the chain before launch and testnet holds
+            // no quorum-signed artifacts to re-read: 0 validators, 0 stakes, 0 checkpoints.
+            assert.strictEqual(srb.SNAPSHOT_BURIAL_ACTIVATION.testnet, 0);
+            assert.strictEqual(srb.isSnapshotBurialActive(N, 'testnet'), true);
         });
 
         it('fails closed (no burial) on an unknown network or an unusable height', function () {
@@ -171,6 +176,7 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
                 async (cap, block) => setAt(block).map(pk => ({ pubkey: pk })));
             db.hasCapability = sinon.stub().callsFake(
                 async (pk, cap, block) => setAt(block).includes(String(pk).toLowerCase()));
+            db.getAttestationAdmissionCounts = sinon.stub().resolves({ total: 0, byContract: 0 });
             db.getAttestationRequestById = sinon.stub().resolves({
                 request_id: REQ_ID, provider_id: 'http_get', request_status: 'pending',
                 deadline_block: N + 500, block_index: N, redundancy: 2,

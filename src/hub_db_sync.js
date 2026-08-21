@@ -174,8 +174,21 @@ function verifyEd25519(payload, sigHex, pubkeyHex) {
 // oracle resumed finalizing rounds and fresh price_snapshots began streaming.
 // Reformat any ISO-8601 datetime string to MySQL 'YYYY-MM-DD HH:MM:SS' (UTC,
 // matching how the hub stores it); leave every other value untouched.
-function coerceMirrorValue(v) {
+//
+// columnType is the LOCAL column's SHOW COLUMNS Type, lowercased (see
+// _cachedColumnType). The rewrite is keyed on that TYPE rather than on the
+// value's shape, because a shape-keyed rewrite also hits free-text columns:
+// oracle_prices.memo is unvalidated operator input (PRICE v1 validates
+// VALUE/FEE but never MEMO), so a memo that is literally an ISO timestamp was
+// rewritten in every distributed mirror while a deployment pointing hubDb
+// straight at the hub's own MariaDB kept the hub's bytes - topology-dependent
+// mirror content, against the verbatim-parity contract the mirror SQL twins
+// state (src/sql/oracle_prices.sql). An empty/unknown columnType falls back to
+// the shape rewrite, so a cache miss (or a driver that serves no Type) can
+// never regress the 22007 mirror-kill described above.
+function coerceMirrorValue(v, columnType) {
     if (typeof v !== 'string') return v;
+    if (columnType && !/^(datetime|timestamp)/.test(columnType)) return v;
     if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(v)) return v;
     // An offset-less ISO string is parsed as LOCAL time by ECMA-262, which would
     // shift the mirrored value by the node's timezone (per-node mirror drift).
@@ -261,11 +274,13 @@ class HubDbSync {
         this._priceWaiters   = [];                         // pending waitForPriceSyncHeight() resolvers
 
         // Highest block_timestamp among finalized rounds in the local price_snapshots copy.
-        // Used by the time-keyed price barrier (waitForPriceSyncTime) that gates NON-reference
-        // chains (LTC/DOGE) at/after the NATIVE_FEE_PRICE_TIME_GATE flag-day: their heights are
-        // not comparable to the rounds' BTC reference_block anchor, so catch-up is judged by the
-        // rounds' consensus timestamps against the block's time instead (H-3). Refreshed together
-        // with priceSyncHeight after every successful price_snapshots sync.
+        // Used by the time-keyed price barrier (waitForPriceSyncTime), which runs on EVERY chain
+        // whenever sync is enabled and is not conditioned on the NATIVE_FEE_PRICE_TIME_GATE
+        // flag-day (XChainIndexer.js:877-903). Non-reference chains' heights are not comparable
+        // to the rounds' BTC reference_block anchor, so catch-up is judged by the rounds'
+        // consensus timestamps against the block's time instead (H-3); on BTC the time barrier
+        // is ADDITIVE to the height one, since height coverage does not imply time coverage.
+        // Refreshed together with priceSyncHeight after every successful price_snapshots sync.
         this.priceSyncMaxTimestamp = 0;
         this._priceTimeWaiters     = [];                   // pending waitForPriceSyncTime() resolvers
 
@@ -1020,7 +1035,9 @@ class HubDbSync {
     }
 
     // Whether the price mirror is caught up enough to safely process a block at
-    // blockTime on a NON-reference chain (H-3 / NATIVE_FEE_PRICE_TIME_GATE).
+    // blockTime. Applies on EVERY chain (BTC included, additively with the
+    // height-keyed barrier) and is not gated on the NATIVE_FEE_PRICE_TIME_GATE
+    // flag-day; H-3 named the fee-query half of that work, not this barrier.
     // Two satisfied cases, mirroring _priceSyncSatisfied:
     //   1. The mirror already holds a finalized round whose consensus timestamp
     //      is at/past this block's time, so every round eligible at this block
@@ -1053,13 +1070,15 @@ class HubDbSync {
         this._priceTimeWaiters = stillWaiting;
     }
 
-    // Block-processing sync barrier for native-coin fee validation on NON-reference
-    // chains (H-3). Resolves once the local price_snapshots copy holds every finalized
-    // round with block_timestamp <= this block's time, so getLatestPrice's time-gated
-    // selection reads the same round on every indexer of this chain. Rejects after
-    // timeoutMs so the caller can DEFER the block and retry; never validate fees
-    // against a stale local mirror. The reference chain (BTC) keeps the height-keyed
-    // waitForPriceSyncHeight barrier above.
+    // Block-processing sync barrier for every time-keyed reader of price_snapshots:
+    // native-coin fee validation on non-reference chains (H-3) AND FIAT dispenser
+    // settlement, which reads by time on all chains. Resolves once the local
+    // price_snapshots copy holds every finalized round with block_timestamp <= this
+    // block's time, so a time-gated selection reads the same round on every indexer of
+    // this chain. Rejects after timeoutMs so the caller can DEFER the block and retry;
+    // never settle or validate against a stale local mirror. Runs on BTC too, ADDITIVELY
+    // with the height-keyed waitForPriceSyncHeight barrier above, which is retained for
+    // the height-selected fee query below the flag-day (XChainIndexer.js:877-932).
     waitForPriceSyncTime(blockTime, timeoutMs) {
         blockTime = Number(blockTime);
         if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.priceSyncMaxTimestamp);
@@ -1201,7 +1220,7 @@ class HubDbSync {
         if (table === 'capability_snapshots') cols = cols.filter(c => c !== 'id');
         if (cols.length === 0) return;
         let placeholders = cols.map(() => '?').join(', ');
-        let args = cols.map(c => coerceMirrorValue(row[c]));
+        let args = cols.map(c => coerceMirrorValue(row[c], this._cachedColumnType(table, c)));
 
         // price_snapshots needs an in-place upgrade path, not plain INSERT IGNORE.
         // It carries UNIQUE (round_number, coin_pair). The hub writes a 'skipped'
@@ -1239,10 +1258,22 @@ class HubDbSync {
         // Upgrade only when the INCOMING row is finalized (keyed on VALUES(status),
         // stable regardless of ODKU assignment order), so an already-finalized local
         // row is never clobbered and re-delivery stays idempotent.
+        // push_generation is the item-5308 reorg FENCE, not ordinary content, so it is held
+        // OUT of the status gate and only ever moves UP, the same rule cross_chain_matches
+        // applies to a_/b_push_generation. Inside the gate a finalized row carrying a LOWER
+        // generation lowered it, and the fenced retraction (DELETE ... WHERE push_generation
+        // <= gen) then matched a row re-published ABOVE that fence and blew a permanent hole
+        // in the mirror. The lowering is reachable because cross_chain_calls live rows apply
+        // DURING the REST bootstrap drain (only price_snapshots buffers, #2422), so a page
+        // fetched before a re-publish can land after the live re-published row.
         if (table === 'cross_chain_calls' && cols.includes('status')) {
-            let updatable = cols.filter(c => c !== 'id' && c !== 'call_id' && c !== 'phase' && c !== 'status');
+            let fence     = cols.includes('push_generation');
+            let updatable = cols.filter(c => c !== 'id' && c !== 'call_id' && c !== 'phase' && c !== 'status'
+                                             && c !== 'push_generation');
             let sets = updatable.map(c => '`' + c + "` = IF(VALUES(status) = 'finalized', VALUES(`" + c + '`), `' + c + '`)');
             sets.push("status = IF(VALUES(status) = 'finalized', 'finalized', status)");
+            if (fence)
+                sets.push('`push_generation` = GREATEST(COALESCE(`push_generation`, 0), COALESCE(VALUES(`push_generation`), 0))');
             let query = 'INSERT INTO cross_chain_calls (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
                       + ' ON DUPLICATE KEY UPDATE ' + sets.join(', ');
             await this.hubDb.doQuery(query, args);
@@ -1393,9 +1424,30 @@ class HubDbSync {
             // not-drained and retries.
             if (!rows || rows.length === 0)
                 throw new Error('local mirror table ' + table + ' not available yet (no columns)');
-            entry = this._localColumnCache[table] = { cols: new Set(rows.map(r => r.Field)), fetchedAt: Date.now() };
+            // `types` rides along on the SAME SHOW COLUMNS result the column
+            // filter is built from, so type-aware value coercion costs no extra
+            // query. The return value stays entry.cols: both callers and every
+            // test stub of this method treat it as a plain Set of field names.
+            entry = this._localColumnCache[table] = {
+                cols:      new Set(rows.map(r => r.Field)),
+                types:     new Map(rows.map(r => [r.Field, String(r.Type == null ? '' : r.Type).toLowerCase()])),
+                fetchedAt: Date.now()
+            };
         }
         return entry.cols;
+    }
+
+    // Local column TYPE for a table already primed in the column cache. It keys
+    // mirror value coercion on the schema instead of on the value's shape.
+    // Returns '' (read as "unknown") when the table or column is absent from the
+    // cache or the driver served no Type, which keeps the coercion's legacy
+    // shape-based fallback in play. Never issues a query: _applyRow awaits
+    // _localColumns for the same table first, so the entry is primed by then,
+    // and a test that stubs _localColumns simply lands on the fallback.
+    _cachedColumnType(table, col) {
+        let entry = this._localColumnCache && this._localColumnCache[table];
+        if (!entry || !entry.types) return '';
+        return entry.types.get(col) || '';
     }
 
     // Apply a reorg retraction to the local hub DB copy. The hub deletes price

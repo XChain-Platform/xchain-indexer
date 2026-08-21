@@ -27,7 +27,7 @@ const path   = require('path');
 const { decoderQuery, indexerQuery, createDatabases, createDecoderSchema,
         resetDecoderDb, resetIndexerDb, closeAll } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
-const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
+const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
 const GenesisDump = require('../../../src/genesisDump');
 
 const GENESIS_BLOCK = 100;
@@ -55,7 +55,7 @@ describe('Genesis Dump Import @regression', function () {
     before(async function () {
         process.env.XCHAIN_GENESIS_BLOCK = String(GENESIS_BLOCK);
         process.env.GENESIS_LEDGER_PATH  = LEDGER_PATH;
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
     });
 
@@ -65,6 +65,7 @@ describe('Genesis Dump Import @regression', function () {
         delete process.env.GENESIS_DUMP_PATH;
         delete process.env.XCHAIN_GENESIS_DUMP_HASH;
         try { fs.unlinkSync(DUMP_FILE); } catch (e) { /* ignore */ }
+        await destroyFileIndexers(__filename);
         await closeAll();
     });
 

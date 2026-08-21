@@ -20,6 +20,7 @@
 -- reorg by Rollback._recomputeAttestationValidatorStats(). See src/rollback.js.
 DROP TABLE IF EXISTS attest_validator_stats;
 CREATE TABLE attest_validator_stats (
+    id                 BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, -- surrogate paging cursor: the natural key (validator_pubkey, provider_id) is composite, and last_updated_block is monotonic but NOT unique (a whole responsible set misses in one block), so a keyset page boundary needs this
     validator_pubkey   CHAR(64) NOT NULL,                -- 32-byte Ed25519 pubkey (hex)
     provider_id        VARCHAR(32) NOT NULL,             -- attestation provider type (e.g. 'http_get')
     fulfilled_count    BIGINT UNSIGNED NOT NULL DEFAULT 0, -- valid signatures contributed to a fulfilled response

@@ -44,12 +44,12 @@
  * change late and entangle its replay evidence with
  * everything else there. Spec: claude/specs/ledger-amount-precision.md.
  *
- * MAINNET AND TESTNET ARE DELIBERATELY UNPINNED. `null` means inert: below any
- * threshold, and on every chain with no pinned height, the legacy per-row
- * quantization runs and historical replay stays byte-identical. Heights get
- * measured and pinned at flag-day assembly, once the replay evidence this item
- * calls for exists. Testnet is NOT genesis-active: the 2026-08-10 fresh
- * testnet genesis already carries history written under the old rule.
+ * `null` means inert: below any threshold, and on every chain with no pinned
+ * height, the legacy per-row quantization runs and historical replay stays
+ * byte-identical. Mainnet carries measured heights above the tip; testnet is
+ * genesis-active, which is only safe because those chains are rebuilt from
+ * chain before launch, so every row is recomputed under this rule and none
+ * written under the legacy one survives to disagree.
  *
  * READ-SIDE AGGREGATION IS NOT GATED. The projection changes (sum at 18 dp,
  * round once) are unconditional because they are provably a no-op on rows
@@ -72,12 +72,24 @@ const LEDGER_AMOUNT_PRECISION = 18;
 // path end to end; mainnet/testnet heights are pinned at flag-day assembly with
 // the replay evidence this item requires.
 const LEDGER_AMOUNT_PRECISION_ACTIVATION = {
-    'BTC:mainnet':  null,
-    'LTC:mainnet':  null,
-    'DOGE:mainnet': null,
-    'BTC:testnet':  null,
-    'LTC:testnet':  null,
-    'DOGE:testnet': null,
+    // Pinned on the standing 21-day rule, to the same boundary the oracle
+    // stale-round gate uses, so both consensus changes arm in one fleet deploy
+    // and one rehearsal rather than two. Each height sits above the tip
+    // recorded beside it, because a height a carrying fleet has not yet passed
+    // opens a retroactive window: a node that reindexes across it derives
+    // different state than one that did not.
+    'BTC:mainnet':  966500,     // tip 963,334 (2026-08-20) + 21d @144/day
+    'LTC:mainnet':  3175500,    // tip 3,163,414 + 21d @576/day
+    'DOGE:mainnet': 6370000,    // tip 6,340,174 + 21d @1440/day
+    // TESTNET ARMED AT GENESIS, operator-ratified 2026-08-18. The pre-launch ruling is
+    // that every platform feature must be ACTIVE on testnet, and block 0 is safe here
+    // because that chain's indexer state is rebuilt from the chain itself before launch: a
+    // rebuild recomputes every row under this rule, so no row written under the legacy one
+    // survives to disagree with it. Without the rebuild a genesis height is NOT safe here,
+    // which is why a network with history carries a measured height instead.
+    'BTC:testnet':  0,
+    'LTC:testnet':  0,
+    'DOGE:testnet': 0,
     regtest: 0,
 };
 

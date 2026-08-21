@@ -428,6 +428,76 @@ describe('Database._destructiveAutoStatement() @regression @tier1', function () 
         assert.strictEqual(destructiveOf(['CREATE TABLE foo (id INT) /* DROP TABLE bar */']), null);
         assert.strictEqual(destructiveOf(['CREATE TABLE foo (id INT)']), null);
     });
+
+    // ── `#` line comments: the server honours them, so the scanner must too ──
+
+    it('the `#`-comment bypass is caught end to end from raw file text', function () {
+        // Before the strip knew `#`, this chunk reached the classifier as
+        // "# tidy legacy rows\nDROP TABLE balances", matched no ^-anchored check,
+        // scored auto-eligible, and the server ran the DROP unattended at startup.
+        const raw = '-- xchain:migration mode=auto\n# tidy legacy rows\nDROP TABLE balances;\n';
+        assert.strictEqual(modeOf(raw), 'auto');
+        const offender = destructiveOf(statementsOf(raw));
+        assert.ok(offender && /DROP TABLE balances/i.test(offender),
+            'a `#` comment line must not hide the DROP from the auto gate');
+    });
+
+    it('flags a statement still carrying a `#` line comment (strip-regression guard)', function () {
+        // Fed directly, bypassing the strip: the classifier is the last line before
+        // an unattended DROP, so a comment introducer it can still see fails closed.
+        assert.ok(destructiveOf(['# tidy legacy rows\nDROP TABLE balances']));
+        assert.ok(destructiveOf(['ALTER TABLE t ADD COLUMN y INT NULL # , DROP COLUMN x']));
+    });
+
+    it('does not flag a `#` inside a quoted literal or a block comment', function () {
+        assert.strictEqual(destructiveOf(["INSERT INTO notes (body) VALUES ('#tag')"]), null);
+        assert.strictEqual(destructiveOf(['ALTER TABLE `t#1` ADD COLUMN y INT NULL']), null);
+        assert.strictEqual(destructiveOf(statementsOf(
+            '-- xchain:migration mode=auto\n/* see issue #4373 */ ALTER TABLE t ADD COLUMN y INT NULL;'
+        )), null);
+    });
+
+    // ── row-rewriting DML that starts with an unflagged keyword ──────────
+
+    it('flags INSERT ... ON DUPLICATE KEY UPDATE (rewrites every colliding row)', function () {
+        assert.ok(destructiveOf([
+            "INSERT INTO tokens (ticker, description) VALUES ('XYZ','') ON DUPLICATE KEY UPDATE description=''"
+        ]));
+        assert.ok(destructiveOf([
+            'INSERT INTO t (a, b) SELECT a, b FROM s\nON DUPLICATE KEY UPDATE b = VALUES(b)'
+        ]));
+    });
+
+    it('does not flag a plain INSERT (additive: it only adds rows)', function () {
+        assert.strictEqual(destructiveOf(["INSERT INTO tokens (ticker) VALUES ('XYZ')"]), null);
+        assert.strictEqual(destructiveOf(['INSERT IGNORE INTO t (a) SELECT a FROM s']), null);
+    });
+
+    it('flags LOAD DATA (rows come from a file the classifier cannot read)', function () {
+        assert.ok(destructiveOf(["LOAD DATA INFILE '/tmp/x.csv' REPLACE INTO TABLE balances"]));
+        assert.ok(destructiveOf(["LOAD DATA LOCAL INFILE '/tmp/x.csv' INTO TABLE balances"]));
+    });
+
+    // ── ALTER clauses that destroy rows with no DROP/RENAME/CHANGE/MODIFY ──
+
+    it('flags ALTER TABLE partition clauses (TRUNCATE / EXCHANGE / ADD are one class)', function () {
+        assert.ok(destructiveOf(['ALTER TABLE balances TRUNCATE PARTITION p0']));
+        assert.ok(destructiveOf(['ALTER TABLE balances EXCHANGE PARTITION p0 WITH TABLE balances_old']));
+        assert.ok(destructiveOf(['ALTER TABLE balances REORGANIZE PARTITION p0 INTO (PARTITION p1 VALUES LESS THAN (100))']));
+        // Additive partition DDL is not separable from the destructive forms by prefix,
+        // so it is non-auto-eligible too: tag the file mode=manual to run one.
+        assert.ok(destructiveOf(['ALTER TABLE balances ADD PARTITION (PARTITION p2 VALUES LESS THAN (200))']));
+        assert.ok(destructiveOf(['ALTER TABLE balances REMOVE PARTITIONING']));
+    });
+
+    it('flags ALTER TABLE tablespace clauses (DISCARD deletes the data file)', function () {
+        assert.ok(destructiveOf(['ALTER TABLE balances DISCARD TABLESPACE']));
+        assert.ok(destructiveOf(['ALTER TABLE balances IMPORT TABLESPACE']));
+    });
+
+    it('does not flag an ordinary column whose name merely contains "partition"', function () {
+        assert.strictEqual(destructiveOf(['ALTER TABLE t ADD COLUMN partition_id INT NULL']), null);
+    });
 });
 
 describe('Database.backdatedFrontierViolation() @regression @tier1', function () {
@@ -541,6 +611,35 @@ describe('Database.splitSqlStatements() @regression @tier1', function () {
     it('does not split on a ; inside a -- line comment', function () {
         assert.deepStrictEqual(splitOf('SELECT 1; -- trailing; note\nSELECT 2;'),
             ['SELECT 1', 'SELECT 2']);
+    });
+
+    it('does not split on a ; inside a # line comment, and drops the comment', function () {
+        assert.deepStrictEqual(splitOf('SELECT 1; # see foo; bar\nSELECT 2;'),
+            ['SELECT 1', 'SELECT 2']);
+    });
+
+    it('strips a leading # comment so the next statement classifies on its own keyword', function () {
+        assert.deepStrictEqual(splitOf('# tidy legacy rows\nDROP TABLE balances;'),
+            ['DROP TABLE balances']);
+    });
+
+    it('leaves a # inside a block comment or a quoted span alone', function () {
+        // A naive #-to-end-of-line strip would eat the closing */ and the rest of the line.
+        assert.deepStrictEqual(splitOf('/* see issue #4373 */ SELECT 1;'),
+            ['/* see issue #4373 */ SELECT 1']);
+        assert.deepStrictEqual(splitOf("INSERT INTO t (m) VALUES ('#tag; still one');"),
+            ["INSERT INTO t (m) VALUES ('#tag; still one')"]);
+    });
+
+    it('does not let an apostrophe in block-comment prose open a quote span', function () {
+        // The scanner used to read `don't` as a quote start, swallowing the ';'.
+        assert.deepStrictEqual(splitOf("/* don't do this */ SELECT 1; SELECT 2;"),
+            ["/* don't do this */ SELECT 1", 'SELECT 2']);
+    });
+
+    it('a `#` comment cannot hide a DROP from the destructive-DDL guard', function () {
+        const offender = destructiveOf(splitOf('# cleanup\nDROP TABLE balances;'));
+        assert.ok(offender && /DROP TABLE balances/i.test(offender));
     });
 
     it('splits ordinary multi-statement SQL into the same statements as before', function () {

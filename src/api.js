@@ -35,6 +35,7 @@ const rateLimit     = require('express-rate-limit');
 const XChainIndexer = require('./XChainIndexer');
 const jsonRouter    = require('express-json-rpc-router');
 const { buildHealthResponse, committedView, inFlightBlockIndex } = require('./health');
+const { createShutdown, createIndexerDrain } = require('./shutdown');
 const { getStakeSourceByPubkey } = require('./stake-source');
 const { canonicalizeRewardType } = require('./reward-push-gate');
 const anchorActionQuery = require('./anchor-action-query');
@@ -743,8 +744,14 @@ async function startApi(){
         // validators with a passed possession proof inside PROOF_WINDOW_BLOCKS of
         // `block_index`. The hub unions this with FULLNODE.GENESIS_VERIFIERS to form
         // the eligible-verifier set for a challenge round, matching the indexer's
-        // acceptance rule in actions/nodeproof.js. (Live-stake intersection is the
-        // caller's via the capability snapshot.)
+        // acceptance rule in actions/nodeproof.js. The live-stake intersection is applied
+        // HERE, by this RPC, not by the caller: the returned set is already the
+        // proof-window set intersected with the live full_node capability at
+        // `block_index`. A caller must NOT re-filter it through a capability snapshot of
+        // its own. That set is the 2/3+1 quorum denominator, and nodeproof.js sizes the
+        // chain's acceptance quorum over this same rule, so a second filter (which
+        // carries its own MIN_STAKE predicate) shrinks the hub's divisor below the one
+        // the chain will accept.
         async getfullnodeverifiers({block_index}){
             if(block_index === undefined || block_index === null)
                 return { error: 'block_index is required' };
@@ -1438,9 +1445,31 @@ async function startApi(){
             // longer pushes it). Pre-flag-day anchor_<CHAIN> rewards still push. block_index
             // is the BTC snapshot_block the flag-day is keyed on. The handler itself stays
             // until pre-v4/pre-v6 history is buried.
+            //
+            // The gate takes BOTH planes, because block_index alone is a key the CALLER
+            // supplies: a key-holder sending block_index 0 read every flag-day as inactive,
+            // got a wire-amount COLLECT-spendable row written, and the MIN(pubkey) collapse
+            // below then DELETED the legitimately derived winner for that round. `round` is
+            // the plane that binds: for the per-chain legs round_reference IS CHECKPOINT_SEQ,
+            // and StateCheckpointEngine.deriveCheckpointSeq(snapshotBlock) returns
+            // snapshotBlock, so round IS the BTC snapshot_block. reconcileAnchorRewardWinner
+            // keys on (reward_type, round_reference), so a forged row can only displace the
+            // derived winner while it carries the derived round, and that round is by
+            // definition at/above the flag-day. Lowering round instead moves the row off any
+            // round a derive will ever write, so it can no longer collide.
+            // Written as OR-of-predicates and never as a max(): round is only checked for
+            // presence above, so Number(round) on a non-numeric round is NaN, and a max()
+            // over NaN is NaN, which fails the gate open and hands the bypass back.
+            // A legitimate pre-flag-day push is unaffected: the hub sends round =
+            // checkpoint_seq of a pre-flag-day snapshot_block (RewardTracker), and the
+            // legacy dense seq it replaced was strictly smaller still.
+            // anchor_archive gets no binding from this: its round is MATCH_BATCH_SEQ, a
+            // dense hub-allocated counter rather than a height, so the leg below still
+            // rests on the wire block_index alone.
             if(/^anchor_(BTC|LTC|DOGE)$/.test(type) &&
-               ar.isAnchorRewardActive(Number(blockIdx), indexer.config && indexer.config['NETWORK']))
-                return { error: 'reward_type ' + type + ' at block ' + blockIdx +
+               (ar.isAnchorRewardActive(Number(blockIdx), indexer.config && indexer.config['NETWORK']) ||
+                ar.isAnchorRewardActive(Number(round),    indexer.config && indexer.config['NETWORK'])))
+                return { error: 'reward_type ' + type + ' at block ' + blockIdx + ' / round ' + round +
                                 ' is derived on-chain from ANCHOR v4/v5; push retired' };
             // The same staged retirement for the ARCHIVE leg. At/above the
             // ARCHIVE_REWARD flag-day anchor_archive is DERIVED on-chain from the ANCHOR v6
@@ -1639,18 +1668,42 @@ async function startApi(){
     // Allow JSON-RPC requests
     app.use(jsonRouter({methods: jsonRpcController}));
 
-    // Start the server
-    app.listen(INDEXER_API_PORT, () => {
+    // Start the server. The handle is kept so the shutdown drain below can stop
+    // accepting connections and let in-flight requests finish.
+    const server = app.listen(INDEXER_API_PORT, () => {
       console.log('API listening on port ' + INDEXER_API_PORT);
     });
 
-    // Start the Indexer (trap any errors and log them before exiting the indexer)
-    indexer.start().catch((error) => {
+    // Start the Indexer (trap any errors and log them before exiting the indexer).
+    // start() awaits the block loop, so this promise SETTLES when the loop breaks:
+    // on a fatal error here, or on the stopFlag the drain sets at a block boundary.
+    const indexerExited = indexer.start().catch((error) => {
         console.error('Fatal indexer error:', error);
         indexerRunning = false;
         indexerError   = error;
         process.exit(1);
     });
+
+    // Graceful shutdown. node is PID 1 in the image, so `docker stop` delivers
+    // SIGTERM to this process; before this handler existed the default action
+    // killed the block loop wherever it stood, which meant an aborted MariaDB
+    // write transaction and InnoDB crash recovery on every routine restart.
+    // The handler is bounded by its own hard-exit timer (see src/shutdown.js):
+    // installing it removes node's default terminate, so a drain that hangs must
+    // still end the process rather than linger until the supervisor's SIGKILL.
+    const shutdown = createShutdown({
+        drain: createIndexerDrain({
+            indexer:     indexer,
+            server:      server,
+            loopSettled: indexerExited,
+            // Flip BEFORE stop(): stop() only sets stopFlag and the loop may take a
+            // whole block to notice it, and /status must not report a draining
+            // indexer as running through that window.
+            onDraining:  () => { indexerRunning = false; }
+        })
+    });
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT',  () => shutdown('SIGINT'));
 
 }
 

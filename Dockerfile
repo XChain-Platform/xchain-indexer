@@ -21,4 +21,12 @@ COPY ./src /XChainIndexer/src
 COPY ./data/genesis /XChainIndexer/data/genesis
 COPY ./.en[v] /XChainIndexer/.env
 
-CMD ["npm", "run", "api"]
+# Exec-form node, not `npm run api`. npm builds an npm -> sh -c -> node tree and
+# no wrapper forwards signals, so `docker stop` kills npm while node is never
+# told anything (measured on the regtest encoder, xchain-encoder/Dockerfile).
+# --no-node-snapshot is carried verbatim from the package.json `api` script;
+# dropping it would surface as a startup failure, not as a shutdown bug.
+# Dropping the npm wrapper also drops the npm_package_* env vars, which
+# XChainIndexer.js reads for its boot banner; that read falls back to
+# package.json for exactly this launch path.
+CMD ["node", "--no-node-snapshot", "./src/api.js"]

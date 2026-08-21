@@ -34,7 +34,7 @@ const {
     resetDecoderDb, resetIndexerDb, closeAll,
 } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
-const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
+const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
 const { seedGas } = require('../setup/gas-seeder');
 const helpers = require('../setup/assertion-helpers');
 
@@ -65,11 +65,12 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
 
     before(async function () {
         this.timeout(30000);
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
     });
 
     after(async function () {
+        await destroyFileIndexers(__filename);
         await closeAll();
     });
 

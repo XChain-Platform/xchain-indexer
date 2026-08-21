@@ -37,6 +37,7 @@ const { indexerQuery, createDatabases, createDecoderSchema, closeAll } = require
 const { getToken, getLastActionIndexByType } = require('../setup/assertion-helpers');
 const { COINS, withCoin, processBlocks } = require('../setup/multi-chain');
 const { seedGas } = require('../setup/gas-seeder');
+const { destroyFileIndexers } = require('../setup/indexer-launcher');
 const Utility = require('../../../src/utility.js');
 
 const A1 = 'mpAEYsk8fhxph1f8P9k7nYxfixstUr6LV9'; // 30 chars
@@ -58,10 +59,11 @@ describe('Multi-chain action processing @regression @tier1', function () {
     this.timeout(120000);
 
     before(async function () {
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
     });
     after(async function () {
+        await destroyFileIndexers(__filename);
         await closeAll();
     });
 

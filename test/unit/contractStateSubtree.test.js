@@ -215,7 +215,7 @@ describe('contract_state_root: inertness @regression', function(){
         assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.ownership_root, {});
         assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.tokens_root, {});
         assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.contract_state_root,
-            { 'BTC:regtest': 10000, 'BTC:testnet': 146500 });
+            { 'BTC:regtest': 10000, 'BTC:testnet': 0, 'LTC:testnet': 0, 'DOGE:testnet': 0 });
         for(const slot of SUB.RESERVED_SUBTREES)
             for(const key of Object.keys(SUB.STATE_SUBTREE_ACTIVATION[slot]))
                 assert.ok(!/mainnet/.test(key), slot + ' is armed on mainnet (' + key + ')');
@@ -229,9 +229,11 @@ describe('contract_state_root: inertness @regression', function(){
             for(const network of ['mainnet', 'testnet', 'regtest'])
                 for(const h of [0, 1, 958500, 962500, 6335000, 999999999]){
                     // Skip every ARMED chain, derived from the map rather than a
-                    // hardcoded pair: with two heights armed (BTC:regtest 10000 and
-                    // BTC:testnet 146500) a hardcoded skip would quietly walk over a
-                    // chain that DOES query, and assert the opposite of its own name.
+                    // hardcoded pair: with four heights armed (BTC:regtest 10000 plus
+                    // all three testnets at genesis) a hardcoded skip would quietly
+                    // walk over a chain that DOES query, and assert the opposite of
+                    // its own name. Deriving it also means the testnet chains dropped
+                    // out of the inert sweep at the same commit that armed them.
                     const armedAt = SUB.STATE_SUBTREE_ACTIVATION.contract_state_root[coin + ':' + network];
                     if(armedAt !== undefined && h >= armedAt) continue;                   // the armed chains
                     const db = new FakeDb();
@@ -258,6 +260,30 @@ describe('contract_state_root: inertness @regression', function(){
         below.write(9999, 7, 'k', '"v"');
         assert.strictEqual(await SC.reservedSubRootCandidates(below, 'BTC', 'regtest', 9999), null);
         assert.strictEqual(below.stateQueries, 0);
+    });
+
+    it('every GENESIS-armed testnet chain queries from block 0, with no below-arming region', async function(){
+        // LTC and DOGE testnet had no entry in this map at all before the genesis
+        // arming, so nothing here exercised them and their removal would have been
+        // invisible. A genesis height also has no "below" to check, which is exactly
+        // why the block above keeps BTC:regtest's real boundary: between them the
+        // gate is proven to open AND to still be capable of answering false.
+        for(const coin of ['BTC', 'LTC', 'DOGE']){
+            const db = new FakeDb();
+            db.write(0, 7, 'k', '"v"');
+            const candidates = await SC.reservedSubRootCandidates(db, coin, 'testnet', 0);
+            assert.ok(candidates && candidates.contract_state_root,
+                coin + ':testnet must offer a candidate at its first block');
+            assert.ok(db.stateQueries > 0, coin + ':testnet must read contract_state at block 0');
+        }
+        // Mainnet is the control: the same call on the same coins reads nothing, so
+        // the assertions above are about the armed map and not about the fake db.
+        for(const coin of ['BTC', 'LTC', 'DOGE']){
+            const db = new FakeDb();
+            db.write(0, 7, 'k', '"v"');
+            assert.strictEqual(await SC.reservedSubRootCandidates(db, coin, 'mainnet', 0), null);
+            assert.strictEqual(db.stateQueries, 0, coin + ' mainnet must stay inert at block 0');
+        }
     });
 
     it('an inert block stores NULL in the extension column, which is what EMPTY means', function(){

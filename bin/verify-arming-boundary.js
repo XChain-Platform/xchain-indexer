@@ -53,11 +53,16 @@
  * THE EMPTY-SLOT CASE IS EXPECTED, NOT A FAILURE. A chain with no rows in the
  * slot's source table commits EMPTY_SMT_ROOT there, which is byte-identical to
  * the padding an absent slot contributes (spec §2), so state_root does NOT move
- * across the boundary. That is exactly what BTC:testnet will do at 146500, where
- * contract_state is empty. The tool detects it, says so in as many words, and
- * still enforces 1, 2, 3 and 5, because the version flip and the boundary are
- * real even when the root is unchanged. Reporting "state_root did not move" as a
- * pass without saying WHY would be the most misleading output this could give.
+ * across the boundary. The tool detects it, says so in as many words, and still
+ * enforces 1, 2, 3 and 5, because the version flip and the boundary are real
+ * even when the root is unchanged. Reporting "state_root did not move" as a pass
+ * without saying WHY would be the most misleading output this could give.
+ *
+ * A GENESIS-ARMED CHAIN HAS NO BOUNDARY TO VERIFY, and that is now the case for
+ * every testnet chain: the slot arms at 0, so there is no H-1 row, no NULL-to-
+ * non-NULL transition and no version flip. Every block is derived under one rule.
+ * The tool refuses those chains by name rather than reporting a missing row at
+ * -1, which reads as a data gap and sends the operator hunting for one.
  *
  * READ-ONLY. It opens one connection, reads, and writes nothing.
  *
@@ -133,6 +138,18 @@ function check(ok, label, detail){
         process.exit(2);
     }
     const H = Number(armed);
+    // A genesis arming has no below-side, so checks 1, 2 and 4 have nothing to
+    // compare against. Refusing here, before opening a connection, keeps the
+    // refusal accurate: reaching the query would report "no row at -1", which
+    // describes a missing row rather than an absent boundary and sends the
+    // operator looking for data loss that never happened.
+    if(H === 0){
+        console.error(opts.chain + ':' + opts.network + ' arms ' + SLOT + ' at GENESIS, so there is no ' +
+                      'boundary to verify: no H-1 row exists, the slot is never NULL, and the version ' +
+                      'never flips. Every block is derived under one rule. Verify such a chain by ' +
+                      'replaying it, not across a boundary (this is not a failure)');
+        process.exit(2);
+    }
     console.log('# ' + opts.chain + '/' + opts.network + '  ' + SLOT + ' armed at ' + H);
 
     const Database = require(path.join(SRC, 'db.js'));

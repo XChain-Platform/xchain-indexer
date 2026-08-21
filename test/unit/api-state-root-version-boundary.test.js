@@ -143,7 +143,11 @@ describe('getblockhashes: state_root_version is derived at the row height @regre
                 return build(indexer, stored, 'bb'.repeat(32), merkle, SUB).state_root_version;
             };
             assert.strictEqual(other('LTC', 'regtest'), 1, 'LTC is a different chain and is not armed');
-            assert.strictEqual(other('BTC', 'testnet'), 1, 'BTC:testnet is a different key and is not armed');
+            // BTC:testnet is a different KEY, which is the property under test, but it is no
+            // longer an unarmed one: the escrow locked leaf was armed on all three testnet
+            // chains at genesis on 2026-08-18, and any live extension slot mints version 2.
+            // LTC:regtest above still carries the "different chain, not armed" half.
+            assert.strictEqual(other('BTC', 'testnet'), 2, 'BTC:testnet is armed via the escrow leaf');
             assert.strictEqual(other('BTC', 'regtest'), 2, 'the armed chain still reports 2 (guard is not vacuous)');
         });
     });

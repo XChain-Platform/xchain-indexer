@@ -263,11 +263,25 @@ class GenesisDump {
         await this.db.doQuery(sql, args);
     }
 
-    // Normalize a DB value for JSON. bigIntAsNumber=true means BIGINTs are Numbers;
-    // a stray BigInt (future driver change) is stringified so JSON.stringify cannot throw.
+    // Normalize a DB value for JSON. bigIntAsNumber=true (db.js) means BIGINTs
+    // already arrive as Numbers; a stray BigInt from a future driver change is
+    // range-checked and converted, and one too large to survive IEEE 754 throws
+    // rather than rounding.
+    //
+    // Number() on a BigInt above 2^53-1 silently returns a nearby double, and
+    // this artifact is pinned by the sha256 of its bytes, so a rounded row would
+    // ship as consensus state with nothing raised. Converting keeps the emitted
+    // bytes identical for every representable value (a stringified id would
+    // change the artifact's shape and invalidate the pin); the throw is the
+    // encoder's parseSatoshiAmount / utility.js bcfloor fail-fast, and it fires
+    // in the offline generator, never on a node's import path.
     _scalar(v){
         if(v === undefined || v === null) return null;
-        if(typeof v === 'bigint')         return Number(v);
+        if(typeof v === 'bigint'){
+            if(v > BigInt(Number.MAX_SAFE_INTEGER) || v < -BigInt(Number.MAX_SAFE_INTEGER))
+                throw new RangeError(`genesis dump value (${v.toString()}) exceeds the maximum safe integer (${Number.MAX_SAFE_INTEGER}) and cannot be written without precision loss`);
+            return Number(v);
+        }
         return v;
     }
 }

@@ -34,7 +34,7 @@ const crypto = require('crypto');
 const { decoderQuery, indexerQuery, createDatabases, createDecoderSchema,
         resetDecoderDb, resetIndexerDb, closeAll } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
-const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
+const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
 const eq = require('../../../src/equivocation_header.js');
 
 // The regtest gas funder (configs/BTC.js ADDRESS.GAS) holds the full bootstrap supply,
@@ -131,12 +131,12 @@ describe('Integration: live SLASH equivocation drill + determinism @regression @
         process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
         process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
         offender = genKey();   // one key, reused both runs
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
         firstRun = await runCorpus();
     });
 
-    after(async function () { await closeAll(); });
+    after(async function () { await destroyFileIndexers(__filename); await closeAll(); });
 
     it('the offender qualified for cross_chain before the slash (sanity)', async function () {
         // A fresh-DB pre-slash check: stake without the slash block, confirm membership.

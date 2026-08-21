@@ -70,12 +70,17 @@
  * is INDEXER-ONLY and has no xchain-sync twin (same shape as
  * oracle_snapshot_age_causality_activation.js).
  *
- * ARMED at the shared pre-freeze deploy-train boundary (BTC 963000 /
- * LTC 3162000 / DOGE 6338000), value-equal to CARET_REF_STRICT_ACTIVATION and
- * LIST_EDIT_RESOLUTION_ACTIVATION so the whole train deploys as one; testnet
- * (fresh 2026-08-10 genesis) and regtest are genesis-active, matching the
+ * ARMED at BTC 966500 / LTC 3175500 / DOGE 6370000: the first boundary that
+ * every chain's tip still sits below when the release carrying this file is
+ * cut, computed on the standing 21-day rule from the tips recorded beside each
+ * value. CARET_REF_STRICT_ACTIVATION and LIST_EDIT_RESOLUTION_ACTIVATION ride
+ * an earlier release and keep their own shared boundary; this gate is
+ * deliberately NOT pinned to it, because a height below the tip of the first
+ * fleet to carry the code is a flag day with a retroactive window, which is
+ * the one thing an execution-path gate may never have. testnet (fresh
+ * 2026-08-10 genesis) and regtest are genesis-active, matching the
  * PKG3_SANDBOX_ACTIVATION template. The indexer fleet must be deployed before
- * BTC 963000.
+ * BTC 966500.
  *
  * NOTE FOR DEPLOYERS: a contract instance already deployed on a chain that has
  * not yet crossed its height keeps the old behaviour until it does. The
@@ -87,9 +92,9 @@
 // block_index. At/after the height a stale tip round is emitted with its price
 // withheld; below it the row is dropped entirely (legacy behaviour).
 const ORACLE_STALE_ROUND_VISIBILITY_ACTIVATION = {
-    'BTC:mainnet':  963000,
-    'LTC:mainnet':  3162000,
-    'DOGE:mainnet': 6338000,
+    'BTC:mainnet':  966500,     // tip 963,240 (2026-08-20) + 21d @144/day = 966,264
+    'LTC:mainnet':  3175500,    // tip 3,163,004 + 21d @576/day = 3,175,100
+    'DOGE:mainnet': 6370000,    // tip 6,339,253 + 21d @1440/day = 6,369,493
     testnet: 0,
     regtest: 0,
 };

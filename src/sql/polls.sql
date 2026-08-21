@@ -29,7 +29,8 @@ CREATE TABLE polls (
     block_index             BIGINT UNSIGNED NOT NULL,   -- creation block (rollback key)
     tick_id                 BIGINT UNSIGNED,            -- FK to index_tickers: electorate + weight token
     end_block               BIGINT UNSIGNED,            -- latest close block (voting accepted while cast_block <= end_block)
-    options                 MEDIUMTEXT,                 -- JSON array of option labels, index-addressed by ballots
+    -- utf8mb4: option labels are free-form user content, so a 4-byte character is legal.
+    options                 MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci, -- JSON array of option labels, index-addressed by ballots
     max_selections          SMALLINT UNSIGNED,          -- max distinct options one ballot may list (1 = single-choice)
     tally_mode              ENUM('approval','split'),   -- approval = full weight per option; split = weight divided by per-option shares
     weight_mode             ENUM('balance','stake','flat','quadratic','time_weighted'), -- balance = close holdings; flat = one-address-one-vote; quadratic = sqrt(close); time_weighted = windowed avg; stake reserved
@@ -37,7 +38,8 @@ CREATE TABLE polls (
     min_voters              BIGINT UNSIGNED,            -- optional participation gate: min distinct qualifying voters
     min_vote_balance        VARCHAR(60),                -- dust floor: a voter counts toward min_voters only if close balance >= this
     decide_threshold        VARCHAR(60),                -- optional early-decide arm: fraction of supply an option must reach (Phase 2)
-    question                MEDIUMTEXT,                 -- inline question text or a FILE reference
+    -- utf8mb4: inline question text is free-form user content (see options above).
+    question                MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci, -- inline question text or a FILE reference
     -- lifecycle
     poll_status             ENUM('open','finalized','failed_quorum') NOT NULL DEFAULT 'open', -- poll state (distinct from status_id)
     -- finalization (written by VOTE v2 in Phase 2; null until then)

@@ -40,7 +40,7 @@ const {
     resetDecoderDb, resetIndexerDb, closeAll,
 } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
-const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
+const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
 const { seedGas } = require('../setup/gas-seeder');
 const helpers = require('../setup/assertion-helpers');
 
@@ -77,11 +77,12 @@ describe('Contract State Reorg: rollback of contract tables @regression @tier3',
         // consolidated run may have left a different INDEXER_COIN in process env.
         process.env.INDEXER_COIN    = 'BTC';
         process.env.INDEXER_NETWORK = 'regtest';
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
     });
 
     after(async function () {
+        await destroyFileIndexers(__filename);
         await closeAll();
     });
 

@@ -737,6 +737,76 @@ describe('HubDbSync _applyRow oracle_prices generation upgrade @regression @tier
     });
 });
 
+describe('HubDbSync _applyRow cross_chain_calls generation fence @regression @tier1', function () {
+
+    // push_generation is the item-5308 reorg FENCE, not content. Assigned inside the
+    // status gate it followed the incoming finalized row in EITHER direction, so a
+    // bootstrap page fetched before a re-publish and landing AFTER the live re-published
+    // row (cross_chain_calls does not buffer during the drain; only price_snapshots does,
+    // #2422) lowered it. The fenced retraction (DELETE ... WHERE push_generation <= gen)
+    // then matched a row published ABOVE the fence and deleted it for good. The fence must
+    // only ever move up, the rule cross_chain_matches applies to a_/b_push_generation.
+
+    const CC_COLS = ['id', 'call_id', 'phase', 'status', 'snapshot_block', 'source_chain',
+                     'source_action_index', 'target_chain', 'effective_time',
+                     'validator_signatures', 'push_generation'];
+
+    function makeApplySync(localCols) {
+        const doQuery = sinon.stub();
+        doQuery.withArgs(sinon.match(/^SHOW COLUMNS/)).resolves(localCols.map(f => ({ Field: f })));
+        doQuery.resolves([]);
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        return { sync, doQuery };
+    }
+
+    function callRow(gen) {
+        return { id: 3, call_id: 'C1', phase: 'dispatch', status: 'finalized', snapshot_block: 900,
+                 source_chain: 'DOGE', source_action_index: 42, target_chain: 'BTC',
+                 effective_time: 1000, validator_signatures: '[]', push_generation: gen };
+    }
+
+    function updateClause(doQuery) {
+        const call = doQuery.getCalls().find(c => /ON DUPLICATE KEY UPDATE/.test(c.args[0]));
+        assert.ok(call, 'an upsert must run');
+        return call.args[0].split('ON DUPLICATE KEY UPDATE')[1];
+    }
+
+    it('lifts push_generation with GREATEST, so a stale finalized row can never lower the fence', async function () {
+        const { sync, doQuery } = makeApplySync(CC_COLS);
+        await sync._applyRow('cross_chain_calls', callRow(7));
+        const clause = updateClause(doQuery);
+        assert.ok(/`push_generation` = GREATEST\(COALESCE\(`push_generation`, 0\), COALESCE\(VALUES\(`push_generation`\), 0\)\)/.test(clause),
+            'the reorg fence must be monotonic: ' + clause);
+    });
+
+    it('never assigns push_generation through the status gate', async function () {
+        const { sync, doQuery } = makeApplySync(CC_COLS);
+        await sync._applyRow('cross_chain_calls', callRow(7));
+        const clause = updateClause(doQuery);
+        assert.ok(!/`push_generation` = IF\(VALUES\(status\)/.test(clause),
+            'a status-gated assignment takes the fence wherever the incoming row points it');
+    });
+
+    it('still upgrades content only when the INCOMING row is finalized, and never the unique key', async function () {
+        const { sync, doQuery } = makeApplySync(CC_COLS);
+        await sync._applyRow('cross_chain_calls', callRow(7));
+        const clause = updateClause(doQuery);
+        assert.ok(/`effective_time` = IF\(VALUES\(status\) = 'finalized', VALUES\(`effective_time`\), `effective_time`\)/.test(clause));
+        assert.ok(/status = IF\(VALUES\(status\) = 'finalized', 'finalized', status\)/.test(clause));
+        assert.ok(!/`call_id` =/.test(clause));
+        assert.ok(!/`phase` =/.test(clause));
+        assert.ok(!/`id` =/.test(clause));
+    });
+
+    it('omits the fence assignment when the mirror table carries no push_generation column', async function () {
+        const { sync, doQuery } = makeApplySync(['call_id', 'phase', 'status', 'effective_time']);
+        await sync._applyRow('cross_chain_calls',
+            { call_id: 'C1', phase: 'dispatch', status: 'finalized', effective_time: 1000 });
+        const clause = updateClause(doQuery);
+        assert.ok(!/push_generation/.test(clause), 'a pre-migration mirror must not be handed a column it lacks');
+    });
+});
+
 describe('HubDbSync _applyRow cross_chain_matches convergence upgrade @regression @tier2', function () {
 
     // Two mutations reach a mirrored match after its first delivery:
@@ -947,6 +1017,56 @@ describe('HubDbSync _applyRow datetime coercion @regression @tier2', function ()
         await sync._applyRow('oracle_prices', { reference_block: 800000, price: null });
         assert.strictEqual(argFor(doQuery, 'oracle_prices', 'reference_block', cols), 800000);
         assert.strictEqual(argFor(doQuery, 'oracle_prices', 'price', cols), null);
+    });
+
+    // A real SHOW COLUMNS result carries Type beside Field. When it does, the
+    // coercion is keyed on the column TYPE, not on the value's shape, so a
+    // free-text column whose value merely LOOKS like a timestamp lands verbatim.
+    // oracle_prices.memo is unvalidated operator input (PRICE v1 validates
+    // VALUE/FEE, never MEMO), so without this a shape-keyed rewrite hits an
+    // ISO-shaped memo in every distributed mirror while a hubDb pointed straight at the hub keeps the
+    // original bytes - mirror content that depended on deployment topology,
+    // against src/sql/oracle_prices.sql's verbatim-parity contract.
+    function makeTypedApplySync(colTypes) {
+        const doQuery = sinon.stub();
+        doQuery.withArgs(sinon.match(/^SHOW COLUMNS/)).resolves(
+            Object.keys(colTypes).map(f => ({ Field: f, Type: colTypes[f] })));
+        doQuery.resolves([]);
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        return { sync, doQuery };
+    }
+
+    it('leaves an ISO-shaped value in a VARCHAR column verbatim when the type is known', async function () {
+        const cols = ['id', 'memo', 'created_at'];
+        const { sync, doQuery } = makeTypedApplySync({
+            id: 'int(11)', memo: 'varchar(255)', created_at: 'timestamp'
+        });
+        const memo = '2026-06-16T10:33:01+09:00';
+        await sync._applyRow('oracle_prices',
+            { id: 1, memo: memo, created_at: '2026-06-16T10:33:01.000Z' });
+        assert.strictEqual(argFor(doQuery, 'oracle_prices', 'memo', cols), memo,
+            'a VARCHAR memo must mirror byte-verbatim');
+        assert.strictEqual(argFor(doQuery, 'oracle_prices', 'created_at', cols), '2026-06-16 10:33:01',
+            'a timestamp column is still reformatted for MariaDB strict mode');
+    });
+
+    it('still reformats a DATETIME column when the type is known', async function () {
+        const cols = ['id', 'created_at'];
+        const { sync, doQuery } = makeTypedApplySync({ id: 'int(11)', created_at: 'datetime' });
+        await sync._applyRow('oracle_prices', { id: 1, created_at: '2026-06-16T12:33:01+02:00' });
+        assert.strictEqual(argFor(doQuery, 'oracle_prices', 'created_at', cols), '2026-06-16 10:33:01');
+    });
+
+    it('falls back to the shape rewrite when the column type is unknown', async function () {
+        // A cache miss (or a driver that serves no Type) must never regress the
+        // 2026-06-16 ER_TRUNCATED_WRONG_VALUE mirror-kill: with no type to key on,
+        // an ISO-8601 string is still reformatted.
+        const sync = new HubDbSync({ doQuery: sinon.stub().resolves([]) }, { hubUrl: 'http://hub.test' });
+        assert.strictEqual(sync._cachedColumnType('oracle_prices', 'created_at'), '');
+        const cols = ['id', 'created_at'];
+        const { sync: s2, doQuery } = makeApplySync(cols);
+        await s2._applyRow('oracle_prices', { id: 1, created_at: '2026-06-16T10:33:01.000Z' });
+        assert.strictEqual(argFor(doQuery, 'oracle_prices', 'created_at', cols), '2026-06-16 10:33:01');
     });
 });
 
@@ -1609,8 +1729,9 @@ describe('HubDbSync.ensureTables @regression @tier3', function () {
     });
 });
 
-// H-3 / NATIVE_FEE_PRICE_TIME_GATE: time-keyed price barrier for non-reference
-// chains (LTC/DOGE). Their heights are not comparable to the rounds' BTC
+// Time-keyed price barrier. It runs on every chain and is NOT conditioned on the
+// NATIVE_FEE_PRICE_TIME_GATE flag-day; H-3 named the fee-query half of that work.
+// Non-reference chains' heights are not comparable to the rounds' BTC
 // reference_block anchor, so catch-up is judged by the rounds' consensus
 // timestamps (mirror MAX(block_timestamp)) or the hub stream watermark.
 describe('HubDbSync time-keyed price barrier (H-3) @regression @tier3', function () {

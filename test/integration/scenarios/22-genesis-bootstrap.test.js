@@ -28,7 +28,7 @@ const path   = require('path');
 const { decoderQuery, indexerQuery, createDatabases, createDecoderSchema,
         resetDecoderDb, resetIndexerDb, closeAll } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
-const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
+const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
 const { assertTokenOwner, countRows } = require('../setup/assertion-helpers');
 
 const GENESIS_BLOCK = 100;
@@ -56,7 +56,7 @@ describe('Genesis Ledger Bootstrap @regression', function () {
         // sharing this process injects at block 100.
         process.env.XCHAIN_GENESIS_BLOCK = String(GENESIS_BLOCK);
         process.env.GENESIS_LEDGER_PATH  = path.join(__dirname, '../../../data/genesis/ledger-test.csv');
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
     });
 
@@ -77,6 +77,7 @@ describe('Genesis Ledger Bootstrap @regression', function () {
     after(async function () {
         delete process.env.XCHAIN_GENESIS_BLOCK;
         delete process.env.GENESIS_LEDGER_PATH;
+        await destroyFileIndexers(__filename);
         await closeAll();
     });
 

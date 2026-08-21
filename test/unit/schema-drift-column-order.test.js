@@ -91,4 +91,25 @@ describe('alterTableForDrift(): column-order convergence @regression', function 
         assert.ok(bin && /AFTER `state_key`/.test(bin), 'state_key_bin after state_key: ' + bin);
         assert.ok(val && /AFTER `state_key_bin`/.test(val), 'state_value must chain after the just-added column: ' + val);
     });
+
+    // The reconciler's blind spot, pinned as a fact rather than left to be re-guessed.
+    // parseExpectedColumns reads AUTO_INCREMENT / PRIMARY KEY as NOT NULL with no DEFAULT,
+    // and the missing-column branch skips that shape, so a surrogate key is never converged
+    // in at boot - even though the engine would backfill the sequence safely. That is why
+    // 2026-08-19-attest-validator-stats-surrogate-id.sql is the SOLE convergence path for
+    // attest_validator_stats.id on an aged install, and why it must not be squashed as
+    // redundant with the reconciler. If this branch is ever taught to add an AUTO_INCREMENT
+    // column, this test is the deliberate edit that records the change.
+    it('skips a missing AUTO_INCREMENT primary key (the reconciler is NOT a convergence path for it)', async function () {
+        // An aged attest_validator_stats: every column except the surrogate id.
+        const h = makeReconciler(['validator_pubkey', 'provider_id', 'fulfilled_count',
+                                  'missed_count', 'slashed_count', 'quality_score', 'last_updated_block']);
+        await h.run('attest_validator_stats.sql');
+        const added = alters(h.queries).filter(q => /ADD COLUMN/i.test(q));
+        assert.deepStrictEqual(added.filter(q => /ADD COLUMN\s+`?id`?\b/i.test(q)), [],
+            'alterTableForDrift must not add attest_validator_stats.id: it parses as NOT NULL ' +
+            'with no DEFAULT, so the dated migration is the only path that carries it to an aged ' +
+            'DB. An ADD here means the migration prose and the squash guidance resting on this ' +
+            'skip are now wrong.');
+    });
 });

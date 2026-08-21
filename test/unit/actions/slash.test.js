@@ -64,6 +64,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         db.getStakeSourceForDelegatedPubkey = sinon.stub().resolves(null);
         db.createCapabilitySlashEvent = sinon.stub().resolves();
         db.getAddressId              = sinon.stub().resolves(1);
+        db.getAttestationAdmissionCounts = sinon.stub().resolves({ total: 0, byContract: 0 });
         db.getAttestationRequestById = sinon.stub().resolves(null);
         db.updateBalances            = sinon.stub().resolves();
         db.updateTokens              = sinon.stub().resolves();

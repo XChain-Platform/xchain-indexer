@@ -90,9 +90,18 @@
 // of the SETTLING action (the ATTEST v1 response, or the v4 relay response), which is
 // the block whose oracle price the conversion reads and the block the reward rows are
 // stamped with.
+// TESTNET ARMED AT 0, operator-ratified 2026-08-18 under the standing ruling that every
+// platform feature must be ACTIVE on testnet, so nothing is found dormant after release.
+// Safe for the same MEASURED reason as ATTEST_REQUEST_CAP_ACTIVATION rather than by
+// assumption: this gate only changes how a fulfilled ATTEST settle splits its escrow, and
+// the live explorer reports `total: 0` attestation rows EVER recorded on BTC, LTC and DOGE
+// testnet alike (/{TBTC,TLTC,TDOGE}/api/attestations, checked 2026-08-18). No settle has
+// ever happened on testnet, so there is no reward split to reinterpret and replay stays
+// byte-identical. Mainnet is untouched and still operator-owned: it HAS attestation
+// history, so pinning a height there needs its own measurement, not this one.
 const ATTEST_BROADCAST_FEE_ACTIVATION = {
     mainnet: null,        // INERT placeholder: the operator owns this height (pinned 2026-08-11, unratified)
-    testnet: null,        // INERT placeholder: the operator owns this height (pinned 2026-08-11, unratified)
+    testnet: 0,           // ARMED at genesis (operator-ratified 2026-08-18; zero historical attestation settles, so nothing is reinterpreted)
     regtest: 0,           // ARMED at genesis on regtest so the e2e venue exercises the carve-out
 };
 

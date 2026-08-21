@@ -35,7 +35,11 @@ const indexer = require('../../src/anchor_reward_activation.js');
 
 // The self-reference line each copy carries naming its twin (the OTHER file). It is
 // intentionally different per copy and is the only permitted divergence.
-const TWIN_REF = /twin lives in xchain-\S+/;
+// Matched on the repo-qualified PATH, not on the prose that introduces it: the
+// sentence wraps, so "lives in" ends one line and the path begins the next, and a
+// pattern anchored to the prose matched neither line. It read as green only while
+// the hub copy still pointed at itself, i.e. exactly when the pointer was wrong.
+const TWIN_REF = /xchain-\S+\/src\/anchor_reward_activation\.js/;
 
 describe('anchor_reward_activation twin parity @regression @tier1', function () {
 

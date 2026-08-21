@@ -35,6 +35,7 @@ const fs     = require('fs');
 const Database = require('../../src/db.js');
 const {
     getConnectionParams,
+    useFileDatabases,
     resetIndexerDb,
     closeAll
 } = require('./setup/db-connection');
@@ -72,6 +73,7 @@ describe('HubPushQueue starvation fix (MariaDB integration) @regression @tier1',
     let db;
 
     before(async function () {
+        await useFileDatabases(__filename);
         await resetIndexerDb();
         const p = getConnectionParams();
         db = new Database(p.indexerHost, p.indexerPort, p.indexerName, p.indexerUser, p.indexerPass, makeMinimalIndexer());

@@ -1,0 +1,27 @@
+-- xchain:migration mode=auto
+-- Migration: index files.name.
+--
+-- WHY
+-- ---
+-- The explorer gains a by-discovery-name FILE query mode (lookup by FILE.name rather
+-- than by block/address/token), which the wallet needs to fetch and decrypt a label
+-- set on restore. files.name is a plain VARCHAR(250) that carried no index, so that
+-- lookup is a full table scan of a table which grows with every FILE action, reached
+-- from an unauthenticated public endpoint. The index is the precondition for shipping
+-- the query mode, not an optimization after the fact.
+--
+-- Non-unique: file names are chosen by whoever broadcasts the FILE and collide freely.
+--
+-- NOT consensus-visible. Index-only DDL on a DERIVED projection table that enters no
+-- block-hash preimage and no validation or settlement path.
+--
+-- Additive + idempotent: CREATE INDEX IF NOT EXISTS, so it is a no-op on any install
+-- whose boot-time reconcileTableIndexes has already healed the index in from
+-- src/sql/files.sql, and it back-fills a DB converged by replaying the dated
+-- migrations alone. The name and column list are byte-equal to the definition, which
+-- sql-schema-index-parity asserts in both directions.
+--
+-- HOW TO RUN
+--   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-08-19-files-name-index.sql
+
+CREATE        INDEX IF NOT EXISTS name ON files (name);

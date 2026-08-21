@@ -69,6 +69,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
     function addAttestationDbStubs(db) {
         db.getContract                       = sinon.stub().resolves({ contract_index: 5 });
         db.createAttestationRequest          = sinon.stub().resolves();
+        db.getAttestationAdmissionCounts = sinon.stub().resolves({ total: 0, byContract: 0 });
         db.getAttestationRequestById         = sinon.stub().resolves(null);
         db.hasCapability                     = sinon.stub().resolves(true);
         db.createAttestationResponse         = sinon.stub().resolves();
@@ -341,6 +342,71 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             await handler.parse(v0Params(), data, null);
             assert.ok(String(data['STATUS']).includes('CONTRACT_INDEX'),
                 'expected CONTRACT_INDEX (unknown) rejection, got: ' + data['STATUS']);
+        });
+
+        // Framework spec §11.1 per-block admission caps. Armed at genesis on
+        // regtest, which is the network this harness runs as, so these exercise the live
+        // path. The counts come from the DB stub, which is what the real query returns
+        // for "admitted earlier in this block".
+        describe('per-block admission caps (spec §11.1)', function () {
+
+            it('admits a request while both counts are under the caps', async function () {
+                indexer.indexerDb.getAttestationAdmissionCounts.resolves({ total: 9, byContract: 1 });
+                const data  = v0Data();
+                const reqId = deriveReqId(data["TX_HASH"], data["ROOT_ACTION_INDEX"], data["EMITTER_PATH"], data["EMITTER"], data["EMITTER_POSITION"]);
+                await handler.parse(v0Params({ requestId: reqId }), data, null);
+                assert.strictEqual(data['STATUS'], 'valid',
+                    'under both caps must still admit, got: ' + data['STATUS']);
+            });
+
+            it('rejects once the emitting contract has filled its per-contract share', async function () {
+                indexer.indexerDb.getAttestationAdmissionCounts.resolves({ total: 2, byContract: 2 });
+                const data  = v0Data();
+                const reqId = deriveReqId(data["TX_HASH"], data["ROOT_ACTION_INDEX"], data["EMITTER_PATH"], data["EMITTER"], data["EMITTER_POSITION"]);
+                await handler.parse(v0Params({ requestId: reqId }), data, null);
+                assert.ok(String(data['STATUS']).includes('ATTEST cap'),
+                    'expected a per-contract cap rejection, got: ' + data['STATUS']);
+                assert.strictEqual(data['REQUEST_STATUS'], 'rejected',
+                    'an over-cap request must never enter the pending pool');
+            });
+
+            it('rejects once the block has filled the global ceiling', async function () {
+                // Under its own per-contract share, but the block is full: the network-wide
+                // ceiling is the one that bounds aggregate validator spend.
+                indexer.indexerDb.getAttestationAdmissionCounts.resolves({ total: 10, byContract: 0 });
+                const data  = v0Data();
+                const reqId = deriveReqId(data["TX_HASH"], data["ROOT_ACTION_INDEX"], data["EMITTER_PATH"], data["EMITTER"], data["EMITTER_POSITION"]);
+                await handler.parse(v0Params({ requestId: reqId }), data, null);
+                assert.ok(String(data['STATUS']).includes('ATTEST cap'),
+                    'expected a per-block cap rejection, got: ' + data['STATUS']);
+                assert.strictEqual(data['REQUEST_STATUS'], 'rejected');
+            });
+
+            it('counts only earlier admissions of THIS block, from THIS action', async function () {
+                indexer.indexerDb.getAttestationAdmissionCounts.resolves({ total: 0, byContract: 0 });
+                const data  = v0Data();
+                const reqId = deriveReqId(data["TX_HASH"], data["ROOT_ACTION_INDEX"], data["EMITTER_PATH"], data["EMITTER"], data["EMITTER_POSITION"]);
+                await handler.parse(v0Params({ requestId: reqId }), data, null);
+                // The (block, action, contract) triple is what makes the count a total order
+                // every node replays identically; passing anything else forks the gate.
+                assert.ok(indexer.indexerDb.getAttestationAdmissionCounts.calledOnce);
+                const args = indexer.indexerDb.getAttestationAdmissionCounts.firstCall.args;
+                assert.strictEqual(args[0], data['BLOCK_INDEX']);
+                assert.strictEqual(args[1], data['ACTION_INDEX']);
+                assert.strictEqual(args[2], data['CONTRACT_INDEX']);
+            });
+
+            it('does not spend a capped slot on a structurally invalid request', async function () {
+                // The cap is checked last, so a request that was going to be rejected anyway
+                // never consults the counts - otherwise malformed spam would burn capacity,
+                // turning the anti-abuse rule into an abuse vector.
+                indexer.indexerDb.getContract.resolves(null);
+                const data  = v0Data();
+                const reqId = deriveReqId(data["TX_HASH"], data["ROOT_ACTION_INDEX"], data["EMITTER_PATH"], data["EMITTER"], data["EMITTER_POSITION"]);
+                await handler.parse(v0Params({ requestId: reqId }), data, null);
+                assert.ok(String(data['STATUS']).includes('CONTRACT_INDEX'));
+                assert.strictEqual(indexer.indexerDb.getAttestationAdmissionCounts.called, false);
+            });
         });
 
         it('rejects a deadline outside the provider window', async function () {

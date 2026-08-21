@@ -39,7 +39,7 @@ const crypto = require('crypto');
 const { createDatabases, createDecoderSchema, decoderQuery, indexerQuery,
         closeAll } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
-const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
+const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
 
 const FUNDER = 'mgash6jYSKAR3Q5HPpDgNX2BYr18q9N6GQ'; // configs/BTC.js ADDRESS.GAS (fee-exempt gas funder)
 const A1     = 'mq7tVfobimRUPxPNnyd5mKn11SVmTiLxtu'; // valid regtest P2PKH (the staker)
@@ -72,7 +72,7 @@ describe('Unstake cooldown completion: GAS supply conservation (real DB + real V
     before(async function () {
         process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
         process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
         seeder = new DecoderSeeder(decoderQuery);
 
@@ -92,6 +92,7 @@ describe('Unstake cooldown completion: GAS supply conservation (real DB + real V
 
     after(async function () {
         if (indexer) await destroyIndexer(indexer);
+        await destroyFileIndexers(__filename);
         await closeAll();
     });
 

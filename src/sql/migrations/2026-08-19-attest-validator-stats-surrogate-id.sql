@@ -1,0 +1,48 @@
+-- xchain:migration mode=auto
+-- Migration: attest_validator_stats.id (surrogate AUTO_INCREMENT primary key).
+--
+-- WHY
+-- ---
+-- The explorer gains a routed, paged list view over attest_validator_stats
+-- (per-validator per-provider ATTEST accountability counters). Keyset paging compares
+-- ONE orderable column with a strict < / > against the client's cursor, so that column
+-- must be both monotonic AND unique. This table had neither candidate:
+--
+--   - (validator_pubkey, provider_id) is unique but composite and non-numeric.
+--   - last_updated_block is monotonic but NOT unique. Counters are upsert-incremented,
+--     and a whole ATTEST responsible set is stamped with the SAME block whenever one
+--     round expires without their signatures, so ties are the common case rather than
+--     the rare one. A tie straddling a page boundary silently splits or duplicates the
+--     boundary row, and page 1 - the only page a smoke test looks at - never shows it.
+--
+-- The surrogate id makes the table match every other id-keyed list view the explorer
+-- serves (price_snapshots, slash_events, capability_snapshots, ...), which is what the
+-- paging machinery already expects.
+--
+-- NOT consensus-visible. attest_validator_stats is a DERIVED accountability rollup: it
+-- enters no block-hash preimage, no validation path and no settlement path, and it is
+-- recomputed wholesale from `attests` on reorg by
+-- Rollback._recomputeAttestationValidatorStats(). Nothing reads or signs over the id.
+--
+-- Additive + idempotent: ADD COLUMN IF NOT EXISTS, so re-running the file is a no-op, and a
+-- fresh install already has the column (createTable from src/sql/attest_validator_stats.sql).
+--
+-- THIS FILE IS THE ONLY CONVERGENCE PATH FOR AN AGED INSTALL. The boot-time drift reconciler
+-- cannot add this column and never will: parseExpectedColumns reads AUTO_INCREMENT /
+-- PRIMARY KEY as NOT NULL with no DEFAULT, and alterTableForDrift skips exactly that shape
+-- ("cannot backfill existing rows safely. Skipping; add manually."). An AUTO_INCREMENT add is
+-- in fact safe - the engine backfills the sequence - but the reconciler has no way to say so.
+-- So do NOT read this file as redundant with the reconciler, and do not squash or baseline it
+-- away: every replay-converged replica would be left without the paging primary key the
+-- explorer's keyset paging needs. Pinned by test/unit/schema-drift-column-order.test.js.
+--
+-- FIRST matches the definition's column position, so both schema-construction paths produce a
+-- byte-identical SHOW CREATE TABLE. The existing UNIQUE INDEX validator_pubkey_provider is
+-- untouched and remains the upsert key that incrementAttestationValidatorStat's
+-- ON DUPLICATE KEY UPDATE rides.
+--
+-- HOW TO RUN
+--   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-08-19-attest-validator-stats-surrogate-id.sql
+
+ALTER TABLE attest_validator_stats
+  ADD COLUMN IF NOT EXISTS id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY FIRST;

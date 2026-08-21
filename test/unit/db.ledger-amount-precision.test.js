@@ -86,16 +86,31 @@ describe('Exact-ledger flag-day: activation map @regression @tier1', function ()
         assert.strictEqual(ledgerPrecision.isLedgerAmountPrecisionActive(500000, 'regtest', 'LTC'), true);
     });
 
-    it('mainnet and testnet are UNPINNED, so the rule is inert there', function () {
-        for (const network of ['mainnet', 'testnet']) {
-            for (const coin of ['BTC', 'LTC', 'DOGE']) {
-                assert.strictEqual(
-                    ledgerPrecision.LEDGER_AMOUNT_PRECISION_ACTIVATION[coin + ':' + network], null,
-                    coin + ':' + network + ' must stay unpinned until its flag day is measured');
-                assert.strictEqual(
-                    ledgerPrecision.isLedgerAmountPrecisionActive(99999999, network, coin), false,
-                    coin + ':' + network + ' must not activate at any height while unpinned');
-            }
+    it('mainnet is pinned above the tip, so the rule is inert across all existing history', function () {
+        const PINNED = { BTC: 966500, LTC: 3175500, DOGE: 6370000 };
+        for (const [coin, height] of Object.entries(PINNED)) {
+            assert.strictEqual(
+                ledgerPrecision.LEDGER_AMOUNT_PRECISION_ACTIVATION[coin + ':mainnet'], height,
+                coin + ':mainnet must carry its ratified height');
+            assert.strictEqual(
+                ledgerPrecision.isLedgerAmountPrecisionActive(height - 1, 'mainnet', coin), false,
+                coin + ':mainnet must stay legacy for every block below the height');
+            assert.strictEqual(
+                ledgerPrecision.isLedgerAmountPrecisionActive(height, 'mainnet', coin), true,
+                coin + ':mainnet must activate AT the height');
+        }
+    });
+
+    it('testnet is armed from genesis (ratified 2026-08-18 for the launch)', function () {
+        // Safe at 0 only because testnet indexer state is rebuilt from the chain before
+        // launch, so no row written under the legacy per-row quantization survives.
+        for (const coin of ['BTC', 'LTC', 'DOGE']) {
+            assert.strictEqual(
+                ledgerPrecision.LEDGER_AMOUNT_PRECISION_ACTIVATION[coin + ':testnet'], 0,
+                coin + ':testnet must be armed at genesis for the testnet launch');
+            assert.strictEqual(
+                ledgerPrecision.isLedgerAmountPrecisionActive(0, 'testnet', coin), true,
+                coin + ':testnet must activate from the first block');
         }
     });
 

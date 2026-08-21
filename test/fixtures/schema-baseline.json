@@ -436,11 +436,11 @@
       },
       {
         "name": "label",
-        "spec": "VARCHAR(250)"
+        "spec": "VARCHAR(250) CHARACTER SET UTF8MB4 COLLATE UTF8MB4_GENERAL_CI"
       },
       {
         "name": "outcomes",
-        "spec": "VARCHAR(1100)"
+        "spec": "VARCHAR(1100) CHARACTER SET UTF8MB4 COLLATE UTF8MB4_GENERAL_CI"
       },
       {
         "name": "tick_id",
@@ -476,7 +476,7 @@
       },
       {
         "name": "details",
-        "spec": "TEXT"
+        "spec": "TEXT CHARACTER SET UTF8MB4 COLLATE UTF8MB4_GENERAL_CI"
       },
       {
         "name": "memo_id",
@@ -588,7 +588,7 @@
       },
       {
         "name": "message",
-        "spec": "VARCHAR(250)"
+        "spec": "VARCHAR(250) CHARACTER SET UTF8MB4 COLLATE UTF8MB4_GENERAL_CI"
       },
       {
         "name": "value",
@@ -1914,11 +1914,11 @@
       },
       {
         "name": "name",
-        "spec": "VARCHAR(250)"
+        "spec": "VARCHAR(250) CHARACTER SET UTF8MB4 COLLATE UTF8MB4_GENERAL_CI"
       },
       {
         "name": "title",
-        "spec": "VARCHAR(250)"
+        "spec": "VARCHAR(250) CHARACTER SET UTF8MB4 COLLATE UTF8MB4_GENERAL_CI"
       },
       {
         "name": "type_id",
@@ -2102,7 +2102,7 @@
       },
       {
         "name": "memo",
-        "spec": "VARCHAR(250) NOT NULL"
+        "spec": "VARCHAR(250) CHARACTER SET UTF8MB4 COLLATE UTF8MB4_GENERAL_CI NOT NULL"
       }
     ],
     "index_mime_types": [
@@ -2178,7 +2178,7 @@
       },
       {
         "name": "description",
-        "spec": "VARCHAR(250)"
+        "spec": "VARCHAR(250) CHARACTER SET UTF8MB4 COLLATE UTF8MB4_GENERAL_CI"
       },
       {
         "name": "mint_supply",
@@ -2480,15 +2480,15 @@
       },
       {
         "name": "encryption_key",
-        "spec": "MEDIUMTEXT"
+        "spec": "MEDIUMTEXT CHARACTER SET UTF8MB4 COLLATE UTF8MB4_GENERAL_CI"
       },
       {
         "name": "encrypted_message",
-        "spec": "MEDIUMTEXT"
+        "spec": "MEDIUMTEXT CHARACTER SET UTF8MB4 COLLATE UTF8MB4_GENERAL_CI"
       },
       {
         "name": "plaintext_message",
-        "spec": "MEDIUMTEXT"
+        "spec": "MEDIUMTEXT CHARACTER SET UTF8MB4 COLLATE UTF8MB4_GENERAL_CI"
       },
       {
         "name": "status_id",
@@ -2854,7 +2854,7 @@
       },
       {
         "name": "options",
-        "spec": "MEDIUMTEXT"
+        "spec": "MEDIUMTEXT CHARACTER SET UTF8MB4 COLLATE UTF8MB4_GENERAL_CI"
       },
       {
         "name": "max_selections",
@@ -2886,7 +2886,7 @@
       },
       {
         "name": "question",
-        "spec": "MEDIUMTEXT"
+        "spec": "MEDIUMTEXT CHARACTER SET UTF8MB4 COLLATE UTF8MB4_GENERAL_CI"
       },
       {
         "name": "poll_status",
@@ -3732,7 +3732,7 @@
       },
       {
         "name": "description",
-        "spec": "VARCHAR(250)"
+        "spec": "VARCHAR(250) CHARACTER SET UTF8MB4 COLLATE UTF8MB4_GENERAL_CI"
       },
       {
         "name": "lock_max_supply",
@@ -3834,7 +3834,7 @@
       },
       {
         "name": "data",
-        "spec": "MEDIUMTEXT"
+        "spec": "MEDIUMTEXT CHARACTER SET UTF8MB4 COLLATE UTF8MB4_GENERAL_CI"
       }
     ],
     "unstakes": [

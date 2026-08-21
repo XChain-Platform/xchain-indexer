@@ -83,6 +83,7 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
     function addAttestationDbStubs(db) {
         db.getContract                         = sinon.stub().resolves({ contract_index: 5 });
         db.createAttestationRequest            = sinon.stub().resolves();
+        db.getAttestationAdmissionCounts = sinon.stub().resolves({ total: 0, byContract: 0 });
         db.getAttestationRequestById           = sinon.stub().resolves(null);
         db.getRelayRequestByOrigin             = sinon.stub().resolves(null);
         db.hasCapability                       = sinon.stub().resolves(true);

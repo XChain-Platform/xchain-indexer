@@ -10,6 +10,12 @@
 # ci_<name>_<run-id> and exports the variable, so a gate run and a hand run on
 # the same venue can never collide, and the database sits inside the ci_%
 # grant the venue already has.
+#
+# These three are NAMESPACES, in the same sense as xchain_recdet below: the
+# integration tier appends a per-file suffix so no two test files share a
+# schema, since a hook abandoned at its timeout keeps issuing DDL into whatever
+# schema the next file has just recreated. Every derived name keeps the exported
+# value's ci_ prefix, so the venue grant still covers it.
 xchain_test_decoder=TEST_DECODER_DB
 xchain_test_indexer=TEST_INDEXER_DB
 xchain_test_indexer_b=TEST_INDEXER_DB_B

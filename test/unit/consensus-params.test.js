@@ -360,7 +360,8 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
     it('the indexer NATIVE_FEE_PRICE_TIME_GATE flag-day matches the coordinated 2.0.0 timestamp', function(){
         // H-3: deterministic (time-gated) price_snapshots selection for native-coin fee
         // validation on non-reference chains flips at this flag-day. It is an indexer-internal
-        // consensus gate (utility.getFeeOraclePrices + the sync barrier), pinned to the same
+        // consensus gate whose sole consumer is utility.getFeeOraclePrices (the block loop's
+        // time-keyed price barrier is unconditional and NOT a consumer), pinned to the same
         // canonical 2.0.0 timestamp as the VM async/binary gates: a divergent value forks the
         // fleet on the first fee-bearing LTC/DOGE action after the boundary. Same-repo, no VM dep.
         const pc = require('../../src/protocol_changes.js');

@@ -42,7 +42,7 @@ const crypto = require('crypto');
 const { createDatabases, createDecoderSchema, decoderQuery, indexerQuery,
         closeAll } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
-const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
+const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
 const { seedGas } = require('../setup/gas-seeder');
 
 const OWNER   = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD'; // issues, binds, lists
@@ -126,7 +126,7 @@ describe('Cross-chain royalty: create-side gate + signed-legs settlement (real D
         priorNetwork = process.env.INDEXER_NETWORK;
         process.env.INDEXER_COIN    = 'LTC';
         process.env.INDEXER_NETWORK = 'regtest';
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
         seeder = new DecoderSeeder(decoderQuery);
         await seedGas(seeder, { addresses: [OWNER], amount: '1000' });
@@ -172,6 +172,7 @@ describe('Cross-chain royalty: create-side gate + signed-legs settlement (real D
         else process.env.INDEXER_COIN = priorCoin;
         if (priorNetwork === undefined) delete process.env.INDEXER_NETWORK;
         else process.env.INDEXER_NETWORK = priorNetwork;
+        await destroyFileIndexers(__filename);
         await closeAll();
     });
 

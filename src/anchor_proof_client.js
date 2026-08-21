@@ -29,7 +29,9 @@
  *   'rejected'  - the txid is on DOGE and positively contradicts the tuple (wrong
  *                 publisher, wrong seq, wrong snapshot_block, wrong version, decoded
  *                 invalid). Chain data, so every honest node reaches the same verdict:
- *                 SKIP this row forever, deterministically.
+ *                 SKIP this row forever, deterministically. The statuses that are a
+ *                 NODE-CLASS verdict rather than chain data are excluded from it by
+ *                 NODE_CLASS_DEPENDENT_STATUS below, or this guarantee is false.
  *   'unknown'   - no DOGE indexer wired, unreachable, malformed reply, or the anchor is
  *                 present but still shallow. The caller must DEFER the block (never
  *                 advance past it) rather than derive a set that another node would
@@ -51,6 +53,31 @@ const url   = require('url');
 // Attestation-bearing ANCHOR versions. A reward exists only for these; anything else on
 // the txid is a different anchor and cannot stand in as proof of this one.
 const ATTESTED_VERSIONS = [4, 5, 6];
+
+// Anchor statuses that are NOT fleet-uniform, so they are evidence of nothing here.
+//
+// _judge's whole licence to memoize a permanent 'rejected' is that the status is chain
+// data every honest DOGE node computes identically. Three values in actions/anchor.js
+// break that, and they break it in OPPOSITE directions on the same anchor:
+//   'unverified'            - the node holds no mirrored oracle_publish snapshot
+//                             (anchor.js oracleN === 0), so it declines to judge the
+//                             root quorum at all.
+//   'invalid: insufficient  - only a node that DOES mirror the snapshot can produce this
+//    signer stake|valid       verdict for the SAME anchor the unmirrored node stamped
+//    signatures (n/m)'        'unverified'.
+//   'invalid_archive'       - the head-side reassembly CRC, stamped only by a node that
+//                             holds the chunks and passes the unverified-head gate.
+// So a BTC node reading a mirrored DOGE indexer memoized 'rejected' and skipped the
+// reward forever, while a BTC node reading an unmirrored one read 'unverified', fell
+// through to 'verified' and minted: a permanent COLLECT-rail divergence decided by which
+// DOGE_INDEXER_URL each node happens to carry. Treating all three as non-evidence pins
+// every node to the reading the unmirrored class already produces, so the verdict keys
+// only on fields that are node-class-independent (version, chain, network, publisher,
+// snapshot_block, seq, confirmations). The publisher-attestation quorum is not lost with
+// them: anchor_reward_derive.verifyAttestation re-runs it BTC-side before proveMined.
+// Every other 'invalid: ...' anchor.js writes is decided from the wire bytes plus
+// replayed DOGE chain state, so it stays a deterministic reject.
+const NODE_CLASS_DEPENDENT_STATUS = /^(?:unverified|invalid: insufficient|invalid_archive)/i;
 
 class AnchorProofClient {
 
@@ -168,7 +195,8 @@ class AnchorProofClient {
     // unproven reward for another, and a 'rejected' suppress a legitimate one. Because the memo
     // is process-lifetime state, that leak also made the derived set restart-dependent, which
     // is a COLLECT-rail fork. Normalize exactly as _judge does, or two spellings of one tuple
-    // miss each other. A field added to _judge must be added here too.
+    // miss each other. A field added to _judge must be added here too. _judge's chain term needs
+    // no entry of its own: it is derived from rewardType, which is already a term here.
     _memoKey(txid, e){
         return [txid,
                 String(e.rewardType),
@@ -188,6 +216,14 @@ class AnchorProofClient {
         let round     = Number(e.roundReference);
         let snapshot  = Number(e.snapshotBlock);
         let isArchive = String(e.rewardType) === 'anchor_archive';
+        // The chain this reward names, read out of reward_type ('anchor_<CHAIN>') and NOT out of
+        // the mirror row's own `chain` column. reward_type is inside the XANCPUB canonical
+        // rewardCanonical() re-verifies, so it is quorum-signed; `chain` is an unsigned column of
+        // the very row that also supplies doge_anchor_txid, so binding to it would only let one
+        // corrupted row agree with itself. Null on the archive leg: the archive XANCPUB canonical
+        // keys on MATCH_BATCH_SEQ and binds no chain, and a v6 head carries the chain of whatever
+        // checkpoint wrapped it, so there is no signed chain to hold it to.
+        let chain = isArchive ? null : String(e.rewardType).slice('anchor_'.length).toUpperCase();
         let sawAttested = false;
         for(let a of anchors){
             if(!ATTESTED_VERSIONS.includes(Number(a.version))) continue;   // a sibling anchor in the same tx, not our proof
@@ -195,8 +231,21 @@ class AnchorProofClient {
             // v6 is the archive leg, v4/v5 the per-chain leg. A v4 can never prove an
             // archive reward and vice versa, whatever else matches.
             if(isArchive !== (Number(a.version) === 6)) continue;
-            if(/^invalid/i.test(String(a.status || ''))) continue;         // decoded-invalid never anchored anything
+            // Decoded-invalid never anchored anything, EXCEPT where the invalidity is a
+            // node-class verdict rather than chain data (NODE_CLASS_DEPENDENT_STATUS above):
+            // those are skipped as evidence so two BTC nodes reading different DOGE indexers
+            // cannot decide the same reward tuple oppositely and fork the derived set.
+            let status = String(a.status || '');
+            if(/^invalid/i.test(status) && !NODE_CLASS_DEPENDENT_STATUS.test(status)) continue;
             if(String(a.checkpoint_network || '') !== network) continue;
+            // Every per-chain checkpoint of one round shares network, snapshot_block,
+            // checkpoint_seq (deriveCheckpointSeq IS snapshot_block) and publisher (elected per
+            // BTC height, so chain-independent). CHAIN is therefore the ONLY field separating an
+            // anchor_BTC reward's anchor from the anchor_LTC anchor it rounds with, and without
+            // it a real LTC anchor proves a BTC reward. Compared case-folded: the DOGE parse side
+            // uppercases the wire CHAIN while the hub carries it verbatim, and chain names are
+            // distinct case-insensitively, so folding can never turn a mis-bind into a match.
+            if(chain !== null && String(a.checkpoint_chain || '').toUpperCase() !== chain) continue;
             if(String(a.publisher || '').toLowerCase() !== publisher) continue;
             if(Number(a.snapshot_block) !== snapshot) continue;
             let seq = isArchive ? Number(a.match_batch_seq) : Number(a.checkpoint_seq);

@@ -76,6 +76,7 @@ const { seedGas, GAS_FUNDER } = require('../setup/gas-seeder');
 const { assertStateInvariants } = require('../setup/state-invariants');
 const { readHashChain, assertHashChainsEqual, captureDbState,
         assertCapturedStatesEqual } = require('../setup/equivalence');
+const { destroyFileIndexers } = require('../setup/indexer-launcher');
 
 const ADDR1 = 'mq7tVfobimRUPxPNnyd5mKn11SVmTiLxtu';
 const ADDR2 = 'n4nbVcRRR5sEHyp2VYuLUvCyDmQmBoonoK';
@@ -160,7 +161,7 @@ describe('14 – Multi-chain full-state parity @regression @tier1', function () 
     }
 
     before(async function () {
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
 
         for (const coin of COINS) {
@@ -184,6 +185,7 @@ describe('14 – Multi-chain full-state parity @regression @tier1', function () 
     });
 
     after(async function () {
+        await destroyFileIndexers(__filename);
         await closeAll();
     });
 

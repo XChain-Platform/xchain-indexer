@@ -40,7 +40,7 @@ const { decoderQuery, indexerQuery,
         createDatabases, createDecoderSchema,
         resetDecoderDb, resetIndexerDb, closeAll } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
-const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
+const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
 const { getLastActionIndexByType } = require('../setup/assertion-helpers');
 const { seedGas } = require('../setup/gas-seeder');
 
@@ -58,11 +58,12 @@ describe('VM ledger-read loader: buildVmBalancesAndTokenInfo @regression @tier2'
         this.timeout(30000);
         process.env.INDEXER_COIN    = 'BTC';
         process.env.INDEXER_NETWORK = 'regtest';
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
     });
 
     after(async function () {
+        await destroyFileIndexers(__filename);
         await closeAll();
     });
 

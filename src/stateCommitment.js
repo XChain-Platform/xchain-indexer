@@ -132,8 +132,50 @@ class MemoryNodeStore {
 }
 
 // ---- Persistent SMT engine --------------------------------------------------
+// Node-cache bound. Each entry is one 64-char hash key plus two 64-char child
+// hashes, so ~200k entries is a few hundred MB of heap worst case and the
+// engine degrades to plain store reads past it rather than growing without
+// limit. Every PersistentSMT is constructed function-locally (four sites in
+// this file, all inside one block's work), so the cache dies with the call.
+const SMT_NODE_CACHE_MAX = 200000;
+
 class PersistentSMT {
-    constructor(store){ this.store = store; }
+    // opts.nodeCacheMax = 0 disables the cache entirely (the uncached reference
+    // run the read-count regression test needs).
+    constructor(store, opts){
+        this.store         = store;
+        this._nodeCacheMax = (opts && opts.nodeCacheMax != null) ? opts.nodeCacheMax : SMT_NODE_CACHE_MAX;
+        this._nodeCache    = new Map();
+    }
+
+    // Read-through cache over the content-addressed node rows. The WRITE half of
+    // this shape was already fixed (see the putMany header above); the read half
+    // still cost one dependent round trip per level, and a present key never
+    // short-circuits, so every descent was a full SMT_DEPTH of them: once in
+    // update() and again in the prove() that _assertCommittedLeaves runs over the
+    // same keys, plus SMT_DEPTH per key on the buildFull rebuild paths.
+    //
+    // Three properties keep this a transport fix and not a consensus one:
+    //   1. POSITIVE ENTRIES ONLY. A store miss is never cached. Absence is the
+    //      fail-loud signal the M-17 strict-read note above is about, and it must
+    //      keep reaching the store every time it is asked.
+    //   2. CONTENT-ADDRESSED KEYS. node_hash = H(left||right), so a row's value can
+    //      never change under its key and a cached entry cannot go stale. A row a
+    //      concurrent retention sweep deleted still answers with the same children.
+    //   3. INSTANCE-SCOPED, BOUNDED. Never module-scoped: the cache cannot outlive
+    //      the block's work, so a rolled-back transaction discards it wholesale.
+    // A miss falls through to the identical store.get, so no root can move.
+    _cacheGet(hashHex){
+        return this._nodeCacheMax > 0 ? this._nodeCache.get(hashHex) : undefined;
+    }
+    _cachePut(hashHex, leftHex, rightHex){
+        if(this._nodeCacheMax <= 0 || this._nodeCache.has(hashHex)) return;
+        // FIFO eviction over Map insertion order. Nodes are offered leaf-first by
+        // _putBatch, so the oldest entry is the deepest and least re-read.
+        if(this._nodeCache.size >= this._nodeCacheMax)
+            this._nodeCache.delete(this._nodeCache.keys().next().value);
+        this._nodeCache.set(hashHex, { left_hash: leftHex, right_hash: rightHex });
+    }
 
     // Descend a key's path collecting the 256 siblings (hex, top-down). Returns
     // { siblings, oldLeaf } where oldLeaf is the current value leaf at the key
@@ -147,7 +189,11 @@ class PersistentSMT {
         for(let d = 0; d < M.SMT_DEPTH; d++){
             const sibEmptyHex = M.toHex(M.EMPTY[M.SMT_DEPTH - 1 - d]);
             if(empty){ siblings[d] = sibEmptyHex; continue; }
-            const row = await this.store.get(cur);
+            let row = this._cacheGet(cur);
+            if(row === undefined){
+                row = await this.store.get(cur);
+                if(row) this._cachePut(cur, row.left_hash, row.right_hash);
+            }
             if(!row){ empty = true; siblings[d] = sibEmptyHex; continue; }
             const bit = M.bitAt(keyBuf, d);
             siblings[d] = (bit === 0) ? row.right_hash : row.left_hash;
@@ -163,9 +209,15 @@ class PersistentSMT {
     async _putBatch(nodes){
         if(typeof this.store.putMany === 'function'){
             await this.store.putMany(nodes);
-            return;
+        } else {
+            for(const n of nodes) await this.store.put(n.hash, n.left, n.right);
         }
-        for(const n of nodes) await this.store.put(n.hash, n.left, n.right);
+        // Seed the read cache only AFTER the write resolved, so a throwing
+        // doQueryStrict never leaves an entry claiming a row that is not durable.
+        // This is where most of the win is: update() threads its new root into the
+        // next descend, and _assertCommittedLeaves proves the same keys back
+        // against the final root, so these nodes are re-read within the same call.
+        for(const n of nodes) this._cachePut(n.hash, n.left, n.right);
     }
 
     // Set (leafHex) or delete (null) a key, persisting new internal nodes. Returns
@@ -245,6 +297,23 @@ const EMPTY_CONSTANTS = (function(){
 // reachability the moment one does, which is a reporting bug now and a
 // correctness trap for any future sweep that trusts these numbers.
 //
+// Marks by a BATCHED FRONTIER WALK and never materializes the node table. Heap
+// holds one hash per seen node plus the current batch, so it tracks the
+// REACHABLE set rather than the whole store, and only reachable rows are read at
+// all. Each frontier level resolves in one indexed `WHERE node_hash IN (...)`
+// against uq_node_hash, capping round trips at ceil(maxNodes / batchSize); every
+// one of those takes and releases its own pooled connection, so nothing is held
+// across the walk. Mark semantics are unchanged from the in-memory DFS this
+// replaced: a hash counts as reachable only when the store actually returned a
+// row for it, EMPTY constants are skipped, and each hash is expanded once.
+//
+// Past maxNodes seen hashes the walk stops instead of growing without bound and
+// sets reachabilityEstimated, which makes reachableNodes a LOWER bound and
+// orphanCount an UPPER bound. totalNodes is the COUNT(*), a snapshot separate
+// from the walk, so a concurrent insert can move the two apart by a few rows.
+// This function is observability only and never feeds a consensus hash, so both
+// that skew and a truncated estimate are acceptable here.
+//
 // Deliberately does NOT delete. A safe reclaiming sweep must serialize against
 // block-root insertion: a content-addressed node orphaned by a reorg is commonly
 // re-created by the new canonical chain (INSERT IGNORE is a no-op, the row keeps
@@ -256,52 +325,18 @@ const EMPTY_CONSTANTS = (function(){
 //
 // `query(sql, args)` MUST run on a POOLED (non-transaction) connection so this
 // never shares the caller's block-processing/apply transaction. Returns
-// { totalNodes, reachableNodes, orphanCount, reachabilitySkipped }.
+// { totalNodes, reachableNodes, orphanCount, reachabilitySkipped }, plus
+// reachabilityEstimated: true when the walk stopped at the cap.
 async function reportOrphanStats(query, chain, network, opts){
     opts = opts || {};
-    const maxNodes = opts.maxNodes || parseInt(process.env.STATE_TREE_METRIC_MAX_NODES, 10) || 2000000;
+    const maxNodes  = opts.maxNodes  || parseInt(process.env.STATE_TREE_METRIC_MAX_NODES, 10) || 2000000;
+    // One placeholder per hash, so the batch must stay well inside max_allowed_packet
+    // and the server's prepared-statement placeholder ceiling; 1000 CHAR(64) hashes is
+    // ~66KB of SQL text and one uq_node_hash range scan.
+    const batchSize = opts.batchSize || 1000;
     const cnt = await query('SELECT COUNT(*) AS c FROM state_tree_nodes', []);
     const totalNodes = cnt.length ? Number(cnt[0].c) : 0;
     if(totalNodes === 0) return { totalNodes: 0, reachableNodes: 0, orphanCount: 0, reachabilitySkipped: false };
-    // Above the in-memory mark ceiling, do not go silent. Load a bounded, deterministic
-    // sample (ORDER BY node_hash LIMIT maxNodes) and mark reachability WITHIN that sample
-    // from the same retained root set, so a rough orphan ratio and growth stay observable
-    // without an unbounded in-memory mark. Reported as an estimate (reachabilityEstimated)
-    // scoped to sampledNodes; this whole function is observability only and never feeds a
-    // consensus hash, so a sampled figure is safe here.
-    if(totalNodes > maxNodes){
-        const sampleRows = await query('SELECT node_hash, left_hash, right_hash FROM state_tree_nodes ORDER BY node_hash LIMIT ?', [maxNodes]);
-        const sampleNodes = new Map();
-        for(const r of sampleRows) sampleNodes.set(r.node_hash, { l: r.left_hash, r: r.right_hash });
-        const sampleRootRows = await query(
-            'SELECT DISTINCT balances_root AS r FROM state_tree_roots WHERE chain=? AND network=? ' +
-            'UNION SELECT DISTINCT stakes_root AS r FROM state_tree_roots WHERE chain=? AND network=? ' +
-            'UNION SELECT DISTINCT contract_state_root AS r FROM state_tree_roots WHERE chain=? AND network=? AND contract_state_root IS NOT NULL',
-            [chain, network, chain, network, chain, network]);
-        const sampleVisited = new Set();
-        const sampleStack = [];
-        for(const rr of sampleRootRows){
-            const root = rr.r;
-            if(root && !EMPTY_CONSTANTS.has(root) && sampleNodes.has(root)) sampleStack.push(root);
-        }
-        while(sampleStack.length){
-            const h = sampleStack.pop();
-            if(sampleVisited.has(h)) continue;
-            sampleVisited.add(h);
-            const row = sampleNodes.get(h);
-            if(!row) continue;
-            for(const child of [row.l, row.r]){
-                if(child && !EMPTY_CONSTANTS.has(child) && !sampleVisited.has(child) && sampleNodes.has(child)) sampleStack.push(child);
-            }
-        }
-        const sampledNodes = sampleNodes.size;
-        const sampledReachable = sampleVisited.size;
-        return { totalNodes, reachableNodes: sampledReachable, orphanCount: sampledNodes - sampledReachable, reachabilitySkipped: false, reachabilityEstimated: true, sampledNodes };
-    }
-
-    const rows = await query('SELECT node_hash, left_hash, right_hash FROM state_tree_nodes', []);
-    const nodes = new Map();
-    for(const r of rows) nodes.set(r.node_hash, { l: r.left_hash, r: r.right_hash });
 
     const rootRows = await query(
         'SELECT DISTINCT balances_root AS r FROM state_tree_roots WHERE chain=? AND network=? ' +
@@ -309,26 +344,37 @@ async function reportOrphanStats(query, chain, network, opts){
         'UNION SELECT DISTINCT contract_state_root AS r FROM state_tree_roots WHERE chain=? AND network=? AND contract_state_root IS NOT NULL',
         [chain, network, chain, network, chain, network]);
 
-    // Iterative DFS from every retained root; only push hashes that actually have a
-    // row (EMPTY constants and absent children are skipped). visited == reachable set.
-    const visited = new Set();
-    const stack = [];
+    // `seen` holds every hash queued or resolved and doubles as the dedupe guard, so
+    // no hash is queried or expanded twice; reachableNodes counts only hashes the
+    // store returned a row for, which is what the old in-memory `nodes.has(...)`
+    // guards enforced. A queued hash with no row is simply never counted, which is
+    // the normal case for the value leaf under a depth-255 node (leaves are not rows,
+    // SPV spec §4.1): seen therefore runs to reachable + reachable leaves, still O(1)
+    // per node and still what maxNodes is bounding, since seen IS the heap.
+    const seen = new Set();
+    let frontier = [];
     for(const rr of rootRows){
         const root = rr.r;
-        if(root && !EMPTY_CONSTANTS.has(root) && nodes.has(root)) stack.push(root);
+        if(root && !EMPTY_CONSTANTS.has(root) && !seen.has(root)){ seen.add(root); frontier.push(root); }
     }
-    while(stack.length){
-        const h = stack.pop();
-        if(visited.has(h)) continue;
-        visited.add(h);
-        const row = nodes.get(h);
-        if(!row) continue;
-        for(const child of [row.l, row.r]){
-            if(child && !EMPTY_CONSTANTS.has(child) && !visited.has(child) && nodes.has(child)) stack.push(child);
+    let reachableNodes = 0;
+    let truncated = false;
+    while(frontier.length){
+        if(seen.size > maxNodes){ truncated = true; break; }
+        const batch = frontier.splice(0, batchSize);
+        const rows = await query(
+            'SELECT node_hash, left_hash, right_hash FROM state_tree_nodes WHERE node_hash IN (' +
+            batch.map(() => '?').join(',') + ')', batch);
+        for(const row of rows){
+            reachableNodes++;
+            for(const child of [row.left_hash, row.right_hash]){
+                if(child && !EMPTY_CONSTANTS.has(child) && !seen.has(child)){ seen.add(child); frontier.push(child); }
+            }
         }
     }
-    const reachableNodes = visited.size;
-    return { totalNodes: nodes.size, reachableNodes, orphanCount: nodes.size - reachableNodes, reachabilitySkipped: false };
+    const stats = { totalNodes, reachableNodes, orphanCount: totalNodes - reachableNodes, reachabilitySkipped: false };
+    if(truncated) stats.reachabilityEstimated = true;
+    return stats;
 }
 
 // Assemble the top-level state_root from the two v1 sub-roots plus any RESERVED

@@ -1,0 +1,56 @@
+--********************************************************************
+--
+-- Copyright © 2025-2026 Dankest, LLC
+-- Based on XChain Platform by Dankest, LLC - https://dankest.llc
+--
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+--
+-- This file is part of XChain Platform. Licensed under the GNU Affero
+-- General Public License v3.0 or later; see LICENSE.md. A commercial
+-- license (without AGPL source-disclosure terms) is available -
+-- contact legal@dankest.llc.
+--
+--********************************************************************
+
+-- xchain:migration mode=manual
+--
+-- Migration: index_memos.memo utf8mb3 -> utf8mb4. Paired with the mode=auto
+-- 2026-08-19-utf8mb4-user-text-columns.sql of the same date; the reasoning for the whole
+-- change lives there. This column is split out for two reasons, both of which need an
+-- operator rather than an unattended startup apply:
+--
+-- 1. The column is NOT NULL, and a MODIFY that carries NOT NULL is indistinguishable
+--    from a narrowing to the auto-apply destructive-DDL classifier
+--    (db._destructiveAutoStatement). Omitting NOT NULL is not an option: a MODIFY
+--    restates the whole column, so it would silently relax the column and diverge the
+--    two schema paths.
+-- 2. memo carries a UNIQUE index. At utf8mb4 that key becomes 250 * 4 = 1000 bytes,
+--    which fits the 3072-byte InnoDB limit only under ROW_FORMAT=DYNAMIC (the MariaDB
+--    10.2+ default). On a legacy COMPACT or REDUNDANT table the limit is 767 bytes and
+--    this ALTER fails with errno 1071 rather than applying, so check the row format
+--    first and convert the table before running this file:
+--
+--      SELECT row_format FROM information_schema.tables
+--       WHERE table_schema = DATABASE() AND table_name = 'index_memos';
+--      -- (information_schema.innodb_tables is MySQL-8-only; on MariaDB the
+--      --  portable check above works for any user, no PROCESS privilege needed)
+--      -- if not Dynamic:
+--      ALTER TABLE index_memos ROW_FORMAT=DYNAMIC;
+--
+-- MEMO is free-form text carried by nearly every action, so it is the halt vector most
+-- likely to be reached after transactions.data. Until this file is applied, an indexer
+-- whose chain carries a 4-byte character inside a MEMO still halts.
+--
+-- NOT consensus-visible: index_memos is a derived id-interning table and enters no
+-- block-hash preimage. Widening rewrites no stored value (utf8mb3 is a strict subset of
+-- utf8mb4) and utf8mb4_general_ci orders BMP characters exactly as utf8_general_ci does,
+-- so the UNIQUE index keeps identifying the same memo strings as equal.
+--
+-- IDEMPOTENT: re-running a MODIFY to the same type and charset is a no-op, and the
+-- schema_migrations ledger records this file once per DB.
+--
+-- HOW TO RUN
+--   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-08-19-utf8mb4-index-memos-memo.sql
+
+ALTER TABLE index_memos
+  MODIFY memo VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL;

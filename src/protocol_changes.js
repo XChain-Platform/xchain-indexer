@@ -210,11 +210,18 @@ const EMISSION_ISSUANCE_LIMITS_MAINNET_TIME = 9999999999;
 // A future change gates normally against the platform stream: register it at the
 // platform version it ships in, and nodes below that version treat it as
 // not-yet-active exactly as before.
-const CONSENSUS_VERSION = '0.9.0';
 
-// Single shared predicate for the NATIVE_FEE_PRICE_TIME_GATE flag-day, used by
-// utility.getFeeOraclePrices (query selection) and XChainIndexer (sync
-// barrier) so the two can never gate differently. Semantics match the
+// The registry stays put across the 0.9.0 -> 0.10.0 move: every change registers
+// at 0.1.0 or 0.2.0, and isEnabled() ranks components numerically rather than
+// lexically, so 0.10.0 outranks both and the enabled set holds at 90 of 90.
+const CONSENSUS_VERSION = '0.10.0';
+
+// Predicate for the NATIVE_FEE_PRICE_TIME_GATE flag-day. Its ONE consumer is
+// utility.getFeeOraclePrices (query selection); nothing else in src/ consults it.
+// XChainIndexer's time-keyed price barrier is deliberately NOT gated on this
+// predicate: it runs on every chain whenever hub-db sync is enabled, because FIAT
+// dispenser settlement reads price_snapshots by time from day one. Rationale and
+// the divergence it closes: XChainIndexer.js:877-888. Semantics match the
 // registry entry: testnet/regtest active from genesis, mainnet at the
 // flag-day; an unknown/empty network is treated like mainnet (conservative:
 // requires the flag-day).
@@ -1183,13 +1190,14 @@ class ProtocolChanges {
         // read today's newest round instead of the round used live. At/after
         // this flag-day, non-BTC chains select by the round's consensus
         // timestamp instead (`block_timestamp <= block time`, the same pair of
-        // quantities the staleness guard already compares) and the block loop
-        // gates on the time-keyed price barrier. Keyed on block TIME (not
+        // quantities the staleness guard already compares). Keyed on block TIME (not
         // height) for the same reason as DEPLOY_BASE64_CODE: no single height
-        // names one cutover across chains. Evaluation happens in
-        // utility.getFeeOraclePrices / XChainIndexer via the shared
-        // isNativeFeePriceTimeGateActive() below (one predicate, no drift);
-        // registered here so the flag-day inventory carries it.
+        // names one cutover across chains. Evaluation happens in exactly one place,
+        // utility.getFeeOraclePrices via isNativeFeePriceTimeGateActive() above;
+        // registered here so the flag-day inventory carries it. The block loop's
+        // time-keyed price barrier is NOT a consumer of this flag: it is unconditional
+        // on every chain (XChainIndexer.js:877-888), and re-conditioning it on this
+        // flag-day would re-open the LTC/DOGE FIAT-dispense divergence window.
         this.addChange('NATIVE_FEE_PRICE_TIME_GATE', '0.2.0', NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME,0,0,0,0,0);
 
         // DEPLOY_INIT_STRICT (F-14 follow-on): a contract that exports `initialize`
@@ -1478,7 +1486,7 @@ class ProtocolChanges {
     // @param {regtest_time}  integer Regtest activation block_time
     // @param {mainnet_block} integer Mainnet activation block_index
     // @param {testnet_block} integer Testnet activation block_index
-    // @param {testnet_block} integer Testnet activation block_index
+    // @param {regtest_block} integer Regtest activation block_index
     addChange(name, version, mainnet_time, testnet_time, regtest_time, mainnet_block, testnet_block, regtest_block){
         let error = false;
         if(typeof name != 'string')
@@ -1621,9 +1629,10 @@ module.exports.CROSS_SETTLE_CAP_MAINNET_TIME = CROSS_SETTLE_CAP_MAINNET_TIME;
 // reason: the suite asserts this consensus-preimage change is still waiting on the operator's
 // flag day rather than armed at a guessed instant.
 module.exports.BATCH_ROOT_SUB_INDEX_MAINNET_TIME = BATCH_ROOT_SUB_INDEX_MAINNET_TIME;
-// UNARMED mainnet sentinel for the BATCH issuance-limits rework, exported for the same
-// reason: the suite asserts the set is still waiting on the operator's flag day rather than
-// armed at a guessed instant, and that it never precedes BATCH_SUBACTION_NORMALIZATION.
+// ARMED mainnet instant for the BATCH issuance-limits rework (1786838400, 2026-08-16T00:00Z,
+// armed 2026-08-14 pre-launch), exported so the suite can pin the ratified value, assert it
+// was never retroactive, that it never precedes BATCH_SUBACTION_NORMALIZATION, and that it
+// equals the decoder's BATCH_SUBCOMMAND_OUTPUT_CAPTURE_ACTIVATION (one boundary).
 module.exports.BATCH_ISSUANCE_LIMITS_MAINNET_TIME = BATCH_ISSUANCE_LIMITS_MAINNET_TIME;
 module.exports.BATCH_COST_WEIGHTING_MAINNET_TIME = BATCH_COST_WEIGHTING_MAINNET_TIME;
 module.exports.EMISSION_ISSUANCE_LIMITS_MAINNET_TIME = EMISSION_ISSUANCE_LIMITS_MAINNET_TIME;

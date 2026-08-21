@@ -78,7 +78,11 @@
 // armed from genesis.
 const ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION = {
     mainnet: 999999999,   // INERT placeholder; pinned with the class-6 height-key repair at ratification
-    testnet: 999999999,   // INERT placeholder; arming it at 0 would be retroactive, not a flag day
+    // Armed from genesis. Safe on a chain with history ONLY where that chain's indexer
+    // state is rebuilt from the chain itself, because a rebuild recomputes every block
+    // under this rule and so leaves nothing indexed under the narrower one to contradict.
+    // That rebuild is a precondition of this height, not a consequence of it.
+    testnet: 0,
     regtest: 0,           // armed from genesis: fresh regtest stacks exercise the widened gate end to end
 };
 

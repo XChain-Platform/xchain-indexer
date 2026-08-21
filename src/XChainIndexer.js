@@ -172,9 +172,14 @@ function atProcessableTip(isSynced, stallReason, stallClearsAtMs, now){
 class XChainIndexer {
 
     constructor(decoderDbHost, decoderDbPort, decoderDbName, decoderDbUser, decoderDbPass, indexerDbHost, indexerDbPort, indexerDbName, indexerDbUser, indexerDbPass, hubDbHost, hubDbPort, hubDbName, hubDbUser, hubDbPass, utxoTrackerUrl, utxoTrackerPort){
-        // XChain Indexer Version
-        this.version = process.env.npm_package_version;
-        this.name    = process.env.npm_package_name;
+        // XChain Indexer Version. npm_package_* exists only under `npm run`; the
+        // container now launches node directly (Dockerfile CMD, exec form, so
+        // node is PID 1 and gets SIGTERM), which left the boot banner reading
+        // "undefined vundefined". Fall back to the package.json this process
+        // actually loaded, the same source src/api.js:220 already reports from.
+        // Env stays first so the test launchers that pin it keep deciding.
+        this.version = process.env.npm_package_version || require('../package.json').version;
+        this.name    = process.env.npm_package_name    || require('../package.json').name;
 
         // Decoder database config
         this.decoderDbHost = decoderDbHost;
@@ -1023,7 +1028,12 @@ class XChainIndexer {
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (cross-chain call sync): ', err);
                         this.stallReason = 'call_sync_barrier';
-                        this.stallClearsAt = this._barrierClearsAt(blockTime, 'matchWatermarkGraceS');
+                        // callWatermarkGraceS, NOT the match grace: _callSyncSatisfied waits on
+                        // the call grace, and the two producers stamp effective_time differently
+                        // (hub_db_sync.js HUB_SYNC_WATERMARK_GRACE_S.call). Keying the health
+                        // verdict on the match value would mis-time the wedge discriminator the
+                        // moment the two constants diverge or a regtest override moves one.
+                        this.stallClearsAt = this._barrierClearsAt(blockTime, 'callWatermarkGraceS');
                         break;
                     }
                 }
@@ -1654,6 +1664,9 @@ class XChainIndexer {
                     chain: this.config['COIN'], network: this.config['NETWORK'],
                     total_nodes: stats.totalNodes, reachable_nodes: stats.reachableNodes,
                     orphan_count: stats.orphanCount, reachability_skipped: stats.reachabilitySkipped,
+                    // Publish the truncation flag or the line reads as a full-store figure:
+                    // when the mark stops at the cap, orphan_count is an UPPER bound.
+                    reachability_estimated: stats.reachabilityEstimated === true,
                     ts: Date.now()
                 }));
             } catch(err) {

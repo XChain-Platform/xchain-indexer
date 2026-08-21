@@ -2417,7 +2417,23 @@ class Utility {
         // XCALL_MAX_CALLS_PER_BLOCK. Fetch the full effective set (the cap is applied here as
         // a deterministic slice) so step 3 can tell which requests already have a result
         // available this block even when the cap defers their delivery to a later block.
-        let allResults = await db.getEffectiveUnprocessedCallResults(coin, network, block_time, Number.MAX_SAFE_INTEGER);
+        //
+        // The uncapped fetch is what step 3's suppression map is built from, and on a block
+        // with nothing to expire that map is never read: the whole finalized-result backlog
+        // is dragged across the (possibly remote hub) connection every ~5s to serve nothing.
+        // Probe first with the SAME expiry predicate at LIMIT 1 and fall back to the plain
+        // per-block cap when it comes back empty. This is the identical row set either way:
+        // step 3's own expiry query is a SUBSET of this probe's, because pass 2 can only
+        // move a request OUT of the probe's set (updateCrossChainCallRequestStatus writes
+        // only the terminal 'completed'/'expired') and can never add one to it (a request
+        // created by a callback this block carries deadline_block = block_index +
+        // XCALL_MIN_DEADLINE_BLOCKS or more, so it cannot satisfy deadline_block <
+        // block_index at this height). Empty probe therefore proves empty expiry pass,
+        // which proves the map is dead. When the probe is non-empty nothing changes at all.
+        // The probe reads the same index the capped query at step 3 uses.
+        let mayExpire  = (await db.getExpiredCrossChainCallRequests(block_index, 1)).length > 0;
+        let allResults = await db.getEffectiveUnprocessedCallResults(coin, network, block_time,
+                                    mayExpire ? Number.MAX_SAFE_INTEGER : cap);
         let results = allResults.slice(0, cap);
         for(let r of results){
             let data = {};
@@ -2508,9 +2524,12 @@ class Utility {
     // because skipping a legitimate first refund strands a user's escrow and forks the chain,
     // while missing a novel terminal state only leaves today's latent hazard in place. Any new
     // status a settlement handler writes belongs here; dispenser-settlement-idempotency.test.js
-    // pins the four that exist.
+    // pins the four that exist, and ONLY those four belong here. A status no handler writes
+    // buys nothing and points the guard the wrong way: it can only ever suppress a legitimate
+    // first refund. 'closed' was such an entry (never written to dispenser_statuses by any
+    // version; the tree's other 'closed' rows are order and BET-feed statuses) and is gone.
     isDispenserSettled(status){
-        return ['cancelled', 'closed', 'empty', 'expired', 'max_dispenses_reached'].includes(String(status));
+        return ['cancelled', 'empty', 'expired', 'max_dispenses_reached'].includes(String(status));
     }
 
     // Reverse price match for user TOKEN/FIAT oracles (PRICE v1)
