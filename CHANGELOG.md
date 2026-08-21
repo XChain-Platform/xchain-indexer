@@ -14,6 +14,8 @@ points; behavior below each activation height is unchanged.
 - Per-contract and network-wide per-block ceilings on attestation requests, rejected at admission rather than deferred (activation-gated).
 - LIST actions carry a MEMO, with multi-destroy and exponential amounts now logged correctly (activation-gated).
 - `/status` and the health RPC report the future-stamped-block wait distinctly from stalls (`waitingOnFutureBlock`, `stallClass`, `atProcessableTip`), so a miner riding the future-time cap no longer reads as degradation.
+- A surrogate paging cursor on the attestation validator stats table, so rows tied on the same block can no longer split or duplicate across a page boundary.
+- An index on the file name column, now that files can be looked up by name from the public API.
 
 ### Changed
 - The pending testnet flag days are armed at genesis, so a public testnet runs with every rule in force: exact ledger amounts, the widened archive-head gate, snapshot reorg burial, the attestation broadcast-fee carve-out, and the escrow locked-balance leaf.
@@ -22,9 +24,22 @@ points; behavior below each activation height is unchanged.
 - VM lint global-alias hardening is gated behind a per-coin activation epoch.
 - A stale oracle tip stays visible with its price withheld, behind a new activation gate.
 - `xchainRequiresHub` moves to `0.10.0`, the hub's version in this release.
+- The ledger amount precision flag day is pinned on mainnet, at a height above each chain's tip so the fleet deploy that carries it cannot open a retroactive window.
+- The contract state sub-root is armed from genesis on every testnet, and the escrow leaf's unreachable shadow entry is dropped.
+- A chunk-carrier DEPLOY weighs as a row write rather than a VM run, so it can share its batch with 249 companions instead of 220 (activation-gated).
 
 ### Fixed
 - The archive reassembly CRC gate is deterministic across nodes.
+- Free-form user-text columns accept any legal UTF-8, so a broadcast carrying a four-byte character can no longer halt every indexer on the chain at the same block.
+- An anchor proof is bound to the reward's own chain, and mirror push generation is fenced against being lowered.
+- Mirror value coercion keys on the local column type, so operator text that merely looks like a timestamp is no longer rewritten in every distributed mirror.
+- Schema shape baselines are anchored to immutable origin fixtures, so a baselined shape can no longer be edited and re-frozen in one commit with no converging migration.
+- Orphan-stat reporting no longer materializes the whole state-tree node table on the metric timer.
+- The full-node verifier set resolves at the raw epoch height again; the earlier buried-height change misattributed epoch participation and is withdrawn in lockstep with the hub.
+- The memo migration's row-format precondition uses a query MariaDB actually provides.
+- The auto-gate DML holes are closed and NODEPROOF resolves at one canonical height.
+- Batch sub-command capture ordering and the anchor-reward parity omission are corrected, along with three comments that described an armed mainnet gate as unarmed.
+- SIGTERM drains instead of hard-killing mid-transaction.
 - Code-review round fixes across actions, API, and state code (two rounds, 29 files).
 
 ### Security
