@@ -69,6 +69,42 @@ const CROSS_SETTLE_CAP_MAINNET_TIME = 9999999999;
 // the fork the gate exists to prevent.
 const BATCH_ROOT_SUB_INDEX_MAINNET_TIME = 9999999999;
 
+// Arms for ISSUE_INHERITED_MINT_WINDOW, the re-parameterization fix that scopes the ISSUE
+// mint-window recency checks (MINT_START_BLOCK / MINT_STOP_BLOCK must be >= the current
+// block) to values the ISSUE EXPLICITLY carries on the wire. Below the flag day those
+// checks also run against values INHERITED from the existing token record by the
+// populate-empty-params merge, which makes every re-parameterizing ISSUE on a token
+// permanently invalid the moment its mint window opens: the inherited MINT_START_BLOCK is
+// by then necessarily in the past, so an owner ISSUE that raises MAX_MINT while leaving
+// the window untouched is rejected with 'MINT_START_BLOCK < BLOCK_INDEX' (and, once the
+// window closes, the same again via MINT_STOP_BLOCK). Remedy ruled by the operator on
+// 2026-08-22: exempt inherited values, keep the recency check on explicit ones, so the
+// anti-backdating purpose is untouched (see actions/issue.js).
+//
+// Mainnet: house UNARMED sentinel (9999999999, year 2286). The ruling settled the REMEDY;
+// naming the mainnet instant is a separate act, and a loosening cannot be armed at a
+// guessed value. Arming it is a one-line edit here. Do NOT arm it at a past instant: a
+// loosening with a retroactive boundary makes a from-genesis replay accept re-issues the
+// live fleet rejected.
+const ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME = 9999999999;
+
+// Testnet: ARMED (operator remedy ruling 2026-08-22, pre-launch) at 1787529600 =
+// 2026-08-24T00:00:00Z. The instant must still be in the FUTURE when this ships: an
+// activation already past is not a flag day at all, because the fleet applies the
+// legacy rule beyond it while a from-genesis replay applies the new one, and the two
+// diverge at the first comparison. Re-pin this constant forward if it lapses.
+// This is the FIRST nonzero testnet threshold in this file, and
+// deliberately so: unlike the sibling gates (registered while testnet carried no history
+// the rule reinterprets), BTC testnet4 already holds a recorded rejection of exactly this
+// shape (the XCHAIN faucet correction ISSUE, block 149546), so a genesis-active testnet
+// arm would fork every already-synced testnet node against a fresh reindex. A FUTURE
+// instant preserves the recorded history and lets the correction be rebroadcast once the
+// boundary passes. Every testnet indexer (all three chains) must be running this code
+// before the instant; testnet4 tips may carry timestamps up to ~2h ahead of wall clock,
+// so the deploy needs to land with that margin. Regtest stays genesis-active (0): suites
+// and regtest venues exercise the corrected rule from block 0.
+const ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME = 1787529600;
+
 // Mainnet arm for BATCH_ISSUANCE_LIMITS, the BATCH issuance rework: the dotted-TICK
 // exemption that lets one BATCH carry a parent plus any number of child ISSUEs, the global
 // 250-command cap that bounds the scan it rides on, the batch-cumulative fee/settlement
@@ -1468,6 +1504,36 @@ class ProtocolChanges {
         // so the discriminator is in force from block 0 there and in the unit/e2e suites.
         this.addChange('BATCH_SUBCOMMAND_ROOT_DISCRIMINATOR', '0.2.0',BATCH_ROOT_SUB_INDEX_MAINNET_TIME,0,0,0,0,0);
 
+        // ISSUE mint-window re-parameterization fix. Below this activation the
+        // MINT_START_BLOCK / MINT_STOP_BLOCK recency checks in actions/issue.js run
+        // against the MERGED action data, which the populate-empty-params step has
+        // already filled with the existing token record's values, so a
+        // re-parameterizing ISSUE that leaves the mint window untouched inherits the
+        // stored MINT_START_BLOCK and is rejected the moment the window has opened
+        // (the inherited value is by then in the past). At/above it the recency
+        // checks apply only to a value the ISSUE explicitly carries on the wire (the
+        // pre-merge snapshot), mirroring how the CALLBACK edit checks already detect
+        // explicit fields; an explicitly restated past value is still rejected, so
+        // the checks' anti-backdating purpose is untouched, and the
+        // stop-before-start cross-check still runs on the merged (effective) window.
+        //
+        // Gated as its own consensus rule because the fix is a validity LOOSENING:
+        // an ISSUE that historical processing rejected ('MINT_START_BLOCK <
+        // BLOCK_INDEX' via inheritance) becomes valid, so an ungated flip forks a
+        // heterogeneous fleet on the first such re-issue and breaks from-genesis
+        // replay byte-identity. Keyed on block_TIME like the sibling multi-chain
+        // gates: ISSUE runs on BTC, LTC and DOGE, whose heights diverge by millions
+        // of blocks, so no single height names one cutover across all three but a
+        // single timestamp does.
+        //
+        // MAINNET IS UNARMED and TESTNET IS ARMED at 2026-08-24T00:00:00Z - the
+        // first nonzero testnet threshold in this registry; the constants above
+        // (ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME / _TESTNET_TIME) carry the
+        // reasoning, including why testnet cannot be genesis-active here. Regtest
+        // activates at genesis (0) so the unit/e2e suites exercise the corrected
+        // rule from block 0.
+        this.addChange('ISSUE_INHERITED_MINT_WINDOW', '0.2.0',ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME,ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME,0,0,0,0);
+
         // NOTE: STAKE_WEIGHTED_QUORUM (WI-1) is deliberately NOT registered here.
         // Standard activations gate on the LOCAL processing block via isEnabled();
         // stake-weighted quorum must gate on the BTC-anchored `snapshot_block`
@@ -1629,6 +1695,12 @@ module.exports.CROSS_SETTLE_CAP_MAINNET_TIME = CROSS_SETTLE_CAP_MAINNET_TIME;
 // reason: the suite asserts this consensus-preimage change is still waiting on the operator's
 // flag day rather than armed at a guessed instant.
 module.exports.BATCH_ROOT_SUB_INDEX_MAINNET_TIME = BATCH_ROOT_SUB_INDEX_MAINNET_TIME;
+// UNARMED mainnet sentinel + ARMED testnet instant for the ISSUE mint-window
+// re-parameterization fix, exported so the suite can assert mainnet is still waiting on
+// the operator's flag day and that the testnet arm is the ratified 2026-08-24T00:00:00Z
+// instant rather than a retroactive or drifted value.
+module.exports.ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME = ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME;
+module.exports.ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME = ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME;
 // ARMED mainnet instant for the BATCH issuance-limits rework (1786838400, 2026-08-16T00:00Z,
 // armed 2026-08-14 pre-launch), exported so the suite can pin the ratified value, assert it
 // was never retroactive, that it never precedes BATCH_SUBACTION_NORMALIZATION, and that it
