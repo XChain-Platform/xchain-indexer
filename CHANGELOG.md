@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- A migration whose end state already holds is recorded as applied without running its statement, so a database built fresh from the schema files no longer leaves it pending forever.
 - A token can be re-issued to change its parameters after its mint window has opened; the mint-window recency checks now apply only to values the issuance itself supplies (activation-gated).
 
 ## [0.10.0] - 2026-08-18

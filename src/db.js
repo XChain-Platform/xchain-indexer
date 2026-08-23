@@ -429,7 +429,7 @@ class Database {
         const only          = (opts.only == null) ? null
             : new Set([].concat(opts.only).map(s => String(s).trim()).filter(Boolean));
         const dir           = path.join(__dirname, 'sql', 'migrations');
-        const result        = { applied: [], pending: [], lockSkipped: false };
+        const result        = { applied: [], pending: [], baselined: [], lockSkipped: false };
 
         let files = [];
         try { files = fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort(); }
@@ -552,6 +552,33 @@ class Database {
                     }
 
                     const mode = this._migrationMode(raw);
+
+                    // Precondition gate: a migration listed in MIGRATION_PRECONDITIONS is
+                    // applicable only to a schema in a particular shape, and running it on
+                    // any other shape destroys data rather than converting it. Evaluate the
+                    // predicate against the LIVE schema and, when it says the migration does
+                    // not apply, record it as applied WITHOUT executing a statement.
+                    //
+                    // Baselining rather than merely skipping is what makes it stick: a skip
+                    // leaves the file pending forever, so every later blanket run re-enters
+                    // this branch and one runner change or one direct-SQL apply puts the
+                    // hazard back. The ledger row states what is already true - the end
+                    // state this migration exists to produce holds on this database.
+                    //
+                    // It runs BEFORE the mode gate deliberately, so an unattended startup
+                    // baselines a pending manual migration and the hazard is gone before an
+                    // operator ever reaches for `npm run migrate`.
+                    const preconditionSkip = await this._migrationPreconditionSkip(file, conn);
+                    if(preconditionSkip){
+                        await conn.query(
+                            'INSERT INTO schema_migrations (name, checksum, mode, applied_at) VALUES (?, ?, ?, NOW())',
+                            [file, checksum, mode]
+                        );
+                        result.baselined.push(file);
+                        console.log('runMigrations: BASELINED ' + file + ' (recorded as applied, no statement run): ' + preconditionSkip);
+                        continue;
+                    }
+
                     if(mode !== 'auto' && !includeManual){
                         console.log('runMigrations: PENDING (gated, mode=' + mode + '): ' + file + ' - apply with `node src/migrate.js`.');
                         result.pending.push(file);
@@ -904,6 +931,17 @@ class Database {
             'applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP' +
             ') ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci'
         );
+    }
+
+    // Evaluate a migration's declared precondition against the live schema. Returns a
+    // human reason string when the migration does NOT apply to this database (the caller
+    // baselines it), or null when it should run. Files with no entry always run.
+    // Runs on the caller's migration connection so it stays inside the migration lock.
+    async _migrationPreconditionSkip(file, conn){
+        const pre = Database.MIGRATION_PRECONDITIONS[file];
+        if(!pre) return null;
+        const rows = await conn.query(pre.sql, [this.dbName]);
+        return pre.skipWhen(rows || []);
     }
 
     // Parse a CREATE TABLE statement to extract expected column nullability.
@@ -15826,6 +15864,46 @@ Database.MIGRATION_CHECKSUM_REBASELINES = {
     '2026-08-19-attest-validator-stats-surrogate-id.sql': {
         from: '0f8f54622b7022134b140d1f68a86ea91d763c6a51e9886ee0b741961df34dc7',
         to:   'ecb9c206ebda43ba932603d60d6d470ab47704db428ff81f42d16c36b983acbb',
+    },
+};
+
+// Applicability preconditions the runner evaluates against the LIVE schema before it
+// applies a migration (see _migrationPreconditionSkip). Each entry is a parameterised
+// information_schema query taking the database name, plus a predicate returning a reason
+// string when the migration does not apply to this database and null when it does.
+//
+// The guard lives HERE rather than inside the .sql file on purpose: a migration file's
+// sha256 is its identity in schema_migrations, so adding a guard clause to an already
+// applied file would trip the immutability check on every node that ran it, and healing
+// that needs a MIGRATION_CHECKSUM_REBASELINES entry whose documented contract is that the
+// executable SQL is byte-identical across pinned revisions. A runner-side predicate keeps
+// both properties intact and covers every invocation route (startup, blanket
+// `node src/migrate.js`, and a targeted `--file` rollout), since all three funnel through
+// this loop. Mirrors xchain-decoder/src/db.js.
+Database.MIGRATION_PRECONDITIONS = {
+    // Widens pubkeys.pubkey to hold an uncompressed key (130 hex chars). It is
+    // mode=manual, so it stays PENDING on a database created from the current
+    // src/sql/pubkeys.sql (already VARCHAR(130) or wider) - and a fresh install never
+    // needs the widen a prior narrower column required. Baseline only while the live
+    // column is already 130 characters or more, the same threshold
+    // _assertPubkeyColumnIsUncompressedWide enforces at startup.
+    //
+    // Absent table/column, or an unreadable/NULL length, is deliberately NOT
+    // baselined: that state needs an operator, and the startup assertion fails
+    // closed on it (a non-character type or a missing column returns early there,
+    // leaving the migration's own PENDING state as the only signal).
+    '2026-07-24-pubkeys-widen-uncompressed.sql': {
+        sql: "SELECT CHARACTER_MAXIMUM_LENGTH AS len FROM information_schema.columns " +
+             "WHERE table_schema = ? AND table_name = 'pubkeys' AND column_name = 'pubkey'",
+        skipWhen: (rows) => {
+            // No column, or a length we could not read: never baseline on an absent
+            // answer, let the file speak for itself and the assertion fail closed after it.
+            if(!rows.length || rows[0].len == null) return null;
+            const len = Number(rows[0].len);
+            if(Number.isNaN(len)) return null;
+            if(len >= 130) return 'pubkeys.pubkey is already ' + len + ' characters wide, so there is no narrow column to widen.';
+            return null;
+        }
     },
 };
 

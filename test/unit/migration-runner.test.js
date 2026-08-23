@@ -785,6 +785,7 @@ describe('runMigrations() checksum heal branch @regression @tier1', function () 
             _runMigrationsInner: Database.prototype._runMigrationsInner,
             _assertPubkeyColumnIsUncompressedWide: Database.prototype._assertPubkeyColumnIsUncompressedWide,
             _migrationMode: Database.prototype._migrationMode,
+            _migrationPreconditionSkip: Database.prototype._migrationPreconditionSkip,
             splitSqlStatements: Database.prototype.splitSqlStatements,
             stripSqlLineComments: Database.prototype.stripSqlLineComments,
             _destructiveAutoStatement: Database.prototype._destructiveAutoStatement,
@@ -906,6 +907,7 @@ describe('runMigrations() backdated-migration guard @regression @tier1', functio
             _ensureMigrationsLedger: async () => {},
             _runMigrationsInner: Database.prototype._runMigrationsInner,
             _migrationMode: Database.prototype._migrationMode,
+            _migrationPreconditionSkip: Database.prototype._migrationPreconditionSkip,
             splitSqlStatements: Database.prototype.splitSqlStatements,
             stripSqlLineComments: Database.prototype.stripSqlLineComments,
             _destructiveAutoStatement: Database.prototype._destructiveAutoStatement,
@@ -1006,7 +1008,7 @@ describe('runMigrations() --file / opts.only scoping @regression @tier1', functi
 
     // Fake conn recording ledger INSERTs and executed migration-body statements.
     // `pubkeyLen` answers the post-run width assertion (#3875).
-    function makeDb(ledgerRows, pubkeyLen = 130) {
+    function makeDb(ledgerRows, pubkeyLen = 130, preRunLen = null) {
         const applied  = [];
         const executed = [];
         const conn = {
@@ -1015,7 +1017,18 @@ describe('runMigrations() --file / opts.only scoping @regression @tier1', functi
                 if (/RELEASE_LOCK/i.test(sql))                                     return [];
                 if (/CREATE TABLE (IF NOT EXISTS )?schema_migrations/i.test(sql))  return [];
                 if (/SELECT name, checksum FROM schema_migrations/i.test(sql))     return ledgerRows.slice();
-                if (/information_schema\.columns/i.test(sql))                      return [{ len: pubkeyLen }];
+                // The width is read twice per run and the two reads mean different
+                // things: the migration precondition asks BEFORE the file is
+                // considered (a column already wide means there is nothing to
+                // convert, so the file is baselined rather than run), and the
+                // post-run assertion asks after. A test that needs the migration to
+                // actually execute reports the pre-migration width until the
+                // widening statement has run. The queries are textually identical,
+                // so ordering is what separates them.
+                if (/information_schema\.columns/i.test(sql)) {
+                    const widened = executed.some(s => /ALTER TABLE pubkeys\s+MODIFY pubkey VARCHAR\(130\)/i.test(s));
+                    return [{ len: (preRunLen !== null && !widened) ? preRunLen : pubkeyLen }];
+                }
                 if (/^INSERT INTO schema_migrations/i.test(sql.trim())) { applied.push(params[0]); return []; }
                 if (/^UPDATE schema_migrations/i.test(sql.trim()))                 return [];
                 executed.push(sql);
@@ -1040,7 +1053,10 @@ describe('runMigrations() --file / opts.only scoping @regression @tier1', functi
     }
 
     it('applies ONLY the targeted file and leaves every other one pending and untouched', async function () {
-        const { db, applied, executed } = makeDb([]);
+        // Start narrow so the target is genuinely outstanding: against an
+        // already-wide column the runner correctly baselines it instead, which
+        // is a different behaviour with its own coverage.
+        const { db, applied, executed } = makeDb([], 130, 66);
         const res = await quietly(() => db.runMigrations({ includeManual: true, only: TARGET }));
         assert.deepStrictEqual(applied, [TARGET], 'only the targeted file is recorded as applied');
         assert.deepStrictEqual(res.applied, [TARGET]);
