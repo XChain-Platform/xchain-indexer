@@ -397,8 +397,19 @@ function buildAnchorActionResponse(config, latest, row, extra) {
 //
 // Every attestation-bearing version is served ({4,5,6}) plus their unattested siblings, so
 // the caller can positively DETECT a version mismatch rather than see an empty answer for
-// one and have to guess. Bounded like every other anchor read.
-const ANCHOR_BY_TXID_SQL =
+// one and have to guess.
+//
+// BOUNDED AND PAGED, not merely bounded. The cap on the checkpoint-identity read above is
+// justified by "the caller filters those by txid/version, so fetch the (tiny) candidate
+// set"; that reasoning does NOT carry here. This read's caller (anchor_proof_client) binds
+// a reward tuple, so a window that silently omits the one matching anchor is
+// indistinguishable on the wire from a complete non-matching set, and the client turns
+// that into a permanent 'rejected' - a legitimate COLLECT-spendable reward forfeited
+// forever. So the row cap keeps a hard bound on any single response, ONE row past it is
+// fetched purely as a truncation probe, and the response says both that it was cut off and
+// where to resume. `after` is exclusive on action_index, which is unique and totally
+// ordered under the ASC sort, so the pages partition the set with no gap and no overlap.
+const ANCHOR_BY_TXID_COLUMNS =
     `SELECT a.action_index, a.version, a.chain, a.network, a.block_index,
             a.checkpoint_seq, a.snapshot_block, a.publisher, a.match_batch_seq,
             a.block_index_doge, s.status, it.hash AS txid
@@ -406,17 +417,43 @@ const ANCHOR_BY_TXID_SQL =
      JOIN transactions t   ON t.tx_hash_id  = it.id
      JOIN actions ac       ON ac.tx_index   = t.tx_index
      JOIN anchor_actions a ON a.action_index = ac.action_index
-     JOIN index_statuses s ON s.id          = a.status_id
+     JOIN index_statuses s ON s.id          = a.status_id`;
+
+const ANCHOR_BY_TXID_SQL =
+    `${ANCHOR_BY_TXID_COLUMNS}
      WHERE it.hash = ?
      ORDER BY a.action_index ASC
-     LIMIT ${ANCHOR_ROW_LIMIT}`;
+     LIMIT ${ANCHOR_ROW_LIMIT + 1}`;
 
-// Validate a getanchorconfirmations request: a single 64-hex txid.
-// Returns {ok:true, txid} (lowercased) or {ok:false, error}.
-function validateAnchorConfirmationsParams({ txid }) {
+// The same read resumed after a page boundary. Params: [txid, after_action_index].
+const ANCHOR_BY_TXID_AFTER_SQL =
+    `${ANCHOR_BY_TXID_COLUMNS}
+     WHERE it.hash = ? AND a.action_index > ?
+     ORDER BY a.action_index ASC
+     LIMIT ${ANCHOR_ROW_LIMIT + 1}`;
+
+// Validate a getanchorconfirmations request: a single 64-hex txid, plus an optional
+// exclusive page cursor. Returns {ok:true, txid, after} (txid lowercased, after a
+// non-negative integer or null) or {ok:false, error}.
+//
+// The cursor is validated rather than coerced: a NaN / negative / fractional cursor
+// silently coerced to 0 would restart the walk at the first page forever, which is the
+// truncation bug wearing a different hat.
+function validateAnchorConfirmationsParams({ txid, after_action_index }) {
     if (typeof txid !== 'string' || !TXID_RE.test(txid))
         return { ok: false, error: 'txid must be a 64-character hex string' };
-    return { ok: true, txid: txid.toLowerCase() };
+    let after = null;
+    if (after_action_index !== undefined && after_action_index !== null) {
+        // Typed before it is numbered: a bare Number() call reads [] as 0 and true as 1, so
+        // the two shapes most likely to arrive from a buggy caller would both validate.
+        let n = (typeof after_action_index === 'number') ? after_action_index
+              : (typeof after_action_index === 'string' && /^\d+$/.test(after_action_index)) ? Number(after_action_index)
+              : NaN;
+        if (!Number.isInteger(n) || n < 0)
+            return { ok: false, error: 'after_action_index must be a non-negative integer' };
+        after = n;
+    }
+    return { ok: true, txid: txid.toLowerCase(), after };
 }
 
 // Map the anchor rows a txid carries + the indexer's latest block into the
@@ -430,11 +467,23 @@ function validateAnchorConfirmationsParams({ txid }) {
 // read guessing for it. A decoded-invalid row is reported with its status rather than
 // filtered out: "this txid exists and is invalid" is a positively-detected forge for the
 // caller, while an empty list is merely "not seen", and the two must not collapse.
+// `rows` is the ANCHOR_ROW_LIMIT + 1 the SQL above fetches. The extra row is a truncation
+// PROBE and never reaches the caller: it is dropped here, and its existence is reported as
+// `truncated` plus `next_after_action_index`, the exclusive cursor for the next page. A
+// caller that ignores both sees exactly the response shape it saw before (the same first
+// ANCHOR_ROW_LIMIT anchors in the same order), so the fields are additive; a caller that
+// reads them can walk the whole set and stop guessing what fell off the end.
 function buildAnchorConfirmationsResponse(config, latest, rows) {
     let coin    = config['COIN'];
     let network = config['NETWORK'];
     let latestNum = Number(latest);
-    let list = (Array.isArray(rows) ? rows : []).map(row => {
+    let all       = Array.isArray(rows) ? rows : [];
+    let truncated = all.length > ANCHOR_ROW_LIMIT;
+    let kept      = truncated ? all.slice(0, ANCHOR_ROW_LIMIT) : all;
+    let lastKept  = kept.length > 0 ? kept[kept.length - 1] : null;
+    let nextAfter = (truncated && lastKept && lastKept.action_index != null)
+                  ? Number(lastKept.action_index) : null;
+    let list = kept.map(row => {
         let dogeBlock = Number(row.block_index_doge);
         let confirmations = (Number.isFinite(latestNum) && Number.isFinite(dogeBlock) && latestNum >= dogeBlock)
             ? (latestNum - dogeBlock + 1) : 0;
@@ -454,7 +503,8 @@ function buildAnchorConfirmationsResponse(config, latest, rows) {
             confirmations:      confirmations
         };
     });
-    return { coin, network, exists: list.length > 0, latest_block_index: latest, anchors: list };
+    return { coin, network, exists: list.length > 0, latest_block_index: latest, anchors: list,
+             truncated: truncated, next_after_action_index: nextAfter };
 }
 
 // Validate a getarchiveanchor request. Returns
@@ -587,5 +637,6 @@ module.exports = {
     ARCHIVE_ANCHOR_BY_CONTENT_SQL, validateArchiveAnchorParams, selectArchiveHeadRow,
     presentChunkIndexes, buildArchiveAnchorResponse,
     validateAnchorActionParams, selectAnchorRow, buildAnchorActionResponse,
-    ANCHOR_BY_TXID_SQL, validateAnchorConfirmationsParams, buildAnchorConfirmationsResponse
+    ANCHOR_BY_TXID_SQL, ANCHOR_BY_TXID_AFTER_SQL,
+    validateAnchorConfirmationsParams, buildAnchorConfirmationsResponse
 };

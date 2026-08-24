@@ -54,6 +54,14 @@ const url   = require('url');
 // the txid is a different anchor and cannot stand in as proof of this one.
 const ATTESTED_VERSIONS = [4, 5, 6];
 
+// Hard stop on the getanchorconfirmations page walk in proveMined. At ANCHOR_ROW_LIMIT
+// (20) rows a page this admits 500 anchor actions for one transaction, which no DOGE
+// transaction can physically carry, so reaching it means the peer is faulty or hostile
+// rather than that the bound is too small. It exists only so a peer that keeps answering
+// "truncated" cannot spin the block loop; the walk answers 'unknown' there instead of
+// judging an incomplete set.
+const MAX_ANCHOR_PAGES = 25;
+
 // Anchor statuses that are NOT fleet-uniform, so they are evidence of nothing here.
 //
 // _judge's whole licence to memoize a permanent 'rejected' is that the status is chain
@@ -103,11 +111,15 @@ class AnchorProofClient {
 
     // Ask the DOGE indexer what a txid anchored. Returns the parsed result, or null when
     // the answer is unusable (unreachable / RPC error / malformed), which the caller maps
-    // to 'unknown'.
-    async _fetch(txid){
+    // to 'unknown'. `after` is the exclusive action_index page cursor; null/undefined asks
+    // for the first page, which is the only request an indexer predating pagination
+    // understands (it ignores the unknown param and answers the first page anyway).
+    async _fetch(txid, after){
         if(!this.url) return null;
         try {
-            let result = await this._rpc('getanchorconfirmations', { txid: txid });
+            let params = { txid: txid };
+            if(after !== null && after !== undefined) params.after_action_index = after;
+            let result = await this._rpc('getanchorconfirmations', params);
             if(!result || result.error || !Array.isArray(result.anchors)) return null;
             return result;
         } catch(e){
@@ -173,15 +185,57 @@ class AnchorProofClient {
         let memoKey = this._memoKey(txid, e);
         if(this._memo.has(memoKey)) return this._memo.get(memoKey);
 
-        let result = await this._fetch(txid);
-        if(!result) return 'unknown';
-        if(!result.exists || result.anchors.length === 0){
-            // The DOGE indexer has no such transaction. That is NOT proof it will never
-            // have one: it may simply be behind. Deferring is the only safe reading.
+        // WALK EVERY PAGE BEFORE JUDGING. getanchorconfirmations bounds its answer at
+        // ANCHOR_ROW_LIMIT rows, and a window that happens to hold some attested sibling
+        // anchor but not this tuple's own is, on the wire, identical to a complete
+        // non-matching set: _judge below reads it as a positively-detected mis-bind and
+        // returns a MEMOIZED, permanent 'rejected', and anchor_reward_derive turns that
+        // into "no reward derived" forever. Degrading that case to 'unknown' instead is not
+        // the fix it looks like: 'unknown' throws AnchorProofUnavailableError, which halts
+        // block processing on every BTC node at once and never clears, since the same
+        // deterministic window comes back on every retry. So the window is removed rather
+        // than reinterpreted, and _judge keeps seeing a COMPLETE anchor set.
+        //
+        // Only a peer that positively reports `truncated` is asked for another page. An
+        // indexer predating pagination reports nothing, the walk stops after one page, and
+        // this node behaves exactly as it did before, so a mixed fleet degrades to today's
+        // reading rather than to a stall.
+        let anchors = [];
+        let after   = null;
+        let walking = true;
+        for(let page = 0; walking && page < MAX_ANCHOR_PAGES; page++){
+            let result = await this._fetch(txid, after);
+            if(!result) return 'unknown';
+            if(page === 0 && (!result.exists || result.anchors.length === 0)){
+                // The DOGE indexer has no such transaction. That is NOT proof it will never
+                // have one: it may simply be behind. Deferring is the only safe reading.
+                return 'unknown';
+            }
+            anchors = anchors.concat(result.anchors);
+            if(result.truncated !== true){ walking = false; break; }
+            let next = Number(result.next_after_action_index);
+            // A peer that says "truncated" and then cannot say where to resume, or hands
+            // back a cursor that does not advance, is answering a protocol it only half
+            // speaks. Judging the partial set it gave us is exactly the silent forfeit this
+            // walk exists to remove, so treat it as the malformed reply it is.
+            if(!Number.isInteger(next) || (after !== null && next <= after)){
+                console.warn('AnchorProofClient: ' + txid + ' reported truncated with an unusable ' +
+                             'page cursor (' + result.next_after_action_index + '); cannot complete the walk');
+                return 'unknown';
+            }
+            after = next;
+        }
+        if(walking){
+            // MAX_ANCHOR_PAGES exhausted with the set still incomplete. Unreachable with a
+            // real anchor transaction (the txid is the hub's own ANCHOR tx, and a DOGE
+            // transaction cannot carry this many anchor actions), so this is a peer fault or
+            // a hostile answer, not a bound to tune. Refuse to judge a partial set.
+            console.error('AnchorProofClient: ' + txid + ' still truncated after ' + MAX_ANCHOR_PAGES +
+                          ' pages; refusing to judge a partial anchor set');
             return 'unknown';
         }
 
-        let verdict = this._judge(result.anchors, e);
+        let verdict = this._judge(anchors, e);
         if(verdict !== 'unknown') this._memo.set(memoKey, verdict);
         return verdict;
     }

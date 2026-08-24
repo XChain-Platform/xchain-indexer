@@ -1301,16 +1301,22 @@ async function startApi(){
         // about to pay, so a txid that anchored something else is positively rejected
         // rather than weakly accepted. See anchor_proof_client.js and
         // anchor_reward_derive.js on the calling side.
-        async getanchorconfirmations({txid}){
+        // `after_action_index` is the optional exclusive page cursor a caller echoes back
+        // from a previous response's next_after_action_index. Omitting it reads the first
+        // page, which is what every pre-pagination caller does, so the method stays
+        // backward compatible on the wire.
+        async getanchorconfirmations({txid, after_action_index}){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            let v = anchorActionQuery.validateAnchorConfirmationsParams({ txid });
+            let v = anchorActionQuery.validateAnchorConfirmationsParams({ txid, after_action_index });
             if(!v.ok) return { error: v.error };
             // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
             try {
                 let latest = await db.getLatestBlockIndex();
-                let rows   = await db.doQuery(anchorActionQuery.ANCHOR_BY_TXID_SQL, [v.txid]);
+                let rows   = (v.after === null)
+                           ? await db.doQuery(anchorActionQuery.ANCHOR_BY_TXID_SQL,       [v.txid])
+                           : await db.doQuery(anchorActionQuery.ANCHOR_BY_TXID_AFTER_SQL, [v.txid, v.after]);
                 return anchorActionQuery.buildAnchorConfirmationsResponse(indexer.config, latest, rows);
             } catch (err) {
                 console.error('getanchorconfirmations error:', err);
