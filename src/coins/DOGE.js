@@ -111,13 +111,13 @@ module.exports = {
                 supportsSegwit:       false,
                 singleOpReturnPolicy: true,
             },
-            // Fresh testnet genesis 2026-08-10 (operator): was 64800000, which is
-            // ~3.02M blocks behind the tip and ~21 hours of replay - the single
-            // reason this genesis is worth doing. Raised to just under the live
-            // tip (67819590 at the decision) so replay is minutes. Consensus input
-            // (folded into consensusSubset), so it moves the DOGE testnet pin and
-            // ships in one wave with every other vendoring service.
-            firstBlock: 67815000,
+            // Fresh testnet genesis 2026-08-24 (operator): was 67815000 (the
+            // 2026-08-10 genesis). Raised to just under the live tip (67847591 at
+            // the decision) so the public testnet announces with zero
+            // pre-announcement test actions and replays in minutes. Consensus
+            // input (folded into consensusSubset), so it moves the DOGE testnet
+            // pin and ships in one wave with every other vendoring service.
+            firstBlock: 67847500,
             // Block-0 hash of the chain (see mainnet above). Unpinned until the operator
             // reads it off the fleet's own node: `dogecoin-cli -testnet getblockhash 0`.
             chainGenesisHash: null,

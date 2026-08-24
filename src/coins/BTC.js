@@ -166,12 +166,13 @@ module.exports = {
                 minStandardTxNonWitnessSize: 82,
                 singleOpReturnPolicy:        true,
             },
-            // Fresh testnet genesis 2026-08-10 (operator): was 138000. Raised to
-            // just under the live tip (147799 at the decision) so the chain starts
-            // effectively empty and replays in seconds. Consensus input (folded
-            // into consensusSubset), so it moves the BTC testnet pin and ships in
-            // one wave with every other vendoring service.
-            firstBlock: 147500,
+            // Fresh testnet genesis 2026-08-24 (operator): was 147500 (the
+            // 2026-08-10 genesis). Raised to just under the live tip (149703 at
+            // the decision) so the public testnet announces with zero
+            // pre-announcement test actions and replays in seconds. Consensus
+            // input (folded into consensusSubset), so it moves the BTC testnet
+            // pin and ships in one wave with every other vendoring service.
+            firstBlock: 149700,
             // Block-0 hash of the chain (see mainnet above). Unpinned until the operator
             // reads it off the fleet's own node: `bitcoin-cli -testnet getblockhash 0`.
             // This is the one value that separates testnet3 from testnet4, which the

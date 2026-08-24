@@ -109,12 +109,13 @@ module.exports = {
                 minStandardTxNonWitnessSize: 85,
                 singleOpReturnPolicy:        true,
             },
-            // Fresh testnet genesis 2026-08-10 (operator): was 4765000. Raised to
-            // just under the live tip (4855452 at the decision) so the chain
-            // starts effectively empty and replays in seconds. Consensus input
-            // (folded into consensusSubset), so it moves the LTC testnet pin and
-            // ships in one wave with every other vendoring service.
-            firstBlock: 4855000,
+            // Fresh testnet genesis 2026-08-24 (operator): was 4855000 (the
+            // 2026-08-10 genesis). Raised to just under the live tip (4862567 at
+            // the decision) so the public testnet announces with zero
+            // pre-announcement test actions and replays in seconds. Consensus
+            // input (folded into consensusSubset), so it moves the LTC testnet
+            // pin and ships in one wave with every other vendoring service.
+            firstBlock: 4862500,
             // Block-0 hash of the chain (see mainnet above). Unpinned until the operator
             // reads it off the fleet's own node: `litecoin-cli -testnet getblockhash 0`.
             chainGenesisHash: null,
