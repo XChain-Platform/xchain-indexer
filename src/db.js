@@ -29,6 +29,7 @@ const { canonicalizeHashAddress } = require('./protocolAddressRoles');
 // so the array-of-{block_index, block_hash} contract is defined once. Pure leaf module (no
 // requires of its own), so no cycle.
 const reorgHistoryQuery = require('./reorg-history-query');
+const protocolTime = require('./protocol_time');
 const swqCap = require('./swq_source_cap_activation');
 const dispenseCancellingMatch = require('./dispense_cancelling_match_activation');
 const stateKeyCollation = require('./state_key_collation_activation');
@@ -227,6 +228,11 @@ class Database {
         // grow unbounded across a long-running process) while collapsing the per-action fan-out
         // to one decoder-DB lookup per block.
         this._blockTimeCache = { block_index: null, block_time: null };
+
+        // Companion memo for getBlockTime(), which resolves PROTOCOL time and costs an
+        // extra 11-row window read on top of the raw lookup. Same last-block-wins shape
+        // and the same reorg invalidation (clearBlockTimeCache clears both).
+        this._protocolTimeCache = { block_index: null, block_time: null };
 
         // Early-decide tally watermark. processVoteFinalizations step 2 re-tallies
         // every armed poll from full ledger/vote/delegation history on EVERY block, uncapped. A
@@ -2294,7 +2300,52 @@ class Database {
     // Handle getting block time for a given block. Memoized (last-block-wins, see
     // this._blockTimeCache in the constructor): block_time is constant per block_index, and
     // protocol_changes.isEnabled() calls this repeatedly per block under the hot per-action path.
+    // PROTOCOL time for a block: what every time-keyed consensus reader should use.
+    //
+    // On networks switched to median-time-past (see protocol_time.js) this is the
+    // median of the previous 11 block timestamps rather than the block's own stamp.
+    // The raw stamp is chosen by whoever mined the block and Bitcoin accepts it up
+    // to ~2h ahead of network-adjusted time; on testnet4 that is not hypothetical,
+    // the chain rides its 20-minute minimum-difficulty rule and stamps every block
+    // ~1201s ahead of its parent. Reading mirrored hub data at a future instant is
+    // what forced the mirror barriers to wait for wall clock to catch up, which is
+    // what made a confirmed transaction take hours to index.
+    //
+    // Applied HERE rather than at each call site on purpose: this is the single
+    // seam every protocol reader already flows through (actions.js, protocol
+    // changes, the six mirror barriers), so they all move together. A reader left
+    // on the raw stamp while the barriers move is the combination that forks.
+    // Storage and display must NOT use this - createBlock and the chain-tip push
+    // take getRawBlockTime, so the timestamp we persist and show stays the real one.
     async getBlockTime(block_index){
+        let key = Number(block_index);
+        // Lazily created: this method is also reached through hand-built Database
+        // doubles that predate the memo, and an absent cache must degrade to "always
+        // recompute" rather than throwing on the consensus path.
+        if(!this._protocolTimeCache)
+            this._protocolTimeCache = { block_index: null, block_time: null };
+        if(this._protocolTimeCache.block_index === key)
+            return this._protocolTimeCache.block_time;
+        let raw = await this.getRawBlockTime(block_index);
+        let network = (this.config) ? this.config['NETWORK'] : undefined;
+        let protocolTimeValue = raw;
+        if(protocolTime.isProtocolTimeMtpActive(network) && raw !== false){
+            let previous = await this.getPreviousBlockTimes(key, protocolTime.MEDIAN_TIME_SPAN);
+            protocolTimeValue = protocolTime.protocolTime(network, raw, previous);
+        }
+        // Never memoize an unresolvable lookup, for the same reason the raw reader
+        // does not: the retry must re-query against a healthy DB.
+        if(raw !== false){
+            this._protocolTimeCache.block_index = key;
+            this._protocolTimeCache.block_time  = protocolTimeValue;
+        }
+        return protocolTimeValue;
+    }
+
+    // The block's own recorded timestamp, unmodified. This is the value to persist
+    // and to show a user; it is NOT the value time-keyed consensus logic should read
+    // on a chain whose miners can date blocks into the future (see getBlockTime).
+    async getRawBlockTime(block_index){
         let key = Number(block_index);
         if(this._blockTimeCache.block_index === key)
             return this._blockTimeCache.block_time;
@@ -2334,7 +2385,35 @@ class Database {
     // createBlock). Rollback calls this on BOTH DB instances after commit so the replay
     // re-reads the new chain's block_time. Mirrors the decoder's per-height reorg clear.
     clearBlockTimeCache(){
-        this._blockTimeCache = { block_index: null, block_time: null };
+        this._blockTimeCache    = { block_index: null, block_time: null };
+        // The protocol-time memo is derived from the raw one AND from the 11 blocks
+        // below it, so a reorg invalidates it for the same reason and then some: the
+        // replayed height can shift the median even when its own stamp is unchanged.
+        this._protocolTimeCache = { block_index: null, block_time: null };
+    }
+
+    // The timestamps of the `span` blocks immediately below `block_index`, newest
+    // first. Feeds the median-time-past calculation in getBlockTime. Returns what
+    // exists rather than failing when fewer are available (a fresh chain near
+    // genesis), matching Bitcoin, which medians whatever history it has.
+    async getPreviousBlockTimes(block_index, span){
+        let key   = Number(block_index);
+        let count = parseInt(span);
+        if(!Number.isFinite(key) || !Number.isFinite(count) || count <= 0) return [];
+        let query = `SELECT block_time FROM blocks
+                     WHERE block_index < ? AND block_time IS NOT NULL
+                     ORDER BY block_index DESC LIMIT ?`;
+        let results;
+        try {
+            // doQueryStrict for the same reason getRawBlockTime uses it: this feeds the
+            // consensus clock, and collapsing a DB fault to [] would silently fall back
+            // to the raw stamp on this node only, which is a unilateral divergence.
+            results = await this.doQueryStrict(query, [key, count]);
+        } catch(e){
+            rethrowIfInfraFault(e);
+            return [];
+        }
+        return (results || []).map((r) => r['block_time']);
     }
 
     // Invalidate the light-client touched-key resolver memos (_smtTickNameCache /

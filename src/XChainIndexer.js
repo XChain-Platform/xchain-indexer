@@ -22,6 +22,7 @@
 const fs        = require('fs');
 const config    = require('./config.js');
 const changes   = require('./protocol_changes.js');
+const protocolTime = require('./protocol_time.js');
 const database  = require('./db.js');
 const actions   = require('./actions.js');
 const util      = require('./utility.js');
@@ -863,8 +864,28 @@ class XChainIndexer {
                 let fanoutFixActive = await this.protocolChanges.isEnabled('FIX_OUTPUT_FANOUT', blockToParse);
                 blockTransactions = collapseOutputFanout(blockTransactions, fanoutFixActive, (m) => this.util.logError(m));
 
-                // Lookup the block time for a given block (read from decoder DB before opening transaction)
-                let blockTime = await this.decoderDb.getBlockTime(blockToParse);
+                // Lookup the block time for a given block (read from decoder DB before opening transaction).
+                //
+                // TWO values, deliberately. blockTime is PROTOCOL time (median-time-past on
+                // the networks switched to it) and drives every barrier and time-keyed read
+                // below, so that a miner-chosen stamp dated into the future cannot make this
+                // node wait for wall clock or read a still-growing mirror window. rawBlockTime
+                // is the block's own stamp, and is what gets PERSISTED and published, so the
+                // timestamp a user sees on a block stays the real one.
+                let blockTime    = await this.decoderDb.getBlockTime(blockToParse);
+                let rawBlockTime = await this.decoderDb.getRawBlockTime(blockToParse);
+
+                // Re-stamp the transaction rows with protocol time before anything reads
+                // them. getDecoderBlockData carries block_time straight from the decoder's
+                // blocks table, and actions.js processTransaction lifts tx.block_time into
+                // data['BLOCK_TIME'], which every handler hands to the time-ranged price and
+                // oracle reads. Leaving the raw stamp there while the barriers below run on
+                // protocol time is the forking combination: the block would be released up
+                // to ~2h before wall clock reached its stamp, and the price window scanned
+                // for it would still be gaining rounds, so two nodes reading at different
+                // instants credit different amounts. Barriers and reads move together or
+                // not at all.
+                protocolTime.stampProtocolTime(blockTransactions, blockTime);
 
                 // Price-sync barrier: don't process this block until the local price mirror has
                 // caught up to it. Native-coin fee validation reads the latest finalized price
@@ -1209,7 +1230,11 @@ class XChainIndexer {
                             this.actions.vm.endBlock();
 
                         // Create record in `blocks` table with hashes of the credits/debits/escrows (ledger) and /actions tables
-                        let [ledger, actions, contracts] = await this.indexerDb.createBlock(blockToParse, blockTime);
+                        // rawBlockTime, not blockTime: this row is what the explorer and the
+                        // SDK show as the block's timestamp, so it carries the chain's own
+                        // stamp. It is also the window every other node medians to derive
+                        // protocol time, so persisting a derived value here would compound.
+                        let [ledger, actions, contracts] = await this.indexerDb.createBlock(blockToParse, rawBlockTime);
 
                         // Create / Update DEX market information
                         await this.util.processMarketUpdates(this.indexerDb, blockToParse, blockTime);
@@ -1294,7 +1319,9 @@ class XChainIndexer {
                     // CHAIN_TIP_PUSH_MAX_LAG blocks of the decoder tip (lastDecoderBlock here is
                     // the prior iteration's value, i.e. at most one block stale, which is fine).
                     if(!this.util.bcgt(this.util.bcsub(lastDecoderBlock, lastIndexerBlock), this.config['CHAIN_TIP_PUSH_MAX_LAG'])){
-                        this.hubClient.pushChainTip(this.config['COIN'], this.config['NETWORK'], lastIndexerBlock, blockTime);
+                        // rawBlockTime: the hub publishes this as the chain's tip timestamp to
+                        // other services, which compare it against wall clock for freshness.
+                        this.hubClient.pushChainTip(this.config['COIN'], this.config['NETWORK'], lastIndexerBlock, rawBlockTime);
                     }
 
                     // Deliver the PRICE hub pushes durably staged inside the just-committed block
