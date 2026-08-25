@@ -5,10 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.11.0] - 2026-08-25
+
+Consensus-affecting changes in this release ship behind per-chain activation
+points; behavior below each activation height is unchanged.
 
 ### Added
 - The anchor-confirmations read is paged: a truncated response says so and carries a cursor to resume from, so a caller can no longer read a cut-off window as a complete answer.
+- A migration guard rejects any additive migration that would widen an indexed column past the key length limit.
+
+### Changed
+- Updated the BTC mainnet reward pool address.
+- Synced the testnet genesis coin registry to its latest values.
 
 ### Fixed
 - A migration whose end state already holds is recorded as applied without running its statement, so a database built fresh from the schema files no longer leaves it pending forever.
@@ -16,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A token can be re-issued to change its parameters after its mint window has opened; the mint-window recency checks now apply only to values the issuance itself supplies (activation-gated).
 - A dispenser naming a user oracle is checked for an effective oracle price on create even when it escrows nothing. The check previously ran only as part of the escrow-sized usage-fee calculation, so an ownership dispenser — which must escrow nothing and cannot be refilled — opened against an oracle that had published nothing, locking the ticker's ownership behind a dispenser that could never settle (activation-gated).
 - Two genuinely distinct archive anchors are paid two rewards. The archive reward was identified by the hub's batch sequence number, a dense counter a wipe-and-replay rebase restarts, so a reissued sequence made a second real, quorum-attested archive anchor either derive nothing at all or lose its reward to the collapse that exists for failover double-publishes. Reward rows now carry the snapshot block as a qualifier on their unique key — the same value the signed attestation tuple already used to tell the two apart — and the derive grouping, reconcile, reorg restore and replica mirror all key on it. Non-archive rewards are unchanged. Requires the accompanying forward migration on every node before this rail is armed.
+- A dispenser SEND was matched by comparing amount strings, so a legal overpayment whose decimal sorted below the dispenser price was filtered out and the sender's tokens were stranded; the compare is now numeric (activation-gated).
+- The stake-weight source and key cap ordering now uses a pinned collation instead of the general one, since the surviving key set is a consensus-hashed quantity (activation-gated).
+- Cumulative log-shipper totals are now reported as counters instead of gauges, so rate queries over them return correct values instead of being undefined.
+- The validator-reward push gate now also checks the derived winner, closing a path where a push carrying only the caller-supplied block index could still displace it.
 
 ## [0.10.0] - 2026-08-18
 
@@ -159,7 +171,6 @@ set of software rather than a rough era.
 - reconcileTableIndexes keeps per-column prefixes and warns on prefix-width drift.
 - New manual migration repositions state_key_bin so aged and fresh table tails converge.
 - tableLifecycle ORPHAN_SWEEPS icons sweep marked replica-mirrored with flag semantics documented.
-
 
 ## [2.7.11] - 2026-06-20
 
