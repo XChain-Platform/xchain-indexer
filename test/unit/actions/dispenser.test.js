@@ -1005,8 +1005,17 @@ describe('Dispenser action handler @regression @tier2', function () {
         });
 
         it('does not charge an ownership dispenser, which escrows no balance', async function () {
+            // The FEE is nil here and no output is required: its base is
+            // oracle_price x GIVE_ESCROW, and an ownership dispenser must carry an empty
+            // GIVE_ESCROW. The oracle price IS still read, because the effective-price
+            // rule is a validity precondition on the create rather than part of the fee
+            // (see dispenser_oracle_price_activation.js); what must not happen is a fee
+            // being demanded. No TX_OUTPUTS are supplied, so a charge would reject.
             const getOraclePrice = sinon.stub().resolves({ value: '0.05', fee: '0.01' });
             indexer.indexerDb.getOraclePrice = getOraclePrice;
+            indexer.indexerDb.setTokenEscrow = sinon.stub().resolves();
+            indexer.indexerDb.isOwnershipEscrowed.resolves(false);
+            indexer.indexerDb.getAddressBalances.resolves({ 10: '0', 99: '999999999' });
 
             // GIVE_OWNERSHIP=1 carries empty GIVE_AMOUNT/GIVE_ESCROW.
             const params = makeParams(
@@ -1014,7 +1023,8 @@ describe('Dispenser action handler @regression @tier2', function () {
             const data = modeBData();
             await dispenser.parse(params, data, false);
 
-            sinon.assert.notCalled(getOraclePrice);
+            assert.strictEqual(data['STATUS'], 'valid', data['STATUS']);
+            sinon.assert.calledOnce(indexer.indexerDb.setTokenEscrow);
         });
     });
 });

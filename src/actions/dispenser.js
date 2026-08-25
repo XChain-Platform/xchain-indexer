@@ -47,6 +47,7 @@ const divergenceMetrics = require('../dispenserDivergenceMetrics.js');
 const dispenserFreshness = require('../dispenser_freshness_activation.js');
 const dispenserCaps = require('../dispenser_caps_activation.js');
 const dispenserGiveAmount = require('../dispenser_give_amount_activation.js');
+const dispenserOraclePrice = require('../dispenser_oracle_price_activation.js');
 
 class Dispenser {
 
@@ -250,6 +251,43 @@ class Dispenser {
         // Validate that FIAT_AMOUNT is in 0.00 format
         if(!error && format==0 && !this.util.isNull(data['FIAT_CODE']) && !this.util.isNull(data['FIAT_AMOUNT']) && !this.util.isValidFiatFormat(2, data['FIAT_AMOUNT']))
             error = 'invalid: FIAT_AMOUNT (format)';
+
+        // A Mode B create must name an oracle that already has an EFFECTIVE price. This is
+        // a VALIDITY rule, not a pricing one, and it is deliberately checked HERE rather
+        // than left to the oracle-fee block below: that block is gated on GIVE_ESCROW > 0,
+        // because the fee it computes is sized by the escrow being added. The price
+        // precondition has no such scope. An ownership dispenser is REQUIRED to carry an
+        // empty GIVE_ESCROW (see the block above) and cannot be refilled later once the
+        // caps cohort is active, so before this check existed a GIVE_OWNERSHIP=1 create
+        // naming a never-priced oracle was accepted outright: it escrowed the tick's
+        // ownership behind a dispenser that can never settle (reverseOraclePriceMatch
+        // finds no row) and used the oracle for free. Same for an open-now-refill-later
+        // balance create.
+        //
+        // Deliberately NOT gated on data['FEE_PROBE']. Unlike the fee block's OUTPUT half,
+        // an effective oracle price is knowable in advance and is the one verdict a caller
+        // can act on ("publish, wait out the 24h window, then create"), so the read-only
+        // quote/preflight surfaces must report it too rather than green-light a create the
+        // chain will reject.
+        //
+        // format-0 only. An escrow-bearing format-2 refill already reaches the same rule
+        // through the fee path, and checking every edit unconditionally would newly reject
+        // expiration-only or list-only edits on a dispenser whose oracle is perfectly fine.
+        //
+        // Gated (see dispenser_oracle_price_activation.js): this rejects creates the engine
+        // used to accept, so replay below the flag-day stays byte-identical.
+        if(!error && format==0 && !this.util.isNull(data['ORACLE_ADDRESS']) &&
+           dispenserOraclePrice.isDispenserOraclePriceActive(data['BLOCK_TIME'], this.config['NETWORK']) &&
+           await this.actions.protocolChanges.isEnabled('FIAT_DISPENSER_PRICING', data['BLOCK_INDEX'])){
+            let priceCheck = await this.util.requireEffectiveOraclePrice(data['BLOCK_TIME'], {
+                ORACLE_ADDRESS: data['ORACLE_ADDRESS'],
+                GIVE_COIN:      data['GIVE_COIN'],
+                GIVE_TICK:      data['GIVE_TICK'],
+                FIAT_CODE:      data['FIAT_CODE'],
+            }, this.indexerDb);
+            if(!priceCheck.valid)
+                error = priceCheck.error;
+        }
 
         // PRICE v1 oracle usage fee, Counterparty parity: a Mode B dispenser
         // pays the oracle operator UP FRONT, as a real native-coin output, charged to the
