@@ -139,6 +139,54 @@ describe('pushvalidatorrewards retirement gate key @regression @tier1', function
             'the retirement gate must not build its key with Math.max (NaN fails the gate open)');
     });
 
+    // The ARCHIVE leg cannot borrow `round` the way the per-chain leg does:
+    // anchor_archive's round_reference is MATCH_BATCH_SEQ, a dense hub-allocated
+    // counter rather than a height, so it binds nothing. Left on the wire block_index
+    // alone the gate was advisory in exactly the same way: block_index 0 read the
+    // archive flag-day as inactive on mainnet, wrote a wire-amount COLLECT-spendable
+    // row, and the MIN(pubkey) collapse then deleted the derived v6 winner. The plane
+    // that binds instead is the node's own committed tip, which no request body moves.
+    const ARCHIVE_GATE_SRC = (function () {
+        const start = PUSH_HANDLER_SRC.indexOf("type === 'anchor_archive'");
+        assert.notStrictEqual(start, -1, 'archive retirement leg not found in the push handler');
+        const gate = PUSH_HANDLER_SRC.slice(start);
+        const end  = gate.indexOf('ANCHOR v6');
+        assert.notStrictEqual(end, -1, 'could not bound the archive retirement leg');
+        return gate.slice(0, end);
+    })();
+
+    it('gates the archive leg on the node-local committed tip as well as the wire block_index', function () {
+        assert.ok(/committedView\(\s*indexer\.indexerDb\s*\)\.getLatestBlockIndex\(\)/.test(ARCHIVE_GATE_SRC),
+            'archive gate must consult the node-local committed tip, not only the wire block_index');
+        assert.ok(/isArchiveRewardActive\(\s*Number\(tip\)/.test(ARCHIVE_GATE_SRC),
+            'the local tip must be fed to isArchiveRewardActive as a gate plane');
+        assert.ok(/isArchiveRewardActive\(\s*Number\(blockIdx\)/.test(ARCHIVE_GATE_SRC),
+            'archive gate must still consult the wire block_index (OR-of-planes can only tighten)');
+    });
+
+    it('fails the archive leg closed when the local tip cannot be read', function () {
+        assert.ok(/Number\.isFinite\(Number\(tip\)\)/.test(ARCHIVE_GATE_SRC),
+            'an unreadable tip must be detected, not coerced into a gate plane');
+        // The retry-ability of that refusal is load-bearing: RewardTracker.isTerminalPushError
+        // matches /is not pushable|push retired|is required|must be an array/, so a transient
+        // refusal carrying any of those words would be DROPPED instead of retried, turning a
+        // DB blip into a permanently unpaid pre-flag-day archive reward.
+        const transient = /error: 'anchor_archive gate[^']*'/.exec(ARCHIVE_GATE_SRC);
+        assert.ok(transient,
+            'an unreadable tip must refuse the push rather than fall through to the wire plane');
+        assert.ok(!/is not pushable|push retired|is required|must be an array/i.test(transient[0]),
+            'the unreadable-tip refusal must NOT read as terminal to RewardTracker.isTerminalPushError');
+    });
+
+    it('refuses an archive push outright on a non-BTC indexer', function () {
+        assert.ok(/chain !== 'BTC'/.test(ARCHIVE_GATE_SRC),
+            'the tip plane is a BTC-anchored height, so a non-BTC indexer must refuse rather than fall back');
+        // This one IS terminal: the hub only ever pushes archive rewards to the BTC
+        // indexer (RewardTracker._pushRewardsToBtcIndexer), so a retry can never succeed.
+        assert.ok(/error: 'reward_type anchor_archive is not pushable[\s\S]*?push retired'/.test(ARCHIVE_GATE_SRC),
+            'the wrong-chain refusal must read as terminal so the hub stops retrying');
+    });
+
     it('still routes its writes through apiView so a push never joins the block transaction', function () {
         assert.ok(/indexer\.indexerDb\.apiView\(\)/.test(PUSH_HANDLER_SRC),
             'pushvalidatorrewards must write on the API view, not the block-loop connection');

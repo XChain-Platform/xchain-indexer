@@ -492,12 +492,25 @@ const CONTENT_PARITY_CARVE_OUTS = Object.freeze([
 // id"), so every block a follower takes live gets a locally assigned id while
 // the parity read is a `SELECT em.*`. Those four replicated columns stay in the
 // preimage, so the check still covers everything the two sides must agree on.
+// `validator_rewards.id` reaches the same place by a different route: the row
+// normally streams as a `SELECT *` carrying the source id, but the RB-ANCHOR
+// reorg restore (xchain-indexer/src/rollback.js and its mirror in
+// xchain-sync/src/ClientRollback.js) re-INSERTs a deleted loser naming only
+// source_id/signing_pubkey_id/reward_type/round_reference/amount/block_index/
+// derive_block_index, so each side mints its own AUTO_INCREMENT value off a
+// counter the other never sees (the source burns values on every ignored
+// createValidatorReward INSERT IGNORE). The difference is permanent, because
+// validator_rewards is in ClientApplier.ignoreTables: a later re-stream carrying
+// the source id is IGNOREd on the reward_unique key and the replica keeps its
+// own forever. The seven restored columns stay in the preimage and reward_unique
+// still identifies the row, so nothing the two sides must agree on drops out.
 // Hashing any of these would turn a by-design difference into a permanent alarm.
 const CONTENT_PARITY_EXCLUDED_COLUMNS = Object.freeze({
     blocks:             Object.freeze(['id']),
     contract_emissions: Object.freeze(['id']),
     contract_state:     Object.freeze(['state_key_bin']),
     sync_meta:          Object.freeze(['id', 'logged_at']),
+    validator_rewards:  Object.freeze(['id']),
 });
 
 // ── Derivation helpers ──────────────────────────────────────────────────

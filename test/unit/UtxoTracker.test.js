@@ -228,4 +228,80 @@ describe('UtxoTracker', function(){
             assert.deepStrictEqual(r, { height: 0 });
         });
     });
+
+    // Freshness-aware sibling. It exists so a null first-seen from a lagging or
+    // halted tracker is distinguishable from an address that never appeared; the
+    // dispenser freshness verdict itself stays on the frozen getFirstSeen.
+    describe('getFirstSeenStatus()', function(){
+
+        it('calls get_first_seen_status and returns both halves', async function(){
+            let t = new UtxoTracker('localhost', 3005);
+            let stub = makeFetch({ jsonrpc: '2.0', id: 1, result: {
+                first_seen: { height: 42 },
+                sync: { tracker_height: 100, node_height: 100, lag: 0, synced: true, mempool_ready: true }
+            }});
+            global.fetch = stub;
+
+            let r = await t.getFirstSeenStatus('bc1qtest');
+            let body = JSON.parse(stub.firstCall.args[1].body);
+            assert.strictEqual(body.method, 'get_first_seen_status');
+            assert.deepStrictEqual(body.params, { address: 'bc1qtest' });
+            assert.deepStrictEqual(r.firstSeen, { height: 42 });
+            assert.strictEqual(r.sync.synced, true);
+            assert.strictEqual(r.sync.lag, 0);
+        });
+
+        it('keeps the sync half when first_seen is null', async function(){
+            let t = new UtxoTracker('localhost', 3005);
+            global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: {
+                first_seen: null,
+                sync: { tracker_height: 10, node_height: 900, lag: 890, synced: false, mempool_ready: false }
+            }});
+
+            let r = await t.getFirstSeenStatus('bc1qtest');
+            assert.strictEqual(r.firstSeen, null, 'a null first_seen must not be invented');
+            assert.strictEqual(r.sync.synced, false, 'the lag signal is the whole point of this call');
+            assert.strictEqual(r.sync.lag, 890);
+        });
+
+        it('carries the halt marker through', async function(){
+            let t = new UtxoTracker('localhost', 3005);
+            global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: {
+                first_seen: null,
+                sync: { tracker_height: 10, node_height: -1, lag: null, synced: false,
+                        mempool_ready: false, halted: true, halt_reason: 'unrecoverable reorg' }
+            }});
+
+            let r = await t.getFirstSeenStatus('bc1qtest');
+            assert.strictEqual(r.sync.halted, true);
+            assert.strictEqual(r.sync.lag, null, 'unknown lag must stay null, never 0');
+        });
+
+        it('normalises a non-numeric height to null, as getFirstSeen does', async function(){
+            let t = new UtxoTracker('localhost', 3005);
+            global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: {
+                first_seen: { height: '42' }, sync: { synced: true, lag: 0 }
+            }});
+
+            let r = await t.getFirstSeenStatus('bc1qtest');
+            assert.strictEqual(r.firstSeen, null);
+        });
+
+        it('reports sync as null when the tracker answered without one', async function(){
+            let t = new UtxoTracker('localhost', 3005);
+            global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: { first_seen: { height: 7 } } });
+
+            let r = await t.getFirstSeenStatus('bc1qtest');
+            assert.deepStrictEqual(r.firstSeen, { height: 7 });
+            assert.strictEqual(r.sync, null);
+        });
+
+        it('throws on an RPC error rather than answering a fabricated shape', async function(){
+            let t = new UtxoTracker('localhost', 3005);
+            global.fetch = makeFetch({ jsonrpc: '2.0', id: 1,
+                error: { code: -32601, message: 'Method not found' } });
+
+            await assert.rejects(() => t.getFirstSeenStatus('bc1qtest'), /-32601/);
+        });
+    });
 });

@@ -779,6 +779,98 @@ describe('Dispenser action handler @regression @tier2', function () {
 
                 assert.ok(data['STATUS'].includes('GET_ADDRESS') && data['STATUS'].includes('not permitted'));
             });
+
+            // get_first_seen answers the same null for "never appeared" and for "this
+            // tracker has not indexed that far yet / is halted", so a fresh-by-null
+            // verdict computed against a lagging tracker is a false positive with no
+            // trace. These pin the diagnostic that records it, and pin that it stays a
+            // diagnostic: the verdict is replay-frozen and must not move.
+            async function runBelowGateFresh(tracker) {
+                indexer.indexerDb.getAddressPreferences
+                    .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
+                    .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
+                mainnetBelowGateCtx();
+                actionsCtx.utxoTracker = tracker;
+                dispenser = new Dispenser(actionsCtx);
+
+                const logged = [];
+                sinon.stub(console, 'log').callsFake((...args) => { logged.push(args.join(' ')); });
+
+                const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
+                const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC', BLOCK_INDEX: 500 });
+                await dispenser.parse(params, data, false);
+
+                return { status: data['STATUS'], stale: logged.filter(l => l.includes('DISPENSER_FRESHNESS_STALE')) };
+            }
+
+            const SYNCED   = { tracker_height: 500, node_height: 500, lag: 0, synced: true, mempool_ready: true };
+            const LAGGING  = { tracker_height: 10, node_height: 500, lag: 490, synced: false, mempool_ready: false };
+            const HALTED   = { tracker_height: 10, node_height: -1, lag: null, synced: false,
+                               mempool_ready: false, halted: true, halt_reason: 'unrecoverable reorg' };
+
+            it('records a fresh verdict that rests on a lagging tracker, without changing it', async function () {
+                const r = await runBelowGateFresh({
+                    enabled: true,
+                    getFirstSeen:       sinon.stub().resolves(null),
+                    getFirstSeenStatus: sinon.stub().resolves({ firstSeen: null, sync: LAGGING }),
+                });
+                assert.strictEqual(r.status, 'valid', 'the replay-frozen verdict must not move');
+                assert.strictEqual(r.stale.length, 1, 'a stale-fresh grant must leave a trace');
+                assert.ok(r.stale[0].includes('lag=490') && r.stale[0].includes('synced=false'));
+            });
+
+            it('records a fresh verdict that rests on a halted tracker', async function () {
+                const r = await runBelowGateFresh({
+                    enabled: true,
+                    getFirstSeen:       sinon.stub().resolves(null),
+                    getFirstSeenStatus: sinon.stub().resolves({ firstSeen: null, sync: HALTED }),
+                });
+                assert.strictEqual(r.status, 'valid');
+                assert.strictEqual(r.stale.length, 1);
+                assert.ok(r.stale[0].includes('halted=true') && r.stale[0].includes('lag=null'));
+            });
+
+            it('stays silent when the tracker vouches for the null answer', async function () {
+                const r = await runBelowGateFresh({
+                    enabled: true,
+                    getFirstSeen:       sinon.stub().resolves(null),
+                    getFirstSeenStatus: sinon.stub().resolves({ firstSeen: null, sync: SYNCED }),
+                });
+                assert.strictEqual(r.status, 'valid');
+                assert.strictEqual(r.stale.length, 0, 'a synced tracker is not a stale grant');
+            });
+
+            it('never probes when the verdict did not rest on a null answer', async function () {
+                const getFirstSeenStatus = sinon.stub().resolves({ firstSeen: null, sync: LAGGING });
+                const r = await runBelowGateFresh({
+                    enabled: true,
+                    getFirstSeen: sinon.stub().resolves({ height: 900 }), // seen later than BLOCK_INDEX
+                    getFirstSeenStatus,
+                });
+                assert.strictEqual(r.status, 'valid', 'first-seen above BLOCK_INDEX is still fresh');
+                assert.ok(getFirstSeenStatus.notCalled, 'a non-null answer needs no lag probe');
+                assert.strictEqual(r.stale.length, 0);
+            });
+
+            it('leaves the verdict alone when the probe itself fails or is unsupported', async function () {
+                const thrown = await runBelowGateFresh({
+                    enabled: true,
+                    getFirstSeen:       sinon.stub().resolves(null),
+                    getFirstSeenStatus: sinon.stub().rejects(new Error('UTXO tracker RPC error: {"code":-32601}')),
+                });
+                assert.strictEqual(thrown.status, 'valid', 'a -32601 must never become a rejection');
+                assert.strictEqual(thrown.stale.length, 0);
+
+                sinon.restore();
+
+                // A tracker client predating the sibling: no method at all.
+                const absent = await runBelowGateFresh({
+                    enabled: true,
+                    getFirstSeen: sinon.stub().resolves(null),
+                });
+                assert.strictEqual(absent.status, 'valid');
+                assert.strictEqual(absent.stale.length, 0);
+            });
         });
     });
 

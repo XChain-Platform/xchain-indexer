@@ -228,12 +228,17 @@ class Dispense {
                     // is floored exactly ONCE; see the note on reverseOraclePriceMatch. Fall
                     // back to .units when the matcher did not supply it.
                     //
-                    // Two guards, both of which would otherwise be a divide-by-zero on a
-                    // legal dispenser: GIVE_AMOUNT is empty/NULL on an ownership dispenser
-                    // (which dispenses the ownership record itself, not a token quantity, and
-                    // is capped to a single fill below anyway), and bcdiv returns 0 on a zero
-                    // divisor, which would silently reject every dispense as insufficient
-                    // funds instead of leaving the legacy behavior in place.
+                    // The giveAmountPositive guard is for a BALANCE dispenser carrying an
+                    // empty or '0' GIVE_AMOUNT, which a format-0 create still accepts below
+                    // dispenser_give_amount_activation (mainnet still on the UNARMED
+                    // sentinel). bcdiv returns 0 on a zero divisor, so dividing there would
+                    // silently reject every such dispense as insufficient funds instead of
+                    // leaving the legacy behavior in place.
+                    //
+                    // An ownership dispenser is NOT that case. `dispenser` reaches this
+                    // handler only from getDispenserInfo, which virtualizes GIVE_AMOUNT to
+                    // '1' on the GIVE_OWNERSHIP == 1 branch, so giveAmountPositive is always
+                    // true for one and this per-token divide DOES run for it.
                     multiplier = priceMatch.units;
                     let perTokenOracle = await this.actions.protocolChanges.isEnabled('DISPENSER_ORACLE_PER_TOKEN_PRICE', block_index);
                     let giveAmountPositive = !this.util.isNull(dispenser['GIVE_AMOUNT']) &&
@@ -338,9 +343,18 @@ class Dispense {
             // exactly min(multiplier, floor(GIVE_REMAINING / GIVE_AMOUNT)).
             //
             // Two guards keep the rewrite byte-identical on the edges:
-            //   - GIVE_AMOUNT is empty/NULL on an ownership dispenser, where bcmul()
-            //     coerced it to 0 so `0 > GIVE_REMAINING` was false and the loop never
-            //     ran. Skip the clamp there rather than dividing by zero.
+            //   - GIVE_AMOUNT is empty or '0' on a BALANCE dispenser created below
+            //     dispenser_give_amount_activation (mainnet still on the UNARMED
+            //     sentinel), where bcmul() coerced it to 0 so `0 > GIVE_REMAINING` was
+            //     false and the loop never ran. Skip the clamp there rather than
+            //     dividing by zero. An ownership dispenser is NOT that case and must
+            //     not be bypassed here: getDispenserInfo virtualizes its GIVE_AMOUNT to
+            //     '1' and its GIVE_REMAINING to '1' before a dispense / '0' once one is
+            //     recorded, so this clamp DOES run for it and is the second line of
+            //     defense on the single-shot rule - with GIVE_REMAINING '0' it drives
+            //     multiplier to 0 and the check below refuses with 'invalid:
+            //     insufficient funds ', even if the cap above and the DISPENSER_CLOSE
+            //     auto-close both failed to fire.
             //   - capacity is only computed when the overspill test says the multiplier
             //     does NOT fit, which means capacity < multiplier, and multiplier is
             //     already a safe JS integer. So this bcfloor can never be the one that

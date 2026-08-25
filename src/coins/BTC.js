@@ -121,7 +121,7 @@ module.exports = {
                 GAS:             '1XChain3M4uRwcHqt4XuhVBUQ8cL4qQsA',
                 DONATE1:         '1Donate1GERVKPW6GFQcnGeTa8dgL6Abyp', // Protocol Development
                 DONATE2:         '1Donate2LkbBrsanwCVRPWZCXAqQcvcqGz', // Community Development
-                FEE_DESTINATION: '1FeesxM9LTEjBYVTkynK6jfDBgvksuh2WL', // native-fee destination (env-overridable)
+                FEE_DESTINATION: '1FeesxM9LTEjBYVTkynK6jfDBgvksuh2WL', // native-fee destination (regtest-only env override; ignored on mainnet/testnet)
                 REWARD:          '1RewardsRQTXMAytLt4bBQvPEscKsSEXt',  // validator reward pool (COLLECT)
                 EXPLORER:        '1Donate3GBGSZzzrS9U9gUgURYKscAE6Yn', // display-only donation; not read by indexer
             },

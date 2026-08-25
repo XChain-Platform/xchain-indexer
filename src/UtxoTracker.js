@@ -15,10 +15,18 @@
  * XChain Indexer - UTXO Tracker Client
  *
  * Thin JSON-RPC client used by the indexer to query xchain-utxo-tracker.
- * Currently exposes get_first_seen which returns the first block height a
- * given address ever appeared in (or null if it never has). Used by the
- * DISPENSER action to enforce the fresh-address exception against
- * DISPENSER_PREFERENCE.
+ *
+ * getFirstSeen returns the first block height a given address ever appeared in
+ * (or null if it never has). The DISPENSER action uses it to enforce the
+ * fresh-address exception against DISPENSER_PREFERENCE below the freshness
+ * flag-day; that verdict is replay-frozen, and this wire shape is frozen with it.
+ *
+ * getFirstSeenStatus is the tracker's freshness-aware sibling: the same
+ * first-seen value plus the tracker's own sync/halt view, so a null first-seen
+ * from a LAGGING or HALTED tracker is distinguishable from an address that has
+ * genuinely never appeared. DIAGNOSTIC USE ONLY. The frozen verdict keeps
+ * reading getFirstSeen, because changing the method a hashed verdict is computed
+ * from is itself a consensus change.
  *
  ********************************************************************/
 
@@ -66,6 +74,20 @@ class UtxoTracker {
         if(typeof result.height !== 'number')
             return null;
         return { height: result.height };
+    }
+
+    // Return { firstSeen, sync }: the same value getFirstSeen would give, plus the
+    // tracker's freshness meta (tracker_height, node_height, lag, synced,
+    // mempool_ready, and halted/halt_reason only while halted). `sync` is null when
+    // the tracker answered without one. Throws on transport / RPC failure, including
+    // the -32601 a tracker deployed before get_first_seen_status answers with; the
+    // caller decides what to do about that, and the one caller today is a
+    // swallow-everything diagnostic.
+    async getFirstSeenStatus(address){
+        let result    = await this._call('get_first_seen_status', { address: address });
+        let raw       = (result && result.first_seen) || null;
+        let firstSeen = (raw && typeof raw.height === 'number') ? { height: raw.height } : null;
+        return { firstSeen: firstSeen, sync: (result && result.sync) || null };
     }
 }
 

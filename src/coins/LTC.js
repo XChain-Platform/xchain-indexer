@@ -72,7 +72,7 @@ module.exports = {
                 GAS:             'LXChainCN6yjHVqqS9tYzYVYZ8CCZcSx72',
                 DONATE1:         'Ldonate18tNZcVThKm5MX33EjvhaanJ6Mg', // Protocol Development
                 DONATE2:         'Ldonate2io846q2e7q8dUArh3TNnaq9ENb', // Community Development
-                FEE_DESTINATION: 'Lfees7tszAx5Gqam2fuqf6biaX3LXafM4H', // native-fee destination (env-overridable)
+                FEE_DESTINATION: 'Lfees7tszAx5Gqam2fuqf6biaX3LXafM4H', // native-fee destination (regtest-only env override; ignored on mainnet/testnet)
                 REWARD:          'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX', // structural only; COLLECT/XCHAIN are BTC-only
                 EXPLORER:        'Ldonate3FfyqbYQAYxo3qjFLcu28oUdAfn', // display-only donation
             },

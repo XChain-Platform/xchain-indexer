@@ -70,6 +70,42 @@ class Dispenser {
         this.listTypes = [2];
     }
 
+    // Report a below-gate fresh-address verdict that rests on a null get_first_seen
+    // from a tracker whose own view is lagging, halted, or of unknown lag.
+    //
+    // Deliberately a SECOND call rather than switching the verdict itself onto
+    // get_first_seen_status: that verdict is replay-frozen (it decides DISPENSER
+    // validity already baked into hashed history), so the call feeding it must not
+    // change method. A tracker deployed before the sibling existed answers -32601,
+    // and the caller's catch turns any throw into isFresh=false, i.e. a rejection
+    // of a create the chain already accepted. This call cannot reach that path: it
+    // runs after the verdict is fixed, swallows everything, and is skipped entirely
+    // when the client has no getFirstSeenStatus.
+    //
+    // Log-only, in the shape of dispenserDivergenceMetrics: no DB write, no
+    // influence on validation, never an input to block hashing.
+    async _logStaleFreshness(data){
+        try {
+            if(!this.utxoTracker || typeof this.utxoTracker.getFirstSeenStatus !== 'function')
+                return;
+            let status = await this.utxoTracker.getFirstSeenStatus(data['GET_ADDRESS']);
+            let sync   = (status && status.sync) || null;
+            // Unknown lag is never treated as zero, and an absent sync surface is
+            // itself untrustworthy: both mean the tracker could not vouch for the
+            // null answer the verdict above rests on.
+            if(sync && sync.synced === true && sync.halted !== true && sync.lag !== null)
+                return;
+            console.log('DISPENSER_FRESHNESS_STALE : addr=' + data['GET_ADDRESS'] +
+                        ' block=' + data['BLOCK_INDEX'] +
+                        ' synced=' + (sync ? sync.synced : 'unknown') +
+                        ' halted=' + (sync ? (sync.halted === true) : 'unknown') +
+                        ' lag=' + (sync ? sync.lag : 'unknown') +
+                        ' tracker_height=' + (sync ? sync.tracker_height : 'unknown'));
+        } catch (e) {
+            // Diagnostic only: a failure here must never disturb the frozen verdict.
+        }
+    }
+
     async parse(params, data, error){
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
@@ -403,6 +439,15 @@ class Dispenser {
                     try {
                         let firstSeen = await this.utxoTracker.getFirstSeen(data['GET_ADDRESS']);
                         isFresh = !firstSeen || firstSeen.height >= data['BLOCK_INDEX'];
+                        // get_first_seen answers null both for "never appeared on chain"
+                        // and for "this tracker has not indexed that far yet, or is halted
+                        // on an unwinding reorg", so a fresh-by-null verdict computed
+                        // against a lagging tracker is a false positive that leaves no
+                        // trace (the catch below only fires on a hard RPC failure, not on
+                        // a stale-but-successful answer). Record when that happened.
+                        // Log-only, and never an input to isFresh.
+                        if(isFresh && !firstSeen)
+                            await this._logStaleFreshness(data);
                     } catch (err) {
                         console.log('WARNING: utxo-tracker get_first_seen failed for ' + data['GET_ADDRESS'] + ': ', err);
                     }

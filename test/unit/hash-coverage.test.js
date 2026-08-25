@@ -279,17 +279,36 @@ describe('Hash coverage guard @regression', function () {
             // shape again, an AUTO_INCREMENT the per-block stream never carries (it names
             // execution_index/emitted_action/action_index/position explicitly). Hashing
             // any of them would turn a by-design difference into a permanent false alarm.
+            // validator_rewards.id is the same class arrived at by a different route: the
+            // row streams with the source id, but the RB-ANCHOR reorg restore re-INSERTs a
+            // deleted loser WITHOUT naming id, so each side mints its own and
+            // ClientApplier.ignoreTables makes that permanent.
             assert.deepStrictEqual(Object.keys(lifecycle.CONTENT_PARITY_EXCLUDED_COLUMNS).sort(),
-                ['blocks', 'contract_emissions', 'contract_state', 'sync_meta']);
+                ['blocks', 'contract_emissions', 'contract_state', 'sync_meta', 'validator_rewards']);
             assert.deepStrictEqual(lifecycle.contentParityExcludedColumns('blocks'), ['id']);
             assert.deepStrictEqual(lifecycle.contentParityExcludedColumns('contract_emissions'), ['id']);
             assert.deepStrictEqual(lifecycle.contentParityExcludedColumns('contract_state'), ['state_key_bin']);
             assert.deepStrictEqual(lifecycle.contentParityExcludedColumns('sync_meta'), ['id', 'logged_at']);
+            assert.deepStrictEqual(lifecycle.contentParityExcludedColumns('validator_rewards'), ['id']);
             assert.ok(/state_key_bin/.test(read('src/sql/contract_state.sql')),
                 'contract_state.state_key_bin is no longer in the schema; the exclusion is stale');
             assert.ok(/id\s+BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY/
                 .test(read('src/sql/contract_emissions.sql')),
                 'contract_emissions.id is no longer a local AUTO_INCREMENT; the exclusion is stale');
+            assert.ok(/id\s+BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY/
+                .test(read('src/sql/validator_rewards.sql')),
+                'validator_rewards.id is no longer a local AUTO_INCREMENT; the exclusion is stale');
+            // The exclusion must not outlive its reason: it is justified ONLY by the
+            // RB-ANCHOR restore minting the id locally on each side. If that INSERT ever
+            // names id, both sides agree again and the column belongs back in the preimage.
+            const rbAnchorInsert = (read('src/rollback.js')
+                .match(/INSERT IGNORE INTO validator_rewards\s*\n?\s*\(([^)]*)\)/) || [])[1];
+            assert.ok(rbAnchorInsert,
+                'the RB-ANCHOR validator_rewards restore INSERT was not found in src/rollback.js; ' +
+                're-check why validator_rewards.id is excluded from the content-parity preimage');
+            assert.ok(!/\bid\b/.test(rbAnchorInsert.replace(/_id\b/g, '')),
+                'the RB-ANCHOR restore now names validator_rewards.id, so the two sides no longer ' +
+                'mint it locally; drop the content-parity exclusion instead of leaving it stale');
             assert.deepStrictEqual(lifecycle.contentParityExcludedColumns('actions'), [],
                 'a table with nothing excluded must hash every column');
         });

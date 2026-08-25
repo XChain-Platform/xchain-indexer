@@ -67,6 +67,17 @@ const HOME_CHAIN = 'BTC';
 // being configured, and BTC is excluded because it needs no relay.
 const ALLOWED_ORIGIN_CHAINS = ['LTC', 'DOGE'];
 
+// request_id preimage fields, in preimage order. This list is the single in-file
+// source of truth for the ORDER and the COUNT, so a skew against the VM's
+// derivation is one visible edit rather than a miscounted string concatenation.
+// Exported and pinned against the canonical xchain-vm GOLDEN_VECTORS.requestId
+// tuple by bin/check-preimage-golden-parity.js, the same way xcall.js pins
+// CALL_ID_PREIMAGE_FIELDS; before this list existed a request_id field skew
+// surfaced only as an opaque hash difference in a unit suite.
+const REQUEST_ID_PREIMAGE_FIELDS = [
+    'TX_HASH', 'ROOT_ACTION_INDEX', 'EMITTER_PATH', 'CONTRACT_INDEX', 'EMITTER_POSITION'
+];
+
 class Attest {
 
     constructor(action){
@@ -98,6 +109,17 @@ class Attest {
         // to how a node without relay support treats an unknown VERSION.
         this.formats[3] = 'VERSION|REQUEST_ID|ORIGIN_CHAIN|ORIGIN_ACTION_INDEX|PROVIDER_ID|REQUEST_PAYLOAD|REDUNDANCY|DEADLINE_BLOCKS|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...';
         this.formats[4] = 'VERSION|REQUEST_ID|HOME_RESPONSE_ACTION_INDEX|RESPONSE_PAYLOAD|STATUS|META|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...';
+    }
+
+    // Stringified request_id preimage values, in REQUEST_ID_PREIMAGE_FIELDS order.
+    // Every field is chain data, so every node derives the same bytes. String() is
+    // the coercion the derivation has always used and is load-bearing on two of
+    // them: CONTRACT_INDEX is deliberately not null-checked here (the caller's
+    // guard chain above decides that), and ROOT_ACTION_INDEX must stay the raw
+    // string, never Number()-coerced, because a BATCH subcommand root is the
+    // composite "<TX_VOUT>.<position>".
+    _requestIdPreimageValues(data){
+        return REQUEST_ID_PREIMAGE_FIELDS.map((f) => String(data[f]));
     }
 
     // Dispatch on VERSION
@@ -234,7 +256,7 @@ class Attest {
             } else if(!data['TX_HASH']){
                 error = 'invalid: TX_HASH (required for request_id derivation)';
             } else {
-                let preimage = String(data['TX_HASH']) + ':' + String(data['ROOT_ACTION_INDEX']) + ':' + String(data['EMITTER_PATH']) + ':' + String(data['CONTRACT_INDEX']) + ':' + String(data['EMITTER_POSITION']);
+                let preimage = this._requestIdPreimageValues(data).join(':');
                 let expected = crypto.createHash('sha256').update(preimage).digest('hex');
                 if(expected !== String(data['REQUEST_ID']).toLowerCase())
                     error = 'invalid: REQUEST_ID (does not match deterministic derivation)';
@@ -1660,3 +1682,4 @@ class Attest {
 }
 
 module.exports = Attest;
+module.exports.REQUEST_ID_PREIMAGE_FIELDS = REQUEST_ID_PREIMAGE_FIELDS;

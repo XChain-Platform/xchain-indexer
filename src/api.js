@@ -1470,8 +1470,8 @@ async function startApi(){
             // checkpoint_seq of a pre-flag-day snapshot_block (RewardTracker), and the
             // legacy dense seq it replaced was strictly smaller still.
             // anchor_archive gets no binding from this: its round is MATCH_BATCH_SEQ, a
-            // dense hub-allocated counter rather than a height, so the leg below still
-            // rests on the wire block_index alone.
+            // dense hub-allocated counter rather than a height. The leg below therefore
+            // takes its second plane from the node's OWN committed tip instead of `round`.
             if(/^anchor_(BTC|LTC|DOGE)$/.test(type) &&
                (ar.isAnchorRewardActive(Number(blockIdx), indexer.config && indexer.config['NETWORK']) ||
                 ar.isAnchorRewardActive(Number(round),    indexer.config && indexer.config['NETWORK'])))
@@ -1483,10 +1483,37 @@ async function startApi(){
             // the insider-with-key forge surface this retires; reject it (the upgraded hub
             // no longer pushes it). The canonicalizer above pins the type's case so no
             // collation-variant can slip this case-sensitive comparison.
-            if(type === 'anchor_archive' &&
-               ar.isArchiveRewardActive(Number(blockIdx), indexer.config && indexer.config['NETWORK']))
-                return { error: 'reward_type anchor_archive at block ' + blockIdx +
-                                ' is derived on-chain from ANCHOR v6; push retired' };
+            //
+            // Two planes here too, for the reason the per-chain leg takes two: block_index
+            // is a key the CALLER supplies, and a key-holder sending 0 read the flag-day as
+            // inactive, got a wire-amount COLLECT-spendable row written, and the MIN(pubkey)
+            // reconcile below then DELETED the derived winner for that round. The archive
+            // leg cannot borrow `round` as the second plane (MATCH_BATCH_SEQ is a dense
+            // counter, not a height), so it takes the node's own committed tip, which no
+            // request body can move. ARCHIVE_REWARD_ACTIVATION is a BTC-anchored
+            // snapshot_block and the hub pushes archive rewards only to the BTC indexer
+            // (RewardTracker._pushRewardsToBtcIndexer), so the tip is a comparable quantity
+            // only there; any other chain refuses the type outright rather than falling back
+            // to the wire plane alone. OR-of-predicates, never a max(): see the note above.
+            if(type === 'anchor_archive'){
+                let chain = String((indexer.config && indexer.config['CHAIN']) || '');
+                if(chain !== 'BTC')
+                    return { error: 'reward_type anchor_archive is not pushable to a ' + (chain || 'chainless') +
+                                    ' indexer (the archive flag-day is BTC-anchored); push retired' };
+                let tip = null;
+                try { tip = await committedView(indexer.indexerDb).getLatestBlockIndex(); }
+                catch (err) { tip = null; }
+                // Fail closed on an unreadable tip: falling through would leave the gate
+                // resting on the caller-supplied plane alone, which is the hole. The wording
+                // deliberately does NOT match RewardTracker.isTerminalPushError, so a
+                // legitimate pre-flag-day push is retried rather than dropped on a blip.
+                if(!Number.isFinite(Number(tip)))
+                    return { error: 'anchor_archive gate could not read the local committed tip; retry' };
+                if(ar.isArchiveRewardActive(Number(blockIdx), indexer.config && indexer.config['NETWORK']) ||
+                   ar.isArchiveRewardActive(Number(tip),      indexer.config && indexer.config['NETWORK']))
+                    return { error: 'reward_type anchor_archive at block ' + blockIdx + ' / tip ' + tip +
+                                    ' is derived on-chain from ANCHOR v6; push retired' };
+            }
             let written = 0;
             let skipped = 0;
             // apiView(): these writes land on an independent pooled connection. A
