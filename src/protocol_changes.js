@@ -88,8 +88,15 @@ const BATCH_ROOT_SUB_INDEX_MAINNET_TIME = 9999999999;
 // live fleet rejected.
 const ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME = 9999999999;
 
-// Testnet: ARMED (operator remedy ruling 2026-08-22, pre-launch) at 1787529600 =
-// 2026-08-24T00:00:00Z. The instant must still be in the FUTURE when this ships: an
+// Testnet: ARMED (operator remedy ruling 2026-08-22, pre-launch) at 1787961600 =
+// 2026-08-29T00:00:00Z. RE-PINNED FORWARD on 2026-08-25 for the v0.11.0 train, per the
+// standing rule below: the original 1787529600 (2026-08-24T00:00:00Z) had lapsed before
+// this code shipped, so the live fleet would have applied the legacy rule past it while a
+// from-genesis replay applied the new one. The remedy is unchanged and needs no re-ruling;
+// only the instant moves, and the fresh 2026-08-24 testnet genesis makes the original
+// reason for a future instant (BTC testnet4's recorded rejection at block 149546) moot,
+// since that block is now below every chain's first indexed block.
+// The instant must still be in the FUTURE when this ships: an
 // activation already past is not a flag day at all, because the fleet applies the
 // legacy rule beyond it while a from-genesis replay applies the new one, and the two
 // diverge at the first comparison. Re-pin this constant forward if it lapses.
@@ -103,7 +110,7 @@ const ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME = 9999999999;
 // before the instant; testnet4 tips may carry timestamps up to ~2h ahead of wall clock,
 // so the deploy needs to land with that margin. Regtest stays genesis-active (0): suites
 // and regtest venues exercise the corrected rule from block 0.
-const ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME = 1787529600;
+const ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME = 1787961600;
 
 // Mainnet arm for BATCH_ISSUANCE_LIMITS, the BATCH issuance rework: the dotted-TICK
 // exemption that lets one BATCH carry a parent plus any number of child ISSUEs, the global

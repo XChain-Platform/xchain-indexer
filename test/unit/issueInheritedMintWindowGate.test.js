@@ -163,9 +163,9 @@ describe('ISSUE_INHERITED_MINT_WINDOW gate @regression @tier2', function () {
         assert.strictEqual(ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME, 9999999999);
     });
 
-    it('testnet arm is the ratified 2026-08-24T00:00:00Z instant', function () {
-        assert.strictEqual(ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME, 1787529600);
+    it('testnet arm is the ratified instant, re-pinned forward to 2026-08-29T00:00:00Z', function () {
+        assert.strictEqual(ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME, 1787961600);
         assert.strictEqual(new Date(ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME * 1000).toISOString(),
-            '2026-08-24T00:00:00.000Z');
+            '2026-08-29T00:00:00.000Z');
     });
 });
