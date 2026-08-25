@@ -87,14 +87,35 @@ describe('flag-day placeholder guard @regression @tier1', function () {
         }
     });
 
-    it('no timestamp gate besides the CONFIRMED royalty create-side carries 1798761600', function () {
+    // 1798761600 is BOTH the retired placeholder value AND the confirmed 2027-01-01
+    // coordinated window, so this guard cannot tell "parked on the placeholder" from
+    // "deliberately co-scheduled" by the number alone. It distinguishes them by NAME:
+    // every entry allowed to sit there is listed here with why, and anything else is a
+    // placeholder regression that fails CI.
+    const CONFIRMED_1798761600 = [
+        // The one-quarter-after-CONTROLLER_GUARD deny window, confirmed by design
+        // (flag-day inventory, Decision 5).
+        'CROSS_CHAIN_ROYALTY',
+        // Destructuring-rest metering + the deploy rejection of the unmeterable rest
+        // positions. It CANNOT ride the 2026-08-07 contract-era anchor the way
+        // VM_LINT_HARDENING does: that instant has already passed, and arming a
+        // gas-moving rule on a past timestamp re-prices every rest destructure that has
+        // already executed, so a from-genesis replay disagrees with a long-running node
+        // at the first hash comparison. It therefore needs a FUTURE instant, and it takes
+        // the already-CONFIRMED one above rather than minting an unscheduled second
+        // coordination event. Its VM twin (REST_PATTERN_METER_GATE_BLOCK_TIME) is pinned
+        // to this same value by the cross-repo guard in consensus-params.test.js.
+        'REST_PATTERN_METER',
+    ];
+
+    it('no timestamp gate besides the CONFIRMED 1798761600 entries carries 1798761600', function () {
         const lines = pcSource.split('\n')
             .filter(l => l.includes(String(ROYALTY_CREATE_SIDE)))
             .filter(l => /this\.addChange\(/.test(l));
-        assert.strictEqual(lines.length, 1,
-            'exactly one addChange may sit at 1798761600 (the royalty create-side deny window); got: ' + lines.join(' | '));
-        assert.ok(lines[0].includes('CROSS_CHAIN_ROYALTY'),
-            'the surviving 1798761600 entry must be CROSS_CHAIN_ROYALTY');
+        const names = lines.map(l => (l.match(/addChange\('([A-Z0-9_]+)'/) || [])[1]);
+        assert.deepStrictEqual(names.slice().sort(), CONFIRMED_1798761600.slice().sort(),
+            'only the named CONFIRMED entries may sit at 1798761600 (everything else is a ' +
+            'placeholder regression); got: ' + lines.join(' | '));
     });
 
     it('ARCHIVE_REWARD_ACTIVATION is armed at the derived BTC height (983000 placeholder gone)', function () {
