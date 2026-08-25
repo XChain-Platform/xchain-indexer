@@ -187,8 +187,8 @@ function isArchiveRewardActive(snapshotBlock, network){
 //
 // PRE-ARMING DEPLOY STEP (already fixed in code): a derived reward earns at
 // the checkpoint's snapshot_block but materializes at a later BTC block, and
-// the reorg delete used to scope only on the earn-block, leaving a
-// COLLECT-spendable reward a from-genesis replay had not derived yet.
+// a reorg delete scoped only on the earn-block leaves a COLLECT-spendable
+// reward a from-genesis replay has not derived yet.
 // validator_rewards now also carries derive_block_index, and rollback deletes
 // on both keys. On the INDEXER side the schema half needs no fleet coordination:
 // the columns and the index are declared in xchain-indexer/src/sql/
