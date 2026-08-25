@@ -122,7 +122,7 @@ module.exports = {
                 DONATE1:         '1Donate1GERVKPW6GFQcnGeTa8dgL6Abyp', // Protocol Development
                 DONATE2:         '1Donate2LkbBrsanwCVRPWZCXAqQcvcqGz', // Community Development
                 FEE_DESTINATION: '1FeesxM9LTEjBYVTkynK6jfDBgvksuh2WL', // native-fee destination (env-overridable)
-                REWARD:          '1rewardsZAyeuLeFJKoAepYiNN5N6uSzn',  // validator reward pool (COLLECT)
+                REWARD:          '1RewardsRQTXMAytLt4bBQvPEscKsSEXt',  // validator reward pool (COLLECT)
                 EXPLORER:        '1Donate3GBGSZzzrS9U9gUgURYKscAE6Yn', // display-only donation; not read by indexer
             },
             // Genesis ledger bootstrap pin (Counterparty name carry-forward).
