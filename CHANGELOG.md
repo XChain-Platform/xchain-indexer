@@ -15,6 +15,7 @@ points; behavior below each activation height is unchanged.
 - A migration guard rejects any additive migration that would widen an indexed column past the key length limit.
 
 ### Changed
+- On testnet, protocol time is read from median-time-past rather than the block's own timestamp, so a block stamped ahead of the clock is indexed when it arrives instead of waiting for the clock to catch up. Mainnet and regtest keep the block timestamp and are unchanged.
 - Updated the BTC mainnet reward pool address.
 - Synced the testnet genesis coin registry to its latest values.
 
