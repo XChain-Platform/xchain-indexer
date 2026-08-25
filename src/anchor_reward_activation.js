@@ -155,12 +155,18 @@ function isArchiveRewardActive(snapshotBlock, network){
 // the reorg delete used to scope only on the earn-block, leaving a
 // COLLECT-spendable reward a from-genesis replay had not derived yet.
 // validator_rewards now also carries derive_block_index, and rollback deletes
-// on both keys. This is a schema change on a table xchain-sync replicates to
-// validators: apply the matching migration
-// (src/sql/migrations/2026-08-12-validator-rewards-derive-block-index.sql)
-// fleet-wide before ratifying a mainnet/testnet height, or a lagging node
-// keeps the old earn-block-only scoping and forks the COLLECT rail after a
-// reorg.
+// on both keys. On the INDEXER side the schema half needs no fleet coordination:
+// the columns and the index are declared in xchain-indexer/src/sql/
+// validator_rewards.sql and .../anchor_reward_reconcile_log.sql, and the startup
+// drift reconciler converges them before runMigrations runs, so any node that
+// boots this build has them (the dated migration
+// 2026-08-12-validator-rewards-derive-block-index.sql remains the explicit apply
+// path, and the runner baselines it once that shape is present). What must
+// actually be true fleet-wide before ratifying a mainnet/testnet height is the
+// BINARY half: every node running a build whose rollback scopes the delete on
+// both keys. A node on an older build has the columns and still scopes on the
+// earn-block alone, and forks the COLLECT rail after a reorg. The migration
+// ledger never enforced that; the deploy does.
 //
 // TESTNET IS ARMED AT 0 (operator ruling 2026-08-11, applied 2026-08-14). The
 // deploy-first-then-flip window this table was held null for is a MAINNET
@@ -173,11 +179,14 @@ function isArchiveRewardActive(snapshotBlock, network){
 // mainnet ratifies a height. Mainnet stays null until the operator picks one.
 //
 // TESTNET DEPLOY ORDER, unchanged by the arming: every testnet hub and indexer
-// must carry BOTH schema migrations
+// must carry the schema of BOTH
 // (2026-08-12-validator-rewards-derive-block-index.sql and
 // 2026-08-13-anchor-reward-attestations-doge-anchor-txid.sql) before it processes
-// an anchor, since a node on the old schema scopes the reorg delete on the
-// earn-block alone and cannot bind the mined-anchor txid.
+// an anchor, since a node on the old schema cannot record the materialization
+// block or bind the mined-anchor txid. Read that as a DEPLOY requirement, not a
+// ledger one: on a BTC indexer the derive columns arrive with the build (see the
+// pre-arming note above), so what to check before an anchor is which build each
+// host runs, not which rows its schema_migrations happens to hold.
 const ANCHOR_REWARD_DERIVE_ACTIVATION = {
     mainnet: null,        // INERT placeholder: the operator owns this height; the three blockers above have landed, ratification has not
     testnet: 0,           // ARMED at genesis 2026-08-14 per the 2026-08-11 operator ruling; see the testnet note above

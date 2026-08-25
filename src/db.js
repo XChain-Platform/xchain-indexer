@@ -15865,6 +15865,21 @@ Database.MIGRATION_CHECKSUM_REBASELINES = {
         from: '0f8f54622b7022134b140d1f68a86ea91d763c6a51e9886ee0b741961df34dc7',
         to:   'ecb9c206ebda43ba932603d60d6d470ab47704db428ff81f42d16c36b983acbb',
     },
+    // The header claimed mode=manual coordinated the fleet; it cannot (the drift
+    // reconciler converges all three objects at verifyTables(), before runMigrations()
+    // reads the gate), so the WHY/mode block was rewritten to state what the tag does
+    // and does not do. Comment lines only: the three ALTER TABLE statements are
+    // byte-identical, verified by comparing the comment-stripped residue. Both of the
+    // file's pre-current committed revisions are listed - afee252f (the original) and
+    // 758fc1db (a comment cleanup) - since each fleet DB recorded whichever it applied
+    // first; on any database that never applied the file by hand the entry is inert.
+    '2026-08-12-validator-rewards-derive-block-index.sql': {
+        from: [
+            '8f6f8b6bae2026128b0b298892fc0b5601a67f2ff12cc05fb4da9ae9cfdd1100', // afee252f, as authored
+            '8496c4f75647ad9768d8128e8f9341e3d4de9a1db5ca2f66d4328762ab0a9ec3', // 758fc1db, comment cleanup
+        ],
+        to: 'a911c38ca928743bb65c763c8143a5a3ad63de18da72b32da83a4971c1735ed8',
+    },
 };
 
 // Applicability preconditions the runner evaluates against the LIVE schema before it
@@ -15903,6 +15918,48 @@ Database.MIGRATION_PRECONDITIONS = {
             if(Number.isNaN(len)) return null;
             if(len >= 130) return 'pubkeys.pubkey is already ' + len + ' characters wide, so there is no narrow column to widen.';
             return null;
+        }
+    },
+    // Adds validator_rewards.derive_block_index (+ its index) and
+    // anchor_reward_reconcile_log.reward_derive_block_index. It is mode=manual, but
+    // unlike the surrogate-key case alterTableForDrift documents as its BLIND SPOT
+    // (AUTO_INCREMENT / PRIMARY KEY), the drift reconciler CAN converge every object
+    // it adds: both columns are nullable-with-DEFAULT in
+    // src/sql/validator_rewards.sql and src/sql/anchor_reward_reconcile_log.sql (so
+    // alterTableForDrift ADDs them rather than hitting the NOT-NULL-no-DEFAULT skip),
+    // and the index is non-unique (so reconcileTableIndexes adds it unconditionally).
+    // verifyTables() runs before runMigrations() at startup, so on a fresh or aged
+    // install the end state is already in place by the time this file is read. The
+    // ledger row records what is true there; without it the file sits PENDING with no
+    // row forever and every operator run re-lists a no-op.
+    //
+    // ONE bind parameter: _migrationPreconditionSkip passes [this.dbName] and nothing
+    // else, so the database name is bound once in a CTE and reused by each subquery.
+    //
+    // A partially converged or unreadable schema is deliberately NOT baselined: any
+    // missing object, or a count that will not parse, returns null and the file runs,
+    // which is idempotent (IF NOT EXISTS throughout) on whatever is already there.
+    '2026-08-12-validator-rewards-derive-block-index.sql': {
+        sql: "WITH p AS (SELECT ? AS db) SELECT " +
+             "(SELECT COUNT(*) FROM information_schema.columns, p WHERE table_schema = p.db " +
+             "AND table_name = 'validator_rewards' AND column_name = 'derive_block_index') AS reward_col, " +
+             "(SELECT COUNT(*) FROM information_schema.columns, p WHERE table_schema = p.db " +
+             "AND table_name = 'anchor_reward_reconcile_log' AND column_name = 'reward_derive_block_index') AS log_col, " +
+             "(SELECT COUNT(*) FROM information_schema.statistics, p WHERE table_schema = p.db " +
+             "AND table_name = 'validator_rewards' AND column_name = 'derive_block_index') AS reward_idx",
+        skipWhen: (rows) => {
+            if(!rows.length) return null;
+            const row = rows[0] || {};
+            const counts = [row.reward_col, row.log_col, row.reward_idx];
+            for(const raw of counts){
+                if(raw == null) return null;
+                const n = Number(raw);
+                if(Number.isNaN(n) || n < 1) return null;
+            }
+            return 'validator_rewards.derive_block_index (with its index) and ' +
+                   'anchor_reward_reconcile_log.reward_derive_block_index are already present, ' +
+                   'converged from the table definitions by the startup drift reconciler, so this ' +
+                   'migration has nothing left to add.';
         }
     },
 };

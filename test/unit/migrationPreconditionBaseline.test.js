@@ -85,6 +85,93 @@ describe('Database.MIGRATION_PRECONDITIONS[pubkeys widen] @regression @tier1', f
     });
 });
 
+const DERIVE_FILE = '2026-08-12-validator-rewards-derive-block-index.sql';
+
+describe('Database.MIGRATION_PRECONDITIONS[validator-rewards derive_block_index] @regression @tier1', function () {
+
+    const pre = Database.MIGRATION_PRECONDITIONS[DERIVE_FILE];
+    const present = { reward_col: 1, log_col: 1, reward_idx: 1 };
+
+    it('is registered', function () {
+        assert.ok(pre, DERIVE_FILE + ' must have a MIGRATION_PRECONDITIONS entry');
+        assert.strictEqual(typeof pre.sql, 'string');
+        assert.strictEqual(typeof pre.skipWhen, 'function');
+    });
+
+    it('binds the database name EXACTLY once (_migrationPreconditionSkip passes one parameter)', function () {
+        assert.strictEqual((pre.sql.match(/\?/g) || []).length, 1,
+            'the precondition query must carry exactly one bind parameter');
+        assert.match(pre.sql, /SELECT \? AS db/);
+        assert.match(pre.sql, /table_schema = p\.db/);
+    });
+
+    it('names both columns and the index it gates', function () {
+        assert.match(pre.sql, /information_schema\.columns/i);
+        assert.match(pre.sql, /information_schema\.statistics/i);
+        assert.match(pre.sql, /table_name = 'validator_rewards'/);
+        assert.match(pre.sql, /column_name = 'derive_block_index'/);
+        assert.match(pre.sql, /table_name = 'anchor_reward_reconcile_log'/);
+        assert.match(pre.sql, /column_name = 'reward_derive_block_index'/);
+    });
+
+    it('baselines when both columns and the index are present', function () {
+        const reason = pre.skipWhen([present]);
+        assert.ok(reason, 'expected a skip reason when the converged shape is fully present');
+        assert.match(reason, /derive_block_index/);
+    });
+
+    it('does NOT baseline when the reward column is missing', function () {
+        assert.strictEqual(pre.skipWhen([{ ...present, reward_col: 0 }]), null);
+    });
+
+    it('does NOT baseline when the reconcile-log column is missing', function () {
+        assert.strictEqual(pre.skipWhen([{ ...present, log_col: 0 }]), null);
+    });
+
+    it('does NOT baseline when the index is missing (column added, index not yet reconciled)', function () {
+        assert.strictEqual(pre.skipWhen([{ ...present, reward_idx: 0 }]), null);
+    });
+
+    it('does NOT baseline on an empty result set', function () {
+        assert.strictEqual(pre.skipWhen([]), null);
+    });
+
+    it('does NOT baseline when a count is NULL (unreadable)', function () {
+        assert.strictEqual(pre.skipWhen([{ ...present, log_col: null }]), null);
+    });
+
+    it('does NOT baseline when a count is unparsable', function () {
+        assert.strictEqual(pre.skipWhen([{ ...present, reward_idx: 'not-a-number' }]), null);
+    });
+});
+
+// The header rewrite changed the file's sha256, which is its identity in
+// schema_migrations, so every DB that applied a prior revision must heal rather
+// than fail the immutability guard forever.
+describe('MIGRATION_CHECKSUM_REBASELINES[validator-rewards derive_block_index] @regression @tier1', function () {
+
+    const fs     = require('fs');
+    const path   = require('path');
+    const crypto = require('crypto');
+
+    it('pins the current file content as `to`', function () {
+        const entry = Database.MIGRATION_CHECKSUM_REBASELINES[DERIVE_FILE];
+        assert.ok(entry, DERIVE_FILE + ' must have a checksum rebaseline entry');
+        const raw = fs.readFileSync(
+            path.join(__dirname, '..', '..', 'src', 'sql', 'migrations', DERIVE_FILE), 'utf8');
+        assert.strictEqual(entry.to, crypto.createHash('sha256').update(raw).digest('hex'),
+            '`to` must be the sha256 of the file as committed');
+    });
+
+    it('lists every prior revision in `from`, and never the current hash', function () {
+        const entry = Database.MIGRATION_CHECKSUM_REBASELINES[DERIVE_FILE];
+        const from  = [].concat(entry.from);
+        assert.ok(from.length >= 1);
+        assert.ok(!from.includes(entry.to), '`from` must not contain the current hash');
+        for (const h of from) assert.match(h, /^[0-9a-f]{64}$/);
+    });
+});
+
 describe('Database._migrationPreconditionSkip() @regression @tier1', function () {
 
     // Bind to a bare object carrying only what the method reads: dbName is the

@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - A migration whose end state already holds is recorded as applied without running its statement, so a database built fresh from the schema files no longer leaves it pending forever.
+- The validator-reward derive-block migration is recorded as applied where its columns and index are already present, and its header no longer claims a fleet-coordination guarantee the schema reconciler already makes moot.
 - A token can be re-issued to change its parameters after its mint window has opened; the mint-window recency checks now apply only to values the issuance itself supplies (activation-gated).
 - A dispenser naming a user oracle is checked for an effective oracle price on create even when it escrows nothing. The check previously ran only as part of the escrow-sized usage-fee calculation, so an ownership dispenser — which must escrow nothing and cannot be refilled — opened against an oracle that had published nothing, locking the ticker's ownership behind a dispenser that could never settle (activation-gated).
 

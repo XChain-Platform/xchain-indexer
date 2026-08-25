@@ -22,20 +22,30 @@
 -- (reward_derive_block_index) so the restore can require BOTH to survive.
 --
 -- CONSENSUS-RELEVANT SURFACE, NOT A CONSENSUS CHANGE. validator_rewards is COLLECT-
--- spendable and is replicated to validators by xchain-sync (stream:block), so this is a
--- coordinated FLEET migration: apply it everywhere BEFORE any ANCHOR_REWARD_DERIVE_
--- ACTIVATION height is ratified on mainnet/testnet. It is byte-neutral while that gate
--- is inert: no derived reward exists, so every column added here stays NULL and every
--- new rollback predicate is a no-op. Snapshot-bootstrapped replicas inherit the columns
--- from the source's SHOW CREATE TABLE; replicas converged by replaying migrations alone
--- need this file applied.
+-- spendable and is replicated to validators by xchain-sync (stream:block). It is
+-- byte-neutral while ANCHOR_REWARD_DERIVE_ACTIVATION is inert: no derived reward exists,
+-- so every column added here stays NULL and every new rollback predicate is a no-op.
+-- Snapshot-bootstrapped replicas inherit the columns from the source's SHOW CREATE TABLE.
 --
--- mode=manual on purpose. It is additive and idempotent (IF NOT EXISTS throughout), but
--- it retimes when a reward row disappears on reorg on a table validators replicate, so
--- the operator lands it deliberately across the fleet rather than having a rolling
--- restart apply it on some nodes and not others. The startup drift reconciler
--- (alterTableForDrift) converges a fresh/aged install from src/sql/*.sql independently,
--- so a node that never runs this file still ends up with the same schema.
+-- HOW THE SCHEMA ACTUALLY ARRIVES. Every object this file adds is also declared in
+-- src/sql/validator_rewards.sql (derive_block_index + its index) and
+-- src/sql/anchor_reward_reconcile_log.sql (reward_derive_block_index), as
+-- nullable-with-DEFAULT columns and a non-unique index. verifyTables() runs BEFORE
+-- runMigrations() at startup, so the drift reconciler converges all three on any node
+-- that boots this build, whether or not anyone runs this file. mode=manual therefore
+-- does NOT hold the change back across the fleet, and must not be read as if it did:
+-- it keeps this file the explicit, auditable apply path for a database an operator
+-- converges by replaying migrations alone. Where the converged shape is already
+-- present, Database.MIGRATION_PRECONDITIONS baselines this file - the runner records
+-- it as applied without executing a statement, so the ledger states what is true
+-- instead of listing a permanent no-op as outstanding work.
+--
+-- WHAT THE FLEET ACTUALLY HAS TO AGREE ON, before any ANCHOR_REWARD_DERIVE_ACTIVATION
+-- height is ratified on mainnet/testnet, is a BINARY property, not a ledger row: every
+-- node must run a build whose reorg rollback scopes the reward delete on BOTH
+-- block_index and derive_block_index. A node on an older build has the columns (the
+-- reconciler gave them to it) and still scopes the delete on the earn-block alone. No
+-- migration ledger ever enforced that, and this file cannot; the deploy is what does.
 --
 -- HOW TO RUN
 --   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-08-12-validator-rewards-derive-block-index.sql
