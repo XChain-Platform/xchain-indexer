@@ -910,36 +910,6 @@ class ProtocolChanges {
         // a fork.
         this.addChange('VM_LINT_HARDENING', '0.2.0',1786060800,0,0,0,0,0);
 
-        // VM destructuring-REST metering, plus the deploy rejection of the rest positions
-        // that metering cannot reach. The VM's allocator transform dispatched purely on
-        // EXPRESSION node types (ArrayExpression/ObjectExpression carrying a SpreadElement),
-        // but a destructuring rest is an ArrayPattern/ObjectPattern carrying a RestElement,
-        // so it matched no branch: `var [...c] = bigArr` performed an unbounded native O(n)
-        // copy for a flat 1 gas. A loop of such copies re-copies a source that was charged
-        // ONCE at build, which decouples native CPU from gas and makes a run's
-        // success-vs-wall-clock-timeout depend on how fast the executing validator is.
-        // Same failure mode CALL_SPREAD_METER closed, one AST dispatch away.
-        //
-        // At/above this activation the VM charges the copy by element/own-key count
-        // (gasUsed -> contract_hash -> fee debit) and the deploy validator REJECTS the four
-        // unmeterable rest positions (parameter lists, rest nested inside another pattern,
-        // catch-clause rest, for-of/for-in heads). Both halves are consensus-visible, so an
-        // ungated flip forks a heterogeneous fleet on the first rest-using EXECUTE/DEPLOY.
-        // deploy.js threads the resolved activation into
-        // vm.validateSyntax(code, {enforceBannedRest}); the execution-side metering is gated
-        // VM-side on this same block time (xchain-vm REST_PATTERN_METER_GATE_BLOCK_TIME),
-        // and the consensus-params suites in both repos pin the two to equality.
-        //
-        // ARMED SEPARATELY, NOT ON THE CONTRACT-ERA FLAG DAY. 1786060800 (2026-08-07) is
-        // already in the PAST, so riding it would retroactively re-price every rest
-        // destructure that has already executed and rewrite settled gasUsed on any replay.
-        // This takes the next scheduled coordinated instant instead, the one
-        // CROSS_CHAIN_ROYALTY above already carries (2027-01-01 00:00:00 UTC), so the fleet
-        // has one coordination event rather than two. testnet/regtest activate at genesis
-        // (both are pre-launch, wiped-and-replayed, with no history to preserve). A
-        // divergent value is a fork.
-        this.addChange('REST_PATTERN_METER', '0.2.0',1798761600,0,0,0,0,0);
-
         // ISSUE validity: strict LOCK_MAX_SUPPLY guard. Before this activation the guard used
         // a truthy check, so an explicit LOCK_MAX_SUPPLY=0 field (a no-op lock intent with no
         // cap declared) incorrectly triggered the 'invalid: LOCK_MAX_SUPPLY (no max supply)'

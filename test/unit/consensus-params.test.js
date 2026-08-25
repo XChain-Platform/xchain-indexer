@@ -55,7 +55,7 @@ const GOLDEN_GAS_SCHEDULE = {
     VM_EMISSION:        500,
     VM_COMPUTATION:     1
 };
-const EXPECTED_VM_CONSENSUS_VERSION = '4';
+const EXPECTED_VM_CONSENSUS_VERSION = '3';
 // Frozen digest of the bundled VM's deploy/execution contract surface, asserted in
 // lockstep with the version above. Any change to the sandbox strip set or the deploy
 // validator's CONSENSUS_RULES must bump EXPECTED_VM_CONSENSUS_VERSION (and the VM's
@@ -71,15 +71,9 @@ const EXPECTED_VM_STRIPPED_GLOBAL_NAMES = [
     'clearInterval', 'clearTimeout', 'fetch', 'performance', 'queueMicrotask',
     'setImmediate', 'setInterval', 'setTimeout', 'structuredClone'
 ];
-// Epoch 4 added 'banned-rest': the deploy half of REST_PATTERN_METER, rejecting the
-// destructuring-rest positions the VM's allocator meter cannot charge (parameter lists,
-// nested rest, catch-clause rest, for-of/for-in heads). deploy.js threads its resolved
-// activation as enforceBannedRest, so below the flag-day the rule is dropped and the
-// historical verdict replays byte-identically.
 const EXPECTED_VM_CONSENSUS_RULES = [
     'banned-async', 'banned-generator', 'banned-literal', 'banned-math',
-    'banned-rest', 'banned-wasm', 'invalid-type', 'reserved-identifier',
-    'unsupported-syntax'
+    'banned-wasm', 'invalid-type', 'reserved-identifier', 'unsupported-syntax'
 ];
 // The sandbox neuters more than the global strip set: prototype-method strips
 // (regex + locale/ICU), the prototype .constructor neuters, and the SafeMath
@@ -361,50 +355,6 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
             assert.strictEqual(vm[gate], pc.VM_BANNED_ASYNC_MAINNET_TIME,
                 'xchain-vm ' + gate + ' != indexer VM_BANNED_ASYNC mainnet_time; update both repos in lockstep (one-sided edit forks the fleet at the flag-day)');
         }
-    });
-
-    it('the VM REST_PATTERN_METER flag-day matches the indexer protocol_changes entry (cross-repo byte-gate)', function(){
-        // REST_PATTERN_METER is deliberately NOT in GATE_EXPORTS above: that list pins the
-        // gates that share the coordinated 2.0.0 instant (VM_BANNED_ASYNC_MAINNET_TIME),
-        // and 1786060800 is already in the PAST. Riding it would retroactively re-price
-        // every destructuring rest that has already executed, so this change is armed on
-        // its own FUTURE instant and needs its own lockstep pin.
-        //
-        // The two halves are: the VM gating the metering rewrite (rest SOURCE wrapped in
-        // __arrspread/__objspreadmeter, which moves gasUsed -> contract_hash -> fee debit)
-        // and the indexer gating the deploy rejection of the unmeterable rest positions
-        // (deploy.js enforceBannedRest). A one-sided repin passes BOTH CIs and forks the
-        // fleet at whichever activation comes first, so assert byte-identity here as well
-        // as in the VM's own consensus-params suite.
-        const { vm, full, pkgErr } = resolveVmConsensus();
-        if(!vm || !full){
-            if(process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                assert.fail('XCHAIN_REQUIRE_SIBLINGS=1 but xchain-vm did not resolve to its full package surface (stale/absent vendored VM): ' + (pkgErr ? String(pkgErr.message) : 'package not present'));
-            this.skip(); return;
-        }
-        assert.notStrictEqual(vm.REST_PATTERN_METER_GATE_BLOCK_TIME, undefined,
-            'xchain-vm did not export REST_PATTERN_METER_GATE_BLOCK_TIME (stale vendored copy? run npm run vendor:vm)');
-        // Read the indexer literal from the protocol_changes SOURCE rather than
-        // instantiating ProtocolChanges (whose constructor needs the utility module):
-        // the registry entry is the consensus artifact, and exactly one must exist.
-        const fs = require('fs'), path = require('path');
-        const src = fs.readFileSync(path.resolve(__dirname, '../../src/protocol_changes.js'), 'utf8');
-        const all = [...src.matchAll(/addChange\(\s*'REST_PATTERN_METER'\s*,\s*'[^']+'\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/g)];
-        assert.strictEqual(all.length, 1,
-            'expected exactly one REST_PATTERN_METER addChange in protocol_changes.js, found ' + all.length);
-        assert.strictEqual(vm.REST_PATTERN_METER_GATE_BLOCK_TIME, Number(all[0][1]),
-            'REST_PATTERN_METER diverged between xchain-vm and xchain-indexer: a repin must move both in lockstep');
-        // testnet/regtest are pre-launch and wiped-and-replayed, so both activate at
-        // genesis (0) on the indexer side, matching isRestPatternMeterActive returning
-        // true for those networks at every block time.
-        assert.strictEqual(Number(all[0][2]), 0, 'REST_PATTERN_METER testnet_time must be genesis-active (0)');
-        assert.strictEqual(Number(all[0][3]), 0, 'REST_PATTERN_METER regtest_time must be genesis-active (0)');
-        assert.strictEqual(vm.isRestPatternMeterActive('testnet', 0), true);
-        assert.strictEqual(vm.isRestPatternMeterActive('regtest', 0), true);
-        // And it must stay off the past 2.0.0 instant.
-        const pc = require('../../src/protocol_changes.js');
-        assert.notStrictEqual(vm.REST_PATTERN_METER_GATE_BLOCK_TIME, pc.VM_BANNED_ASYNC_MAINNET_TIME,
-            'REST_PATTERN_METER must keep its own FUTURE flag-day; the 2.0.0 instant has already passed');
     });
 
     it('the indexer NATIVE_FEE_PRICE_TIME_GATE flag-day matches the coordinated 2.0.0 timestamp', function(){

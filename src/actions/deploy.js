@@ -389,15 +389,7 @@ class Deploy {
             // reject contracts the chain already accepted. Mainnet is still unarmed, so
             // this resolves false there and mainnet replay is byte-identical.
             let enforceLintGlobalAlias = vmLintGlobalAlias.isVmLintGlobalAliasActive(data['BLOCK_INDEX'], this.config['NETWORK'], this.config['COIN']);
-            // banned-rest rejects the destructuring-rest positions the VM's allocator
-            // meter cannot charge (parameter lists, rest nested inside another pattern,
-            // catch-clause rest, for-of/for-in heads); the rest forms that DO have an
-            // addressable source are metered instead, on this same flag-day. Block-TIME
-            // keyed like VM_BANNED_ASYNC, so it rides protocolChanges.isEnabled. Below the
-            // activation such a contract was ACCEPTED, so a from-genesis replay must
-            // reproduce that historical verdict; threaded exactly like the flags above.
-            let enforceBannedRest = await this.actions.protocolChanges.isEnabled('REST_PATTERN_METER', data['BLOCK_INDEX']);
-            let syntaxResult = this.actions.vm.validateSyntax(code, { enforceBannedAsync, enforceLintHardening, enforceBannedGenerator, enforceBannedWasm, enforceLintGlobalAlias, enforceBannedRest });
+            let syntaxResult = this.actions.vm.validateSyntax(code, { enforceBannedAsync, enforceLintHardening, enforceBannedGenerator, enforceBannedWasm, enforceLintGlobalAlias });
             if(!syntaxResult.valid)
                 error = 'invalid: CODE_ENCODING (' + syntaxResult.error + ')';
 
