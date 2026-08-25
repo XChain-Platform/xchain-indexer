@@ -37,6 +37,8 @@ const staleRoundVisibility = require('./oracle_stale_round_visibility_activation
 const listEditResolution = require('./list_edit_resolution_activation');
 const caretRefStrict = require('./caret_ref_strict_activation');
 const ledgerPrecision = require('./ledger_amount_precision_activation');
+const dispenserSendCompare = require('./dispenser_send_amount_compare_activation');
+const stakeWeightCollation = require('./stake_weight_collation_activation');
 // Per-block cap on the ATTEST deadline-expiry sweep. Vendored
 // byte-identical from xchain-documentation/protocol/constants.js, same convention
 // as the XCALL_MAX_CALLS_PER_BLOCK sibling it mirrors.
@@ -423,7 +425,46 @@ class Database {
     async runMigrations(opts = {}){
         const result = await this._runMigrationsInner(opts);
         await this._assertPubkeyColumnIsUncompressedWide();
+        await this._assertStakeWeightOrderingCollation();
         return result;
+    }
+
+    // Fail-closed schema contract for the columns the stake-weight snapshot ORDERS on
+    // (stake_weight_collation_activation.js). The window caps truncate on that order, so
+    // the collation of index_addresses.address / index_pubkeys.pubkey decides which
+    // sources and keys reach the hashed stakes_root: a node whose column collation
+    // drifted off src/sql commits a different root than the rest of the fleet, silently.
+    // Once the gate is armed, a drifted CHARSET is worse than silent - `COLLATE utf8_bin`
+    // against a utf8mb4 column is errno 1253, so the node dies mid-block instead of at
+    // boot. Halting here with the table.column named is the cheap end of that.
+    //
+    // The comparison normalises the utf8 / utf8mb3 spelling on BOTH sides: MariaDB 10.6
+    // renamed the charset, so a column declared `CHARSET=utf8 COLLATE=utf8_general_ci`
+    // reports utf8mb3 / utf8mb3_general_ci (verified on 11.4.12). Comparing the raw names
+    // would halt every node in the fleet on a perfectly correct schema.
+    //
+    // An absent column and an unreadable name both return early rather than halt: a
+    // fresh install has no table yet, and an answer we could not read is not evidence of
+    // drift. Same convention as _assertPubkeyColumnIsUncompressedWide above.
+    async _assertStakeWeightOrderingCollation(){
+        let conn;
+        try {
+            conn = await this.getConnection();
+            for(const spec of stakeWeightCollation.STAKE_WEIGHT_ORDERING_COLUMNS){
+                const rows = await conn.query(
+                    "SELECT CHARACTER_SET_NAME, COLLATION_NAME FROM information_schema.columns " +
+                    "WHERE table_schema = ? AND table_name = ? AND column_name = ?",
+                    [this.dbName, spec.table, spec.column]
+                );
+                if(!rows.length) continue;  // column absent: table may not exist yet
+                const reason = stakeWeightCollation.collationDriftReason(spec, rows[0]);
+                if(reason) throw new Error(reason);
+            }
+        } finally {
+            if(conn && this.transactionConnection == null){
+                try { await conn.release(); } catch(_){}
+            }
+        }
     }
 
     async _runMigrationsInner(opts = {}){
@@ -11211,8 +11252,25 @@ class Database {
     }
 
     // Handle finding any sends to an address with active dispenser(s)
-    async findDispenserSends(action_index){
+    //
+    // Affordability predicate (flag-day gated, see
+    // dispenser_send_amount_compare_activation.js). `sends.amount` and
+    // `dispensers.get_amount` are both VARCHAR(250), so the legacy
+    // `s1.amount >= d1.get_amount` compares them as TEXT under the column
+    // collation: get_amount '9' against a send of '10' is false as a string and
+    // true as a number. This query is the ONLY gate deciding whether a token
+    // SEND becomes a DISPENSE (utility.processDispenserSends iterates exactly
+    // these rows), so a lexicographic false negative strands the sender's
+    // tokens at the dispenser address on a legal overpayment. At/after the
+    // activation both operands are CAST to DECIMAL before comparing, the
+    // CAST-before-compare idiom every sibling amount query in this file uses.
+    // Correcting it changes how already-valid blocks evaluate, so the legacy
+    // predicate is emitted byte-identically below the height, and a caller with
+    // no block context (out-of-band writes, API-side readers) stays on it.
+    async findDispenserSends(action_index, block_index){
         let sends = [];
+        let amountCompare = dispenserSendCompare.sendAmountComparePredicate(
+            block_index, this.config['NETWORK'], this.config['COIN']);
         let query  = `SELECT
                             a2.address as source,
                             a3.address as destination,
@@ -11243,7 +11301,7 @@ class Database {
                             s3.status='valid' AND 
                             s4.status IN ('open', 'cancelling') AND 
                             s1.tick_id=d1.get_tick_id AND
-                            s1.amount >= d1.get_amount AND
+                            ` + amountCompare + ` AND
                             s1.action_index=?
                         GROUP BY s1.action_index`;
         let args = [action_index];
@@ -12759,16 +12817,26 @@ class Database {
     // pubkey+capability); only the returned SET is. CONSENSUS-CRITICAL: feeds the
     // hashed stakes_root at/after SWQ_SOURCE_CAP_ACTIVATION and MUST stay byte-identical
     // to the xchain-sync twin (cross-repo drift guard in rollback-coverage.test.js).
-    _cappedStakeWeightsSql(inner, maxSources, maxKeys){
+    //
+    // `binCollation` (stake_weight_collation_activation.js) pins the ordering to a
+    // binary collation. `source` and `pubkey` resolve through index_addresses.address
+    // and index_pubkeys.pubkey, both declared utf8_general_ci (folding), and every
+    // other consensus read of those columns already pins utf8_bin. Order is a
+    // consensus quantity HERE and only here: the two window ranks are what the caps
+    // truncate on, so the collation decides which sources and which keys survive into
+    // the hashed stakes_root. Below the height the emitted SQL is byte-identical to
+    // what shipped before the gate; the suffix is '' and concatenates away.
+    _cappedStakeWeightsSql(inner, maxSources, maxKeys, binCollation){
+        let c = stakeWeightCollation.stakeWeightCollate(binCollation);
         let sql = `SELECT r.pubkey AS pubkey, r.source AS source, r.weight AS weight, r._sr AS _sr
                    FROM (
                        SELECT b.pubkey AS pubkey, b.source AS source, b.weight AS weight,
-                              DENSE_RANK() OVER (ORDER BY b.source)                        AS _sr,
-                              ROW_NUMBER() OVER (PARTITION BY b.source ORDER BY b.pubkey)  AS _kr
+                              DENSE_RANK() OVER (ORDER BY b.source${c})                        AS _sr,
+                              ROW_NUMBER() OVER (PARTITION BY b.source${c} ORDER BY b.pubkey${c})  AS _kr
                        FROM (${inner.sql}) b
                    ) r
                    WHERE r._sr <= ? AND r._kr <= ?
-                   ORDER BY r.source, r.pubkey`;
+                   ORDER BY r.source${c}, r.pubkey${c}`;
         let args = [...inner.args, maxSources + 1, maxKeys];
         return { sql, args };
     }
@@ -12783,10 +12851,15 @@ class Database {
     // in xchain-sync so the stakes_root set is identical on both sides of the height.
     async _stakeWeightsWithCap(valid_id, blockIndex, minStake, label){
         let sw = this._stakeWeightsSql(valid_id, blockIndex, minStake);
+        // Ordering collation for BOTH regimes (stake_weight_collation_activation.js);
+        // the legacy LIMIT branch truncates on the same order the capped branch ranks on.
+        let binCollation = stakeWeightCollation.isStakeWeightBinCollationActive(
+            blockIndex, this.config['NETWORK'], this.config['COIN']);
+        let swc = stakeWeightCollation.stakeWeightCollate(binCollation);
         if(swqCap.isSwqSourceCapActive(blockIndex, this.config['NETWORK'], this.config['COIN'])){
             let maxSources = swqCap.STAKE_WEIGHT_MAX_SOURCES;
             let maxKeys    = swqCap.STAKE_WEIGHT_MAX_KEYS_PER_SOURCE;
-            let capped = this._cappedStakeWeightsSql(sw, maxSources, maxKeys);
+            let capped = this._cappedStakeWeightsSql(sw, maxSources, maxKeys, binCollation);
             let raw = await this.doQuery(capped.sql, capped.args);
             let truncated = raw.some(r => Number(r._sr) > maxSources);
             if(truncated)
@@ -12799,7 +12872,7 @@ class Database {
             return { rows, truncated };
         }
         let limit = this.config['VALIDATOR_QUERY_LIMIT'];
-        let query = `${sw.sql} ORDER BY source, pubkey LIMIT ?`;
+        let query = `${sw.sql} ORDER BY source${swc}, pubkey${swc} LIMIT ?`;
         let raw = await this.doQuery(query, [...sw.args, limit]);
         let truncated = raw.length >= limit;
         if(truncated)

@@ -2697,7 +2697,10 @@ class Utility {
     // A future batched SEND therefore cannot reintroduce the defect: it would arrive here
     // exactly as an ordinary SEND does, and be tallied the same way.
     async processDispenserSends(actions, db, info){
-        let sends = await db.findDispenserSends(info['ACTION_INDEX']);
+        // BLOCK_INDEX is the block context the affordability flag-day is keyed on
+        // (dispenser_send_amount_compare_activation.js); without it the query stays
+        // on the legacy string compare.
+        let sends = await db.findDispenserSends(info['ACTION_INDEX'], info['BLOCK_INDEX']);
         for(let send of sends){
             // Define basic DISPENSE transaction data object
             let action = 'DISPENSE';

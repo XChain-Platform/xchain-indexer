@@ -280,6 +280,11 @@ describe('runMigrations() precondition baseline branch @regression @tier1', func
             _runMigrationsInner: Database.prototype._runMigrationsInner,
             _migrationPreconditionSkip: Database.prototype._migrationPreconditionSkip,
             _assertPubkeyColumnIsUncompressedWide: async () => {},
+            // The REAL collation assertion, not a stub: this harness's conn answers []
+            // to any SQL it does not recognise, which is exactly the absent-column case
+            // that assertion must pass through rather than halt on. Stubbing it away
+            // would let a regression in that pass-through ride into runMigrations unseen.
+            _assertStakeWeightOrderingCollation: Database.prototype._assertStakeWeightOrderingCollation,
             _migrationMode: Database.prototype._migrationMode,
             splitSqlStatements: Database.prototype.splitSqlStatements,
             stripSqlLineComments: Database.prototype.stripSqlLineComments,

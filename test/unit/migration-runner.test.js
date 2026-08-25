@@ -784,6 +784,7 @@ describe('runMigrations() checksum heal branch @regression @tier1', function () 
             _ensureMigrationsLedger: Database.prototype._ensureMigrationsLedger,
             _runMigrationsInner: Database.prototype._runMigrationsInner,
             _assertPubkeyColumnIsUncompressedWide: Database.prototype._assertPubkeyColumnIsUncompressedWide,
+            _assertStakeWeightOrderingCollation: Database.prototype._assertStakeWeightOrderingCollation,
             _migrationMode: Database.prototype._migrationMode,
             _migrationPreconditionSkip: Database.prototype._migrationPreconditionSkip,
             splitSqlStatements: Database.prototype.splitSqlStatements,
