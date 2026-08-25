@@ -19,6 +19,21 @@ CREATE TABLE validator_rewards (
     signing_pubkey_id   BIGINT UNSIGNED NOT NULL,        -- FK to index_pubkeys
     reward_type         VARCHAR(20) NOT NULL,             -- 'oracle_round' (legacy/share=0), 'oracle_base' + 'oracle_full_node' (two-tranche split), 'attest_fee', 'attest_bcast' (spec §11 leader broadcast-fee reimbursement; a separate type so the leader's carve-out and its equal share coexist under reward_unique), 'anchor_<chain>' (e.g. 'anchor_BTC'), 'anchor_archive'
     round_reference     BIGINT UNSIGNED,                  -- round number or attestation ref
+    -- The round_reference QUALIFIER, part of reward_unique below. round_reference alone is a
+    -- safe identity for every reward type but one: the per-chain anchor legs use CHECKPOINT_SEQ,
+    -- which equals the checkpoint's snapshot_block, a chain height that only advances. The
+    -- ARCHIVE leg uses MATCH_BATCH_SEQ, a DENSE counter the hub allocates from its own tables,
+    -- and those tables are reset by a wipe-and-replay rebase - so after a rebase the hub
+    -- reissues seq values earlier archive batches already used, and two genuinely distinct
+    -- archive anchors present the same round_reference. The signed side always distinguished
+    -- them (the XANCPUB canonical and anchor_reward_attestations.uq_reward_tuple both carry
+    -- snapshot_block); only this key did not, so the second real reward was either never
+    -- derived (the pending NOT EXISTS matched round-only) or deleted by the MIN(pubkey)
+    -- reconcile. Carries snapshot_block for 'anchor_archive' and 0 for every other reward type,
+    -- so every non-archive row keeps exactly the key it had before this column existed.
+    -- NOT NULL DEFAULT 0 and never nullable: MariaDB treats NULLs as DISTINCT in a UNIQUE
+    -- index, so a nullable qualifier would silently stop deduplicating every reward row.
+    round_qualifier     BIGINT UNSIGNED NOT NULL DEFAULT 0,
     amount              VARCHAR(250) NOT NULL,
     block_index         BIGINT UNSIGNED NOT NULL,
     -- MATERIALIZATION block. block_index above is the reward's EARN block, which for
@@ -35,7 +50,7 @@ CREATE TABLE validator_rewards (
     derive_block_index  BIGINT UNSIGNED DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
-CREATE UNIQUE INDEX reward_unique     ON validator_rewards (source_id, signing_pubkey_id, reward_type, round_reference);
+CREATE UNIQUE INDEX reward_unique     ON validator_rewards (source_id, signing_pubkey_id, reward_type, round_reference, round_qualifier);
 -- Composite (source_id, block_index): getUnclaimedRewardTotal SUMs a source's rewards
 -- per COLLECT, block-scoped for replay determinism. The composite lets the scoped SUM
 -- range-scan exactly the source's at-or-before-block rows and covers `WHERE source_id=?`

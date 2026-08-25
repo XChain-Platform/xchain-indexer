@@ -79,9 +79,27 @@ describe('reconcileAnchorRewardWinner() @regression @tier1', function () {
         assert.match(sql, /JOIN\s+index_pubkeys\s+pk\s+ON\s+pk\.id\s*=\s*vr\.signing_pubkey_id/i);
         assert.match(sql, /MIN\(pk2\.pubkey\)\s+AS\s+min_pubkey/i);
         assert.match(sql, /pk\.pubkey\s*>\s*m\.min_pubkey/i);
+        // The winner group is scoped by round_qualifier too: 'anchor_archive' rounds are
+        // MATCH_BATCH_SEQ, a dense hub counter a rebase reissues, so an unqualified DELETE
+        // reaches across two distinct archive anchors and deletes a real publisher's reward.
+        assert.match(sql, /vr2\.round_qualifier\s*=\s*\?/i, 'min-pubkey subquery must be qualifier-scoped');
+        assert.match(sql, /vr\.round_qualifier\s*=\s*\?/i,  'DELETE predicate must be qualifier-scoped');
         // Subquery params first (it appears earlier in the text), then the outer WHERE.
-        assert.deepStrictEqual(args, ['anchor_BTC', 306, 'anchor_BTC', 306]);
+        // An omitted qualifier defaults to 0, which is what every per-chain leg carries.
+        assert.deepStrictEqual(args, ['anchor_BTC', 306, 0, 'anchor_BTC', 306, 0]);
         assert.strictEqual(removed, 2, 'returns affectedRows');
+    });
+
+    it('scopes the collapse to the round_qualifier it is given (archive leg)', async function () {
+        const db    = makeDb();
+        const query = sinon.stub(db, 'doQuery').resolves({ affectedRows: 1 });
+
+        // Two archive anchors can share round_reference 306 across a hub rebase and differ
+        // only in snapshot_block; this reconcile must speak about the 8100 one alone.
+        await db.reconcileAnchorRewardWinner(306, 'anchor_archive', null, null, 8100);
+
+        assert.deepStrictEqual(query.firstCall.args[1],
+            ['anchor_archive', 306, 8100, 'anchor_archive', 306, 8100]);
     });
 
     it('pre-images the loser rows into anchor_reward_reconcile_log BEFORE the DELETE when a reconcile block is given (RB-ANCHOR)', async function () {
@@ -105,8 +123,13 @@ describe('reconcileAnchorRewardWinner() @regression @tier1', function () {
         assert.match(logSql, /reward_derive_block_index/i, 'log must declare the reward_derive_block_index column');
         assert.match(logSql, /vr\.derive_block_index,\s*\?/i, 'must capture the loser row materialization block');
         assert.match(logSql, /pk\.pubkey\s*>\s*m\.min_pubkey/i);
-        // anchor_action_index, reconcile block, then the two (rewardType, round) subquery+WHERE pairs.
-        assert.deepStrictEqual(logArgs, [42, 900, 'anchor_BTC', 306, 'anchor_BTC', 306]);
+        // The pre-image carries the loser's round_qualifier, since that is part of the reward's
+        // UNIQUE identity: restore it without the qualifier and the reorg re-INSERTs a
+        // DIFFERENT row than the one that was deleted.
+        assert.match(logSql, /vr\.round_reference,\s*vr\.round_qualifier/i,
+            'log must capture the loser row round_qualifier');
+        // anchor_action_index, reconcile block, then the two (rewardType, round, qualifier) triples.
+        assert.deepStrictEqual(logArgs, [42, 900, 'anchor_BTC', 306, 0, 'anchor_BTC', 306, 0]);
         // The DELETE still runs second, unchanged.
         assert.match(query.secondCall.args[0], /DELETE\s+vr\s+FROM\s+validator_rewards\s+vr/i);
         assert.strictEqual(removed, 2);

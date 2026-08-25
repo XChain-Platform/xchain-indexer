@@ -3607,7 +3607,8 @@
           "source_id",
           "signing_pubkey_id",
           "reward_type",
-          "round_reference"
+          "round_reference",
+          "round_qualifier"
         ],
         "unique": true
       },

@@ -47,6 +47,9 @@ const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS,
         ARCHIVE_ANCHOR_BY_CONTENT_SQL, selectArchiveHeadRow,
         dedupeArchiveChunks } = require('./anchor-action-query');
 const { rethrowIfInfraFault } = require('./actions/faultGuard');
+// The validator_rewards ledger-key qualifier rule, shared with the two JS writers so the
+// SQL predicate here and they cannot disagree about which reward type is qualified.
+const arKey = require('./anchor_reward_key.js');
 
 // A stake weight, as stake_weighted_quorum.bcnum accepts one (plain decimal string).
 // Kept identical to that predicate's pattern so this producer can never emit a row the
@@ -2935,11 +2938,23 @@ class Database {
             let pubkey_id = await this.getOrCreatePubkeyId(String(r.validator_pubkey).toLowerCase());
             if(pubkey_id === null)
                 continue;   // leave unapplied; surfaces as a parity gap rather than a bad FK
+            // round_qualifier keeps this row's key identical to what the live writers
+            // produce, which is what "same UNIQUE dedup" above promises. The staging table
+            // carries no snapshot_block, but it does not need one: for 'anchor_archive' the
+            // reward's EARN block IS the snapshot block (both live writers pass
+            // SNAPSHOT_BLOCK as block_index), so the archived block_index is the qualifier.
+            // Every other reward type resolves to 0 and is written exactly as before.
+            // Without this a recovered node would key archive rewards at 0 while a live node
+            // keys them at snapshot_block, so a pair sharing a reissued MATCH_BATCH_SEQ would
+            // collapse under INSERT IGNORE here and the recovered node's COLLECT total would
+            // sit one archive reward below a from-genesis replay's.
             await this.doQuery(
                 `INSERT IGNORE INTO validator_rewards
-                    (source_id, signing_pubkey_id, reward_type, round_reference, amount, block_index)
-                 VALUES (?, ?, ?, ?, ?, ?)`,
-                [source_id, pubkey_id, String(r.reward_type), r.round_reference, String(r.amount), Number(r.block_index)]);
+                    (source_id, signing_pubkey_id, reward_type, round_reference, round_qualifier, amount, block_index)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [source_id, pubkey_id, String(r.reward_type), r.round_reference,
+                 arKey.rewardRoundQualifier(r.reward_type, r.block_index),
+                 String(r.amount), Number(r.block_index)]);
             await this.doQuery("UPDATE recovery_pending_rewards SET applied=1, source_id=?, applied_block=? WHERE id=?",
                 [source_id, appliedBlock, r.id]);
             count++;
@@ -11780,10 +11795,22 @@ class Database {
             '       ara.publisher, ara.publisher_attestations, ara.doge_anchor_txid ' +
             '  FROM anchor_reward_attestations ara ' +
             ' WHERE ara.network = ? AND ara.snapshot_block <= ? ' +
+            // The exclusion is also QUALIFIER-scoped. Matching on (reward_type,
+            // round_reference) alone made this the FIRST place the archive collapse bit:
+            // 'anchor_archive' round_reference is MATCH_BATCH_SEQ, a dense hub counter a
+            // wipe-and-replay rebase reissues, so once ONE archive anchor was derived, a
+            // genuinely distinct later archive anchor that happened to reuse that seq matched
+            // this NOT EXISTS and was never returned as pending at all - suppressed before
+            // reconcile ever saw it, so no amount of reconcile-side fixing could recover it.
+            // Comparing the qualifier a derived row WOULD carry (snapshot_block for the
+            // archive leg, 0 otherwise - the SQL twin of anchor_reward_key.rewardRoundQualifier,
+            // emitted from that module so the two forms cannot drift) makes the exclusion
+            // speak about the same logical reward the ledger key does.
             '   AND NOT EXISTS (SELECT 1 FROM validator_rewards vr ' +
             '                     JOIN index_pubkeys pk ON pk.id = vr.signing_pubkey_id ' +
             '                    WHERE vr.reward_type = ara.reward_type ' +
             '                      AND vr.round_reference = ara.round_reference ' +
+            '                      AND vr.round_qualifier = ' + arKey.sqlRoundQualifier('ara.reward_type', 'ara.snapshot_block') + ' ' +
             '                      AND pk.pubkey <= LOWER(ara.publisher)) ' +
             // Tiebreak on snapshot_block, the remaining component of uq_reward_tuple, BEFORE
             // ara.id. Two rows can share (reward_type, round_reference, publisher) and differ
@@ -11808,7 +11835,14 @@ class Database {
     //         writes while processing a much later BTC block, so rollback needs the creating
     // block to know the row must disappear. Every other writer earns and
     //         writes in the same block and leaves it NULL.
-    async createValidatorReward(pubkeyHex, roundReference, rewardType, amount, blockIndex, upsert, deriveBlockIndex){
+    // roundQualifier: the remaining component of the reward's UNIQUE identity. It is
+    //         snapshot_block for 'anchor_archive' and 0 for every other reward type, because the
+    //         archive leg's round_reference is MATCH_BATCH_SEQ - a dense hub counter a
+    //         wipe-and-replay rebase reissues - so it alone does not name one logical reward.
+    //         Callers compute it with anchor_reward_key.rewardRoundQualifier(); an omitted
+    //         argument lands on 0, the value every pre-column row already carries, so every
+    //         non-archive writer stays byte-identical.
+    async createValidatorReward(pubkeyHex, roundReference, rewardType, amount, blockIndex, upsert, deriveBlockIndex, roundQualifier){
         let pubkey_id = await this.getPubkeyId(String(pubkeyHex).toLowerCase());
         if(pubkey_id === null){
             console.warn('createValidatorReward: unknown pubkey ' + pubkeyHex);
@@ -11821,20 +11855,28 @@ class Database {
             console.warn('createValidatorReward: no active stake or delegation for pubkey ' + pubkeyHex + ' at block ' + blockIndex);
             return false;
         }
-        // Insert the reward (idempotent via UNIQUE INDEX on source_id+signing_pubkey_id+reward_type+round_reference).
+        // Insert the reward (idempotent via UNIQUE INDEX on
+        // source_id+signing_pubkey_id+reward_type+round_reference+round_qualifier).
         // Deterministic writers upsert so their amount/block_index always win.
         let derive_block_index = (deriveBlockIndex === undefined || deriveBlockIndex === null)
             ? null : Number(deriveBlockIndex);
+        // NEVER NULL. MariaDB treats NULLs as distinct in a UNIQUE index, so a nullable
+        // qualifier would silently stop this key deduplicating rows at all - the opposite of
+        // what the column is for. Coerced here so a caller that passes undefined/null still
+        // writes the legacy 0.
+        let round_qualifier = Number(roundQualifier);
+        if(!Number.isFinite(round_qualifier) || round_qualifier < 0) round_qualifier = 0;
+        round_qualifier = Math.floor(round_qualifier);
         let query = upsert
             ? `INSERT INTO validator_rewards
-                    (source_id, signing_pubkey_id, reward_type, round_reference, amount, block_index, derive_block_index)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (source_id, signing_pubkey_id, reward_type, round_reference, round_qualifier, amount, block_index, derive_block_index)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                  ON DUPLICATE KEY UPDATE amount=VALUES(amount), block_index=VALUES(block_index),
                                          derive_block_index=VALUES(derive_block_index)`
             : `INSERT IGNORE INTO validator_rewards
-                    (source_id, signing_pubkey_id, reward_type, round_reference, amount, block_index, derive_block_index)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)`;
-        let args = [source_id, pubkey_id, rewardType, roundReference, amount, blockIndex, derive_block_index];
+                    (source_id, signing_pubkey_id, reward_type, round_reference, round_qualifier, amount, block_index, derive_block_index)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+        let args = [source_id, pubkey_id, rewardType, roundReference, round_qualifier, amount, blockIndex, derive_block_index];
         await this.doQuery(query, args);
         return true;
     }
@@ -11864,8 +11906,19 @@ class Database {
     // vs a fresh replay (a ledger-hashed divergence). Logging is scoped to the
     // reconcile block, so callers that cannot name a block (legacy test paths)
     // pass null and skip the log (the DELETE behaviour is unchanged).
-    async reconcileAnchorRewardWinner(roundReference, rewardType, reconcileBlockIndex, anchorActionIndex){
+    //
+    // Scoped by round_qualifier as well, and that scoping is the whole point for the archive
+    // leg: 'anchor_archive' rounds are MATCH_BATCH_SEQ, a dense hub counter a wipe-and-replay
+    // rebase reissues, so a (reward_type, round_reference) collapse reaches ACROSS two
+    // genuinely distinct archive anchors and deletes a real, quorum-attested publisher's pay
+    // as if it were a failover loser. The qualifier (snapshot_block for the archive leg, 0
+    // everywhere else) is what the signed XANCPUB tuple already used to tell them apart.
+    // An omitted qualifier is 0, so every per-chain caller behaves exactly as before.
+    async reconcileAnchorRewardWinner(roundReference, rewardType, reconcileBlockIndex, anchorActionIndex, roundQualifier){
         if(!/^anchor_[A-Za-z_]+$/.test(String(rewardType))) return 0;
+        let round_qualifier = Number(roundQualifier);
+        if(!Number.isFinite(round_qualifier) || round_qualifier < 0) round_qualifier = 0;
+        round_qualifier = Math.floor(round_qualifier);
         if(reconcileBlockIndex !== null && reconcileBlockIndex !== undefined){
             // Same loser predicate as the DELETE (pubkey > min_pubkey), capturing each
             // row's verbatim pre-image + its ORIGINAL earn-block (reward_block_index).
@@ -11874,10 +11927,10 @@ class Database {
             // have minted this loser at all, because a derived reward's earn-block is the far
             // earlier SNAPSHOT_BLOCK. NULL for a loser written by a same-block writer.
             let logQuery = `INSERT INTO anchor_reward_reconcile_log
-                                (anchor_action_index, reward_type, round_reference,
+                                (anchor_action_index, reward_type, round_reference, round_qualifier,
                                  source_id, signing_pubkey_id, amount, reward_block_index,
                                  reward_derive_block_index, block_index)
-                            SELECT ?, vr.reward_type, vr.round_reference,
+                            SELECT ?, vr.reward_type, vr.round_reference, vr.round_qualifier,
                                    vr.source_id, vr.signing_pubkey_id, vr.amount, vr.block_index,
                                    vr.derive_block_index, ?
                               FROM validator_rewards vr
@@ -11887,12 +11940,15 @@ class Database {
                                   FROM validator_rewards vr2
                                   JOIN index_pubkeys pk2 ON pk2.id = vr2.signing_pubkey_id
                                   WHERE vr2.reward_type = ? AND vr2.round_reference = ?
+                                    AND vr2.round_qualifier = ?
                               ) m
                               WHERE vr.reward_type = ? AND vr.round_reference = ?
+                                AND vr.round_qualifier = ?
                                 AND pk.pubkey > m.min_pubkey`;
             await this.doQuery(logQuery, [
                 (anchorActionIndex === undefined ? null : anchorActionIndex), reconcileBlockIndex,
-                rewardType, roundReference, rewardType, roundReference]);
+                rewardType, roundReference, round_qualifier,
+                rewardType, roundReference, round_qualifier]);
         }
         let query = `DELETE vr FROM validator_rewards vr
                      JOIN index_pubkeys pk ON pk.id = vr.signing_pubkey_id
@@ -11901,10 +11957,13 @@ class Database {
                          FROM validator_rewards vr2
                          JOIN index_pubkeys pk2 ON pk2.id = vr2.signing_pubkey_id
                          WHERE vr2.reward_type = ? AND vr2.round_reference = ?
+                           AND vr2.round_qualifier = ?
                      ) m
                      WHERE vr.reward_type = ? AND vr.round_reference = ?
+                       AND vr.round_qualifier = ?
                        AND pk.pubkey > m.min_pubkey`;
-        let res = await this.doQuery(query, [rewardType, roundReference, rewardType, roundReference]);
+        let res = await this.doQuery(query, [rewardType, roundReference, round_qualifier,
+                                             rewardType, roundReference, round_qualifier]);
         return res && res.affectedRows ? res.affectedRows : 0;
     }
 

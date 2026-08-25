@@ -150,6 +150,41 @@ function isArchiveRewardActive(snapshotBlock, network){
 //       its OWN oracle_publish set at snapshot_block (and re-proves the anchor
 //       mined) before writing its copy. The wire is transport, never trust.
 //
+// PRE-ARMING BLOCKER (4), LANDED 2026-08-24, same class as the three above and
+// held to the same rule: remedy in code while this table is inert, operator
+// ratifies a height later. The reward LEDGER key could not tell two genuinely
+// distinct archive anchors apart. validator_rewards keys on (source_id,
+// signing_pubkey_id, reward_type, round_reference), and for 'anchor_archive'
+// round_reference is MATCH_BATCH_SEQ - a DENSE counter the hub allocates from
+// its own tables, which a wipe-and-replay rebase resets, so the hub reissues
+// seq values earlier archive batches already used. The per-chain legs are safe
+// by construction (CHECKPOINT_SEQ == snapshot_block, a height that only
+// advances). The SIGNED side always distinguished them - the XANCPUB reward
+// canonical carries SNAPSHOT_BLOCK and anchor_reward_attestations'
+// uq_reward_tuple includes snapshot_block - so the attestation layer knew there
+// were two rewards while the ledger conserved one: the pending-attestation NOT
+// EXISTS matched round-only and suppressed the second derive outright, and where
+// both rows did land the MIN(pubkey) reconcile deleted one real, quorum-attested
+// publisher's pay. CLOSED: validator_rewards and anchor_reward_reconcile_log
+// carry round_qualifier (snapshot_block for the archive leg, 0 for every other
+// reward type, so non-archive rows keep exactly the key they had),
+// reward_unique includes it, and the pending join, the reconcile predicate, the
+// derive grouping, the reorg restore and xchain-sync's replica-side mirror all
+// key on it.
+//
+// This one has a LEDGER half the other three do not, and it must be verified
+// separately before ratification: the columns converge on their own (declared
+// with DEFAULTs, so the startup drift reconciler ADDs them), but the UNIQUE KEY
+// does NOT - reconcileTableIndexes will not DROP an index it did not create, so
+// an AGED database keeps the old four-column reward_unique and merely logs a
+// drift warning each boot. So a node can run the new binary and still
+// re-collapse two distinct archive rewards inside its own index. Every node
+// must therefore carry BOTH the build AND the applied migration
+// (xchain-indexer/src/sql/migrations/
+// 2026-08-24-validator-rewards-round-qualifier.sql) before any mainnet/testnet
+// height is ratified. xchain-sync reads and writes the same replicated table,
+// so its build has to be qualifier-aware in the same deploy.
+//
 // PRE-ARMING DEPLOY STEP (already fixed in code): a derived reward earns at
 // the checkpoint's snapshot_block but materializes at a later BTC block, and
 // the reorg delete used to scope only on the earn-block, leaving a

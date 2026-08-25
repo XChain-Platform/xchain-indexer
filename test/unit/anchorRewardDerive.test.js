@@ -131,9 +131,11 @@ describe('anchor_reward_derive (BTC-side derivation) @regression @tier2', functi
             const n    = await derive.deriveAnchorRewards(db, cfg, 200, stubProof());
             assert.strictEqual(n, 1);
             assert.ok(db.createValidatorReward.calledOnce);
+            // The trailing 0 is round_qualifier: the per-chain legs are never qualified, since
+            // their round_reference is CHECKPOINT_SEQ, a height that only advances.
             assert.deepStrictEqual(db.createValidatorReward.firstCall.args,
-                [keys[0].pubkey, 7, 'anchor_BTC', ar.ANCHOR_REWARD_AMOUNT, 0, true, 200]);
-            assert.ok(db.reconcileAnchorRewardWinner.calledOnceWith(7, 'anchor_BTC', 200, null));
+                [keys[0].pubkey, 7, 'anchor_BTC', ar.ANCHOR_REWARD_AMOUNT, 0, true, 200, 0]);
+            assert.ok(db.reconcileAnchorRewardWinner.calledOnceWith(7, 'anchor_BTC', 200, null, 0));
         });
 
         // #4172, operator ruling (a). snapshot_block is the height the XANCPUB signing set was
@@ -180,7 +182,40 @@ describe('anchor_reward_derive (BTC-side derivation) @regression @tier2', functi
             const db   = stubDb(keys, [row]);
             await derive.deriveAnchorRewards(db, cfg, 200, stubProof());
             assert.deepStrictEqual(db.createValidatorReward.firstCall.args,
-                [keys[0].pubkey, 3, 'anchor_archive', ar.ARCHIVE_REWARD_AMOUNT, 0, true, 200]);
+                [keys[0].pubkey, 3, 'anchor_archive', ar.ARCHIVE_REWARD_AMOUNT, 0, true, 200, 0]);
+        });
+
+        // The archive leg's round_reference is MATCH_BATCH_SEQ, a dense counter the hub
+        // allocates from its own tables, and a wipe-and-replay rebase resets those tables - so
+        // the same seq can name two genuinely distinct archive anchors. snapshot_block is what
+        // the signed XANCPUB tuple already uses to tell them apart, and it has to reach the
+        // ledger key (round_qualifier) and the reconcile, or the second real reward is either
+        // never inserted or deleted as a "loser" of the first one's round.
+        it('qualifies an archive reward by its snapshot_block, in the write AND the reconcile', async function () {
+            const keys = [makeKey()];
+            const row  = makeRow(keys, { reward_type: 'anchor_archive', round_reference: 3, snapshot_block: 8100 });
+            const db   = stubDb(keys, [row]);
+            await derive.deriveAnchorRewards(db, cfg, 8100 + ar.ANCHOR_REWARD_MIRROR_MATURITY, stubProof());
+            const args = db.createValidatorReward.firstCall.args;
+            assert.strictEqual(args[7], 8100, 'round_qualifier must be the archive reward snapshot_block');
+            assert.strictEqual(db.reconcileAnchorRewardWinner.firstCall.args[4], 8100,
+                'the reconcile must collapse only within that snapshot, not across the reissued seq');
+        });
+
+        // Two archive anchors sharing a reissued seq are TWO logical rewards, so they must not
+        // land in one reconcile group: one group means one surviving winner, and the other
+        // publisher - quorum-attested, on a different snapshot - is paid nothing.
+        it('groups two archive rewards sharing a reissued seq SEPARATELY, one reconcile each', async function () {
+            const keys = [makeKey()];
+            const rowA = makeRow(keys, { reward_type: 'anchor_archive', round_reference: 3, snapshot_block: 8100 });
+            const rowB = makeRow(keys, { reward_type: 'anchor_archive', round_reference: 3, snapshot_block: 9200 });
+            const db   = stubDb(keys, [rowA, rowB]);
+            const n    = await derive.deriveAnchorRewards(db, cfg, 9200 + ar.ANCHOR_REWARD_MIRROR_MATURITY, stubProof());
+            assert.strictEqual(n, 2, 'both archive rewards derive');
+            assert.strictEqual(db.reconcileAnchorRewardWinner.callCount, 2, 'one reconcile per snapshot');
+            assert.deepStrictEqual(
+                db.reconcileAnchorRewardWinner.getCalls().map(c => c.args[4]).sort((a, b) => a - b),
+                [8100, 9200]);
         });
 
         it('collapses a failover double-publish: both publishers inserted, ONE reconcile per round', async function () {

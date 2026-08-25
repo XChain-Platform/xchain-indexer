@@ -801,10 +801,17 @@ class Rollback {
                 // and fork SUM(validator_rewards) in the other direction. Require BOTH heights to
                 // survive; NULL (every same-block writer, and every row pre-dating the column)
                 // keeps the original earn-block-only behavior.
+                // round_qualifier rides the pre-image like every other key column: it is part
+                // of the reward's UNIQUE identity (snapshot_block for the archive leg, whose
+                // round_reference is a reissuable hub counter), so restoring without it would
+                // re-INSERT the loser under qualifier 0 - a DIFFERENT row from the one the
+                // reconcile deleted, colliding with whatever legacy row already holds that key
+                // and leaving the real loser unrestored.
                 query = `INSERT IGNORE INTO validator_rewards
-                            (source_id, signing_pubkey_id, reward_type, round_reference, amount,
-                             block_index, derive_block_index)
+                            (source_id, signing_pubkey_id, reward_type, round_reference, round_qualifier,
+                             amount, block_index, derive_block_index)
                          SELECT d.source_id, d.signing_pubkey_id, d.reward_type, d.round_reference,
+                                d.round_qualifier,
                                 d.amount, d.reward_block_index, d.reward_derive_block_index
                            FROM anchor_reward_reconcile_log d
                           WHERE d.block_index >= ?
