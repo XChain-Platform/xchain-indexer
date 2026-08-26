@@ -325,9 +325,11 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         assert.strictEqual(data['STATUS'], 'valid');
         assert.strictEqual(data['PUBLISHER'], PUBKEY_A);
         assert.ok(indexer.indexerDb.createValidatorReward.calledOnce);
-        // (pubkeyHex, roundReference, rewardType, amount, blockIndex, upsert) - frozen amount, NOT wire.
+        // (pubkeyHex, roundReference, rewardType, amount, blockIndex, upsert, deriveBlockIndex,
+        // roundQualifier) - frozen amount, NOT wire. The per-chain legs are never qualified:
+        // their round_reference is CHECKPOINT_SEQ, a height that only advances.
         assert.deepStrictEqual(indexer.indexerDb.createValidatorReward.firstCall.args,
-            [PUBKEY_A, 0, 'anchor_BTC', '10.00000000', 100, true]);
+            [PUBKEY_A, 0, 'anchor_BTC', '10.00000000', 100, true, null, 0]);
         assert.ok(indexer.indexerDb.reconcileAnchorRewardWinner.calledOnceWith(0, 'anchor_BTC'));
     });
 
@@ -348,7 +350,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         assert.strictEqual(data['STATUS'], 'valid');
         assert.strictEqual(lastWrite()['STATE_ROOT'], HASH('d'));
         assert.deepStrictEqual(indexer.indexerDb.createValidatorReward.firstCall.args,
-            [PUBKEY_A, 0, 'anchor_BTC', '10.00000000', 100, true]);
+            [PUBKEY_A, 0, 'anchor_BTC', '10.00000000', 100, true, null, 0]);
     });
 
     it('v4 is rejected before the ANCHOR_REWARD flag-day', async function () {
@@ -415,10 +417,13 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         assert.strictEqual(data['MATCH_BATCH_SEQ'], '0');
         assert.strictEqual(data['ARCHIVE_B64'], gz64(ARCHIVE_JSON));
         assert.ok(indexer.indexerDb.createValidatorReward.calledOnce);
-        // (pubkeyHex, roundReference=MATCH_BATCH_SEQ, rewardType, amount, blockIndex, upsert)
-        // - frozen ARCHIVE amount, NOT wire.
+        // (pubkeyHex, roundReference=MATCH_BATCH_SEQ, rewardType, amount, blockIndex, upsert,
+        // deriveBlockIndex, roundQualifier) - frozen ARCHIVE amount, NOT wire. The archive leg
+        // IS qualified: MATCH_BATCH_SEQ is a dense hub counter a wipe-and-replay rebase
+        // reissues, so SNAPSHOT_BLOCK (100 here, the same height block_index carries) is what
+        // keeps two genuinely distinct archive anchors from collapsing onto one reward row.
         assert.deepStrictEqual(indexer.indexerDb.createValidatorReward.firstCall.args,
-            [PUBKEY_A, 0, 'anchor_archive', '10.00000000', 100, true]);
+            [PUBKEY_A, 0, 'anchor_archive', '10.00000000', 100, true, null, 100]);
         assert.ok(indexer.indexerDb.reconcileAnchorRewardWinner.calledOnceWith(0, 'anchor_archive'));
     });
 

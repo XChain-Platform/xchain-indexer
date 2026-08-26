@@ -141,15 +141,20 @@ class LogShipper {
 
     _attachMetrics(registry) {
         const emitted = registry.counter({ name: 'log_lines_emitted_total', help: 'Log lines emitted by the structured log shim', labelNames: ['level'] });
-        const shipped = registry.gauge({ name: 'log_lines_shipped_total',   help: 'Log lines successfully shipped to the collector' });
-        const dropped = registry.gauge({ name: 'log_lines_dropped_total',   help: 'Log lines dropped because the ship buffer was full' });
-        const failed  = registry.gauge({ name: 'log_ship_failures_total',   help: 'Failed log-ship batch attempts' });
+        // Cumulative totals are counters, not gauges: a _total-suffixed gauge
+        // reads to a scraper as a resettable level, so rate() over it is
+        // undefined. setMonotonic publishes the running total and refuses a
+        // backwards step, which is what a restarted source would otherwise do.
+        const shipped = registry.counter({ name: 'log_lines_shipped_total',   help: 'Log lines successfully shipped to the collector' });
+        const dropped = registry.counter({ name: 'log_lines_dropped_total',   help: 'Log lines dropped because the ship buffer was full' });
+        const failed  = registry.counter({ name: 'log_ship_failures_total',   help: 'Failed log-ship batch attempts' });
+        // Buffer depth IS a level, so it stays a gauge.
         const pending = registry.gauge({ name: 'log_ship_buffer_lines',     help: 'Log lines currently buffered for shipping' });
         this._levelCounter = emitted;
         registry.addCollector(() => {
-            shipped.set({}, this.stats.shipped);
-            dropped.set({}, this.stats.dropped);
-            failed.set({}, this.stats.failures);
+            shipped.setMonotonic({}, this.stats.shipped);
+            dropped.setMonotonic({}, this.stats.dropped);
+            failed.setMonotonic({}, this.stats.failures);
             pending.set({}, this.buffer.length);
         });
     }

@@ -33,7 +33,9 @@
  * set + weighting anchor.js uses on DOGE), rebuilds the reward canonical byte-identically to
  * anchor.js._rewardCanonical / the hub's StateAnchorPublisher, and only then materializes
  * validator_rewards at block_index = snapshot_block. A forged or short-quorum row credits
- * nothing. Idempotent and reorg-safe: the reward upserts on (reward_type, round_reference) and a
+ * nothing. Idempotent and reorg-safe: the reward upserts on (reward_type, round_reference,
+ * round_qualifier) - the qualifier being snapshot_block for the archive leg, whose
+ * round_reference is a hub counter a rebase reissues (anchor_reward_key.js) - and a
  * failover double-publish is collapsed to the smallest-pubkey winner by reconcileAnchorRewardWinner;
  * a BTC reorg that block-scoped-deletes the reward at snapshot_block re-exposes the group for replay.
  *
@@ -54,6 +56,7 @@ const ed25519 = require('./ed25519.js');
 const swq     = require('./stake_weighted_quorum.js');
 const eq      = require('./equivocation_header.js');
 const ar      = require('./anchor_reward_activation.js');
+const arKey   = require('./anchor_reward_key.js');
 const coins   = require('./coins');
 
 // Rebuild the XANCPUB canonical for a mirrored attestation row. MUST byte-match
@@ -153,12 +156,22 @@ async function deriveAnchorRewards(indexerDb, config, blockIndex, proof){
     if(!rows || rows.length === 0) return 0;
     let minConfirmations = coins.DEFAULT_CONFIRMATIONS.DOGE;
 
-    // Group by the logical reward (reward_type, round_reference): every attesting publisher
-    // for a round must be inserted BEFORE reconcile, so a failover double-publish collapses to
-    // the smallest-pubkey winner (identical to the DOGE on-chain path anchor.js drives).
+    // Group by the logical reward (reward_type, round_reference, round_qualifier): every
+    // attesting publisher for a round must be inserted BEFORE reconcile, so a failover
+    // double-publish collapses to the smallest-pubkey winner (identical to the DOGE on-chain
+    // path anchor.js drives).
+    //
+    // The qualifier is in the key because for 'anchor_archive' the pair (reward_type,
+    // round_reference) does NOT name one logical reward: round_reference is MATCH_BATCH_SEQ,
+    // a dense hub counter a wipe-and-replay rebase reissues (anchor_reward_key.js). Two
+    // distinct archive anchors sharing a reissued seq landed in ONE group, so the single
+    // reconcile that group ran collapsed them to one winner across two snapshots and deleted
+    // a real publisher's pay. Split by qualifier, each snapshot's archive reward reconciles
+    // as its own single-winner group, which is what the attestation quorum actually attested.
     let groups = new Map();
     for(let row of rows){
-        let key = row.reward_type + '|' + row.round_reference;
+        let key = row.reward_type + '|' + row.round_reference + '|' +
+                  arKey.rewardRoundQualifier(row.reward_type, row.snapshot_block);
         if(!groups.has(key)) groups.set(key, []);
         groups.get(key).push(row);
     }
@@ -206,7 +219,8 @@ async function deriveAnchorRewards(indexerDb, config, blockIndex, proof){
             // rollback delete only scopes on block_index.
             let ok = await indexerDb.createValidatorReward(
                 String(row.publisher).toLowerCase(), Number(row.round_reference), String(row.reward_type),
-                amount, Number(row.snapshot_block), true, Number(blockIndex));
+                amount, Number(row.snapshot_block), true, Number(blockIndex),
+                arKey.rewardRoundQualifier(row.reward_type, row.snapshot_block));
             if(ok) anyWritten = true;
         }
         if(anyWritten){
@@ -214,8 +228,12 @@ async function deriveAnchorRewards(indexerDb, config, blockIndex, proof){
             // Reconcile the single smallest-pubkey winner. The reconcile-log block_index is the
             // CURRENT BTC block, so a reorg of it restores collapsed losers (RB-ANCHOR). No ANCHOR
             // action index exists on BTC (the rows arrive via the mirror), so pass null.
+            // The qualifier is a property of the GROUP (it is part of the group key), so any
+            // member names it; taking it from `first` cannot disagree with what the writers
+            // above stamped on the rows this reconcile is about to compare.
             await indexerDb.reconcileAnchorRewardWinner(
-                Number(first.round_reference), String(first.reward_type), Number(blockIndex), null);
+                Number(first.round_reference), String(first.reward_type), Number(blockIndex), null,
+                arKey.rewardRoundQualifier(first.reward_type, first.snapshot_block));
             derived++;
         }
     }

@@ -52,6 +52,7 @@ const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
 const ckpt    = require('../checkpoint_commitment_activation.js');
 const ar      = require('../anchor_reward_activation.js');
+const arKey   = require('../anchor_reward_key.js');
 const abas    = require('../archive_batch_author_activation.js');
 const ahug    = require('../archive_head_unverified_gate_activation.js');
 const aaq     = require('../anchor-action-query.js');
@@ -426,13 +427,22 @@ class Anchor {
                 let rewardType  = (format === 6) ? 'anchor_archive' : 'anchor_' + data['CHAIN'];
                 let rewardRound = (format === 6) ? Number(data['MATCH_BATCH_SEQ']) : Number(data['CHECKPOINT_SEQ']);
                 let rewardAmt   = (format === 6) ? ar.ARCHIVE_REWARD_AMOUNT : ar.ANCHOR_REWARD_AMOUNT;
+                // The archive leg's rewardRound is MATCH_BATCH_SEQ, the dense hub counter the
+                // replay-guard comment above describes as restarting across a wipe-and-replay
+                // rebase, so it alone does not identify the reward: two genuinely distinct
+                // archive anchors can carry a reissued seq. The qualifier is the snapshot
+                // block that already distinguishes them in the SIGNED tuple (_rewardCanonical
+                // puts SNAPSHOT_BLOCK in the v6 XANCPUB canonical), carried into the ledger
+                // key so both real publishes survive the upsert and the reconcile. 0 for the
+                // per-chain legs, whose CHECKPOINT_SEQ is a height that only advances.
+                let rewardQual  = arKey.rewardRoundQualifier(rewardType, data['SNAPSHOT_BLOCK']);
                 let ok = await this.indexerDb.createValidatorReward(
                     data['PUBLISHER'], rewardRound, rewardType,
-                    rewardAmt, Number(data['SNAPSHOT_BLOCK']), true);
+                    rewardAmt, Number(data['SNAPSHOT_BLOCK']), true, null, rewardQual);
                 if(ok)
                     await this.indexerDb.reconcileAnchorRewardWinner(
                         rewardRound, rewardType,
-                        Number(data['BLOCK_INDEX']), Number(data['ACTION_INDEX']));
+                        Number(data['BLOCK_INDEX']), Number(data['ACTION_INDEX']), rewardQual);
             } else {
                 console.warn('\t ANCHOR v' + format + ' : publisher-attestation quorum not met or PUBLISHER not in oracle_publish set; reward skipped (anchor still valid)');
             }

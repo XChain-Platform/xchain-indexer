@@ -47,6 +47,7 @@ const divergenceMetrics = require('../dispenserDivergenceMetrics.js');
 const dispenserFreshness = require('../dispenser_freshness_activation.js');
 const dispenserCaps = require('../dispenser_caps_activation.js');
 const dispenserGiveAmount = require('../dispenser_give_amount_activation.js');
+const dispenserOraclePrice = require('../dispenser_oracle_price_activation.js');
 
 class Dispenser {
 
@@ -67,6 +68,42 @@ class Dispenser {
 
         // Define array of supported list types (1=Tick, 2=Address)
         this.listTypes = [2];
+    }
+
+    // Report a below-gate fresh-address verdict that rests on a null get_first_seen
+    // from a tracker whose own view is lagging, halted, or of unknown lag.
+    //
+    // Deliberately a SECOND call rather than switching the verdict itself onto
+    // get_first_seen_status: that verdict is replay-frozen (it decides DISPENSER
+    // validity already baked into hashed history), so the call feeding it must not
+    // change method. A tracker deployed before the sibling existed answers -32601,
+    // and the caller's catch turns any throw into isFresh=false, i.e. a rejection
+    // of a create the chain already accepted. This call cannot reach that path: it
+    // runs after the verdict is fixed, swallows everything, and is skipped entirely
+    // when the client has no getFirstSeenStatus.
+    //
+    // Log-only, in the shape of dispenserDivergenceMetrics: no DB write, no
+    // influence on validation, never an input to block hashing.
+    async _logStaleFreshness(data){
+        try {
+            if(!this.utxoTracker || typeof this.utxoTracker.getFirstSeenStatus !== 'function')
+                return;
+            let status = await this.utxoTracker.getFirstSeenStatus(data['GET_ADDRESS']);
+            let sync   = (status && status.sync) || null;
+            // Unknown lag is never treated as zero, and an absent sync surface is
+            // itself untrustworthy: both mean the tracker could not vouch for the
+            // null answer the verdict above rests on.
+            if(sync && sync.synced === true && sync.halted !== true && sync.lag !== null)
+                return;
+            console.log('DISPENSER_FRESHNESS_STALE : addr=' + data['GET_ADDRESS'] +
+                        ' block=' + data['BLOCK_INDEX'] +
+                        ' synced=' + (sync ? sync.synced : 'unknown') +
+                        ' halted=' + (sync ? (sync.halted === true) : 'unknown') +
+                        ' lag=' + (sync ? sync.lag : 'unknown') +
+                        ' tracker_height=' + (sync ? sync.tracker_height : 'unknown'));
+        } catch (e) {
+            // Diagnostic only: a failure here must never disturb the frozen verdict.
+        }
     }
 
     async parse(params, data, error){
@@ -251,6 +288,43 @@ class Dispenser {
         if(!error && format==0 && !this.util.isNull(data['FIAT_CODE']) && !this.util.isNull(data['FIAT_AMOUNT']) && !this.util.isValidFiatFormat(2, data['FIAT_AMOUNT']))
             error = 'invalid: FIAT_AMOUNT (format)';
 
+        // A Mode B create must name an oracle that already has an EFFECTIVE price. This is
+        // a VALIDITY rule, not a pricing one, and it is deliberately checked HERE rather
+        // than left to the oracle-fee block below: that block is gated on GIVE_ESCROW > 0,
+        // because the fee it computes is sized by the escrow being added. The price
+        // precondition has no such scope. An ownership dispenser is REQUIRED to carry an
+        // empty GIVE_ESCROW (see the block above) and cannot be refilled later once the
+        // caps cohort is active, so before this check existed a GIVE_OWNERSHIP=1 create
+        // naming a never-priced oracle was accepted outright: it escrowed the tick's
+        // ownership behind a dispenser that can never settle (reverseOraclePriceMatch
+        // finds no row) and used the oracle for free. Same for an open-now-refill-later
+        // balance create.
+        //
+        // Deliberately NOT gated on data['FEE_PROBE']. Unlike the fee block's OUTPUT half,
+        // an effective oracle price is knowable in advance and is the one verdict a caller
+        // can act on ("publish, wait out the 24h window, then create"), so the read-only
+        // quote/preflight surfaces must report it too rather than green-light a create the
+        // chain will reject.
+        //
+        // format-0 only. An escrow-bearing format-2 refill already reaches the same rule
+        // through the fee path, and checking every edit unconditionally would newly reject
+        // expiration-only or list-only edits on a dispenser whose oracle is perfectly fine.
+        //
+        // Gated (see dispenser_oracle_price_activation.js): this rejects creates the engine
+        // used to accept, so replay below the flag-day stays byte-identical.
+        if(!error && format==0 && !this.util.isNull(data['ORACLE_ADDRESS']) &&
+           dispenserOraclePrice.isDispenserOraclePriceActive(data['BLOCK_TIME'], this.config['NETWORK']) &&
+           await this.actions.protocolChanges.isEnabled('FIAT_DISPENSER_PRICING', data['BLOCK_INDEX'])){
+            let priceCheck = await this.util.requireEffectiveOraclePrice(data['BLOCK_TIME'], {
+                ORACLE_ADDRESS: data['ORACLE_ADDRESS'],
+                GIVE_COIN:      data['GIVE_COIN'],
+                GIVE_TICK:      data['GIVE_TICK'],
+                FIAT_CODE:      data['FIAT_CODE'],
+            }, this.indexerDb);
+            if(!priceCheck.valid)
+                error = priceCheck.error;
+        }
+
         // PRICE v1 oracle usage fee, Counterparty parity: a Mode B dispenser
         // pays the oracle operator UP FRONT, as a real native-coin output, charged to the
         // address opening (or refilling) it rather than to buyers per dispense. The fee
@@ -365,6 +439,15 @@ class Dispenser {
                     try {
                         let firstSeen = await this.utxoTracker.getFirstSeen(data['GET_ADDRESS']);
                         isFresh = !firstSeen || firstSeen.height >= data['BLOCK_INDEX'];
+                        // get_first_seen answers null both for "never appeared on chain"
+                        // and for "this tracker has not indexed that far yet, or is halted
+                        // on an unwinding reorg", so a fresh-by-null verdict computed
+                        // against a lagging tracker is a false positive that leaves no
+                        // trace (the catch below only fires on a hard RPC failure, not on
+                        // a stale-but-successful answer). Record when that happened.
+                        // Log-only, and never an input to isFresh.
+                        if(isFresh && !firstSeen)
+                            await this._logStaleFreshness(data);
                     } catch (err) {
                         console.log('WARNING: utxo-tracker get_first_seen failed for ' + data['GET_ADDRESS'] + ': ', err);
                     }

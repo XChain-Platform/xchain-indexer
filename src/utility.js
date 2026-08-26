@@ -1262,6 +1262,36 @@ class Utility {
         return this._dustThresholdCoin;
     }
 
+    // VALIDITY precondition for any Mode B (oracle-priced) dispenser: the oracle it names
+    // must already have an EFFECTIVE price for the pair. Operator ruling 2026-07-25: a
+    // dispenser must reference an oracle that has prices set. Oracle operators are a
+    // separate, ongoing service from dispenser operators, so the normal path is to point
+    // at an established feed whose price is already effective; only someone standing up
+    // their own oracle for their own dispenser meets the 24h activation delay (§5.4), and
+    // waiting is correct for them. Accepting the create with no effective price instead
+    // would be a free-oracle-usage loophole: publish, create immediately, never pay.
+    //
+    // Deliberately its OWN method rather than a step buried in quoteOracleFee. This rule is
+    // about whether the dispenser is valid at all, not about how large a fee it owes, and
+    // the two obligations have different scopes: the fee is sized by GIVE_ESCROW and is
+    // therefore nil for an escrow-less create, while the price precondition binds every
+    // Mode B action regardless of escrow. Living only inside the fee path made it
+    // unreachable for exactly the creates that escrow nothing (ownership dispensers, whose
+    // GIVE_ESCROW must be empty). quoteOracleFee still calls it as its first step, so the
+    // fee path keeps a single source of truth and its behavior is unchanged.
+    //
+    //   dispenser: { ORACLE_ADDRESS, GIVE_COIN, GIVE_TICK, FIAT_CODE }
+    //
+    // Returns { valid, error? }.
+    async requireEffectiveOraclePrice(blockTime, dispenser, db){
+        let oracleRow = await db.getOraclePrice(
+            dispenser['ORACLE_ADDRESS'], dispenser['GIVE_COIN'], dispenser['GIVE_TICK'],
+            dispenser['FIAT_CODE'], Number(blockTime));
+        if(!oracleRow)
+            return { valid: false, error: 'invalid: ORACLE_ADDRESS (no effective oracle price)', oracleRow: null };
+        return { valid: true, oracleRow: oracleRow };
+    }
+
     // Consensus check for the PRICE v1 oracle usage fee on a Mode B dispenser open or
     // refill. Deliberately the same shape as validateNativeCoinFee below: derive
     // an expected native amount from oracle prices, find the required output in
@@ -1294,19 +1324,13 @@ class Utility {
     async quoteOracleFee(blockTime, dispenser, db){
         blockTime = Number(blockTime);
 
-        // The oracle must already have an EFFECTIVE price. Operator ruling 2026-07-25: a
-        // dispenser must reference an oracle that has prices set. Oracle operators are a
-        // separate, ongoing service from dispenser operators, so the normal path is to
-        // point at an established feed whose price is already effective; only someone
-        // standing up their own oracle for their own dispenser meets the 24h activation
-        // delay (§5.4), and waiting is correct for them. Accepting the create with no fee
-        // instead would be a free-oracle-usage loophole: publish, create immediately,
-        // never pay.
-        let oracleRow = await db.getOraclePrice(
-            dispenser['ORACLE_ADDRESS'], dispenser['GIVE_COIN'], dispenser['GIVE_TICK'],
-            dispenser['FIAT_CODE'], blockTime);
-        if(!oracleRow)
-            return { valid: false, error: 'invalid: ORACLE_ADDRESS (no effective oracle price)' };
+        // The oracle must already have an EFFECTIVE price. Shared with the standalone
+        // create-time precondition (requireEffectiveOraclePrice above) so the two cannot
+        // drift: one rule, one error string, one lookup.
+        let priceCheck = await this.requireEffectiveOraclePrice(blockTime, dispenser, db);
+        if(!priceCheck.valid)
+            return { valid: false, error: priceCheck.error };
+        let oracleRow = priceCheck.oracleRow;
 
         // A zero or absent FEE is the common case and requires no output at all.
         let feeFraction = this.bcnum(oracleRow.fee || 0);
@@ -2673,7 +2697,10 @@ class Utility {
     // A future batched SEND therefore cannot reintroduce the defect: it would arrive here
     // exactly as an ordinary SEND does, and be tallied the same way.
     async processDispenserSends(actions, db, info){
-        let sends = await db.findDispenserSends(info['ACTION_INDEX']);
+        // BLOCK_INDEX is the block context the affordability flag-day is keyed on
+        // (dispenser_send_amount_compare_activation.js); without it the query stays
+        // on the legacy string compare.
+        let sends = await db.findDispenserSends(info['ACTION_INDEX'], info['BLOCK_INDEX']);
         for(let send of sends){
             // Define basic DISPENSE transaction data object
             let action = 'DISPENSE';

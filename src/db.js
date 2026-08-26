@@ -29,6 +29,7 @@ const { canonicalizeHashAddress } = require('./protocolAddressRoles');
 // so the array-of-{block_index, block_hash} contract is defined once. Pure leaf module (no
 // requires of its own), so no cycle.
 const reorgHistoryQuery = require('./reorg-history-query');
+const protocolTime = require('./protocol_time');
 const swqCap = require('./swq_source_cap_activation');
 const dispenseCancellingMatch = require('./dispense_cancelling_match_activation');
 const stateKeyCollation = require('./state_key_collation_activation');
@@ -37,6 +38,8 @@ const staleRoundVisibility = require('./oracle_stale_round_visibility_activation
 const listEditResolution = require('./list_edit_resolution_activation');
 const caretRefStrict = require('./caret_ref_strict_activation');
 const ledgerPrecision = require('./ledger_amount_precision_activation');
+const dispenserSendCompare = require('./dispenser_send_amount_compare_activation');
+const stakeWeightCollation = require('./stake_weight_collation_activation');
 // Per-block cap on the ATTEST deadline-expiry sweep. Vendored
 // byte-identical from xchain-documentation/protocol/constants.js, same convention
 // as the XCALL_MAX_CALLS_PER_BLOCK sibling it mirrors.
@@ -47,6 +50,9 @@ const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS,
         ARCHIVE_ANCHOR_BY_CONTENT_SQL, selectArchiveHeadRow,
         dedupeArchiveChunks } = require('./anchor-action-query');
 const { rethrowIfInfraFault } = require('./actions/faultGuard');
+// The validator_rewards ledger-key qualifier rule, shared with the two JS writers so the
+// SQL predicate here and they cannot disagree about which reward type is qualified.
+const arKey = require('./anchor_reward_key.js');
 
 // A stake weight, as stake_weighted_quorum.bcnum accepts one (plain decimal string).
 // Kept identical to that predicate's pattern so this producer can never emit a row the
@@ -222,6 +228,11 @@ class Database {
         // grow unbounded across a long-running process) while collapsing the per-action fan-out
         // to one decoder-DB lookup per block.
         this._blockTimeCache = { block_index: null, block_time: null };
+
+        // Companion memo for getBlockTime(), which resolves PROTOCOL time and costs an
+        // extra 11-row window read on top of the raw lookup. Same last-block-wins shape
+        // and the same reorg invalidation (clearBlockTimeCache clears both).
+        this._protocolTimeCache = { block_index: null, block_time: null };
 
         // Early-decide tally watermark. processVoteFinalizations step 2 re-tallies
         // every armed poll from full ledger/vote/delegation history on EVERY block, uncapped. A
@@ -420,7 +431,46 @@ class Database {
     async runMigrations(opts = {}){
         const result = await this._runMigrationsInner(opts);
         await this._assertPubkeyColumnIsUncompressedWide();
+        await this._assertStakeWeightOrderingCollation();
         return result;
+    }
+
+    // Fail-closed schema contract for the columns the stake-weight snapshot ORDERS on
+    // (stake_weight_collation_activation.js). The window caps truncate on that order, so
+    // the collation of index_addresses.address / index_pubkeys.pubkey decides which
+    // sources and keys reach the hashed stakes_root: a node whose column collation
+    // drifted off src/sql commits a different root than the rest of the fleet, silently.
+    // Once the gate is armed, a drifted CHARSET is worse than silent - `COLLATE utf8_bin`
+    // against a utf8mb4 column is errno 1253, so the node dies mid-block instead of at
+    // boot. Halting here with the table.column named is the cheap end of that.
+    //
+    // The comparison normalises the utf8 / utf8mb3 spelling on BOTH sides: MariaDB 10.6
+    // renamed the charset, so a column declared `CHARSET=utf8 COLLATE=utf8_general_ci`
+    // reports utf8mb3 / utf8mb3_general_ci (verified on 11.4.12). Comparing the raw names
+    // would halt every node in the fleet on a perfectly correct schema.
+    //
+    // An absent column and an unreadable name both return early rather than halt: a
+    // fresh install has no table yet, and an answer we could not read is not evidence of
+    // drift. Same convention as _assertPubkeyColumnIsUncompressedWide above.
+    async _assertStakeWeightOrderingCollation(){
+        let conn;
+        try {
+            conn = await this.getConnection();
+            for(const spec of stakeWeightCollation.STAKE_WEIGHT_ORDERING_COLUMNS){
+                const rows = await conn.query(
+                    "SELECT CHARACTER_SET_NAME, COLLATION_NAME FROM information_schema.columns " +
+                    "WHERE table_schema = ? AND table_name = ? AND column_name = ?",
+                    [this.dbName, spec.table, spec.column]
+                );
+                if(!rows.length) continue;  // column absent: table may not exist yet
+                const reason = stakeWeightCollation.collationDriftReason(spec, rows[0]);
+                if(reason) throw new Error(reason);
+            }
+        } finally {
+            if(conn && this.transactionConnection == null){
+                try { await conn.release(); } catch(_){}
+            }
+        }
     }
 
     async _runMigrationsInner(opts = {}){
@@ -429,7 +479,7 @@ class Database {
         const only          = (opts.only == null) ? null
             : new Set([].concat(opts.only).map(s => String(s).trim()).filter(Boolean));
         const dir           = path.join(__dirname, 'sql', 'migrations');
-        const result        = { applied: [], pending: [], lockSkipped: false };
+        const result        = { applied: [], pending: [], baselined: [], lockSkipped: false };
 
         let files = [];
         try { files = fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort(); }
@@ -552,6 +602,33 @@ class Database {
                     }
 
                     const mode = this._migrationMode(raw);
+
+                    // Precondition gate: a migration listed in MIGRATION_PRECONDITIONS is
+                    // applicable only to a schema in a particular shape, and running it on
+                    // any other shape destroys data rather than converting it. Evaluate the
+                    // predicate against the LIVE schema and, when it says the migration does
+                    // not apply, record it as applied WITHOUT executing a statement.
+                    //
+                    // Baselining rather than merely skipping is what makes it stick: a skip
+                    // leaves the file pending forever, so every later blanket run re-enters
+                    // this branch and one runner change or one direct-SQL apply puts the
+                    // hazard back. The ledger row states what is already true - the end
+                    // state this migration exists to produce holds on this database.
+                    //
+                    // It runs BEFORE the mode gate deliberately, so an unattended startup
+                    // baselines a pending manual migration and the hazard is gone before an
+                    // operator ever reaches for `npm run migrate`.
+                    const preconditionSkip = await this._migrationPreconditionSkip(file, conn);
+                    if(preconditionSkip){
+                        await conn.query(
+                            'INSERT INTO schema_migrations (name, checksum, mode, applied_at) VALUES (?, ?, ?, NOW())',
+                            [file, checksum, mode]
+                        );
+                        result.baselined.push(file);
+                        console.log('runMigrations: BASELINED ' + file + ' (recorded as applied, no statement run): ' + preconditionSkip);
+                        continue;
+                    }
+
                     if(mode !== 'auto' && !includeManual){
                         console.log('runMigrations: PENDING (gated, mode=' + mode + '): ' + file + ' - apply with `node src/migrate.js`.');
                         result.pending.push(file);
@@ -904,6 +981,17 @@ class Database {
             'applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP' +
             ') ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci'
         );
+    }
+
+    // Evaluate a migration's declared precondition against the live schema. Returns a
+    // human reason string when the migration does NOT apply to this database (the caller
+    // baselines it), or null when it should run. Files with no entry always run.
+    // Runs on the caller's migration connection so it stays inside the migration lock.
+    async _migrationPreconditionSkip(file, conn){
+        const pre = Database.MIGRATION_PRECONDITIONS[file];
+        if(!pre) return null;
+        const rows = await conn.query(pre.sql, [this.dbName]);
+        return pre.skipWhen(rows || []);
     }
 
     // Parse a CREATE TABLE statement to extract expected column nullability.
@@ -2212,7 +2300,52 @@ class Database {
     // Handle getting block time for a given block. Memoized (last-block-wins, see
     // this._blockTimeCache in the constructor): block_time is constant per block_index, and
     // protocol_changes.isEnabled() calls this repeatedly per block under the hot per-action path.
+    // PROTOCOL time for a block: what every time-keyed consensus reader should use.
+    //
+    // On networks switched to median-time-past (see protocol_time.js) this is the
+    // median of the previous 11 block timestamps rather than the block's own stamp.
+    // The raw stamp is chosen by whoever mined the block and Bitcoin accepts it up
+    // to ~2h ahead of network-adjusted time; on testnet4 that is not hypothetical,
+    // the chain rides its 20-minute minimum-difficulty rule and stamps every block
+    // ~1201s ahead of its parent. Reading mirrored hub data at a future instant is
+    // what forced the mirror barriers to wait for wall clock to catch up, which is
+    // what made a confirmed transaction take hours to index.
+    //
+    // Applied HERE rather than at each call site on purpose: this is the single
+    // seam every protocol reader already flows through (actions.js, protocol
+    // changes, the six mirror barriers), so they all move together. A reader left
+    // on the raw stamp while the barriers move is the combination that forks.
+    // Storage and display must NOT use this - createBlock and the chain-tip push
+    // take getRawBlockTime, so the timestamp we persist and show stays the real one.
     async getBlockTime(block_index){
+        let key = Number(block_index);
+        // Lazily created: this method is also reached through hand-built Database
+        // doubles that predate the memo, and an absent cache must degrade to "always
+        // recompute" rather than throwing on the consensus path.
+        if(!this._protocolTimeCache)
+            this._protocolTimeCache = { block_index: null, block_time: null };
+        if(this._protocolTimeCache.block_index === key)
+            return this._protocolTimeCache.block_time;
+        let raw = await this.getRawBlockTime(block_index);
+        let network = (this.config) ? this.config['NETWORK'] : undefined;
+        let protocolTimeValue = raw;
+        if(protocolTime.isProtocolTimeMtpActive(network) && raw !== false){
+            let previous = await this.getPreviousBlockTimes(key, protocolTime.MEDIAN_TIME_SPAN);
+            protocolTimeValue = protocolTime.protocolTime(network, raw, previous);
+        }
+        // Never memoize an unresolvable lookup, for the same reason the raw reader
+        // does not: the retry must re-query against a healthy DB.
+        if(raw !== false){
+            this._protocolTimeCache.block_index = key;
+            this._protocolTimeCache.block_time  = protocolTimeValue;
+        }
+        return protocolTimeValue;
+    }
+
+    // The block's own recorded timestamp, unmodified. This is the value to persist
+    // and to show a user; it is NOT the value time-keyed consensus logic should read
+    // on a chain whose miners can date blocks into the future (see getBlockTime).
+    async getRawBlockTime(block_index){
         let key = Number(block_index);
         if(this._blockTimeCache.block_index === key)
             return this._blockTimeCache.block_time;
@@ -2252,7 +2385,35 @@ class Database {
     // createBlock). Rollback calls this on BOTH DB instances after commit so the replay
     // re-reads the new chain's block_time. Mirrors the decoder's per-height reorg clear.
     clearBlockTimeCache(){
-        this._blockTimeCache = { block_index: null, block_time: null };
+        this._blockTimeCache    = { block_index: null, block_time: null };
+        // The protocol-time memo is derived from the raw one AND from the 11 blocks
+        // below it, so a reorg invalidates it for the same reason and then some: the
+        // replayed height can shift the median even when its own stamp is unchanged.
+        this._protocolTimeCache = { block_index: null, block_time: null };
+    }
+
+    // The timestamps of the `span` blocks immediately below `block_index`, newest
+    // first. Feeds the median-time-past calculation in getBlockTime. Returns what
+    // exists rather than failing when fewer are available (a fresh chain near
+    // genesis), matching Bitcoin, which medians whatever history it has.
+    async getPreviousBlockTimes(block_index, span){
+        let key   = Number(block_index);
+        let count = parseInt(span);
+        if(!Number.isFinite(key) || !Number.isFinite(count) || count <= 0) return [];
+        let query = `SELECT block_time FROM blocks
+                     WHERE block_index < ? AND block_time IS NOT NULL
+                     ORDER BY block_index DESC LIMIT ?`;
+        let results;
+        try {
+            // doQueryStrict for the same reason getRawBlockTime uses it: this feeds the
+            // consensus clock, and collapsing a DB fault to [] would silently fall back
+            // to the raw stamp on this node only, which is a unilateral divergence.
+            results = await this.doQueryStrict(query, [key, count]);
+        } catch(e){
+            rethrowIfInfraFault(e);
+            return [];
+        }
+        return (results || []).map((r) => r['block_time']);
     }
 
     // Invalidate the light-client touched-key resolver memos (_smtTickNameCache /
@@ -2897,11 +3058,23 @@ class Database {
             let pubkey_id = await this.getOrCreatePubkeyId(String(r.validator_pubkey).toLowerCase());
             if(pubkey_id === null)
                 continue;   // leave unapplied; surfaces as a parity gap rather than a bad FK
+            // round_qualifier keeps this row's key identical to what the live writers
+            // produce, which is what "same UNIQUE dedup" above promises. The staging table
+            // carries no snapshot_block, but it does not need one: for 'anchor_archive' the
+            // reward's EARN block IS the snapshot block (both live writers pass
+            // SNAPSHOT_BLOCK as block_index), so the archived block_index is the qualifier.
+            // Every other reward type resolves to 0 and is written exactly as before.
+            // Without this a recovered node would key archive rewards at 0 while a live node
+            // keys them at snapshot_block, so a pair sharing a reissued MATCH_BATCH_SEQ would
+            // collapse under INSERT IGNORE here and the recovered node's COLLECT total would
+            // sit one archive reward below a from-genesis replay's.
             await this.doQuery(
                 `INSERT IGNORE INTO validator_rewards
-                    (source_id, signing_pubkey_id, reward_type, round_reference, amount, block_index)
-                 VALUES (?, ?, ?, ?, ?, ?)`,
-                [source_id, pubkey_id, String(r.reward_type), r.round_reference, String(r.amount), Number(r.block_index)]);
+                    (source_id, signing_pubkey_id, reward_type, round_reference, round_qualifier, amount, block_index)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [source_id, pubkey_id, String(r.reward_type), r.round_reference,
+                 arKey.rewardRoundQualifier(r.reward_type, r.block_index),
+                 String(r.amount), Number(r.block_index)]);
             await this.doQuery("UPDATE recovery_pending_rewards SET applied=1, source_id=?, applied_block=? WHERE id=?",
                 [source_id, appliedBlock, r.id]);
             count++;
@@ -11158,8 +11331,25 @@ class Database {
     }
 
     // Handle finding any sends to an address with active dispenser(s)
-    async findDispenserSends(action_index){
+    //
+    // Affordability predicate (flag-day gated, see
+    // dispenser_send_amount_compare_activation.js). `sends.amount` and
+    // `dispensers.get_amount` are both VARCHAR(250), so the legacy
+    // `s1.amount >= d1.get_amount` compares them as TEXT under the column
+    // collation: get_amount '9' against a send of '10' is false as a string and
+    // true as a number. This query is the ONLY gate deciding whether a token
+    // SEND becomes a DISPENSE (utility.processDispenserSends iterates exactly
+    // these rows), so a lexicographic false negative strands the sender's
+    // tokens at the dispenser address on a legal overpayment. At/after the
+    // activation both operands are CAST to DECIMAL before comparing, the
+    // CAST-before-compare idiom every sibling amount query in this file uses.
+    // Correcting it changes how already-valid blocks evaluate, so the legacy
+    // predicate is emitted byte-identically below the height, and a caller with
+    // no block context (out-of-band writes, API-side readers) stays on it.
+    async findDispenserSends(action_index, block_index){
         let sends = [];
+        let amountCompare = dispenserSendCompare.sendAmountComparePredicate(
+            block_index, this.config['NETWORK'], this.config['COIN']);
         let query  = `SELECT
                             a2.address as source,
                             a3.address as destination,
@@ -11190,7 +11380,7 @@ class Database {
                             s3.status='valid' AND 
                             s4.status IN ('open', 'cancelling') AND 
                             s1.tick_id=d1.get_tick_id AND
-                            s1.amount >= d1.get_amount AND
+                            ` + amountCompare + ` AND
                             s1.action_index=?
                         GROUP BY s1.action_index`;
         let args = [action_index];
@@ -11742,10 +11932,22 @@ class Database {
             '       ara.publisher, ara.publisher_attestations, ara.doge_anchor_txid ' +
             '  FROM anchor_reward_attestations ara ' +
             ' WHERE ara.network = ? AND ara.snapshot_block <= ? ' +
+            // The exclusion is also QUALIFIER-scoped. Matching on (reward_type,
+            // round_reference) alone made this the FIRST place the archive collapse bit:
+            // 'anchor_archive' round_reference is MATCH_BATCH_SEQ, a dense hub counter a
+            // wipe-and-replay rebase reissues, so once ONE archive anchor was derived, a
+            // genuinely distinct later archive anchor that happened to reuse that seq matched
+            // this NOT EXISTS and was never returned as pending at all - suppressed before
+            // reconcile ever saw it, so no amount of reconcile-side fixing could recover it.
+            // Comparing the qualifier a derived row WOULD carry (snapshot_block for the
+            // archive leg, 0 otherwise - the SQL twin of anchor_reward_key.rewardRoundQualifier,
+            // emitted from that module so the two forms cannot drift) makes the exclusion
+            // speak about the same logical reward the ledger key does.
             '   AND NOT EXISTS (SELECT 1 FROM validator_rewards vr ' +
             '                     JOIN index_pubkeys pk ON pk.id = vr.signing_pubkey_id ' +
             '                    WHERE vr.reward_type = ara.reward_type ' +
             '                      AND vr.round_reference = ara.round_reference ' +
+            '                      AND vr.round_qualifier = ' + arKey.sqlRoundQualifier('ara.reward_type', 'ara.snapshot_block') + ' ' +
             '                      AND pk.pubkey <= LOWER(ara.publisher)) ' +
             // Tiebreak on snapshot_block, the remaining component of uq_reward_tuple, BEFORE
             // ara.id. Two rows can share (reward_type, round_reference, publisher) and differ
@@ -11770,7 +11972,14 @@ class Database {
     //         writes while processing a much later BTC block, so rollback needs the creating
     // block to know the row must disappear. Every other writer earns and
     //         writes in the same block and leaves it NULL.
-    async createValidatorReward(pubkeyHex, roundReference, rewardType, amount, blockIndex, upsert, deriveBlockIndex){
+    // roundQualifier: the remaining component of the reward's UNIQUE identity. It is
+    //         snapshot_block for 'anchor_archive' and 0 for every other reward type, because the
+    //         archive leg's round_reference is MATCH_BATCH_SEQ - a dense hub counter a
+    //         wipe-and-replay rebase reissues - so it alone does not name one logical reward.
+    //         Callers compute it with anchor_reward_key.rewardRoundQualifier(); an omitted
+    //         argument lands on 0, the value every pre-column row already carries, so every
+    //         non-archive writer stays byte-identical.
+    async createValidatorReward(pubkeyHex, roundReference, rewardType, amount, blockIndex, upsert, deriveBlockIndex, roundQualifier){
         let pubkey_id = await this.getPubkeyId(String(pubkeyHex).toLowerCase());
         if(pubkey_id === null){
             console.warn('createValidatorReward: unknown pubkey ' + pubkeyHex);
@@ -11783,20 +11992,28 @@ class Database {
             console.warn('createValidatorReward: no active stake or delegation for pubkey ' + pubkeyHex + ' at block ' + blockIndex);
             return false;
         }
-        // Insert the reward (idempotent via UNIQUE INDEX on source_id+signing_pubkey_id+reward_type+round_reference).
+        // Insert the reward (idempotent via UNIQUE INDEX on
+        // source_id+signing_pubkey_id+reward_type+round_reference+round_qualifier).
         // Deterministic writers upsert so their amount/block_index always win.
         let derive_block_index = (deriveBlockIndex === undefined || deriveBlockIndex === null)
             ? null : Number(deriveBlockIndex);
+        // NEVER NULL. MariaDB treats NULLs as distinct in a UNIQUE index, so a nullable
+        // qualifier would silently stop this key deduplicating rows at all - the opposite of
+        // what the column is for. Coerced here so a caller that passes undefined/null still
+        // writes the legacy 0.
+        let round_qualifier = Number(roundQualifier);
+        if(!Number.isFinite(round_qualifier) || round_qualifier < 0) round_qualifier = 0;
+        round_qualifier = Math.floor(round_qualifier);
         let query = upsert
             ? `INSERT INTO validator_rewards
-                    (source_id, signing_pubkey_id, reward_type, round_reference, amount, block_index, derive_block_index)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (source_id, signing_pubkey_id, reward_type, round_reference, round_qualifier, amount, block_index, derive_block_index)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                  ON DUPLICATE KEY UPDATE amount=VALUES(amount), block_index=VALUES(block_index),
                                          derive_block_index=VALUES(derive_block_index)`
             : `INSERT IGNORE INTO validator_rewards
-                    (source_id, signing_pubkey_id, reward_type, round_reference, amount, block_index, derive_block_index)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)`;
-        let args = [source_id, pubkey_id, rewardType, roundReference, amount, blockIndex, derive_block_index];
+                    (source_id, signing_pubkey_id, reward_type, round_reference, round_qualifier, amount, block_index, derive_block_index)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+        let args = [source_id, pubkey_id, rewardType, roundReference, round_qualifier, amount, blockIndex, derive_block_index];
         await this.doQuery(query, args);
         return true;
     }
@@ -11826,8 +12043,19 @@ class Database {
     // vs a fresh replay (a ledger-hashed divergence). Logging is scoped to the
     // reconcile block, so callers that cannot name a block (legacy test paths)
     // pass null and skip the log (the DELETE behaviour is unchanged).
-    async reconcileAnchorRewardWinner(roundReference, rewardType, reconcileBlockIndex, anchorActionIndex){
+    //
+    // Scoped by round_qualifier as well, and that scoping is the whole point for the archive
+    // leg: 'anchor_archive' rounds are MATCH_BATCH_SEQ, a dense hub counter a wipe-and-replay
+    // rebase reissues, so a (reward_type, round_reference) collapse reaches ACROSS two
+    // genuinely distinct archive anchors and deletes a real, quorum-attested publisher's pay
+    // as if it were a failover loser. The qualifier (snapshot_block for the archive leg, 0
+    // everywhere else) is what the signed XANCPUB tuple already used to tell them apart.
+    // An omitted qualifier is 0, so every per-chain caller behaves exactly as before.
+    async reconcileAnchorRewardWinner(roundReference, rewardType, reconcileBlockIndex, anchorActionIndex, roundQualifier){
         if(!/^anchor_[A-Za-z_]+$/.test(String(rewardType))) return 0;
+        let round_qualifier = Number(roundQualifier);
+        if(!Number.isFinite(round_qualifier) || round_qualifier < 0) round_qualifier = 0;
+        round_qualifier = Math.floor(round_qualifier);
         if(reconcileBlockIndex !== null && reconcileBlockIndex !== undefined){
             // Same loser predicate as the DELETE (pubkey > min_pubkey), capturing each
             // row's verbatim pre-image + its ORIGINAL earn-block (reward_block_index).
@@ -11836,10 +12064,10 @@ class Database {
             // have minted this loser at all, because a derived reward's earn-block is the far
             // earlier SNAPSHOT_BLOCK. NULL for a loser written by a same-block writer.
             let logQuery = `INSERT INTO anchor_reward_reconcile_log
-                                (anchor_action_index, reward_type, round_reference,
+                                (anchor_action_index, reward_type, round_reference, round_qualifier,
                                  source_id, signing_pubkey_id, amount, reward_block_index,
                                  reward_derive_block_index, block_index)
-                            SELECT ?, vr.reward_type, vr.round_reference,
+                            SELECT ?, vr.reward_type, vr.round_reference, vr.round_qualifier,
                                    vr.source_id, vr.signing_pubkey_id, vr.amount, vr.block_index,
                                    vr.derive_block_index, ?
                               FROM validator_rewards vr
@@ -11849,12 +12077,15 @@ class Database {
                                   FROM validator_rewards vr2
                                   JOIN index_pubkeys pk2 ON pk2.id = vr2.signing_pubkey_id
                                   WHERE vr2.reward_type = ? AND vr2.round_reference = ?
+                                    AND vr2.round_qualifier = ?
                               ) m
                               WHERE vr.reward_type = ? AND vr.round_reference = ?
+                                AND vr.round_qualifier = ?
                                 AND pk.pubkey > m.min_pubkey`;
             await this.doQuery(logQuery, [
                 (anchorActionIndex === undefined ? null : anchorActionIndex), reconcileBlockIndex,
-                rewardType, roundReference, rewardType, roundReference]);
+                rewardType, roundReference, round_qualifier,
+                rewardType, roundReference, round_qualifier]);
         }
         let query = `DELETE vr FROM validator_rewards vr
                      JOIN index_pubkeys pk ON pk.id = vr.signing_pubkey_id
@@ -11863,10 +12094,13 @@ class Database {
                          FROM validator_rewards vr2
                          JOIN index_pubkeys pk2 ON pk2.id = vr2.signing_pubkey_id
                          WHERE vr2.reward_type = ? AND vr2.round_reference = ?
+                           AND vr2.round_qualifier = ?
                      ) m
                      WHERE vr.reward_type = ? AND vr.round_reference = ?
+                       AND vr.round_qualifier = ?
                        AND pk.pubkey > m.min_pubkey`;
-        let res = await this.doQuery(query, [rewardType, roundReference, rewardType, roundReference]);
+        let res = await this.doQuery(query, [rewardType, roundReference, round_qualifier,
+                                             rewardType, roundReference, round_qualifier]);
         return res && res.affectedRows ? res.affectedRows : 0;
     }
 
@@ -12662,16 +12896,26 @@ class Database {
     // pubkey+capability); only the returned SET is. CONSENSUS-CRITICAL: feeds the
     // hashed stakes_root at/after SWQ_SOURCE_CAP_ACTIVATION and MUST stay byte-identical
     // to the xchain-sync twin (cross-repo drift guard in rollback-coverage.test.js).
-    _cappedStakeWeightsSql(inner, maxSources, maxKeys){
+    //
+    // `binCollation` (stake_weight_collation_activation.js) pins the ordering to a
+    // binary collation. `source` and `pubkey` resolve through index_addresses.address
+    // and index_pubkeys.pubkey, both declared utf8_general_ci (folding), and every
+    // other consensus read of those columns already pins utf8_bin. Order is a
+    // consensus quantity HERE and only here: the two window ranks are what the caps
+    // truncate on, so the collation decides which sources and which keys survive into
+    // the hashed stakes_root. Below the height the emitted SQL is byte-identical to
+    // what shipped before the gate; the suffix is '' and concatenates away.
+    _cappedStakeWeightsSql(inner, maxSources, maxKeys, binCollation){
+        let c = stakeWeightCollation.stakeWeightCollate(binCollation);
         let sql = `SELECT r.pubkey AS pubkey, r.source AS source, r.weight AS weight, r._sr AS _sr
                    FROM (
                        SELECT b.pubkey AS pubkey, b.source AS source, b.weight AS weight,
-                              DENSE_RANK() OVER (ORDER BY b.source)                        AS _sr,
-                              ROW_NUMBER() OVER (PARTITION BY b.source ORDER BY b.pubkey)  AS _kr
+                              DENSE_RANK() OVER (ORDER BY b.source${c})                        AS _sr,
+                              ROW_NUMBER() OVER (PARTITION BY b.source${c} ORDER BY b.pubkey${c})  AS _kr
                        FROM (${inner.sql}) b
                    ) r
                    WHERE r._sr <= ? AND r._kr <= ?
-                   ORDER BY r.source, r.pubkey`;
+                   ORDER BY r.source${c}, r.pubkey${c}`;
         let args = [...inner.args, maxSources + 1, maxKeys];
         return { sql, args };
     }
@@ -12686,10 +12930,15 @@ class Database {
     // in xchain-sync so the stakes_root set is identical on both sides of the height.
     async _stakeWeightsWithCap(valid_id, blockIndex, minStake, label){
         let sw = this._stakeWeightsSql(valid_id, blockIndex, minStake);
+        // Ordering collation for BOTH regimes (stake_weight_collation_activation.js);
+        // the legacy LIMIT branch truncates on the same order the capped branch ranks on.
+        let binCollation = stakeWeightCollation.isStakeWeightBinCollationActive(
+            blockIndex, this.config['NETWORK'], this.config['COIN']);
+        let swc = stakeWeightCollation.stakeWeightCollate(binCollation);
         if(swqCap.isSwqSourceCapActive(blockIndex, this.config['NETWORK'], this.config['COIN'])){
             let maxSources = swqCap.STAKE_WEIGHT_MAX_SOURCES;
             let maxKeys    = swqCap.STAKE_WEIGHT_MAX_KEYS_PER_SOURCE;
-            let capped = this._cappedStakeWeightsSql(sw, maxSources, maxKeys);
+            let capped = this._cappedStakeWeightsSql(sw, maxSources, maxKeys, binCollation);
             let raw = await this.doQuery(capped.sql, capped.args);
             let truncated = raw.some(r => Number(r._sr) > maxSources);
             if(truncated)
@@ -12702,7 +12951,7 @@ class Database {
             return { rows, truncated };
         }
         let limit = this.config['VALIDATOR_QUERY_LIMIT'];
-        let query = `${sw.sql} ORDER BY source, pubkey LIMIT ?`;
+        let query = `${sw.sql} ORDER BY source${swc}, pubkey${swc} LIMIT ?`;
         let raw = await this.doQuery(query, [...sw.args, limit]);
         let truncated = raw.length >= limit;
         if(truncated)
@@ -15826,6 +16075,103 @@ Database.MIGRATION_CHECKSUM_REBASELINES = {
     '2026-08-19-attest-validator-stats-surrogate-id.sql': {
         from: '0f8f54622b7022134b140d1f68a86ea91d763c6a51e9886ee0b741961df34dc7',
         to:   'ecb9c206ebda43ba932603d60d6d470ab47704db428ff81f42d16c36b983acbb',
+    },
+    // The header claimed mode=manual coordinated the fleet; it cannot (the drift
+    // reconciler converges all three objects at verifyTables(), before runMigrations()
+    // reads the gate), so the WHY/mode block was rewritten to state what the tag does
+    // and does not do. Comment lines only: the three ALTER TABLE statements are
+    // byte-identical, verified by comparing the comment-stripped residue. Both of the
+    // file's pre-current committed revisions are listed - afee252f (the original) and
+    // 758fc1db (a comment cleanup) - since each fleet DB recorded whichever it applied
+    // first; on any database that never applied the file by hand the entry is inert.
+    '2026-08-12-validator-rewards-derive-block-index.sql': {
+        from: [
+            '8f6f8b6bae2026128b0b298892fc0b5601a67f2ff12cc05fb4da9ae9cfdd1100', // afee252f, as authored
+            '8496c4f75647ad9768d8128e8f9341e3d4de9a1db5ca2f66d4328762ab0a9ec3', // 758fc1db, comment cleanup
+        ],
+        to: 'a911c38ca928743bb65c763c8143a5a3ad63de18da72b32da83a4971c1735ed8',
+    },
+};
+
+// Applicability preconditions the runner evaluates against the LIVE schema before it
+// applies a migration (see _migrationPreconditionSkip). Each entry is a parameterised
+// information_schema query taking the database name, plus a predicate returning a reason
+// string when the migration does not apply to this database and null when it does.
+//
+// The guard lives HERE rather than inside the .sql file on purpose: a migration file's
+// sha256 is its identity in schema_migrations, so adding a guard clause to an already
+// applied file would trip the immutability check on every node that ran it, and healing
+// that needs a MIGRATION_CHECKSUM_REBASELINES entry whose documented contract is that the
+// executable SQL is byte-identical across pinned revisions. A runner-side predicate keeps
+// both properties intact and covers every invocation route (startup, blanket
+// `node src/migrate.js`, and a targeted `--file` rollout), since all three funnel through
+// this loop. Mirrors xchain-decoder/src/db.js.
+Database.MIGRATION_PRECONDITIONS = {
+    // Widens pubkeys.pubkey to hold an uncompressed key (130 hex chars). It is
+    // mode=manual, so it stays PENDING on a database created from the current
+    // src/sql/pubkeys.sql (already VARCHAR(130) or wider) - and a fresh install never
+    // needs the widen a prior narrower column required. Baseline only while the live
+    // column is already 130 characters or more, the same threshold
+    // _assertPubkeyColumnIsUncompressedWide enforces at startup.
+    //
+    // Absent table/column, or an unreadable/NULL length, is deliberately NOT
+    // baselined: that state needs an operator, and the startup assertion fails
+    // closed on it (a non-character type or a missing column returns early there,
+    // leaving the migration's own PENDING state as the only signal).
+    '2026-07-24-pubkeys-widen-uncompressed.sql': {
+        sql: "SELECT CHARACTER_MAXIMUM_LENGTH AS len FROM information_schema.columns " +
+             "WHERE table_schema = ? AND table_name = 'pubkeys' AND column_name = 'pubkey'",
+        skipWhen: (rows) => {
+            // No column, or a length we could not read: never baseline on an absent
+            // answer, let the file speak for itself and the assertion fail closed after it.
+            if(!rows.length || rows[0].len == null) return null;
+            const len = Number(rows[0].len);
+            if(Number.isNaN(len)) return null;
+            if(len >= 130) return 'pubkeys.pubkey is already ' + len + ' characters wide, so there is no narrow column to widen.';
+            return null;
+        }
+    },
+    // Adds validator_rewards.derive_block_index (+ its index) and
+    // anchor_reward_reconcile_log.reward_derive_block_index. It is mode=manual, but
+    // unlike the surrogate-key case alterTableForDrift documents as its BLIND SPOT
+    // (AUTO_INCREMENT / PRIMARY KEY), the drift reconciler CAN converge every object
+    // it adds: both columns are nullable-with-DEFAULT in
+    // src/sql/validator_rewards.sql and src/sql/anchor_reward_reconcile_log.sql (so
+    // alterTableForDrift ADDs them rather than hitting the NOT-NULL-no-DEFAULT skip),
+    // and the index is non-unique (so reconcileTableIndexes adds it unconditionally).
+    // verifyTables() runs before runMigrations() at startup, so on a fresh or aged
+    // install the end state is already in place by the time this file is read. The
+    // ledger row records what is true there; without it the file sits PENDING with no
+    // row forever and every operator run re-lists a no-op.
+    //
+    // ONE bind parameter: _migrationPreconditionSkip passes [this.dbName] and nothing
+    // else, so the database name is bound once in a CTE and reused by each subquery.
+    //
+    // A partially converged or unreadable schema is deliberately NOT baselined: any
+    // missing object, or a count that will not parse, returns null and the file runs,
+    // which is idempotent (IF NOT EXISTS throughout) on whatever is already there.
+    '2026-08-12-validator-rewards-derive-block-index.sql': {
+        sql: "WITH p AS (SELECT ? AS db) SELECT " +
+             "(SELECT COUNT(*) FROM information_schema.columns, p WHERE table_schema = p.db " +
+             "AND table_name = 'validator_rewards' AND column_name = 'derive_block_index') AS reward_col, " +
+             "(SELECT COUNT(*) FROM information_schema.columns, p WHERE table_schema = p.db " +
+             "AND table_name = 'anchor_reward_reconcile_log' AND column_name = 'reward_derive_block_index') AS log_col, " +
+             "(SELECT COUNT(*) FROM information_schema.statistics, p WHERE table_schema = p.db " +
+             "AND table_name = 'validator_rewards' AND column_name = 'derive_block_index') AS reward_idx",
+        skipWhen: (rows) => {
+            if(!rows.length) return null;
+            const row = rows[0] || {};
+            const counts = [row.reward_col, row.log_col, row.reward_idx];
+            for(const raw of counts){
+                if(raw == null) return null;
+                const n = Number(raw);
+                if(Number.isNaN(n) || n < 1) return null;
+            }
+            return 'validator_rewards.derive_block_index (with its index) and ' +
+                   'anchor_reward_reconcile_log.reward_derive_block_index are already present, ' +
+                   'converged from the table definitions by the startup drift reconciler, so this ' +
+                   'migration has nothing left to add.';
+        }
     },
 };
 

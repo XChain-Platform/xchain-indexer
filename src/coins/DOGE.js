@@ -72,7 +72,7 @@ module.exports = {
                 GAS:             'DGasfpttCnTijuuoAdiJ9sXJjG7vQ5pMkW',
                 DONATE1:         'DDonate1RBcwGnCRNnVtwuCmQyWW1Gn25f', // Protocol Development
                 DONATE2:         'DDonate2o3Sg4phybp92oFpkmv8S9ZhGSV', // Community Development
-                FEE_DESTINATION: 'DFeesjvoMoVqd9UDuwDSAxzHMF5xZFgeG9', // native-fee destination (env-overridable)
+                FEE_DESTINATION: 'DFeesjvoMoVqd9UDuwDSAxzHMF5xZFgeG9', // native-fee destination (regtest-only env override; ignored on mainnet/testnet)
                 REWARD:          'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX', // structural only; COLLECT/XCHAIN are BTC-only
                 EXPLORER:        'DDonate3FCoUgi1bxW5r9c2p75uKTLw9qE', // display-only donation
             },
@@ -111,13 +111,13 @@ module.exports = {
                 supportsSegwit:       false,
                 singleOpReturnPolicy: true,
             },
-            // Fresh testnet genesis 2026-08-10 (operator): was 64800000, which is
-            // ~3.02M blocks behind the tip and ~21 hours of replay - the single
-            // reason this genesis is worth doing. Raised to just under the live
-            // tip (67819590 at the decision) so replay is minutes. Consensus input
-            // (folded into consensusSubset), so it moves the DOGE testnet pin and
-            // ships in one wave with every other vendoring service.
-            firstBlock: 67815000,
+            // Fresh testnet genesis 2026-08-24 (operator): was 67815000 (the
+            // 2026-08-10 genesis). Raised to just under the live tip (67847591 at
+            // the decision) so the public testnet announces with zero
+            // pre-announcement test actions and replays in minutes. Consensus
+            // input (folded into consensusSubset), so it moves the DOGE testnet
+            // pin and ships in one wave with every other vendoring service.
+            firstBlock: 67847500,
             // Block-0 hash of the chain (see mainnet above). Unpinned until the operator
             // reads it off the fleet's own node: `dogecoin-cli -testnet getblockhash 0`.
             chainGenesisHash: null,

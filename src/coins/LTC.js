@@ -72,7 +72,7 @@ module.exports = {
                 GAS:             'LXChainCN6yjHVqqS9tYzYVYZ8CCZcSx72',
                 DONATE1:         'Ldonate18tNZcVThKm5MX33EjvhaanJ6Mg', // Protocol Development
                 DONATE2:         'Ldonate2io846q2e7q8dUArh3TNnaq9ENb', // Community Development
-                FEE_DESTINATION: 'Lfees7tszAx5Gqam2fuqf6biaX3LXafM4H', // native-fee destination (env-overridable)
+                FEE_DESTINATION: 'Lfees7tszAx5Gqam2fuqf6biaX3LXafM4H', // native-fee destination (regtest-only env override; ignored on mainnet/testnet)
                 REWARD:          'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX', // structural only; COLLECT/XCHAIN are BTC-only
                 EXPLORER:        'Ldonate3FfyqbYQAYxo3qjFLcu28oUdAfn', // display-only donation
             },
@@ -109,12 +109,13 @@ module.exports = {
                 minStandardTxNonWitnessSize: 85,
                 singleOpReturnPolicy:        true,
             },
-            // Fresh testnet genesis 2026-08-10 (operator): was 4765000. Raised to
-            // just under the live tip (4855452 at the decision) so the chain
-            // starts effectively empty and replays in seconds. Consensus input
-            // (folded into consensusSubset), so it moves the LTC testnet pin and
-            // ships in one wave with every other vendoring service.
-            firstBlock: 4855000,
+            // Fresh testnet genesis 2026-08-24 (operator): was 4855000 (the
+            // 2026-08-10 genesis). Raised to just under the live tip (4862567 at
+            // the decision) so the public testnet announces with zero
+            // pre-announcement test actions and replays in seconds. Consensus
+            // input (folded into consensusSubset), so it moves the LTC testnet
+            // pin and ships in one wave with every other vendoring service.
+            firstBlock: 4862500,
             // Block-0 hash of the chain (see mainnet above). Unpinned until the operator
             // reads it off the fleet's own node: `litecoin-cli -testnet getblockhash 0`.
             chainGenesisHash: null,

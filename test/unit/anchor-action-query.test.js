@@ -309,7 +309,8 @@ describe('anchor-action-query: ANCHOR_ACTIONS_SQL', function () {
 // exists at all - collapsing any of those into a bare boolean loses the caller's ability to
 // tell a forge from a lagging DOGE indexer.
 describe('anchor-action-query: getanchorconfirmations', function () {
-    const { ANCHOR_BY_TXID_SQL, validateAnchorConfirmationsParams,
+    const { ANCHOR_BY_TXID_SQL, ANCHOR_BY_TXID_AFTER_SQL, ANCHOR_ROW_LIMIT,
+            validateAnchorConfirmationsParams,
             buildAnchorConfirmationsResponse } = require('../../src/anchor-action-query');
 
     function txidRow(overrides) {
@@ -373,6 +374,40 @@ describe('anchor-action-query: getanchorconfirmations', function () {
             assert.strictEqual(r.exists, false);
             assert.deepStrictEqual(r.anchors, []);
         });
+
+        // The bound must be visible on the wire: a page cut off at ANCHOR_ROW_LIMIT reads
+        // exactly like a complete non-matching set, and anchor_proof_client turns that into
+        // a memoized permanent 'rejected' forfeiting a legitimate COLLECT-spendable reward.
+        // So the response states both that it was cut off and where to resume.
+        it('reports a full window as truncated and drops the probe row', function () {
+            let rows = [];
+            for (let i = 0; i < ANCHOR_ROW_LIMIT + 1; i++) rows.push(txidRow({ action_index: 100 + i }));
+            let r = buildAnchorConfirmationsResponse(CONFIG, 200, rows);
+            assert.strictEqual(r.truncated, true);
+            assert.strictEqual(r.anchors.length, ANCHOR_ROW_LIMIT,
+                'the ANCHOR_ROW_LIMIT+1st row is a truncation probe and must never reach the caller');
+            assert.strictEqual(r.next_after_action_index, 100 + ANCHOR_ROW_LIMIT - 1,
+                'the cursor must be the LAST RETURNED action_index, so the next page neither skips nor repeats');
+        });
+
+        it('reports a short window as complete, with no cursor', function () {
+            let r = buildAnchorConfirmationsResponse(CONFIG, 200, [txidRow(), txidRow({ action_index: 10 })]);
+            assert.strictEqual(r.truncated, false);
+            assert.strictEqual(r.next_after_action_index, null);
+            assert.strictEqual(r.anchors.length, 2);
+        });
+
+        it('reports an exactly-full page as complete rather than guessing', function () {
+            // Exactly ANCHOR_ROW_LIMIT rows means the probe found nothing: the set really did
+            // end here. Calling this truncated would turn a legitimate 'rejected' into an
+            // endless walk, which is why the flag is probed rather than inferred from length.
+            let rows = [];
+            for (let i = 0; i < ANCHOR_ROW_LIMIT; i++) rows.push(txidRow({ action_index: 100 + i }));
+            let r = buildAnchorConfirmationsResponse(CONFIG, 200, rows);
+            assert.strictEqual(r.truncated, false);
+            assert.strictEqual(r.next_after_action_index, null);
+            assert.strictEqual(r.anchors.length, ANCHOR_ROW_LIMIT);
+        });
     });
 
     describe('ANCHOR_BY_TXID_SQL', function () {
@@ -387,8 +422,37 @@ describe('anchor-action-query: getanchorconfirmations', function () {
                 assert.ok(ANCHOR_BY_TXID_SQL.includes(col), 'missing ' + col);
         });
 
-        it('is bounded so one pathological transaction cannot stream unbounded rows', function () {
-            assert.match(ANCHOR_BY_TXID_SQL, /LIMIT \d+/);
+        it('fetches exactly one row past the cap as a truncation probe', function () {
+            assert.ok(ANCHOR_BY_TXID_SQL.includes('LIMIT ' + (ANCHOR_ROW_LIMIT + 1)),
+                'the read must fetch ANCHOR_ROW_LIMIT+1 so the builder can tell a full page from a cut-off one');
+        });
+
+        it('resumes exclusively after a cursor, so pages partition the set', function () {
+            assert.match(ANCHOR_BY_TXID_AFTER_SQL, /WHERE it\.hash = \? AND a\.action_index > \?/);
+            assert.match(ANCHOR_BY_TXID_AFTER_SQL, /ORDER BY a\.action_index ASC/);
+            assert.ok(ANCHOR_BY_TXID_AFTER_SQL.includes('LIMIT ' + (ANCHOR_ROW_LIMIT + 1)));
+        });
+    });
+
+    describe('the page cursor is validated, never coerced', function () {
+        it('accepts an absent cursor as "first page"', function () {
+            assert.strictEqual(validateAnchorConfirmationsParams({ txid: 'a'.repeat(64) }).after, null);
+            assert.strictEqual(
+                validateAnchorConfirmationsParams({ txid: 'a'.repeat(64), after_action_index: null }).after, null);
+        });
+
+        it('accepts a non-negative integer cursor', function () {
+            assert.strictEqual(
+                validateAnchorConfirmationsParams({ txid: 'a'.repeat(64), after_action_index: 0 }).after, 0);
+            assert.strictEqual(
+                validateAnchorConfirmationsParams({ txid: 'a'.repeat(64), after_action_index: 41 }).after, 41);
+        });
+
+        it('refuses a junk cursor rather than silently restarting the walk at page one', function () {
+            for (const bad of ['x', -1, 1.5, NaN, Infinity, {}, []])
+                assert.strictEqual(
+                    validateAnchorConfirmationsParams({ txid: 'a'.repeat(64), after_action_index: bad }).ok, false,
+                    'cursor ' + String(bad) + ' must be refused');
         });
     });
 });

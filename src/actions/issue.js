@@ -660,12 +660,27 @@ class Issue {
             }
         }
 
+        // The mint-window recency checks exist to stop an ISSUE from BACKDATING a
+        // window, so at/above the ISSUE_INHERITED_MINT_WINDOW activation they apply
+        // only to a value the ISSUE explicitly carries on the wire (`issue` is the
+        // pre-merge snapshot; the CALLBACK edit checks above detect explicit fields
+        // the same way). Below it they also run against values the
+        // populate-empty-params merge inherited from the existing token record,
+        // which rejects every re-parameterizing ISSUE once the token's mint window
+        // has opened (the inherited MINT_START_BLOCK is by then in the past); that
+        // legacy behaviour is preserved below the flag day so a from-genesis replay
+        // reproduces the historical rejections. An explicitly restated past value is
+        // rejected either way.
+        let inheritedWindowExempt = await this.actions.protocolChanges.isEnabled('ISSUE_INHERITED_MINT_WINDOW', data['BLOCK_INDEX']);
+        let mintStartRecency      = inheritedWindowExempt ? issue['MINT_START_BLOCK'] : data['MINT_START_BLOCK'];
+        let mintStopRecency       = inheritedWindowExempt ? issue['MINT_STOP_BLOCK']  : data['MINT_STOP_BLOCK'];
+
         // Verify MINT_START_BLOCK is greater than or equal to current block
-        if(!error && !this.util.isNull(data['MINT_START_BLOCK']) && this.util.bcgt(data['MINT_START_BLOCK'], 0) && this.util.bclt(data['MINT_START_BLOCK'], data['BLOCK_INDEX']))
+        if(!error && !this.util.isNull(mintStartRecency) && this.util.bcgt(mintStartRecency, 0) && this.util.bclt(mintStartRecency, data['BLOCK_INDEX']))
             error = 'invalid: MINT_START_BLOCK < BLOCK_INDEX';
 
         // Verify MINT_STOP_BLOCK is greater than or equal to current block
-        if(!error && !this.util.isNull(data['MINT_STOP_BLOCK']) && this.util.bcgt(data['MINT_STOP_BLOCK'], 0) && this.util.bclt(data['MINT_STOP_BLOCK'], data['BLOCK_INDEX']))
+        if(!error && !this.util.isNull(mintStopRecency) && this.util.bcgt(mintStopRecency, 0) && this.util.bclt(mintStopRecency, data['BLOCK_INDEX']))
             error = 'invalid: MINT_STOP_BLOCK < BLOCK_INDEX';
 
         // Verify MINT_STOP_BLOCK is greater than or equal to MINT_START_BLOCK

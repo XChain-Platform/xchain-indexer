@@ -134,6 +134,71 @@ function declaredIndexesByTable(dir) {
     return declared;
 }
 
+// Column names each src/sql/<table>.sql currently DECLARES, keyed by table. The
+// column twin of declaredIndexesByTable: read the CREATE TABLE body and take the
+// first identifier of every line that is a column definition, skipping the
+// key/constraint clauses (which have no column name in that position).
+function declaredColumnsByTable(dir) {
+    const declared = new Map();
+    const KEYWORDS = ['PRIMARY', 'UNIQUE', 'KEY', 'INDEX', 'CONSTRAINT', 'FOREIGN', 'FULLTEXT', 'SPATIAL', 'CHECK'];
+    for (const { text } of readSqlFiles(dir)) {
+        const sql = stripComments(text);
+        const tableRe = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?\s*\(([\s\S]*?)\n\s*\)/gi;
+        let t;
+        while ((t = tableRe.exec(sql)) !== null) {
+            const key = t[1].toLowerCase();
+            if (!declared.has(key)) declared.set(key, new Set());
+            for (const line of t[2].split('\n')) {
+                const m = /^\s*`?(\w+)`?\s+[A-Za-z]/.exec(line);
+                if (!m || KEYWORDS.includes(m[1].toUpperCase())) continue;
+                declared.get(key).add(m[1].toLowerCase());
+            }
+        }
+    }
+    return declared;
+}
+
+// ORDERED DDL events for one SQL text: { kind: 'index'|'column', key: 'table.name',
+// act: 'add'|'drop', at: <byte offset> }, sorted by position. extractConvergenceDdl
+// buckets by kind and so cannot tell "DROP INDEX x then ADD INDEX x" from the
+// reverse; the drop-direction rules need that order, because a drop-then-recreate
+// inside one ALTER must resolve to the ADD.
+function ddlTimeline(sql) {
+    const text = stripComments(sql);
+    const ev = [];
+    const alterRe = /ALTER\s+TABLE\s+`?(\w+)`?([\s\S]*?);/gi;
+    let m;
+    while ((m = alterRe.exec(text)) !== null) {
+        const table = m[1].toLowerCase();
+        const body  = m[2];
+        const base  = m.index + m[0].indexOf(body);
+        const scan = (re, kind, act) => {
+            let x;
+            while ((x = re.exec(body)) !== null)
+                ev.push({ kind, key: table + '.' + x[1].toLowerCase(), act, at: base + x.index });
+        };
+        scan(/DROP\s+COLUMN\s+(?:IF\s+EXISTS\s+)?`?(\w+)`?/gi, 'column', 'drop');
+        scan(/ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?/gi, 'column', 'add');
+        scan(/ADD\s+(?:UNIQUE\s+)?(?:INDEX|KEY)\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?/gi, 'index', 'add');
+        scan(/DROP\s+(?:INDEX|KEY)\s+(?:IF\s+EXISTS\s+)?`?(\w+)`?/gi, 'index', 'drop');
+        // A CHANGE/MODIFY re-declares the column, so it counts as an ADD for the
+        // last-writer rule: a column renamed back into existence is not dropped.
+        const chRe = /(?:CHANGE|MODIFY)\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?`?(\w+)`?\s+`?(\w+)`?/gi;
+        let ch;
+        while ((ch = chRe.exec(body)) !== null)
+            ev.push({ kind: 'column', key: table + '.' + ch[2].toLowerCase(), act: 'add', at: base + ch.index });
+    }
+    let r, x;
+    r = /DROP\s+INDEX\s+(?:IF\s+EXISTS\s+)?`?(\w+)`?\s+ON\s+`?(\w+)`?/gi;
+    while ((x = r.exec(text)) !== null)
+        ev.push({ kind: 'index', key: x[2].toLowerCase() + '.' + x[1].toLowerCase(), act: 'drop', at: x.index });
+    r = /CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?\s+ON\s+`?(\w+)`?/gi;
+    while ((x = r.exec(text)) !== null)
+        ev.push({ kind: 'index', key: x[2].toLowerCase() + '.' + x[1].toLowerCase(), act: 'add', at: x.index });
+    ev.sort((a, b) => a.at - b.at);
+    return ev;
+}
+
 describe('legacy migrations/ DDL is ported to the tracked ledger', function () {
     const legacy  = readSqlFiles(LEGACY_DIR);
     const tracked = readSqlFiles(TRACKED_DIR);
@@ -219,6 +284,91 @@ describe('legacy migrations/ DDL is ported to the tracked ledger', function () {
         assert.ok(uqs.includes('uq_markets_pair'), `expected legacy uq_markets_pair, saw: ${uqs.join(', ')}`);
         assert.ok(idrop.includes('balances.address_id'), `expected legacy balances.address_id index drop, saw: ${idrop.join(', ')}`);
         assert.ok(iadd.includes('actions.source_id'), `expected legacy actions.source_id index add, saw: ${iadd.join(', ')}`);
+    });
+
+    // ── the DROP direction, for TRACKED migrations ─────────────────────────────
+    //
+    // Every rule above (and both sql-schema-*-parity suites) runs in the ADD
+    // direction: definition declares it, so the ledger must too. The inverse is
+    // unguarded and is NOT inert, because the boot reconcilers actively undo it.
+    // A tracked migration that DROPs an index while src/sql/<table>.sql still
+    // declares it is re-created by reconcileTableIndexes (db.js, "Schema drift on
+    // <table>: missing index ... Adding.") at EVERY startup, and the column twin is
+    // re-added by alterTableForDrift. A replay-only replica never runs verifyTables,
+    // so it keeps the object dropped, and the two paths diverge permanently with
+    // nothing asserting anything. balances.address_id is the shape: it has bitten
+    // twice, caught reactively both times.
+    //
+    // Last-writer-wins over the tracked ledger, in filename (date) order and, within
+    // one file, in byte order: a drop-then-recreate in one ALTER (destroys.action_index,
+    // capability_snapshots.uq_cap_snap) ends on the ADD, so the definition is expected
+    // to keep declaring it. Only a TERMINAL drop obliges the definition to be silent.
+    const terminalDdlState = (function () {
+        const state = new Map();   // 'index:table.name' | 'column:table.name' -> { act, file }
+        // Filenames are date-prefixed, so lexical order IS ledger order. readSqlFiles
+        // leans on readdir order, which is not guaranteed; sort explicitly or the
+        // last-writer rule reads the ledger in whatever order the filesystem hands back.
+        const ordered = tracked.slice().sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
+        for (const { file, text } of ordered)
+            for (const ev of ddlTimeline(text)) state.set(ev.kind + ':' + ev.key, { act: ev.act, file });
+        return state;
+    })();
+
+    it('no tracked DROP INDEX leaves the index still declared in its definition', function () {
+        const declared = declaredIndexesByTable(DEFN_DIR);
+        let checked = 0;
+        for (const [k, v] of terminalDdlState) {
+            if (!k.startsWith('index:') || v.act !== 'drop') continue;
+            checked++;
+            const [table, index] = k.slice('index:'.length).split('.');
+            assert.ok(!(declared.get(table) || new Set()).has(index),
+                `${v.file} drops index ${index} on ${table}, but src/sql/${table}.sql still declares it. ` +
+                `reconcileTableIndexes re-ADDs any declared-but-missing index at every boot, so a ` +
+                `verifyTables node silently undoes this migration while a replay-only replica keeps it ` +
+                `dropped - the two diverge permanently. Either remove the declaration or drop the migration.`);
+        }
+        // Falsifiability anchor: the rule must be iterating real terminal drops, not
+        // an empty set. A parser change that returned nothing would pass silently.
+        assert.ok(checked >= 5, `expected the ledger to carry terminal index drops; saw ${checked}`);
+    });
+
+    it('no tracked DROP COLUMN leaves the column still declared in its definition', function () {
+        const declared = declaredColumnsByTable(DEFN_DIR);
+        let checked = 0;
+        for (const [k, v] of terminalDdlState) {
+            if (!k.startsWith('column:') || v.act !== 'drop') continue;
+            checked++;
+            const [table, column] = k.slice('column:'.length).split('.');
+            assert.ok(!(declared.get(table) || new Set()).has(column),
+                `${v.file} drops column ${column} from ${table}, but src/sql/${table}.sql still declares it. ` +
+                `alterTableForDrift re-ADDs any declared-but-missing column at every boot, so a ` +
+                `verifyTables node silently undoes this migration while a replay-only replica keeps it ` +
+                `dropped. Either remove the declaration or drop the migration.`);
+        }
+        assert.ok(checked >= 1, `expected the ledger to carry at least one terminal column drop; saw ${checked}`);
+    });
+
+    it('sanity: the drop-direction timeline orders a drop-then-recreate onto the ADD', function () {
+        // The whole rule rests on within-file byte order. destroys.action_index is
+        // dropped as a UNIQUE and re-created as a plain index inside ONE migration;
+        // reading that pair drop-last would make the rule demand the definition stop
+        // declaring an index the same file rebuilds, i.e. a false red on real DDL.
+        const st = terminalDdlState.get('index:destroys.action_index');
+        assert.ok(st, 'expected destroys.action_index in the tracked DDL timeline');
+        assert.strictEqual(st.act, 'add',
+            `destroys.action_index is dropped and re-created in one migration; the timeline must end on ` +
+            `the ADD, saw "${st.act}" from ${st.file}`);
+    });
+
+    it('sanity: the definition column parser sees real columns', function () {
+        // Falsifiability anchor for the DROP COLUMN rule, matching the index twin
+        // below: a parser returning nothing would make that rule pass on empty input.
+        const declared = declaredColumnsByTable(DEFN_DIR);
+        assert.ok((declared.get('balances') || new Set()).has('address_id'),
+            `expected balances.address_id declared, saw: ${[...(declared.get('balances') || [])].join(', ')}`);
+        assert.ok(!(declared.get('sweeps') || new Set()).has('escrows'),
+            'sweeps.escrows was dropped by a tracked migration and must not be declared');
+        assert.ok(declared.size > 20, `column parser found only ${declared.size} tables; it is not reading src/sql/`);
     });
 
     it('sanity: the definition parser sees both declaration forms', function () {

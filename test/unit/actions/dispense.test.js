@@ -191,13 +191,32 @@ describe('Dispense action handler @regression @tier2', function () {
         assert.strictEqual(String(rec['GIVE_AMOUNT']), '4');
     });
 
-    it('clamp: skipped for an ownership dispenser with no GIVE_AMOUNT', async function () {
-        // Ownership dispensers carry empty GIVE_AMOUNT/GIVE_ESCROW. bcmul() coerced
-        // that to 0, so `0 > GIVE_REMAINING` was false and the loop never ran; the
-        // clamp must skip rather than divide by zero.
+    it('clamp: skipped for a balance dispenser with no GIVE_AMOUNT', async function () {
+        // The case the guard actually covers: a BALANCE dispenser opened with an empty
+        // GIVE_AMOUNT, which a format-0 create still accepts below
+        // dispenser_give_amount_activation. bcmul() coerced that to 0, so
+        // `0 > GIVE_REMAINING` was false and the loop never ran; the clamp must skip
+        // rather than divide by zero.
+        indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
+            GIVE_AMOUNT: null, GIVE_REMAINING: '10',
+        }));
+        const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '0.01', BLOCK_TIME });
+
+        await dispense.parse([], data, false);
+
+        const rec = indexer.indexerDb.createDispense.firstCall.args[0];
+        assert.strictEqual(rec['STATUS'], 'valid', 'the legacy verdict must be left in place');
+    });
+
+    // getDispenserInfo is the only source of `dispenser` in this handler and it
+    // virtualizes an ownership dispenser to GIVE_AMOUNT '1' / GIVE_ESCROW '1', with
+    // GIVE_REMAINING '1' before a dispense and '0' once one is recorded. So the clamp
+    // is NOT skipped for one, and these two pin it on the fixture the hub can really
+    // return rather than on the wire-level empty GIVE_AMOUNT it never emits.
+    it('clamp: runs for an ownership dispenser and still settles the first fill', async function () {
         indexer.indexerDb.clearTokenEscrow = sinon.stub().resolves();
         indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
-            GIVE_OWNERSHIP: 1, GIVE_AMOUNT: null, GIVE_REMAINING: null,
+            GIVE_OWNERSHIP: 1, GIVE_AMOUNT: '1', GIVE_ESCROW: '1', GIVE_REMAINING: '1',
         }));
         const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '0.01', BLOCK_TIME });
 
@@ -206,6 +225,26 @@ describe('Dispense action handler @regression @tier2', function () {
         const rec = indexer.indexerDb.createDispense.firstCall.args[0];
         assert.strictEqual(rec['STATUS'], 'valid', 'ownership dispense must still settle');
         sinon.assert.called(indexer.indexerDb.clearTokenEscrow);
+    });
+
+    it('clamp alone refuses a second ownership dispense (single-shot backstop)', async function () {
+        // GIVE_REMAINING '0' is what getDispenserInfo returns once a valid DISPENSE has
+        // been recorded. The single-fill cap above cannot refuse anything, so the clamp
+        // is the only thing between this and a second ownership transfer: it drives the
+        // multiplier to 0 and the insufficient-funds check refuses. Do not delete this
+        // as redundant with the DISPENSER_CLOSE auto-close; it is the backstop for the
+        // auto-close failing to fire.
+        indexer.indexerDb.clearTokenEscrow = sinon.stub().resolves();
+        indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
+            GIVE_OWNERSHIP: 1, GIVE_AMOUNT: '1', GIVE_ESCROW: '1', GIVE_REMAINING: '0',
+        }));
+        const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '0.01', BLOCK_TIME });
+
+        await dispense.parse([], data, false);
+
+        const rec = indexer.indexerDb.createDispense.firstCall.args[0];
+        assert.ok(String(rec['STATUS']).startsWith('invalid: insufficient funds'),
+            `expected the clamp to refuse a dispensed ownership dispenser, got ${rec['STATUS']}`);
     });
 
     it('a saturated FIAT unit count settles promptly instead of spinning', async function () {
@@ -754,14 +793,32 @@ describe('Dispense action handler @regression @tier2', function () {
                 `expected an insufficient-funds refusal, got ${rec['STATUS']}`);
         });
 
-        it('does not divide by an ownership dispenser empty GIVE_AMOUNT', async function () {
-            // GIVE_OWNERSHIP=1 carries empty GIVE_AMOUNT/GIVE_ESCROW: it dispenses
-            // the ownership record, not a token quantity, and is capped to one fill.
-            // Dividing here would be a divide-by-zero, and bcdiv's zero-divisor
-            // return of 0 would refuse every such dispense as insufficient funds.
+        it('does not divide by a balance dispenser empty GIVE_AMOUNT', async function () {
+            // The case the giveAmountPositive guard covers: a BALANCE dispenser opened
+            // with an empty GIVE_AMOUNT, still legal below
+            // dispenser_give_amount_activation. Dividing here would be a divide-by-zero,
+            // and bcdiv's zero-divisor return of 0 would refuse every such dispense as
+            // insufficient funds instead of leaving the legacy verdict in place.
+            indexer.indexerDb.getDispenserInfo.resolves(modeBDispenser({
+                GIVE_AMOUNT: null, GIVE_REMAINING: '100',
+            }));
+            sinon.stub(indexer.util, 'reverseOraclePriceMatch').resolves(MEASURED);
+
+            const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '0.37', BLOCK_TIME });
+            await dispense.parse([], data, false);
+
+            const rec = indexer.indexerDb.createDispense.firstCall.args[0];
+            assert.strictEqual(rec['STATUS'], 'valid', 'the legacy verdict must be left in place');
+        });
+
+        it('divides for an ownership dispenser, whose GIVE_AMOUNT arrives virtualized to 1', async function () {
+            // getDispenserInfo never hands this handler the wire-level empty
+            // GIVE_AMOUNT: an ownership dispenser arrives as '1', so the per-token
+            // divide runs and 7 affordable tokens become 7 fills, capped to the single
+            // fill an ownership dispenser is allowed.
             indexer.indexerDb.clearTokenEscrow = sinon.stub().resolves();
             indexer.indexerDb.getDispenserInfo.resolves(modeBDispenser({
-                GIVE_OWNERSHIP: 1, GIVE_AMOUNT: null, GIVE_REMAINING: null,
+                GIVE_OWNERSHIP: 1, GIVE_AMOUNT: '1', GIVE_ESCROW: '1', GIVE_REMAINING: '1',
             }));
             sinon.stub(indexer.util, 'reverseOraclePriceMatch').resolves(MEASURED);
 
@@ -770,6 +827,7 @@ describe('Dispense action handler @regression @tier2', function () {
 
             const rec = indexer.indexerDb.createDispense.firstCall.args[0];
             assert.strictEqual(rec['STATUS'], 'valid', 'an ownership dispense must still settle');
+            assert.strictEqual(String(rec['GIVE_AMOUNT']), '1', 'single-shot: exactly one fill');
             sinon.assert.called(indexer.indexerDb.clearTokenEscrow);
         });
 

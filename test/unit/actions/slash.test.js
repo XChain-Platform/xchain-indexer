@@ -408,6 +408,91 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
     });
 
+    // ── the field indices come from a REAL builder, not from a hand-copied join ──
+    //
+    // _resolveSlot hard-codes the in-content snapshot_block position per engine
+    // (CHECKPOINT 9, XANCPUB 3). slash.js is a SEVENTH consumer of the XCHECKPOINT
+    // layout and sits on no lockstep list and in no cross-service parity suite; the
+    // parity suites compare builders to builders, and every fixture above rebuilds
+    // the layout by hand, so a coordinated field insertion between CHAIN|NETWORK and
+    // SNAPSHOT_BLOCK keeps all of them green while _resolveSlot starts reading
+    // CHECKPOINT_SEQ as the slot. That resolves the WRONG capability snapshot: real
+    // proofs get rejected, or a bond burns against the wrong height. And because
+    // deriveCheckpointSeq(snapshot_block) returns snapshot_block, an off-by-one-segment
+    // read looks plausible on live data while being structurally wrong.
+    //
+    // These two cases source the signed bytes from the indexer's OWN builder
+    // (Anchor._canonical / Anchor._rewardCanonical, the sibling of the hub's
+    // StateCheckpointEngine.canonicalCheckpoint), so a layout change in anchor.js
+    // moves the fixture and this file goes red rather than agreeing with itself.
+    // Called off the prototype with a bare receiver: neither builder touches `this`.
+    const Anchor = require('../../../src/actions/anchor.js');
+    const CP_SNAP = 100;
+    function builtCheckpoint(ledgerHash) {
+        return Anchor.prototype._canonical.call({}, {
+            FORMAT: 0, CHAIN: 'BTC', NETWORK: 'regtest',
+            BLOCK_INDEX_CHECKPOINTED: 199, BLOCK_HASH: 'aa'.repeat(32),
+            LEDGER_HASH: ledgerHash, ACTIONS_HASH: 'cc'.repeat(32),
+            CONTRACT_HASH: 'dd'.repeat(32), CHECKPOINT_SEQ: 5, SNAPSHOT_BLOCK: CP_SNAP,
+        });
+    }
+    function builtArchiveAttestation(publisher) {
+        return Anchor.prototype._rewardCanonical.call({}, {
+            FORMAT: 6, CHAIN: 'BTC', NETWORK: 'regtest', MATCH_BATCH_SEQ: 7,
+            SNAPSHOT_BLOCK: CP_SNAP, PUBLISHER: publisher, CHECKPOINT_SEQ: 5,
+        });
+    }
+    const equivContent = (msg) => msg.slice(msg.indexOf('||') + 2);
+
+    it('resolves the CHECKPOINT slot from a canonical the real builder produced', async function () {
+        const msgA = builtCheckpoint('e1'.repeat(32));
+        const msgB = builtCheckpoint('e2'.repeat(32));
+        // Pin the positional read itself, so a shift reports as a layout change rather
+        // than as an opaque wrong-slot number further down.
+        assert.strictEqual(equivContent(msgA).split('|')[9], String(CP_SNAP),
+            'Anchor._canonical no longer carries SNAPSHOT_BLOCK at segment 9; slash._resolveSlot ' +
+            'FIELD[CHECKPOINT] still says 9 and would resolve the wrong bond slot. Content was: ' +
+            equivContent(msgA));
+
+        const d = data();
+        await handler.parse(params('oracle_publish', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.strictEqual(d['STATUS'], 'valid');
+        assert.deepStrictEqual(indexer.indexerDb.getValidatorsByCapability.firstCall.args,
+            ['oracle_publish', CP_SNAP],
+            'the slot must be the builder-produced SNAPSHOT_BLOCK, not whatever sits at segment 9');
+    });
+
+    it('resolves the XANCPUB slot from a canonical the real builder produced', async function () {
+        const msgA = builtArchiveAttestation('aaaa'.repeat(16));
+        const msgB = builtArchiveAttestation('bbbb'.repeat(16));
+        assert.strictEqual(equivContent(msgA).split('|')[3], String(CP_SNAP),
+            'Anchor._rewardCanonical no longer carries SNAPSHOT_BLOCK at segment 3; slash._resolveSlot ' +
+            'switches to index 3 on the XANCPUB family and would resolve the wrong bond slot. Content was: ' +
+            equivContent(msgA));
+
+        const d = data();
+        await handler.parse(params('oracle_publish', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.strictEqual(d['STATUS'], 'valid');
+        assert.deepStrictEqual(indexer.indexerDb.getValidatorsByCapability.firstCall.args,
+            ['oracle_publish', CP_SNAP]);
+    });
+
+    it('the hand-written checkpoint fixture still matches the real builder segment for segment', function () {
+        // The fixtures above stay hand-written on purpose (they vary fields the builder
+        // would not), so bind their SHAPE to the builder here: same segment count, same
+        // snapshot_block position. Without this, a field insertion updates the builder
+        // and leaves every hand-written fixture generating the stale ten-segment string.
+        const built = equivContent(builtCheckpoint('e1'.repeat(32))).split('|');
+        const hand  = checkpointContent(CP_SNAP, 'e1'.repeat(32)).split('|');
+        assert.strictEqual(hand.length, built.length,
+            `hand-written checkpointContent() has ${hand.length} segments, the builder emits ` +
+            `${built.length}; the fixture is a stale copy of the canonical layout`);
+        assert.strictEqual(hand.indexOf(String(CP_SNAP)), built.indexOf(String(CP_SNAP)),
+            'hand-written fixture puts snapshot_block at a different segment than the builder');
+    });
+
     // XATTEST hosts TWO content families (Phase 5). The base v1 canonical is
     // delimiter-less and carries no block, so the slot resolver reads it from the mirrored
     // request row; the relay legs are XCALL-shaped (snapshot_block at index 3) under a

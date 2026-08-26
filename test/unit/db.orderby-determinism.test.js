@@ -69,6 +69,13 @@ const TIEBREAKERS = [
 // entry here is a deliberate, reviewed act.
 const ALLOWLIST = [
     {
+        clause: 'block_index DESC',
+        reason: 'getPreviousBlockTimes: block_index is the PRIMARY KEY of blocks, so it is ' +
+                'unique by definition and no tie is possible. The window it returns feeds the ' +
+                'median-time-past calculation in getBlockTime, which sorts the values itself ' +
+                'and is order-insensitive besides.'
+    },
+    {
         clause: 'block_index ASC',
         reason: 'getTimeWeightedBalances: per-address signed-delta accumulation where ' +
                 'same-block events form zero-length segments, so intra-block order cannot ' +

@@ -61,19 +61,19 @@ describe('getBlockTime() fail-loud fault handling (#898)', function () {
     it('returns the block_time for an existing block', async function () {
         const db = makeDb();
         sinon.stub(db, 'doQueryStrict').resolves([{ block_time: 1700000000 }]);
-        assert.strictEqual(await db.getBlockTime(500), 1700000000);
+        assert.strictEqual(await db.getRawBlockTime(500), 1700000000);
     });
 
     it('returns the false sentinel for a genuinely-missing block (empty result)', async function () {
         const db = makeDb();
         sinon.stub(db, 'doQueryStrict').resolves([]);
-        assert.strictEqual(await db.getBlockTime(999999), false);
+        assert.strictEqual(await db.getRawBlockTime(999999), false);
     });
 
     it('RETHROWS an infrastructure fault (lock-wait timeout 1205) instead of returning false', async function () {
         const db = makeDb();
         sinon.stub(db, 'doQueryStrict').rejects(faultWith(1205));
-        await assert.rejects(() => db.getBlockTime(500), /injected db fault/);
+        await assert.rejects(() => db.getRawBlockTime(500), /injected db fault/);
     });
 
     it('does NOT memoize a failed lookup: a later healthy query re-reads and succeeds', async function () {
@@ -82,10 +82,10 @@ describe('getBlockTime() fail-loud fault handling (#898)', function () {
         stub.onFirstCall().rejects(faultWith(1205));
         stub.onSecondCall().resolves([{ block_time: 1700000042 }]);
 
-        await assert.rejects(() => db.getBlockTime(500), /injected db fault/);
+        await assert.rejects(() => db.getRawBlockTime(500), /injected db fault/);
         // Same block_index: if the fault had been cached, this would return the stale value
         // without a second query. It must re-query and return the real time.
-        assert.strictEqual(await db.getBlockTime(500), 1700000042);
+        assert.strictEqual(await db.getRawBlockTime(500), 1700000042);
         assert.strictEqual(stub.callCount, 2);
     });
 
@@ -95,17 +95,17 @@ describe('getBlockTime() fail-loud fault handling (#898)', function () {
         stub.onFirstCall().rejects(faultWith(1146));
         stub.onSecondCall().resolves([{ block_time: 1700000100 }]);
 
-        assert.strictEqual(await db.getBlockTime(500), false);
+        assert.strictEqual(await db.getRawBlockTime(500), false);
         // Not cached: the retry re-queries rather than serving the false sentinel.
-        assert.strictEqual(await db.getBlockTime(500), 1700000100);
+        assert.strictEqual(await db.getRawBlockTime(500), 1700000100);
         assert.strictEqual(stub.callCount, 2);
     });
 
     it('memoizes a successful lookup (no second query for the same block_index)', async function () {
         const db = makeDb();
         const stub = sinon.stub(db, 'doQueryStrict').resolves([{ block_time: 1700000200 }]);
-        assert.strictEqual(await db.getBlockTime(777), 1700000200);
-        assert.strictEqual(await db.getBlockTime(777), 1700000200);
+        assert.strictEqual(await db.getRawBlockTime(777), 1700000200);
+        assert.strictEqual(await db.getRawBlockTime(777), 1700000200);
         assert.strictEqual(stub.callCount, 1);
     });
 });

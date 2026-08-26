@@ -3934,8 +3934,40 @@ describe('Database.createValidatorReward() @regression @tier1', function () {
 
         dq.resetHistory();
         await db.createValidatorReward('deadbeef', 2, 'oracle_round', '10', 100, true);
-        assert.strictEqual(dq.args[0][1][6], null,
+        assert.strictEqual(dq.args[0][1][7], null,
             'a same-block writer leaves derive_block_index NULL so the new predicate never matches it');
+    });
+
+    // round_qualifier joined the UNIQUE key because 'anchor_archive' rounds are MATCH_BATCH_SEQ,
+    // a dense hub counter a wipe-and-replay rebase reissues. Every OTHER reward type must keep
+    // the key it always had, which means a literal 0 - never NULL, since MariaDB treats NULLs as
+    // distinct in a UNIQUE index and would stop deduplicating the row entirely.
+    it('writes round_qualifier 0 for a non-archive reward and when the caller omits it', async function () {
+        const db = makeDb();
+        sinon.stub(db, 'getPubkeyId').resolves(3);
+        sinon.stub(db, '_resolveActiveStakeSourceId').resolves(2);
+        const dq = sinon.stub(db, 'doQuery').resolves([]);
+
+        await db.createValidatorReward('deadbeef', 1, 'anchor_BTC', '10', 850000, true, 962400);
+        assert.ok(String(dq.args[0][0]).includes('round_qualifier'), 'the INSERT must name the column');
+        assert.strictEqual(dq.args[0][1][4], 0, 'a per-chain anchor leg is never qualified');
+
+        dq.resetHistory();
+        await db.createValidatorReward('deadbeef', 2, 'oracle_round', '10', 100, true);
+        assert.strictEqual(dq.args[0][1][4], 0, 'an omitted qualifier lands on 0, not NULL');
+    });
+
+    it('carries the archive reward snapshot_block through as its round_qualifier', async function () {
+        const db = makeDb();
+        sinon.stub(db, 'getPubkeyId').resolves(3);
+        sinon.stub(db, '_resolveActiveStakeSourceId').resolves(2);
+        const dq = sinon.stub(db, 'doQuery').resolves([]);
+
+        // Two archive anchors can carry round_reference 3 across a hub rebase; the qualifier is
+        // what keeps them two rows instead of one upsert overwriting the other.
+        await db.createValidatorReward('deadbeef', 3, 'anchor_archive', '10', 8100, true, 9000, 8100);
+        assert.strictEqual(dq.args[0][1][4], 8100);
+        assert.strictEqual(dq.args[0][1][3], 3, 'round_reference stays the hub batch seq');
     });
 });
 

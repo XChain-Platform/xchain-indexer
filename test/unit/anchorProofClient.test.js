@@ -241,4 +241,97 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
             assert.strictEqual(await c.proveMined(expectation()), 'unknown');
         });
     });
+
+    // getanchorconfirmations bounds its answer. Before the walk below, a window cut off
+    // BEFORE the matching anchor looked identical on the wire to a complete non-matching
+    // set: _judge read a positively-detected mis-bind, proveMined MEMOIZED it, and
+    // anchor_reward_derive turned that into "no reward derived" forever - a legitimate
+    // COLLECT-spendable reward lost silently and permanently. Reinterpreting the verdict
+    // was not an option: 'unknown' raises AnchorProofUnavailableError, which HALTS block
+    // processing on every BTC node and never clears, because the same deterministic window
+    // returns on every retry. So the window is removed instead, and _judge is handed the
+    // complete set it always assumed it had.
+    describe('proveMined walks every page before judging', function () {
+        // A sibling attested anchor that is NOT this tuple's: on its own it makes _judge
+        // return the permanent 'rejected'.
+        function sibling() { return anchor({ checkpoint_seq: 999 }); }
+
+        it('follows the cursor and finds a match that fell past the first page', async function () {
+            const c = client();
+            const seen = [];
+            c._fetch = async (txid, after) => {
+                seen.push(after);
+                return (after === null || after === undefined)
+                    ? { exists: true, anchors: [sibling()], truncated: true, next_after_action_index: 41 }
+                    : { exists: true, anchors: [anchor()], truncated: false, next_after_action_index: null };
+            };
+            assert.strictEqual(await c.proveMined(expectation()), 'verified');
+            assert.deepStrictEqual(seen, [null, 41], 'the second page must be requested from the reported cursor');
+        });
+
+        it('does not reject on a truncated window whose later page contradicts the tuple', async function () {
+            // Same shape, but the anchor past the boundary is also a mis-bind: only after the
+            // walk completes is 'rejected' a statement about the WHOLE set rather than a page.
+            const c = client();
+            c._fetch = async (txid, after) => (after === null || after === undefined)
+                ? { exists: true, anchors: [sibling()], truncated: true, next_after_action_index: 41 }
+                : { exists: true, anchors: [sibling()], truncated: false, next_after_action_index: null };
+            assert.strictEqual(await c.proveMined(expectation()), 'rejected');
+        });
+
+        it('asks for exactly one page when the peer says the set is complete', async function () {
+            const c = client();
+            let calls = 0;
+            c._fetch = async () => { calls++; return { exists: true, anchors: [anchor()], truncated: false }; };
+            assert.strictEqual(await c.proveMined(expectation()), 'verified');
+            assert.strictEqual(calls, 1);
+        });
+
+        it('stops after one page against a peer that reports no truncation field at all', async function () {
+            // An indexer predating pagination. The walk must degrade to exactly the old
+            // behaviour (judge page one) rather than stall the block loop on a mixed fleet.
+            const c = client();
+            let calls = 0;
+            c._fetch = async () => { calls++; return { exists: true, anchors: [sibling()] }; };
+            assert.strictEqual(await c.proveMined(expectation()), 'rejected');
+            assert.strictEqual(calls, 1);
+        });
+
+        it('refuses to judge a partial set when the cursor is missing or does not advance', async function () {
+            const noCursor = client();
+            noCursor._fetch = async () => ({ exists: true, anchors: [sibling()], truncated: true,
+                                             next_after_action_index: null });
+            assert.strictEqual(await noCursor.proveMined(expectation()), 'unknown');
+
+            const stuck = client();
+            stuck._fetch = async () => ({ exists: true, anchors: [sibling()], truncated: true,
+                                          next_after_action_index: 41 });
+            assert.strictEqual(await stuck.proveMined(expectation()), 'unknown',
+                'a cursor that never advances would loop forever; it is a half-spoken protocol, not a set');
+        });
+
+        it('bounds the walk and refuses rather than judging what it managed to collect', async function () {
+            const c = client();
+            let calls = 0;
+            c._fetch = async () => {
+                calls++;
+                return { exists: true, anchors: [sibling()], truncated: true, next_after_action_index: calls };
+            };
+            assert.strictEqual(await c.proveMined(expectation()), 'unknown');
+            assert.ok(calls > 1 && calls <= 100, 'the walk must terminate on its own; made ' + calls + ' calls');
+        });
+
+        it('never memoizes an undecided walk, so the reward is retried rather than lost', async function () {
+            const c = client();
+            let calls = 0;
+            c._fetch = async () => {
+                calls++;
+                return { exists: true, anchors: [sibling()], truncated: true, next_after_action_index: null };
+            };
+            assert.strictEqual(await c.proveMined(expectation()), 'unknown');
+            const before = calls;
+            assert.strictEqual(await c.proveMined(expectation()), 'unknown');
+            assert.ok(calls > before, 'an undecided verdict must be re-asked, never cached');
+        });
+    });
 });

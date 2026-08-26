@@ -121,8 +121,8 @@ module.exports = {
                 GAS:             '1XChain3M4uRwcHqt4XuhVBUQ8cL4qQsA',
                 DONATE1:         '1Donate1GERVKPW6GFQcnGeTa8dgL6Abyp', // Protocol Development
                 DONATE2:         '1Donate2LkbBrsanwCVRPWZCXAqQcvcqGz', // Community Development
-                FEE_DESTINATION: '1FeesxM9LTEjBYVTkynK6jfDBgvksuh2WL', // native-fee destination (env-overridable)
-                REWARD:          '1rewardsZAyeuLeFJKoAepYiNN5N6uSzn',  // validator reward pool (COLLECT)
+                FEE_DESTINATION: '1FeesxM9LTEjBYVTkynK6jfDBgvksuh2WL', // native-fee destination (regtest-only env override; ignored on mainnet/testnet)
+                REWARD:          '1RewardsRQTXMAytLt4bBQvPEscKsSEXt',  // validator reward pool (COLLECT)
                 EXPLORER:        '1Donate3GBGSZzzrS9U9gUgURYKscAE6Yn', // display-only donation; not read by indexer
             },
             // Genesis ledger bootstrap pin (Counterparty name carry-forward).
@@ -166,12 +166,13 @@ module.exports = {
                 minStandardTxNonWitnessSize: 82,
                 singleOpReturnPolicy:        true,
             },
-            // Fresh testnet genesis 2026-08-10 (operator): was 138000. Raised to
-            // just under the live tip (147799 at the decision) so the chain starts
-            // effectively empty and replays in seconds. Consensus input (folded
-            // into consensusSubset), so it moves the BTC testnet pin and ships in
-            // one wave with every other vendoring service.
-            firstBlock: 147500,
+            // Fresh testnet genesis 2026-08-24 (operator): was 147500 (the
+            // 2026-08-10 genesis). Raised to just under the live tip (149703 at
+            // the decision) so the public testnet announces with zero
+            // pre-announcement test actions and replays in seconds. Consensus
+            // input (folded into consensusSubset), so it moves the BTC testnet
+            // pin and ships in one wave with every other vendoring service.
+            firstBlock: 149700,
             // Block-0 hash of the chain (see mainnet above). Unpinned until the operator
             // reads it off the fleet's own node: `bitcoin-cli -testnet getblockhash 0`.
             // This is the one value that separates testnet3 from testnet4, which the

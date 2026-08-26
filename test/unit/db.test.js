@@ -1047,39 +1047,39 @@ describe('Database.getContractState() adversarial keys @regression @tier1', func
 // must hit the cache instead of re-querying, while a different block_index
 // still triggers a fresh query and returns the correct (not stale) value.
 // ---------------------------------------------------------------------------
-describe('Database.getBlockTime() memoization @regression @tier1', function () {
+describe('Database.getRawBlockTime() memoization @regression @tier1', function () {
     let db;
 
     beforeEach(function () {
         db = {
-            // getBlockTime reads via doQueryStrict (throw-on-fault, finding #898) so a
+            // getRawBlockTime reads via doQueryStrict (throw-on-fault, finding #898) so a
             // transient decoder-DB fault propagates to the fail-loud protocol-changes catch
             // instead of collapsing to the `false` sentinel and silently disabling gates.
             doQueryStrict: sinon.stub().resolves([]),
             _blockTimeCache: { block_index: null, block_time: null },
-            getBlockTime: Database.prototype.getBlockTime,
+            getRawBlockTime: Database.prototype.getRawBlockTime,
         };
     });
 
     it('queries the DB on the first call for a block_index', async function () {
         db.doQueryStrict.resolves([{ block_time: 1700000000 }]);
-        const result = await db.getBlockTime.call(db, 100);
+        const result = await db.getRawBlockTime.call(db, 100);
         assert.strictEqual(result, 1700000000);
         assert.strictEqual(db.doQueryStrict.callCount, 1);
     });
 
     it('serves repeated calls for the same block_index from cache (no extra query)', async function () {
         db.doQueryStrict.resolves([{ block_time: 1700000000 }]);
-        await db.getBlockTime.call(db, 100);
-        await db.getBlockTime.call(db, 100);
-        await db.getBlockTime.call(db, 100);
+        await db.getRawBlockTime.call(db, 100);
+        await db.getRawBlockTime.call(db, 100);
+        await db.getRawBlockTime.call(db, 100);
         assert.strictEqual(db.doQueryStrict.callCount, 1, 'only the first call should hit the DB');
     });
 
     it('returns the identical value on cached calls as the original query', async function () {
         db.doQueryStrict.resolves([{ block_time: 1700000123 }]);
-        const first  = await db.getBlockTime.call(db, 100);
-        const second = await db.getBlockTime.call(db, 100);
+        const first  = await db.getRawBlockTime.call(db, 100);
+        const second = await db.getRawBlockTime.call(db, 100);
         assert.strictEqual(second, first);
         assert.strictEqual(second, 1700000123);
     });
@@ -1087,8 +1087,8 @@ describe('Database.getBlockTime() memoization @regression @tier1', function () {
     it('re-queries when block_index changes (last-block-wins, cache does not grow unbounded)', async function () {
         db.doQueryStrict.onCall(0).resolves([{ block_time: 1111 }]);
         db.doQueryStrict.onCall(1).resolves([{ block_time: 2222 }]);
-        const first  = await db.getBlockTime.call(db, 100);
-        const second = await db.getBlockTime.call(db, 101);
+        const first  = await db.getRawBlockTime.call(db, 100);
+        const second = await db.getRawBlockTime.call(db, 101);
         assert.strictEqual(first, 1111);
         assert.strictEqual(second, 2222);
         assert.strictEqual(db.doQueryStrict.callCount, 2);
@@ -1097,17 +1097,17 @@ describe('Database.getBlockTime() memoization @regression @tier1', function () {
     it('does not serve a stale value after the block_index advances then returns', async function () {
         db.doQueryStrict.onCall(0).resolves([{ block_time: 1111 }]);
         db.doQueryStrict.onCall(1).resolves([{ block_time: 2222 }]);
-        await db.getBlockTime.call(db, 100);
-        await db.getBlockTime.call(db, 101);
+        await db.getRawBlockTime.call(db, 100);
+        await db.getRawBlockTime.call(db, 101);
         db.doQueryStrict.resolves([{ block_time: 1111 }]);
-        const third = await db.getBlockTime.call(db, 100);
+        const third = await db.getRawBlockTime.call(db, 100);
         assert.strictEqual(third, 1111);
         assert.strictEqual(db.doQueryStrict.callCount, 3, 'revisiting block 100 after 101 must re-query, not read a stale entry');
     });
 
     it('returns false when the block row is not found (unchanged from unmemoized behavior)', async function () {
         db.doQueryStrict.resolves([]);
-        const result = await db.getBlockTime.call(db, 999);
+        const result = await db.getRawBlockTime.call(db, 999);
         assert.strictEqual(result, false);
     });
 
@@ -1116,9 +1116,9 @@ describe('Database.getBlockTime() memoization @regression @tier1', function () {
         fault.errno = 1205;
         db.doQueryStrict.onCall(0).rejects(fault);
         db.doQueryStrict.onCall(1).resolves([{ block_time: 1700009999 }]);
-        await assert.rejects(() => db.getBlockTime.call(db, 100), /lock wait timeout/);
+        await assert.rejects(() => db.getRawBlockTime.call(db, 100), /lock wait timeout/);
         // Not memoized: the retry re-queries and returns the real value.
-        const retried = await db.getBlockTime.call(db, 100);
+        const retried = await db.getRawBlockTime.call(db, 100);
         assert.strictEqual(retried, 1700009999);
         assert.strictEqual(db.doQueryStrict.callCount, 2);
     });

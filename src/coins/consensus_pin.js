@@ -59,10 +59,17 @@ module.exports = {
         // all three testnet hashes move and the one-wave rule above applies in full.
         // Regtest and mainnet are untouched, and their hashes were re-verified
         // against the canonical files as unchanged by this edit.
+        //
+        // REGENERATED 2026-08-24 (fresh testnet genesis, operator): testnet
+        // `firstBlock` moved to just under the live tip on all three chains
+        // (BTC 147500 -> 149700, LTC 4855000 -> 4862500, DOGE 67815000 -> 67847500)
+        // so the public testnet announces with zero pre-announcement test actions.
+        // Same one-wave rule as every regeneration above. Regtest and mainnet are
+        // untouched and were re-verified as unchanged by this edit.
         testnet: {
-            BTC:  '1e45a958ff9eb6a88be8684e3801b57e7afcfc9031f7761e4f4b1dcf1c8d42a9',
-            LTC:  '888818a874d6d8acb3363355089f0de601c355b63fc8431a44ef666f91615202',
-            DOGE: 'ea3ee0d1407959f3cb59e4baf66b50dfc2ada9962351e578d7c6d8586e6ff905',
+            BTC:  'f6589c6b88dc930db05998070ef0b73743f58623a0d23fbc30fdb158c49d1427',
+            LTC:  '9faf066a1470be2486d8a2cd121548ca02de1397d0678a2ab8dc0e712ebfa8fd',
+            DOGE: '2991d7e7caf2b212de959dd5831ac1477e0b13da95ac1ed8c2b43e2704732439',
         },
 
         regtest: {
