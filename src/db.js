@@ -16091,6 +16091,35 @@ Database.MIGRATION_CHECKSUM_REBASELINES = {
         ],
         to: 'a911c38ca928743bb65c763c8143a5a3ad63de18da72b32da83a4971c1735ed8',
     },
+    // The same 758fc1db comment cleanup (internal-reference scrub) caught three more
+    // already-applied files, and unlike the entry above these were never rebaselined, so
+    // every aged testnet/regtest DB logged `content CHANGED` on each start AND - the part
+    // that actually bites - `node src/migrate.js` FAILED CLOSED on the first of them, which
+    // made the whole pending manual backlog unappliable on those hosts. Found 2026-08-26
+    // while working that backlog; the startup warning had been dismissed as noise for two
+    // weeks, which is exactly the failure mode a guard that always fires produces.
+    //
+    // Comment lines only in all three, verified by comparing the comment-stripped residue
+    // rather than assumed: the scrub removed internal ticket ids and an internal tracker
+    // reference from the header prose. The executable SQL is byte-identical.
+    //
+    // The third file's predecessor was an ORPHANED BLOB, unreachable from any commit (the
+    // published-history rewrite, same cause as the five noted above), so `git log` finds
+    // nothing for it; it was recovered by scanning the whole object store (2586 blob
+    // candidates) and only then compared. Mainnet is NOT affected: the BTC mainnet ledger
+    // already records the current hash for all three, so this heals aged non-mainnet DBs.
+    '2026-07-16-mirror-twin-bigint-unsigned-align.sql': {
+        from: '1d981cd5d128c2ec8de391289b11fdc43932f65ee5d3fd8a61c32e7b01be0569', // fd9267e2, pre-scrub
+        to:   'fac090271fd2cebaea9b914d344f94483d97d0ec5b7854bf42263df0153c1d48',
+    },
+    '2026-07-26-tokens-backfill-lock-mint-supply.sql': {
+        from: '03ec334fdfafd207d5ca7d39887422175ab0ed9f83947c21a6d30c2391419215', // ef66d9e3, pre-scrub
+        to:   'f2e53e5a3de9f08b162528323b6cb78bbbddf9591859bf555313801929689c84',
+    },
+    '2026-07-29-state-checkpoints-uq-chain-seq.sql': {
+        from: '05dfd2ef7d246929a451521aa7c4c6e0f21faf019dd06f1f16384a450675267c', // orphaned blob 8a293ccf, pre-scrub
+        to:   '0796c26842434c39b056e9875ba5ee7dbbcfd92d340e2899f7921e03147c5458',
+    },
 };
 
 // Applicability preconditions the runner evaluates against the LIVE schema before it
