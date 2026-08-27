@@ -11,35 +11,48 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Integration: full-node REWARD-tranche cross-node determinism (reward-only tier).
+ * Integration: full-node participation accrual, genesis-reindex determinism, and the
+ * PRICE batch's zero-reward rule.
  *
- * The verified-full-node tier is REWARD-ONLY (no slashing). A staking source earns
- * the oracle-round full-node tranche only if, over the trailing
- * REWARD_PASS_WINDOW_BLOCKS, it answered at least MIN_PASS_RATE_BPS of the challenge
- * epochs that produced a verdict (db.getFullNodeParticipation → price.js). That gate
- * is consensus-critical: every indexer that replays the same chain MUST derive the
- * SAME validator_rewards rows, or the federation forks. The unit tests pin the split
- * with a mocked DB; the live e2e (multiHubNodeProof) proves only the NODEPROOF
- * participation accrual and intentionally skips a real PRICE oracle round. Neither
- * proves the reward ROWS replay byte-identical through the REAL DB pipeline from a
- * genesis reindex - this does.
+ * RETIRED HERE, AND WHY (the batch collapse). This scenario used to assert a two-tranche
+ * oracle reward split: oracle_base for every round signer, plus oracle_full_node for the
+ * staking sources that answered at least MIN_PASS_RATE_BPS of the challenge epochs. PRICE
+ * version 0 is now the validator BATCH format, and the per-round wire that carried the
+ * inline reward derivation was deleted rather than deprecated. The batch derives NO
+ * rewards at all, by design: the retired derivation only ever fired for prices landing on
+ * Bitcoin (which production never does), and paying the elected publisher alone would
+ * misprice every other validator's participation, so a real participation rail is tracked
+ * separately. oracle_base and oracle_full_node are consequently unreachable - nothing in
+ * src/ can emit either row - so the tranche assertions were removed outright rather than
+ * re-pointed at some other action that happens to pay. Re-pointing would have kept a
+ * green test that proved nothing about the split it was named for. In their place sits a
+ * pin on the ruled behavior: a VALID, BTC-landed batch writes zero validator_rewards
+ * rows. Should a future participation rail reintroduce a split, it earns its own scenario.
  *
- * Drives the whole reward path end-to-end through the REAL indexer against a real DB:
+ * What survives is the half PRICE was only ever the vehicle for, and it is still
+ * consensus-critical: every indexer replaying the same chain MUST derive the same
+ * participation and the same consensus hashes, or the federation forks. The unit tests
+ * cover the batch's zero-reward rule against a mocked DB; the live e2e (multiHubNodeProof)
+ * covers NODEPROOF accrual alone. Neither proves these replay byte-identical through the
+ * REAL DB pipeline from a genesis reindex - this does.
+ *
+ * Drives the path end-to-end through the REAL indexer against a real DB:
  *   1. STAKE four validators above full_node MIN_STAKE (2000). V1+V2 share staking
- *      source A1 (exercises the per-source dedup → one tranche share per source); V3
- *      from A2, V4 from A3.
+ *      source A1 (so a source with two signers stays one source); V3 from A2, V4 from A3.
  *   2. Two challenge epochs of REAL Ed25519 NODEPROOF verdicts. V1,V2,V3 pass BOTH
- *      epochs; V4 passes only ONE (→ pass-rate 50% < 70%, excluded from the tranche).
+ *      epochs; V4 passes only ONE (pass-rate 50% < 70%).
  *      challenge_id = sha256(network:epoch:ledger_hash:target) - re-derived from the
  *      indexer's own stored epoch ledger hash, so the corpus is a deterministic
  *      function of earlier on-chain state (the property under test).
- *   3. A REAL signed PRICE v0 round (REWARD_SHARE=0.25) that all four sign → the
- *      indexer writes the two-tranche split: oracle_base (all signers) + oracle_full_node
- *      (qualifying sources only, deduped to the lex-smallest passing signer per source).
- *   4. Assert (a) the validator_rewards rows AND the chained consensus block hashes are
- *      BYTE-IDENTICAL when re-derived from a clean DB (determinism = no fork), and
- *      (b) the structural shape: 4 base rows, 2 full-node rows (V4's low-rate source
- *      excluded), source-deduped representative = lex-smallest passing signer.
+ *   3. A REAL signed PRICE batch that all four sign and that the indexer accepts as
+ *      valid, landing on BTC where the retired derivation would have paid out.
+ *   4. Assert (a) the participation the gate reads accrued per SOURCE, not per signer,
+ *      (b) the valid batch wrote zero validator_rewards rows, and (c) the reward rows
+ *      AND the chained consensus block hashes are BYTE-IDENTICAL when re-derived from a
+ *      clean DB (determinism = no fork).
+ *
+ * The FULLNODE_REWARD_SHARE knob below is kept deliberately non-zero: a zero share would
+ * make the zero-reward pin vacuous by disabling a split that no longer exists anyway.
  *
  * Mirrors the harness of 10-determinism-baseline / 17-slash-equivocation. Needs a
  * disposable MariaDB (TEST_DB_*) and a Node 22 runtime. Run standalone so the FULLNODE_*
@@ -91,8 +104,8 @@ const STAKE_AMT = '2500.00000000';   // > full_node MIN_STAKE (2000) and > price
 const EPOCHS    = [110, 115];         // multiples of CHALLENGE_INTERVAL (5), past activation (107)
 const DEPTH     = 2;                  // FULLNODE_CONFIRM_DEPTH
 const V110_BLK  = 117, V115_BLK = 118;  // verdict blocks (within VERDICT_ACCEPT_WINDOW of each epoch)
-const PRICE_BLK = 120;                // PRICE round block (reward derivation reads participation here)
-const ROUND     = 1;
+const PRICE_BLK = 120;                // PRICE batch block, and the batch's own BTC anchor
+const ROUND     = 1;                  // single-round window, so FIRST_ROUND == LAST_ROUND
 
 // Deterministic Ed25519 identity: { privateKey (KeyObject), pub (raw 64-hex, lowercase) }.
 function genKey() {
@@ -124,27 +137,35 @@ function buildNodeproofWire(epoch, ledgerHash, passKeys, verifiers) {
             String(verifiers.length), ...sigFields].join('|');
 }
 
-// Build a signed PRICE v0 wire action over the canonical payload (ed25519.buildPriceV0Payload
-// applies the regtest ORACLE equiv header itself, gated on btcHeight per #4232).
-// Wire: PRICE|0|ROUND|TIMESTAMP|BTC_BLOCK_HEIGHT|PAIR_COUNT|...|SIG_COUNT|...
-function buildPriceWire(round, timestamp, pairs, signers, btcHeight) {
-    const payload = Buffer.from(ed25519.buildPriceV0Payload(round, timestamp, pairs, NETWORK, btcHeight), 'utf8');
+// Build a signed PRICE batch wire action (version 0) carrying a single round body, over
+// the canonical buildPriceBatchPayload applies (it wraps the ORACLE_BATCH equiv header
+// itself, unconditionally, unlike the retired per-round builder's height gate).
+// Wire: PRICE|0|FIRST_ROUND|LAST_ROUND|BTC_BLOCK_HEIGHT|ROUND_COUNT|
+//         ROUND|TIMESTAMP|ANCHOR_HEIGHT|PAIR_COUNT|pair|price|...  |SIG_COUNT|PUBKEY|SIG|...
+//
+// One round is enough: the window bounds collapse to that round and its anchor equals the
+// header anchor, which is what the parser requires and what keeps the batch off both
+// straddle rules. A wider window would exercise batching, not the reward rule under test.
+function buildPriceBatchWire(round, timestamp, pairs, signers, btcHeight) {
+    const rounds  = [{ round: round, timestamp: timestamp, btcBlockHeight: btcHeight, pairs: pairs }];
+    const payload = Buffer.from(ed25519.buildPriceBatchPayload(round, round, btcHeight, rounds), 'utf8');
     const pairFields = [];
     for (const p of pairs) pairFields.push(p.pair, p.price);
     const sigFields = [];
     for (const s of signers) { sigFields.push(s.pub, signHex(s.privateKey, payload)); }
-    return ['PRICE', '0', String(round), String(timestamp), String(btcHeight),
+    return ['PRICE', '0', String(round), String(round), String(btcHeight), '1',
+            String(round), String(timestamp), String(btcHeight),
             String(pairs.length), ...pairFields,
             String(signers.length), ...sigFields].join('|');
 }
 
-describe('Integration: full-node reward-tranche determinism @regression @tier1', function () {
+describe('Integration: full-node participation determinism and the batch zero-reward rule @regression @tier1', function () {
     this.timeout(180000);
 
     let V1, V2, V3, V4, verifiers, firstRun;
 
     // One clean-DB run: seed gas + stake + (derived) NODEPROOF verdicts + a signed PRICE
-    // round, drive the REAL indexer, and read back the reward rows + consensus hash chain.
+    // batch, drive the REAL indexer, and read back the reward rows + consensus hash chain.
     async function runCorpus() {
         await resetDecoderDb();
         await resetIndexerDb();
@@ -190,8 +211,10 @@ describe('Integration: full-node reward-tranche determinism @regression @tier1',
             }
             await processBlocks(indexer);   // process the verdict blocks → full_node_verifications
 
-            // Phase C - a signed PRICE v0 round; the indexer derives the two-tranche reward split.
-            const priceWire = buildPriceWire(ROUND, T + 3600,
+            // Phase C - a signed PRICE batch all four sign. It must land VALID for the
+            // zero-reward pin to mean anything: an invalid action pays nothing for the
+            // uninteresting reason.
+            const priceWire = buildPriceBatchWire(ROUND, T + 3600,
                 [{ pair: 'BTC/USD', price: '50000' }], [V1, V2, V3, V4], PRICE_BLK);
             await seeder.seedBlock(PRICE_BLK, T + 3600, [{ source: A1, data: priceWire }]);
             await processBlocks(indexer);
@@ -209,7 +232,8 @@ describe('Integration: full-node reward-tranche determinism @regression @tier1',
                  JOIN index_pubkeys   ip ON ip.id = vr.signing_pubkey_id
                  JOIN index_addresses ia ON ia.id = vr.source_id
                  ORDER BY vr.reward_type, ip.pubkey`);
-            // PRICE round status (sanity - the reward path only runs on a VALID round).
+            // Batch status. round_number carries FIRST_ROUND on a batch row, which for this
+            // single-round window is ROUND.
             const priceStatus = await indexerQuery(
                 `SELECT validation_status AS status FROM prices
                  WHERE round_number = ? LIMIT 1`, [ROUND]);
@@ -262,42 +286,45 @@ describe('Integration: full-node reward-tranche determinism @regression @tier1',
         await closeAll();
     });
 
-    it('the PRICE round validated and produced the participation the gate expects (sanity)', function () {
-        assert.strictEqual(firstRun.priceStatus, 'valid', 'PRICE v0 round must validate for rewards to fire');
+    it('the batch validated and the challenge participation accrued per SOURCE', function () {
+        assert.strictEqual(firstRun.priceStatus, 'valid',
+            'the PRICE batch must land VALID, or the zero-reward pin below proves nothing');
+        // Per SOURCE, not per signer: A1 funded two validators (V1+V2) and still counts as
+        // one source, which is the shape any future participation rail has to read.
         const part = new Map(firstRun.participation.map(p => [p.source, p.epochs]));
         assert.strictEqual(part.get(A1), 2, 'source A1 (V1+V2) passed both epochs');
         assert.strictEqual(part.get(A2), 2, 'source A2 (V3) passed both epochs');
         assert.strictEqual(part.get(A3), 1, 'source A3 (V4) passed only one epoch (50% < 70%)');
     });
 
-    it('writes the two-tranche split: base = every signer, full-node = qualifying sources only', function () {
-        const base = firstRun.rewards.filter(r => r.reward_type === 'oracle_base');
-        const full = firstRun.rewards.filter(r => r.reward_type === 'oracle_full_node');
-
-        // Base tranche - one row per qualified signer (all four).
-        assert.strictEqual(base.length, 4, 'one oracle_base row per signer');
-        assert.deepStrictEqual(new Set(base.map(r => r.pubkey)),
-            new Set([V1, V2, V3, V4].map(v => v.pub)), 'base tranche covers every signer');
-        assert.ok(base.every(r => r.amount === base[0].amount), 'base split is equal');
-        assert.notStrictEqual(Number(base[0].amount), 0, 'base reward is non-zero');
-
-        // Full-node tranche - one row per QUALIFYING source (A1, A2). A3 (V4, 50% < 70%)
-        // is excluded; A1 is deduped to its lex-smallest passing signer (V1).
-        assert.strictEqual(full.length, 2, 'one oracle_full_node row per qualifying source');
-        assert.deepStrictEqual(new Set(full.map(r => r.pubkey)), new Set([V1.pub, V3.pub]),
-            'full-node tranche = lex-smallest passing signer of each qualifying source (A1→V1, A2→V3)');
-        assert.ok(!full.some(r => r.pubkey === V4.pub),
-            'V4 (source A3, below the 70% pass-rate) must NOT earn the full-node tranche');
-        assert.ok(full.every(r => r.amount === full[0].amount), 'full-node split is equal');
-        assert.notStrictEqual(Number(full[0].amount), 0, 'full-node reward is non-zero');
+    it('a VALID BTC-landed PRICE batch writes ZERO validator_rewards rows', function () {
+        // The ruled behavior after the batch collapse. Every condition the retired per-round
+        // derivation needed is satisfied here and it still must not pay: the action is valid,
+        // it landed on BTC (the only chain that derivation ever fired on), four capable
+        // validators signed it, FULLNODE_REWARD_SHARE is non-zero, and real challenge
+        // participation exists in the DB for it to have read. Nothing pays it because the
+        // derivation is gone, not because the setup fell short.
+        // The retired tranche types first, so a reintroduced split reports as itself rather
+        // than as a generic non-empty table.
+        assert.deepStrictEqual(firstRun.rewards.filter(r => r.reward_type === 'oracle_base' ||
+                                                           r.reward_type === 'oracle_full_node'), [],
+            'the oracle tranche reward types are unreachable and must stay unreachable');
+        // Catch-all: no reward of ANY type is derived from a batch, so a new type added later
+        // cannot start paying here unnoticed.
+        assert.deepStrictEqual(firstRun.rewards, [],
+            'the validator batch derives no rewards; a non-empty table means a derivation came back');
     });
 
     it('re-deriving from a clean DB yields IDENTICAL reward rows + hash chain (determinism = no fork)', async function () {
         const second = await runCorpus();
         assert.deepStrictEqual(second.rewards, firstRun.rewards,
-            'reward derivation produced different validator_rewards rows for the same input - fork risk');
+            'reward rows differ for the same input - fork risk');
+        // The load-bearing one now that the reward table is empty: the hash chain covers
+        // the whole corpus, batch and verdicts included, so a divergence anywhere in block
+        // processing surfaces here.
         assert.deepStrictEqual(second.chain, firstRun.chain,
-            'reward processing produced different consensus hashes for the same input - fork risk');
-        assert.deepStrictEqual(second.participation, firstRun.participation);
+            'block processing produced different consensus hashes for the same input - fork risk');
+        assert.deepStrictEqual(second.participation, firstRun.participation,
+            'challenge participation replayed differently from a clean DB - fork risk');
     });
 });
