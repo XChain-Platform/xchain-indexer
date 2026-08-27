@@ -40,6 +40,7 @@ const caretRefStrict = require('./caret_ref_strict_activation');
 const ledgerPrecision = require('./ledger_amount_precision_activation');
 const dispenserSendCompare = require('./dispenser_send_amount_compare_activation');
 const stakeWeightCollation = require('./stake_weight_collation_activation');
+const priceCapSnapshot = require('./price_capability_snapshot_activation');
 // Per-block cap on the ATTEST deadline-expiry sweep. Vendored
 // byte-identical from xchain-documentation/protocol/constants.js, same convention
 // as the XCALL_MAX_CALLS_PER_BLOCK sibling it mirrors.
@@ -133,6 +134,28 @@ const BLOCK_HASH_VERSION = 1;
 // integer FK column; the digit string is handed to SQL verbatim (never via Number()) so a
 // large id keeps full precision. See xchain-documentation/protocol/Index_Id_References.md.
 const CANONICAL_CARET_ID = /^[1-9][0-9]*$/;
+
+
+// Whether this indexer resolves `capability` from the hub-mirrored capability_snapshots
+// rather than from local stake rows. Capability staking is BTC-only at the protocol level,
+// so every non-BTC indexer has an empty local set and would otherwise compute a quorum
+// against zero stake.
+//
+// Deliberately a module-level function rather than a method: both resolvers are invoked by
+// tier-1 regression tests against a partial object, so a `this`-dependent predicate would
+// make their behaviour depend on how they were called rather than on the config.
+//
+// `price` is GATED where the other two are not. cross_chain and oracle_publish have never
+// resolved any other way, so admitting them is not a change. Flipping `price` turns actions
+// that record an insufficient-stake status today into valid ones, which diverges replay on
+// any existing chain and forks a mixed-version fleet, so it waits for its flag day.
+function usesCapabilitySnapshot(config, capability, blockTime){
+    if(!config || config['COIN'] === 'BTC') return false;
+    if(capability === 'cross_chain' || capability === 'oracle_publish') return true;
+    if(capability === 'price')
+        return priceCapSnapshot.isPriceCapabilitySnapshotActive(blockTime, config['NETWORK']);
+    return false;
+}
 
 class Database {
 
@@ -12660,20 +12683,41 @@ class Database {
         return result;
     }
 
+    // Whether `capability` resolves from the hub-mirrored capability_snapshots on this
+    // chain instead of the local `stakes` rows.
+    //
+    // Capability staking is BTC-only at the protocol level (coins/DOGE.js and coins/LTC.js
+    // both declare CAPABILITIES: {}), so off BTC the local path returns an empty set for
+    // every capability and the mirror is the only way a non-BTC indexer reaches the
+    // BTC-anchored validator set at all.
+    //
+    // ONE predicate for BOTH the count resolver (getValidatorsByCapability) and the weight
+    // resolver (getStakeWeightsByCapability), deliberately. Those answer "who is capable"
+    // and "how much stake does each capable signer carry"; if only one consulted the
+    // mirror, a node would tally signatures against one validator set and divide by a
+    // quorum denominator computed from another, reaching a verdict no other node reaches.
+    //
+    // `price` is GATED (price_capability_snapshot_activation.js) while `cross_chain` and
+    // `oracle_publish` are not. The difference is history, not taste: those two are the
+    // redirect's original scope and have never resolved any other way, whereas every PRICE
+    // action already on a non-BTC chain recorded 'invalid: insufficient signer stake' under
+    // the empty local path. Admitting the mirror flips those same bytes to valid, so below
+    // the gate `price` MUST stay on the local path or replay of the existing chain diverges
+    // and a mixed-version fleet forks on the first PRICE action. `blockTime` is the parsed
+    // action's own block time; absent or unparseable, the gate fails closed.
+
     // Return all pubkeys whose SUM(active stake) at `blockIndex` meets the
     // capability's MIN_STAKE. Used by xchain-hub's CapabilitySnapshot to lock
     // the validator set at a block boundary for PBFT quorum calculations -
     // every hub independently calling this against the same blockIndex must
     // arrive at the same set, so consensus on quorum N is deterministic.
     // Spec: capability-staking model §6 (deterministic quorum selection).
-    async getValidatorsByCapability(capability, blockIndex, minStakeOverride){
-        // Off-BTC chains have no local capability stakes (capability staking is BTC-only),
-        // so resolve the qualifying set from the hub-mirrored capability_snapshots at the
-        // (BTC-anchored) block. Scoped to the capabilities verified on a non-BTC chain:
-        // `cross_chain` (cross-chain match settlement) and `oracle_publish` (the DOGE-only
-        // ANCHOR action); other capabilities keep the existing local-stakes path (which is
-        // empty off BTC, exactly as before).
-        if(this.config['COIN'] !== 'BTC' && (capability === 'cross_chain' || capability === 'oracle_publish'))
+    async getValidatorsByCapability(capability, blockIndex, minStakeOverride, blockTime){
+        // Off-BTC chains have no local capability stakes, so the qualifying set comes from
+        // the hub-mirrored capability_snapshots at the (BTC-anchored) block. `blockTime` is
+        // the parsed action's own block time and is read ONLY by the gated `price` arm; see
+        // usesCapabilitySnapshot for the scope and the consensus reasoning.
+        if(usesCapabilitySnapshot(this.config, capability, blockTime))
             return await this.getCapabilitySnapshotValidators(capability, blockIndex);
         let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
         let capConfig = caps[capability];
@@ -12796,11 +12840,12 @@ class Database {
     // effective signer key, each carrying its `source` (address) + the source's
     // aggregate `weight`. Σ weight over DISTINCT sources = S. CONSENSUS-CRITICAL:
     // must resolve identically on the hub and every indexer or validation forks.
-    async getStakeWeightsByCapability(capability, blockIndex, minStakeOverride){
+    async getStakeWeightsByCapability(capability, blockIndex, minStakeOverride, blockTime){
         // Off-BTC chains have no local capability stakes - read the source-keyed
-        // weights from the hub-mirrored capability_snapshots (same capability scoping
-        // as getValidatorsByCapability).
-        if(this.config['COIN'] !== 'BTC' && (capability === 'cross_chain' || capability === 'oracle_publish'))
+        // weights from the hub-mirrored capability_snapshots. Routed through the SAME
+        // predicate as getValidatorsByCapability so the count set and the weight set can
+        // never come from different sources; see usesCapabilitySnapshot.
+        if(usesCapabilitySnapshot(this.config, capability, blockTime))
             return await this.getCapabilitySnapshotWeights(capability, blockIndex);
         let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
         let capConfig = caps[capability];
