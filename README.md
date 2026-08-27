@@ -39,7 +39,7 @@ State-processing engine for the XChain Platform. Reads decoded blockchain transa
 - **Action mapping**: address/ticker/action_index cross-references for fast lookups
 - **Circuit-breaker DB connections**: automatic failure detection and recovery
 - **Watchdog timeout**: configurable per-block processing timeout detects deadlocks
-- **Hub-facing RPCs**: `getownstake`, `getactivevalidators`, `getactivestakeweights`, `getcapabilityvalidators`, `getstakeweightsbycapability`, `getfullnodeverifiers`, `getpendingattestation_requests`, `getrelayedattestation_requests`, `getopencrosschainorders`, `getpendingcrosschaincalls`, `getcrosschaincall`, `getcrosschaincallresult`, `getactionconfirmations`, `getstakesourcebypubkey`, `getlatestblock`, `getblockhashes`; ingests `pushvalidatorrewards` from hub
+- **Hub-facing RPCs**: `getownstake`, `getactivevalidators`, `getactivestakeweights`, `getcapabilityvalidators`, `getstakeweightsbycapability`, `getfullnodeverifiers`, `getpendingattestation_requests`, `getrelayedattestation_requests`, `getopencrosschainorders`, `getpendingcrosschaincalls`, `getcrosschaincall`, `getcrosschaincallresult`, `getactionconfirmations`, `getstakesourcebypubkey`, `getlatestblock`, `getblockhashes`. `pushvalidatorrewards` is retired: it refuses every reward type, because every validator reward is derived from on-chain bytes
 - **Comprehensive test suite**: unit, integration, e2e, boundary, security, fuzz, chaos, mutation, regression, performance, smoke
 
 ## Documentation

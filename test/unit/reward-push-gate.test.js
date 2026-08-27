@@ -13,17 +13,24 @@
  **********************************************************************
  * test/unit/reward-push-gate.test.js
  *
- * CONSENSUS/SECURITY REGRESSION GUARD for the pushvalidatorrewards ingest gate.
+ * CONSENSUS/SECURITY REGRESSION GUARD for the RETIRED validator-reward push rail.
  *
- * A mixed-case per-chain anchor reward_type (e.g. 'anchor_btc') pushed over the
- * authenticated RPC would otherwise (a) slip the case-SENSITIVE #5311 flag-day
- * gate /^anchor_(BTC|LTC|DOGE)$/ and get written post-flag-day, and (b) because
- * validator_rewards is utf8_general_ci, collation-collide with the on-chain-
- * derived 'anchor_BTC' winner inside reconcileAnchorRewardWinner's MIN(pubkey)
- * collapse, deleting the legit derived row and forking that node from the fleet.
- * canonicalizeRewardType normalizes the case at the ingest boundary so neither
- * bypass is reachable. This file guards that normalization + the downstream gate
- * property it restores.
+ * pushvalidatorrewards was a key-authenticated JSON-RPC that wrote rows into
+ * validator_rewards, which COLLECT can spend. Every reward it carried is now
+ * derived from on-chain bytes instead: oracle_round / attest_fee / attest_bcast
+ * during block processing, anchor_<CHAIN> from the ANCHOR v4/v5 publisher
+ * attestation, anchor_archive from the ANCHOR v6 one. Mainnet is past both
+ * anchor flag-days and both sit at 0 on testnet and regtest, so the staged gates
+ * that used to stand in the handler refused every push on every live network.
+ * The write path is now DELETED rather than gated.
+ *
+ * What this file pins:
+ *   - the refusal answers EVERY reward type, including one nobody has minted yet,
+ *     and reads as terminal to the hub's push loop so a stale hub drops instead
+ *     of looping against a node that will never accept;
+ *   - the handler holds no write path at all, so no gate input, forged or
+ *     otherwise, can reach createValidatorReward or the smallest-pubkey
+ *     reconcileAnchorRewardWinner collapse.
  */
 
 'use strict';
@@ -31,11 +38,12 @@
 const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
-const { canonicalizeRewardType } = require('../../src/reward-push-gate');
+const { canonicalizeRewardType, rewardPushRetiredError } = require('../../src/reward-push-gate');
 
-// api.js is a server entrypoint and exports no controller, so the handler's gate is
+// api.js is a server entrypoint and exports no controller, so the handler itself is
 // asserted the same way test/unit/api-federation-read-isolation.test.js asserts its
-// apiView routing: over the handler's own source text.
+// apiView routing: over the handler's own source text. The refusal it returns is
+// exercised as behaviour through rewardPushRetiredError below.
 const API_SRC = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
 const PUSH_HANDLER_SRC = (function () {
     const start = API_SRC.indexOf('async pushvalidatorrewards(');
@@ -45,12 +53,97 @@ const PUSH_HANDLER_SRC = (function () {
     return API_SRC.slice(start, end);
 })();
 
-// The exact gate the handler applies to reject a per-chain anchor push once the
-// flag-day is active (api.js pushvalidatorrewards). Kept in sync here so the test
-// proves canonicalization makes a mixed-case push reachable to this gate.
-const FLAG_DAY_CHAIN_GATE = /^anchor_(BTC|LTC|DOGE)$/;
+// The hub's terminal-refusal predicate (xchain-hub RewardTracker.isTerminalPushError).
+// An error matching it stops the push immediately; anything else burns the retry budget.
+const HUB_TERMINAL_PUSH_ERROR = /is not pushable|push retired|is required|must be an array/i;
 
-describe('canonicalizeRewardType() forge-gate normalization @regression @tier1', function () {
+// Every reward type the rail ever carried, plus shapes a caller can invent.
+const EVERY_PUSHED_TYPE = [
+    'anchor_BTC', 'anchor_LTC', 'anchor_DOGE', 'anchor_archive',
+    'anchor_btc', 'anchor_BtC', 'Anchor_Archive', 'ANCHOR_ARCHIVE',
+    'oracle_round', 'attest_fee', 'attest_bcast',
+    'anchor_xyz', 'anchor_btc_x', 'xanchor_btc', '', 'not a type',
+];
+
+describe('pushvalidatorrewards is retired for every reward type @regression @tier1', function () {
+
+    it('refuses every reward type the rail ever carried, and every invented one', function () {
+        for (const type of EVERY_PUSHED_TYPE) {
+            const err = rewardPushRetiredError(type);
+            assert.strictEqual(typeof err, 'string', 'no reward type may resolve to an acceptance: ' + type);
+            assert.ok(err.length > 0, 'the refusal must carry a reason: ' + type);
+        }
+    });
+
+    it('refuses a missing / null / non-string reward_type without throwing', function () {
+        for (const type of [undefined, null, 0, {}, [], true]) {
+            const err = rewardPushRetiredError(type);
+            assert.strictEqual(typeof err, 'string');
+            assert.ok(err.length > 0);
+        }
+        // An absent type still names itself, so an operator reading the log can tell a
+        // malformed push apart from one that named a real reward.
+        assert.match(rewardPushRetiredError(undefined), /\(unset\)/);
+    });
+
+    it('reads as TERMINAL to the hub push loop, so a stale hub drops instead of looping', function () {
+        // A refusal the hub does not recognise is treated as transient and re-posted
+        // pushMaxAttempts times against a node whose answer can never change.
+        for (const type of EVERY_PUSHED_TYPE.concat([undefined, null])) {
+            assert.match(rewardPushRetiredError(type), HUB_TERMINAL_PUSH_ERROR,
+                'refusal for ' + String(type) + ' must match the hub terminal-error predicate');
+        }
+    });
+
+    it('names the reward with the spelling the derived row carries', function () {
+        // The derived winner is written as 'anchor_' + CHAIN.toUpperCase(), so a refusal
+        // logged for 'anchor_btc' should name the same reward an operator sees on the
+        // derive side rather than a second spelling of it.
+        assert.match(rewardPushRetiredError('anchor_btc'), /anchor_BTC/);
+        assert.match(rewardPushRetiredError('Anchor_Archive'), /anchor_archive/);
+    });
+});
+
+describe('pushvalidatorrewards holds no write path @regression @tier1', function () {
+
+    it('never reaches the reward writer', function () {
+        assert.ok(!/createValidatorReward/.test(PUSH_HANDLER_SRC),
+            'the retired rail must not be able to mint a COLLECT-spendable validator_rewards row');
+    });
+
+    it('never reaches the smallest-pubkey reconcile that DELETES rows', function () {
+        // This collapse was the destructive half of the forge: a pushed row sharing a
+        // round with the derived winner deleted that winner.
+        assert.ok(!/reconcileAnchorRewardWinner/.test(PUSH_HANDLER_SRC),
+            'the retired rail must not be able to delete a derived reward row');
+    });
+
+    it('opens no database connection at all', function () {
+        assert.ok(!/apiView\(\)/.test(PUSH_HANDLER_SRC),
+            'a handler that only refuses has no reason to draw a pooled connection');
+        assert.ok(!/committedView\(/.test(PUSH_HANDLER_SRC),
+            'the committed-tip read existed only to give the archive gate a second plane');
+    });
+
+    it('answers from the refusal helper rather than re-deriving a flag-day in the handler', function () {
+        assert.ok(/rewardPushRetiredError\(\s*reward_type\s*\)/.test(PUSH_HANDLER_SRC),
+            'the handler must answer with the shared refusal, which the hub predicate is pinned against');
+        assert.ok(!/isAnchorRewardActive|isArchiveRewardActive/.test(PUSH_HANDLER_SRC),
+            'no flag-day may be consulted here: a re-introduced gate is a re-introduced admitted case');
+    });
+
+    it('is still listed as a WRITE method, so it stays key-gated', function () {
+        // The method no longer writes, but leaving it ungated would expose an
+        // unauthenticated probe of a consensus node for no gain.
+        assert.match(API_SRC, /WRITE_METHODS\s*=\s*new Set\(\[\s*'pushvalidatorrewards'/,
+            'the retired method must remain behind the API key');
+    });
+});
+
+// The reward_type canonicalization outlives the gate it was built for: the refusal
+// above names the type with it, and the uppercase-chain invariant it documents is
+// still load-bearing on the derive side (see anchorRewardCanonicalGolden.test.js).
+describe('canonicalizeRewardType() naming @regression @tier1', function () {
 
     it('uppercases the chain suffix of a lowercase per-chain anchor reward', function () {
         assert.strictEqual(canonicalizeRewardType('anchor_btc'),  'anchor_BTC');
@@ -70,7 +163,7 @@ describe('canonicalizeRewardType() forge-gate normalization @regression @tier1',
         assert.strictEqual(canonicalizeRewardType('anchor_DOGE'), 'anchor_DOGE');
     });
 
-    it('lowercases anchor_archive to its canonical form (the gate is case-sensitive)', function () {
+    it('lowercases anchor_archive to its canonical form', function () {
         assert.strictEqual(canonicalizeRewardType('anchor_archive'), 'anchor_archive');
         assert.strictEqual(canonicalizeRewardType('Anchor_Archive'), 'anchor_archive');
         assert.strictEqual(canonicalizeRewardType('ANCHOR_ARCHIVE'), 'anchor_archive');
@@ -91,104 +184,7 @@ describe('canonicalizeRewardType() forge-gate normalization @regression @tier1',
     });
 
     it('does not partial-match a chain name embedded in a longer type', function () {
-        // Only an exact anchor_<chain> is canonicalized; a decorated variant is left
-        // alone (and would be rejected/handled as a non-chain type downstream).
         assert.strictEqual(canonicalizeRewardType('anchor_btc_x'), 'anchor_btc_x');
         assert.strictEqual(canonicalizeRewardType('xanchor_btc'),  'xanchor_btc');
-    });
-
-    it('makes a mixed-case per-chain push reachable to the flag-day gate (the forge fix)', function () {
-        // Before the fix: the raw lowercase 'anchor_btc' does NOT match the case-
-        // sensitive gate, so the flag-day rejection is skipped and the row is written.
-        assert.strictEqual(FLAG_DAY_CHAIN_GATE.test('anchor_btc'), false,
-            'raw lowercase must NOT match the case-sensitive gate (this is the bypass)');
-        // After canonicalization the same push is caught by the gate.
-        assert.strictEqual(FLAG_DAY_CHAIN_GATE.test(canonicalizeRewardType('anchor_btc')), true,
-            'canonicalized form must match the gate so the flag-day rejection fires');
-    });
-});
-
-// The gate key itself, separate from the reward_type spelling above.
-//
-// block_index arrives on the wire and is defaulted to 0 when absent, so keying the
-// flag-day retirement on it alone made the gate advisory: a key-holder sending
-// block_index 0 read every flag-day as inactive, got a wire-amount COLLECT-spendable
-// row written, and the unconditional MIN(pubkey) reconcileAnchorRewardWinner collapse
-// then DELETED the legitimately derived winner for that round. `round` is the binding
-// plane for the per-chain legs: round_reference IS CHECKPOINT_SEQ and
-// StateCheckpointEngine.deriveCheckpointSeq(snapshotBlock) returns snapshotBlock, so
-// round IS the BTC snapshot_block, and reconcileAnchorRewardWinner keys on
-// (reward_type, round_reference) - a forged row can only displace the derived winner
-// while it carries the derived (post-flag-day) round.
-describe('pushvalidatorrewards retirement gate key @regression @tier1', function () {
-
-    it('gates the per-chain leg on round as well as the wire block_index', function () {
-        const gate = PUSH_HANDLER_SRC.slice(PUSH_HANDLER_SRC.indexOf('anchor_(BTC|LTC|DOGE)'));
-        const body = gate.slice(0, gate.indexOf('push retired'));
-        assert.ok(/isAnchorRewardActive\(\s*Number\(blockIdx\)/.test(body),
-            'per-chain gate must still consult the wire block_index');
-        assert.ok(/isAnchorRewardActive\(\s*Number\(round\)/.test(body),
-            'per-chain gate must ALSO consult round, or a key-holder lowers block_index and slips it');
-    });
-
-    it('combines the two planes with OR, never with a max() that NaN can poison', function () {
-        // round is only checked for presence, never for numeric type, so Number(round) on a
-        // non-numeric round is NaN and Math.max(NaN, x) is NaN. A max()-shaped gate key would
-        // therefore hand the bypass straight back to any caller sending round: 'x'.
-        assert.ok(!/Math\.max/.test(PUSH_HANDLER_SRC),
-            'the retirement gate must not build its key with Math.max (NaN fails the gate open)');
-    });
-
-    // The ARCHIVE leg cannot borrow `round` the way the per-chain leg does:
-    // anchor_archive's round_reference is MATCH_BATCH_SEQ, a dense hub-allocated
-    // counter rather than a height, so it binds nothing. Left on the wire block_index
-    // alone the gate was advisory in exactly the same way: block_index 0 read the
-    // archive flag-day as inactive on mainnet, wrote a wire-amount COLLECT-spendable
-    // row, and the MIN(pubkey) collapse then deleted the derived v6 winner. The plane
-    // that binds instead is the node's own committed tip, which no request body moves.
-    const ARCHIVE_GATE_SRC = (function () {
-        const start = PUSH_HANDLER_SRC.indexOf("type === 'anchor_archive'");
-        assert.notStrictEqual(start, -1, 'archive retirement leg not found in the push handler');
-        const gate = PUSH_HANDLER_SRC.slice(start);
-        const end  = gate.indexOf('ANCHOR v6');
-        assert.notStrictEqual(end, -1, 'could not bound the archive retirement leg');
-        return gate.slice(0, end);
-    })();
-
-    it('gates the archive leg on the node-local committed tip as well as the wire block_index', function () {
-        assert.ok(/committedView\(\s*indexer\.indexerDb\s*\)\.getLatestBlockIndex\(\)/.test(ARCHIVE_GATE_SRC),
-            'archive gate must consult the node-local committed tip, not only the wire block_index');
-        assert.ok(/isArchiveRewardActive\(\s*Number\(tip\)/.test(ARCHIVE_GATE_SRC),
-            'the local tip must be fed to isArchiveRewardActive as a gate plane');
-        assert.ok(/isArchiveRewardActive\(\s*Number\(blockIdx\)/.test(ARCHIVE_GATE_SRC),
-            'archive gate must still consult the wire block_index (OR-of-planes can only tighten)');
-    });
-
-    it('fails the archive leg closed when the local tip cannot be read', function () {
-        assert.ok(/Number\.isFinite\(Number\(tip\)\)/.test(ARCHIVE_GATE_SRC),
-            'an unreadable tip must be detected, not coerced into a gate plane');
-        // The retry-ability of that refusal is load-bearing: RewardTracker.isTerminalPushError
-        // matches /is not pushable|push retired|is required|must be an array/, so a transient
-        // refusal carrying any of those words would be DROPPED instead of retried, turning a
-        // DB blip into a permanently unpaid pre-flag-day archive reward.
-        const transient = /error: 'anchor_archive gate[^']*'/.exec(ARCHIVE_GATE_SRC);
-        assert.ok(transient,
-            'an unreadable tip must refuse the push rather than fall through to the wire plane');
-        assert.ok(!/is not pushable|push retired|is required|must be an array/i.test(transient[0]),
-            'the unreadable-tip refusal must NOT read as terminal to RewardTracker.isTerminalPushError');
-    });
-
-    it('refuses an archive push outright on a non-BTC indexer', function () {
-        assert.ok(/chain !== 'BTC'/.test(ARCHIVE_GATE_SRC),
-            'the tip plane is a BTC-anchored height, so a non-BTC indexer must refuse rather than fall back');
-        // This one IS terminal: the hub only ever pushes archive rewards to the BTC
-        // indexer (RewardTracker._pushRewardsToBtcIndexer), so a retry can never succeed.
-        assert.ok(/error: 'reward_type anchor_archive is not pushable[\s\S]*?push retired'/.test(ARCHIVE_GATE_SRC),
-            'the wrong-chain refusal must read as terminal so the hub stops retrying');
-    });
-
-    it('still routes its writes through apiView so a push never joins the block transaction', function () {
-        assert.ok(/indexer\.indexerDb\.apiView\(\)/.test(PUSH_HANDLER_SRC),
-            'pushvalidatorrewards must write on the API view, not the block-loop connection');
     });
 });

@@ -12,11 +12,12 @@
  *
  **********************************************************************
  *
- * XChain Indexer - validator-reward push ingest gate
+ * XChain Indexer - validator-reward push rail, retired
  *
- * Canonicalization for the reward_type of an inbound pushvalidatorrewards RPC.
- * Extracted from the api.js handler so the case-normalization that guards the
- * anchor-reward forge gate is unit-testable without the Express stack.
+ * The refusal the pushvalidatorrewards RPC now answers with, for every reward
+ * type and on every network, plus the reward_type canonicalization that names
+ * the type in it. Kept out of api.js so both are unit-testable as behaviour
+ * rather than as handler source text.
  *
  ********************************************************************/
 
@@ -25,19 +26,18 @@
 // Normalize a per-chain anchor reward_type to its canonical uppercase-suffix
 // form: 'anchor_btc' / 'anchor_BtC' -> 'anchor_BTC' (same for LTC / DOGE).
 //
-// WHY (consensus-safety): the deterministic on-chain derivation writes
-// 'anchor_' + CHAIN.toUpperCase() (actions/anchor.js), and the validator_rewards
-// column is utf8_general_ci (case-insensitive). A mixed-case pushed variant would
-// therefore (a) slip the case-SENSITIVE flag-day gate
-// (/^anchor_(BTC|LTC|DOGE)$/) and get written post-flag-day, and (b) collation-
-// collide with the derived winner inside reconcileAnchorRewardWinner's
-// `WHERE reward_type=?` + MIN(pubkey) collapse, deleting the legitimate derived
-// row and forking that node from the fleet. Canonicalizing at the ingest boundary
-// forecloses both: no lowercase form can slip the gate or create a colliding
-// duplicate. anchor_archive is canonicalized to full lowercase for the same
-// reason: its flag-day gate also compares case-sensitively while the derived row
-// is written as 'anchor_archive', so a mixed-case push (e.g. 'Anchor_Archive')
-// would otherwise slip the gate and collation-collide with the derived winner.
+// This was a security control while the push rail could still write: the
+// deterministic on-chain derivation writes 'anchor_' + CHAIN.toUpperCase()
+// (actions/anchor.js) into a utf8_general_ci column, so a mixed-case pushed
+// variant slipped the case-SENSITIVE flag-day gate AND then collation-collided
+// with the derived winner inside reconcileAnchorRewardWinner's MIN(pubkey)
+// collapse, deleting the legitimate derived row. With the write path removed
+// there is no gate to slip and no row to collide with, so what is left of this
+// is presentational: the refusal below names the type with the same spelling the
+// derived row carries, which keeps operator logs on both sides of a retired push
+// talking about the same reward. The uppercase-chain invariant it documents is
+// still load-bearing for the derive path (see the note in
+// test/unit/anchorRewardCanonicalGolden.test.js).
 // Other reward types (oracle_round, ...) pass through unchanged.
 function canonicalizeRewardType(type){
     let str = String(type == null ? '' : type);
@@ -47,4 +47,19 @@ function canonicalizeRewardType(type){
     return str;
 }
 
-module.exports = { canonicalizeRewardType };
+// The refusal for an inbound pushvalidatorrewards RPC. There is no admitted case:
+// every validator reward is derived from on-chain bytes, so this returns a message
+// for whatever the caller asked for, never null.
+//
+// The wording is load-bearing on the hub side. RewardTracker.isTerminalPushError
+// matches /is not pushable|push retired|is required|must be an array/, and an
+// un-upgraded hub must read this as FINAL and drop the push rather than burn its
+// retry budget against a node that will never accept. Both phrases are here so a
+// hub on either side of that predicate's history stops on the first answer.
+function rewardPushRetiredError(rewardType){
+    let type = canonicalizeRewardType(rewardType);
+    return 'reward_type ' + (type || '(unset)') + ' is not pushable: every validator reward is ' +
+           'derived on-chain during block processing; push retired';
+}
+
+module.exports = { canonicalizeRewardType, rewardPushRetiredError };
