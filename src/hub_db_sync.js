@@ -89,11 +89,11 @@ const RETRACTION_COLUMNS = {
 // regardless of grace, and the value never enters any ledger row. There is no
 // historical byte-shape that a height gate would have to preserve.
 const HUB_SYNC_WATERMARK_GRACE_S = Object.freeze({
-    // Covers the PRICE v2 hourly batch window (3600s), the post-window
+    // Covers the PRICE hourly batch window (3600s), the post-window
     // signing-round grace (300s, ORACLE_BATCH_GRACE_MS), and ~900s of
     // headroom for DOGE confirmation and indexing before the batch lands
     // locally: 3600 + 300 + 900 = 4800. The prior value (600) was calibrated
-    // to the 10-minute round cadence PRICE v2 replaces; left at 600 it opens
+    // to the 10-minute round cadence batching replaces; left at 600 it opens
     // this barrier's escape hatch ~55 minutes before a batch window can have
     // finished, letting a chain-only node process blocks against a mirror
     // that is still missing the current window. Raising it means an isolated
@@ -103,7 +103,7 @@ const HUB_SYNC_WATERMARK_GRACE_S = Object.freeze({
     // computes the same verdict as one that was live). Hub-connected nodes,
     // which is every validator and the documented non-validator topology,
     // never hit this escape hatch and are unaffected. Moves fleet-wide in
-    // lockstep with the PRICE v2 flag day like every other value in this
+    // lockstep with batching like every other value in this
     // object, and needs no activation gate of its own by the reasoning below:
     // node-local, never persisted or hashed, and a reindex replays with the
     // mirror already far ahead of the tip so the barrier opens immediately

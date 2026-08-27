@@ -95,7 +95,7 @@ class HubClient {
         return this._requireHubAccepted('pushoracleprice', await this._call('pushoracleprice', priceData));
     }
 
-    // Push a validated PRICE v2 batch (a signed window of rounds) to the hub for cross-chain
+    // Push a validated PRICE batch (a signed window of rounds) to the hub for cross-chain
     // aggregation via pushpricebatch. batchData mirrors pushPriceRound's payload one-for-one
     // (source_chain, btc_block_height, sigs, action_index, block_index, push_generation) plus
     // rounds[] carrying the window's per-round data and block_time, the landing block's own

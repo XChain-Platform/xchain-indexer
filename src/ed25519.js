@@ -80,10 +80,10 @@ function buildPriceV0Payload(round, timestamp, pairs, network, btcBlockHeight) {
     return raw;
 }
 
-// Build the canonical signable payload for a PRICE v2 batch: ONE signature set over
+// Build the canonical signable payload for a PRICE batch: ONE signature set over
 // several rounds. This must match exactly what the hub producer signs
-// (OracleConsensus._buildPriceV2Payload) and what the hub re-checks on ingest
-// (PriceAggregator._buildPriceV2Payload).
+// (OracleConsensus._buildPriceBatchPayload) and what the hub re-checks on ingest
+// (PriceAggregator._buildPriceBatchPayload).
 //
 // `rounds` is [{ round, timestamp, btcBlockHeight, pairs }] and each `pairs` entry is
 // { pair | coinPair, price }. The builder sorts the rounds ascending and normalizes each
@@ -96,7 +96,7 @@ function buildPriceV0Payload(round, timestamp, pairs, network, btcBlockHeight) {
 // ungated and every network it runs on already has EQUIV active). The unwrapped bare-JSON form is also the exact shape that
 // breaks SLASH's "an ORACLE-tagged canonical always carries `round`" invariant, which is
 // why v2 carries its own engine tag. Do NOT "fix" this into a v0-style gate.
-function buildPriceV2Payload(firstRound, lastRound, btcBlockHeight, rounds) {
+function buildPriceBatchPayload(firstRound, lastRound, btcBlockHeight, rounds) {
     let sortedRounds = [...rounds]
         .sort((a, b) => parseInt(a.round) - parseInt(b.round))
         .map(r => {
@@ -132,5 +132,5 @@ module.exports = {
     pubkeyFromHex,
     verify,
     buildPriceV0Payload,
-    buildPriceV2Payload
+    buildPriceBatchPayload
 };

@@ -336,17 +336,17 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         assert.strictEqual(d['STATUS'], 'valid', 'the gate must leave sub-flag-day acceptance untouched');
     });
 
-    // ── XORACLEB: PRICE v2 batch canonicals ──
+    // ── XORACLEB: PRICE batch canonicals ──
     //
-    // A v2 canonical declares first_round/last_round and NO scalar `round`, which is the
+    // A batch canonical declares first_round/last_round and NO scalar `round`, which is the
     // exact shape the XORACLE leg's invariant ("a content with no `round` cannot have come
     // from buildPriceV0Payload") does not cover: under a shared tag its distinct-rounds
-    // guard would skip, and an honest validator that signed one v0 round and one v2 batch
+    // guard would skip, and an honest validator that signed one v0 round and one batch
     // at the same BTC anchor would read as a provable equivocator, for a full bond burn
     // plus permanent capability disqualification. The distinct tag plus the composite
     // ROUND_ID `<anchor>|<first_round>|<last_round>` is what keeps that from happening.
 
-    // buildPriceV2Payload's emitted JSON (key order as the builder emits it).
+    // buildPriceBatchPayload's emitted JSON (key order as the builder emits it).
     function batchContent(first, last, btcHeight, price) {
         return JSON.stringify({
             first_round: first, last_round: last, btc_block_height: btcHeight,
@@ -371,7 +371,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         assert.ok(indexer.indexerDb.slashCapabilityStake.calledOnce, 'a real double-signed batch must burn');
     });
 
-    it('REJECTS an honest v0 round paired with an honest v2 batch at ONE anchor', async function () {
+    it('REJECTS an honest v0 round paired with an honest batch at ONE anchor', async function () {
         // The defect this row exists to prevent: under a shared engine tag these two share
         // the equiv key, differ in content, and burn a full bond off two honest signatures.
         const anchor = 961123;
@@ -381,7 +381,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         const d = data();
         await handler.parse(params('price', offender.pubHex, v0, offender.privateKey, v2, offender.privateKey), d, null);
 
-        assert.notStrictEqual(d['STATUS'], 'valid', 'an honest v0 round and an honest v2 batch are not one slot');
+        assert.notStrictEqual(d['STATUS'], 'valid', 'an honest v0 round and an honest batch are not one slot');
         assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled,
             'a validator that signed one honest round and one honest batch must keep its bond');
     });

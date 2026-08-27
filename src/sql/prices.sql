@@ -28,8 +28,8 @@ CREATE TABLE prices (
     sigs_json           TEXT,                             -- JSON array [{pubkey, sig}, ...]; carries the BATCH signature set on a v2 row
     -- v2 fields (validator BATCH snapshot: one signed action carrying an hourly
     -- window of full round bodies). NULL on a v0/v1 row.
-    batch_first_round   BIGINT UNSIGNED,                  -- FIRST_ROUND of the v2 batch window (v2 only; NULL on a v0/v1 row)
-    batch_last_round    BIGINT UNSIGNED,                  -- LAST_ROUND of the v2 batch window (v2 only; NULL on a v0/v1 row)
+    batch_first_round   BIGINT UNSIGNED,                  -- FIRST_ROUND of the batch window (v2 only; NULL on a v0/v1 row)
+    batch_last_round    BIGINT UNSIGNED,                  -- LAST_ROUND of the batch window (v2 only; NULL on a v0/v1 row)
     round_count         SMALLINT UNSIGNED,                -- number of rounds carried by this batch (v2 only)
     rounds_json         TEXT,                             -- JSON array of the batch per-round bodies [{round, timestamp, btc_block_height, pairs}, ...] (v2 only)
     -- v1 fields (user oracle TOKEN/FIAT)

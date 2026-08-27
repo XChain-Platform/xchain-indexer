@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/pricesV2BatchStorage.test.js
  *
- * PRICE v2 batch storage: the `prices` table's four new columns
+ * PRICE batch storage: the `prices` table's four new columns
  * (batch_first_round, batch_last_round, round_count, rounds_json), and their
  * two touch points:
  *
@@ -76,7 +76,7 @@ function makePriceDb(existsRows) {
     return db;
 }
 
-// A representative v2 batch action's data, shaped the way _parseV2 (row 6,
+// A representative batch action's data, shaped the way _parseV0 (row 6,
 // out of scope here) is expected to hand it to createPrice: ROUND set to
 // FIRST_ROUND (D21), plus the four new v2 fields.
 const V2_DATA = {
@@ -94,7 +94,7 @@ const V2_DATA = {
 
 afterEach(function () { sinon.restore(); });
 
-describe('Database.createPrice() v2 batch columns @regression', function () {
+describe('Database.createPrice() batch columns @regression', function () {
 
     // Positional, not just presence: the args array has no column names, so a swapped or
     // dropped field would still "include" the right values while binding them to the wrong
@@ -103,7 +103,7 @@ describe('Database.createPrice() v2 batch columns @regression', function () {
     // rounds_json, ... (both arms, per createPrice/prices.sql) - the four v2 fields are args[8..11].
     const V2_SLICE = [100, 105, 6, V2_DATA.ROUNDS_JSON];
 
-    it('INSERT carries all four v2 batch fields, in position', async function () {
+    it('INSERT carries all four batch fields, in position', async function () {
         const db = makePriceDb([]);
         await db.createPrice(V2_DATA);
         const sql  = String(db.doQuery.args[1][0]);
@@ -117,7 +117,7 @@ describe('Database.createPrice() v2 batch columns @regression', function () {
             'INSERT args[8..11] must be [batch_first_round, batch_last_round, round_count, rounds_json]');
     });
 
-    it('UPDATE carries all four v2 batch fields, in position', async function () {
+    it('UPDATE carries all four batch fields, in position', async function () {
         const db = makePriceDb([{ action_index: 901 }]);
         await db.createPrice(V2_DATA);
         const sql  = String(db.doQuery.args[1][0]);
@@ -150,9 +150,9 @@ describe('Database.createPrice() v2 batch columns @regression', function () {
     });
 });
 
-describe('Rollback: prices v2 batch columns clear the same way v0 columns do @regression', function () {
+describe('Rollback: prices batch columns clear the same way v0 columns do @regression', function () {
 
-    it('an orphaned v2 batch row is removed by the same wholesale action_index DELETE as a v0 row', async function () {
+    it('an orphaned batch row is removed by the same wholesale action_index DELETE as a v0 row', async function () {
         const indexer = createMockIndexer();
         indexer.protocolChanges = {
             isDefined: sinon.stub().returns(true),
@@ -161,7 +161,7 @@ describe('Rollback: prices v2 batch columns clear the same way v0 columns do @re
         const rollback = new Rollback(indexer);
 
         assert.ok(rollback.dataTables.includes('prices'),
-            'prices must stay in the generic dataTables rollback set, or a v2 batch row would ' +
+            'prices must stay in the generic dataTables rollback set, or a batch row would ' +
             'survive its own reorg with the OLD v0 columns cleared and the NEW v2 columns intact');
 
         indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 100 }]); // firstActionIndex

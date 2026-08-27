@@ -13,10 +13,10 @@
  **********************************************************************
  * test/unit/priceV2PayloadTwinParity.test.js
  *
- * The PRICE v2 canonical exists in THREE hand-maintained copies: the producer
- * (xchain-hub OracleConsensus._buildPriceV2Payload, which signs), the hub's ingest
- * verifier (PriceAggregator._buildPriceV2Payload) and the on-chain verifier
- * (xchain-indexer ed25519.buildPriceV2Payload). A one-byte divergence between any two
+ * The PRICE v0 canonical exists in THREE hand-maintained copies: the producer
+ * (xchain-hub OracleConsensus._buildPriceBatchPayload, which signs), the hub's ingest
+ * verifier (PriceAggregator._buildPriceBatchPayload) and the on-chain verifier
+ * (xchain-indexer ed25519.buildPriceBatchPayload). A one-byte divergence between any two
  * means the producer signs bytes a verifier never checks: every legitimate batch is
  * rejected, the price rail stalls, and the native-fee / XCHAIN-USD path stalls with it.
  * No other suite compares them, so this one asserts byte equality on a batch built to
@@ -84,18 +84,18 @@ function loadHubTwins(ctx) {
     try { return hubTwins(); }
     catch (e) {
         if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-            throw new Error('PRICE v2 canonical parity cannot run: xchain-hub sibling missing (' + e.message + ')');
+            throw new Error('PRICE v0 canonical parity cannot run: xchain-hub sibling missing (' + e.message + ')');
         ctx.skip();
         return null;
     }
 }
 
-describe('PRICE v2 canonical: three-way twin parity', function () {
+describe('PRICE v0 canonical: three-way twin parity', function () {
 
     describe('the canonical itself (indexer verifier copy)', function () {
 
         it('emits the pinned key order, ascending rounds and sorted pairs', function () {
-            let canonical = ed25519.buildPriceV2Payload(FIRST, LAST, ANCHOR, batch());
+            let canonical = ed25519.buildPriceBatchPayload(FIRST, LAST, ANCHOR, batch());
             assert.ok(canonical.startsWith(PREFIX), 'EQUIV prefix: ' + canonical.slice(0, 60));
 
             let body = JSON.parse(canonical.slice(PREFIX.length));
@@ -120,23 +120,23 @@ describe('PRICE v2 canonical: three-way twin parity', function () {
 
         it('is caller-order independent', function () {
             assert.strictEqual(
-                ed25519.buildPriceV2Payload(FIRST, LAST, ANCHOR, shuffledBatch()),
-                ed25519.buildPriceV2Payload(FIRST, LAST, ANCHOR, batch()));
+                ed25519.buildPriceBatchPayload(FIRST, LAST, ANCHOR, shuffledBatch()),
+                ed25519.buildPriceBatchPayload(FIRST, LAST, ANCHOR, batch()));
         });
 
         it('spells coinPair and pair to the same bytes', function () {
             let rounds = [{ round: 7, timestamp: 100, btcBlockHeight: 5, pairs: [{ coinPair: 'BTC/USD', price: '1' }] }];
             let twin   = [{ round: 7, timestamp: 100, btcBlockHeight: 5, pairs: [{ pair:     'BTC/USD', price: 1   }] }];
             assert.strictEqual(
-                ed25519.buildPriceV2Payload(7, 7, 5, rounds),
-                ed25519.buildPriceV2Payload(7, 7, 5, twin));
+                ed25519.buildPriceBatchPayload(7, 7, 5, rounds),
+                ed25519.buildPriceBatchPayload(7, 7, 5, twin));
         });
 
         // D36: v2 has no pre-flag-day history to stay bit-identical with, and the bare
         // JSON form is the shape that breaks SLASH's "an ORACLE-tagged canonical always
         // carries `round`" invariant. v0 at this height would be headerless.
         it('wraps in the EQUIV header unconditionally, with no activation gate', function () {
-            let belowFlagDay = ed25519.buildPriceV2Payload(1, 1, 1, [{ round: 1, timestamp: 1, btcBlockHeight: 1, pairs: [{ pair: 'BTC/USD', price: '1' }] }]);
+            let belowFlagDay = ed25519.buildPriceBatchPayload(1, 1, 1, [{ round: 1, timestamp: 1, btcBlockHeight: 1, pairs: [{ pair: 'BTC/USD', price: '1' }] }]);
             assert.ok(belowFlagDay.startsWith('EQUIV|' + eq.ENGINE_TAGS.ORACLE_BATCH + '|1|1|1|0||'), belowFlagDay.slice(0, 60));
             assert.strictEqual(eq.isEquivHeaderActive(1, 'mainnet'), false, 'the gate v0 would have failed here');
         });
@@ -148,9 +148,9 @@ describe('PRICE v2 canonical: three-way twin parity', function () {
             let hub = loadHubTwins(this);
             if (!hub) return;
 
-            let fromIndexer  = ed25519.buildPriceV2Payload(FIRST, LAST, ANCHOR, batch());
-            let fromProducer = hub.producer._buildPriceV2Payload(FIRST, LAST, ANCHOR, batch());
-            let fromIngest   = hub.ingest._buildPriceV2Payload(FIRST, LAST, ANCHOR, batch());
+            let fromIndexer  = ed25519.buildPriceBatchPayload(FIRST, LAST, ANCHOR, batch());
+            let fromProducer = hub.producer._buildPriceBatchPayload(FIRST, LAST, ANCHOR, batch());
+            let fromIngest   = hub.ingest._buildPriceBatchPayload(FIRST, LAST, ANCHOR, batch());
 
             assert.strictEqual(fromProducer, fromIndexer,
                 'OracleConsensus (PRODUCER) diverged from the indexer verifier: the hub would sign bytes no indexer checks');
@@ -165,11 +165,11 @@ describe('PRICE v2 canonical: three-way twin parity', function () {
             let hub = loadHubTwins(this);
             if (!hub) return;
 
-            let expected = ed25519.buildPriceV2Payload(FIRST, LAST, ANCHOR, batch());
+            let expected = ed25519.buildPriceBatchPayload(FIRST, LAST, ANCHOR, batch());
             for (const [name, canonical] of [
-                ['indexer verifier',  ed25519.buildPriceV2Payload(FIRST, LAST, ANCHOR, shuffledBatch())],
-                ['hub producer',      hub.producer._buildPriceV2Payload(FIRST, LAST, ANCHOR, shuffledBatch())],
-                ['hub ingest',        hub.ingest._buildPriceV2Payload(FIRST, LAST, ANCHOR, shuffledBatch())],
+                ['indexer verifier',  ed25519.buildPriceBatchPayload(FIRST, LAST, ANCHOR, shuffledBatch())],
+                ['hub producer',      hub.producer._buildPriceBatchPayload(FIRST, LAST, ANCHOR, shuffledBatch())],
+                ['hub ingest',        hub.ingest._buildPriceBatchPayload(FIRST, LAST, ANCHOR, shuffledBatch())],
             ]) {
                 assert.strictEqual(canonical, expected, name + ' is sensitive to caller ordering');
             }
@@ -182,9 +182,9 @@ describe('PRICE v2 canonical: three-way twin parity', function () {
             let rounds = [{ round: 1, timestamp: 1, btcBlockHeight: 1, pairs: [{ pair: 'BTC/USD', price: '1' }] }];
             let want   = 'EQUIV|' + eq.ENGINE_TAGS.ORACLE_BATCH + '|1|1|1|0||';
             for (const [name, canonical] of [
-                ['indexer verifier',  ed25519.buildPriceV2Payload(1, 1, 1, rounds)],
-                ['hub producer',      hub.producer._buildPriceV2Payload(1, 1, 1, rounds)],
-                ['hub ingest',        hub.ingest._buildPriceV2Payload(1, 1, 1, rounds)],
+                ['indexer verifier',  ed25519.buildPriceBatchPayload(1, 1, 1, rounds)],
+                ['hub producer',      hub.producer._buildPriceBatchPayload(1, 1, 1, rounds)],
+                ['hub ingest',        hub.ingest._buildPriceBatchPayload(1, 1, 1, rounds)],
             ]) {
                 assert.ok(canonical.startsWith(want), name + ' did not wrap below the v0 flag-day: ' + canonical.slice(0, 60));
             }

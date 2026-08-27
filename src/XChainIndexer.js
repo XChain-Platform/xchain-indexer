@@ -352,7 +352,7 @@ class XChainIndexer {
                 } else if(entry.pushType === 'oracle_price'){
                     await this.hubClient.pushOraclePrice(entry.payload);
                 } else if(entry.pushType === 'price_batch'){
-                    // PRICE v2: a signed window of rounds, delivered to pushpricebatch.
+                    // PRICE v0: a signed window of rounds, delivered to pushpricebatch.
                     await this.hubClient.pushPriceBatch(entry.payload);
                 } else {
                     // Unknown type: leave the durable row for HubPushQueue rather than guess.

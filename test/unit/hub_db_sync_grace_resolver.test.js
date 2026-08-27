@@ -59,7 +59,7 @@ describe('HubDbSync watermark-grace resolver @regression @tier1', function () {
         assert.strictEqual(sync.callWatermarkGraceS, FROZEN.call);
     });
 
-    // Pins the PRICE v2 recalibration (D11): the price barrier's watermark
+    // Pins the PRICE v0 recalibration (D11): the price barrier's watermark
     // escape must cover a full hourly batch window (3600s) plus the
     // post-window signing grace (300s) plus DOGE confirm/index headroom
     // (~900s). A regression back to the pre-batching 600s value would open

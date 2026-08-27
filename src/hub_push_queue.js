@@ -17,7 +17,7 @@
  * Durable retry queue for best-effort pushes to xchain-hub.
  *
  * The PRICE handlers push validated rounds (PRICE v0), oracle prices
- * (PRICE v1), and batches of rounds (PRICE v2) to the hub. Those pushes are
+ * (PRICE v1), and batches of rounds (PRICE v0) to the hub. Those pushes are
  * network calls and can fail when the hub is restarting, overloaded, or
  * partitioned. The raw on-chain action is always retained locally in the
  * `prices` table, but the hub never reads that table, so a dropped push used
@@ -231,7 +231,7 @@ class HubPushQueue {
             } else if(row.push_type === 'oracle_price'){
                 await this.hubClient.pushOraclePrice(payload);
             } else if(row.push_type === 'price_batch'){
-                // PRICE v2: a signed window of rounds, delivered to pushpricebatch.
+                // PRICE v0: a signed window of rounds, delivered to pushpricebatch.
                 await this.hubClient.pushPriceBatch(payload);
             } else if(row.push_type === 'price_retraction'){
                 // Reorg retraction parked by rollback.js when the live RPC failed.
@@ -278,7 +278,7 @@ class HubPushQueue {
             // as safe as it is for a retraction. `price_round` keeps the cap: price.js says it IS
             // re-derivable, so it stays disposable.
             //
-            // `price_batch` (PRICE v2) is durable for the SAME reason, not the opposite one: unlike
+            // `price_batch` (PRICE v0) is durable for the SAME reason, not the opposite one: unlike
             // a single `price_round`, which price.js can re-derive from the on-chain action alone, a
             // batch is the SOLE carrier of every round in its window for a chain-only node with no
             // hub of its own. Retiring a `price_batch` row to 'failed' after the finite cap does not

@@ -395,7 +395,7 @@ describe('HubPushQueue', function(){
             assert.strictEqual(indexer.indexerDb.markHubPushDelivered.calledWith(2), true);
         });
 
-        // ─── price_batch (PRICE v2 batch push, D12) ─────
+        // ─── price_batch (PRICE batch push, D12) ─────
         it('calls pushPriceBatch for price_batch rows and marks delivered', async function(){
             let indexer = makeIndexer();
             let q = new HubPushQueue(indexer);

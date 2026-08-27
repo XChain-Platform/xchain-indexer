@@ -10,13 +10,13 @@
 //
 // test/unit/actions/priceV2Batch.test.js
 //
-// PRICE v2 (_parseV2): the consensus parser that decides, on every indexing
+// PRICE v0 (_parseV0): the consensus parser that decides, on every indexing
 // node, whether a batch is valid.
 //
 // Everything here is driven through a REAL six-round batch: real Ed25519
 // identities from node crypto, signatures over the real canonical from
-// ed25519.buildPriceV2Payload, and the real deflate/base64 from
-// price_v2_compression.js. No hand-written canonical string appears in this
+// ed25519.buildPriceBatchPayload, and the real deflate/base64 from
+// price_batch_compression.js. No hand-written canonical string appears in this
 // file, because a hand-written one pins the test's idea of the canonical rather
 // than the parser's.
 
@@ -36,7 +36,7 @@ const Price         = require('../../../src/actions/price.js');
 const ed25519       = require('../../../src/ed25519.js');
 const swq           = require('../../../src/stake_weighted_quorum.js');
 const priceSigTally = require('../../../src/price_sig_tally_activation.js');
-const comp          = require('../../../src/price_v2_compression.js');
+const comp          = require('../../../src/price_batch_compression.js');
 
 // ---------------------------------------------------------------------------
 // Real Ed25519 identities. The 64-hex pubkey the wire carries is the raw key
@@ -52,7 +52,7 @@ function signWith(identity, payload){
 }
 
 // ---------------------------------------------------------------------------
-// Wire construction. `body` is the field list AFTER "PRICE|2|", which is
+// Wire construction. `body` is the field list AFTER "PRICE|0|", which is
 // exactly the string the compressed form deflates.
 // ---------------------------------------------------------------------------
 function batchBody(batch){
@@ -67,8 +67,8 @@ function batchBody(batch){
     return out;
 }
 const uncompressedParams = body => ['2'].concat(body);
-const compressedParams   = body => ['2', comp.PRICE_V2_COMPRESSION_MARKER,
-                                    comp.compressPriceV2Body(body.join('|'))];
+const compressedParams   = body => ['2', comp.PRICE_BATCH_COMPRESSION_MARKER,
+                                    comp.compressPriceBatchBody(body.join('|'))];
 
 // A six-round window, the shape section 7's publisher assembles at the default
 // ORACLE_BATCH_WINDOW_ROUNDS of 6.
@@ -95,7 +95,7 @@ function signBatch(rounds, identities, opts = {}){
     const firstRound     = opts.firstRound     !== undefined ? opts.firstRound     : rounds[0].round;
     const lastRound      = opts.lastRound      !== undefined ? opts.lastRound      : rounds[rounds.length - 1].round;
     const btcBlockHeight = opts.btcBlockHeight !== undefined ? opts.btcBlockHeight : rounds[rounds.length - 1].btcBlockHeight;
-    const payload = ed25519.buildPriceV2Payload(firstRound, lastRound, btcBlockHeight, rounds);
+    const payload = ed25519.buildPriceBatchPayload(firstRound, lastRound, btcBlockHeight, rounds);
     const sigs    = identities.map(id => ({ pubkey: id.pubkey, sig: signWith(id, payload) }));
     return { firstRound, lastRound, btcBlockHeight, rounds, sigs, payload };
 }
@@ -155,7 +155,7 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
     });
 
     const v2Data = (overrides = {}) =>
-        createBaseData({ ACTION: 'PRICE', FORMAT: 2, BLOCK_INDEX: 100, ...overrides });
+        createBaseData({ ACTION: 'PRICE', FORMAT: 0, BLOCK_INDEX: 100, ...overrides });
 
     // A signed, quorate six-round batch with one price-capable signer.
     function validBatch(){
@@ -247,7 +247,7 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
         });
 
         it('records the compression module reason verbatim for non-canonical base64', async function () {
-            const field = comp.compressPriceV2Body(batchBody(validBatch()).join('|'));
+            const field = comp.compressPriceBatchBody(batchBody(validBatch()).join('|'));
             // URL-safe alphabet is a DIFFERENT encoding of the same bytes: one wire, one meaning.
             const data = v2Data();
             await handler.parse(['2', 'Z', field.replace(/\+/g, '-').replace(/\//g, '_')], data, null);
@@ -357,10 +357,10 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
             const data = v2Data();
             await handler.parse(uncompressedParams(body), data, null);
             assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
-            assert.ok(data['STATUS'].includes(String(comp.PRICE_V2_MAX_ROUND_COUNT)), data['STATUS']);
+            assert.ok(data['STATUS'].includes(String(comp.PRICE_BATCH_MAX_ROUND_COUNT)), data['STATUS']);
         });
 
-        it('accepts exactly PRICE_V2_MAX_ROUND_COUNT and refuses one more', async function () {
+        it('accepts exactly PRICE_BATCH_MAX_ROUND_COUNT and refuses one more', async function () {
             const make = n => {
                 const rounds = [];
                 for(let i = 0; i < n; i++)
@@ -371,11 +371,11 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
                 return signBatch(rounds, [id]);
             };
             const at = v2Data();
-            await handler.parse(uncompressedParams(batchBody(make(comp.PRICE_V2_MAX_ROUND_COUNT))), at, null);
+            await handler.parse(uncompressedParams(batchBody(make(comp.PRICE_BATCH_MAX_ROUND_COUNT))), at, null);
             assert.strictEqual(at['STATUS'], 'valid');
 
             const over = v2Data();
-            await newHandler().parse(uncompressedParams(batchBody(make(comp.PRICE_V2_MAX_ROUND_COUNT + 1))), over, null);
+            await newHandler().parse(uncompressedParams(batchBody(make(comp.PRICE_BATCH_MAX_ROUND_COUNT + 1))), over, null);
             assert.strictEqual(over['VALIDATION_STATUS'], 'invalid');
         });
 
@@ -629,7 +629,7 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
     // -----------------------------------------------------------------------
     describe('signature verification (step 4)', function () {
 
-        it('verifies real signatures over the canonical from buildPriceV2Payload', async function () {
+        it('verifies real signatures over the canonical from buildPriceBatchPayload', async function () {
             const data = v2Data();
             await handler.parse(uncompressedParams(batchBody(validBatch())), data, null);
             assert.strictEqual(data['STATUS'], 'valid');
@@ -650,7 +650,7 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
 
         it('rejects a signature that is valid over the v0 canonical of one contained round', async function () {
             // The new engine tag is what keeps v0 and v2 canonicals unmixable; a v0-shaped
-            // signature must not satisfy a v2 batch.
+            // signature must not satisfy a batch.
             const id = newIdentity();
             capable.add(id.pubkey);
             const rounds  = sixRounds();
@@ -764,7 +764,7 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
     // -----------------------------------------------------------------------
     // The canonical the signatures cover
     // -----------------------------------------------------------------------
-    describe('the v2 canonical', function () {
+    describe('the batch canonical', function () {
 
         it('carries first_round and last_round as JSON INTEGERS, never strings', async function () {
             // The equivocation reader that resolves an XORACLEB slash requires
@@ -784,11 +784,11 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
                 'the window must serialize unquoted');
         });
 
-        it('is built by ed25519.buildPriceV2Payload, never inlined by the parser', async function () {
+        it('is built by ed25519.buildPriceBatchPayload, never inlined by the parser', async function () {
             // A second spelling of the canonical anywhere is a fork; this asserts the parser
             // verifies against the ONE builder's bytes.
             const batch = validBatch();
-            const spy   = sinon.spy(ed25519, 'buildPriceV2Payload');
+            const spy   = sinon.spy(ed25519, 'buildPriceBatchPayload');
             const verifySpy = sinon.spy(ed25519, 'verify');
             await handler.parse(uncompressedParams(batchBody(batch)), v2Data(), null);
             assert.ok(spy.calledOnce, 'the canonical must be built once per action');
@@ -810,7 +810,7 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
             assert.strictEqual(data['BATCH_FIRST_ROUND'], 100);
             assert.strictEqual(data['BATCH_LAST_ROUND'], 105);
             assert.strictEqual(data['ROUND_COUNT'], 6);
-            assert.strictEqual(data['VERSION'], 2);
+            assert.strictEqual(data['VERSION'], 0);
             assert.ok(indexer.indexerDb.createPrice.calledOnce);
             assert.strictEqual(indexer.indexerDb.createPrice.firstCall.args[0], data);
         });
@@ -945,7 +945,7 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
     describe('rewards', function () {
 
         // THE PIN for D30. The oracle_round derivation lives inline in _parseV0 and is not
-        // shared code, so _parseV2 simply never calls it. Without this test a later
+        // shared code, so _parseV0 simply never calls it. Without this test a later
         // refactor that hoisted the derivation into a shared helper would silently start
         // paying six rounds' worth of rewards per batch, on chain, with no failing test.
         it('writes ZERO validator_rewards rows for a valid BTC-landed batch', async function () {

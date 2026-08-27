@@ -3,7 +3,7 @@
 --
 -- WHY
 -- ---
--- PRICE v2 replaces the per-round DOGE publication with one hourly BATCH action that
+-- PRICE v0 replaces the per-round DOGE publication with one hourly BATCH action that
 -- carries the full bodies of every finalized round in the window under ONE quorum
 -- signature set. The prices table had no columns to hold a batch: pair_count / pairs_json
 -- / sig_count / sigs_json are shaped for exactly one round's pairs and one round's

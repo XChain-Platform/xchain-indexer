@@ -11,9 +11,9 @@
  * legal@dankest.llc.
  *
  **********************************************************************
- * test/unit/price_v2_compression.test.js
+ * test/unit/price_batch_compression.test.js
  *
- * PRICE v2 wire compression is CONSENSUS: every node must accept or reject the
+ * PRICE v0 wire compression is CONSENSUS: every node must accept or reject the
  * same compressed field identically, and must do so without ever allocating
  * what a hostile field claims to inflate to. These tests drive the two
  * properties that a naive implementation gets wrong.
@@ -36,13 +36,13 @@ const fs     = require('fs');
 const path   = require('path');
 const zlib   = require('zlib');
 
-const c = require('../../src/price_v2_compression.js');
+const c = require('../../src/price_batch_compression.js');
 
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
 
-// A realistic six-round PRICE v2 body: everything after "PRICE|2|" on the
+// A realistic six-round PRICE v0 body: everything after "PRICE|0|" on the
 // uncompressed wire. Built rather than pasted so the shape stays honest, and
 // so the ratio this suite records is a measurement of real oracle data
 // (repeated pair names, near-repeated prices, high-entropy hex signatures)
@@ -125,20 +125,20 @@ function alternateSpelling(canonical){
 
 // ---------------------------------------------------------------------------
 
-describe('price_v2_compression: consensus constants @regression', function(){
+describe('price_batch_compression: consensus constants @regression', function(){
 
     it('exports the pinned consensus values', function(){
-        assert.strictEqual(c.PRICE_V2_MAX_INFLATE_RATIO, 150);
-        assert.strictEqual(c.PRICE_V2_MAX_ROUND_COUNT,   256);
+        assert.strictEqual(c.PRICE_BATCH_MAX_INFLATE_RATIO, 150);
+        assert.strictEqual(c.PRICE_BATCH_MAX_ROUND_COUNT,   256);
         assert.strictEqual(c.PRICE_WIRE_MAX_BYTES,       8189);
-        assert.strictEqual(c.PRICE_V2_COMPRESSION_MARKER, 'Z');
+        assert.strictEqual(c.PRICE_BATCH_COMPRESSION_MARKER, 'Z');
     });
 
     it('the Z marker can never be confused with a FIRST_ROUND value', function(){
         // The compressed and uncompressed forms are told apart on this field
         // alone. FIRST_ROUND is always a decimal integer.
-        assert.ok(!/^[0-9]+$/.test(c.PRICE_V2_COMPRESSION_MARKER));
-        assert.ok(Number.isNaN(parseInt(c.PRICE_V2_COMPRESSION_MARKER, 10)));
+        assert.ok(!/^[0-9]+$/.test(c.PRICE_BATCH_COMPRESSION_MARKER));
+        assert.ok(Number.isNaN(parseInt(c.PRICE_BATCH_COMPRESSION_MARKER, 10)));
     });
 
     it('PRICE_WIRE_MAX_BYTES matches the declaration in xchain-hub OraclePublisher.js', function(){
@@ -157,29 +157,29 @@ describe('price_v2_compression: consensus constants @regression', function(){
         const m = /const\s+PRICE_WIRE_MAX_BYTES\s*=\s*(\d+)\s*;/.exec(fs.readFileSync(pub, 'utf8'));
         assert.ok(m, 'PRICE_WIRE_MAX_BYTES declaration not found in ' + pub);
         assert.strictEqual(parseInt(m[1], 10), c.PRICE_WIRE_MAX_BYTES,
-            'the PRICE wire ceiling has diverged between OraclePublisher.js and price_v2_compression.js; ' +
+            'the PRICE wire ceiling has diverged between OraclePublisher.js and price_batch_compression.js; ' +
             'the publisher and the parser would disagree on which batches are expressible');
     });
 });
 
-describe('price_v2_compression: round trip @regression', function(){
+describe('price_batch_compression: round trip @regression', function(){
 
     it('a compressed body inflates back byte-identically', function(){
         const body = buildRealisticV2Body();
-        const r = c.inflatePriceV2Body(c.compressPriceV2Body(body));
+        const r = c.inflatePriceBatchBody(c.compressPriceBatchBody(body));
         assert.strictEqual(r.ok, true, r.reason);
         assert.strictEqual(r.body, body);
     });
 
     it('MEASUREMENT: a realistic six-round batch fits the wire compressed', function(){
         const body  = buildRealisticV2Body();
-        const field = c.compressPriceV2Body(body);
-        const r     = c.inflatePriceV2Body(field);
+        const field = c.compressPriceBatchBody(body);
+        const r     = c.inflatePriceBatchBody(field);
 
         assert.strictEqual(r.ok, true, r.reason);
         assert.strictEqual(r.body, body);
 
-        const wire = 'PRICE|2|Z|'.length + field.length;
+        const wire = 'PRICE|0|Z|'.length + field.length;
         console.log('        measured: uncompressed body ' + body.length + ' B' +
                     ', deflate ' + r.compressedBytes + ' B' +
                     ', base64 field ' + field.length + ' B' +
@@ -194,10 +194,10 @@ describe('price_v2_compression: round trip @regression', function(){
         // Section 8's N ceiling rests on the per-signer cost AFTER deflate and
         // AFTER base64, not on the deflate size alone. Measure the increment
         // rather than restating the estimate.
-        const q3 = c.compressPriceV2Body(buildRealisticV2Body(3));
-        const q9 = c.compressPriceV2Body(buildRealisticV2Body(9));
+        const q3 = c.compressPriceBatchBody(buildRealisticV2Body(3));
+        const q9 = c.compressPriceBatchBody(buildRealisticV2Body(9));
         const b3 = buildRealisticV2Body(3), b9 = buildRealisticV2Body(9);
-        console.log('        measured: quorum-3 wire ' + ('PRICE|2|Z|'.length + q3.length) + ' B' +
+        console.log('        measured: quorum-3 wire ' + ('PRICE|0|Z|'.length + q3.length) + ' B' +
                     ' (deflate ' + Buffer.from(q3, 'base64').length + ' B' +
                     ', uncompressed body ' + b3.length + ' B)');
         console.log('        measured: per-signer marginal cost, uncompressed ' +
@@ -206,25 +206,25 @@ describe('price_v2_compression: round trip @regression', function(){
                     ', on the wire (base64) ' + ((q9.length - q3.length) / 6).toFixed(1) + ' B');
         // And it must stay far under the consensus cap, or honest batches would
         // start tripping a bomb defense.
-        assert.ok(r.ratio < c.PRICE_V2_MAX_INFLATE_RATIO / 10,
+        assert.ok(r.ratio < c.PRICE_BATCH_MAX_INFLATE_RATIO / 10,
             'honest ratio ' + r.ratio + ' is uncomfortably close to the cap');
     });
 
     it('round trips a body containing every printable ASCII character', function(){
         let body = '';
         for(let i = 32; i < 127; i++) body += String.fromCharCode(i);
-        const r = c.inflatePriceV2Body(c.compressPriceV2Body(body));
+        const r = c.inflatePriceBatchBody(c.compressPriceBatchBody(body));
         assert.strictEqual(r.ok, true, r.reason);
         assert.strictEqual(r.body, body);
     });
 
-    it('compressPriceV2Body refuses a non-string body', function(){
-        assert.throws(() => c.compressPriceV2Body(Buffer.from('x')), TypeError);
-        assert.throws(() => c.compressPriceV2Body(null), TypeError);
+    it('compressPriceBatchBody refuses a non-string body', function(){
+        assert.throws(() => c.compressPriceBatchBody(Buffer.from('x')), TypeError);
+        assert.throws(() => c.compressPriceBatchBody(null), TypeError);
     });
 });
 
-describe('price_v2_compression: the bomb is refused before the buffer grows @regression', function(){
+describe('price_batch_compression: the bomb is refused before the buffer grows @regression', function(){
 
     // 200 KB of one byte deflates to a couple of hundred bytes, a ratio near
     // 950:1. This is the payload the cap exists for.
@@ -235,7 +235,7 @@ describe('price_v2_compression: the bomb is refused before the buffer grows @reg
     it('the fixture really is a bomb (unbounded inflate proves the size)', function(){
         const unbounded = zlib.inflateRawSync(BOMB_RAW);
         assert.strictEqual(unbounded.length, BOMB_PLAIN.length);
-        assert.ok(unbounded.length / BOMB_RAW.length > c.PRICE_V2_MAX_INFLATE_RATIO,
+        assert.ok(unbounded.length / BOMB_RAW.length > c.PRICE_BATCH_MAX_INFLATE_RATIO,
             'fixture ratio is only ' + (unbounded.length / BOMB_RAW.length));
     });
 
@@ -245,7 +245,7 @@ describe('price_v2_compression: the bomb is refused before the buffer grows @reg
         // implementation that inflated first and measured afterwards could not
         // produce this error, and would fail here while still "rejecting" the
         // payload.
-        const cap = Math.min(c.PRICE_WIRE_MAX_BYTES, BOMB_RAW.length * c.PRICE_V2_MAX_INFLATE_RATIO);
+        const cap = Math.min(c.PRICE_WIRE_MAX_BYTES, BOMB_RAW.length * c.PRICE_BATCH_MAX_INFLATE_RATIO);
         assert.throws(
             () => zlib.inflateRawSync(BOMB_RAW, { maxOutputLength: cap }),
             (e) => e.code === 'ERR_BUFFER_TOO_LARGE'
@@ -253,7 +253,7 @@ describe('price_v2_compression: the bomb is refused before the buffer grows @reg
     });
 
     it('rejects the bomb and never returns a body', function(){
-        const r = c.inflatePriceV2Body(BOMB_FIELD);
+        const r = c.inflatePriceBatchBody(BOMB_FIELD);
         assert.strictEqual(r.ok, false);
         // 200 KB deflates to ~216 bytes, and 216 * 150 is already past the wire
         // ceiling, so the SIZE bound is the one that stops this particular bomb.
@@ -268,12 +268,12 @@ describe('price_v2_compression: the bomb is refused before the buffer grows @reg
         // ceiling and the ratio is what refuses it. Both bounds need a live
         // fixture or one of them is only ever exercised as dead arithmetic.
         const raw = zlib.deflateRawSync(Buffer.alloc(20000, 0x41), { level: 9 });
-        assert.ok(raw.length * c.PRICE_V2_MAX_INFLATE_RATIO < c.PRICE_WIRE_MAX_BYTES,
+        assert.ok(raw.length * c.PRICE_BATCH_MAX_INFLATE_RATIO < c.PRICE_WIRE_MAX_BYTES,
             'fixture must make the RATIO bound the binding one');
-        const r = c.inflatePriceV2Body(raw.toString('base64'));
+        const r = c.inflatePriceBatchBody(raw.toString('base64'));
         assert.strictEqual(r.ok, false);
         assert.strictEqual(r.reason, 'ratio-cap');
-        assert.strictEqual(r.detail, raw.length * c.PRICE_V2_MAX_INFLATE_RATIO);
+        assert.strictEqual(r.detail, raw.length * c.PRICE_BATCH_MAX_INFLATE_RATIO);
         assert.strictEqual(r.body, undefined);
     });
 
@@ -286,14 +286,14 @@ describe('price_v2_compression: the bomb is refused before the buffer grows @reg
         const plain = 'A'.repeat(8000);
         const raw   = zlib.deflateRawSync(Buffer.from(plain, 'utf8'), { level: 9 });
         assert.ok(plain.length <= c.PRICE_WIRE_MAX_BYTES, 'fixture must FIT the wire ceiling');
-        assert.ok(plain.length / raw.length > c.PRICE_V2_MAX_INFLATE_RATIO,
+        assert.ok(plain.length / raw.length > c.PRICE_BATCH_MAX_INFLATE_RATIO,
             'fixture must breach the ratio cap, was ' + (plain.length / raw.length));
 
-        const r = c.inflatePriceV2Body(raw.toString('base64'));
+        const r = c.inflatePriceBatchBody(raw.toString('base64'));
         assert.strictEqual(r.ok, false,
             'a size-legal payload with an illegal ratio was ACCEPTED; the ratio bound is not wired in');
         assert.strictEqual(r.reason, 'ratio-cap');
-        assert.strictEqual(r.detail, raw.length * c.PRICE_V2_MAX_INFLATE_RATIO);
+        assert.strictEqual(r.detail, raw.length * c.PRICE_BATCH_MAX_INFLATE_RATIO);
         assert.strictEqual(r.body, undefined);
     });
 
@@ -307,11 +307,11 @@ describe('price_v2_compression: the bomb is refused before the buffer grows @reg
         const ratio = plain.length / raw.length;
 
         assert.ok(plain.length > c.PRICE_WIRE_MAX_BYTES, 'fixture must exceed the wire ceiling');
-        assert.ok(ratio < c.PRICE_V2_MAX_INFLATE_RATIO, 'fixture ratio must be legal, was ' + ratio);
-        assert.ok(raw.length * c.PRICE_V2_MAX_INFLATE_RATIO > c.PRICE_WIRE_MAX_BYTES,
+        assert.ok(ratio < c.PRICE_BATCH_MAX_INFLATE_RATIO, 'fixture ratio must be legal, was ' + ratio);
+        assert.ok(raw.length * c.PRICE_BATCH_MAX_INFLATE_RATIO > c.PRICE_WIRE_MAX_BYTES,
             'fixture must make the SIZE bound the binding one');
 
-        const r = c.inflatePriceV2Body(raw.toString('base64'));
+        const r = c.inflatePriceBatchBody(raw.toString('base64'));
         assert.strictEqual(r.ok, false);
         assert.strictEqual(r.reason, 'size-cap');
         assert.strictEqual(r.detail, c.PRICE_WIRE_MAX_BYTES);
@@ -326,12 +326,12 @@ describe('price_v2_compression: the bomb is refused before the buffer grows @reg
         const atCap = hex(c.PRICE_WIRE_MAX_BYTES, 7);
         const over  = hex(c.PRICE_WIRE_MAX_BYTES + 1, 7);
 
-        const rAt = c.inflatePriceV2Body(c.compressPriceV2Body(atCap));
+        const rAt = c.inflatePriceBatchBody(c.compressPriceBatchBody(atCap));
         assert.strictEqual(rAt.ok, true, rAt.reason);
         assert.strictEqual(rAt.inflatedBytes, c.PRICE_WIRE_MAX_BYTES);
         assert.strictEqual(rAt.body, atCap);
 
-        const rOver = c.inflatePriceV2Body(c.compressPriceV2Body(over));
+        const rOver = c.inflatePriceBatchBody(c.compressPriceBatchBody(over));
         assert.strictEqual(rOver.ok, false);
         assert.strictEqual(rOver.reason, 'size-cap');
         assert.strictEqual(rOver.detail, c.PRICE_WIRE_MAX_BYTES);
@@ -343,22 +343,22 @@ describe('price_v2_compression: the bomb is refused before the buffer grows @reg
         // it. The cap is a maximum, so it must be admitted.
         const plain = 'A'.repeat(3150);
         const raw   = zlib.deflateRawSync(Buffer.from(plain, 'utf8'), { level: 9 });
-        assert.strictEqual(plain.length, raw.length * c.PRICE_V2_MAX_INFLATE_RATIO,
+        assert.strictEqual(plain.length, raw.length * c.PRICE_BATCH_MAX_INFLATE_RATIO,
             'fixture no longer sits on the ratio bound (deflate output changed); re-derive it');
-        const r = c.inflatePriceV2Body(raw.toString('base64'));
+        const r = c.inflatePriceBatchBody(raw.toString('base64'));
         assert.strictEqual(r.ok, true, r.reason);
-        assert.strictEqual(r.ratio, c.PRICE_V2_MAX_INFLATE_RATIO);
+        assert.strictEqual(r.ratio, c.PRICE_BATCH_MAX_INFLATE_RATIO);
         assert.strictEqual(r.body, plain);
     });
 });
 
-describe('price_v2_compression: strictly canonical base64 @regression', function(){
+describe('price_batch_compression: strictly canonical base64 @regression', function(){
 
     const BODY  = '481200|481205|918442|1|481200|1756180800|918442|1|BTC/USD|104325.00000000|1|aa|bb';
-    const FIELD = c.compressPriceV2Body(BODY);
+    const FIELD = c.compressPriceBatchBody(BODY);
 
     it('positive control: the canonical spelling is accepted', function(){
-        const r = c.inflatePriceV2Body(FIELD);
+        const r = c.inflatePriceBatchBody(FIELD);
         assert.strictEqual(r.ok, true, r.reason);
         assert.strictEqual(r.body, BODY);
     });
@@ -380,7 +380,7 @@ describe('price_v2_compression: strictly canonical base64 @regression', function
         it('rejects ' + name, function(){
             const bad = nonCanonical[name]();
             if(bad === FIELD) return this.skip();   // fixture had nothing to mangle
-            const r = c.inflatePriceV2Body(bad);
+            const r = c.inflatePriceBatchBody(bad);
             assert.strictEqual(r.ok, false, name + ' was ACCEPTED, which is a consensus split');
             assert.strictEqual(r.reason, 'non-canonical-base64');
             assert.strictEqual(r.body, undefined);
@@ -405,13 +405,13 @@ describe('price_v2_compression: strictly canonical base64 @regression', function
     it('rejects a redundant spelling of a real compressed payload', function(){
         const alt = alternateSpelling(FIELD);
         if(!alt) return this.skip();
-        const r = c.inflatePriceV2Body(alt);
+        const r = c.inflatePriceBatchBody(alt);
         assert.strictEqual(r.ok, false);
         assert.strictEqual(r.reason, 'non-canonical-base64');
     });
 });
 
-describe('price_v2_compression: every failure is explicit and terminal @regression', function(){
+describe('price_batch_compression: every failure is explicit and terminal @regression', function(){
 
     const cases = [
         ['non-string (undefined)', undefined,                     'not-a-string'],
@@ -424,7 +424,7 @@ describe('price_v2_compression: every failure is explicit and terminal @regressi
 
     cases.forEach(function([name, input, reason]){
         it('rejects ' + name + ' as ' + reason, function(){
-            const r = c.inflatePriceV2Body(input);
+            const r = c.inflatePriceBatchBody(input);
             assert.strictEqual(r.ok, false);
             assert.strictEqual(r.reason, reason);
             assert.strictEqual(r.status, 'invalid: COMPRESSION (' + reason + ')');
@@ -432,7 +432,7 @@ describe('price_v2_compression: every failure is explicit and terminal @regressi
     });
 
     it('rejects canonical base64 that is not a deflate stream', function(){
-        const r = c.inflatePriceV2Body(fieldOf(Buffer.from([0xde, 0xad, 0xbe, 0xef, 0x00, 0x01])));
+        const r = c.inflatePriceBatchBody(fieldOf(Buffer.from([0xde, 0xad, 0xbe, 0xef, 0x00, 0x01])));
         assert.strictEqual(r.ok, false);
         assert.strictEqual(r.reason, 'inflate-failed');
         assert.strictEqual(r.body, undefined);
@@ -440,13 +440,13 @@ describe('price_v2_compression: every failure is explicit and terminal @regressi
 
     it('rejects a truncated deflate stream', function(){
         const raw = zlib.deflateRawSync(Buffer.from('481200|481205|918442|1|x', 'utf8'));
-        const r = c.inflatePriceV2Body(fieldOf(raw.subarray(0, raw.length - 2)));
+        const r = c.inflatePriceBatchBody(fieldOf(raw.subarray(0, raw.length - 2)));
         assert.strictEqual(r.ok, false);
         assert.strictEqual(r.reason, 'inflate-failed');
     });
 
     it('rejects a stream that inflates to zero bytes', function(){
-        const r = c.inflatePriceV2Body(fieldOf(zlib.deflateRawSync(Buffer.alloc(0))));
+        const r = c.inflatePriceBatchBody(fieldOf(zlib.deflateRawSync(Buffer.alloc(0))));
         assert.strictEqual(r.ok, false);
         assert.strictEqual(r.reason, 'empty-body');
     });
@@ -456,7 +456,7 @@ describe('price_v2_compression: every failure is explicit and terminal @regressi
         // distinct payloads would produce one identical body. That is the same
         // one-meaning-per-wire failure the base64 check prevents, one layer down.
         const raw = zlib.deflateRawSync(Buffer.from([0x34, 0x38, 0xff, 0xfe, 0x7c, 0x31]));
-        const r = c.inflatePriceV2Body(fieldOf(raw));
+        const r = c.inflatePriceBatchBody(fieldOf(raw));
         assert.strictEqual(r.ok, false);
         assert.strictEqual(r.reason, 'non-utf8');
         assert.strictEqual(r.body, undefined);
@@ -465,7 +465,7 @@ describe('price_v2_compression: every failure is explicit and terminal @regressi
     it('accepts multi-byte UTF-8 that round trips exactly', function(){
         // The guard rejects INVALID sequences, not non-ASCII ones.
         const body = 'BTC/USD|104325.00|note:€é中';
-        const r = c.inflatePriceV2Body(c.compressPriceV2Body(body));
+        const r = c.inflatePriceBatchBody(c.compressPriceBatchBody(body));
         assert.strictEqual(r.ok, true, r.reason);
         assert.strictEqual(r.body, body);
     });
@@ -474,14 +474,14 @@ describe('price_v2_compression: every failure is explicit and terminal @regressi
         // A plausible-looking uncompressed body handed in where a compressed
         // field belongs must be rejected, not read.
         const plain = '481200|481205|918442|6|481200|1756180800|918442|1|BTC/USD|1.0|1|aa|bb';
-        const r = c.inflatePriceV2Body(plain);
+        const r = c.inflatePriceBatchBody(plain);
         assert.strictEqual(r.ok, false);
         assert.strictEqual(r.body, undefined);
         assert.ok(!Object.prototype.hasOwnProperty.call(r, 'body'));
     });
 
     it('every failure reason is distinct and stable', function(){
-        const reasons = Object.values(c.PRICE_V2_COMPRESSION_FAIL_REASONS);
+        const reasons = Object.values(c.PRICE_BATCH_COMPRESSION_FAIL_REASONS);
         assert.strictEqual(new Set(reasons).size, reasons.length);
         assert.deepStrictEqual(reasons.slice().sort(), [
             'empty', 'empty-body', 'inflate-failed', 'non-canonical-base64',
@@ -490,12 +490,12 @@ describe('price_v2_compression: every failure is explicit and terminal @regressi
     });
 });
 
-describe('price_v2_compression: determinism across nodes @regression', function(){
+describe('price_batch_compression: determinism across nodes @regression', function(){
 
     it('the same field inflates to the same body every time', function(){
-        const field = c.compressPriceV2Body(buildRealisticV2Body());
-        const a = c.inflatePriceV2Body(field);
-        const b = c.inflatePriceV2Body(field);
+        const field = c.compressPriceBatchBody(buildRealisticV2Body());
+        const a = c.inflatePriceBatchBody(field);
+        const b = c.inflatePriceBatchBody(field);
         assert.deepStrictEqual(a, b);
     });
 
@@ -504,32 +504,32 @@ describe('price_v2_compression: determinism across nodes @regression', function(
         // choice between ratio-cap and size-cap may not depend on the inflated
         // size (which the bounded inflate never learns).
         for(const compressedLen of [1, 54, 55, 100, 8189]){
-            const ratioCap = compressedLen * c.PRICE_V2_MAX_INFLATE_RATIO;
+            const ratioCap = compressedLen * c.PRICE_BATCH_MAX_INFLATE_RATIO;
             const expected = ratioCap <= c.PRICE_WIRE_MAX_BYTES ? 'ratio-cap' : 'size-cap';
             assert.strictEqual(typeof expected, 'string');
         }
         // 54 * 150 = 8100 (ratio binds); 55 * 150 = 8250 (size binds).
-        assert.ok(54 * c.PRICE_V2_MAX_INFLATE_RATIO <= c.PRICE_WIRE_MAX_BYTES);
-        assert.ok(55 * c.PRICE_V2_MAX_INFLATE_RATIO >  c.PRICE_WIRE_MAX_BYTES);
+        assert.ok(54 * c.PRICE_BATCH_MAX_INFLATE_RATIO <= c.PRICE_WIRE_MAX_BYTES);
+        assert.ok(55 * c.PRICE_BATCH_MAX_INFLATE_RATIO >  c.PRICE_WIRE_MAX_BYTES);
     });
 });
 
-describe('price_v2_compression: vendored-twin byte identity @regression', function(){
+describe('price_batch_compression: vendored-twin byte identity @regression', function(){
 
     const HUB_DIR = process.env.XCHAIN_HUB_DIR ||
         path.join(__dirname, '..', '..', '..', 'xchain-hub');
 
-    it('xchain-hub/src/price_v2_compression.js is byte-identical to this repo\'s copy', function(){
-        const twin = path.join(HUB_DIR, 'src', 'price_v2_compression.js');
+    it('xchain-hub/src/price_batch_compression.js is byte-identical to this repo\'s copy', function(){
+        const twin = path.join(HUB_DIR, 'src', 'price_batch_compression.js');
         if(!fs.existsSync(twin)){
             if(process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
                 throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but the twin is missing: ' + twin);
             this.skip();
             return;
         }
-        const local = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'price_v2_compression.js'), 'utf8');
+        const local = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'price_batch_compression.js'), 'utf8');
         assert.strictEqual(local, fs.readFileSync(twin, 'utf8'),
-            'price_v2_compression.js has drifted between xchain-indexer and xchain-hub; the two would ' +
+            'price_batch_compression.js has drifted between xchain-indexer and xchain-hub; the two would ' +
             'disagree on which compressed batches are valid, which is a fork');
     });
 });

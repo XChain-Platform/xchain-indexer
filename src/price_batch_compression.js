@@ -12,14 +12,14 @@
  *
  **********************************************************************
  *
- * PRICE v2 wire compression (spec section 4a).
+ * PRICE v0 wire compression (spec section 4a).
  *
- * A PRICE v2 batch carries the full pair data of every round in an hourly
+ * A PRICE batch carries the full pair data of every round in an hourly
  * window, so the uncompressed body runs to several kilobytes against an 8,189
  * byte wire ceiling. The compressed form spends that budget better:
  *
- *     uncompressed:  PRICE|2|<body>
- *     compressed:    PRICE|2|Z|<base64 of deflateRaw(<body>)>
+ *     uncompressed:  PRICE|0|<body>
+ *     compressed:    PRICE|0|Z|<base64 of deflateRaw(<body>)>
  *
  * `Z` sits in the slot where FIRST_ROUND sits in the uncompressed form.
  * FIRST_ROUND is always a decimal integer and `Z` never is, so the two forms
@@ -33,7 +33,7 @@
  *
  * NOTHING HERE IS EVER SIGNED, and this is the sentence to read before
  * reaching for the compressed bytes as a signing input. The signature set
- * covers buildPriceV2Payload's canonical JSON of the UNCOMPRESSED content.
+ * covers buildPriceBatchPayload's canonical JSON of the UNCOMPRESSED content.
  * Compression is applied after signing and stripped before verification.
  * Consequently only INFLATION has to be deterministic, and it is: RFC 1951
  * pins what a deflate stream inflates to. DEFLATE output is explicitly ALLOWED
@@ -79,7 +79,7 @@
 const zlib = require('zlib');
 
 // Wire marker occupying the FIRST_ROUND slot on the compressed form.
-const PRICE_V2_COMPRESSION_MARKER = 'Z';
+const PRICE_BATCH_COMPRESSION_MARKER = 'Z';
 
 // PRICE wire ceiling. LOCAL COPY: must equal MAX_DATA_BYTES in
 // xchain-encoder/src/validator.js, the same value and the same name already
@@ -96,13 +96,13 @@ const PRICE_WIRE_MAX_BYTES = 8189;
 // (150) so the platform has one number for "this is a bomb, not a payload".
 // Deflate-raw tops out near 1032:1, so 150 leaves honest text far more headroom
 // than it needs: the measured six-round batch sits near 4:1.
-const PRICE_V2_MAX_INFLATE_RATIO = 150;
+const PRICE_BATCH_MAX_INFLATE_RATIO = 150;
 
 // Consensus bound on ROUND_COUNT, exported here because the parser reads it
 // from the same module that bounds the decompression. An attacker-supplied
 // count is a parse-loop DoS on every indexing node, and the wire ceiling
 // already makes a batch of more than 256 rounds physically impossible.
-const PRICE_V2_MAX_ROUND_COUNT = 256;
+const PRICE_BATCH_MAX_ROUND_COUNT = 256;
 
 // Standard alphabet, canonical padding, nothing else. Anchored, no whitespace
 // class, no `-` or `_`: the URL-safe alphabet is a DIFFERENT encoding and
@@ -152,14 +152,14 @@ function decodeCanonicalBase64(field){
 }
 
 /**
- * Compress an uncompressed PRICE v2 body (everything after `PRICE|2|`) into the
+ * Compress an uncompressed PRICE v0 body (everything after `PRICE|0|`) into the
  * base64 field the compressed wire carries.
  *
  * EMIT SIDE ONLY, with no consensus weight: the level is chosen for the
  * smallest wire, and a future zlib may produce different bytes at the same
  * level without breaking anything, because readers only ever inflate.
  */
-function compressPriceV2Body(body){
+function compressPriceBatchBody(body){
     if(typeof body !== 'string') throw new TypeError('price v2 body must be a string');
     const deflated = zlib.deflateRawSync(Buffer.from(body, 'utf8'),
         { level: zlib.constants.Z_BEST_COMPRESSION });
@@ -167,19 +167,19 @@ function compressPriceV2Body(body){
 }
 
 /**
- * Inflate the base64 field of a compressed PRICE v2 wire back into the
+ * Inflate the base64 field of a compressed PRICE v0 wire back into the
  * uncompressed body.
  *
  * On success: { ok:true, body, compressedBytes, inflatedBytes, ratio }
  * On failure: { ok:false, reason, status, detail } and NOTHING ELSE. The caller
  * must record the action invalid; it must never retry the bytes as a body.
  */
-function inflatePriceV2Body(field){
+function inflatePriceBatchBody(field){
     if(typeof field !== 'string') return fail(FAIL.NOT_A_STRING);
     if(field.length === 0)        return fail(FAIL.EMPTY);
 
     // Bound the decode itself. A legitimate compressed field is at most
-    // PRICE_WIRE_MAX_BYTES minus the `PRICE|2|Z|` prefix, so this can never
+    // PRICE_WIRE_MAX_BYTES minus the `PRICE|0|Z|` prefix, so this can never
     // reject a wire that could actually exist; it caps the work done on a
     // field handed to this module from anywhere other than a validated wire.
     if(field.length > PRICE_WIRE_MAX_BYTES) return fail(FAIL.OVERSIZE, field.length);
@@ -190,7 +190,7 @@ function inflatePriceV2Body(field){
     // The two bounds, resolved to the single number zlib enforces. Which one
     // binds is a function of the compressed length alone, so every node picks
     // the same one and reports the same reason for the same wire.
-    const ratioCap  = compressed.length * PRICE_V2_MAX_INFLATE_RATIO;
+    const ratioCap  = compressed.length * PRICE_BATCH_MAX_INFLATE_RATIO;
     const outputCap = Math.min(PRICE_WIRE_MAX_BYTES, ratioCap);
     const bindingReason = (ratioCap <= PRICE_WIRE_MAX_BYTES) ? FAIL.RATIO_CAP : FAIL.SIZE_CAP;
 
@@ -225,12 +225,12 @@ function inflatePriceV2Body(field){
 }
 
 module.exports = {
-    PRICE_V2_COMPRESSION_MARKER,
+    PRICE_BATCH_COMPRESSION_MARKER,
     PRICE_WIRE_MAX_BYTES,
-    PRICE_V2_MAX_INFLATE_RATIO,
-    PRICE_V2_MAX_ROUND_COUNT,
-    PRICE_V2_COMPRESSION_FAIL_REASONS: FAIL,
-    compressPriceV2Body,
-    inflatePriceV2Body,
+    PRICE_BATCH_MAX_INFLATE_RATIO,
+    PRICE_BATCH_MAX_ROUND_COUNT,
+    PRICE_BATCH_COMPRESSION_FAIL_REASONS: FAIL,
+    compressPriceBatchBody,
+    inflatePriceBatchBody,
     decodeCanonicalBase64
 };

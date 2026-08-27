@@ -21,10 +21,10 @@
  *       Format: PRICE|1|COIN|TICK|FIAT|VALUE|FEE|MEMO
  *   v2: Validator BATCH snapshot - one signed action carrying an hourly window of
  *       full v0-shaped round bodies, in either of two wire forms
- *       Format: PRICE|2|FIRST_ROUND|LAST_ROUND|BTC_BLOCK_HEIGHT|ROUND_COUNT|
+ *       Format: PRICE|0|FIRST_ROUND|LAST_ROUND|BTC_BLOCK_HEIGHT|ROUND_COUNT|
  *                 ROUND|TIMESTAMP|ANCHOR_HEIGHT|PAIR_COUNT|pair|price|... (x ROUND_COUNT)
  *                 |SIG_COUNT|PUBKEY|SIG|...
- *               PRICE|2|Z|<base64 of deflateRaw(everything after "PRICE|2|" above)>
+ *               PRICE|0|Z|<base64 of deflateRaw(everything after "PRICE|0|" above)>
  *
  * v0 validation:
  *   1. Each PUBKEY must have an active price capability stake
@@ -40,7 +40,7 @@ const ed25519   = require('../ed25519.js');
 const swq       = require('../stake_weighted_quorum.js');
 const pricePair = require('../price_pair_activation.js');
 const priceSigTally = require('../price_sig_tally_activation.js');
-const priceV2       = require('../price_v2_compression.js');
+const priceV2       = require('../price_batch_compression.js');
 
 class Price {
 
@@ -57,10 +57,9 @@ class Price {
 
         this.formats = {};
         // v0 has variable-length params; the format string is informational
-        this.formats[0] = 'VERSION|ROUND|TIMESTAMP|PAIR_COUNT|...|SIG_COUNT|...';
+        this.formats[0] = 'VERSION|FIRST_ROUND|LAST_ROUND|BTC_BLOCK_HEIGHT|ROUND_COUNT|...|SIG_COUNT|...';
         this.formats[1] = 'VERSION|COIN|TICK|FIAT|VALUE|FEE|MEMO';
         // v2 has variable-length params and two wire forms; the format string is informational
-        this.formats[2] = 'VERSION|FIRST_ROUND|LAST_ROUND|BTC_BLOCK_HEIGHT|ROUND_COUNT|...|SIG_COUNT|...';
     }
 
     async parse(params, data, error){
@@ -72,8 +71,6 @@ class Price {
             return this._parseV0(params, data, error);
         if(format === 1)
             return this._parseV1(params, data, error);
-        if(format === 2)
-            return this._parseV2(params, data, error);
 
         // Unknown format: still record it (as invalid) rather than dropping it silently
         data['VERSION']           = format;
@@ -83,334 +80,24 @@ class Price {
         await this.mapper.createMappings(data);
     }
 
-    // Parse PRICE v0: validator COIN/FIAT snapshot
-    async _parseV0(params, data, error){
-        data['VERSION'] = 0;
-
-        // Manually parse variable-length format:
-        //   params[0] = '0' (version)
-        //   params[1] = ROUND
-        //   params[2] = TIMESTAMP
-        //   params[3] = BTC_BLOCK_HEIGHT (the round's BTC anchor; in the signed payload)
-        //   params[4] = PAIR_COUNT (N)
-        //   params[5..5+2N-1] = N pairs of (PAIR_ID, PAIR_PRICE)
-        //   params[5+2N] = SIG_COUNT (M)
-        //   params[5+2N+1..5+2N+2M] = M pairs of (PUBKEY, SIG)
-        let round, timestamp, btcBlockHeight, pairCount, pairs = [], sigCount, sigs = [];
-        try {
-            round          = parseInt(params[1]);
-            timestamp      = parseInt(params[2]);
-            btcBlockHeight = parseInt(params[3]);
-            pairCount      = parseInt(params[4]);
-            if(!Number.isFinite(round) || round < 0)
-                throw new Error('invalid ROUND');
-            if(!Number.isFinite(timestamp) || timestamp < 0)
-                throw new Error('invalid TIMESTAMP');
-            if(!Number.isFinite(btcBlockHeight) || btcBlockHeight < 0)
-                throw new Error('invalid BTC_BLOCK_HEIGHT');
-            if(!Number.isFinite(pairCount) || pairCount < 1)
-                throw new Error('invalid PAIR_COUNT');
-
-            // Pair-name bound, resolved ONCE per action (see price_pair_activation.js). Below
-            // the flag-day the ticker side is capped at 5 characters, which cannot express the
-            // 6-character gas ticker XCHAIN and so makes the XCHAIN/USD pair the native-fee path
-            // needs unrepresentable; at/above it, 6 is accepted. Keyed on this action's own block
-            // time because a PRICE round can land on any of BTC/LTC/DOGE and their heights diverge.
-            //
-            // A malformed pair still throws out of the WHOLE action rather than skipping the entry,
-            // deliberately: the pair set is inside the payload the validators signed
-            // (buildPriceV0Payload below reconstructs it from `pairs`), so dropping one entry would
-            // change the payload and fail every signature. A signed round is atomic.
-            let pairPattern = pricePair.pricePairPattern(data['BLOCK_TIME'], this.config['NETWORK']);
-
-            let idx = 5;
-            for(let i = 0; i < pairCount; i++){
-                let pair  = params[idx++];
-                let price = params[idx++];
-                if(!pair || !price) throw new Error('missing pair data at index ' + i);
-                if(!pairPattern.test(pair)) throw new Error('invalid pair format: ' + pair);
-                if(!/^[0-9]+(\.[0-9]+)?$/.test(price)) throw new Error('invalid price format: ' + price);
-                pairs.push({ pair: pair, price: price });
-            }
-
-            sigCount = parseInt(params[idx++]);
-            if(!Number.isFinite(sigCount) || sigCount < 1)
-                throw new Error('invalid SIG_COUNT');
-
-            for(let i = 0; i < sigCount; i++){
-                let pubkey = params[idx++];
-                let sig    = params[idx++];
-                if(!pubkey || !sig) throw new Error('missing sig data at index ' + i);
-                if(!/^[0-9a-fA-F]{64}$/.test(pubkey)) throw new Error('invalid pubkey format: ' + pubkey);
-                if(!/^[0-9a-fA-F]{128}$/.test(sig))   throw new Error('invalid sig format');
-                sigs.push({ pubkey: pubkey.toLowerCase(), sig: sig.toLowerCase() });
-            }
-        } catch(e) {
-            if(!error) error = 'invalid: ' + e.message;
-        }
-
-        data['ROUND']            = round;
-        data['TIMESTAMP']        = timestamp;
-        data['BTC_BLOCK_HEIGHT'] = btcBlockHeight;
-        data['PAIR_COUNT']       = pairCount;
-        data['PAIRS_JSON'] = pairs.length > 0 ? JSON.stringify(pairs) : null;
-        data['SIG_COUNT']  = sigCount;
-        data['SIGS_JSON']  = sigs.length  > 0 ? JSON.stringify(sigs)  : null;
-
-        // Verify Ed25519 signatures against the canonical payload.
-        // Each pubkey must have an active price capability stake at the round's BTC anchor.
-        let qualifiedSigners = [];
-        if(!error){
-            let payload    = ed25519.buildPriceV0Payload(round, timestamp, pairs, this.config['NETWORK'], btcBlockHeight);
-            let validSigs  = 0;
-            let seenPubkey = new Set();
-
-            // PRICE_SIG_TALLY: WHERE the pubkey enters the dedupe set. At/above the gate it enters
-            // only after a successful verify, so a garbage signature carrying a qualified oracle's
-            // pubkey cannot be ordered ahead of that oracle's real one to consume its slot and
-            // under-count the round. Below the gate the legacy mark-on-first-encounter ordering is
-            // preserved verbatim, so replay of every pre-flag-day round stays bit-identical. Keyed
-            // on the round's signed BTC anchor (NOT the landing chain's local height) so the hub
-            // and every chain's indexer flip together; see price_sig_tally_activation.js. Either
-            // way a pubkey counts AT MOST ONCE.
-            let verifyFirst = priceSigTally.isPriceSigTallyVerifyFirstActive(
-                data['BTC_BLOCK_HEIGHT'], this.config['NETWORK']);
-
-            // Capability is a pure function of (pubkey, block), so resolve the whole price-capable
-            // set ONCE per round rather than a DB round-trip per signer (hasCapability is ~5
-            // sequential queries). Same effective set: both paths resolve _effectiveCapabilitySetSql
-            // semantics at the same default MIN_STAKE. getValidatorsByCapability caps at
-            // VALIDATOR_QUERY_LIMIT and hasCapability does not, so a TRUNCATED read falls back to
-            // the per-signer path: silently dropping a qualified signer would under-count the
-            // round's quorum.
-            //
-            // Keyed on the round's signed BTC anchor, NOT this action's own BLOCK_INDEX. Capability
-            // staking is BTC-only, so off BTC the set comes from the hub-mirrored
-            // capability_snapshots whose snapshot_block IS a BTC height; querying it at a DOGE/LTC
-            // height matches nothing (empty set, zero stake, every round invalid) and on regtest,
-            // where the chains' heights overlap, it can match the WRONG snapshot.
-            let capableRows = await this.indexerDb.getValidatorsByCapability('price', data['BTC_BLOCK_HEIGHT']);
-            let capableSet  = (capableRows && capableRows.truncated === true)
-                            ? null
-                            : new Set((capableRows || []).map(v => String(v.pubkey).toLowerCase()));
-            let capabilityCache = new Map();
-
-            for(let s of sigs){
-                if(seenPubkey.has(s.pubkey)){
-                    // Duplicate pubkey signature: count only once
-                    continue;
-                }
-                if(!verifyFirst) seenPubkey.add(s.pubkey);
-
-                let capable;
-                if(capableSet){
-                    capable = capableSet.has(s.pubkey);
-                } else {
-                    capable = capabilityCache.get(s.pubkey);
-                    if(capable === undefined){
-                        capable = await this.indexerDb.hasCapability(s.pubkey, 'price', data['BTC_BLOCK_HEIGHT']);
-                        capabilityCache.set(s.pubkey, capable);
-                    }
-                }
-                if(!capable){
-                    continue;
-                }
-
-                if(!ed25519.verify(payload, s.sig, s.pubkey))
-                    continue;
-
-                if(verifyFirst) seenPubkey.add(s.pubkey);
-                validSigs++;
-                qualifiedSigners.push(s.pubkey);
-            }
-
-            // STAKE_WEIGHTED_QUORUM: at/above activation, finalize on the summed STAKE of the
-            // qualified signers (>2/3 of S, source-deduped) rather than their COUNT. Gated on the
-            // round's signed BTC anchor (data['BTC_BLOCK_HEIGHT']), NOT this PRICE's local
-            // BLOCK_INDEX: PRICE v0 can land on any chain, so keying on the landing chain's own
-            // height would make the LTC/DOGE comparison vacuously true (their heights already
-            // dwarf the BTC activation height) and flip stake-weighting there months early while
-            // BTC still used count quorum, the same signed round resolving under two rules. Below
-            // activation this is byte-for-byte the legacy count rule. `qualifiedSigners` is the
-            // verified, capability-qualified signer set (both modes tally it).
-            let weighted = swq.isStakeWeightedQuorumActive(data['BTC_BLOCK_HEIGHT'], this.config['NETWORK']);
-            if(weighted){
-                // Same BTC anchor as the capable-set read above: the weights and the membership
-                // test must name one validator set, or the tally and the denominator come from
-                // two different sets and this node reaches a verdict no other node reaches.
-                let validators = await this.indexerDb.getStakeWeightsByCapability('price', data['BTC_BLOCK_HEIGHT']);
-                if(!swq.meetsStakeThreshold(validators, qualifiedSigners))
-                    error = 'invalid: insufficient signer stake';
-            } else {
-                // Compute PBFT quorum over validators with `price` capability,
-                // floored at a simple majority: max(2 * floor((N - 1) / 3) + 1, ceil((N + 1) / 2))
-                let priceValidatorCount = await this.indexerDb.getActiveCapabilityCount('price', data['BTC_BLOCK_HEIGHT']);
-                let quorum = (priceValidatorCount <= 1) ? 1 : Math.max(2 * Math.floor((priceValidatorCount - 1) / 3) + 1, Math.ceil((priceValidatorCount + 1) / 2));
-
-                if(validSigs < quorum)
-                    error = 'invalid: insufficient PBFT quorum (' + validSigs + '/' + quorum + ')';
-            }
-        }
-
-        let validation = error ? 'invalid' : 'valid';
-        data['VALIDATION_STATUS'] = validation;
-        data['STATUS'] = error || 'valid';
-
-        console.log("\t PRICE v0 : round=" + round + ' pairs=' + pairCount + ' sigs=' + sigCount + ' : ' + data['STATUS']);
-
-        await this.indexerDb.createPrice(data);
-
-        // Derive oracle_round rewards from the on-chain signer set (CONSENSUS). The verified,
-        // capability-qualified signature list above IS the round's signed participation record,
-        // so the reward split is a deterministic function of this action, replayable on any
-        // reindex or ANCHOR full-parse recovery, unlike the retired hub push (which credited the
-        // in-memory PBFT prepare set and could never be re-derived offline). Consequences:
-        // rewards follow the published signer set, and a round that finalizes but never lands a
-        // PRICE action earns nothing. A duplicate PRICE for an already-rewarded round upserts the
-        // same rows (same round_reference → same split), so failover double-publishes stay idempotent.
-        if(!error && data['COIN'] === 'BTC' && qualifiedSigners.length > 0){
-            let staking     = this.config['STAKING'] || {};
-            let rewardTotal = staking['ORACLE_REWARD_PER_ROUND'] || '10.00000000';
-            let fnShare     = String((this.config['FULLNODE'] || {})['REWARD_SHARE'] || '0');
-
-            // Two-tranche split (NODEPROOF / verified full-node tier). When FULLNODE.REWARD_SHARE
-            // > 0 the round budget is split into a BASE tranche (every qualified signer) and a
-            // FULL-NODE tranche (only signers that are VERIFIED full nodes this block, deduped per
-            // staking source; one operator = one share). When the share is 0, or no verified full
-            // node signed this round, the whole budget pays the base set; with share == 0 that base
-            // set keeps the legacy 'oracle_round' reward_type so existing-chain replay stays
-            // byte-identical. CONSENSUS: REWARD_SHARE is a fleet-wide consensus parameter (like
-            // ORACLE_REWARD_PER_ROUND) and MUST match across every indexer and be deployed
-            // atomically. (See NODEPROOF.md.)
-            let activeRegime = this.util.bcgt(fnShare, '0');
-
-            // Resolve the full-node REWARD sources among THIS round's signers. Earning the tranche
-            // is participation-rate based (a carrot, not a stick; there is NO slashing for
-            // non-participation): a staking source qualifies only if, over the trailing
-            // REWARD_PASS_WINDOW_BLOCKS, it answered at least MIN_PASS_RATE_BPS of the challenge
-            // epochs that actually produced a verdict (db.getFullNodeParticipation). Forgiving of a
-            // missed check or two. The bonus is credited once per source, to the lexicographically
-            // smallest of its passing pubkeys that ALSO signed this round and still holds the
-            // full_node capability. Integer gate: passed*10000 >= bps*total, no floats.
-            let fnSources = [];   // [{ source_id, pubkey }]
-            if(activeRegime){
-                let minRateBps = parseInt((this.config['FULLNODE'] || {})['MIN_PASS_RATE_BPS']);
-                if(!Number.isFinite(minRateBps) || minRateBps < 0) minRateBps = 0;
-                let part = await this.indexerDb.getFullNodeParticipation(data['BLOCK_INDEX']);
-                if(part.totalEpochs > 0){
-                    let signed = new Set(qualifiedSigners.map(pk => String(pk).toLowerCase()));
-                    for(let src of part.sources){
-                        // Pass-rate gate: passed_epochs / totalEpochs >= minRateBps/10000.
-                        if(src.passed_epochs * 10000 < minRateBps * part.totalEpochs) continue;
-                        // Representative = lex-smallest passing pubkey that signed this
-                        // round and still holds the full_node capability at this block.
-                        let rep = null;
-                        // Byte comparator, not a bare .sort(): this pick lands in a ledger
-                        // write (createValidatorReward), and the default sort is a total order
-                        // here only because every element happens to be lowercase 64-hex. Pin it
-                        // the way the other consensus-feeding sorts do (sweep.js, attest.js) so
-                        // the tiebreak stops depending on that implicit input shape.
-                        for(let pk of Array.from(src.pubkeys)
-                                .sort((a, b) => Buffer.compare(Buffer.from(String(a), 'utf8'),
-                                                               Buffer.from(String(b), 'utf8')))){
-                            if(!signed.has(pk)) continue;
-                            if(!await this.indexerDb.hasCapability(pk, 'full_node', data['BLOCK_INDEX'])) continue;
-                            rep = pk;
-                            break;
-                        }
-                        if(rep) fnSources.push({ source_id: String(src.source_id), pubkey: rep });
-                    }
-                }
-            }
-
-            // Carve the full-node tranche (floored to GAS decimals). Rolls into the
-            // base tranche when no verified full node signed this round.
-            let fullNodeTotal = (activeRegime && fnSources.length > 0)
-                ? this.util.bcmulfloor(this.util.bcmul(rewardTotal, fnShare, 18), '1', 8)
-                : '0';
-            let baseTotal = this.util.bcsub(rewardTotal, fullNodeTotal, 8);
-
-            // Base tranche: equal split across ALL qualified signers.
-            let baseType = activeRegime ? 'oracle_base' : 'oracle_round';
-            let perBase  = this.util.bcmulfloor(
-                this.util.bcdiv(baseTotal, String(qualifiedSigners.length), 18), '1', 8
-            );
-            if(this.util.bcgt(perBase, '0')){
-                for(let pk of qualifiedSigners){
-                    await this.indexerDb.createValidatorReward(
-                        pk, round, baseType, perBase, data['BLOCK_INDEX'], true
-                    );
-                }
-            }
-
-            // Full-node tranche: equal split across the distinct verified sources.
-            if(this.util.bcgt(fullNodeTotal, '0') && fnSources.length > 0){
-                let perFull = this.util.bcmulfloor(
-                    this.util.bcdiv(fullNodeTotal, String(fnSources.length), 18), '1', 8
-                );
-                if(this.util.bcgt(perFull, '0')){
-                    for(let s of fnSources){
-                        await this.indexerDb.createValidatorReward(
-                            s.pubkey, round, 'oracle_full_node', perFull, data['BLOCK_INDEX'], true
-                        );
-                    }
-                }
-            }
-        }
-
-        // Push validated round to hub for cross-chain aggregation via a durable transactional
-        // outbox (mirrors rollback.js HUB-RETRACT-2). The pending_hub_pushes row is written
-        // through the OPEN block transaction so it commits atomically with the prices row (and
-        // rolls back with it); block processing never blocks on hub HTTP latency because live
-        // delivery is attempted post-commit. The hub dedupes by round_number, so a later replay
-        // it already has is a safe no-op.
-        if(!error && this.hubClient && this.hubClient.enabled){
-            // Source-chain reorg fence: stamp the current push generation so the hub row carries
-            // it. A later deferred retraction (which carries the rollback's pre-bump generation)
-            // then deletes only stale rows, not this one if it is re-published post-reorg.
-            let pushGeneration = await this.indexerDb.getPushGeneration(data['COIN']);
-            let payload = {
-                source_chain:     data['COIN'],
-                round:            round,
-                timestamp:        timestamp,
-                btc_block_height: btcBlockHeight,
-                pairs:            pairs,
-                sigs:             sigs,
-                action_index:     data['ACTION_INDEX'],
-                block_index:      data['BLOCK_INDEX'],
-                push_generation:  pushGeneration
-            };
-            // Durable outbox: enqueue INSIDE the block transaction (enqueueHubPushTx routes
-            // through the open transaction connection) so a crash between commitTransaction and
-            // the old fire-and-forget .catch handler can no longer silently drop the round, and a
-            // later same-block rollbackTransaction unwinds the row instead of leaving a phantom
-            // push. Stage it for an immediate post-commit live delivery by XChainIndexer; on
-            // success the row is dropped, on failure/crash HubPushQueue drains the survivor.
-            let pushId = await this.indexerDb.enqueueHubPushTx('price_round', payload);
-            this.indexerDb.stageHubPush({ id: pushId, pushType: 'price_round', payload });
-        }
-
-        await this.mapper.createMappings(data);
-    }
-
-    // Parse PRICE v2: validator BATCH snapshot, one signed action carrying an hourly
-    // window of full v0-shaped round bodies.
+    // Parse PRICE v0: validator BATCH snapshot, one signed action carrying an hourly
+    // window of full round bodies.
     //
     // THE ORDER OF THE STEPS BELOW IS ITSELF CONSENSUS: decompression, structure,
     // straddle, signatures, storage, push. Each step's inputs are produced by the one
     // before it, so reordering two of them changes which wires a node accepts.
     //
-    // v2 is ALWAYS ON: a batch is valid on its own merits, with no activation gate. There
-    // is no pre-launch history for a gate to protect (mainnet has no chain and the testnet
-    // chains carry no protocol transactions), so a gate here would only be machinery
-    // someone must remember to arm.
+    // There is no activation gate: a batch is valid on its own merits. Nothing pre-launch
+    // needs protecting (mainnet has no chain and the testnet chains carry no protocol
+    // transactions), so a gate here would only be machinery someone must remember to arm.
     //
-    // Unlike v0 this never derives rewards (D30): the oracle_round derivation lives inline
-    // in _parseV0 and is not shared code, so a v2 batch pays nothing. Hoisting that
-    // derivation into a shared helper would silently start paying six rounds per batch, so
-    // a zero-validator_rewards test pins the absence.
-    async _parseV2(params, data, error){
-        data['VERSION'] = 2;
+    // This derives no rewards. The retired per-round wire carried an inline oracle_round
+    // derivation that only ever fired for PRICE landing on BTC, which production never
+    // does, so it paid nothing in practice and is not reproduced here. Paying the elected
+    // publisher alone would misprice every other validator's participation; a real
+    // participation rail is tracked separately. A zero-validator_rewards test pins this.
+    async _parseV0(params, data, error){
+        data['VERSION'] = 0;
 
         // 1. DECOMPRESSION, before anything else.
         //
@@ -425,8 +112,8 @@ class Price {
         // next node rejects, and the bounds it would bypass (ratio, size, canonical
         // base64) are consensus here, not presentational.
         let fields = params;
-        if(!error && params[1] === priceV2.PRICE_V2_COMPRESSION_MARKER){
-            let inflated = priceV2.inflatePriceV2Body(params[2]);
+        if(!error && params[1] === priceV2.PRICE_BATCH_COMPRESSION_MARKER){
+            let inflated = priceV2.inflatePriceBatchBody(params[2]);
             if(!inflated.ok)
                 error = inflated.status;
             else
@@ -437,7 +124,7 @@ class Price {
         //
         // Any breach invalidates the WHOLE action rather than dropping the offending
         // round: the single signature set covers every round in the window (see
-        // buildPriceV2Payload), so removing one round changes the signed bytes and fails
+        // buildPriceBatchPayload), so removing one round changes the signed bytes and fails
         // every signature. A signed batch is atomic exactly as a signed round is.
         let firstRound, lastRound, btcBlockHeight, roundCount;
         let rounds = [], sigCount, sigs = [];
@@ -454,7 +141,7 @@ class Price {
                 roundCount     = parseInt(fields[4]);
 
                 // Number.isInteger on the window bounds, where v0 uses Number.isFinite on its
-                // single ROUND. These two values reach buildPriceV2Payload untouched and land in
+                // single ROUND. These two values reach buildPriceBatchPayload untouched and land in
                 // the canonical JSON, and the equivocation reader that resolves an XORACLEB slash
                 // requires Number.isInteger on both. A non-integer that slipped through here would
                 // not surface as an invalid action; it would surface later as a slashing decision
@@ -476,8 +163,8 @@ class Price {
                 // cheap transaction. Checking it after the loop would mean the work had already
                 // been done. The wire ceiling already makes a batch of more than 256 rounds
                 // physically inexpressible, so this rejects nothing an honest publisher can emit.
-                if(roundCount > priceV2.PRICE_V2_MAX_ROUND_COUNT)
-                    throw new Error('invalid ROUND_COUNT (' + roundCount + ' > ' + priceV2.PRICE_V2_MAX_ROUND_COUNT + ')');
+                if(roundCount > priceV2.PRICE_BATCH_MAX_ROUND_COUNT)
+                    throw new Error('invalid ROUND_COUNT (' + roundCount + ' > ' + priceV2.PRICE_BATCH_MAX_ROUND_COUNT + ')');
 
                 // Pair-name bound, resolved ONCE per action exactly as _parseV0 resolves it, and
                 // keyed on this action's own block time for the same reason: a batch can land on
@@ -523,7 +210,7 @@ class Price {
                         if(!/^[0-9]+(\.[0-9]+)?$/.test(price)) throw new Error('invalid price format: ' + price);
                         pairs.push({ pair: pair, price: price });
                     }
-                    // btcBlockHeight (camel) is the shape buildPriceV2Payload reads; the snake
+                    // btcBlockHeight (camel) is the shape buildPriceBatchPayload reads; the snake
                     // spelling is produced once, below, for storage and the hub push.
                     rounds.push({ round: round, timestamp: timestamp, btcBlockHeight: anchor, pairs: pairs });
                 }
@@ -594,14 +281,14 @@ class Price {
             pairs:            r.pairs
         }));
 
-        // 4. SIGNATURE VERIFICATION over the v2 canonical.
+        // 4. SIGNATURE VERIFICATION over the batch canonical.
         //
-        // buildPriceV2Payload is the ONLY canonical builder; the hub's two twins are
+        // buildPriceBatchPayload is the ONLY canonical builder; the hub's two twins are
         // byte-identical to it. Never inline the JSON here, or the three copies drift and
         // every honest batch fails.
         let qualifiedSigners = [];
         if(!error){
-            let payload    = ed25519.buildPriceV2Payload(firstRound, lastRound, btcBlockHeight, rounds);
+            let payload    = ed25519.buildPriceBatchPayload(firstRound, lastRound, btcBlockHeight, rounds);
             let validSigs  = 0;
             let seenPubkey = new Set();
 
@@ -688,7 +375,7 @@ class Price {
         data['VALIDATION_STATUS'] = validation;
         data['STATUS'] = error || 'valid';
 
-        console.log("\t PRICE v2 : rounds=" + firstRound + '-' + lastRound + ' count=' + roundCount + ' sigs=' + sigCount + ' : ' + data['STATUS']);
+        console.log("\t PRICE v0 : rounds=" + firstRound + '-' + lastRound + ' count=' + roundCount + ' sigs=' + sigCount + ' : ' + data['STATUS']);
 
         await this.indexerDb.createPrice(data);
 

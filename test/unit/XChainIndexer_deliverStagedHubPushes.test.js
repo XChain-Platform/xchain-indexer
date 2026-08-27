@@ -17,7 +17,7 @@
  * (the first is HubPushQueue._attempt, tested in hub_push_queue.test.js).
  * An unknown push_type is left on the durable row forever rather than
  * erroring, so a missing arm here is a silent permanent stall for every
- * PRICE v2 batch, not a visible failure.
+ * PRICE batch, not a visible failure.
  */
 
 'use strict';
@@ -82,7 +82,7 @@ describe('XChainIndexer._deliverStagedHubPushes()', function(){
         assert.strictEqual(indexer.indexerDb.markHubPushDelivered.calledWith(2), true);
     });
 
-    // ─── price_batch (PRICE v2 batch push, D12): the arm this row adds ─────
+    // ─── price_batch (PRICE batch push, D12): the arm this row adds ─────
     it('dispatches price_batch entries to pushPriceBatch and marks delivered', async function(){
         let payload = {
             source_chain:     'BTC',

@@ -12229,7 +12229,7 @@ class Database {
         let action_index    = data['ACTION_INDEX'];
         let version         = data['VERSION'];
         let validation      = data['VALIDATION_STATUS'] || 'pending';
-        // v0 fields (round_number holds FIRST_ROUND on a v2 batch row; see prices.sql)
+        // v0 fields (round_number holds FIRST_ROUND on a batch row; see prices.sql)
         let round_number    = data['ROUND'] || null;
         let round_timestamp = data['TIMESTAMP'] || null;
         let pair_count      = data['PAIR_COUNT'] || null;

@@ -91,9 +91,9 @@ const ENGINE_CAPABILITY = {
     [eq.ENGINE_TAGS.XCALL]:      'cross_chain',
     [eq.ENGINE_TAGS.CHECKPOINT]: 'oracle_publish',
     [eq.ENGINE_TAGS.ORACLE]:     'price',
-    // PRICE v2 batches are signed by the same price-capable set as v0 rounds, under the
+    // PRICE batches are signed by the same price-capable set as v0 rounds, under the
     // same locked snapshot, so they burn the same bond. The tag is distinct only so a v0
-    // round and a v2 batch at one BTC anchor can never share an equiv key.
+    // round and a batch at one BTC anchor can never share an equiv key.
     [eq.ENGINE_TAGS.ORACLE_BATCH]: 'price',
     [eq.ENGINE_TAGS.ATTEST]:     'attestation',
     [eq.ENGINE_TAGS.CONFIG]:     CONFIG_CAPABILITY,
@@ -113,7 +113,7 @@ function _parseOracleContent(content){
 }
 
 // Read the (first_round, last_round, btc_block_height) triple out of an XORACLEB signed
-// content (ed25519.buildPriceV2Payload's JSON.stringify output). A v2 batch declares a
+// content (ed25519.buildPriceBatchPayload's JSON.stringify output). A batch declares a
 // WINDOW and no scalar `round`, which is why it carries its own engine tag and its own
 // reader here. Same null discipline as _parseOracleContent: an absent or non-integer field
 // yields null rather than 0, so two absent windows never compare EQUAL and re-open the
@@ -412,7 +412,7 @@ class Slash {
             }
             return { snapshotBlock: Number(roundId) };
         }
-        // XORACLEB (PRICE v2 batches): the ROUND_ID is the COMPOSITE
+        // XORACLEB (PRICE batches): the ROUND_ID is the COMPOSITE
         // `<anchor>|<first_round>|<last_round>`, so the BTC anchor is its first segment.
         if(engineTag === eq.ENGINE_TAGS.ORACLE_BATCH){
             // The round id legitimately contains '|' and equivKey treats it as opaque, so
