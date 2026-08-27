@@ -266,7 +266,6 @@ module.exports = {
             'RESUME_BLOCK',
             'SWAP_ACTION_INDEX',
             'TARGET_CONTRACT_INDEX',
-            'TRANSFER_SUPPLY',
             'TYPE',
             'UNBIND',
             'VALUE',
