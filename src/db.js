@@ -12199,13 +12199,18 @@ class Database {
         let action_index    = data['ACTION_INDEX'];
         let version         = data['VERSION'];
         let validation      = data['VALIDATION_STATUS'] || 'pending';
-        // v0 fields
+        // v0 fields (round_number holds FIRST_ROUND on a v2 batch row; see prices.sql)
         let round_number    = data['ROUND'] || null;
         let round_timestamp = data['TIMESTAMP'] || null;
         let pair_count      = data['PAIR_COUNT'] || null;
         let pairs_json      = data['PAIRS_JSON'] || null;
         let sig_count       = data['SIG_COUNT'] || null;
         let sigs_json       = data['SIGS_JSON'] || null;
+        // v2 fields (BATCH window; NULL on a v0/v1 row)
+        let batch_first_round = data['BATCH_FIRST_ROUND'] || null;
+        let batch_last_round  = data['BATCH_LAST_ROUND'] || null;
+        let round_count       = data['ROUND_COUNT'] || null;
+        let rounds_json       = data['ROUNDS_JSON'] || null;
         // v1 fields
         let coin_id         = (data['V1_COIN'])  ? await this.createCoin(data['V1_COIN'])     : null;
         let tick_id         = (data['V1_TICK'])  ? await this.createTicker(data['V1_TICK'])   : null;
@@ -12224,22 +12229,26 @@ class Database {
             query = `UPDATE prices SET
                         version=?, source_id=?, round_number=?, round_timestamp=?,
                         pair_count=?, pairs_json=?, sig_count=?, sigs_json=?,
+                        batch_first_round=?, batch_last_round=?, round_count=?, rounds_json=?,
                         coin_id=?, tick_id=?, fiat_id=?, value=?, fee=?, memo_id=?,
                         validation_status=?, status_id=?
                     WHERE action_index=?`;
             args = [version, source_id, round_number, round_timestamp,
                     pair_count, pairs_json, sig_count, sigs_json,
+                    batch_first_round, batch_last_round, round_count, rounds_json,
                     coin_id, tick_id, fiat_id, value, fee, memo_id,
                     validation, status_id, action_index];
         } else {
             query = `INSERT INTO prices
                         (version, source_id, round_number, round_timestamp,
                          pair_count, pairs_json, sig_count, sigs_json,
+                         batch_first_round, batch_last_round, round_count, rounds_json,
                          coin_id, tick_id, fiat_id, value, fee, memo_id,
                          validation_status, status_id, action_index)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
             args = [version, source_id, round_number, round_timestamp,
                     pair_count, pairs_json, sig_count, sigs_json,
+                    batch_first_round, batch_last_round, round_count, rounds_json,
                     coin_id, tick_id, fiat_id, value, fee, memo_id,
                     validation, status_id, action_index];
         }

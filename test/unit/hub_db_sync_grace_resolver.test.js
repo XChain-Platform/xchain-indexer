@@ -13,14 +13,14 @@
  **********************************************************************
  * test/unit/hub_db_sync_grace_resolver.test.js
  *
- * Watermark-grace resolver (/ Package 12). The four barrier grace
- * margins are frozen protocol constants (600/600/120/120): a per-node divergence
- * forks settlement, and a NaN value wedges the tip via `blockTime + NaN`. The
- * resolver pins the constants, ignores env overrides off-regtest with a loud
- * warning (mirroring resolveFeeDestination), honors them only on regtest for
- * test tunability, and THROWS on a malformed regtest override rather than
- * swallowing it. These tests drive the real constructor wiring, both sides of
- * the regtest / off-regtest branch.
+ * Watermark-grace resolver (/ Package 12). The four barrier grace margins
+ * are frozen protocol constants (price 4800, oracle/match/call 600/120/120):
+ * a per-node divergence forks settlement, and a NaN value wedges the tip via
+ * `blockTime + NaN`. The resolver pins the constants, ignores env overrides
+ * off-regtest with a loud warning (mirroring resolveFeeDestination), honors
+ * them only on regtest for test tunability, and THROWS on a malformed
+ * regtest override rather than swallowing it. These tests drive the real
+ * constructor wiring, both sides of the regtest / off-regtest branch.
  */
 
 'use strict';
@@ -29,6 +29,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 
 const HubDbSync = require('../../src/hub_db_sync.js');
+const FROZEN    = HubDbSync.HUB_SYNC_WATERMARK_GRACE_S;
 
 const GRACE_ENV = ['HUB_SYNC_PRICE_GRACE_S', 'HUB_SYNC_ORACLE_GRACE_S', 'HUB_SYNC_MATCH_GRACE_S',
                    'HUB_SYNC_CALL_GRACE_S'];
@@ -49,13 +50,41 @@ describe('HubDbSync watermark-grace resolver @regression @tier1', function () {
         sinon.restore();
     });
 
-    it('defaults to the frozen protocol constants 600/600/120/120 when no env is set', function () {
+    it('defaults to the frozen protocol constants when no env is set', function () {
         clearGraceEnv();
         const sync = makeSync('mainnet');
-        assert.strictEqual(sync.priceWatermarkGraceS, 600);
-        assert.strictEqual(sync.oracleWatermarkGraceS, 600);
-        assert.strictEqual(sync.matchWatermarkGraceS, 120);
-        assert.strictEqual(sync.callWatermarkGraceS, 120);
+        assert.strictEqual(sync.priceWatermarkGraceS, FROZEN.price);
+        assert.strictEqual(sync.oracleWatermarkGraceS, FROZEN.oracle);
+        assert.strictEqual(sync.matchWatermarkGraceS, FROZEN.match);
+        assert.strictEqual(sync.callWatermarkGraceS, FROZEN.call);
+    });
+
+    // Pins the PRICE v2 recalibration (D11): the price barrier's watermark
+    // escape must cover a full hourly batch window (3600s) plus the
+    // post-window signing grace (300s) plus DOGE confirm/index headroom
+    // (~900s). A regression back to the pre-batching 600s value would open
+    // this escape ~55 minutes before an hourly batch window can have
+    // finished, so this test asserts the value AND the boundary behaviour,
+    // not just the number.
+    it('the price grace is 4800s (batch window + signing grace + headroom), and gates the escape exactly there', function () {
+        clearGraceEnv();
+        assert.strictEqual(FROZEN.price, 4800,
+            'HUB_SYNC_WATERMARK_GRACE_S.price must equal 3600 (window) + 300 (grace) + 900 (headroom)');
+
+        const sync = makeSync('mainnet');
+        assert.strictEqual(sync.priceWatermarkGraceS, 4800);
+
+        const blockTime = 1700000000;
+        sync.priceBootstrapped     = true;
+        sync.priceSyncMaxTimestamp = 0;   // mirror holds nothing at/past blockTime
+
+        sync.streamWatermark = blockTime + 4800 - 1;
+        assert.strictEqual(sync._priceTimeSyncSatisfied(blockTime), false,
+            'one second short of the grace must still defer');
+
+        sync.streamWatermark = blockTime + 4800;
+        assert.strictEqual(sync._priceTimeSyncSatisfied(blockTime), true,
+            'the escape opens exactly at blockTime + 4800');
     });
 
     // The call barrier used to borrow matchWatermarkGraceS, which silently coupled it
@@ -98,7 +127,8 @@ describe('HubDbSync watermark-grace resolver @regression @tier1', function () {
         const warn = sinon.stub(console, 'log');
         process.env.HUB_SYNC_PRICE_GRACE_S = '60';
         const sync = makeSync('mainnet');
-        assert.strictEqual(sync.priceWatermarkGraceS, 600, 'mainnet must ignore the override and pin 600');
+        assert.strictEqual(sync.priceWatermarkGraceS, FROZEN.price,
+            'mainnet must ignore the override and pin the frozen constant');
         assert.ok(
             warn.getCalls().some(c => String(c.args[0]).includes('HUB_SYNC_PRICE_GRACE_S') &&
                                       String(c.args[0]).includes('IGNORED')),
@@ -109,9 +139,9 @@ describe('HubDbSync watermark-grace resolver @regression @tier1', function () {
     it('off-regtest does not warn when the override equals the frozen value', function () {
         clearGraceEnv();
         const warn = sinon.stub(console, 'log');
-        process.env.HUB_SYNC_ORACLE_GRACE_S = '600';
+        process.env.HUB_SYNC_ORACLE_GRACE_S = String(FROZEN.oracle);
         const sync = makeSync('testnet');
-        assert.strictEqual(sync.oracleWatermarkGraceS, 600);
+        assert.strictEqual(sync.oracleWatermarkGraceS, FROZEN.oracle);
         assert.ok(
             !warn.getCalls().some(c => String(c.args[0]).includes('HUB_SYNC_ORACLE_GRACE_S')),
             'no warning when the override matches the pinned constant'
@@ -140,6 +170,6 @@ describe('HubDbSync watermark-grace resolver @regression @tier1', function () {
         clearGraceEnv();
         process.env.HUB_SYNC_PRICE_GRACE_S = '';
         const sync = makeSync('regtest');
-        assert.strictEqual(sync.priceWatermarkGraceS, 600);
+        assert.strictEqual(sync.priceWatermarkGraceS, FROZEN.price);
     });
 });

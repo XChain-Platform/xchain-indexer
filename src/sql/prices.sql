@@ -17,13 +17,21 @@ CREATE TABLE prices (
     action_index        BIGINT UNSIGNED NOT NULL,         -- FK to actions table
     version             TINYINT UNSIGNED NOT NULL,        -- 0=validator snapshot, 1=user oracle
     source_id           BIGINT UNSIGNED NOT NULL,         -- FK to index_addresses (tx source)
-    -- v0 fields (validator COIN/FIAT snapshot)
-    round_number        BIGINT UNSIGNED,                  -- BTC block height of round
+    -- v0 fields (validator COIN/FIAT snapshot); also carries the v2 BATCH row's anchor:
+    -- round_number is set to FIRST_ROUND on a v2 row, since the column is indexed and
+    -- every existing read treats it as "the round this action is about"
+    round_number        BIGINT UNSIGNED,                  -- BTC block height of round (v2: FIRST_ROUND of the batch)
     round_timestamp     BIGINT UNSIGNED,                  -- block_time of triggering BTC block
-    pair_count          SMALLINT UNSIGNED,                -- number of COIN/FIAT pairs
-    pairs_json          TEXT,                             -- JSON array [{pair, price}, ...]
-    sig_count           SMALLINT UNSIGNED,                -- number of PBFT signatures
-    sigs_json           TEXT,                             -- JSON array [{pubkey, sig}, ...]
+    pair_count          SMALLINT UNSIGNED,                -- number of COIN/FIAT pairs (NULL on a v2 row; see rounds_json)
+    pairs_json          TEXT,                             -- JSON array [{pair, price}, ...] (NULL on a v2 row; see rounds_json)
+    sig_count           SMALLINT UNSIGNED,                -- number of PBFT signatures (NULL on a v2 row; see sigs_json)
+    sigs_json           TEXT,                             -- JSON array [{pubkey, sig}, ...]; carries the BATCH signature set on a v2 row
+    -- v2 fields (validator BATCH snapshot: one signed action carrying an hourly
+    -- window of full round bodies). NULL on a v0/v1 row.
+    batch_first_round   BIGINT UNSIGNED,                  -- FIRST_ROUND of the v2 batch window (v2 only; NULL on a v0/v1 row)
+    batch_last_round    BIGINT UNSIGNED,                  -- LAST_ROUND of the v2 batch window (v2 only; NULL on a v0/v1 row)
+    round_count         SMALLINT UNSIGNED,                -- number of rounds carried by this batch (v2 only)
+    rounds_json         TEXT,                             -- JSON array of the batch per-round bodies [{round, timestamp, btc_block_height, pairs}, ...] (v2 only)
     -- v1 fields (user oracle TOKEN/FIAT)
     coin_id             BIGINT UNSIGNED,                  -- FK to index_coins (which chain's token)
     tick_id             BIGINT UNSIGNED,                  -- FK to index_tickers (token name)

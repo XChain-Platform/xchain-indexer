@@ -62,6 +62,7 @@ const GATES = [
     // "a one-line edit here plus the byte-equal edit in the vendored copies", so lock them.
     ['price_pair_activation.js',            'PRICE_PAIR_TICKER_MAX_LEGACY'],
     ['price_pair_activation.js',            'PRICE_PAIR_TICKER_MAX_WIDE'],
+    ['price_batch_activation.js',           'PRICE_BATCH_ACTIVATION'],
     ['price_sig_tally_activation.js',       'PRICE_SIG_TALLY_ACTIVATION'],
     ['snapshot_reorg_buffer.js',           'SNAPSHOT_BURIAL_ACTIVATION'],
     // The burial depth that gate reads; canon claims it byte-identical to the local copies.

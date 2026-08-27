@@ -336,6 +336,150 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         assert.strictEqual(d['STATUS'], 'valid', 'the gate must leave sub-flag-day acceptance untouched');
     });
 
+    // ── XORACLEB: PRICE v2 batch canonicals ──
+    //
+    // A v2 canonical declares first_round/last_round and NO scalar `round`, which is the
+    // exact shape the XORACLE leg's invariant ("a content with no `round` cannot have come
+    // from buildPriceV0Payload") does not cover: under a shared tag its distinct-rounds
+    // guard would skip, and an honest validator that signed one v0 round and one v2 batch
+    // at the same BTC anchor would read as a provable equivocator, for a full bond burn
+    // plus permanent capability disqualification. The distinct tag plus the composite
+    // ROUND_ID `<anchor>|<first_round>|<last_round>` is what keeps that from happening.
+
+    // buildPriceV2Payload's emitted JSON (key order as the builder emits it).
+    function batchContent(first, last, btcHeight, price) {
+        return JSON.stringify({
+            first_round: first, last_round: last, btc_block_height: btcHeight,
+            rounds: [{ round: first, timestamp: 1700000000, btc_block_height: btcHeight,
+                       pairs: [{ pair: 'BTCUSD', price: String(price) }] }]
+        });
+    }
+    const batchRoundId = (anchor, first, last) => [anchor, first, last].join('|');
+
+    it('ACCEPTS a genuine XORACLEB equivocation (two batches over ONE window at one anchor)', async function () {
+        const anchor = 961123;
+        const rid = batchRoundId(anchor, 100, 105);
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, rid, 0, batchContent(100, 105, anchor, 60000));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, rid, 0, batchContent(100, 105, anchor, 61000));
+        const d = data();
+        await handler.parse(params('price', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.strictEqual(d['STATUS'], 'valid', 'got ' + d['STATUS']);
+        // The capability map must route XORACLEB to `price`, and the snapshot block must be
+        // the FIRST segment of the composite round id, not the whole id.
+        assert.deepStrictEqual(indexer.indexerDb.getValidatorsByCapability.firstCall.args, ['price', anchor]);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.calledOnce, 'a real double-signed batch must burn');
+    });
+
+    it('REJECTS an honest v0 round paired with an honest v2 batch at ONE anchor', async function () {
+        // The defect this row exists to prevent: under a shared engine tag these two share
+        // the equiv key, differ in content, and burn a full bond off two honest signatures.
+        const anchor = 961123;
+        const v0 = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE, String(anchor), 0, priceContent(100, anchor, 60000));
+        const v2 = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, batchRoundId(anchor, 100, 105), 0,
+                                          batchContent(100, 105, anchor, 60000));
+        const d = data();
+        await handler.parse(params('price', offender.pubHex, v0, offender.privateKey, v2, offender.privateKey), d, null);
+
+        assert.notStrictEqual(d['STATUS'], 'valid', 'an honest v0 round and an honest v2 batch are not one slot');
+        assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled,
+            'a validator that signed one honest round and one honest batch must keep its bond');
+    });
+
+    it('REJECTS two honest batches that split ONE window differently at one anchor', async function () {
+        // Two leaders may legitimately cut the same window at different points, so the
+        // window is in the round id and the two batches never collide on one key.
+        const anchor = 961123;
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, batchRoundId(anchor, 100, 105), 0,
+                                            batchContent(100, 105, anchor, 60000));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, batchRoundId(anchor, 100, 102), 0,
+                                            batchContent(100, 102, anchor, 60000));
+        const d = data();
+        await handler.parse(params('price', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.notStrictEqual(d['STATUS'], 'valid', 'got ' + d['STATUS']);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled,
+            'two honest sub-ranges at one anchor must keep the bond');
+    });
+
+    it('REJECTS a batch pair sharing one key whose contents declare DIFFERENT windows', async function () {
+        // The in-content leg of the same defence: contents that end at different rounds are
+        // two messages, not two versions of one, whatever the shared header says.
+        const anchor = 961123;
+        const rid = batchRoundId(anchor, 100, 105);
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, rid, 0, batchContent(100, 105, anchor, 60000));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, rid, 0, batchContent(100, 102, anchor, 60000));
+        const d = data();
+        await handler.parse(params('price', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.notStrictEqual(d['STATUS'], 'valid', 'got ' + d['STATUS']);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled,
+            'a window that differs only at its LAST round is still a distinct window');
+    });
+
+    it('REJECTS a batch pair whose content anchor disagrees with the ROUND_ID anchor', async function () {
+        const anchor = 961123;
+        const rid = batchRoundId(anchor, 100, 105);
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, rid, 0, batchContent(100, 105, anchor, 60000));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, rid, 0, batchContent(100, 105, 961999, 61000));
+        const d = data();
+        await handler.parse(params('price', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.ok(String(d['STATUS']).indexOf('ORACLE_BATCH btc_block_height') >= 0, 'got: ' + d['STATUS']);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
+    });
+
+    it('REJECTS an XORACLEB round id that is not <anchor>|<first>|<last>', async function () {
+        // The membership snapshot is read off segment 0, so a round id of another shape
+        // must never resolve to a block at all.
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, '961123|100', 0, batchContent(100, 105, 961123, 60000));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, '961123|100', 0, batchContent(100, 105, 961123, 61000));
+        const d = data();
+        await handler.parse(params('price', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.ok(String(d['STATUS']).indexOf('ORACLE_BATCH round id') >= 0, 'got: ' + d['STATUS']);
+        assert.ok(indexer.indexerDb.getValidatorsByCapability.notCalled);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
+    });
+
+    it('REJECTS an XORACLEB round id whose window runs backwards', async function () {
+        const rid = batchRoundId(961123, 105, 100);
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, rid, 0, batchContent(105, 100, 961123, 60000));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, rid, 0, batchContent(105, 100, 961123, 61000));
+        const d = data();
+        await handler.parse(params('price', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.ok(String(d['STATUS']).indexOf('ORACLE_BATCH window') >= 0, 'got: ' + d['STATUS']);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
+    });
+
+    it('REJECTS an XORACLEB proof labelled with a capability other than price', async function () {
+        const rid = batchRoundId(961123, 100, 105);
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, rid, 0, batchContent(100, 105, 961123, 60000));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, rid, 0, batchContent(100, 105, 961123, 61000));
+        const d = data();
+        await handler.parse(params('oracle_publish', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.ok(/CAPABILITY \(does not match engine\)/.test(d['STATUS']), 'got ' + d['STATUS']);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
+    });
+
+    it('the XORACLEB discrimination is NOT gated on SLASH_ORACLE_ROUND_DISCRIMINATED', async function () {
+        // A new tag has no pre-fix verdicts to reproduce, so there must be no height window
+        // in which two honest splits burn a bond.
+        ctx.protocolChanges.isEnabled = sinon.stub().callsFake(async (name) =>
+            name !== 'SLASH_ORACLE_ROUND_DISCRIMINATED');
+        const anchor = 961123;
+        const rid = batchRoundId(anchor, 100, 105);
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, rid, 0, batchContent(100, 105, anchor, 60000));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, rid, 0, batchContent(100, 102, anchor, 60000));
+        const d = data();
+        await handler.parse(params('price', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.notStrictEqual(d['STATUS'], 'valid', 'got ' + d['STATUS']);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
+    });
+
     // ── CHECKPOINT engine tag: two content families ──
     // XCHECKPOINT (root canonical, snapshot_block at index 9) and XANCPUB (reward
     // attestation, snapshot_block at index 3) share the CHECKPOINT engine tag.

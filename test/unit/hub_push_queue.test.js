@@ -28,6 +28,7 @@ function makeIndexer(hubClientOpts){
         enabled:        true,
         pushPriceRound: sinon.stub().resolves(),
         pushOraclePrice: sinon.stub().resolves(),
+        pushPriceBatch: sinon.stub().resolves(),
         retractPriceRange: sinon.stub().resolves(),
         retractXcallRange: sinon.stub().resolves(),
         retractMatchRange: sinon.stub().resolves()
@@ -392,6 +393,31 @@ describe('HubPushQueue', function(){
             assert.strictEqual(indexer.hubClient.pushOraclePrice.calledOnce, true);
             assert.deepStrictEqual(indexer.hubClient.pushOraclePrice.firstCall.args[0], payload);
             assert.strictEqual(indexer.indexerDb.markHubPushDelivered.calledWith(2), true);
+        });
+
+        // ─── price_batch (PRICE v2 batch push, D12) ─────
+        it('calls pushPriceBatch for price_batch rows and marks delivered', async function(){
+            let indexer = makeIndexer();
+            let q = new HubPushQueue(indexer);
+            let payload = { source_chain: 'BTC', first_round: 1, last_round: 6, rounds: [], block_time: 1700000000 };
+            let row = makeRow({ id: 20, push_type: 'price_batch', payload: JSON.stringify(payload) });
+            await q._attempt(row);
+            assert.strictEqual(indexer.hubClient.pushPriceBatch.calledOnce, true);
+            assert.deepStrictEqual(indexer.hubClient.pushPriceBatch.firstCall.args[0], payload);
+            assert.strictEqual(indexer.indexerDb.markHubPushDelivered.calledWith(20), true);
+        });
+
+        it('does NOT retire a price_batch after maxAttempts failures (batch is the sole carrier of its window)', async function(){
+            let indexer = makeIndexer();
+            indexer.hubClient.pushPriceBatch = sinon.stub().rejects(new Error('hub down'));
+            let q = new HubPushQueue(indexer, { maxAttempts: 3 });
+            let row = makeRow({ id: 21, push_type: 'price_batch', attempts: 3 });
+            await q._attempt(row);
+            let cap = indexer.indexerDb.recordHubPushAttempt.firstCall.args[2];
+            assert.strictEqual(cap, Number.MAX_SAFE_INTEGER,
+                'a price_batch must be recorded with an unbounded cap so it never flips to failed');
+            assert.strictEqual(indexer.indexerDb.markHubPushDelivered.callCount, 0,
+                'a failed price_batch row must stay queued, never be dropped');
         });
 
         it('calls retractPriceRange for price_retraction rows and marks delivered (open-ended when no ceiling)', async function(){

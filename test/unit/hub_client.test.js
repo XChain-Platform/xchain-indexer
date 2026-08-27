@@ -334,6 +334,58 @@ describe('HubClient', function(){
         });
     });
 
+    describe('pushPriceBatch()', function(){
+        it('returns immediately without calling _call when not enabled', async function(){
+            let c = new HubClient('', '');
+            let callStub = sinon.stub(c, '_call').resolves({});
+            let result = await c.pushPriceBatch({ first_round: 1, last_round: 6 });
+            assert.strictEqual(callStub.callCount, 0);
+            assert.strictEqual(result, undefined);
+        });
+
+        it('calls _call with pushpricebatch and passes batchData verbatim', async function(){
+            let c = new HubClient('http://hub.example.com', '');
+            let callStub = sinon.stub(c, '_call').resolves({ ok: true });
+            let batchData = {
+                source_chain:     'BTC',
+                first_round:      1,
+                last_round:       6,
+                btc_block_height: 900000,
+                rounds:           [{ round: 1, timestamp: 1700000000, btc_block_height: 900000, pairs: [] }],
+                sigs:             [{ pubkey: 'a', sig: 'b' }],
+                action_index:     42,
+                block_index:      7,
+                push_generation:  0,
+                block_time:       1700000600
+            };
+            let result = await c.pushPriceBatch(batchData);
+            assert.strictEqual(callStub.calledOnce, true);
+            assert.strictEqual(callStub.firstCall.args[0], 'pushpricebatch');
+            assert.strictEqual(callStub.firstCall.args[1], batchData);
+            assert.deepStrictEqual(result, { ok: true });
+        });
+
+        it('propagates rejection from _call (not swallowed)', async function(){
+            let c = new HubClient('http://hub.example.com', '');
+            sinon.stub(c, '_call').rejects(new Error('rpc error'));
+            await assert.rejects(() => c.pushPriceBatch({}), /rpc error/);
+        });
+
+        it('throws on a transient hub rejection so the durable row is retried, not deleted', async function(){
+            let c = new HubClient('http://hub.example.com', '');
+            sinon.stub(c, '_call').resolves({ accepted: false, reason: 'validator snapshot unavailable' });
+            await assert.rejects(() => c.pushPriceBatch({ first_round: 1, last_round: 6 }),
+                /hub rejected pushpricebatch/);
+        });
+
+        it('resolves on a terminal hub rejection so the row is dropped, not retried forever', async function(){
+            let c = new HubClient('http://hub.example.com', '');
+            let result = { accepted: false, reason: 'duplicate' };
+            sinon.stub(c, '_call').resolves(result);
+            assert.deepStrictEqual(await c.pushPriceBatch({ first_round: 1, last_round: 6 }), result);
+        });
+    });
+
     describe('_call() HTTP internals', function(){
         it('resolves with parsed result from a successful http response', async function(){
             let c = new HubClient('http://hub.example.com:3003', 'mykey');

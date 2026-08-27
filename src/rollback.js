@@ -891,7 +891,13 @@ class Rollback {
                     await this.indexerDb.doQuery(query, args);
                 }
 
-                // Loop through the data tables and delete records above the action_index
+                // Loop through the data tables and delete records above the action_index.
+                // This is the whole price rollback path for `prices`: an orphaned PRICE v0
+                // round row and an orphaned PRICE v2 batch row are both removed WHOLESALE by
+                // action_index, so batch_first_round/batch_last_round/round_count/rounds_json
+                // are cleared exactly as round_number/pairs_json/sigs_json are, by virtue of
+                // the row itself being gone; no v2-specific delete or partial-column reset is
+                // needed on top of this generic loop.
                 for(let table of this.dataTables){
                     query = `DELETE FROM ` + table + ` WHERE action_index >= ?`;
                     args  = [firstActionIndex];
