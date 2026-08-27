@@ -40,7 +40,6 @@ const ed25519   = require('../ed25519.js');
 const swq       = require('../stake_weighted_quorum.js');
 const pricePair = require('../price_pair_activation.js');
 const priceSigTally = require('../price_sig_tally_activation.js');
-const priceBatch    = require('../price_batch_activation.js');
 const priceV2       = require('../price_v2_compression.js');
 
 class Price {
@@ -159,7 +158,7 @@ class Price {
         data['SIGS_JSON']  = sigs.length  > 0 ? JSON.stringify(sigs)  : null;
 
         // Verify Ed25519 signatures against the canonical payload.
-        // Each pubkey must have an active price capability stake at the BLOCK_INDEX of this PRICE tx.
+        // Each pubkey must have an active price capability stake at the round's BTC anchor.
         let qualifiedSigners = [];
         if(!error){
             let payload    = ed25519.buildPriceV0Payload(round, timestamp, pairs, this.config['NETWORK'], btcBlockHeight);
@@ -184,7 +183,13 @@ class Price {
             // VALIDATOR_QUERY_LIMIT and hasCapability does not, so a TRUNCATED read falls back to
             // the per-signer path: silently dropping a qualified signer would under-count the
             // round's quorum.
-            let capableRows = await this.indexerDb.getValidatorsByCapability('price', data['BLOCK_INDEX']);
+            //
+            // Keyed on the round's signed BTC anchor, NOT this action's own BLOCK_INDEX. Capability
+            // staking is BTC-only, so off BTC the set comes from the hub-mirrored
+            // capability_snapshots whose snapshot_block IS a BTC height; querying it at a DOGE/LTC
+            // height matches nothing (empty set, zero stake, every round invalid) and on regtest,
+            // where the chains' heights overlap, it can match the WRONG snapshot.
+            let capableRows = await this.indexerDb.getValidatorsByCapability('price', data['BTC_BLOCK_HEIGHT']);
             let capableSet  = (capableRows && capableRows.truncated === true)
                             ? null
                             : new Set((capableRows || []).map(v => String(v.pubkey).toLowerCase()));
@@ -203,7 +208,7 @@ class Price {
                 } else {
                     capable = capabilityCache.get(s.pubkey);
                     if(capable === undefined){
-                        capable = await this.indexerDb.hasCapability(s.pubkey, 'price', data['BLOCK_INDEX']);
+                        capable = await this.indexerDb.hasCapability(s.pubkey, 'price', data['BTC_BLOCK_HEIGHT']);
                         capabilityCache.set(s.pubkey, capable);
                     }
                 }
@@ -230,13 +235,16 @@ class Price {
             // verified, capability-qualified signer set (both modes tally it).
             let weighted = swq.isStakeWeightedQuorumActive(data['BTC_BLOCK_HEIGHT'], this.config['NETWORK']);
             if(weighted){
-                let validators = await this.indexerDb.getStakeWeightsByCapability('price', data['BLOCK_INDEX']);
+                // Same BTC anchor as the capable-set read above: the weights and the membership
+                // test must name one validator set, or the tally and the denominator come from
+                // two different sets and this node reaches a verdict no other node reaches.
+                let validators = await this.indexerDb.getStakeWeightsByCapability('price', data['BTC_BLOCK_HEIGHT']);
                 if(!swq.meetsStakeThreshold(validators, qualifiedSigners))
                     error = 'invalid: insufficient signer stake';
             } else {
                 // Compute PBFT quorum over validators with `price` capability,
                 // floored at a simple majority: max(2 * floor((N - 1) / 3) + 1, ceil((N + 1) / 2))
-                let priceValidatorCount = await this.indexerDb.getActiveCapabilityCount('price', data['BLOCK_INDEX']);
+                let priceValidatorCount = await this.indexerDb.getActiveCapabilityCount('price', data['BTC_BLOCK_HEIGHT']);
                 let quorum = (priceValidatorCount <= 1) ? 1 : Math.max(2 * Math.floor((priceValidatorCount - 1) / 3) + 1, Math.ceil((priceValidatorCount + 1) / 2));
 
                 if(validSigs < quorum)
@@ -388,9 +396,14 @@ class Price {
     // Parse PRICE v2: validator BATCH snapshot, one signed action carrying an hourly
     // window of full v0-shaped round bodies.
     //
-    // THE ORDER OF THE STEPS BELOW IS ITSELF CONSENSUS: activation, decompression,
-    // structure, straddle, signatures, storage, push. Each step's inputs are produced by
-    // the one before it, so reordering two of them changes which wires a node accepts.
+    // THE ORDER OF THE STEPS BELOW IS ITSELF CONSENSUS: decompression, structure,
+    // straddle, signatures, storage, push. Each step's inputs are produced by the one
+    // before it, so reordering two of them changes which wires a node accepts.
+    //
+    // v2 is ALWAYS ON: a batch is valid on its own merits, with no activation gate. There
+    // is no pre-launch history for a gate to protect (mainnet has no chain and the testnet
+    // chains carry no protocol transactions), so a gate here would only be machinery
+    // someone must remember to arm.
     //
     // Unlike v0 this never derives rewards (D30): the oracle_round derivation lives inline
     // in _parseV0 and is not shared code, so a v2 batch pays nothing. Hoisting that
@@ -399,23 +412,7 @@ class Price {
     async _parseV2(params, data, error){
         data['VERSION'] = 2;
 
-        // 1. ACTIVATION GATE, resolved before any parsing work.
-        //
-        // Below the flag day a PRICE|2 records the EXACT status a garbage VERSION field
-        // already records today (parse() above), so a from-genesis reindex of the
-        // pre-flag-day chain reproduces byte-for-byte what the deployed fleet already
-        // wrote. D18: a second literal here would be a string two implementations could
-        // spell differently, and the difference would only surface as a status mismatch on
-        // a replaying node. Time-keyed and fail-closed; see price_batch_activation.js.
-        if(!priceBatch.isPriceBatchActive(data['BLOCK_TIME'], this.config['NETWORK'])){
-            data['VALIDATION_STATUS'] = 'invalid';
-            data['STATUS']            = error || 'invalid: VERSION (unknown)';
-            await this.indexerDb.createPrice(data);
-            await this.mapper.createMappings(data);
-            return;
-        }
-
-        // 2. DECOMPRESSION, before anything else.
+        // 1. DECOMPRESSION, before anything else.
         //
         // `Z` occupies the FIRST_ROUND slot on the compressed form and FIRST_ROUND is
         // always a decimal integer, so the two forms are told apart with no lookahead.
@@ -436,7 +433,7 @@ class Price {
                 fields = [params[0]].concat(inflated.body.split('|'));
         }
 
-        // 3. STRUCTURAL CHECKS.
+        // 2. STRUCTURAL CHECKS.
         //
         // Any breach invalidates the WHOLE action rather than dropping the offending
         // round: the single signature set covers every round in the window (see
@@ -561,7 +558,7 @@ class Price {
             }
         }
 
-        // 4. STRADDLE RULE (D7), a deliberate departure from v0.
+        // 3. STRADDLE RULE (D7), a deliberate departure from v0.
         //
         // v0 resolves the sig-tally and stake-weighted-quorum flag days on each round's OWN
         // anchor. A batch resolves them ONCE, on the batch anchor, so a window straddling
@@ -597,7 +594,7 @@ class Price {
             pairs:            r.pairs
         }));
 
-        // 5. SIGNATURE VERIFICATION over the v2 canonical.
+        // 4. SIGNATURE VERIFICATION over the v2 canonical.
         //
         // buildPriceV2Payload is the ONLY canonical builder; the hub's two twins are
         // byte-identical to it. Never inline the JSON here, or the three copies drift and
@@ -616,11 +613,13 @@ class Price {
             let verifyFirst = priceSigTally.isPriceSigTallyVerifyFirstActive(
                 btcBlockHeight, this.config['NETWORK']);
 
-            // Capability set resolved exactly as _parseV0 resolves it, including the truncation
-            // fallback to the per-signer path: getValidatorsByCapability caps at
+            // Capability set resolved exactly as _parseV0 resolves it, at the BATCH's signed BTC
+            // anchor and not this action's own BLOCK_INDEX (capability_snapshots.snapshot_block is
+            // a BTC height, so off BTC a landing-chain height matches nothing). Includes the same
+            // truncation fallback to the per-signer path: getValidatorsByCapability caps at
             // VALIDATOR_QUERY_LIMIT and hasCapability does not, so treating a TRUNCATED read as
             // the whole set would silently drop a qualified signer and under-count the quorum.
-            let capableRows = await this.indexerDb.getValidatorsByCapability('price', data['BLOCK_INDEX']);
+            let capableRows = await this.indexerDb.getValidatorsByCapability('price', btcBlockHeight);
             let capableSet  = (capableRows && capableRows.truncated === true)
                             ? null
                             : new Set((capableRows || []).map(v => String(v.pubkey).toLowerCase()));
@@ -639,7 +638,7 @@ class Price {
                 } else {
                     capable = capabilityCache.get(s.pubkey);
                     if(capable === undefined){
-                        capable = await this.indexerDb.hasCapability(s.pubkey, 'price', data['BLOCK_INDEX']);
+                        capable = await this.indexerDb.hasCapability(s.pubkey, 'price', btcBlockHeight);
                         capabilityCache.set(s.pubkey, capable);
                     }
                 }
@@ -655,17 +654,17 @@ class Price {
                 qualifiedSigners.push(s.pubkey);
             }
 
-            // Count-or-stake quorum, the GATE keyed on the batch anchor while the WEIGHTS and the
-            // capability count come from BLOCK_INDEX, exactly as _parseV0 splits them: the gate
-            // must flip on one height for every chain and the hub, while the validator set is
-            // whatever the landing chain saw at this action's own block.
+            // Count-or-stake quorum. The GATE, the WEIGHTS and the capability count all key on the
+            // batch's signed BTC anchor, exactly as _parseV0 keys them: the gate must flip on one
+            // height for every chain and the hub, and the validator set is BTC-anchored because
+            // capability staking is BTC-only.
             let weighted = swq.isStakeWeightedQuorumActive(btcBlockHeight, this.config['NETWORK']);
             if(weighted){
-                let validators = await this.indexerDb.getStakeWeightsByCapability('price', data['BLOCK_INDEX']);
+                let validators = await this.indexerDb.getStakeWeightsByCapability('price', btcBlockHeight);
                 if(!swq.meetsStakeThreshold(validators, qualifiedSigners))
                     error = 'invalid: insufficient signer stake';
             } else {
-                let priceValidatorCount = await this.indexerDb.getActiveCapabilityCount('price', data['BLOCK_INDEX']);
+                let priceValidatorCount = await this.indexerDb.getActiveCapabilityCount('price', btcBlockHeight);
                 let quorum = (priceValidatorCount <= 1) ? 1 : Math.max(2 * Math.floor((priceValidatorCount - 1) / 3) + 1, Math.ceil((priceValidatorCount + 1) / 2));
 
                 if(validSigs < quorum)
@@ -673,7 +672,7 @@ class Price {
             }
         }
 
-        // 6. STORAGE. round_number carries FIRST_ROUND (D21: the column is indexed and every
+        // 5. STORAGE. round_number carries FIRST_ROUND (D21: the column is indexed and every
         // existing read treats it as "the round this action is about"), sigs_json carries the
         // batch signature set, and pair_count/pairs_json/sig_count are left unset so they
         // store NULL: on a v2 row those three would describe only one round out of the window.
@@ -693,7 +692,7 @@ class Price {
 
         await this.indexerDb.createPrice(data);
 
-        // 7. HUB PUSH through the same durable transactional outbox v0 and v1 use. The
+        // 6. HUB PUSH through the same durable transactional outbox v0 and v1 use. The
         // pending_hub_pushes row is written through the OPEN block transaction so it commits
         // atomically with the prices row and rolls back with it. `price_batch` is DURABLE
         // rather than disposable (D12): a batch is the SOLE carrier of every round in its

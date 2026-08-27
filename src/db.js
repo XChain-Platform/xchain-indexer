@@ -40,7 +40,6 @@ const caretRefStrict = require('./caret_ref_strict_activation');
 const ledgerPrecision = require('./ledger_amount_precision_activation');
 const dispenserSendCompare = require('./dispenser_send_amount_compare_activation');
 const stakeWeightCollation = require('./stake_weight_collation_activation');
-const priceCapSnapshot = require('./price_capability_snapshot_activation');
 // Per-block cap on the ATTEST deadline-expiry sweep. Vendored
 // byte-identical from xchain-documentation/protocol/constants.js, same convention
 // as the XCALL_MAX_CALLS_PER_BLOCK sibling it mirrors.
@@ -141,20 +140,22 @@ const CANONICAL_CARET_ID = /^[1-9][0-9]*$/;
 // so every non-BTC indexer has an empty local set and would otherwise compute a quorum
 // against zero stake.
 //
-// Deliberately a module-level function rather than a method: both resolvers are invoked by
+// Deliberately a module-level function rather than a method: every resolver is invoked by
 // tier-1 regression tests against a partial object, so a `this`-dependent predicate would
 // make their behaviour depend on how they were called rather than on the config.
 //
-// `price` is GATED where the other two are not. cross_chain and oracle_publish have never
-// resolved any other way, so admitting them is not a change. Flipping `price` turns actions
-// that record an insufficient-stake status today into valid ones, which diverges replay on
-// any existing chain and forks a mixed-version fleet, so it waits for its flag day.
-function usesCapabilitySnapshot(config, capability, blockTime){
+// `price` redirects unconditionally, exactly like cross_chain and oracle_publish. Off BTC
+// the local `stakes` path is empty for every capability, so without the redirect a PRICE
+// round on LTC/DOGE sums to zero stake and records 'invalid: insufficient signer stake'
+// with signatures that all verify.
+//
+// ONE predicate for ALL FOUR capability reads (validator set, stake weights, active count,
+// per-pubkey membership). If any one of them consulted a different source, a node would
+// tally signatures against one validator set and divide by a quorum denominator computed
+// from another, reaching a verdict no other node reaches.
+function usesCapabilitySnapshot(config, capability){
     if(!config || config['COIN'] === 'BTC') return false;
-    if(capability === 'cross_chain' || capability === 'oracle_publish') return true;
-    if(capability === 'price')
-        return priceCapSnapshot.isPriceCapabilitySnapshotActive(blockTime, config['NETWORK']);
-    return false;
+    return capability === 'cross_chain' || capability === 'oracle_publish' || capability === 'price';
 }
 
 class Database {
@@ -12187,6 +12188,12 @@ class Database {
     // Count distinct active validators (by pubkey) qualified for the given capability.
     // Used for PBFT quorum calculation: quorum = max(2 * floor((N - 1) / 3) + 1, ceil((N + 1) / 2)).
     async getActiveCapabilityCount(capability, blockIndex, minStakeOverride){
+        // Same redirect, same predicate, as the set and weight resolvers: this count is the
+        // quorum DENOMINATOR, so if it came from the local (empty off BTC) path while the
+        // capable set came from the mirror, the two would disagree about who is capable and
+        // this node would reach a quorum verdict no other node reaches.
+        if(usesCapabilitySnapshot(this.config, capability))
+            return await this.getCapabilitySnapshotCount(capability, blockIndex);
         let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
         let capConfig = caps[capability];
         if(!capConfig) return 0;
@@ -12691,20 +12698,17 @@ class Database {
     // every capability and the mirror is the only way a non-BTC indexer reaches the
     // BTC-anchored validator set at all.
     //
-    // ONE predicate for BOTH the count resolver (getValidatorsByCapability) and the weight
-    // resolver (getStakeWeightsByCapability), deliberately. Those answer "who is capable"
-    // and "how much stake does each capable signer carry"; if only one consulted the
-    // mirror, a node would tally signatures against one validator set and divide by a
-    // quorum denominator computed from another, reaching a verdict no other node reaches.
+    // ONE predicate for ALL FOUR capability reads: getValidatorsByCapability (who is
+    // capable), getStakeWeightsByCapability (how much stake each capable signer carries),
+    // getActiveCapabilityCount (the PBFT denominator) and hasCapability (the per-signer
+    // truncation fallback). If any one of them consulted a different source, a node would
+    // tally signatures against one validator set and divide by a quorum denominator computed
+    // from another, reaching a verdict no other node reaches.
     //
-    // `price` is GATED (price_capability_snapshot_activation.js) while `cross_chain` and
-    // `oracle_publish` are not. The difference is history, not taste: those two are the
-    // redirect's original scope and have never resolved any other way, whereas every PRICE
-    // action already on a non-BTC chain recorded 'invalid: insufficient signer stake' under
-    // the empty local path. Admitting the mirror flips those same bytes to valid, so below
-    // the gate `price` MUST stay on the local path or replay of the existing chain diverges
-    // and a mixed-version fleet forks on the first PRICE action. `blockTime` is the parsed
-    // action's own block time; absent or unparseable, the gate fails closed.
+    // `snapshot_block` in capability_snapshots is a BTC HEIGHT, so every caller on this path
+    // must key the read on the action's BTC anchor, never the landing chain's own height:
+    // off BTC a landing-chain height matches nothing, and on regtest, where the chains'
+    // heights overlap, it can match the wrong snapshot.
 
     // Return all pubkeys whose SUM(active stake) at `blockIndex` meets the
     // capability's MIN_STAKE. Used by xchain-hub's CapabilitySnapshot to lock
@@ -12712,12 +12716,11 @@ class Database {
     // every hub independently calling this against the same blockIndex must
     // arrive at the same set, so consensus on quorum N is deterministic.
     // Spec: capability-staking model §6 (deterministic quorum selection).
-    async getValidatorsByCapability(capability, blockIndex, minStakeOverride, blockTime){
+    async getValidatorsByCapability(capability, blockIndex, minStakeOverride){
         // Off-BTC chains have no local capability stakes, so the qualifying set comes from
-        // the hub-mirrored capability_snapshots at the (BTC-anchored) block. `blockTime` is
-        // the parsed action's own block time and is read ONLY by the gated `price` arm; see
-        // usesCapabilitySnapshot for the scope and the consensus reasoning.
-        if(usesCapabilitySnapshot(this.config, capability, blockTime))
+        // the hub-mirrored capability_snapshots. `blockIndex` MUST be a BTC height on this
+        // path (snapshot_block is BTC-anchored); see usesCapabilitySnapshot.
+        if(usesCapabilitySnapshot(this.config, capability))
             return await this.getCapabilitySnapshotValidators(capability, blockIndex);
         let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
         let capConfig = caps[capability];
@@ -12840,12 +12843,12 @@ class Database {
     // effective signer key, each carrying its `source` (address) + the source's
     // aggregate `weight`. Σ weight over DISTINCT sources = S. CONSENSUS-CRITICAL:
     // must resolve identically on the hub and every indexer or validation forks.
-    async getStakeWeightsByCapability(capability, blockIndex, minStakeOverride, blockTime){
+    async getStakeWeightsByCapability(capability, blockIndex, minStakeOverride){
         // Off-BTC chains have no local capability stakes - read the source-keyed
         // weights from the hub-mirrored capability_snapshots. Routed through the SAME
         // predicate as getValidatorsByCapability so the count set and the weight set can
         // never come from different sources; see usesCapabilitySnapshot.
-        if(usesCapabilitySnapshot(this.config, capability, blockTime))
+        if(usesCapabilitySnapshot(this.config, capability))
             return await this.getCapabilitySnapshotWeights(capability, blockIndex);
         let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
         let capConfig = caps[capability];
@@ -13074,11 +13077,12 @@ class Database {
     // Check whether a pubkey's active stake qualifies for a capability.
     // Returns true if SUM(active stake amount for pubkey) >= governance.min_stake[capability].
     async hasCapability(pubkey, capability, blockIndex, minStakeOverride){
-        // Off-BTC chains verify cross_chain (match settlement) and oracle_publish (the
-        // DOGE-only ANCHOR action) against the hub-mirrored capability snapshot
-        // (presence = qualified) since capability stakes live only on BTC. Other
-        // capabilities keep the local-stakes path. See getValidatorsByCapability.
-        if(this.config['COIN'] !== 'BTC' && (capability === 'cross_chain' || capability === 'oracle_publish'))
+        // Off-BTC chains verify the mirrored capabilities against the hub-mirrored capability
+        // snapshot (presence = qualified) since capability stakes live only on BTC. Routed
+        // through the SAME predicate as the three set/weight/count resolvers, so the
+        // truncation fallback in actions/price.js cannot land on a path that answers false
+        // for every signer while the capable-set read answered from the mirror.
+        if(usesCapabilitySnapshot(this.config, capability))
             return await this.isPubkeyInCapabilitySnapshot(pubkey, capability, blockIndex);
         let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
         let capConfig = caps[capability];
@@ -13302,6 +13306,18 @@ class Database {
         // '0') and the BTC local path both coerce NULL to '0'; without this an
         // unguarded NULL would surface as the literal string 'null'.
         return rows.map(r => ({ pubkey: String(r.pubkey), amount: r.amount == null ? '0' : String(r.amount) }));
+    }
+
+    // How many DISTINCT signing keys the mirrored snapshot holds for a capability at a
+    // BTC-anchored block. DISTINCT because a key delegated by two sources produces two rows
+    // (see getCapabilitySnapshotValidators): the PBFT denominator counts capable SIGNERS, so
+    // counting rows would inflate N above the set the tally is drawn from.
+    async getCapabilitySnapshotCount(capability, snapshotBlock){
+        let query = `SELECT COUNT(DISTINCT signing_pubkey) AS cnt
+                     FROM capability_snapshots
+                     WHERE capability = ? AND snapshot_block = ?`;
+        let rows = await this._mirrorDb().doQuery(query, [capability, snapshotBlock]);
+        return rows.length > 0 ? Number(rows[0].cnt) : 0;
     }
 
     // Whether a pubkey is in the mirrored capability snapshot at a block (qualified).

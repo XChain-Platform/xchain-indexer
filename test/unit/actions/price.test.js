@@ -261,8 +261,9 @@ describe('Price (PRICE) @regression @tier3', function () {
                     { pubkey: PUBKEY_A, sig: SIG_A },
                 ]), data, null);
                 assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
+                // Keyed on the round's signed BTC anchor, not the landing chain's height.
                 assert.ok(indexer.indexerDb.getValidatorsByCapability
-                    .calledWith('price', data['BLOCK_INDEX']));
+                    .calledWith('price', data['BTC_BLOCK_HEIGHT']));
                 assert.strictEqual(indexer.indexerDb.getValidatorsByCapability.callCount, 1);
                 assert.strictEqual(
                     indexer.indexerDb.hasCapability.getCalls().filter(c => c.args[1] === 'price').length, 0,
@@ -280,7 +281,7 @@ describe('Price (PRICE) @regression @tier3', function () {
                 const data = v0Data();
                 await handler.parse(v0Params(ONE_PAIR, [{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
                 assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
-                assert.ok(indexer.indexerDb.hasCapability.calledWith(PUBKEY_A, 'price', data['BLOCK_INDEX']));
+                assert.ok(indexer.indexerDb.hasCapability.calledWith(PUBKEY_A, 'price', data['BTC_BLOCK_HEIGHT']));
             });
 
             it('below the gate: the legacy mark-then-verify verdict is preserved verbatim', async function () {
@@ -678,8 +679,89 @@ describe('Price (PRICE) @regression @tier3', function () {
         it('uses the source-keyed weight query, not the count query', async function () {
             const data = v0Data();
             await handler.parse(v0Params(ONE_PAIR, [{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
-            assert.ok(indexer.indexerDb.getStakeWeightsByCapability.calledWith('price', data['BLOCK_INDEX']));
+            assert.ok(indexer.indexerDb.getStakeWeightsByCapability.calledWith('price', data['BTC_BLOCK_HEIGHT']));
             assert.ok(indexer.indexerDb.getActiveCapabilityCount.notCalled);
+        });
+    });
+
+    // -----------------------------------------------------------------------
+    // Off-BTC capability resolution: the BTC ANCHOR, never the landing height.
+    //
+    // capability_snapshots.snapshot_block is a BTC height (see actions/cross_settle.js
+    // and the comment in actions/anchor.js). A PRICE round can land on BTC, LTC or DOGE,
+    // so keying the capability reads on the landing chain's own BLOCK_INDEX queries the
+    // mirror at a DOGE/LTC height: nothing matches, the capable set is empty, and every
+    // off-BTC PRICE action records 'invalid: insufficient signer stake' with signatures
+    // that all verify. That is the measured 2026-08-26 DOGE regtest failure.
+    // -----------------------------------------------------------------------
+    describe('v0 - capability set resolves at the BTC anchor off BTC', function () {
+
+        const BTC_ANCHOR   = 799000;    // the round's signed BTC anchor
+        const DOGE_LANDING = 5700000;   // the DOGE height the action actually landed at
+
+        function v0Params(pairs, sigs, overrides = {}) {
+            const p = { round: '7', timestamp: '1700000000', btcHeight: String(BTC_ANCHOR), ...overrides };
+            const out = ['0', p.round, p.timestamp, p.btcHeight, String(pairs.length)];
+            for (const pr of pairs) { out.push(pr.pair, pr.price); }
+            out.push(String(sigs.length));
+            for (const s of sigs) { out.push(s.pubkey, s.sig); }
+            return out;
+        }
+        const ONE_PAIR = [{ pair: 'BTC/USD', price: '50000' }];
+
+        // The mirror as it really behaves: rows exist ONLY at the BTC snapshot_block.
+        // Any other height is a miss, which is exactly what a DOGE height produces.
+        function mirrorOnlyAtAnchor(db) {
+            db.getValidatorsByCapability.callsFake(async (cap, blk) => {
+                const rows = (cap === 'price' && blk === BTC_ANCHOR)
+                    ? [{ pubkey: PUBKEY_A, amount: '5000' }] : [];
+                rows.truncated = false;
+                return rows;
+            });
+            db.hasCapability.callsFake(async (pubkey, cap, blk) =>
+                cap === 'price' && blk === BTC_ANCHOR && pubkey === PUBKEY_A);
+            db.getActiveCapabilityCount.callsFake(async (cap, blk) =>
+                (cap === 'price' && blk === BTC_ANCHOR) ? 1 : 0);
+            db.getStakeWeightsByCapability.callsFake(async (cap, blk) =>
+                (cap === 'price' && blk === BTC_ANCHOR)
+                    ? [{ pubkey: PUBKEY_A, source: 'src1', weight: '5000' }] : []);
+        }
+
+        beforeEach(function () {
+            sinon.stub(ed25519, 'verify').returns(true);
+            indexer.config['COIN'] = 'DOGE';
+            mirrorOnlyAtAnchor(indexer.indexerDb);
+        });
+
+        it('validates a DOGE-landed round under COUNT quorum', async function () {
+            sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+            const data = createBaseData({ ACTION: 'PRICE', FORMAT: 0, COIN: 'DOGE', BLOCK_INDEX: DOGE_LANDING });
+            await handler.parse(v0Params(ONE_PAIR, [{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+            // Resolving at DOGE_LANDING yields an empty set, no capable signer, and
+            // 'invalid: insufficient PBFT quorum (0/1)'.
+            assert.strictEqual(data['VALIDATION_STATUS'], 'valid', 'got: ' + data['STATUS']);
+            assert.ok(indexer.indexerDb.getValidatorsByCapability.calledWith('price', BTC_ANCHOR));
+            assert.ok(indexer.indexerDb.getActiveCapabilityCount.calledWith('price', BTC_ANCHOR));
+        });
+
+        it('validates a DOGE-landed round under STAKE-WEIGHTED quorum', async function () {
+            sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(true);
+            const data = createBaseData({ ACTION: 'PRICE', FORMAT: 0, COIN: 'DOGE', BLOCK_INDEX: DOGE_LANDING });
+            await handler.parse(v0Params(ONE_PAIR, [{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+            // Resolving at DOGE_LANDING yields zero stake and 'invalid: insufficient signer stake'.
+            assert.strictEqual(data['VALIDATION_STATUS'], 'valid', 'got: ' + data['STATUS']);
+            assert.ok(indexer.indexerDb.getStakeWeightsByCapability.calledWith('price', BTC_ANCHOR));
+        });
+
+        it('takes the per-signer fallback at the BTC anchor too when the set reads TRUNCATED', async function () {
+            sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+            indexer.indexerDb.getValidatorsByCapability.callsFake(async () => {
+                const rows = []; rows.truncated = true; return rows;
+            });
+            const data = createBaseData({ ACTION: 'PRICE', FORMAT: 0, COIN: 'DOGE', BLOCK_INDEX: DOGE_LANDING });
+            await handler.parse(v0Params(ONE_PAIR, [{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+            assert.strictEqual(data['VALIDATION_STATUS'], 'valid', 'got: ' + data['STATUS']);
+            assert.ok(indexer.indexerDb.hasCapability.calledWith(PUBKEY_A, 'price', BTC_ANCHOR));
         });
     });
 

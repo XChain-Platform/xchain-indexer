@@ -36,7 +36,6 @@ const Price         = require('../../../src/actions/price.js');
 const ed25519       = require('../../../src/ed25519.js');
 const swq           = require('../../../src/stake_weighted_quorum.js');
 const priceSigTally = require('../../../src/price_sig_tally_activation.js');
-const priceBatch    = require('../../../src/price_batch_activation.js');
 const comp          = require('../../../src/price_v2_compression.js');
 
 // ---------------------------------------------------------------------------
@@ -166,72 +165,35 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
     }
 
     // -----------------------------------------------------------------------
-    // 1. Activation gate
+    // v2 is ALWAYS ON
     // -----------------------------------------------------------------------
-    describe('activation gate (step 1)', function () {
+    describe('no activation gate', function () {
 
-        it('below the gate records the EXACT unknown-VERSION status, byte-identical to today', async function () {
-            // D18: the string a v2 records below its flag day must be the one an unknown
-            // FORMAT already records, or a from-genesis reindex of the existing chain writes
-            // a status the deployed fleet never wrote. Compared by identity, not by substring.
-            sinon.stub(priceBatch, 'isPriceBatchActive').returns(false);
+        it('a well-formed batch is valid on its merits, whatever the block time', async function () {
+            // There is no flag day and no time key: the same batch must validate at any
+            // BLOCK_TIME, including none at all. A gate reintroduced here would show up as
+            // one of these recording 'invalid: VERSION (unknown)'.
             const batch = validBatch();
-            const data  = v2Data();
-            await handler.parse(uncompressedParams(batchBody(batch)), data, null);
-
-            assert.strictEqual(data['STATUS'], 'invalid: VERSION (unknown)');
-            assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
-            assert.strictEqual(data['VERSION'], 2);
-            // Recorded, not dropped, exactly as the unknown-format arm records it.
-            assert.ok(indexer.indexerDb.createPrice.calledOnce);
+            for (const blockTime of [0, 1, 1755000000, null, undefined]) {
+                const data = v2Data({ BLOCK_TIME: blockTime });
+                await newHandler().parse(uncompressedParams(batchBody(batch)), data, null);
+                assert.strictEqual(data['STATUS'], 'valid', 'BLOCK_TIME ' + String(blockTime));
+                assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
+                assert.strictEqual(data['ROUND_COUNT'], 6);
+            }
         });
 
-        it('below the gate the string matches what an unknown FORMAT records, character for character', async function () {
-            sinon.stub(priceBatch, 'isPriceBatchActive').returns(false);
-            const gated = v2Data();
-            await handler.parse(uncompressedParams(batchBody(validBatch())), gated, null);
-
-            const unknown = createBaseData({ ACTION: 'PRICE', FORMAT: 9 });
-            await newHandler().parse(['9'], unknown, null);
-
-            assert.strictEqual(gated['STATUS'], unknown['STATUS']);
-        });
-
-        it('below the gate nothing is parsed, stored as a batch, or pushed', async function () {
-            sinon.stub(priceBatch, 'isPriceBatchActive').returns(false);
-            const data = v2Data();
-            await handler.parse(uncompressedParams(batchBody(validBatch())), data, null);
-
-            assert.strictEqual(data['BATCH_FIRST_ROUND'], undefined);
-            assert.strictEqual(data['ROUNDS_JSON'], undefined);
-            assert.ok(!indexer.indexerDb.enqueueHubPushTx.called);
-            assert.ok(!indexer.indexerDb.stageHubPush.called);
-        });
-
-        it('an upstream error still wins below the gate, as it does on the unknown-format arm', async function () {
-            sinon.stub(priceBatch, 'isPriceBatchActive').returns(false);
+        it('an upstream error still wins over a well-formed batch', async function () {
             const data = v2Data();
             await handler.parse(uncompressedParams(batchBody(validBatch())), data, 'invalid: upstream');
             assert.strictEqual(data['STATUS'], 'invalid: upstream');
         });
-
-        it('the gate is keyed on this action BLOCK_TIME, and fails closed on a missing one', async function () {
-            const spy   = sinon.spy(priceBatch, 'isPriceBatchActive');
-            const batch = validBatch();
-            await handler.parse(uncompressedParams(batchBody(batch)), v2Data({ BLOCK_TIME: 1755000000 }), null);
-            assert.strictEqual(spy.getCall(0).args[0], 1755000000);
-            assert.strictEqual(spy.getCall(0).args[1], 'regtest');
-
-            const missing = v2Data({ BLOCK_TIME: null });
-            await newHandler().parse(uncompressedParams(batchBody(batch)), missing, null);
-            assert.strictEqual(missing['STATUS'], 'invalid: VERSION (unknown)');
-        });
     });
 
     // -----------------------------------------------------------------------
-    // 2. Decompression
+    // 1. Decompression
     // -----------------------------------------------------------------------
-    describe('decompression (step 2)', function () {
+    describe('decompression (step 1)', function () {
 
         it('accepts a real six-round batch in the COMPRESSED form', async function () {
             const data = v2Data();
@@ -342,9 +304,9 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 3. Structural checks
+    // 2. Structural checks
     // -----------------------------------------------------------------------
-    describe('structural checks (step 3)', function () {
+    describe('structural checks (step 2)', function () {
 
         it('rejects FIRST_ROUND > LAST_ROUND', async function () {
             const body = batchBody(validBatch());
@@ -491,9 +453,9 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 4. Straddle rule
+    // 3. Straddle rule
     // -----------------------------------------------------------------------
-    describe('straddle rule (step 4)', function () {
+    describe('straddle rule (step 3)', function () {
         // Regtest arms every oracle gate at genesis, so no anchor can straddle one there.
         // The gates are therefore driven directly, at a boundary standing in for mainnet's
         // sig-tally height (963000). The parser resolves the rule through the SAME
@@ -663,9 +625,9 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 5. Signature verification
+    // 4. Signature verification
     // -----------------------------------------------------------------------
-    describe('signature verification (step 5)', function () {
+    describe('signature verification (step 4)', function () {
 
         it('verifies real signatures over the canonical from buildPriceV2Payload', async function () {
             const data = v2Data();
@@ -748,7 +710,7 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
             assert.ok(indexer.indexerDb.hasCapability.called, 'the per-signer path must be taken');
         });
 
-        it('keys the sig-tally and quorum gates on the BATCH anchor, and the validator set on BLOCK_INDEX', async function () {
+        it('keys the sig-tally, the quorum gate AND the validator set on the BATCH anchor', async function () {
             swq.isStakeWeightedQuorumActive.restore();
             const gateSpy = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
             const tallySpy = sinon.spy(priceSigTally, 'isPriceSigTallyVerifyFirstActive');
@@ -761,9 +723,11 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
             // before it are the straddle rule's own probes).
             assert.strictEqual(gateSpy.lastCall.args[0], batch.btcBlockHeight);
             assert.strictEqual(tallySpy.lastCall.args[0], batch.btcBlockHeight);
-            // The SET from the landing block.
-            assert.strictEqual(indexer.indexerDb.getValidatorsByCapability.firstCall.args[1], 5700000);
-            assert.strictEqual(indexer.indexerDb.getActiveCapabilityCount.firstCall.args[1], 5700000);
+            // The SET from the BTC anchor too, NOT the landing chain's own height:
+            // capability_snapshots.snapshot_block is a BTC height, so a DOGE/LTC height
+            // matches nothing off BTC and can match the wrong snapshot on regtest.
+            assert.strictEqual(indexer.indexerDb.getValidatorsByCapability.firstCall.args[1], batch.btcBlockHeight);
+            assert.strictEqual(indexer.indexerDb.getActiveCapabilityCount.firstCall.args[1], batch.btcBlockHeight);
         });
 
         it('uses stake-weighted quorum when the batch anchor is at or above its gate', async function () {
@@ -772,11 +736,14 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
             const id = newIdentity();
             capable.add(id.pubkey);
             indexer.indexerDb.getStakeWeightsByCapability.resolves([{ pubkey: id.pubkey, source: 's1', weight: '100' }]);
+            const batch = signBatch(sixRounds(), [id]);
             const data = v2Data();
-            await handler.parse(uncompressedParams(batchBody(signBatch(sixRounds(), [id]))), data, null);
+            await handler.parse(uncompressedParams(batchBody(batch)), data, null);
             assert.strictEqual(data['STATUS'], 'valid');
             assert.ok(indexer.indexerDb.getStakeWeightsByCapability.calledOnce);
-            assert.strictEqual(indexer.indexerDb.getStakeWeightsByCapability.firstCall.args[1], 100);
+            // The weights come from the same BTC anchor as the capable set, so the tally
+            // and the denominator can never be drawn from two different validator sets.
+            assert.strictEqual(indexer.indexerDb.getStakeWeightsByCapability.firstCall.args[1], batch.btcBlockHeight);
         });
 
         it('records the stake shortfall status when the signer stake is too thin', async function () {
@@ -831,9 +798,9 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 6. Storage
+    // 5. Storage
     // -----------------------------------------------------------------------
-    describe('storage (step 6)', function () {
+    describe('storage (step 5)', function () {
 
         it('stores round_number = FIRST_ROUND and the batch window columns', async function () {
             const data = v2Data();
@@ -892,9 +859,9 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 7. Hub push
+    // 6. Hub push
     // -----------------------------------------------------------------------
-    describe('hub push (step 7)', function () {
+    describe('hub push (step 6)', function () {
 
         // THE KEY SET. The hub's pushpricebatch handler destructures exactly these names
         // and nothing in the transport validates them, so a typo fails silently at runtime
@@ -975,7 +942,7 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
     // -----------------------------------------------------------------------
     // 8. No rewards
     // -----------------------------------------------------------------------
-    describe('rewards (step 8)', function () {
+    describe('rewards', function () {
 
         // THE PIN for D30. The oracle_round derivation lives inline in _parseV0 and is not
         // shared code, so _parseV2 simply never calls it. Without this test a later

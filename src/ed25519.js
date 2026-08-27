@@ -93,8 +93,7 @@ function buildPriceV0Payload(round, timestamp, pairs, network, btcBlockHeight) {
 //
 // The EQUIV header is UNCONDITIONAL here, unlike buildPriceV0Payload's height gate. v0
 // gates because it has pre-flag-day history whose bytes may not move; v2 has none (it is
-// invalid below its own PRICE_BATCH_ACTIVATION, and every network where it can be active
-// already has EQUIV active). The unwrapped bare-JSON form is also the exact shape that
+// ungated and every network it runs on already has EQUIV active). The unwrapped bare-JSON form is also the exact shape that
 // breaks SLASH's "an ORACLE-tagged canonical always carries `round`" invariant, which is
 // why v2 carries its own engine tag. Do NOT "fix" this into a v0-style gate.
 function buildPriceV2Payload(firstRound, lastRound, btcBlockHeight, rounds) {
