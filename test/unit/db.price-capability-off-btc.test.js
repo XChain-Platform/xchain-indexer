@@ -115,6 +115,18 @@ describe('price capability resolution off BTC @regression', function () {
             });
         });
 
+        // LTC carries the identical off-BTC scoping (coins/LTC.js:243 is byte-identical to
+        // coins/DOGE.js:248), and the predicate keys on COIN !== 'BTC', never on a specific
+        // coin, so LTC is covered by construction. This pins that construction so a later
+        // coin-specific "optimization" cannot quietly strand LTC the way prices were stranded.
+        it('getValidatorsByCapability reads capability_snapshots on LTC too, the predicate is coin-agnostic', async function () {
+            const { db, local, mirror } = dbFor('LTC', 'regtest');
+            const rows = await db.getValidatorsByCapability('price', SNAP_BLOCK);
+            assert.deepStrictEqual(rows.map(r => r.pubkey), ['aa11', 'bb22', 'cc33', 'dd44']);
+            assert.strictEqual(mirror.callCount, 1);
+            assert.strictEqual(local.callCount, 0, 'the empty local-stakes path must not be touched');
+        });
+
         it('getStakeWeightsByCapability reads the source-keyed mirrored weights', async function () {
             const { db, local, mirror } = dbFor('DOGE', 'regtest');
             const rows = await db.getStakeWeightsByCapability('price', SNAP_BLOCK);
