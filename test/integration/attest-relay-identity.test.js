@@ -42,6 +42,16 @@
  *   7. The dated migration's DDL executes, is idempotent, and produces an index
  *      byte-identical in shape to the one src/sql/attests.sql declares.
  *
+ * The same file now also covers getRelayRequestById, the request_id plane of the
+ * SAME v3 admission. It was the cheaper of the two attacks and it shipped counting
+ * rejected rows: request_id rides the wire and is public before the federation
+ * broadcasts, so one malformed v3 at a pending id was stored as rejected and then
+ * answered the guard for the real relay, permanently, for one transaction fee. It is
+ * a second raw predicate with the same stub-shaped blind spot, and its cases below
+ * pin the same seven properties plus one more: the SHARED lookup
+ * (getAttestationRequestById, four consensus callers) still returns the rejected row
+ * the narrow one hides, which is the ruling's actual constraint.
+ *
  * Self-skips when TEST_DB_PASS is unset, matching the other DB-backed files here.
  * Run it with bin/run-db-tiers.sh.
  */
@@ -101,6 +111,14 @@ describe('relay-identity lookup against a real MariaDB @tier3', function () {
             host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS, multipleStatements: true });
         await admin.query('DROP DATABASE IF EXISTS ' + DB_NAME + '; CREATE DATABASE ' + DB_NAME + ';');
         await admin.query('USE ' + DB_NAME + '; ' + ATTESTS_SQL);
+        // A stand-in for the one table getAttestationRequestById LEFT JOINs. The
+        // request_id comparison case needs the SHARED lookup to actually run against
+        // this schema, and without the join target its query is a 1146 that doQuery
+        // swallows into [] - which would make the shared lookup look like it excludes
+        // rejected rows when it does not. Columns are only what the join reads.
+        await admin.query('USE ' + DB_NAME +
+            '; CREATE TABLE IF NOT EXISTS index_addresses (' +
+            ' id BIGINT UNSIGNED NOT NULL PRIMARY KEY, address VARCHAR(128) NULL)');
         await admin.end();
 
         db = makeDb();
@@ -213,6 +231,110 @@ describe('relay-identity lookup against a real MariaDB @tier3', function () {
         const hit = await db.getRelayRequestByOrigin(ORIGIN, IDX);
         assert.ok(hit);
         assert.strictEqual(Number(hit.action_index), 15);
+    });
+
+    // ── 3b. the request_id plane (getRelayRequestById) ───────────────────────
+    //
+    // The sibling guard, and the one that shipped counting rejected rows. It runs on
+    // the SAME wire action, one line above the origin-identity check, and it is the
+    // cheaper attack of the two: request_id rides the wire and is derivable in public
+    // from the origin chain's v0, so a watcher does not even need a reorg. Everything
+    // below is the SQL half, which the unit tier reaches only through a stub.
+
+    describe('the request_id admission lookup', function () {
+        const RID   = 'a'.repeat(64);
+        const OTHER_RID = 'b'.repeat(64);
+
+        it('finds the admitted v0 row holding the id', async function () {
+            await row({ actionIndex: 50, requestId: RID });
+
+            const hit = await db.getRelayRequestById(RID);
+            assert.ok(hit, 'an admitted request_id must be found');
+            assert.strictEqual(Number(hit.action_index), 50);
+            assert.strictEqual(hit.request_status, 'pending');
+        });
+
+        it('returns null for an id this chain has never admitted', async function () {
+            await row({ actionIndex: 50, requestId: RID });
+            assert.strictEqual(await db.getRelayRequestById(OTHER_RID), null);
+        });
+
+        it('lower-cases the id, which arrives from the wire in any case', async function () {
+            await row({ actionIndex: 50, requestId: RID });
+            assert.ok(await db.getRelayRequestById(RID.toUpperCase()),
+                'the column is stored lower-case; an upper-case wire value must still match');
+        });
+
+        it('excludes a REJECTED row, so one malformed v3 cannot burn the id', async function () {
+            // The defect, driven against real SQL. A refused v3 is still written down
+            // with its request_id; if that audit row answered the guard, anyone could
+            // watch an origin chain, take the request_id of a request the federation is
+            // about to relay, and spend one transaction fee to make it permanently
+            // unservable.
+            await row({ actionIndex: 51, requestId: RID, status: 'rejected' });
+
+            assert.strictEqual(await db.getRelayRequestById(RID), null,
+                'a rejected verdict escrowed nothing and materialized nothing');
+        });
+
+        it('sees past the front-run to the real materialization behind it', async function () {
+            await row({ actionIndex: 51, requestId: RID, status: 'rejected' });
+            await row({ actionIndex: 52, requestId: RID, status: 'pending' });
+
+            const hit = await db.getRelayRequestById(RID);
+            assert.ok(hit);
+            assert.strictEqual(Number(hit.action_index), 52);
+        });
+
+        it('counts every NON-rejected lifecycle state, terminal ones included', async function () {
+            // The dangerous half of `<> 'rejected'`: a fulfilled or expired request DID
+            // materialize, so it must keep the id. Written this way rather than
+            // `= 'pending'` so a later tightening cannot re-open double materialization.
+            for (const status of ['fulfilled', 'expired', 'errored']) {
+                await conn(c => c.query('DELETE FROM attests'));
+                await row({ actionIndex: 53, requestId: RID, status });
+
+                const hit = await db.getRelayRequestById(RID);
+                assert.ok(hit, 'a ' + status + ' request already spent the id');
+                assert.strictEqual(hit.request_status, status);
+            }
+        });
+
+        it('excludes the v1 response row that carries the same request_id', async function () {
+            await row({ actionIndex: 54, version: 1, requestId: RID, status: null });
+
+            assert.strictEqual(await db.getRelayRequestById(RID), null,
+                'only a v0 request row consumes the id');
+        });
+
+        it('returns the FIRST admission when two rows share the id', async function () {
+            await row({ actionIndex: 56, requestId: RID, originActionIndex: IDX + 1 });
+            await row({ actionIndex: 55, requestId: RID });
+
+            assert.strictEqual(Number((await db.getRelayRequestById(RID)).action_index), 55);
+        });
+
+        it('THROWS on a query fault instead of reading as "the id is free"', async function () {
+            // Same consensus property as the origin lookup: null here ADMITS the v3.
+            await conn(c => c.query('RENAME TABLE attests TO attests_parked'));
+            try {
+                await assert.rejects(() => db.getRelayRequestById(RID), /attests/);
+            } finally {
+                await conn(c => c.query('RENAME TABLE attests_parked TO attests'));
+            }
+        });
+
+        it('leaves the shared row lookup answering for rejected rows', async function () {
+            // getAttestationRequestById keeps four consensus callers that need to see
+            // every stored row. The narrow query exists precisely so their behaviour did
+            // not have to change, and this is that promise asked of real SQL.
+            await row({ actionIndex: 57, requestId: RID, status: 'rejected' });
+
+            assert.ok(await db.getAttestationRequestById(RID),
+                'the shared lookup still returns the rejected row');
+            assert.strictEqual(await db.getRelayRequestById(RID), null,
+                'and the admission guard still does not');
+        });
     });
 
     // ── 4. ORDER BY action_index ─────────────────────────────────────────────

@@ -85,6 +85,7 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
         db.createAttestationRequest            = sinon.stub().resolves();
         db.getAttestationAdmissionCounts = sinon.stub().resolves({ total: 0, byContract: 0 });
         db.getAttestationRequestById           = sinon.stub().resolves(null);
+        db.getRelayRequestById                 = sinon.stub().resolves(null);
         db.getRelayRequestByOrigin             = sinon.stub().resolves(null);
         db.hasCapability                       = sinon.stub().resolves(true);
         db.createAttestationResponse           = sinon.stub().resolves();
@@ -340,12 +341,58 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
 
         it('rejects a request_id already materialized on this chain', async function () {
             indexer.config['COIN'] = 'BTC';
-            indexer.indexerDb.getAttestationRequestById.resolves(originRequestRow());
+            indexer.indexerDb.getRelayRequestById.resolves(originRequestRow());
             const data = createBaseData({ ACTION: 'ATTEST', FORMAT: 3, BLOCK_INDEX: 900000 });
 
             await handler.parse(v3Params(), data, null);
 
             assert.match(data['STATUS'], /already present/);
+        });
+
+        // The griefing shape the narrow lookup exists to close. request_id rides the
+        // wire and is derivable in public from the origin chain's v0, so a watcher can
+        // front-run the federation with a malformed v3 naming the pending id. That
+        // attempt is refused, but it is still STORED as a rejected audit row - and a
+        // dedupe that counted stored rows then answered "taken" for the federation's
+        // real relay, forever, for one transaction fee.
+        it('admits the federation relay after a malformed v3 front-ran its request_id', async function () {
+            indexer.config['COIN'] = 'BTC';
+
+            // Step one: the attacker's v3, malformed only in its provider, lands first.
+            const griefData = createBaseData({ ACTION: 'ATTEST', FORMAT: 3, BLOCK_INDEX: 900000 });
+            await handler.parse(v3Params({ providerId: 'not_a_provider' }), griefData, null);
+
+            assert.strictEqual(griefData['REQUEST_STATUS'], 'rejected',
+                'the front-run is refused, and the audit row is still written');
+            assert.strictEqual(griefData['REQUEST_ID'], REQ_ID,
+                'carrying the very request_id the federation is about to relay');
+
+            // Step two: the real relay arrives at the same id. The admitted-only lookup
+            // sees nothing, because nothing was admitted.
+            const realData = createBaseData({ ACTION: 'ATTEST', FORMAT: 3, BLOCK_INDEX: 900001 });
+            await handler.parse(v3Params(), realData, null);
+
+            assert.strictEqual(realData['STATUS'], 'valid');
+            assert.strictEqual(realData['REQUEST_STATUS'], 'pending',
+                'a stored rejected verdict must not consume the request_id');
+            assert.strictEqual(indexer.indexerDb.getRelayRequestById.calledWith(REQ_ID), true,
+                'the guard asks the admitted-only lookup, not the shared row lookup');
+        });
+
+        it('leaves the shared request lookup out of the v3 admission path entirely', async function () {
+            // The other half of the ruling: getAttestationRequestById keeps its current
+            // behaviour for the four consensus callers that need to see rejected rows
+            // (v1 response, v2 expiry, v4 relay response, slash round lookup), so the v3
+            // guard must not be reaching for it any more.
+            indexer.config['COIN'] = 'BTC';
+            indexer.indexerDb.getAttestationRequestById.resolves(originRequestRow());
+            const data = createBaseData({ ACTION: 'ATTEST', FORMAT: 3, BLOCK_INDEX: 900000 });
+
+            await handler.parse(v3Params(), data, null);
+
+            assert.strictEqual(indexer.indexerDb.getAttestationRequestById.called, false,
+                'a row the shared lookup would return must not decide v3 admission');
+            assert.strictEqual(data['STATUS'], 'valid');
         });
 
         // request_id derives from the ORIGIN tx_hash, so a deep origin reorg
@@ -360,7 +407,7 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
 
             await handler.parse(v3Params(), data, null);
 
-            assert.strictEqual(indexer.indexerDb.getAttestationRequestById.calledOnce, true,
+            assert.strictEqual(indexer.indexerDb.getRelayRequestById.calledOnce, true,
                 'the request_id guard must have passed: this is the case it cannot see');
             assert.match(data['STATUS'], /ORIGIN_ACTION_INDEX \(relay identity already materialized/);
             assert.strictEqual(data['REQUEST_STATUS'], 'rejected',

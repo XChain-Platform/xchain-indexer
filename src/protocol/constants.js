@@ -412,6 +412,42 @@ const PRICE_MAX = 10_000_000_000;
 // the ±band boundary). 0.05 = 5%.
 const ORACLE_DEVIATION_THRESHOLD = 0.05;
 
+// ── Oracle history the VM can see (db.getOracleDataForVM) ───────────────────
+// The VM's bridge is synchronous and runs in a forked worker, so oracle history
+// is PRE-LOADED and shipped across an IPC boundary before every execution. Both
+// numbers below bound that payload, and both are consensus inputs: they decide
+// which rounds a contract can read, and two nodes loading different rounds reach
+// different contract state.
+//
+// ORACLE_VM_ROUND_WINDOW is the window in ROUNDS, deliberately not in rows. A flat
+// row cap taken newest-first would make the visible history a function of how many
+// coin pairs the oracle happens to publish: at 36 pairs a 50,000-row cap is only
+// ~1,388 rounds, and every pair added narrows it further with no signal. A
+// round-denominated window is stable under pair growth, and it is the quantity a
+// contract reasons about.
+//
+// The window is also what makes the boundary VISIBLE. getOracleDataForVM returns
+// the oldest round the window guarantees, and the VM's accessor answers
+// "outside the loaded window" for anything below it instead of the same null it
+// returns for a round that never existed. Those two were indistinguishable, and
+// the price-bet family votes its void guard on exactly that null, so the loser of
+// a settled bet could reclaim their stake by waiting for the settle round to
+// scroll out of the preload.
+//
+// 1200 rounds is ~8.3 days at the oracle's 144-rounds-per-day cadence, and is
+// the largest whole-round window that fits under the row ceiling at today's 36
+// pairs (1200 x 36 = 43,200). db.oracle-round-window.test.js pins that
+// arithmetic, so adding pairs past the point where the ceiling starts truncating
+// reddens a suite rather than silently shrinking the window again.
+const ORACLE_VM_ROUND_WINDOW = 1200;
+
+// Hard ceiling on preloaded rows, unchanged from the flat cap it replaces so the
+// per-execution IPC payload does not regress. It is a backstop, not the window:
+// when it truncates, the oldest loaded round may be missing pairs, so the floor
+// reported to the VM rises above that round rather than claiming coverage the
+// payload does not have.
+const ORACLE_VM_MAX_ROWS = 50000;
+
 module.exports = {
     MAX_ACTION_DATA_LENGTH,
     OP_RETURN_PUSH_OVERHEAD,
@@ -444,4 +480,6 @@ module.exports = {
     GAS_TICK,
     PRICE_MAX,
     ORACLE_DEVIATION_THRESHOLD,
+    ORACLE_VM_ROUND_WINDOW,
+    ORACLE_VM_MAX_ROWS,
 };

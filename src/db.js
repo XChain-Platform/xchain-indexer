@@ -44,7 +44,9 @@ const stakeWeightCollation = require('./stake_weight_collation_activation');
 // byte-identical from xchain-documentation/protocol/constants.js, same convention
 // as the XCALL_MAX_CALLS_PER_BLOCK sibling it mirrors.
 const { ATTEST_MAX_EXPIRIES_PER_BLOCK,
-        CROSS_SETTLE_MAX_PER_BLOCK } = require('./protocol/constants.js');
+        CROSS_SETTLE_MAX_PER_BLOCK,
+        ORACLE_VM_ROUND_WINDOW,
+        ORACLE_VM_MAX_ROWS } = require('./protocol/constants.js');
 const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS,
         ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
         ARCHIVE_ANCHOR_BY_CONTENT_SQL, selectArchiveHeadRow,
@@ -14914,6 +14916,41 @@ class Database {
         return rows.length > 0 ? rows[0] : null;
     }
 
+    // Cross-chain relay: has THIS request_id already been ADMITTED on this chain?
+    //
+    // Narrow by design, and deliberately not a change to getAttestationRequestById
+    // above. That shared lookup answers "show me the request row for this id" and
+    // four consensus paths depend on it seeing every stored row, rejected verdicts
+    // included (v1 response resolution, v2 expiry, v4 relay response, slash round
+    // lookup). Only the v3 admission guard needs the narrower question, so only the
+    // v3 admission guard gets this query.
+    //
+    // 'rejected' rows are excluded for the same reason getRelayRequestByOrigin
+    // excludes them, and the omission was exploitable in exactly the shape that
+    // sibling was written to prevent. request_id arrives on the wire and is derivable
+    // in public from the origin chain's v0, so anyone can watch an origin chain, take
+    // the id of a request the federation is about to relay, and broadcast a
+    // deliberately malformed v3 naming it. The malformed one is rejected but still
+    // stored, and a guard that counts stored rows then reads that audit row as "this
+    // id is taken" and refuses the federation's real relay forever. One transaction
+    // fee, one permanently unservable request. A rejected row escrowed nothing, was
+    // never pending and was never served, so it consumed no materialization.
+    //
+    // ORDER BY action_index keeps the FIRST admission canonical on every node, and
+    // doQueryStrict for the reason spelled out on getRelayRequestByOrigin: null here
+    // is what ADMITS the v3, so a swallowed query error collapsing to [] would make
+    // one faulting node materialize a request every other node refused.
+    async getRelayRequestById(requestId){
+        let query = `SELECT action_index, request_id, request_status
+                     FROM attests
+                     WHERE request_id = ? AND version = 0
+                       AND request_status <> 'rejected'
+                     ORDER BY action_index ASC
+                     LIMIT 1`;
+        let rows = await this.doQueryStrict(query, [String(requestId || '').toLowerCase()]);
+        return rows.length > 0 ? rows[0] : null;
+    }
+
     // Update the request_status field on an ATTEST v0 (request) row
     // resolvedBlock anchors a TERMINAL flip ('fulfilled'/'errored'/'expired') to the
     // block that caused it, so the rollback pass can reset the surviving request row
@@ -15746,19 +15783,69 @@ class Database {
         // is "getPriceAtRound(settleRound) === null"). The prices/rounds
         // asymmetry is closed on the `prices` side above (stale tips are kept
         // with the price withheld) rather than by hiding history here.
+        // The window is taken in ROUNDS, then the rows of those rounds are loaded.
+        // The old shape was a flat row cap taken newest-first, which silently made
+        // the visible history a function of the pair count and, worse, left the
+        // eviction boundary invisible: a round outside the payload and a round that
+        // never existed both came back null, and the price-bet family's void guard
+        // reads exactly that null, so the loser of a settled bet could reclaim their
+        // stake by waiting for the settle round to scroll out of the preload.
+        //
+        // Ungated, on the same measurement Item 1 rests on and with the same expiry
+        // date: at the time of the change there were zero deployed contracts and zero
+        // executions on every live network, so getOracleDataForVM had never once run
+        // against a real contract and no replay observes any of this. Once a contract
+        // deploys, what this preload contains IS consensus history and any later
+        // change to the window needs an activation height.
+        //
+        // One number, not six: price_snapshots is a single hub-mirrored set and every
+        // chain path reads the identical rows, so the window applies fleet-wide rather
+        // than per chain.
         let rounds = {};
-        const MAX_ORACLE_ROUNDS = 50000;
+
+        // Step one: which rounds does the window cover? DISTINCT rounds, newest
+        // first, so the answer does not move when a pair is added or a pair misses a
+        // round. Fewer rounds than the window means nothing was evicted at all, and
+        // the floor stays 0: on a young chain (regtest, a fresh testnet) every round
+        // that ever existed is loaded, and a floor above 0 there would report rounds
+        // as "hidden" that simply never happened.
+        let windowRows = await this.doQuery(
+            `SELECT DISTINCT round_number
+             FROM price_snapshots
+             WHERE status = 'finalized' AND price IS NOT NULL AND reference_block <= ?
+             ORDER BY round_number DESC
+             LIMIT ${ORACLE_VM_ROUND_WINDOW}`, [blockCap]);
+        let roundFloor = (windowRows.length >= ORACLE_VM_ROUND_WINDOW)
+            ? Number(windowRows[windowRows.length - 1].round_number)
+            : 0;
+
+        // Step two: every row at or above the floor, under a hard payload ceiling.
         let roundQuery = `SELECT coin_pair, price, round_number, block_timestamp
                           FROM price_snapshots
                           WHERE status = 'finalized' AND price IS NOT NULL AND reference_block <= ?
+                            AND round_number >= ?
                           ORDER BY round_number DESC
-                          LIMIT ${MAX_ORACLE_ROUNDS}`;
-        let roundRows = await this.doQuery(roundQuery, [blockCap]);
-        if(roundRows.length >= MAX_ORACLE_ROUNDS)
-            console.error('[oracle snapshot] round set capped at ' + MAX_ORACLE_ROUNDS +
-                ' rows for block ' + blockIndex + ' - getPriceAtRound may miss older rounds');
+                          LIMIT ${ORACLE_VM_MAX_ROWS}`;
+        let roundRows = await this.doQuery(roundQuery, [blockCap, roundFloor]);
+
+        // The ceiling truncates newest-first, so the OLDEST loaded round is the one
+        // that may be missing pairs. Claiming it is covered would hand a contract the
+        // exact ambiguity this floor exists to remove, for the one round where a
+        // wrong answer is most likely, so the guarantee starts one round above it.
+        if(roundRows.length >= ORACLE_VM_MAX_ROWS){
+            let oldestLoaded = Number(roundRows[roundRows.length - 1].round_number);
+            roundFloor = oldestLoaded + 1;
+            console.error('[oracle snapshot] round set hit the ' + ORACLE_VM_MAX_ROWS +
+                ' row ceiling at block ' + blockIndex + ' - the guaranteed window is ' +
+                'now rounds >= ' + roundFloor + ', short of the ' + ORACLE_VM_ROUND_WINDOW +
+                '-round window (too many coin pairs for the ceiling)');
+        }
+
         for(let r of roundRows){
             let cp = String(r.coin_pair);
+            // A partial round above the raised floor is worse than no round: it would
+            // answer "never existed" for the pairs the ceiling cut off.
+            if(Number(r.round_number) < roundFloor) continue;
             if(!rounds[cp]) rounds[cp] = {};
             rounds[cp][String(r.round_number)] = {
                 price:       r.price,
@@ -15767,7 +15854,11 @@ class Database {
             };
         }
 
-        return { snapshotAge, prices, rounds };
+        // roundFloor rides along to the VM, where readonly-accessors.js turns a read
+        // below it into a distinguishable "outside the loaded window" answer instead
+        // of the null that means "this round never existed". 0 means nothing is
+        // hidden: the preload holds all the history there is.
+        return { snapshotAge, prices, rounds, roundFloor };
     }
 
     // Get the latest finalized price for a coin pair at or before a given block height
