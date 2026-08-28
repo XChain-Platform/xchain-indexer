@@ -41,6 +41,25 @@ const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('./stateHas
 // txid-keyed reads, which filter no version at all.
 const CHECKPOINT_VERSIONS = [1, 6, 7];
 
+// The subset of CHECKPOINT_VERSIONS that IS a checkpoint in its own right: a v7
+// bundle SECTION. The other members (1/6) are archive heads, which carry their
+// WRAPPER checkpoint's identity, so an archive head and a bundle section can and do
+// collide on one (chain, network, block_index, checkpoint_seq) key - both legs anchor
+// the same checkpoint, for different purposes. On that shared key the archive head is
+// typically the higher action_index, so a plain "newest wins" pick answers a
+// getanchoraction("is this checkpoint anchored") with the ARCHIVE head's txid and
+// status: a different transaction, a different verdict. The two families are therefore
+// ranked before recency (SQL and selectAnchorRow both), and only a version filter
+// reaches the archive leg on such a key.
+//
+// Derived by subtraction rather than written as [7] so that a future checkpoint
+// version added to CHECKPOINT_VERSIONS joins the section family automatically; the
+// archive family is ARCHIVE_HEAD_VERSIONS, which owns that definition already.
+const CHECKPOINT_SECTION_VERSIONS = CHECKPOINT_VERSIONS.filter(v => !ARCHIVE_HEAD_VERSIONS.includes(v));
+// SQL fragment form, spliced as `a.version ` + CHECKPOINT_SECTION_VERSIONS_SQL. Only
+// integers from the constant above are interpolated, never caller input.
+const CHECKPOINT_SECTION_VERSIONS_SQL = 'IN (' + CHECKPOINT_SECTION_VERSIONS.join(', ') + ')';
+
 // A DOGE txid as the hub announces it (XANC_V0_DONE.txid / XANC_FINALIZED.txid).
 const TXID_RE = /^[0-9a-fA-F]{64}$/;
 
@@ -51,11 +70,20 @@ const TXID_RE = /^[0-9a-fA-F]{64}$/;
 // a pathological identity can never stream unbounded rows into the RPC.
 const ANCHOR_ROW_LIMIT = 20;
 
-// Candidate anchor rows for a checkpoint identity, newest (highest action_index)
-// first, each carrying the DOGE txid it landed in. The txid is resolved through
+// Candidate anchor rows for a checkpoint identity, checkpoint SECTIONS before
+// archive heads and newest (highest action_index) first within each family, each
+// carrying the DOGE txid it landed in. The txid is resolved through
 // actions -> transactions -> index_transactions; LEFT JOINed so a row whose tx
 // linkage is missing still returns (txid null) instead of vanishing, which would
 // silently turn a present anchor into 'absent' for the hub.
+//
+// The family term ranks ahead of action_index for a reason the row limit makes
+// concrete: anyone can land additional v6 archive rows carrying this same wrapper
+// checkpoint identity, each at a higher action_index, and under a pure
+// action_index DESC order ANCHOR_ROW_LIMIT of those would push the real section row
+// out of the fetched window entirely. Then no downstream tie-break can recover it.
+// Ranking the family in the ORDER BY keeps the section inside the window no matter
+// how many archive rows share the key.
 const ANCHOR_ACTIONS_SQL =
     `SELECT a.action_index, a.version, a.chain, a.network, a.block_index,
             a.block_hash, a.ledger_hash, a.actions_hash, a.contract_hash,
@@ -69,7 +97,7 @@ const ANCHOR_ACTIONS_SQL =
      LEFT JOIN index_transactions it ON it.id           = t.tx_hash_id
      WHERE a.chain = ? AND a.network = ? AND a.block_index = ? AND a.checkpoint_seq = ?
        AND a.version IN (${CHECKPOINT_VERSIONS.map(() => '?').join(', ')})
-     ORDER BY a.action_index DESC
+     ORDER BY (a.version ${CHECKPOINT_SECTION_VERSIONS_SQL}) DESC, a.action_index DESC
      LIMIT ${ANCHOR_ROW_LIMIT}`;
 
 // Archive-batch authorship: a v2 continuation chunk carries no signatures of its
@@ -316,10 +344,24 @@ function validateAnchorActionParams({ chain, network, block_index, checkpoint_se
 }
 
 // Pick the anchor row a caller asked for from the candidate set. `rows` must be
-// ordered action_index DESC (ANCHOR_ACTIONS_SQL does this), so with no filter the
-// highest action_index wins, byte-identical to the pre-filter behavior: a
-// reorg-replayed re-anchor supersedes an earlier one. A supplied txid/version
-// narrows to that exact anchor. Returns null when nothing matches.
+// ordered action_index DESC within a version family (ANCHOR_ACTIONS_SQL does this),
+// so among rows of one family the highest action_index wins: a reorg-replayed
+// re-anchor supersedes an earlier one. A supplied txid/version narrows to that exact
+// anchor. Returns null when nothing matches.
+//
+// FAMILY BEFORE RECENCY. A checkpoint key can carry both a v7 bundle section and a
+// v1/v6 archive head (the archive wraps the same checkpoint), and the archive head
+// usually lands at the higher action_index. getanchoraction is a per-SECTION reader:
+// its unfiltered question is "is THIS checkpoint anchored", and answering it with the
+// co-located archive head hands the caller a different transaction's txid and status
+// while looking like a hit. So whenever any section row survives the caller's filters,
+// the pick comes from the section family.
+//
+// The fallback is what keeps the archive leg reachable: with no section row among the
+// candidates, the whole set is used, so an archive-only key still answers unfiltered,
+// and an explicit `version: 1`/`version: 6` still resolves to that head even when a
+// section shares the key. `txid` behaves the same way, since a txid that carries only
+// an archive head leaves no section to prefer.
 function selectAnchorRow(rows, filter) {
     let f = filter || {};
     let candidates = Array.isArray(rows) ? rows : [];
@@ -327,6 +369,8 @@ function selectAnchorRow(rows, filter) {
         candidates = candidates.filter(r => Number(r.version) === Number(f.version));
     if (f.txid)
         candidates = candidates.filter(r => String(r.txid || '').toLowerCase() === String(f.txid).toLowerCase());
+    let sections = candidates.filter(r => CHECKPOINT_SECTION_VERSIONS.includes(Number(r.version)));
+    if (sections.length > 0) candidates = sections;
     return candidates.length > 0 ? candidates[0] : null;
 }
 
@@ -640,7 +684,8 @@ function buildArchiveAnchorResponse(config, latest, head, chunkRows) {
 }
 
 module.exports = {
-    CHECKPOINT_VERSIONS, ANCHOR_ROW_LIMIT, ANCHOR_ACTIONS_SQL,
+    CHECKPOINT_VERSIONS, CHECKPOINT_SECTION_VERSIONS, CHECKPOINT_SECTION_VERSIONS_SQL,
+    ANCHOR_ROW_LIMIT, ANCHOR_ACTIONS_SQL,
     ARCHIVE_HEAD_AUTHOR_SQL, ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
     ARCHIVE_HEAD_GATE_SQL, dedupeArchiveChunks, archiveChunkCoverage,
     ARCHIVE_HEAD_VERSIONS, ARCHIVE_CRC_RE, ARCHIVE_ANCHOR_ROW_LIMIT,
