@@ -50,19 +50,42 @@ function crc32Hex(str) {
 }
 function gz64(str) { return zlib.gzipSync(Buffer.from(str, 'utf8'), { level: 9 }).toString('base64url'); }
 
-// ANCHOR v0 params (params[0] = VERSION, mirroring how actions.js splits the wire string)
-function v0Params(overrides = {}) {
+// ANCHOR v7 params (the per-network checkpoint bundle; params[0] = VERSION, mirroring how
+// actions.js splits the wire string): header, SECTION_COUNT sections in wire order, then
+// ONE publisher tail for the whole bundle. `section_count` overrides the declared count
+// independently of the sections actually emitted, so a lying header can be exercised.
+function v7Params(overrides = {}) {
     let f = Object.assign({
-        chain: 'BTC', network: 'regtest', block_index: '500', block_hash: HASH('0'),
-        ledger: HASH('1'), actions: HASH('2'), contracts: HASH('3'),
-        seq: '0', snapshot: '100',
-        sigs: [[PUBKEY_A, SIG]]
+        network: 'regtest', snapshot: '100',
+        sections: [{ chain: 'BTC' }],
+        publisher: PUBKEY_A, attest: [[PUBKEY_A, SIG]],
+        section_count: null
     }, overrides);
-    let p = ['0', f.chain, f.network, f.block_index, f.block_hash, f.ledger, f.actions, f.contracts,
-             f.seq, f.snapshot, String(f.sigs.length)];
-    for (let [pk, sg] of f.sigs) p.push(pk, sg);
+    let sections = f.sections.map(s => Object.assign({
+        chain: 'BTC', block_index: '500', block_hash: HASH('0'),
+        ledger: HASH('1'), actions: HASH('2'), contracts: HASH('3'),
+        seq: '0', snapshot: f.snapshot,
+        state_root: HASH('d'), state_root_version: '1',
+        block_merkle_root: HASH('e'), block_merkle_version: '1',
+        sigs: [[PUBKEY_A, SIG]]
+    }, s));
+    let p = ['7', f.network, f.snapshot,
+             String(f.section_count !== null ? f.section_count : sections.length)];
+    for (let s of sections) {
+        p.push(s.chain, s.block_index, s.block_hash, s.ledger, s.actions, s.contracts,
+               s.seq, s.snapshot, s.state_root, s.state_root_version,
+               s.block_merkle_root, s.block_merkle_version, String(s.sigs.length));
+        for (let [pk, sg] of s.sigs) p.push(pk, sg);
+    }
+    p.push(f.publisher, String(f.attest.length));
+    for (let [pk, sg] of f.attest) p.push(pk, sg);
     return p;
 }
+
+// A three-chain bundle in wire order (sections CHAIN ascending, D5): the AT1 shape.
+const THREE_CHAINS = [{ chain: 'BTC',  block_index: '500' },
+                      { chain: 'DOGE', block_index: '600' },
+                      { chain: 'LTC',  block_index: '700' }];
 
 function v1Params(archiveJson, overrides = {}) {
     let b64 = (overrides.archive_b64 !== undefined) ? overrides.archive_b64 : gz64(archiveJson);
@@ -80,62 +103,8 @@ function v1Params(archiveJson, overrides = {}) {
     return p;
 }
 
-// ANCHOR v3 params (SPV Phase 2): v0 fields + the two light-client roots + version
-// bytes appended before SIG_COUNT.
-function v3Params(overrides = {}) {
-    let f = Object.assign({
-        chain: 'BTC', network: 'regtest', block_index: '500', block_hash: HASH('0'),
-        ledger: HASH('1'), actions: HASH('2'), contracts: HASH('3'),
-        seq: '0', snapshot: '100',
-        state_root: HASH('d'), state_root_version: '1',
-        block_merkle_root: HASH('e'), block_merkle_version: '1',
-        sigs: [[PUBKEY_A, SIG]]
-    }, overrides);
-    let p = ['3', f.chain, f.network, f.block_index, f.block_hash, f.ledger, f.actions, f.contracts,
-             f.seq, f.snapshot, f.state_root, f.state_root_version, f.block_merkle_root, f.block_merkle_version,
-             String(f.sigs.length)];
-    for (let [pk, sg] of f.sigs) p.push(pk, sg);
-    return p;
-}
 
-// ANCHOR v4 params (anchor-reward, rootless): v0 fields + the root sig list, then the
-// PUBLISHER pubkey + the attestation sig list appended at the tail.
-function v4Params(overrides = {}) {
-    let f = Object.assign({
-        chain: 'BTC', network: 'regtest', block_index: '500', block_hash: HASH('0'),
-        ledger: HASH('1'), actions: HASH('2'), contracts: HASH('3'),
-        seq: '0', snapshot: '100',
-        sigs: [[PUBKEY_A, SIG]],
-        publisher: PUBKEY_A, attest: [[PUBKEY_A, SIG]]
-    }, overrides);
-    let p = ['4', f.chain, f.network, f.block_index, f.block_hash, f.ledger, f.actions, f.contracts,
-             f.seq, f.snapshot, String(f.sigs.length)];
-    for (let [pk, sg] of f.sigs) p.push(pk, sg);
-    p.push(f.publisher, String(f.attest.length));
-    for (let [pk, sg] of f.attest) p.push(pk, sg);
-    return p;
-}
 
-// ANCHOR v5 params (anchor-reward, root-bearing): v3 fields + the root sig list, then the
-// PUBLISHER pubkey + the attestation sig list appended at the tail.
-function v5Params(overrides = {}) {
-    let f = Object.assign({
-        chain: 'BTC', network: 'regtest', block_index: '500', block_hash: HASH('0'),
-        ledger: HASH('1'), actions: HASH('2'), contracts: HASH('3'),
-        seq: '0', snapshot: '100',
-        state_root: HASH('d'), state_root_version: '1',
-        block_merkle_root: HASH('e'), block_merkle_version: '1',
-        sigs: [[PUBKEY_A, SIG]],
-        publisher: PUBKEY_A, attest: [[PUBKEY_A, SIG]]
-    }, overrides);
-    let p = ['5', f.chain, f.network, f.block_index, f.block_hash, f.ledger, f.actions, f.contracts,
-             f.seq, f.snapshot, f.state_root, f.state_root_version, f.block_merkle_root, f.block_merkle_version,
-             String(f.sigs.length)];
-    for (let [pk, sg] of f.sigs) p.push(pk, sg);
-    p.push(f.publisher, String(f.attest.length));
-    for (let [pk, sg] of f.attest) p.push(pk, sg);
-    return p;
-}
 
 // ANCHOR v6 params (archive-reward): v1 fields + the wrapper sig list, then the
 // PUBLISHER pubkey + the attestation sig list appended at the tail.
@@ -205,207 +174,261 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
 
     function lastWrite() { return indexer.indexerDb.createAnchorAction.lastCall.args[0]; }
 
-    it('v0 with a quorum of valid oracle_publish sigs is valid and stored', async function () {
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
-        await handler.parse(v0Params(), data, null);
-        assert.strictEqual(data['STATUS'], 'valid');
-        let row = lastWrite();
-        assert.strictEqual(row['CHAIN'], 'BTC');
-        assert.strictEqual(row['BLOCK_INDEX_CHECKPOINTED'], '500');
-        assert.strictEqual(row['SNAPSHOT_BLOCK'], '100');
-        // Canonical covers the wire fields, byte-identical to the hub engine. EQUIV is
-        // active in regtest (WI-2 bump 2), so it is the v0 raw wrapped in the uniform
-        // header (TAG=XCHECKPOINT, ROUND_ID=chain|network|block|checkpoint_seq, VIEW=0).
-        let raw = ['XCHECKPOINT', 'BTC', 'regtest', '500', HASH('0'), HASH('1'), HASH('2'), HASH('3'), '0', '100'].join('|');
-        let expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, 'BTC|regtest|500|0', 0, raw);
-        assert.strictEqual(verifyStub.firstCall.args[0], expected);
-    });
+    function writtenRows() { return indexer.indexerDb.createAnchorAction.getCalls().map(c => c.args[0]); }
 
-    it('v3 (SPV Phase 2) with a quorum of valid sigs is valid, commits + stores the roots', async function () {
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 3, COIN: 'DOGE' });
-        await handler.parse(v3Params(), data, null);
+    // ── v7: the per-network checkpoint bundle ────────────────────────────────────────
+    it('v7 with a quorum of valid oracle_publish sigs is valid and stores one row per section', async function () {
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7, COIN: 'DOGE' });
+        await handler.parse(v7Params({ sections: THREE_CHAINS }), data, null);
         assert.strictEqual(data['STATUS'], 'valid');
-        let row = lastWrite();
-        assert.strictEqual(row['CHAIN'], 'BTC');
-        assert.strictEqual(row['STATE_ROOT'], HASH('d'));
-        assert.strictEqual(String(row['STATE_ROOT_VERSION']), '1');
-        assert.strictEqual(row['BLOCK_MERKLE_ROOT'], HASH('e'));
-        assert.strictEqual(String(row['BLOCK_MERKLE_VERSION']), '1');
-        // The signed canonical is the v0 raw + the SPV root suffix, EQUIV-wrapped (regtest).
+        let rows = writtenRows();
+        assert.strictEqual(rows.length, 3, 'three chains, three rows, ONE action');
+        assert.deepStrictEqual(rows.map(r => r['CHAIN']), ['BTC', 'DOGE', 'LTC']);
+        assert.deepStrictEqual(rows.map(r => Number(r['SECTION_INDEX'])), [0, 1, 2]);
+        assert.deepStrictEqual(rows.map(r => String(r['BLOCK_INDEX_CHECKPOINTED'])), ['500', '600', '700']);
+        // Every row carries the header network and the bundle's publisher tail.
+        for (let r of rows) {
+            assert.strictEqual(r['NETWORK'], 'regtest');
+            assert.strictEqual(r['PUBLISHER'], PUBKEY_A);
+            assert.strictEqual(r['STATE_ROOT'], HASH('d'));
+        }
+        // The signed section canonical is the per-chain XCHECKPOINT + root suffix, rebuilt
+        // with the HEADER network (the section's own network field is off the wire) and
+        // EQUIV-wrapped (regtest, WI-2 bump 2).
         let raw = ['XCHECKPOINT', 'BTC', 'regtest', '500', HASH('0'), HASH('1'), HASH('2'), HASH('3'), '0', '100',
                    HASH('d'), '1', HASH('e'), '1'].join('|');
         let expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, 'BTC|regtest|500|0', 0, raw);
         assert.strictEqual(verifyStub.firstCall.args[0], expected);
     });
 
-    it('v3 canonical appends the root suffix to the v0 base (hub byte-parity covered in e2e parity suite)', function () {
-        // The hub<->indexer<->SDK byte-identity is asserted in the cross-service suite
-        // (xchain-e2e-test .../parity/checkpointCommitmentParity.test.js); here we lock the
-        // indexer's own v3 canonical shape: v0 base + |STATE_ROOT|VER|BLOCK_MERKLE|VER, wrapped.
-        let d = {
-            FORMAT: 3, CHAIN: 'BTC', NETWORK: 'regtest', BLOCK_INDEX_CHECKPOINTED: 500,
-            BLOCK_HASH: HASH('0'), LEDGER_HASH: HASH('1'), ACTIONS_HASH: HASH('2'), CONTRACT_HASH: HASH('3'),
-            CHECKPOINT_SEQ: 0, SNAPSHOT_BLOCK: 100,
-            STATE_ROOT: HASH('d'), STATE_ROOT_VERSION: 1, BLOCK_MERKLE_ROOT: HASH('e'), BLOCK_MERKLE_VERSION: 1
-        };
-        let raw = ['XCHECKPOINT', 'BTC', 'regtest', '500', HASH('0'), HASH('1'), HASH('2'), HASH('3'), '0', '100',
-                   HASH('d'), '1', HASH('e'), '1'].join('|');
-        let expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, 'BTC|regtest|500|0', 0, raw);
-        assert.strictEqual(handler._canonical(d), expected);
+    it('v7 rejects a malformed STATE_ROOT, naming the section', async function () {
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7, COIN: 'DOGE' });
+        await handler.parse(v7Params({ sections: [{ chain: 'BTC' }, { chain: 'LTC', state_root: 'nothex' }] }), data, null);
+        assert.strictEqual(data['STATUS'], 'invalid: SECTION 1 STATE_ROOT (format)');
     });
 
-    it('v3 rejects a malformed STATE_ROOT', async function () {
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 3, COIN: 'DOGE' });
-        await handler.parse(v3Params({ state_root: 'nothex' }), data, null);
-        assert.ok(String(data['STATUS']).startsWith('invalid: STATE_ROOT'));
+    it('v7 rejects a rootless section: the bundle is root-bearing by construction', async function () {
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7, COIN: 'DOGE' });
+        await handler.parse(v7Params({ sections: [{ chain: 'BTC', block_merkle_root: '' }] }), data, null);
+        assert.strictEqual(data['STATUS'], 'invalid: SECTION 0 BLOCK_MERKLE_ROOT (format)');
     });
 
-    it('v3 is rejected before the CHECKPOINT_COMMITMENT flag-day', async function () {
-        let ckptStub = sinon.stub(require('../../../src/checkpoint_commitment_activation.js'),
-            'isCheckpointCommitmentActive').returns(false);
-        try {
-            let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 3, COIN: 'DOGE' });
-            await handler.parse(v3Params(), data, null);
-            assert.ok(String(data['STATUS']).startsWith('invalid: ANCHOR v3 before CHECKPOINT_COMMITMENT flag-day'));
-        } finally { ckptStub.restore(); }
+    it('v7 rejects a header SNAPSHOT_BLOCK that is not the section maximum', async function () {
+        // D6: the bundle block is the MAX over sections, because it is where the election
+        // and the attestation resolve. A higher header would move the attestation round
+        // onto a set no section signature is bound to.
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7, COIN: 'DOGE' });
+        await handler.parse(v7Params({ snapshot: '200', sections: [{ chain: 'BTC', snapshot: '100' }] }), data, null);
+        assert.strictEqual(data['STATUS'], 'invalid: SNAPSHOT_BLOCK (not the section maximum)');
+    });
+
+    it('v7 accepts a lagging section riding at its OWN snapshot block (D6)', async function () {
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7, COIN: 'DOGE' });
+        await handler.parse(v7Params({
+            snapshot: '100',
+            sections: [{ chain: 'BTC', snapshot: '100' }, { chain: 'LTC', snapshot: '94', seq: '0' }]
+        }), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+        assert.deepStrictEqual(writtenRows().map(r => String(r['SNAPSHOT_BLOCK'])), ['100', '94'],
+            'each section row keeps its own snapshot block, never the bundle MAX');
     });
 
     it('rejects ANCHOR on a non-DOGE chain', async function () {
         indexer.config['COIN'] = 'BTC';
         handler = new Anchor(indexer);
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0 });
-        await handler.parse(v0Params(), data, null);
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7 });
+        await handler.parse(v7Params(), data, null);
         assert.ok(String(data['STATUS']).startsWith('invalid: ANCHOR only valid on DOGE'));
     });
 
-    it('rejects a checkpoint for a different network', async function () {
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
-        await handler.parse(v0Params({ network: 'mainnet' }), data, null);
+    it('rejects a bundle for a different network', async function () {
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7, COIN: 'DOGE' });
+        await handler.parse(v7Params({ network: 'mainnet' }), data, null);
         assert.ok(String(data['STATUS']).startsWith('invalid: NETWORK'));
     });
 
-    it('enforces 2f+1: 2 valid sigs of a 4-validator set (quorum 3) is rejected', async function () {
+    it('enforces 2f+1 per section: 2 valid sigs of a 4-validator set (quorum 3) is rejected', async function () {
         indexer.indexerDb.getValidatorsByCapability.resolves(
             [PUBKEY_A, PUBKEY_B, PUBKEY_C, PUBKEY_D].map(pk => ({ pubkey: pk, amount: '1' })));
         verifyStub.callsFake((canon, sig, pk) => (pk === PUBKEY_A || pk === PUBKEY_B));
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
-        await handler.parse(v0Params({ sigs: [[PUBKEY_A, SIG], [PUBKEY_B, SIG], [PUBKEY_C, SIG]] }), data, null);
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7, COIN: 'DOGE' });
+        await handler.parse(v7Params({
+            sections: [{ chain: 'BTC', sigs: [[PUBKEY_A, SIG], [PUBKEY_B, SIG], [PUBKEY_C, SIG]] }]
+        }), data, null);
         // Message denominator is N (total snapshot validators), not the quorum;
-        // 2 valid signatures of a 4-validator set (quorum 3) → rejected.
-        assert.ok(String(data['STATUS']).startsWith('invalid: insufficient valid signatures (2/4)'));
+        // 2 valid signatures of a 4-validator set (quorum 3) -> rejected.
+        assert.strictEqual(data['STATUS'], 'invalid: SECTION 0 insufficient valid signatures (2/4)');
     });
 
     it('a garbage-then-valid duplicate for one signer still passes (seen marked AFTER verify; hub/SDK/explorer/sync parity)', async function () {
         // N=2 validators -> quorum 2, so BOTH A and B must count. The wire sig list is
         // attacker-influenceable: prepend an INVALID entry for B before its genuine one.
         // Marking "seen" on first encounter (the pre-fix order) would suppress B's real
-        // signature and reject a legitimately-quorate anchor (order-dependent under-count),
+        // signature and reject a legitimately-quorate section (order-dependent under-count),
         // disagreeing with the hub finalizer + SDK/explorer/sync verifiers on the same bytes.
         indexer.indexerDb.getValidatorsByCapability.resolves(
             [PUBKEY_A, PUBKEY_B].map(pk => ({ pubkey: pk, amount: '1' })));
         const BADSIG = '0'.repeat(128);
         verifyStub.callsFake((canon, sig, pk) => sig === SIG);
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
-        await handler.parse(v0Params({ sigs: [[PUBKEY_A, SIG], [PUBKEY_B, BADSIG], [PUBKEY_B, SIG]] }), data, null);
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7, COIN: 'DOGE' });
+        await handler.parse(v7Params({
+            sections: [{ chain: 'BTC', sigs: [[PUBKEY_A, SIG], [PUBKEY_B, BADSIG], [PUBKEY_B, SIG]] }]
+        }), data, null);
         assert.strictEqual(data['STATUS'], 'valid');
     });
 
     it('stores as unverified when no oracle_publish snapshot is mirrored locally', async function () {
         indexer.indexerDb.getValidatorsByCapability.resolves([]);
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
-        await handler.parse(v0Params(), data, null);
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7, COIN: 'DOGE' });
+        await handler.parse(v7Params({ sections: THREE_CHAINS }), data, null);
         assert.strictEqual(data['STATUS'], 'unverified');
-        assert.ok(indexer.indexerDb.createAnchorAction.calledOnce);   // stored regardless
+        assert.strictEqual(writtenRows().length, 3);                  // stored regardless
+        assert.ok(writtenRows().every(r => r['STATUS'] === 'unverified'),
+            'the verdict is one column on N rows: never a mix');
     });
 
-    // ── v4/v5: publisher-attestation + on-chain reward derivation ────────────────────
-    it('v4 with a valid publisher attestation is valid and DERIVES the reward (no push)', async function () {
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 4, COIN: 'DOGE' });
-        await handler.parse(v4Params(), data, null);
+    // ── AT7: one bad section takes the whole bundle down, with zero rewards ──────────
+    it('AT7: one STALE section invalidates the WHOLE bundle and writes no reward', async function () {
+        // The chain-scoped watermark says every chain is already anchored at seq 5. BTC and
+        // DOGE re-broadcast at 5 (equal is tolerated), LTC arrives at 4, which the hub's
+        // selector can never emit: it is a replay or a forgery.
+        indexer.indexerDb.getMaxAnchorCheckpointSeq.resolves(5);
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7, COIN: 'DOGE' });
+        await handler.parse(v7Params({
+            sections: [{ chain: 'BTC', block_index: '500', seq: '5' },
+                       { chain: 'DOGE', block_index: '600', seq: '5' },
+                       { chain: 'LTC', block_index: '700', seq: '4' }]
+        }), data, null);
+        assert.strictEqual(data['STATUS'],
+            'invalid: SECTION 2 CHECKPOINT_SEQ (stale; replay of an older checkpoint)');
+        assert.ok(indexer.indexerDb.createValidatorReward.notCalled,
+            'a bundle with a bad section pays nothing, not even for its good sections');
+        assert.ok(indexer.indexerDb.reconcileAnchorRewardWinner.notCalled);
+        let rows = writtenRows();
+        assert.strictEqual(rows.length, 3, 'every section is still recorded on chain');
+        assert.ok(rows.every(r => r['STATUS'] === data['STATUS']),
+            'the verdict is all-or-nothing: no section row is left valid');
+    });
+
+    it('D39: two sections naming the same CHAIN invalidate the WHOLE bundle and write no reward', async function () {
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7, COIN: 'DOGE' });
+        await handler.parse(v7Params({
+            sections: [{ chain: 'BTC', block_index: '500' },
+                       { chain: 'LTC', block_index: '700' },
+                       { chain: 'BTC', block_index: '501' }]
+        }), data, null);
+        assert.strictEqual(data['STATUS'], 'invalid: SECTION 2 CHAIN (duplicate)');
+        assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
+        assert.ok(indexer.indexerDb.reconcileAnchorRewardWinner.notCalled);
+        assert.ok(writtenRows().every(r => r['STATUS'] === data['STATUS']),
+            'no section row survives a duplicate-chain bundle as valid');
+    });
+
+    it('D39: the duplicate is named by the LATER section, not the first claim', async function () {
+        // The reason has to point at the section that repeats, or an operator reading the
+        // status goes looking at the legitimate first claim.
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7, COIN: 'DOGE' });
+        await handler.parse(v7Params({
+            sections: [{ chain: 'DOGE' }, { chain: 'DOGE' }]
+        }), data, null);
+        assert.strictEqual(data['STATUS'], 'invalid: SECTION 1 CHAIN (duplicate)');
+    });
+
+    it('D39: three DISTINCT chains are unaffected by the guard', async function () {
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7, COIN: 'DOGE' });
+        await handler.parse(v7Params({ sections: THREE_CHAINS }), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+        assert.strictEqual(writtenRows().length, 3);
+    });
+
+    it('an EQUAL section seq is tolerated (a signature-bound re-broadcast, not a replay)', async function () {
+        indexer.indexerDb.getMaxAnchorCheckpointSeq.resolves(5);
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7, COIN: 'DOGE' });
+        await handler.parse(v7Params({ sections: [{ chain: 'BTC', seq: '5' }] }), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+    });
+
+    // ── the bundle reward ────────────────────────────────────────────────────────────
+    it('v7 with a valid publisher attestation DERIVES exactly ONE anchor_bundle reward', async function () {
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7, COIN: 'DOGE' });
+        await handler.parse(v7Params({ sections: THREE_CHAINS }), data, null);
         assert.strictEqual(data['STATUS'], 'valid');
         assert.strictEqual(data['PUBLISHER'], PUBKEY_A);
-        assert.ok(indexer.indexerDb.createValidatorReward.calledOnce);
-        // (pubkeyHex, roundReference, rewardType, amount, blockIndex, upsert, deriveBlockIndex,
-        // roundQualifier) - frozen amount, NOT wire. The per-chain legs are never qualified:
-        // their round_reference is CHECKPOINT_SEQ, a height that only advances.
+        assert.ok(indexer.indexerDb.createValidatorReward.calledOnce,
+            'ONE reward per bundle, not one per section');
+        // (pubkeyHex, roundReference, rewardType, amount, blockIndex, upsert,
+        // deriveBlockIndex, roundQualifier) - frozen amount, NOT wire. round_reference is
+        // SNAPSHOT_BLOCK, a height that only advances, so the qualifier stays 0.
         assert.deepStrictEqual(indexer.indexerDb.createValidatorReward.firstCall.args,
-            [PUBKEY_A, 0, 'anchor_BTC', '10.00000000', 100, true, null, 0]);
-        assert.ok(indexer.indexerDb.reconcileAnchorRewardWinner.calledOnceWith(0, 'anchor_BTC'));
+            [PUBKEY_A, 100, 'anchor_bundle', '10.00000000', 100, true, null, 0]);
+        assert.ok(indexer.indexerDb.reconcileAnchorRewardWinner.calledOnceWith(100, 'anchor_bundle'));
     });
 
-    it('at/above the derive-relocation gate the DOGE-side write is SKIPPED (relocated to BTC), anchor still valid', async function () {
+    it('at/above the derive-relocation gate the DOGE-side write is SKIPPED (relocated to BTC), bundle still valid', async function () {
         deriveGateStub.returns(true);                                   // derive relocated to the BTC indexer
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 4, COIN: 'DOGE' });
-        await handler.parse(v4Params(), data, null);
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7, COIN: 'DOGE' });
+        await handler.parse(v7Params({ sections: THREE_CHAINS }), data, null);
         assert.strictEqual(data['STATUS'], 'valid');                    // attestation verification unaffected
         assert.strictEqual(data['PUBLISHER'], PUBKEY_A);
         assert.ok(indexer.indexerDb.createValidatorReward.notCalled, 'DOGE no longer writes the reward at/above the gate');
         assert.ok(indexer.indexerDb.reconcileAnchorRewardWinner.notCalled);
-        assert.ok(indexer.indexerDb.createAnchorAction.calledOnce);     // the anchor is still recorded
+        assert.strictEqual(writtenRows().length, 3);                    // the sections are still recorded
     });
 
-    it('v5 (root-bearing) is valid, stores the roots, and derives the reward', async function () {
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 5, COIN: 'DOGE' });
-        await handler.parse(v5Params(), data, null);
-        assert.strictEqual(data['STATUS'], 'valid');
-        assert.strictEqual(lastWrite()['STATE_ROOT'], HASH('d'));
-        assert.deepStrictEqual(indexer.indexerDb.createValidatorReward.firstCall.args,
-            [PUBKEY_A, 0, 'anchor_BTC', '10.00000000', 100, true, null, 0]);
-    });
-
-    it('v4 is rejected before the ANCHOR_REWARD flag-day', async function () {
-        let arStub = sinon.stub(require('../../../src/anchor_reward_activation.js'),
-            'isAnchorRewardActive').returns(false);
-        try {
-            let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 4, COIN: 'DOGE' });
-            await handler.parse(v4Params(), data, null);
-            assert.ok(String(data['STATUS']).startsWith('invalid: ANCHOR v4 before ANCHOR_REWARD flag-day'));
-            assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
-        } finally { arStub.restore(); }
-    });
-
-    it('v4 keeps the anchor valid but SKIPS the reward when PUBLISHER is not in the oracle_publish set', async function () {
+    it('v7 keeps the bundle valid but SKIPS the reward when PUBLISHER is not in the oracle_publish set', async function () {
         // Snapshot = {A}; attestation quorum from A is valid, but the named PUBLISHER is B.
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 4, COIN: 'DOGE' });
-        await handler.parse(v4Params({ publisher: PUBKEY_B }), data, null);
-        assert.strictEqual(data['STATUS'], 'valid');                 // anchor still lands
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7, COIN: 'DOGE' });
+        await handler.parse(v7Params({ publisher: PUBKEY_B }), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');                 // the anchor still lands
         assert.ok(indexer.indexerDb.createValidatorReward.notCalled); // reward denied
     });
 
-    it('v4 keeps the anchor valid but SKIPS the reward when the attestation quorum is short', async function () {
+    it('v7 keeps the bundle valid but SKIPS the reward when the attestation quorum is short', async function () {
         // Snapshot = {A}; the only attestation sig is from B (not in the set) -> 0 valid attesters.
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 4, COIN: 'DOGE' });
-        await handler.parse(v4Params({ attest: [[PUBKEY_B, SIG]] }), data, null);
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7, COIN: 'DOGE' });
+        await handler.parse(v7Params({ attest: [[PUBKEY_B, SIG]] }), data, null);
         assert.strictEqual(data['STATUS'], 'valid');
         assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
     });
 
-    it('v4 rejects a malformed PUBLISHER', async function () {
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 4, COIN: 'DOGE' });
-        await handler.parse(v4Params({ publisher: 'nothex' }), data, null);
+    it('v7 rejects a malformed PUBLISHER', async function () {
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7, COIN: 'DOGE' });
+        await handler.parse(v7Params({ publisher: 'nothex' }), data, null);
         assert.ok(String(data['STATUS']).startsWith('invalid: PUBLISHER format'));
         assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
     });
 
-    it('reward (XANCPUB) canonical: XANCPUB|anchor_<CHAIN>|seq|snapshot|publisher|amount, EQUIV-wrapped', function () {
-        let d = {
-            FORMAT: 4, CHAIN: 'BTC', NETWORK: 'regtest', CHECKPOINT_SEQ: 0, SNAPSHOT_BLOCK: 100,
-            PUBLISHER: PUBKEY_A
-        };
-        let raw = ['XANCPUB', 'anchor_BTC', '0', '100', PUBKEY_A, '10.00000000'].join('|');
-        let expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, 'XANCPUB|BTC|regtest|0|100', 0, raw);
+    it('bundle reward (XANCPUB) canonical: six positional fields with snapshot_block at index 3', function () {
+        // D22: the layout keeps SIX fields, round_reference repeated as the snapshot block,
+        // so slash.js's XANCPUB branch (index 3) judges a bundle equivocation with no third
+        // case. A five-field draft would have made every bundle equivocation read
+        // 'invalid: snapshot_block'.
+        let d = { FORMAT: 7, NETWORK: 'regtest', SNAPSHOT_BLOCK: 100, PUBLISHER: PUBKEY_A };
+        let raw = ['XANCPUB', 'anchor_bundle', '100', '100', PUBKEY_A, '10.00000000'].join('|');
+        let expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, 'XANCPUB|bundle|regtest|100', 0, raw);
         assert.strictEqual(handler._rewardCanonical(d), expected);
+        // The content slash.js reads sits after the '||' separator; field 3 is the block.
+        assert.strictEqual(expected.split('||')[1].split('|')[3], '100');
     });
 
-    it('determinism: two independent parses of identical v4 bytes derive the identical reward row', async function () {
+    it('determinism: two independent parses of identical v7 bytes derive the identical reward row', async function () {
         let h2 = new Anchor(indexer);
-        let d1 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 4, COIN: 'DOGE' });
-        let d2 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 4, COIN: 'DOGE' });
-        await handler.parse(v4Params(), d1, null);
+        let d1 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7, COIN: 'DOGE' });
+        let d2 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7, COIN: 'DOGE' });
+        await handler.parse(v7Params({ sections: THREE_CHAINS }), d1, null);
         let firstArgs = indexer.indexerDb.createValidatorReward.lastCall.args;
-        await h2.parse(v4Params(), d2, null);
+        await h2.parse(v7Params({ sections: THREE_CHAINS }), d2, null);
         let secondArgs = indexer.indexerDb.createValidatorReward.lastCall.args;
         assert.deepStrictEqual(firstArgs, secondArgs);
+    });
+
+    it('the retired per-chain versions no longer parse at all (D2)', async function () {
+        for (const v of [0, 3, 4, 5]) {
+            let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: v, COIN: 'DOGE' });
+            await handler.parse(['' + v, 'BTC', 'regtest'], data, null);
+            assert.strictEqual(data['STATUS'], 'invalid: VERSION (unknown)',
+                'ANCHOR v' + v + ' is retired; its parser is deleted, not merely unused');
+        }
     });
 
     // ── v6: archive publisher-attestation + anchor_archive reward derivation ──
@@ -544,14 +567,14 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         assert.deepStrictEqual(firstArgs, secondArgs);
     });
 
-    it('replay guard: a checkpoint_seq below the recorded max is stale; equal is allowed (v0+v1 pairs share a seq)', async function () {
+    it('replay guard: a checkpoint_seq below the recorded max is stale; equal is allowed (a v7 section and its v1 archive share a seq)', async function () {
         indexer.indexerDb.getMaxAnchorCheckpointSeq.resolves(5);
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
-        await handler.parse(v0Params({ seq: '4' }), data, null);
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
+        await handler.parse(v1Params(ARCHIVE_JSON, { seq: '4' }), data, null);
         assert.ok(String(data['STATUS']).startsWith('invalid: CHECKPOINT_SEQ (stale'));
 
-        let data2 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE', ACTION_INDEX: 2 });
-        await handler.parse(v0Params({ seq: '5' }), data2, null);
+        let data2 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE', ACTION_INDEX: 2 });
+        await handler.parse(v1Params(ARCHIVE_JSON, { seq: '5' }), data2, null);
         assert.strictEqual(data2['STATUS'], 'valid');
     });
 

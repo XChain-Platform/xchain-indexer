@@ -885,7 +885,12 @@ class AnchorRecovery {
                 // its own ARCHIVE_REWARD flag-day (derived from the ANCHOR v6 attestation
                 // with the frozen ARCHIVE_REWARD_AMOUNT); below each flag-day the legacy
                 // operator-tunable amount is kept as archived (matches the live push path).
-                let derivedChainReward   = /^anchor_(BTC|LTC|DOGE)$/.test(String(r.reward_type)) &&
+                // anchor_bundle (ANCHOR v7) rides the per-chain pin: it is the same
+                // ANCHOR_REWARD_AMOUNT under the same anchor-reward flag-day, one per
+                // per-network bundle instead of one per chain. Without it an archived
+                // bundle reward would be staged at whatever amount the archive claims.
+                let derivedChainReward   = (/^anchor_(BTC|LTC|DOGE)$/.test(String(r.reward_type)) ||
+                                            String(r.reward_type) === 'anchor_bundle') &&
                                            ar.isAnchorRewardActive(Number(r.block_index), network);
                 let derivedArchiveReward = String(r.reward_type) === 'anchor_archive' &&
                                            ar.isArchiveRewardActive(Number(r.block_index), network);

@@ -171,6 +171,18 @@ describe('canonicalizeRewardType() naming @regression @tier1', function () {
         assert.strictEqual(canonicalizeRewardType('anchor_archive_x'), 'anchor_archive_x');
     });
 
+    it('lowercases anchor_bundle to its canonical form (ANCHOR v7)', function () {
+        // The bundle reward names a LEG, not a chain, so it canonicalizes lowercase the
+        // way anchor_archive does. The refusal must spell it the way the derived row does.
+        assert.strictEqual(canonicalizeRewardType('anchor_bundle'), 'anchor_bundle');
+        assert.strictEqual(canonicalizeRewardType('Anchor_Bundle'), 'anchor_bundle');
+        assert.strictEqual(canonicalizeRewardType('ANCHOR_BUNDLE'), 'anchor_bundle');
+        // A decorated variant is not the bundle type; left alone.
+        assert.strictEqual(canonicalizeRewardType('anchor_bundle_x'), 'anchor_bundle_x');
+        assert.ok(rewardPushRetiredError('ANCHOR_BUNDLE').includes('anchor_bundle'),
+            'the refusal names the type with the spelling the derived row carries');
+    });
+
     it('passes non-chain reward types through verbatim (no over-normalization)', function () {
         assert.strictEqual(canonicalizeRewardType('oracle_round'),   'oracle_round');
         assert.strictEqual(canonicalizeRewardType('attest_fee'),     'attest_fee');

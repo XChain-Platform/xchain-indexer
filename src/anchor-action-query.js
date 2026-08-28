@@ -29,7 +29,17 @@ const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('./stateHas
 // checkpoint_seq + the state hashes). Version 2 is an archive continuation chunk with
 // no checkpoint identity of its own, so it is never a getanchoraction match. Kept here
 // as the single source of truth for both the SQL filter and the tests.
-const CHECKPOINT_VERSIONS = [0, 1, 3, 4, 5, 6];
+//
+// 7 is the checkpoint BUNDLE, whose rows are per-SECTION and each carry a full
+// checkpoint identity, so a (chain, network, block_index, checkpoint_seq) lookup
+// resolves to exactly the section row the caller asked for and needs no new RPC (D17).
+// 1 and 6 are the archive legs, which carry the wrapper checkpoint's identity. The
+// retired 0/3/4/5 are OUT: the indexer no longer parses them, so admitting them here
+// would let a pre-retirement row keep raising the replay watermark
+// (getMaxAnchorCheckpointSeq reads this same set) against bundles it can never be
+// compared with. Rows on chain keep their version byte and stay readable through the
+// txid-keyed reads, which filter no version at all.
+const CHECKPOINT_VERSIONS = [1, 6, 7];
 
 // A DOGE txid as the hub announces it (XANC_V0_DONE.txid / XANC_FINALIZED.txid).
 const TXID_RE = /^[0-9a-fA-F]{64}$/;

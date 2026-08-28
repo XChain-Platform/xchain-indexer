@@ -1,29 +1,94 @@
 {
-  "$schema_note": "FROZEN ANCHOR canonical WIRE vectors. This is the byte-for-byte broadcast payload of an ANCHOR action per protocol version. It is the consensus contract between the xchain-hub PRODUCER (StateAnchorPublisher._buildV0/V3/V4/V5Payload) and the xchain-indexer PARSER (src/actions/anchor.js formats[0,3,4,5] positional extraction). A one-character field-order drift between the two silently forks validator signatures (followers fail to co-sign, or recovery rebuilds divergent state) with NO build/test failure unless these vectors are asserted on both sides.",
+  "$schema_note": "FROZEN ANCHOR canonical WIRE vectors. This is the byte-for-byte broadcast payload of an ANCHOR action per protocol version. It is the consensus contract between the xchain-hub PRODUCER (StateAnchorPublisher._buildV7Payload) and the xchain-indexer PARSER (src/actions/anchor.js formats[7] positional extraction). A one-character field-order drift between the two silently forks validator signatures (followers fail to co-sign, or recovery rebuilds divergent state) with NO build/test failure unless these vectors are asserted on both sides.",
   "authority": "xchain-documentation/protocol/test-vectors/anchor_canonical.json is authoritative. xchain-hub/test/fixtures and xchain-indexer/test/fixtures vendor byte-identical copies so each repo CI can assert without a sibling checkout. Keep all three identical.",
   "regeneration": "Regenerate ONLY on an intentional, fleet-coordinated ANCHOR wire-format change (a NEW version byte), never to make a test pass. v1/v2 (archive batch + continuation chunk) are intentionally out of scope here; they carry a compressed/base64 blob and are covered by the archive round-trip tests.",
   "field_order": {
-    "v0": "ANCHOR|VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|SIG_COUNT|(PUBKEY|SIG)...",
-    "v3": "v0 fields + STATE_ROOT|STATE_ROOT_VERSION|BLOCK_MERKLE_ROOT|BLOCK_MERKLE_VERSION inserted before SIG_COUNT",
-    "v4": "v0 fields + ...|SIG_COUNT|(PUBKEY|SIG)...|PUBLISHER|ATTEST_SIG_COUNT|(APUBKEY|ASIG)...",
-    "v5": "v3 fields + the v4 publisher/attestation tail"
+    "v7": "ANCHOR|7|NETWORK|SNAPSHOT_BLOCK|SECTION_COUNT|{CHAIN|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SECTION_SNAPSHOT_BLOCK|STATE_ROOT|STATE_ROOT_VERSION|BLOCK_MERKLE_ROOT|BLOCK_MERKLE_VERSION|SIG_COUNT|(PUBKEY|SIG)...} x SECTION_COUNT|PUBLISHER|ATTEST_SIG_COUNT|(APUBKEY|ASIG)...",
+    "v7_rules": "Sections ordered by CHAIN ascending (byte order). Within a section the (PUBKEY,SIG) pairs are ordered by PUBKEY ascending. The bundle SNAPSHOT_BLOCK is the MAX of the sections SECTION_SNAPSHOT_BLOCK. Each section omits NETWORK; the indexer rebuilds every section canonical (XCHECKPOINT|CHAIN|NETWORK|...) with the header NETWORK. The fixture below deliberately lists sections and one signature list OUT of order so both producer and parser tests prove they apply the ordering rules rather than echo fixture order. Retired versions 0/3/4/5 (one anchor per chain) were removed from this file on 2026-08-28 by operator ruling (pre-launch, superseded wires deleted)."
   },
   "fixture": {
-    "row": {
-      "chain": "DOGE",
+    "bundle": {
       "network": "regtest",
-      "block_index": 5000000,
-      "block_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "ledger_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-      "actions_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-      "contract_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-      "checkpoint_seq": 42,
       "snapshot_block": 100,
-      "state_root": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-      "state_root_version": 1,
-      "block_merkle_root": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-      "block_merkle_version": 1,
-      "validator_signatures": [
+      "sections": [
+        {
+          "chain": "LTC",
+          "network": "regtest",
+          "block_index": 7000000,
+          "block_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "ledger_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "actions_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "contract_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "checkpoint_seq": 42,
+          "snapshot_block": 100,
+          "state_root": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "state_root_version": 1,
+          "block_merkle_root": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "block_merkle_version": 1,
+          "validator_signatures": [
+            {
+              "pubkey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "sig": "11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
+            },
+            {
+              "pubkey": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "sig": "22222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222"
+            }
+          ]
+        },
+        {
+          "chain": "BTC",
+          "network": "regtest",
+          "block_index": 900000,
+          "block_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "ledger_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "actions_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "contract_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "checkpoint_seq": 42,
+          "snapshot_block": 100,
+          "state_root": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "state_root_version": 1,
+          "block_merkle_root": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "block_merkle_version": 1,
+          "validator_signatures": [
+            {
+              "pubkey": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "sig": "22222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222"
+            },
+            {
+              "pubkey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "sig": "11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
+            }
+          ]
+        },
+        {
+          "chain": "DOGE",
+          "network": "regtest",
+          "block_index": 5000000,
+          "block_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "ledger_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "actions_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "contract_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "checkpoint_seq": 42,
+          "snapshot_block": 100,
+          "state_root": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "state_root_version": 1,
+          "block_merkle_root": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "block_merkle_version": 1,
+          "validator_signatures": [
+            {
+              "pubkey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "sig": "11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
+            },
+            {
+              "pubkey": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "sig": "22222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222"
+            }
+          ]
+        }
+      ],
+      "publisher": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "attest_sigs": [
         {
           "pubkey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           "sig": "11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
@@ -33,23 +98,9 @@
           "sig": "22222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222"
         }
       ]
-    },
-    "publisher": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "attest_sigs": [
-      {
-        "pubkey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "sig": "11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
-      },
-      {
-        "pubkey": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-        "sig": "22222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222"
-      }
-    ]
+    }
   },
   "vectors": {
-    "v0": "ANCHOR|0|DOGE|regtest|5000000|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc|dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|42|100|2|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|22222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222",
-    "v3": "ANCHOR|3|DOGE|regtest|5000000|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc|dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|42|100|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|1|ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|2|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|22222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222",
-    "v4": "ANCHOR|4|DOGE|regtest|5000000|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc|dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|42|100|2|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|22222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|2|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|22222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222",
-    "v5": "ANCHOR|5|DOGE|regtest|5000000|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc|dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|42|100|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|1|ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|2|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|22222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|2|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|22222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222"
+    "v7": "ANCHOR|7|regtest|100|3|BTC|900000|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc|dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|42|100|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|1|ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|2|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|22222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222|DOGE|5000000|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc|dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|42|100|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|1|ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|2|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|22222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222|LTC|7000000|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc|dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|42|100|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|1|ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|2|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|22222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|2|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|22222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222"
   }
 }

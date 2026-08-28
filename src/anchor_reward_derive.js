@@ -76,7 +76,22 @@ function rewardCanonical(row){
         }
         return base;
     }
-    // Per-chain (v4/v5): reward_type is 'anchor_<CHAIN>'; CHAIN drives the disjoint roundId.
+    if(String(row.reward_type) === 'anchor_bundle'){
+        // Bundle leg (v7): ONE reward per per-network bundle. round_reference IS the
+        // snapshot block, so field 2 and field 3 repeat it; the six-field positional
+        // layout is kept so slash.js reads snapshot_block at index 3 for every XANCPUB
+        // family. MUST byte-match anchor.js._rewardCanonical's v7 branch and the hub's
+        // bundle attestation canonical.
+        let base = ['XANCPUB', 'anchor_bundle', roundReference,
+                    String(snapshotBlock), publisher, ar.ANCHOR_REWARD_AMOUNT].join('|');
+        if(eq.isEquivHeaderActive(snapshotBlock, network)){
+            let roundId = 'XANCPUB|bundle|' + network + '|' + snapshotBlock;
+            return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, roundId, 0, base);
+        }
+        return base;
+    }
+    // Per-chain (retired v4/v5 rows still mirrored): reward_type is 'anchor_<CHAIN>';
+    // CHAIN drives the disjoint roundId.
     let chain = String(row.reward_type).slice('anchor_'.length);
     let base = ['XANCPUB', 'anchor_' + chain, roundReference,
                 String(snapshotBlock), publisher, ar.ANCHOR_REWARD_AMOUNT].join('|');

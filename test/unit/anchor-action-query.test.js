@@ -39,8 +39,16 @@ function anchorRow(overrides) {
 
 describe('anchor-action-query: CHECKPOINT_VERSIONS', function () {
     it('is exactly the checkpoint-bearing versions (v2 continuation excluded)', function () {
-        assert.deepStrictEqual(CHECKPOINT_VERSIONS, [0, 1, 3, 4, 5, 6]);
+        // 7 is the bundle SECTION, which carries a full checkpoint identity of its own;
+        // 1 and 6 are the archive legs, which carry their wrapper checkpoint's. The
+        // retired 0/3/4/5 are OUT: nothing parses them any more, and admitting them would
+        // let a pre-retirement row keep raising the replay watermark that
+        // getMaxAnchorCheckpointSeq reads off this same set.
+        assert.deepStrictEqual(CHECKPOINT_VERSIONS, [1, 6, 7]);
         assert.ok(!CHECKPOINT_VERSIONS.includes(2), 'v2 (archive continuation) is not a checkpoint');
+        for (const retired of [0, 3, 4, 5])
+            assert.ok(!CHECKPOINT_VERSIONS.includes(retired),
+                'ANCHOR v' + retired + ' is retired (D2) and must not re-enter the checkpoint set');
     });
 });
 
@@ -200,7 +208,8 @@ describe('anchor-action-query: validateAnchorActionParams() txid/version', funct
 
     it('accepts a checkpoint-bearing version and rejects v2 / unknown versions', function () {
         assert.strictEqual(validateAnchorActionParams(Object.assign({}, base, { version: 1 })).version, 1);
-        assert.strictEqual(validateAnchorActionParams(Object.assign({}, base, { version: 0 })).version, 0);
+        assert.strictEqual(validateAnchorActionParams(Object.assign({}, base, { version: 7 })).version, 7);
+        assert.strictEqual(validateAnchorActionParams(Object.assign({}, base, { version: 0 })).ok, false);
         assert.strictEqual(validateAnchorActionParams(Object.assign({}, base, { version: 2 })).ok, false);
         assert.strictEqual(validateAnchorActionParams(Object.assign({}, base, { version: 9 })).ok, false);
         assert.strictEqual(validateAnchorActionParams(Object.assign({}, base, { version: 1.5 })).ok, false);
