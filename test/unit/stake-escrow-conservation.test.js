@@ -117,13 +117,24 @@ describe('a contract stake locks tokens rather than destroying them', function()
         assert.ok(/'UNSTAKE'/.test(set), 'the UNSTAKE v2 release writes escrow rows but has no attribution rule');
     });
 
-    it('leaves the capability path alone, which is where live history exists', function(){
-        // Deliberate asymmetry, and the test states it so nobody "tidies" it. Testnet
-        // already carries capability stakes; escrowing them retroactively would change
-        // balances_root for blocks that are already mined.
+    it('applies the same rule to a CAPABILITY bond, which is locked too', function(){
+        // These were briefly asymmetric while only the contract half was fixed. The operator
+        // decided to roll testnet back and reparse forward, which removed the only reason to
+        // keep the capability path minting - so one rule now covers both.
         const loop = loopAround("createCredit(creditIndex, gas");
         assert.ok(/createCredit\(creditIndex, gas/.test(loop), 'the capability release changed shape');
-        assert.ok(!/createEscrow/.test(loop),
-            'the capability release now escrows: that rewrites history for stakes already on testnet');
+        assert.ok(/createEscrow\(creditIndex, gas,[\s\S]{0,160}bcsub\(0, row\.amount, 64\), row\.source_address\)/.test(loop),
+            'the capability release credits without releasing escrow: it mints a bond that was never destroyed');
+    });
+
+    it('pairs the capability stake debit with an escrow row', function(){
+        const i = stakeSrc.indexOf('let credits = []');
+        const cap = stakeSrc.slice(i, stakeSrc.indexOf('processTransactionLedgerChanges', i) + 200);
+        assert.ok(/debits\.push\(\[gas, data\['AMOUNT'\], data\['SOURCE'\]\]\)/.test(cap),
+            'the capability stake no longer debits the staker');
+        assert.ok(/escrows\.push\(\[gas, data\['AMOUNT'\], data\['SOURCE'\]\]\)/.test(cap),
+            'the capability stake debits without escrowing: the bond leaves the supply equation');
+        assert.ok(/processTransactionLedgerChanges\(this\.indexerDb, data, credits, debits, escrows\)/.test(cap),
+            'the capability escrows array is never passed to the ledger writer');
     });
 });

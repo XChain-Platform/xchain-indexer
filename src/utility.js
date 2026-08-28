@@ -2250,6 +2250,10 @@ class Utility {
                     if(!this.bcgt(row.amount, '0')) continue;
                     let creditIndex = await completionAttribution(row.action_index);
                     await db.createCredit(creditIndex, gas, String(row.amount), row.source_address);
+                    // Release the bond the stake locked, rather than minting it back. Same
+                    // shape as the contract release below.
+                    await db.createEscrow(creditIndex, gas,
+                                          this.bcsub(0, row.amount, 64), row.source_address);
                     addressesToRebalance.add(row.source_address);
                     ticksToRebalance.add(gas);
                 }
@@ -2283,13 +2287,11 @@ class Utility {
         // Update balances AND token supply for everything the release credits touched, so the
         // per-block sanityCheck (ledger == supply == balances) sees a consistent picture.
         //
-        // The two loops above are no longer symmetric, and the difference is deliberate.
-        // A CONTRACT stake locks its tokens in escrow, so its release pairs the credit with a
-        // negative escrow row and is net-zero on supply. A CAPABILITY stake still burns at
-        // stake time, so its release is genuinely a net mint and supply really does move.
-        // That asymmetry is a migration in progress, not a design: the capability path leaks
-        // the same way the contract path did, and it is only still here because testnet
-        // already carries capability stakes whose history a fix would retroactively change.
+        // Both loops now pair their credit with a negative escrow row, so a maturing cooldown
+        // is tokens becoming spendable again rather than tokens being created, and supply does
+        // not move on either path. The two were briefly asymmetric while only the contract half
+        // was fixed; the operator's decision to roll testnet back and reparse forward removed
+        // the reason to keep the capability half on the old rules.
         if(addressesToRebalance.size > 0){
             await db.updateBalances(Array.from(addressesToRebalance));
             await db.updateTokens(Array.from(ticksToRebalance));

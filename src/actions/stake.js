@@ -147,12 +147,19 @@ class Stake {
         this.util.addAddressTicker(data['SOURCE'], gas);
 
         let credits = [],
-            debits  = [];
+            debits  = [],
+            escrows = [];
 
-        if(status == 'valid')
+        if(status == 'valid'){
+            // A capability bond is LOCKED, not destroyed - same rule as a contract stake and
+            // as every ORDER, SWAP, DISPENSER and BET before it. The debit takes the bond out
+            // of spendable balance, the escrow row holds it, and the pair is net-zero on
+            // `ledger = credits - debits + escrows`, so total supply does not move.
             debits.push([gas, data['AMOUNT'], data['SOURCE']]);
+            escrows.push([gas, data['AMOUNT'], data['SOURCE']]);
+        }
 
-        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
+        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
 
         let tickers   = this.util.getTickersList(),
             addresses = Object.keys(this.util.getAddressesList());
