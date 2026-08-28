@@ -13346,11 +13346,19 @@ class Database {
      * verification source. Spec: xchain-documentation/protocol/actions/ANCHOR.md
      */
 
-    // Create/Update record in `anchor_actions` table (one row per ANCHOR action_index).
+    // Create/Update record in `anchor_actions` table.
+    //
+    // Keyed on (action_index, section_index), not action_index alone: an ANCHOR v7 bundle
+    // is ONE action carrying N per-chain sections, and each section gets its own row so
+    // idx_anchor_checkpoint and every per-chain reader keep working unchanged. Every
+    // version that carries a single body (v1/v2/v6 archive rows) writes section_index 0,
+    // which is also the column's DEFAULT, so old rows and old writers land where they
+    // always did.
     async createAnchorAction(data){
         data            = this.normalizeDataValues(data);
         let status_id   = await this.createStatus(data['STATUS']);
         let action_index = data['ACTION_INDEX'];
+        let section_index = (data['SECTION_INDEX'] != null) ? Number(data['SECTION_INDEX']) : 0;
         let version      = Number(data['FORMAT']);
         // Publisher tail (#2486): v4/v5/v6 only; NULL otherwise. Mirrors validator_signatures
         // exactly: anchor.js pre-serializes the XANCPUB sig list to a JSON string (as it does
@@ -13358,6 +13366,7 @@ class Database {
         let publisher = data['PUBLISHER'] || null;
         let publisherAttestations = data['PUBLISHER_ATTESTATIONS'] || null;
         let args = [
+            section_index,
             version,
             data['CHAIN'] || null,
             data['NETWORK'] || null,
@@ -13387,26 +13396,28 @@ class Database {
             status_id,
             data['BLOCK_INDEX']
         ];
-        let exists = (await this.doQuery("SELECT action_index FROM anchor_actions WHERE action_index=? LIMIT 1", [action_index])).length > 0;
+        let exists = (await this.doQuery(
+            "SELECT action_index FROM anchor_actions WHERE action_index=? AND section_index=? LIMIT 1",
+            [action_index, section_index])).length > 0;
         if(exists){
             await this.doQuery(
-                `UPDATE anchor_actions SET version=?, chain=?, network=?, block_index=?, block_hash=?,
+                `UPDATE anchor_actions SET section_index=?, version=?, chain=?, network=?, block_index=?, block_hash=?,
                         ledger_hash=?, actions_hash=?, contract_hash=?, checkpoint_seq=?, snapshot_block=?,
                         state_root=?, state_root_version=?, block_merkle_root=?, block_merkle_version=?,
                         match_batch_seq=?, match_count=?, batch_crc32=?, total_chunks=?, chunk_index=?,
                         archive_b64=?, validator_signatures=?, publisher=?, publisher_attestations=?,
                         status_id=?, block_index_doge=?
-                 WHERE action_index=?`, args.concat([action_index]));
+                 WHERE action_index=? AND section_index=?`, args.concat([action_index, section_index]));
         } else {
             await this.doQuery(
                 `INSERT INTO anchor_actions
-                        (version, chain, network, block_index, block_hash, ledger_hash, actions_hash,
+                        (section_index, version, chain, network, block_index, block_hash, ledger_hash, actions_hash,
                          contract_hash, checkpoint_seq, snapshot_block, state_root, state_root_version,
                          block_merkle_root, block_merkle_version, match_batch_seq, match_count,
                          batch_crc32, total_chunks, chunk_index, archive_b64, validator_signatures,
                          publisher, publisher_attestations,
                          status_id, block_index_doge, action_index)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, args.concat([action_index]));
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, args.concat([action_index]));
         }
     }
 
@@ -13431,10 +13442,12 @@ class Database {
 
     // Look up the on-chain ANCHOR checkpoint record for one checkpoint identity
     // (chain, network, block_index, checkpoint_seq), joined to its status. Only
-    // checkpoint-bearing versions (0/1/3/4/5/6, per the ANCHOR_CHECKPOINT_VERSIONS
+    // checkpoint-bearing versions (1/6/7, per the ANCHOR_CHECKPOINT_VERSIONS
     // constant below; version 2 is an archive continuation chunk with no checkpoint
-    // identity of its own, and v6 is the publisher-bearing archive anchor that
-    // DOES carry a checkpoint identity). Returns the highest action_index
+    // identity of its own, v6 is the publisher-bearing archive anchor that DOES carry
+    // one, and a v7 row is one bundle SECTION, which carries its own). A bundle
+    // therefore answers this read per section, with no bundle-level RPC of its own.
+    // Returns the highest action_index
     // match (a reorg-replayed re-anchor supersedes an earlier one) or null. Read path
     // for the getanchoraction RPC: it lets the hub confirm an announced anchor actually
     // landed on-chain, with the matching payload, at DOGE depth, before trusting an
@@ -13614,6 +13627,14 @@ class Database {
     }
 
     // Flag an anchor row (e.g. 'invalid_archive' when chunk reassembly fails CRC).
+    //
+    // Keyed on action_index ALONE, deliberately, even though the table's PK is now
+    // (action_index, section_index): the anchor verdict is ALL-OR-NOTHING (spec D15), so
+    // every section row of one action always carries the same status and stamping them
+    // together is the correct behavior, not an oversight. Do not "fix" this into a
+    // section-scoped update: an archive head is a single-body v1/v6 row at section 0
+    // anyway, and a per-section stamp would let one action hold two verdicts, which no
+    // reader is built to reconcile.
     async setAnchorArchiveStatus(actionIndex, status){
         let status_id = await this.createStatus(status);
         await this.doQuery("UPDATE anchor_actions SET status_id = ? WHERE action_index = ?", [status_id, actionIndex]);

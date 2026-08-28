@@ -185,6 +185,23 @@ describe('anchor_reward_derive (BTC-side derivation) @regression @tier2', functi
                 [keys[0].pubkey, 3, 'anchor_archive', ar.ARCHIVE_REWARD_AMOUNT, 0, true, 200, 0]);
         });
 
+        it('derives ONE anchor_bundle reward per bundle, at the ANCHOR amount, qualifier 0', async function () {
+            // ANCHOR v7 writes exactly one attestation row per bundle, whatever its section
+            // count, so the derive pass must produce exactly one reward and one reconcile.
+            // round_reference IS the snapshot block, a height that only advances, so unlike
+            // the archive leg the qualifier stays 0.
+            const keys = [makeKey()];
+            const row  = makeRow(keys, { reward_type: 'anchor_bundle', round_reference: 8100, snapshot_block: 8100 });
+            const db   = stubDb(keys, [row]);
+            const derived = await derive.deriveAnchorRewards(db, cfg, maturedAt(8100), stubProof());
+            assert.strictEqual(derived, 1, 'one bundle, one derived reward group');
+            assert.ok(db.createValidatorReward.calledOnce, 'never one reward per section');
+            assert.deepStrictEqual(db.createValidatorReward.firstCall.args,
+                [keys[0].pubkey, 8100, 'anchor_bundle', ar.ANCHOR_REWARD_AMOUNT, 8100, true, maturedAt(8100), 0]);
+            assert.strictEqual(db.reconcileAnchorRewardWinner.firstCall.args[4], 0,
+                'a bundle round_reference only advances, so it needs no snapshot qualifier');
+        });
+
         // The archive leg's round_reference is MATCH_BATCH_SEQ, a dense counter the hub
         // allocates from its own tables, and a wipe-and-replay rebase resets those tables - so
         // the same seq can name two genuinely distinct archive anchors. snapshot_block is what

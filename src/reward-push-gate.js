@@ -44,6 +44,11 @@ function canonicalizeRewardType(type){
     let m   = /^anchor_(btc|ltc|doge)$/i.exec(str);
     if(m) return 'anchor_' + m[1].toUpperCase();
     if(/^anchor_archive$/i.test(str)) return 'anchor_archive';
+    // The ANCHOR v7 bundle reward. Lowercase like anchor_archive (it names a leg, not a
+    // chain), and folded here for the same presentational reason: the refusal below must
+    // name the type with the spelling the derived row carries, so operator logs on both
+    // sides of a retired push talk about the same reward.
+    if(/^anchor_bundle$/i.test(str)) return 'anchor_bundle';
     return str;
 }
 
