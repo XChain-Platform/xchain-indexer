@@ -8419,6 +8419,15 @@ class Database {
         results = await this.doQuery(query, args);
     }
 
+    // Set the lifecycle status of one `order_matches` row.
+    // A COINPay match is written `pending_coinpay` and becomes `valid` when the
+    // obligation settles; the status lives on the match row, not in order_statuses.
+    async updateOrderMatchStatus(action_index, status){
+        let status_id = await this.createStatus(status);
+        let query = `UPDATE order_matches SET status_id=? WHERE action_index=?`;
+        await this.doQuery(query, [status_id, action_index]);
+    }
+
 
     //////////////////////////////////////////////////////////////////////////
     // COINPay Methods

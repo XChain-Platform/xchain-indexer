@@ -346,7 +346,10 @@ class Coinpay {
 
         await this.indexerDb.createCoinpayStatus(data['ACTION_INDEX'], obligationInfo['ACTION_INDEX'], 'fulfilled');
 
-        await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], obligationInfo['ACTION_INDEX'], 'valid');
+        // Clear the MATCH. Its status lives on its own order_matches row; order_statuses
+        // is keyed by an ORDER index and every reader joins it that way, so a match
+        // index written there matches nothing.
+        await this.indexerDb.updateOrderMatchStatus(obligationInfo['ACTION_INDEX'], 'valid');
 
         // Re-fetch order info to get updated GIVE_REMAINING after this settlement
         let updatedSellerOrder = await this.indexerDb.getOrderInfo(this.config['COIN'], sellerOrder['ACTION_INDEX']);

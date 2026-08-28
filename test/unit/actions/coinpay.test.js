@@ -86,6 +86,7 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
         indexer.indexerDb.createCoinpay              = sinon.stub().resolves();
         indexer.indexerDb.createCoinpayStatus        = sinon.stub().resolves();
         indexer.indexerDb.createOrderStatus          = sinon.stub().resolves();
+        indexer.indexerDb.updateOrderMatchStatus     = sinon.stub().resolves();
         indexer.indexerDb.getPendingCoinpayObligationsByOrder = sinon.stub().resolves([]);
         indexer.indexerDb.deleteActionIndex          = sinon.stub().resolves();
         indexer.indexerDb.getOrderSweepDestination   = sinon.stub().resolves(null);
@@ -208,10 +209,16 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
                 BLOCK_TIME: 1000,
             });
             await handler.parse(['0', '42'], data, null);
-            // At minimum one createOrderStatus call must set the order_match row to valid
-            const matchValidCall = indexer.indexerDb.createOrderStatus.getCalls()
-                .find(c => c.args[2] === 'valid');
-            assert.ok(matchValidCall, 'createOrderStatus with valid expected');
+            // CORRECTED: this asserted createOrderStatus, which writes into
+            // order_statuses keyed by an ORDER index. The value passed here is a
+            // MATCH index, so every reader of that table joined it to nothing and the
+            // match stayed pending_coinpay for good. The match status lives on its own
+            // order_matches row, so the settlement must reach updateOrderMatchStatus.
+            const matchValidCall = indexer.indexerDb.updateOrderMatchStatus.getCalls()
+                .find(c => c.args[1] === 'valid');
+            assert.ok(matchValidCall, 'updateOrderMatchStatus with valid expected');
+            assert.strictEqual(Number(matchValidCall.args[0]), 42,
+                'the match must be cleared by the obligation own action index');
         });
 
         it('valid coinpay → updateBalances and updateTokens called', async function () {
