@@ -309,18 +309,32 @@ class Stake {
         this.util.addAddressTicker(data['SOURCE'], data['TICK']);
 
         let credits = [],
-            debits  = [];
+            debits  = [],
+            escrows = [];
         if(status === 'valid'){
+            // A stake LOCKS the tokens; it does not destroy them. The debit takes them out of
+            // the staker's spendable balance and the matching escrow row holds them, exactly
+            // as ORDER and DISPENSER do (order.js:472). The pair is net-zero on
+            // `ledger = credits - debits + escrows`, so total supply is unchanged and the
+            // staked amount stays inside the equation instead of leaving the system.
+            //
+            // Before this, the debit stood alone. That did not trip the per-block sanityCheck,
+            // and could not: tokens.supply is not independent, getTokenSupply COMPUTES it as
+            // credits - debits + escrows, and updateTokens runs right below. So an uncountered
+            // debit shrank the ledger, supply followed it down, balances fell by the same
+            // debit, and all three sides agreed while the tokens left the system. Measured on
+            // testnet, five capability stakes had 125,000 XCHAIN unaccounted for this way.
             debits.push([data['TICK'], data['AMOUNT'], data['SOURCE']]);
-            // Bill the controller-guard gas to SOURCE (GAS burn, no offsetting credit). updateTokens
-            // below already recomputes GAS supply so the per-block sanityCheck stays balanced.
+            escrows.push([data['TICK'], data['AMOUNT'], data['SOURCE']]);
+            // The controller-guard gas is a genuine BURN, so it stays a lone debit with no
+            // escrow row: those tokens really are destroyed and supply really should fall.
             if(this.util.bcgt(guardFee, 0)){
                 debits.push([this.config['GAS'], guardFee, data['SOURCE']]);
                 this.util.addAddressTicker(data['SOURCE'], this.config['GAS']);
             }
         }
 
-        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
+        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
 
         let tickers   = this.util.getTickersList(),
             addresses = Object.keys(this.util.getAddressesList());

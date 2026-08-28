@@ -107,7 +107,14 @@ const SELF_ATTRIBUTING = new Set([
     'COINPAY', 'COINPAY_EXPIRE',
     'SWAP', 'SWAP_EXPIRE', 'SWAP_CANCEL', 'SWAP_EDIT',
     'BET', 'BET_EXPIRE',
-    'SWEEP'
+    'SWEEP',
+    // A CONTRACT stake locks the staker's own tokens and releases them to the same address:
+    // the lock rides the STAKE action and the release rides the synthetic UNSTAKE v2 that
+    // utility.js mints at cooldown maturity, and both escrow rows carry the staker's address.
+    // Both must be classified BEFORE any block containing one is processed - an unclassified
+    // escrow-writing action type halts this writer by design, which on a live indexer means a
+    // stop, not a bad row.
+    'STAKE', 'UNSTAKE'
 ]);
 
 // The DISPENSER family resolves through the DISPENSER ROW for every action,

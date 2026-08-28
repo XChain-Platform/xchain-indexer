@@ -2268,15 +2268,28 @@ class Utility {
                     if(!this.bcgt(row.amount, '0')) continue;
                     let creditIndex = await completionAttribution(row.action_index);
                     await db.createCredit(creditIndex, row.tick, String(row.amount), row.source_address);
+                    // RELEASE the escrow the stake locked, rather than minting the tokens back.
+                    // The negative escrow row offsets the credit, so the pair is net-zero on
+                    // `ledger = credits - debits + escrows` and supply is unchanged - which is
+                    // the whole point: a cooldown maturing is tokens becoming spendable again,
+                    // not tokens being created. Mirrors order.js:499's release idiom.
+                    await db.createEscrow(creditIndex, row.tick,
+                                          this.bcsub(0, row.amount, 64), row.source_address);
                     addressesToRebalance.add(row.source_address);
                     ticksToRebalance.add(row.tick);
                 }
             }
         }
-        // Update balances AND token supply for everything the release credits touched. The credit
-        // is a net mint (the matching debit was burned at STAKE time), so tokens.supply must be
-        // recomputed from the ledger or the per-block sanityCheck (ledger == supply == balances)
-        // trips on the released tick and halts the indexer. Mirrors every other ledger-mutating path.
+        // Update balances AND token supply for everything the release credits touched, so the
+        // per-block sanityCheck (ledger == supply == balances) sees a consistent picture.
+        //
+        // The two loops above are no longer symmetric, and the difference is deliberate.
+        // A CONTRACT stake locks its tokens in escrow, so its release pairs the credit with a
+        // negative escrow row and is net-zero on supply. A CAPABILITY stake still burns at
+        // stake time, so its release is genuinely a net mint and supply really does move.
+        // That asymmetry is a migration in progress, not a design: the capability path leaks
+        // the same way the contract path did, and it is only still here because testnet
+        // already carries capability stakes whose history a fix would retroactively change.
         if(addressesToRebalance.size > 0){
             await db.updateBalances(Array.from(addressesToRebalance));
             await db.updateTokens(Array.from(ticksToRebalance));
