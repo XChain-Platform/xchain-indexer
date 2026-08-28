@@ -79,6 +79,12 @@
  * ticks are equal (a self-tick trade, which the parsers should never admit) is
  * ambiguous and THROWS rather than guesses.
  *
+ *   EXECUTE          returns the row's OWN address, having first verified it is the
+ *                    escrow release a contract SLASH writes against the staker it burns.
+ *                    A resolver rather than a SELF_ATTRIBUTING entry because a blanket
+ *                    permit on the VM's generic entry point would absorb a future escrow
+ *                    site silently, and this file's contract is that one halts.
+ *
  **********************************************************************/
 
 'use strict';
@@ -114,7 +120,12 @@ const SELF_ATTRIBUTING = new Set([
     // Both must be classified BEFORE any block containing one is processed - an unclassified
     // escrow-writing action type halts this writer by design, which on a live indexer means a
     // stop, not a bad row.
-    'STAKE', 'UNSTAKE'
+    'STAKE', 'UNSTAKE',
+    // A capability SLASH keys its bond release to the STAKER, so the row address is the
+    // locker here too, even though the staker is NOT the action's SOURCE (the submitter
+    // collecting the bounty). Admitted wholesale only because SLASH has one escrow site;
+    // EXECUTE, the VM's generic entry point, gets a verifying resolver instead.
+    'SLASH'
 ]);
 
 // The DISPENSER family resolves through the DISPENSER ROW for every action,
@@ -172,6 +183,29 @@ const RESOLVERS = {
             'SELECT local_action_index FROM cross_chain_settlements WHERE action_index = ?', [row.action_index],
             'CROSS_SETTLE row without a cross_chain_settlements record');
         return sourceOf(db, s.local_action_index);
+    },
+
+    // The one escrow row an EXECUTE writes is the contract-slash release, keyed to the
+    // STAKER, who is the locker. A resolver rather than a SELF_ATTRIBUTING entry because
+    // EXECUTE is the VM's generic entry point: a blanket permit would absorb a future escrow
+    // site silently, so the row is VERIFIED against a debit this same execution wrote (same
+    // tick, same owning address) and anything else halts.
+
+    // Emitted ORDER/SWAP/DISPENSER/VOTE actions never reach here: each emission is minted its
+    // own action_index under its own action name, so its rows resolve under that name's rule.
+    EXECUTE: async function(db, row){
+        const rows = await db.doQuery(
+            'SELECT 1 AS ok FROM contract_slash_debits d ' +
+            "LEFT JOIN contract_stakes   cs ON (d.target_table = 'contract_stakes'   AND cs.action_index = d.stake_action_index) " +
+            "LEFT JOIN contract_unstakes cu ON (d.target_table = 'contract_unstakes' AND cu.action_index = d.stake_action_index) " +
+            'INNER JOIN index_addresses a ON a.id = COALESCE(cs.source_id, cu.source_id) ' +
+            'WHERE d.execution_index = ? AND a.address = ? AND COALESCE(cs.tick_id, cu.tick_id) = ? LIMIT 1',
+            [row.action_index, row.address, row.tick_id]);
+        if(!rows || rows.length !== 1)
+            throw new Error('escrowJournal: EXECUTE escrow row at action ' + row.action_index +
+                            ' is not a contract-slash release for ' + row.address + '/' + row.tick +
+                            '; classify the site in escrowJournalWriter.js before any block containing it is processed');
+        return row.address;
     }
 };
 

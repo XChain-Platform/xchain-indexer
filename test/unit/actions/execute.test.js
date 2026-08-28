@@ -691,9 +691,13 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             indexer.indexerDb.getContract        = sinon.stub().resolves({ slash_destination_id: 42 });
             indexer.indexerDb.getPubkeyId        = sinon.stub().resolves(7);
             indexer.indexerDb.getTickerId        = sinon.stub().resolves(3);
-            indexer.indexerDb.slashContractStake = sinon.stub().resolves('100');
+            // { total, releases }: the deduction reports WHOSE escrow it reduced, because a
+            // contract stake is LOCKED there and the handler has to release it before it
+            // credits the slash destination.
+            indexer.indexerDb.slashContractStake = sinon.stub().resolves({ total: '100', releases: [{ address: '1StakerXXXXXXXXXXXXXXXXXXXXXXXX', amount: '100' }] });
             indexer.indexerDb.doQuery            = sinon.stub().resolves([{ address: '1SlashDestXXXXXXXXXXXXXXXXXXXXX' }]);
             indexer.indexerDb.createCredit       = sinon.stub().resolves();
+            indexer.indexerDb.createEscrow       = sinon.stub().resolves();
             indexer.indexerDb.createSlashEvent   = sinon.stub().resolves();
             for(const [k, v] of Object.entries(over)) indexer.indexerDb[k] = v;
         }
@@ -703,6 +707,15 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             await handler._processSlashEmission(slashEmission(), slashData());
             assert.ok(indexer.indexerDb.slashContractStake.calledWith(CONTRACT, 7, 3, '100'));
             assert.ok(indexer.indexerDb.createCredit.calledWith(99, 'STK', '100', '1SlashDestXXXXXXXXXXXXXXXXXXXXX'));
+            // The credit REDIRECTS locked tokens, it does not mint them: the staker's escrow
+            // must be released by the same amount, or supply grows by the slashed amount and
+            // the burned stake stays locked in escrow for ever.
+            assert.ok(indexer.indexerDb.createEscrow.calledOnce, 'the slash must release the staker escrow it burns');
+            const esc = indexer.indexerDb.createEscrow.firstCall.args;
+            assert.strictEqual(esc[0], 99);
+            assert.strictEqual(esc[1], 'STK');
+            assert.strictEqual(String(esc[2]), '-100');
+            assert.strictEqual(esc[3], '1StakerXXXXXXXXXXXXXXXXXXXXXXXX');
             assert.ok(indexer.indexerDb.createSlashEvent.calledOnce);
             const ev = indexer.indexerDb.createSlashEvent.firstCall.args[0];
             assert.strictEqual(ev['TARGET_CONTRACT_INDEX'], CONTRACT);
@@ -754,7 +767,7 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
         });
 
         it('no-ops when nothing was actually slashed (0 available)', async function () {
-            wireSlashDb({ slashContractStake: sinon.stub().resolves('0') });
+            wireSlashDb({ slashContractStake: sinon.stub().resolves({ total: '0', releases: [] }) });
             await handler._processSlashEmission(slashEmission(), slashData());
             assert.ok(indexer.indexerDb.createCredit.notCalled);
             assert.ok(indexer.indexerDb.createSlashEvent.notCalled);

@@ -137,4 +137,47 @@ describe('a contract stake locks tokens rather than destroying them', function()
         assert.ok(/processTransactionLedgerChanges\(this\.indexerDb, data, credits, debits, escrows\)/.test(cap),
             'the capability escrows array is never passed to the ledger writer');
     });
+
+    // A SLASH DISPOSES OF LOCKED TOKENS, SO IT MUST UNLOCK THEM. Redirecting without
+    // releasing is a pure mint, and it strands the burned bond in the staker's escrow.
+    // Whole-ledger deltas live in actions/slash.test.js; these are the cross-file shapes.
+    const slashSrc   = fs.readFileSync(path.join(SRC, 'actions/slash.js'), 'utf8');
+    const executeSrc = fs.readFileSync(path.join(SRC, 'actions/execute.js'), 'utf8');
+
+    it('the capability slash releases the bond per OWNER and hands the array to the writer', function(){
+        const i = slashSrc.indexOf('let credits = [], debits = []');
+        const block = slashSrc.slice(i, slashSrc.indexOf('processTransactionLedgerChanges', i) + 200);
+        assert.ok(/escrows\.push\(\[gas, this\.util\.bcsub\(0, r\.amount, 64\), r\.address\]\)/.test(block),
+            'the capability slash credits bounty/treasury without releasing the escrow it burns');
+        assert.ok(/processTransactionLedgerChanges\(this\.indexerDb, data, credits, debits, escrows\)/.test(block),
+            'the slash escrows array is never passed to the ledger writer');
+        // The old model's claim, in the file's own words. Its presence means a path still
+        // believes the bond was destroyed at STAKE time.
+        assert.ok(!/there is NO debit here/.test(slashSrc),
+            'slash.js still states the pre-lock model; one of its paths has not been converted');
+    });
+
+    it('the contract slash releases the escrow it burns, keyed to the staker', function(){
+        const i = executeSrc.indexOf('_processSlashEmission');
+        const fn = executeSrc.slice(i, executeSrc.indexOf('createSlashEvent', i));
+        assert.ok(/createEscrow\(data\['ACTION_INDEX'\], token, this\.util\.bcsub\(0, r\.amount, 64\), r\.address\)/.test(fn),
+            'the VM slash credits the destination without releasing the staker escrow: a mint');
+        // Ordering matters for readability only, but the release must be inside the same
+        // guarded path as the credit - i.e. after the zero-slashed early return.
+        assert.ok(fn.indexOf('createEscrow(') < fn.indexOf('createCredit('),
+            'the release must be written alongside the redirect, not somewhere else');
+    });
+
+    it('classifies both slash sites in the escrow journal, or the writer halts on them', function(){
+        const i = journalSrc.indexOf('const SELF_ATTRIBUTING');
+        const set = journalSrc.slice(i, journalSrc.indexOf(']);', i));
+        assert.ok(/'SLASH'/.test(set),
+            'the capability slash writes escrow rows but has no attribution rule');
+        // EXECUTE is deliberately NOT in the blanket set: it is the VM's generic entry point,
+        // so it gets a resolver that verifies the row really is a contract-slash release.
+        assert.ok(!/'EXECUTE'/.test(set),
+            'EXECUTE must not be blanket self-attributing: a future VM escrow site would be absorbed silently');
+        assert.ok(/EXECUTE: async function/.test(journalSrc),
+            'EXECUTE writes escrow rows but has no attribution rule');
+    });
 });

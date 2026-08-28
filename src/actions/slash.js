@@ -282,7 +282,7 @@ class Slash {
             ' : key=' + equivKey.substring(0, 24) + '...' +
             ' : ' + status);
 
-        let credits = [], debits = [];
+        let credits = [], debits = [], escrows = [];
 
         if(status === 'valid'){
             // Burn the whole bond (active stakes + cooldown unstakes); returns total XCHAIN burned.
@@ -304,15 +304,26 @@ class Slash {
             // that is deliberate, not a rejection, so the outcome never depends on stake
             // motion after the offence.
             let ownerSourceId = await this.indexerDb.getStakeSourceForDelegatedPubkey(pubkeyId, snapshotBlock);
-            let burned = await this.indexerDb.slashCapabilityStake(pubkeyId, data['BLOCK_INDEX'], data['ACTION_INDEX'], burnPending, ownerSourceId);
+            let burn   = await this.indexerDb.slashCapabilityStake(pubkeyId, data['BLOCK_INDEX'], data['ACTION_INDEX'], burnPending, ownerSourceId);
+            let burned = burn.total;
 
             // Bounty / treasury split. Governance config (Phase D); absent → pure burn.
             let split = this._bountyTreasurySplit(capability, burned);
 
-            // Bounty re-enters circulation to the submitter; treasury to its destination
-            // (a configured address, else BURN = no credit). Burned stake left circulation
-            // at STAKE time, so there is NO debit here; only the redirected credits.
             let gas = this.config['GAS'];
+            // Release the bond from the staker's escrow BEFORE redirecting any of it: a bond
+            // is LOCKED at STAKE time, so the credits below move tokens already inside the
+            // supply equation. Supply falls by exactly the un-redirected remainder.
+
+            // Keyed per owner, never to data['SOURCE']: one burn spans several rows, and a
+            // DELEGATED key's bond lives on the OWNING source rather than the submitter.
+            for(let r of burn.releases){
+                escrows.push([gas, this.util.bcsub(0, r.amount, 64), r.address]);
+                this.util.addAddressTicker(r.address, gas);
+            }
+
+            // Bounty re-enters circulation to the submitter; treasury to its destination
+            // (a configured address, else BURN = no credit).
             if(this.util.bcgt(split.bounty, '0'))
                 credits.push([gas, split.bounty, data['SOURCE']]);
             if(split.treasuryAddr && this.util.bcgt(split.treasury, '0'))
@@ -339,7 +350,7 @@ class Slash {
         }
 
         // Apply ledger changes + reconcile balances/supply.
-        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
+        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
         let tickers   = this.util.getTickersList(),
             addresses = Object.keys(this.util.getAddressesList());
         await this.indexerDb.updateBalances(addresses);

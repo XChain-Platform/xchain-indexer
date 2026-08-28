@@ -70,6 +70,9 @@ function makeDb(state){
         expires:  state.expires  || {},
         closes:   state.closes   || {},
         settles:  state.settles  || {},   // action_index -> {local_action_index}
+        // Contract-slash escrow releases, the one escrow site an EXECUTE writes:
+        // [{execution_index, address, tick_id}], one per (owner, tick) the slash debited.
+        slashes:  state.slashes  || [],
         sources:  state.sources  || {},   // action_index -> address
         journal:  [],
         inserted: [],
@@ -132,6 +135,11 @@ function makeDb(state){
             if(sql.indexOf('FROM dispenser_expires') !== -1)        return this.expires[args[0]]   ? [this.expires[args[0]]]   : [];
             if(sql.indexOf('FROM dispensers') !== -1)               return this.dispensers[args[0]] ? [this.dispensers[args[0]]] : [];
             if(sql.indexOf('FROM cross_chain_settlements') !== -1)  return this.settles[args[0]]   ? [this.settles[args[0]]]   : [];
+            // The EXECUTE resolver's verification read: does this execution actually hold a
+            // slash debit against this owner and tick? args = [execution_index, address, tick_id].
+            if(sql.indexOf('FROM contract_slash_debits d') !== -1)
+                return this.slashes.some(s => s.execution_index === args[0] && s.address === args[1] &&
+                                              String(s.tick_id) === String(args[2])) ? [{ ok: 1 }] : [];
             if(sql.indexOf('SELECT addr.address AS address FROM actions a') === 0)
                 return this.sources[args[0]] ? [{ address: this.sources[args[0]] }] : [];
             throw new Error('stub: unrecognized query: ' + sql.slice(0, 80));
@@ -172,7 +180,11 @@ describe('escrow journal writer: attribution exhaustiveness @regression', functi
         for(const f of fs.readdirSync(dir)){
             if(!f.endsWith('.js')) continue;
             const src = fs.readFileSync(path.join(dir, f), 'utf8');
-            if(src.indexOf('escrows.push(') === -1) continue;
+            // Two ways a handler writes an escrow row: the escrows[] array it hands to
+            // processTransactionLedgerChanges, and a direct db.createEscrow under its own
+            // action_index (execute.js's contract-slash release does the latter). Scanning
+            // only the first left the EXECUTE site invisible to this guard.
+            if(src.indexOf('escrows.push(') === -1 && src.indexOf('createEscrow(') === -1) continue;
             for(const a of mintedActions(src, f)){
                 all.add(a);
                 assert.ok(W.SELF_ATTRIBUTING.has(a) || W.RESOLVERS[a],
@@ -182,7 +194,8 @@ describe('escrow journal writer: attribution exhaustiveness @regression', functi
         }
         // Sanity that the derivation itself still sees the family it must: if a
         // refactor breaks the regexes, every assertion above passes vacuously.
-        for(const expected of ['ORDER', 'ORDER_CANCEL', 'SWAP_CANCEL', 'DISPENSER_EDIT', 'BET', 'SWEEP'])
+        for(const expected of ['ORDER', 'ORDER_CANCEL', 'SWAP_CANCEL', 'DISPENSER_EDIT', 'BET', 'SWEEP',
+                               'STAKE', 'SLASH', 'EXECUTE'])
             assert.ok(all.has(expected), 'the action-name derivation no longer finds ' + expected +
                 '; the guard would pass vacuously');
         // The two sets must not overlap: a type resolving two ways is a fork.
@@ -227,6 +240,46 @@ describe('escrow journal writer: attribution vectors @regression', function(){
             const locker = await W.attributeRow(makeDb({}), { action_index: 1, action_name: name, address: SO, tick: T1, tick_id: 1, amount: '5' });
             assert.strictEqual(locker, SO, name + ' must attribute to the row address');
         }
+    });
+
+    // The one self-attributing family where row address and action SOURCE genuinely differ:
+    // attributing to the source would drive the bounty submitter's key negative and strand a
+    // permanent positive on the staker's.
+    it('SLASH attributes its bond release to the STAKER on the row, not the bounty submitter', async function(){
+        const STAKER = '1StakerDddddddddddddddddddddddddd';
+        const locker = await W.attributeRow(makeDb({}),
+            { action_index: 700, action_name: 'SLASH', address: STAKER, tick: T1, tick_id: 1, amount: '-1000' });
+        assert.strictEqual(locker, STAKER);
+    });
+
+    // Verified rather than trusted: a blanket self-attribution on the VM's generic entry
+    // point would absorb any future escrow site it grows.
+    it('EXECUTE attributes a contract-slash release to the staker it debited', async function(){
+        const STAKER = '1StakerDddddddddddddddddddddddddd';
+        const db = makeDb({ slashes: [{ execution_index: 800, address: STAKER, tick_id: 1 }] });
+        assert.strictEqual(
+            await W.attributeRow(db, { action_index: 800, action_name: 'EXECUTE', address: STAKER, tick: T1, tick_id: 1, amount: '-40' }),
+            STAKER);
+    });
+
+    it('an EXECUTE escrow row that is NOT a contract-slash release throws instead of self-attributing', async function(){
+        const STAKER = '1StakerDddddddddddddddddddddddddd';
+        // Right execution, wrong owner: the slash debited someone else, so this row is a
+        // site nobody has classified.
+        const db = makeDb({ slashes: [{ execution_index: 800, address: SO, tick_id: 1 }] });
+        await assert.rejects(
+            () => W.attributeRow(db, { action_index: 800, action_name: 'EXECUTE', address: STAKER, tick: T1, tick_id: 1, amount: '-40' }),
+            /is not a contract-slash release/);
+        // Right owner, wrong tick: same halt.
+        await assert.rejects(
+            () => W.attributeRow(makeDb({ slashes: [{ execution_index: 800, address: STAKER, tick_id: 1 }] }),
+                { action_index: 800, action_name: 'EXECUTE', address: STAKER, tick: T2, tick_id: 2, amount: '-40' }),
+            /is not a contract-slash release/);
+        // No slash on the execution at all: same halt.
+        await assert.rejects(
+            () => W.attributeRow(makeDb({}),
+                { action_index: 800, action_name: 'EXECUTE', address: STAKER, tick: T1, tick_id: 1, amount: '-40' }),
+            /is not a contract-slash release/);
     });
 
     it('ORDER_MATCH is CROSSED: give-tick row -> get side locker, get-tick row -> give side locker', async function(){

@@ -48,6 +48,11 @@ function makeDb() {
     return db;
 }
 
+// The real selects join index_addresses so the burn can name whose escrow it releases, and
+// halt on a row without one. A fixture with no owner gets the default; one that sets
+// source_address (null included, the dangling-join case) keeps what it set.
+const withOwner = (r) => ('source_address' in r ? r.source_address : 'staker1');
+
 // Emulate the Pass-1 `stakes` SELECT against fixture rows, honoring whichever deactivation predicate
 // the query text carries, so the test exercises the real block-height arithmetic rather than assuming
 // the filter works. slashBlock is the block the slash lands at (3rd arg to slashCapabilityStake).
@@ -60,7 +65,7 @@ function selectStakes(sql, rows, slashBlock) {
         if (nullOnly)  return false;                                        // correct filter drops any deactivated row
         if (windowed)  return Number(r.deactivation_block) > Number(slashBlock); // buggy filter keeps it in-window
         return true;
-    }).map((r) => ({ action_index: r.action_index, amount: r.amount }));
+    }).map((r) => ({ action_index: r.action_index, amount: r.amount, source_address: withOwner(r) }));
 }
 
 function wire(db, { stakes = [], unstakes = [], slashBlock = 306 }) {
@@ -68,7 +73,8 @@ function wire(db, { stakes = [], unstakes = [], slashBlock = 306 }) {
     sinon.stub(db, 'doQuery').callsFake(async (sql, args) => {
         calls.push({ sql, args });
         if (/SELECT[\s\S]*FROM\s+stakes/i.test(sql))   return selectStakes(sql, stakes, slashBlock);
-        if (/SELECT[\s\S]*FROM\s+unstakes/i.test(sql)) return unstakes;
+        if (/SELECT[\s\S]*FROM\s+unstakes/i.test(sql))
+            return unstakes.map(r => ({ ...r, source_address: withOwner(r) }));
         return [];   // UPDATEs + the capability_slash_debits INSERTs
     });
     return calls;
@@ -84,7 +90,7 @@ describe('Database.slashCapabilityStake() equivocation burn @regression @tier1',
         const calls = wire(db, { stakes: [{ action_index: 7, amount: '1000' }] });
 
         const burned = await db.slashCapabilityStake(42, 306, 999);
-        assert.strictEqual(Number(burned), 1000);
+        assert.strictEqual(Number(burned.total), 1000);
 
         const upd = calls.find(c => /UPDATE\s+stakes\s+SET\s+amount/i.test(c.sql));
         assert.ok(upd, 'an active stake must be burned from stakes');
@@ -118,7 +124,7 @@ describe('Database.slashCapabilityStake() equivocation burn @regression @tier1',
         });
 
         const burned = await db.slashCapabilityStake(42, 306, 999);
-        assert.strictEqual(Number(burned), 1000);
+        assert.strictEqual(Number(burned.total), 1000);
 
         assert.ok(!calls.some(c => /UPDATE\s+stakes\s+SET\s+amount/i.test(c.sql)),
             'must NOT burn the deactivated stakes phantom (double-count guard)');
@@ -137,7 +143,7 @@ describe('Database.slashCapabilityStake() equivocation burn @regression @tier1',
         });
 
         const burned = await db.slashCapabilityStake(42, 306, 999);
-        assert.strictEqual(Number(burned), 1250);
+        assert.strictEqual(Number(burned.total), 1250);
 
         assert.ok(calls.some(c => /UPDATE\s+stakes\s+SET\s+amount/i.test(c.sql)));
         assert.ok(calls.some(c => /UPDATE\s+unstakes\s+SET\s+amount/i.test(c.sql)));
@@ -164,7 +170,45 @@ describe('Database.slashCapabilityStake() equivocation burn @regression @tier1',
         const calls = wire(db, { stakes: [], unstakes: [] });
 
         const burned = await db.slashCapabilityStake(42, 306, 999);
-        assert.strictEqual(Number(burned), 0);
+        assert.strictEqual(Number(burned.total), 0);
         assert.strictEqual(debitInserts(calls).length, 0);
+        assert.deepStrictEqual(burned.releases, [], 'nothing burned releases no escrow');
+    });
+
+    // The bond is LOCKED in the staker's escrow, so slash.js releases it against whoever
+    // holds the lock. A bare total cannot be attributed: a delegated key's rows resolve to
+    // the OWNING source, so one burn can span two addresses.
+    it('reports the escrow release PER OWNING ADDRESS, summing to the total', async function () {
+        const db = makeDb();
+        wire(db, {
+            stakes: [
+                { action_index: 9, amount: '600', source_address: 'ownerA' },
+                { action_index: 7, amount: '400', source_address: 'ownerB' },
+            ],
+            unstakes: [{ action_index: 5, amount: '250', source_address: 'ownerA' }],
+        });
+
+        const burned = await db.slashCapabilityStake(42, 306, 999);
+        assert.strictEqual(Number(burned.total), 1250);
+        // ownerA's two rows fold into ONE release; order is the LIFO scan order, which is
+        // deterministic, so every node writes the escrow rows in the same sequence.
+        assert.deepStrictEqual(burned.releases, [
+            { address: 'ownerA', amount: '850' },
+            { address: 'ownerB', amount: '400' },
+        ]);
+        const sum = burned.releases.reduce((a, r) => a + Number(r.amount), 0);
+        assert.strictEqual(sum, Number(burned.total), 'releases must account for the whole burn');
+    });
+
+    // Guessing would strand the lock: the tokens leave the stake tables with nothing
+    // releasing them from escrow.
+    it('HALTS on a burned row whose source address does not resolve', async function () {
+        const db = makeDb();
+        wire(db, { stakes: [{ action_index: 7, amount: '1000', source_address: null }] });
+
+        await assert.rejects(
+            () => db.slashCapabilityStake(42, 306, 999),
+            /no source address/,
+            'an unattributable bond must halt rather than burn without releasing its escrow');
     });
 });

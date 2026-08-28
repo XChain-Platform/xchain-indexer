@@ -69,7 +69,9 @@ function selectStakes(sql, args, rows, slashBlock) {
         if (nullOnly)  return false;                         // correct filter drops any deactivated row
         if (windowed)  return Number(r.deactivation_block) > Number(slashBlock); // buggy filter keeps it in-window
         return true;                                         // no filter at all (also a bug) => keep
-    }).map((r) => ({ action_index: r.action_index, amount: r.amount }));
+    // source_address rides along: the deduction has to name whose escrow it is releasing, so
+    // the real query joins index_addresses and the function halts on a row without one.
+    }).map((r) => ({ action_index: r.action_index, amount: r.amount, source_address: 'staker1' }));
 }
 
 afterEach(function () { sinon.restore(); });
@@ -87,14 +89,14 @@ describe('Database.slashContractStake() mid-cooldown double-count guard @regress
         sinon.stub(db, 'doQuery').callsFake(async (sql, args) => {
             calls.push({ sql, args });
             if (/SELECT[\s\S]*FROM\s+contract_stakes/i.test(sql))   return selectStakes(sql, args, stakeFixtures, slashBlock);
-            if (/SELECT[\s\S]*FROM\s+contract_unstakes/i.test(sql)) return [{ action_index: 5, amount: '100' }]; // cooldown row holds the tokens
+            if (/SELECT[\s\S]*FROM\s+contract_unstakes/i.test(sql)) return [{ action_index: 5, amount: '100', source_address: 'staker1' }]; // cooldown row holds the tokens
             return [];                                                                                          // UPDATEs
         });
 
         const slashed = await db.slashContractStake(1, 10, 1, '100', slashBlock);
 
         // Exactly 100 slashed, entirely from contract_unstakes (Pass 2). Not double-counted.
-        assert.strictEqual(String(slashed), '100');
+        assert.strictEqual(String(slashed.total), '100');
         assert.ok(!calls.some(c => /UPDATE\s+contract_stakes/i.test(c.sql)),
             'must NOT slash the deactivated contract_stakes phantom (that copy is refunded by the sweep)');
         assert.ok(calls.some(c => /UPDATE\s+contract_unstakes/i.test(c.sql)),
@@ -120,7 +122,7 @@ describe('Database.slashContractStake() mid-cooldown double-count guard @regress
         });
 
         const slashed = await db.slashContractStake(1, 10, 1, '40', slashBlock);
-        assert.strictEqual(String(slashed), '40');
+        assert.strictEqual(String(slashed.total), '40');
         assert.ok(calls.some(c => /UPDATE\s+contract_stakes/i.test(c.sql)),
             'an active (non-cooldown) staker is slashed from contract_stakes');
     });

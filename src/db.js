@@ -14210,9 +14210,16 @@ class Database {
 
     // Slash a staker. Deducts `amount` from active contract_stakes rows first (LIFO by
     // activation_block / action_index), then from contract_unstakes rows if any remainder.
-    // Returns the actual amount slashed (may be less than `amount` if available balance is lower).
     // Does NOT credit the destination or emit the slash_events row - caller (_processSlashEmission)
     // wires those side effects.
+    //
+    // Returns { total, releases }:
+    //   total    - the amount actually slashed, as a string (less than `amount` when the
+    //              available stake is lower).
+    //   releases - [{ address, amount }] per OWNING address, in LIFO row order, summing to
+    //              `total`. Staked tokens sit in the staker's ESCROW, so the caller releases
+    //              them there before crediting the destination. Per-owner because one slash
+    //              reduces several rows and a delegated key's rows can span sources.
     //
     // SIGNING-KEY ROTATIONS (#4366). `pubkeyId` is resolved from the pubkey the contract emitted,
     // which it read out of the same snapshot getContractStakeDataForVM built, and that snapshot
@@ -14223,13 +14230,25 @@ class Database {
     // applied). No rotation-aware lookup belongs here: the row IS the rotation.
     async slashContractStake(targetContractIndex, pubkeyId, tickId, amount, blockIndex, executionIndex, slashPosition){
         let valid_id = await this.getStatusId('valid');
-        if(valid_id === null) return '0';
+        if(valid_id === null) return { total: '0', releases: [] };
         let remaining = String(amount);
         let totalSlashed = '0';
         // The staked tick may carry up to MAX_TOKEN_DECIMALS (18); do all slash arithmetic at its own
         // precision so an >8-dp token isn't truncated mid-deduction (which would leave dust unslashed
         // or corrupt the residual stake). XCHAIN(8) math is unchanged (item 5303).
         let dec = await this.getTokenDecimalPrecision(tickId);
+        // Escrow release breakdown, accumulated as the rows are debited. Insertion order is
+        // the deterministic LIFO scan order, so every node writes its escrow rows alike.
+        let releases = new Map();
+        let addRelease = (address, take) => {
+            // An unresolvable source cannot have its escrow released against anyone, and
+            // guessing would strand the lock. Halt instead.
+            if(address === null || address === undefined)
+                throw new Error('slashContractStake: stake row has no source address; its escrow is not releasable');
+            let cur = releases.get(address);
+            releases.set(address, this.util.bcstr(this.util.bcadd(cur === undefined ? '0' : cur, take, dec)));
+        };
+        let asReleases = () => Array.from(releases, ([address, amt]) => ({ address, amount: amt }));
         // Pass 1: deduct from ACTIVE (never-unstaked) contract_stakes rows (LIFO - highest
         // action_index first). The deactivation filter is load-bearing: UNSTAKE v1 leaves the
         // contract_stakes row's `amount` intact (it only sets a FUTURE deactivation_block =
@@ -14243,11 +14262,13 @@ class Database {
         // the window slashed the phantom contract_stakes copy (crediting the destination) while the
         // sweep still refunded the contract_unstakes row - +X to the destination AND +X back to the
         // staker against one debit (silent supply inflation + total slash evasion).
-        let stakesQ = `SELECT action_index, amount FROM contract_stakes
-                       WHERE target_contract_index=? AND signing_pubkey_id=? AND tick_id=? AND status_id=?
-                         AND CAST(amount AS DECIMAL(60,18)) > 0
-                         AND deactivation_block IS NULL
-                       ORDER BY action_index DESC`;
+        let stakesQ = `SELECT cs.action_index, cs.amount, a.address AS source_address
+                       FROM contract_stakes cs
+                           LEFT JOIN index_addresses a ON (a.id = cs.source_id)
+                       WHERE cs.target_contract_index=? AND cs.signing_pubkey_id=? AND cs.tick_id=? AND cs.status_id=?
+                         AND CAST(cs.amount AS DECIMAL(60,18)) > 0
+                         AND cs.deactivation_block IS NULL
+                       ORDER BY cs.action_index DESC`;
         let stakeRows = await this.doQuery(stakesQ, [Number(targetContractIndex), pubkeyId, tickId, valid_id]);
         for(let row of stakeRows){
             if(!this.util.bcgt(remaining, '0')) break;
@@ -14257,20 +14278,23 @@ class Database {
             await this.doQuery('UPDATE contract_stakes SET amount=? WHERE action_index=?', [newAmt, row.action_index]);
             // Record the in-place debit so a reorg can restore rowAmt verbatim (see rollback.js).
             await this.createContractSlashDebit(executionIndex, slashPosition, 'contract_stakes', row.action_index, rowAmt, take, blockIndex);
+            addRelease(row.source_address, take);
             remaining = this.util.bcsub(remaining, take, dec);
             totalSlashed = this.util.bcadd(totalSlashed, take, dec);
         }
-        if(!this.util.bcgt(remaining, '0')) return totalSlashed;
+        if(!this.util.bcgt(remaining, '0')) return { total: this.util.bcstr(totalSlashed), releases: asReleases() };
         // Pass 2: deduct from contract_unstakes rows (cooldown-locked but still slashable)
         let pendingId = await this.getStatusId('pending');
         let unstakeStatusIds = [valid_id];
         if(pendingId !== null) unstakeStatusIds.push(pendingId);
         let placeholders = unstakeStatusIds.map(() => '?').join(',');
-        let unstakesQ = `SELECT action_index, amount FROM contract_unstakes
-                         WHERE target_contract_index=? AND signing_pubkey_id=? AND tick_id=?
-                           AND status_id IN (${placeholders})
-                           AND CAST(amount AS DECIMAL(60,18)) > 0
-                         ORDER BY action_index DESC`;
+        let unstakesQ = `SELECT cu.action_index, cu.amount, a.address AS source_address
+                         FROM contract_unstakes cu
+                             LEFT JOIN index_addresses a ON (a.id = cu.source_id)
+                         WHERE cu.target_contract_index=? AND cu.signing_pubkey_id=? AND cu.tick_id=?
+                           AND cu.status_id IN (${placeholders})
+                           AND CAST(cu.amount AS DECIMAL(60,18)) > 0
+                         ORDER BY cu.action_index DESC`;
         let unstakeRows = await this.doQuery(unstakesQ, [Number(targetContractIndex), pubkeyId, tickId, ...unstakeStatusIds]);
         for(let row of unstakeRows){
             if(!this.util.bcgt(remaining, '0')) break;
@@ -14280,10 +14304,11 @@ class Database {
             await this.doQuery('UPDATE contract_unstakes SET amount=? WHERE action_index=?', [newAmt, row.action_index]);
             // Record the in-place debit so a reorg can restore rowAmt verbatim (see rollback.js).
             await this.createContractSlashDebit(executionIndex, slashPosition, 'contract_unstakes', row.action_index, rowAmt, take, blockIndex);
+            addRelease(row.source_address, take);
             remaining = this.util.bcsub(remaining, take, dec);
             totalSlashed = this.util.bcadd(totalSlashed, take, dec);
         }
-        return totalSlashed;
+        return { total: this.util.bcstr(totalSlashed), releases: asReleases() };
     }
 
     // Record one in-place slash debit, enabling reorg restoration of stake amounts.
@@ -14304,8 +14329,13 @@ class Database {
 
     // Burn an equivocating validator's ENTIRE capability bond (active `stakes` + cooldown-
     // locked `unstakes`), recording each in-place reduction in capability_slash_debits so a
-    // reorg restores the pre-slash amounts verbatim (see rollback.js). Returns the total
-    // XCHAIN burned as a string.
+    // reorg restores the pre-slash amounts verbatim (see rollback.js).
+    //
+    // Returns { total, releases }, the same shape as slashContractStake and for the same
+    // reason: the bond sits in the staker's ESCROW and the caller releases it there before
+    // crediting bounty/treasury. `releases` is [{ address, amount }] per owning address in
+    // LIFO row order, summing to `total` (the XCHAIN burned, as a string); a delegated key's
+    // rows resolve to the OWNING source, so one burn can span several addresses.
     //
     // Unlike slashContractStake (per-contract, per-tick, partial `amount`), capability stake
     // is a single XCHAIN bond per signing pubkey (XCHAIN-only - no contract/tick), and a
@@ -14328,8 +14358,18 @@ class Database {
     // outcome must not depend on stake motion after the offence.
     async slashCapabilityStake(pubkeyId, blockIndex, slashActionIndex, burnPending, ownerSourceId = null){
         let valid_id = await this.getStatusId('valid');
-        if(valid_id === null) return '0';
+        if(valid_id === null) return { total: '0', releases: [] };
         let totalSlashed = '0';
+        // Escrow release breakdown, accumulated as the rows are burned; XCHAIN is 8-dp,
+        // matching the arithmetic below. LIFO scan order, so every node writes it alike.
+        let releases = new Map();
+        let addRelease = (address, take) => {
+            // Same halt as slashContractStake: an unattributable bond cannot be released.
+            if(address === null || address === undefined)
+                throw new Error('slashCapabilityStake: stake row has no source address; its escrow is not releasable');
+            let cur = releases.get(address);
+            releases.set(address, this.util.bcstr(this.util.bcadd(cur === undefined ? '0' : cur, take, 8)));
+        };
         // Pass 1: ACTIVE (never-unstaked) stakes rows (LIFO - highest action_index first). Same
         // correctness point as slashContractStake: after UNSTAKE the `stakes` row keeps its amount
         // but carries a FUTURE deactivation_block and its tokens are mirrored into a cooldown
@@ -14346,18 +14386,20 @@ class Database {
         // predicate is dropped; below it the legacy activation-gated burn is preserved for
         // replay/fleet consistency. The `deactivation_block IS NULL` guard is INDEPENDENT and stays
         // in both regimes (it is the Pass-1/Pass-2 double-burn defense, not an activation gate).
-        let activationClause = burnPending ? '' : 'AND activation_block <= ?';
+        let activationClause = burnPending ? '' : 'AND s.activation_block <= ?';
         // Target the owning source when the offender was a delegated key (#3163),
         // otherwise the offender's own signing key. Exactly one column is matched, so
         // there is no chance of double-counting a row across both spellings.
         let targetCol = (ownerSourceId !== null && ownerSourceId !== undefined) ? 'source_id' : 'signing_pubkey_id';
         let targetVal = (ownerSourceId !== null && ownerSourceId !== undefined) ? ownerSourceId : pubkeyId;
-        let stakesQ = `SELECT action_index, amount FROM stakes
-                       WHERE ${targetCol}=? AND status_id=?
+        let stakesQ = `SELECT s.action_index, s.amount, a.address AS source_address
+                       FROM stakes s
+                           LEFT JOIN index_addresses a ON (a.id = s.source_id)
+                       WHERE s.${targetCol}=? AND s.status_id=?
                          ${activationClause}
-                         AND CAST(amount AS DECIMAL(30,8)) > 0
-                         AND deactivation_block IS NULL
-                       ORDER BY action_index DESC`;
+                         AND CAST(s.amount AS DECIMAL(30,8)) > 0
+                         AND s.deactivation_block IS NULL
+                       ORDER BY s.action_index DESC`;
         let stakeArgs = burnPending ? [targetVal, valid_id] : [targetVal, valid_id, blockIndex];
         let stakeRows = await this.doQuery(stakesQ, stakeArgs);
         for(let row of stakeRows){
@@ -14366,6 +14408,7 @@ class Database {
             await this.doQuery('UPDATE stakes SET amount=? WHERE action_index=?', ['0', row.action_index]);
             // prev_amount = the whole row (we burn it entirely); delta = the same.
             await this.createCapabilitySlashDebit(slashActionIndex, 'stakes', row.action_index, rowAmt, rowAmt, blockIndex);
+            addRelease(row.source_address, rowAmt);
             totalSlashed = this.util.bcadd(totalSlashed, rowAmt, 8);
         }
         // Pass 2: cooldown-locked unstakes rows (status valid/pending) - slashable too (closes R-4:
@@ -14376,19 +14419,22 @@ class Database {
         let placeholders = unstakeStatusIds.map(() => '?').join(',');
         // Same owner-vs-own-key targeting as Pass 1 (#3163): cooldown-locked tokens of a
         // delegated key's OWNER are part of the bond and must burn with it.
-        let unstakesQ = `SELECT action_index, amount FROM unstakes
-                         WHERE ${targetCol}=? AND status_id IN (${placeholders})
-                           AND CAST(amount AS DECIMAL(30,8)) > 0
-                         ORDER BY action_index DESC`;
+        let unstakesQ = `SELECT u.action_index, u.amount, a.address AS source_address
+                         FROM unstakes u
+                             LEFT JOIN index_addresses a ON (a.id = u.source_id)
+                         WHERE u.${targetCol}=? AND u.status_id IN (${placeholders})
+                           AND CAST(u.amount AS DECIMAL(30,8)) > 0
+                         ORDER BY u.action_index DESC`;
         let unstakeRows = await this.doQuery(unstakesQ, [targetVal, ...unstakeStatusIds]);
         for(let row of unstakeRows){
             let rowAmt = String(row.amount);
             if(!this.util.bcgt(rowAmt, '0')) continue;
             await this.doQuery('UPDATE unstakes SET amount=? WHERE action_index=?', ['0', row.action_index]);
             await this.createCapabilitySlashDebit(slashActionIndex, 'unstakes', row.action_index, rowAmt, rowAmt, blockIndex);
+            addRelease(row.source_address, rowAmt);
             totalSlashed = this.util.bcadd(totalSlashed, rowAmt, 8);
         }
-        return totalSlashed;
+        return { total: this.util.bcstr(totalSlashed), releases: Array.from(releases, ([address, amount]) => ({ address, amount })) };
     }
 
     // Record one in-place capability-stake slash debit so a reorg can restore the row's

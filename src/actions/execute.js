@@ -1381,7 +1381,8 @@ class Execute {
         // Deduct (returns actual slashed total; may be less than requested if balance lower).
         // Pass BLOCK_INDEX so Pass 1 slashes only still-active stake; unstaked-but-cooling tokens are
         // slashed from contract_unstakes (Pass 2), preventing the double-count / supply inflation.
-        let slashed = await this.indexerDb.slashContractStake(contractIndex, pubkeyId, tickId, amount, parseInt(data['BLOCK_INDEX']), data['ACTION_INDEX'], slashPosition);
+        let deduction = await this.indexerDb.slashContractStake(contractIndex, pubkeyId, tickId, amount, parseInt(data['BLOCK_INDEX']), data['ACTION_INDEX'], slashPosition);
+        let slashed   = deduction.total;
         if(!this.util.bcgt(slashed, '0')){
             // pubkey + token exist but no active stake on this contract to deduct.
             // Log the attempted vs actual amounts so the no-op is visible in the audit trail.
@@ -1398,6 +1399,18 @@ class Execute {
         if(destQ.length === 0)
             throw new Error('SLASH: destination address row missing');
         let destAddress = destQ[0].address;
+
+        // Release the escrow the stake was locked in BEFORE crediting the destination: a
+        // contract stake LOCKS its tokens, so the credit below redirects them rather than
+        // minting them, and supply falls only by what the destination does not receive.
+
+        // Per owner: the deduction walks several rows and a delegated key's rows can span
+        // sources. Written under the EXECUTE's action_index, which escrowJournalWriter
+        // attributes through its EXECUTE rule.
+        for(let r of deduction.releases){
+            await this.indexerDb.createEscrow(data['ACTION_INDEX'], token, this.util.bcsub(0, r.amount, 64), r.address);
+            this.util.addAddressTicker(r.address, token);
+        }
 
         // Write credit row (action_index = the EXECUTE's action_index, for audit trail)
         await this.indexerDb.createCredit(data['ACTION_INDEX'], token, slashed, destAddress);

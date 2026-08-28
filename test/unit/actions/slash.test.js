@@ -57,7 +57,9 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         db.getActiveValidators       = sinon.stub().resolves([{ pubkey: offender.pubHex, amount: '1000' }]);  // whole-federation set (XCONFIG membership)
         db.getOrCreatePubkeyId       = sinon.stub().resolves(7);
         db.hasCapabilitySlashEvent   = sinon.stub().resolves(false);
-        db.slashCapabilityStake      = sinon.stub().resolves('1000');
+        // { total, releases }: the burn reports WHOSE escrow it reduced, because the handler
+        // has to release the bond out of the staker's escrow before redirecting any of it.
+        db.slashCapabilityStake      = sinon.stub().resolves({ total: '1000', releases: [{ address: 'staker1', amount: '1000' }] });
         // #3163: the handler resolves a delegated offender to its owning stake source at
         // the equivocation height before burning. Default to null (offender stakes in its
         // own name); the delegated-offender case overrides this per-test.
@@ -111,6 +113,74 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         // 5th is ownerSourceId (#3163): null because this offender stakes in its own name.
         assert.deepStrictEqual(indexer.indexerDb.slashCapabilityStake.firstCall.args, [7, 200, 999, true, null]);
         assert.ok(indexer.indexerDb.createCapabilitySlashEvent.calledOnce, 'an audit event must be written');
+    });
+
+    // A bond is LOCKED in the staker's escrow, so a slash REDIRECTS tokens rather than
+    // minting them. These assert the whole ledger effect of one slash, not that a call was
+    // made: supply delta = credits - debits + escrows.
+    function ledgerOf(applied){
+        const [, , credits, debits, escrows] = applied.firstCall.args;
+        const sum = rows => (rows || []).reduce((a, r) => a + Number(r[1]), 0);
+        return { credits, debits, escrows, sum,
+                 delta: sum(credits) - sum(debits) + sum(escrows) };
+    }
+
+    it('releases the burned bond from the STAKERS escrow, per owner, not from the submitter', async function () {
+        indexer.config.STAKING = { CAPABILITIES: { cross_chain: { MIN_STAKE: '5000',
+            SLASH: { BOUNTY_BPS: 500 } } } };                       // 5% bounty, remainder BURNED
+        indexer.indexerDb.slashCapabilityStake = sinon.stub().resolves({
+            total: '1000',
+            releases: [{ address: 'stakerA', amount: '600' }, { address: 'stakerB', amount: '400' }]
+        });
+        const applied = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
+
+        const { msgA, msgB } = dexProof();
+        const d = data();
+        await handler.parse(params('cross_chain', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.strictEqual(d['STATUS'], 'valid');
+        const L = ledgerOf(applied);
+        // The release is keyed to whoever HOLDS the lock. A delegated key's bond lives on the
+        // owning source, so this is not data['SOURCE'] and cannot be assumed to be one address.
+        assert.deepStrictEqual(L.escrows.map(r => r[2]).sort(), ['stakerA', 'stakerB']);
+        assert.strictEqual(L.sum(L.escrows), -1000, 'the whole bond must come out of escrow');
+        assert.strictEqual(L.sum(L.credits), 50,    'only the 5% bounty re-enters circulation');
+        // 950 was redirected to a treasury with no address, i.e. genuinely burned. Supply
+        // falls by exactly that, and by nothing else.
+        assert.strictEqual(L.delta, -950,
+            'supply must fall by the UNREDIRECTED remainder - no more (a mint) and no less (a strand)');
+    });
+
+    it('a fully redirected slash moves no supply at all', async function () {
+        indexer.config.STAKING = { CAPABILITIES: { cross_chain: { MIN_STAKE: '5000',
+            SLASH: { BOUNTY_BPS: 500, TREASURY_ADDRESS: 'addrT' } } } };
+        indexer.indexerDb.slashCapabilityStake = sinon.stub().resolves({
+            total: '1000', releases: [{ address: 'stakerA', amount: '1000' }]
+        });
+        const applied = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
+
+        const { msgA, msgB } = dexProof();
+        const d = data();
+        await handler.parse(params('cross_chain', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        const L = ledgerOf(applied);
+        assert.strictEqual(L.sum(L.credits), 1000, 'bounty + treasury account for the whole bond');
+        assert.strictEqual(L.sum(L.escrows), -1000);
+        assert.strictEqual(L.delta, 0, 'nothing was destroyed, so supply must not move');
+    });
+
+    it('a zero burn writes no escrow release', async function () {
+        indexer.indexerDb.slashCapabilityStake = sinon.stub().resolves({ total: '0', releases: [] });
+        const applied = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
+
+        const { msgA, msgB } = dexProof();
+        const d = data();
+        await handler.parse(params('cross_chain', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.strictEqual(d['STATUS'], 'valid', 'an emptied bond still records a valid slash');
+        const L = ledgerOf(applied);
+        assert.strictEqual(L.escrows.length, 0);
+        assert.strictEqual(L.delta, 0);
     });
 
     // A delegated signing key owns no stake, so burning by its own pubkey

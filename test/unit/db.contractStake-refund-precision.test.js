@@ -137,14 +137,14 @@ describe('slashContractStake precision @regression @tier1', function () {
         sinon.stub(db, 'doQuery').callsFake(async (sql) => {
             calls.push({ sql });
             if (/SELECT[\s\S]*FROM\s+contract_stakes/i.test(sql))
-                return [{ action_index: 7, amount: '2.000000000000000009' }];
+                return [{ action_index: 7, amount: '2.000000000000000009', source_address: 'staker1' }];
             return []; // contract_unstakes select, UPDATEs, slash-debit insert
         });
 
         const slashed = await db.slashContractStake(1, 10, 20, '1.000000000000000005', 306);
 
         // Old 8-dp math floored the deduction; the residual + slashed total must be exact.
-        assert.strictEqual(db.util.bcformat(slashed, 18), '1.000000000000000005');
+        assert.strictEqual(db.util.bcformat(slashed.total, 18), '1.000000000000000005');
         const upd = calls.find(c => /UPDATE\s+contract_stakes/i.test(c.sql));
         assert.ok(upd, 'residual write ran');
     });
