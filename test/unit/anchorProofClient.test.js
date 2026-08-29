@@ -334,4 +334,206 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
             assert.ok(calls > before, 'an undecided verdict must be re-asked, never cached');
         });
     });
+
+    // The v7 checkpoint bundle: ONE anchor action carrying every checkpointed chain as a
+    // section under one action_index, one publisher tail, and exactly ONE reward of type
+    // 'anchor_bundle' keyed on the bundle's SNAPSHOT_BLOCK. So the reward is bound to the
+    // BUNDLE, never to a chain: proving it mined is finding the v7 anchor at that txid whose
+    // sections carry the reward's snapshot block, not matching a chain name.
+    //
+    // Each section becomes its own anchor_actions row, so getanchorconfirmations answers a
+    // bundle transaction with N version-7 entries sharing publisher, network and status, each
+    // carrying its own chain, block_index, checkpoint_seq and snapshot_block.
+    describe('_judge: the v7 bundle leg', function () {
+        const SNAP = 150208;
+
+        // One section row of a three-chain bundle, in the shape the DOGE indexer serves.
+        function section(overrides) {
+            return Object.assign({
+                status: 'valid', version: 7,
+                checkpoint_chain: 'BTC', checkpoint_network: 'regtest',
+                block_index: 150208, checkpoint_seq: SNAP, snapshot_block: SNAP,
+                publisher: 'aa'.repeat(32), match_batch_seq: null,
+                block_index_doge: 100, confirmations: 60
+            }, overrides || {});
+        }
+
+        // The three sections of one bundle, exactly as the live anchor carries them.
+        function bundle(overrides) {
+            return [section(Object.assign({ checkpoint_chain: 'BTC'  }, overrides || {})),
+                    section(Object.assign({ checkpoint_chain: 'DOGE' }, overrides || {})),
+                    section(Object.assign({ checkpoint_chain: 'LTC'  }, overrides || {}))];
+        }
+
+        // The one reward the bundle earns. round_reference IS the snapshot block.
+        function bundleReward(overrides) {
+            return expectation(Object.assign({
+                rewardType: 'anchor_bundle', roundReference: SNAP, snapshotBlock: SNAP
+            }, overrides || {}));
+        }
+
+        it('verifies a buried v7 bundle against its one anchor_bundle reward', function () {
+            assert.strictEqual(client()._judge(bundle(), bundleReward()), 'verified');
+        });
+
+        // The whole point of the family: no section's chain is compared to anything. Slicing
+        // the chain out of 'anchor_bundle' yields the literal 'BUNDLE', which no section can
+        // ever equal, so a chain-named binding cannot prove this reward at all.
+        it('binds the bundle reward to no chain, whichever section leads the wire', function () {
+            const c = client();
+            for (const first of ['LTC', 'DOGE', 'BTC'])
+                assert.strictEqual(c._judge([section({ checkpoint_chain: first })], bundleReward()),
+                                   'verified', first);
+        });
+
+        // A bundle is proven at the block the reward names. A bundle at a different snapshot
+        // block is a positively-detected mis-bind: chain data, identical on every honest node,
+        // so it is the permanent 'rejected' the rest of this file gives that case. Degrading it
+        // to 'unknown' would raise AnchorProofUnavailableError on every retry and wedge the
+        // block loop forever, which is the failure this leg exists to remove.
+        it('refuses a v7 bundle whose snapshot block is not the reward round', function () {
+            const c = client();
+            assert.strictEqual(c._judge(bundle({ snapshot_block: SNAP - 6, checkpoint_seq: SNAP - 6 }),
+                                        bundleReward()), 'rejected');
+            assert.strictEqual(c._judge(bundle(), bundleReward({ roundReference: SNAP - 6 })), 'rejected');
+        });
+
+        // A lagging chain rides the bundle at its OWN older snapshot block, and the parser proves
+        // the header block is the maximum over the sections, so the maximum over the section rows
+        // reconstructs the header the reward is keyed on. The lagging section must not be able to
+        // prove a reward at its own block: no such reward was ever attested or earned.
+        it('verifies a bundle carrying a lagging section, and only at the header block', function () {
+            const rows = [section({ checkpoint_chain: 'BTC' }),
+                          section({ checkpoint_chain: 'LTC', snapshot_block: SNAP - 6, checkpoint_seq: SNAP - 6 })];
+            assert.strictEqual(client()._judge(rows, bundleReward()), 'verified');
+            assert.strictEqual(client()._judge(rows, bundleReward({ roundReference: SNAP - 6, snapshotBlock: SNAP - 6 })),
+                               'rejected');
+        });
+
+        // CHECKPOINT_SEQ and SECTION_SNAPSHOT_BLOCK are separate wire fields on a section, and
+        // the bundle reward is keyed on the snapshot block alone. A section's own seq is
+        // per-chain checkpoint identity, covered by that section's own signatures; it is no
+        // part of the one reward, so the round term must never read it. Binding to it instead
+        // would tie the whole bundle to whichever chain led the wire.
+        it('binds the bundle round to the snapshot block, never to a section checkpoint_seq', function () {
+            assert.strictEqual(client()._judge(bundle({ checkpoint_seq: SNAP - 3 }), bundleReward()), 'verified');
+        });
+
+        it('refuses a v7 bundle crediting a different publisher', function () {
+            assert.strictEqual(client()._judge(bundle({ publisher: 'cc'.repeat(32) }), bundleReward()), 'rejected');
+        });
+
+        it('refuses a v7 bundle anchored for a different network', function () {
+            assert.strictEqual(client()._judge(bundle({ checkpoint_network: 'testnet' }), bundleReward()), 'rejected');
+        });
+
+        // Depth is the one failure that self-heals, so a matching but shallow bundle defers.
+        it('returns unknown for a matching bundle that is not yet buried deep enough', function () {
+            assert.strictEqual(client()._judge(bundle({ confirmations: 59 }), bundleReward()), 'unknown');
+        });
+
+        // A version-7 section can never stand in for a legacy per-chain reward: it shares the
+        // publisher, network, snapshot block, seq and even the chain of the anchor_<CHAIN>
+        // reward of the same round, so the family map is the ONLY thing separating them.
+        it('refuses a v7 section as proof of a per-chain reward', function () {
+            assert.strictEqual(client()._judge([section()], expectation({ roundReference: SNAP, snapshotBlock: SNAP })),
+                               'rejected');
+        });
+
+        it('refuses a v4 or v5 per-chain anchor as proof of a bundle reward', function () {
+            const c = client();
+            for (const version of [4, 5])
+                assert.strictEqual(c._judge([anchor({ version, checkpoint_seq: SNAP, snapshot_block: SNAP })],
+                                            bundleReward()), 'rejected', 'v' + version);
+        });
+
+        it('refuses a v6 archive head as proof of a bundle reward', function () {
+            const a = anchor({ version: 6, checkpoint_seq: SNAP, snapshot_block: SNAP, match_batch_seq: SNAP });
+            assert.strictEqual(client()._judge([a], bundleReward()), 'rejected');
+        });
+
+        // "Cannot tell" must stay apart from "no". A transaction carrying only unattested rows
+        // (an archive continuation chunk, say) is no evidence either way, so the block defers
+        // and the reward is re-asked rather than forfeited.
+        it('returns unknown when the txid carries no attestation-bearing anchor at all', function () {
+            const chunk = section({ version: 2, publisher: null, snapshot_block: null, checkpoint_seq: null });
+            assert.strictEqual(client()._judge([chunk], bundleReward()), 'unknown');
+        });
+
+        // The live shape: an archive head sharing the transaction with the bundle. Each reward
+        // is proven from its own leg and neither leg can answer for the other.
+        it('judges a bundle and an unrelated archive head sharing one transaction', function () {
+            const archiveHead = anchor({ version: 6, checkpoint_chain: 'DOGE', checkpoint_seq: 99,
+                                         snapshot_block: SNAP, match_batch_seq: 12 });
+            const rows = bundle().concat([archiveHead]);
+            assert.strictEqual(client()._judge(rows, bundleReward()), 'verified');
+            assert.strictEqual(client()._judge(rows, expectation({ rewardType: 'anchor_archive',
+                                                                  roundReference: 12, snapshotBlock: SNAP })),
+                               'verified');
+            // The archive head is the only v6 present, so a bundle reward at ITS batch seq is
+            // still a mis-bind rather than an accidental match.
+            assert.strictEqual(client()._judge(rows, bundleReward({ roundReference: 12, snapshotBlock: 12 })),
+                               'rejected');
+        });
+
+        // The bundle stamps ONE status across its section rows, and a node holding no mirrored
+        // oracle_publish snapshot for any section stamps the whole bundle 'unverified'. So the
+        // section-quorum verdict divides the fleet exactly as the per-chain spelling does, and
+        // reading it as a positive reject would let two BTC nodes decide one reward oppositely
+        // and forever, by which DOGE indexer each happens to read.
+        it('treats the section-quorum verdict as node-class evidence, not a reject', function () {
+            const c = client();
+            for (const status of ['invalid: SECTION 0 insufficient valid signatures (1/3)',
+                                  'invalid: SECTION 2 insufficient signer stake',
+                                  'unverified'])
+                assert.strictEqual(c._judge(bundle({ status }), bundleReward()), 'verified', status);
+        });
+
+        it('keeps rejecting the v7 verdicts a node computes from the wire alone', function () {
+            const c = client();
+            for (const status of ['invalid: SECTION 1 CHECKPOINT_SEQ (stale; replay of an older checkpoint)',
+                                  'invalid: SECTION 0 CHAIN (duplicate)',
+                                  'invalid: SNAPSHOT_BLOCK (not the section maximum)'])
+                assert.strictEqual(c._judge(bundle({ status }), bundleReward()), 'rejected', status);
+        });
+
+        // End to end over the real transport shape: one page, three version-7 sections, the
+        // verdict memoized per tuple.
+        it('proves the live three-section bundle through proveMined', async function () {
+            const c = client();
+            let calls = 0;
+            c._fetch = async () => { calls++; return { exists: true, anchors: bundle(), truncated: false }; };
+            assert.strictEqual(await c.proveMined(bundleReward()), 'verified');
+            assert.strictEqual(await c.proveMined(bundleReward()), 'verified');
+            assert.strictEqual(calls, 1);
+        });
+    });
+
+    // The legacy legs are live on testnet right now and prove 'verified' today, so the bundle
+    // work must leave every one of them exactly where it was.
+    describe('_judge: the legacy legs are unchanged by the bundle leg', function () {
+        it('verifies each per-chain shape against its own reward', function () {
+            const c = client();
+            for (const chain of ['BTC', 'DOGE', 'LTC']) {
+                for (const version of [4, 5]) {
+                    assert.strictEqual(
+                        c._judge([anchor({ version, checkpoint_chain: chain })],
+                                 expectation({ rewardType: 'anchor_' + chain })),
+                        'verified', chain + '/v' + version);
+                }
+            }
+        });
+
+        it('still rejects a per-chain reward proven by a SIBLING chain of the same round', function () {
+            const c = client();
+            assert.strictEqual(c._judge([anchor({ version: 5, checkpoint_chain: 'LTC' })],
+                                        expectation({ rewardType: 'anchor_BTC' })), 'rejected');
+        });
+
+        it('verifies the v6 archive leg on match_batch_seq and chain-gates nothing', function () {
+            const a = anchor({ version: 6, checkpoint_chain: 'LTC', checkpoint_seq: 99, match_batch_seq: 12 });
+            assert.strictEqual(client()._judge([a], expectation({ rewardType: 'anchor_archive', roundReference: 12 })),
+                               'verified');
+        });
+    });
 });

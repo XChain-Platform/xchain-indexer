@@ -263,6 +263,29 @@ function isAnchorRewardDeriveActive(snapshotBlock, network){
 // activation map above and a change needs its own flag-day.
 const ANCHOR_REWARD_MIRROR_MATURITY = 144;   // ~24h of BTC blocks
 
+// The DOGE burial depth deriveAnchorRewards() requires before it will mint a mirrored
+// attestation's reward. Frozen HERE, beside the maturity watermark and the activation map,
+// because it is a LEDGER input: it decides the BTC height at which a reward materializes,
+// so two nodes applying different depths derive the same reward at different heights and
+// fork the ledger hash for identical blocks (the same failure ANCHOR_REWARD_MIRROR_MATURITY
+// above was re-keyed to close).
+//
+// It must NOT be read from the coin registry as coins.DEFAULT_CONFIRMATIONS.DOGE, which is
+// the wrong authority twice over: the registry classifies `confirmations` as display /
+// operator-tunable depth and deliberately leaves it OUT of the pinned consensus subset
+// (coins/index.js consensusSubset, coins.test.js NON_CONSENSUS_TOP_LEVEL_KEYS), so a node
+// bundling a divergent value forks the derive height while verifyConsensusPin() passes
+// clean; and coins.resolveConfirmations() lets an operator move the same number per node
+// via XCHAIN_CONFIRMATIONS_DOGE. A ledger input cannot be sourced from a field nothing pins
+// and anyone may tune, so the block-transaction path takes it from here and the registry
+// field means what it is classified as: local, hub-side trust policy.
+//
+// The value equals the registry default at rest and a drift alarm in
+// test/unit/anchorRewardDerive.test.js fails if the two ever part. Changing it moves the
+// block a reward materializes at, so it is frozen with the activation map above and a
+// change needs its own flag-day.
+const ANCHOR_REWARD_DOGE_MIN_CONFIRMATIONS = 60;   // DOGE confirmations, ~1h
+
 // The BTC block at which a mirrored attestation row whose XANCPUB signing set was resolved
 // at `snapshotBlock` becomes derivable. Returns null for an unparseable height so callers
 // fail closed rather than maturing everything at NaN.
@@ -282,5 +305,6 @@ module.exports = {
     ANCHOR_REWARD_DERIVE_ACTIVATION,
     isAnchorRewardDeriveActive,
     ANCHOR_REWARD_MIRROR_MATURITY,
+    ANCHOR_REWARD_DOGE_MIN_CONFIRMATIONS,
     anchorRewardDeriveHeight
 };

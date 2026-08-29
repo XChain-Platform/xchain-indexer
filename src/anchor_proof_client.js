@@ -52,7 +52,34 @@ const url   = require('url');
 
 // Attestation-bearing ANCHOR versions. A reward exists only for these; anything else on
 // the txid is a different anchor and cannot stand in as proof of this one.
-const ATTESTED_VERSIONS = [4, 5, 6];
+const ATTESTED_VERSIONS = [4, 5, 6, 7];
+
+// Which anchor versions can prove which reward FAMILY, and nothing else.
+//
+// The reward type names one publishing shape, and each shape rides exactly one wire
+// version: 'anchor_archive' is the v6 archive head, 'anchor_bundle' is the v7 per-network
+// checkpoint bundle, 'anchor_<CHAIN>' is a v4/v5 per-chain anchor. The map is exhaustive
+// and exclusive on purpose. A two-way archive/not-archive test cannot express three
+// families: it silently files a v7 section under the per-chain leg, where the section's own
+// chain, publisher, network, snapshot_block and seq all match a legacy anchor_<CHAIN>
+// reward of the same round, so ONE bundle section would prove a per-chain reward the hub
+// never published and never attested. Membership here is therefore part of the binding,
+// not a convenience.
+const REWARD_FAMILY_VERSIONS = {
+    archive: [6],
+    bundle:  [7],
+    chain:   [4, 5]
+};
+
+// The reward family a reward_type names. reward_type is inside the XANCPUB canonical the
+// caller re-verifies (anchor_reward_derive.rewardCanonical), so it is quorum-signed; the
+// family is read from it alone and never from an unsigned mirror column.
+function rewardFamily(rewardType){
+    let t = String(rewardType);
+    if(t === 'anchor_archive') return 'archive';
+    if(t === 'anchor_bundle')  return 'bundle';
+    return 'chain';
+}
 
 // Hard stop on the getanchorconfirmations page walk in proveMined. At ANCHOR_ROW_LIMIT
 // (20) rows a page this admits 500 anchor actions for one transaction, which no DOGE
@@ -73,19 +100,25 @@ const MAX_ANCHOR_PAGES = 25;
 //   'invalid: insufficient  - only a node that DOES mirror the snapshot can produce this
 //    signer stake|valid       verdict for the SAME anchor the unmirrored node stamped
 //    signatures (n/m)'        'unverified'.
+//   'invalid: SECTION n     - the same quorum verdict on the v7 bundle leg, which names the
+//    insufficient ...'        failing section. The bundle stamps ONE status across its
+//                             section rows, and a node holding no mirrored snapshot for any
+//                             section stamps the whole bundle 'unverified', so this spelling
+//                             divides the fleet exactly as the per-chain one does.
 //   'invalid_archive'       - the head-side reassembly CRC, stamped only by a node that
 //                             holds the chunks and passes the unverified-head gate.
 // So a BTC node reading a mirrored DOGE indexer memoized 'rejected' and skipped the
 // reward forever, while a BTC node reading an unmirrored one read 'unverified', fell
 // through to 'verified' and minted: a permanent COLLECT-rail divergence decided by which
-// DOGE_INDEXER_URL each node happens to carry. Treating all three as non-evidence pins
+// DOGE_INDEXER_URL each node happens to carry. Treating all four as non-evidence pins
 // every node to the reading the unmirrored class already produces, so the verdict keys
 // only on fields that are node-class-independent (version, chain, network, publisher,
 // snapshot_block, seq, confirmations). The publisher-attestation quorum is not lost with
 // them: anchor_reward_derive.verifyAttestation re-runs it BTC-side before proveMined.
 // Every other 'invalid: ...' anchor.js writes is decided from the wire bytes plus
 // replayed DOGE chain state, so it stays a deterministic reject.
-const NODE_CLASS_DEPENDENT_STATUS = /^(?:unverified|invalid: insufficient|invalid_archive)/i;
+const NODE_CLASS_DEPENDENT_STATUS =
+    /^(?:unverified|invalid: insufficient|invalid: SECTION \d+ insufficient|invalid_archive)/i;
 
 class AnchorProofClient {
 
@@ -166,8 +199,9 @@ class AnchorProofClient {
 
     // Prove (or disprove) that `expect` names a mined DOGE anchor.
     //   expect.txid            - the doge_anchor_txid on the mirrored attestation row
-    //   expect.rewardType      - 'anchor_<CHAIN>' or 'anchor_archive'
-    //   expect.roundReference  - checkpoint_seq (per-chain) or match_batch_seq (archive)
+    //   expect.rewardType      - 'anchor_<CHAIN>', 'anchor_archive' or 'anchor_bundle'
+    //   expect.roundReference  - checkpoint_seq (per-chain), match_batch_seq (archive) or
+    //                            the bundle's SNAPSHOT_BLOCK (bundle)
     //   expect.snapshotBlock   - the reward's BTC snapshot_block
     //   expect.publisher       - the elected publisher pubkey being paid
     //   expect.network         - the reward's network
@@ -250,7 +284,8 @@ class AnchorProofClient {
     // is process-lifetime state, that leak also made the derived set restart-dependent, which
     // is a COLLECT-rail fork. Normalize exactly as _judge does, or two spellings of one tuple
     // miss each other. A field added to _judge must be added here too. _judge's chain term needs
-    // no entry of its own: it is derived from rewardType, which is already a term here.
+    // no entry of its own, and neither does the reward FAMILY or the round term it selects:
+    // all three are derived from rewardType, which is already a term here.
     _memoKey(txid, e){
         return [txid,
                 String(e.rewardType),
@@ -269,22 +304,51 @@ class AnchorProofClient {
         let publisher = String(e.publisher || '').toLowerCase();
         let round     = Number(e.roundReference);
         let snapshot  = Number(e.snapshotBlock);
-        let isArchive = String(e.rewardType) === 'anchor_archive';
+        let family    = rewardFamily(e.rewardType);
+        let isArchive = family === 'archive';
+        let versions  = REWARD_FAMILY_VERSIONS[family];
         // The chain this reward names, read out of reward_type ('anchor_<CHAIN>') and NOT out of
         // the mirror row's own `chain` column. reward_type is inside the XANCPUB canonical
         // rewardCanonical() re-verifies, so it is quorum-signed; `chain` is an unsigned column of
         // the very row that also supplies doge_anchor_txid, so binding to it would only let one
         // corrupted row agree with itself. Null on the archive leg: the archive XANCPUB canonical
         // keys on MATCH_BATCH_SEQ and binds no chain, and a v6 head carries the chain of whatever
-        // checkpoint wrapped it, so there is no signed chain to hold it to.
-        let chain = isArchive ? null : String(e.rewardType).slice('anchor_'.length).toUpperCase();
+        // checkpoint wrapped it, so there is no signed chain to hold it to. Null on the bundle leg
+        // too, and for a stronger reason: a v7 bundle is ONE action carrying every checkpointed
+        // chain as a section under one action_index, one publisher tail and one reward keyed on the
+        // bundle's SNAPSHOT_BLOCK, so the reward is bound to the BUNDLE and names no chain at all.
+        // 'anchor_bundle' sliced past 'anchor_' yields the literal 'BUNDLE', which no section's
+        // chain can ever equal, so the slice is reachable only for the per-chain family.
+        let chain = (family === 'chain') ? String(e.rewardType).slice('anchor_'.length).toUpperCase() : null;
+        // The bundle's header SNAPSHOT_BLOCK, reconstructed from the section rows.
+        //
+        // The wire carries the header block once and each section carries its own, and the
+        // indexer writes the SECTION's value onto the section's row, so no single row reports
+        // the header. The parser proves the header IS the maximum over the sections (a header
+        // above every section would move the attestation round, and the reward's earn block,
+        // onto an oracle_publish set no section signed against), so the maximum over the v7
+        // rows of this transaction reconstructs it exactly. The hub keys the one bundle reward
+        // on that header block, so binding here is what stops a LAGGING section, riding the
+        // bundle at its own older block, from proving a reward at that older block: a reward
+        // the federation never attested and the bundle never earned. Rows above are complete by
+        // construction (proveMined walks every page before judging), and one transaction
+        // carries one bundle, so this maximum is that bundle's header and nothing else.
+        let bundleBlock = null;
+        if(family === 'bundle'){
+            for(let a of anchors){
+                if(Number(a.version) !== 7) continue;
+                let b = Number(a.snapshot_block);
+                if(Number.isFinite(b) && (bundleBlock === null || b > bundleBlock)) bundleBlock = b;
+            }
+        }
         let sawAttested = false;
         for(let a of anchors){
             if(!ATTESTED_VERSIONS.includes(Number(a.version))) continue;   // a sibling anchor in the same tx, not our proof
             sawAttested = true;
-            // v6 is the archive leg, v4/v5 the per-chain leg. A v4 can never prove an
-            // archive reward and vice versa, whatever else matches.
-            if(isArchive !== (Number(a.version) === 6)) continue;
+            // One family, one wire version (REWARD_FAMILY_VERSIONS above). A v4 can never prove
+            // an archive or a bundle reward, a v7 section can never prove a per-chain reward,
+            // and a v6 head can never prove either of the others, whatever else matches.
+            if(!versions.includes(Number(a.version))) continue;
             // Decoded-invalid never anchored anything, EXCEPT where the invalidity is a
             // node-class verdict rather than chain data (NODE_CLASS_DEPENDENT_STATUS above):
             // those are skipped as evidence so two BTC nodes reading different DOGE indexers
@@ -301,8 +365,23 @@ class AnchorProofClient {
             // distinct case-insensitively, so folding can never turn a mis-bind into a match.
             if(chain !== null && String(a.checkpoint_chain || '').toUpperCase() !== chain) continue;
             if(String(a.publisher || '').toLowerCase() !== publisher) continue;
+            // On a v7 section row this column is the SECTION's own snapshot block, not the
+            // bundle header's, because a lagging chain rides a bundle at its own block. So the
+            // bundle leg holds the row to BOTH values: the reward's snapshot block and the
+            // reconstructed header above. The two together prove the row is the header-block
+            // section of the bundle the reward names.
+            if(family === 'bundle' && Number(a.snapshot_block) !== bundleBlock) continue;
             if(Number(a.snapshot_block) !== snapshot) continue;
-            let seq = isArchive ? Number(a.match_batch_seq) : Number(a.checkpoint_seq);
+            // The round term per family. Per-chain: checkpoint_seq. Archive: match_batch_seq.
+            // Bundle: the snapshot block itself, because a bundle's round_reference IS its
+            // SNAPSHOT_BLOCK (one reward per bundle, keyed on the bundle block, six-field
+            // XANCPUB canonical with the block repeated at fields 2 and 3). Using a section's
+            // checkpoint_seq here instead would bind the whole bundle to whichever chain
+            // happened to be first in the wire, and would reject outright any bundle carrying
+            // a lagging section whose seq trails the bundle block.
+            let seq = isArchive ? Number(a.match_batch_seq)
+                    : (family === 'bundle') ? Number(a.snapshot_block)
+                    : Number(a.checkpoint_seq);
             if(seq !== round) continue;
             // Bound at last: a tuple-matching anchor that is merely too shallow is a
             // 'unknown' (it will bury), not a 'rejected' (it never will).

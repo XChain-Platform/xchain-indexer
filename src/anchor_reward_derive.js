@@ -57,7 +57,8 @@ const swq     = require('./stake_weighted_quorum.js');
 const eq      = require('./equivocation_header.js');
 const ar      = require('./anchor_reward_activation.js');
 const arKey   = require('./anchor_reward_key.js');
-const coins   = require('./coins');
+// No coin-registry require here on purpose: nothing inside the block transaction may read a
+// field the registry advertises as operator-tunable (see minConfirmations below).
 
 // Rebuild the XANCPUB canonical for a mirrored attestation row. MUST byte-match
 // anchor.js._rewardCanonical (DOGE parse side) and the hub's publisher canonical, or the
@@ -169,7 +170,15 @@ async function deriveAnchorRewards(indexerDb, config, blockIndex, proof){
     if(!Number.isFinite(watermark) || watermark < 0) return 0;
     let rows = await indexerDb.getPendingAnchorRewardAttestations(network, watermark);
     if(!rows || rows.length === 0) return 0;
-    let minConfirmations = coins.DEFAULT_CONFIRMATIONS.DOGE;
+    // The burial depth this mint gate requires, from the frozen ledger constants beside the
+    // activation map, NOT from the coin registry: the registry's `confirmations` is
+    // classified as operator-tunable depth, sits outside the pinned consensus subset, and is
+    // env-overridable per node (coins.resolveConfirmations), so sourcing a ledger input from
+    // it let two nodes derive the same reward at different BTC heights while their consensus
+    // pins verified clean. The hub's own attest gate keeps reading the registry knob, which
+    // is local trust policy there; on mainnet and testnet that knob is floor-clamped to the
+    // same default, so a hub can never attest shallower than this gate will mint.
+    let minConfirmations = ar.ANCHOR_REWARD_DOGE_MIN_CONFIRMATIONS;
 
     // Group by the logical reward (reward_type, round_reference, round_qualifier): every
     // attesting publisher for a round must be inserted BEFORE reconcile, so a failover
