@@ -128,6 +128,15 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
         // block commit, and whether a set stallReason is a healthy-degraded barrier defer (the
         // counter is still advancing) rather than a genuine wedge.
         lastBlockCommittedAt: indexer.lastBlockCommittedAt || null,
+        // Block-poll loop LIVENESS, a different axis from every stall field around it and the
+        // only one that can see a loop hung inside an await: stallReason needs a barrier to
+        // have been hit, lag/decoderBlock are written inside the loop and freeze with it, and
+        // lastBlockCommittedAt is legitimately old on a quiet chain in the healthy case too.
+        // Reported, and deliberately NOT folded into `status` or the /status 503 gate: a single
+        // iteration can hold across several sequential barrier waits, and restarting the
+        // container is the wrong answer to a slow block. The monitor crits on it instead.
+        pollSilent:       (typeof indexer.isPollSilent === 'function') ? indexer.isPollSilent() : false,
+        lastPollAt:       indexer.lastPollAt || null,
         // NOTE degraded stays true during the healthy future-stamped-block wait as well,
         // deliberately: the monitor rules key on `degraded === false` for the wedge case, so
         // flipping it there would turn a healthy wait into a crit. waitingOnFutureBlock and

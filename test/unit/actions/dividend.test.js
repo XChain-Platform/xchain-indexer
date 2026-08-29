@@ -221,6 +221,57 @@ describe('Dividend @regression @tier2', function () {
             assert.strictEqual(data['STATUS'], 'valid');
         });
 
+        // The three cases below pin the membership semantics against the Set-backed
+        // membership probe. A configured-but-empty ALLOW_LIST admitting everyone is the
+        // load-bearing one: AIRDROP gates on list existence and would admit nobody here.
+        async function runWithList(listIds, listMembers, holders) {
+            const tokenInfo    = createTokenInfo({ TICK: 'TEST',   TICK_ID: 1, DECIMALS: 0 });
+            const divTokenInfo = createTokenInfo({ TICK: 'DIVTOK', TICK_ID: 2, DECIMALS: 0, ...listIds });
+
+            indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(tokenInfo);
+            indexer.indexerDb.getTokenInfo.withArgs('DIVTOK').resolves(divTokenInfo);
+            indexer.indexerDb.getList.resolves(listMembers);
+            indexer.indexerDb.getAddressBalances.resolves({ 1: '1', 2: '1000' });
+            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+            indexer.indexerDb.getHolders.resolves(holders);
+            indexer.indexerDb.isActionAllowed.resolves(true);
+
+            const data   = createBaseData({ ACTION: 'DIVIDEND', FORMAT: 0, SOURCE });
+            const params = ['0', 'TEST', 'DIVTOK', '1', null];
+
+            await handler.parse(params, data, null);
+
+            assert.ok(indexer.indexerDb.createDividend.called);
+            return String(indexer.indexerDb.createDividend.args[0][0]['DEBIT']);
+        }
+
+        it('ALLOW_LIST set but resolving empty still admits every holder', async function () {
+            const debit = await runWithList(
+                { ALLOW_LIST: 5, BLOCK_LIST: null },
+                [],
+                { [HOLDER1]: '10', [HOLDER2]: '20' }
+            );
+            assert.strictEqual(debit, '30');
+        });
+
+        it('non-empty ALLOW_LIST admits only listed holders', async function () {
+            const debit = await runWithList(
+                { ALLOW_LIST: 5, BLOCK_LIST: null },
+                [HOLDER1],
+                { [HOLDER1]: '10', [HOLDER2]: '20' }
+            );
+            assert.strictEqual(debit, '10');
+        });
+
+        it('non-empty BLOCK_LIST excludes listed holders from the DEBIT', async function () {
+            const debit = await runWithList(
+                { ALLOW_LIST: null, BLOCK_LIST: 5 },
+                [HOLDER1],
+                { [HOLDER1]: '10', [HOLDER2]: '20' }
+            );
+            assert.strictEqual(debit, '20');
+        });
+
     });
 
     describe('sleeping validations', function () {

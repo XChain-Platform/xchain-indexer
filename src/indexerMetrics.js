@@ -49,12 +49,23 @@ function installIndexerMetrics(observability, indexer){
         help: 'Unix time of the most recent committed block; stops advancing when the block poll stalls'
     });
 
+    // Commit recency alone cannot discriminate a wedged poller from a quiet chain: a
+    // caught-up indexer commits nothing for hours while perfectly healthy, so the gauge
+    // above is old in the healthy case too. The iteration heartbeat is the discriminator,
+    // and it is the ONLY signal that sees a loop hung inside an await.
+    const lastPollTs = registry.gauge({
+        name: 'xchain_indexer_last_poll_timestamp_seconds',
+        help: 'Unix time of the most recent block-poll loop iteration; stops advancing when the loop stops iterating'
+    });
+
     // Read at scrape time so the value tracks the live indexer without threading
     // a metrics write through the commit path. Leave the series ABSENT until the
     // first commit: an indexer that has never committed is starting up, not
     // stalled, and a zero would render as a 1970 timestamp and page instantly.
+    // Same rule for the heartbeat, whose 0 means the loop has not iterated yet.
     registry.addCollector(() => {
         if(indexer.lastBlockCommittedAt) lastCommitTs.set({}, indexer.lastBlockCommittedAt / 1000);
+        if(indexer.lastPollAt) lastPollTs.set({}, indexer.lastPollAt / 1000);
     });
 
     return true;

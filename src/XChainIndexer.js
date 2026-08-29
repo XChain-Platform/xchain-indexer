@@ -238,6 +238,15 @@ class XChainIndexer {
         // read by the /status healthcheck to tell an advancing-but-barrier-deferring indexer
         // (healthy) from a genuinely wedged one (see stallWedged).
         this.lastBlockCommittedAt = null;
+        // Wall-clock (epoch ms) of the most recent block-poll ITERATION, 0 until the loop has
+        // run once. Distinct from lastBlockCommittedAt above, which only moves on a COMMIT and
+        // is therefore old in the healthy case too on a caught-up or quiet chain: it cannot tell
+        // "no new blocks" from "the loop is gone". Every freshness field the health payload reads
+        // is written inside the loop, so a poll that hangs in an await freezes all of them at
+        // their last good values and health keeps answering healthy forever. Stamped by BOTH the
+        // outer poll loop and the inner catch-up loop, since an initial sync legitimately stays
+        // inside the inner one for hours. Read by isPollSilent().
+        this.lastPollAt = 0;
         // Set true when the decoder has written a durable REORG_HALT marker (a reorg it
         // could not safely rewind). Surfaced on /health so a halted decoder is not mistaken for
         // ordinary idle/lag. Updated by _checkDecoderReorgHalt(); the log-tick counter keeps the
@@ -294,6 +303,16 @@ class XChainIndexer {
         this.healthStallGraceMs = parseInt(process.env.INDEXER_HEALTH_STALL_GRACE_MS
                                            || String(Math.max(2 * this.priceSyncTimeoutMs, 120000)), 10);
 
+        // Window (ms) the block-poll loop may go without completing an ITERATION before
+        // isPollSilent() calls it dead. Sized off healthStallGraceMs, which is already at
+        // least two barrier-timeout cycles, and doubled again on top: one block can hold a
+        // single iteration across several sequential barrier waits, and this signal must
+        // never fire on a block that is merely slow. It measures loop LIVENESS, never chain
+        // progress, so unlike stallWedged it has nothing to do with commits. Purely
+        // operational, NOT a consensus parameter.
+        this.pollSilentMs = parseInt(process.env.INDEXER_POLL_SILENT_MS
+                                     || String(2 * this.healthStallGraceMs), 10);
+
         // Direct-hub-DB call-presence barrier timeout (ms). In single-host / direct-hub-DB
         // mode there is no HubDbSync mirror, so the cross-chain-call sync barrier is skipped.
         // But reading the hub's MariaDB directly does NOT mean a relay row was already WRITTEN
@@ -307,6 +326,21 @@ class XChainIndexer {
     // Handle indicating if indexer is synced
     isSynced(){
         return this.synced;
+    }
+
+    // True when the block-poll loop has stopped ITERATING. Nothing else in the health
+    // payload can see this: stallReason is only set when a barrier was actually hit, lag and
+    // decoderBlock are written inside the loop and freeze at their last good values, and
+    // lastBlockCommittedAt is old on a quiet chain in the healthy case too. So a loop that
+    // hangs inside an await (black-holed DB socket, pool exhaustion with no query timeout)
+    // never rejects, never flips indexerRunning, and leaves buildHealthResponse reporting
+    // healthy / stallClass 'none' / lag 0 indefinitely.
+    //
+    // Fail-quiet before the first iteration: lastPollAt 0 means the loop has not run yet
+    // (boot, or a long initial DB connect) and is never reported silent.
+    isPollSilent(){
+        if(!this.lastPollAt) return false;
+        return (Date.now() - this.lastPollAt) > this.pollSilentMs;
     }
 
     // Handle setting flag to stop indexer
@@ -719,6 +753,11 @@ class XChainIndexer {
 
         while (true){
 
+            // Iteration heartbeat, stamped FIRST so it records the pass whatever the body
+            // does next, including breaking out on stopFlag. isPollSilent() reads it; see
+            // the field comment for why no other health field can stand in for it.
+            this.lastPollAt = Date.now();
+
             // Bail out if stop is requested
             if(this.stopFlag)
                 break;
@@ -822,6 +861,13 @@ class XChainIndexer {
             // beginTransaction, preserving the invariant that an open block transaction is never
             // interrupted mid-flight.
             while( !this.stopFlag && !this.util.isNull(lastIndexerBlock) && !this.util.isNull(lastDecoderBlock) && this.util.bclt(lastIndexerBlock, lastDecoderBlock) ){
+
+                // The heartbeat belongs here too, not only at the outer loop top. This loop
+                // runs the whole backlog and only breaks out every REORG_RECHECK_BLOCKS, so a
+                // healthy initial sync legitimately stays inside it for hours; an outer-loop-only
+                // stamp would report a catching-up indexer dead and, worse, would call it dead
+                // for exactly as long as it is doing the most work.
+                this.lastPollAt = Date.now();
 
                 this.synced = false;
 

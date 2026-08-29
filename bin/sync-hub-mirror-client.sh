@@ -10,7 +10,7 @@
 # in sync (same pattern as xchain-hub/bin/sync-coins.sh for the coin registry).
 #
 # Vendored set: the client (hub_db_sync.js), the schema-version lockstep
-# constant (hub-schema-version.js), and the six mirror-table SQL twins the
+# constant (hub-schema-version.js), and the mirror-table SQL twins the
 # client's ensureTables() creates for consumers without their own schema
 # machinery (the explorer's copies land under src/sql/hub-mirror/ so they are
 # obviously not the explorer's own tables).

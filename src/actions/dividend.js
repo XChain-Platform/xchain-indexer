@@ -85,8 +85,11 @@ class Dividend {
         let recipients = {};
 
         // List of addresses allowed or blocked from holding DIVIDEND_TICK
-        let allowList = (dividendTokenInfo && dividendTokenInfo['ALLOW_LIST']) ? await this.indexerDb.getList(dividendTokenInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : [];
-        let blockList = (dividendTokenInfo && dividendTokenInfo['BLOCK_LIST']) ? await this.indexerDb.getList(dividendTokenInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : [];
+        // Held as Sets: the holder loop below probes membership once per holder, so an O(1)
+        // hash probe replaces a scan of the whole list. Emptiness still gates the check, so a
+        // configured-but-empty ALLOW_LIST keeps admitting everyone exactly as before.
+        let allowList = (dividendTokenInfo && dividendTokenInfo['ALLOW_LIST']) ? new Set(await this.indexerDb.getList(dividendTokenInfo['ALLOW_LIST'], data['BLOCK_INDEX'])) : new Set();
+        let blockList = (dividendTokenInfo && dividendTokenInfo['BLOCK_LIST']) ? new Set(await this.indexerDb.getList(dividendTokenInfo['BLOCK_LIST'], data['BLOCK_INDEX'])) : new Set();
 
         // Loop through list of holders and build out valid recipients list
         dividend['DEBIT'] = 0;
@@ -94,7 +97,7 @@ class Dividend {
             for(let address in holders){
                 let valid = true;
                 // Check if recipient is on the allow or block lists and only add valid addresses to the recipients list
-                if((allowList.length && !allowList.includes(address)) || (blockList.length && blockList.includes(address)))
+                if((allowList.size && !allowList.has(address)) || (blockList.size && blockList.has(address)))
                     valid = false;
                 // Ignore the source address so it is not added to recipients list
                 if(address==data['SOURCE'])
