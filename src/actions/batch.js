@@ -25,6 +25,9 @@
  * 
  ********************************************************************/
 
+// Leaf module (requires nothing of its own), so no cycle with the actions.js note below.
+const { rethrowIfInfraFault } = require('./faultGuard.js');
+
 
 // Resolved at CALL time, never at module load: actions.js requires this file while it is
 // still being evaluated, so a top-level require here would bind an empty exports object.
@@ -550,9 +553,19 @@ class Batch {
     // batch pays for ONE read, not 250.
     //
     // No param is read at all, which is why EXECUTE needs no positional seam: the floor does
-    // not depend on the contract, the method or the arguments. Never throws, for the same
-    // reason its siblings do not - a crash here would halt block processing - and the fallback
-    // is null, which is the pre-D10 verdict.
+    // not depend on the contract, the method or the arguments. A DETERMINISTIC failure never
+    // throws, for the same reason its siblings do not - a crash there would halt block
+    // processing - and the fallback is null, which is the pre-D10 verdict.
+    //
+    // AN INFRASTRUCTURE FAULT IS NOT A DETERMINISTIC FAILURE, and the catch must not treat it
+    // as one. The probe below is a DB read (indexerDb.getTokenInfo), so a deadlock (1213),
+    // lock-wait timeout (1205) or killed connection lands in this catch; returning null for it
+    // makes the caller's verdict node-local. null short-circuits isGasProvablyUnaffordable to
+    // false, so the faulted node writes STATUS 'valid' and dispatches every sub-command while
+    // a healthy peer writes one 'invalid: GAS (insufficient)' record - a fork committed into
+    // the block. rethrowIfInfraFault propagates exactly that class and nothing else, so the
+    // block rolls back and retries; it is the same guard the sibling ISSUE probe gets for
+    // free by calling probeTokenInfo UNWRAPPED (see isGasProvablyUnaffordable).
     async nominalExecuteFee(data){
         try {
             let gasCost = this.util.vmGasCost(this.config['GAS_SCHEDULE'], 'EXECUTE', 0);
@@ -562,6 +575,7 @@ class Batch {
                 return null;
             return this.util.bcmul(gasCost, this.config['GAS_PRICE'], 8);
         } catch(e) {
+            rethrowIfInfraFault(e);
             return null;
         }
     }

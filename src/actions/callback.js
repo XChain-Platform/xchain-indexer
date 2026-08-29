@@ -57,8 +57,11 @@ class Callback {
         let preferences = await this.indexerDb.getAddressPreferences(data['SOURCE'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let holders     = await this.indexerDb.getHolders(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
-        let allowList = (callbackTokenInfo && callbackTokenInfo['ALLOW_LIST']) ? await this.indexerDb.getList(callbackTokenInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : [];
-        let blockList = (callbackTokenInfo && callbackTokenInfo['BLOCK_LIST']) ? await this.indexerDb.getList(callbackTokenInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : [];
+        // Held as Sets: the holder loop below probes membership once per holder, so an O(1)
+        // hash probe replaces a scan of the whole list. Emptiness still gates the check, so a
+        // configured-but-empty ALLOW_LIST keeps admitting everyone exactly as before.
+        let allowList = (callbackTokenInfo && callbackTokenInfo['ALLOW_LIST']) ? new Set(await this.indexerDb.getList(callbackTokenInfo['ALLOW_LIST'], data['BLOCK_INDEX'])) : new Set();
+        let blockList = (callbackTokenInfo && callbackTokenInfo['BLOCK_LIST']) ? new Set(await this.indexerDb.getList(callbackTokenInfo['BLOCK_LIST'], data['BLOCK_INDEX'])) : new Set();
 
         let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
 
@@ -81,7 +84,7 @@ class Callback {
                 if(address==data['SOURCE'])
                    continue;
 
-                if((allowList.length && !allowList.includes(address)) || (blockList.length && blockList.includes(address)))
+                if((allowList.size && !allowList.has(address)) || (blockList.size && blockList.has(address)))
                     valid = false;
 
                 if(valid){

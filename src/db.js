@@ -18,6 +18,20 @@
  *
  ********************************************************************/
 
+// Runtime floor, asserted above the require it protects. The pinned mariadb 3.5.x line is
+// ESM-only ("type": "module"), and require() loads ESM without a flag only from Node 22.12.0;
+// below that the next line throws a bare ERR_REQUIRE_ESM that names neither the Node version
+// nor the reason. engines.node cannot enforce this (npm only warns, and nothing in the tree
+// sets engine-strict), and .nvmrc says only "22", so the check lives here, where the failure
+// actually happens. Same guard, same wording, as xchain-hub/src/db.js.
+const [NODE_MAJOR, NODE_MINOR] = String(process.versions.node).split('.').map(Number);
+if (NODE_MAJOR < 22 || (NODE_MAJOR === 22 && NODE_MINOR < 12)) {
+    throw new Error('xchain-indexer requires Node >= 22.12.0 (running ' + process.versions.node +
+        '): the pinned mariadb 3.5.x driver is ESM-only and require() can load ESM without ' +
+        'a flag only from Node 22.12. Upgrade the runtime (see .nvmrc), or start Node with ' +
+        '--experimental-require-module.');
+}
+
 // Load required libraries
 const mariadb = require('mariadb');
 const fs      = require('fs');
@@ -158,6 +172,32 @@ const CANONICAL_CARET_ID = /^[1-9][0-9]*$/;
 function usesCapabilitySnapshot(config, capability){
     if(!config || config['COIN'] === 'BTC') return false;
     return capability === 'cross_chain' || capability === 'oracle_publish' || capability === 'price';
+}
+
+// True when str[i] opens a backslash escape inside the currently open quoted span.
+//
+// MariaDB/MySQL honour `\<char>` inside `'` and `"` string literals by default, so a
+// `\'` does NOT close the literal. Every quote walker below must consult this helper
+// instead of closing a span on the next matching quote, or the scan desyncs from the
+// statements the server would run: `INSERT ... VALUES ('it\'s fine'); DROP TABLE
+// balances;` closes at the `\'`, re-opens at the literal's real closing quote, and
+// swallows the `;` and the DROP into one chunk whose first keyword is INSERT,
+// invisible to the ^-anchored destructive checks in _destructiveAutoStatement, which
+// then score the file auto-eligible.
+//
+// Backtick spans are excluded: a backslash inside an identifier quote is a literal
+// character there, so consuming the next char would desync in the other direction.
+// A trailing lone backslash opens nothing, so no walker indexes past end-of-input.
+//
+// Module-level, not a method: hasUnquotedHash is deliberately a local closure because
+// runMigrations' callers build partial `this` objects, and a prototype hop would break
+// the guard on those (see the comment at that closure).
+//
+// Holds only while sql_mode omits NO_BACKSLASH_ESCAPES. Nothing in this tree sets
+// sql_mode and the pool params below set none; if that ever changes, every caller of
+// this helper must be revisited.
+function opensBackslashEscape(str, i, quote){
+    return str[i] === '\\' && quote !== '`' && i + 1 < str.length;
 }
 
 class Database {
@@ -835,6 +875,7 @@ class Database {
             for(let i = 0; i < s.length; i++){
                 const c = s[i];
                 if(q){
+                    if(opensBackslashEscape(s, i, q)){ i++; continue; }
                     if(c === q){
                         if(s[i + 1] === q){ i++; }
                         else { q = null; }
@@ -982,6 +1023,7 @@ class Database {
         for(; i < stmt.length; i++){
             const ch = stmt[i];
             if(quote){
+                if(opensBackslashEscape(stmt, i, quote)){ i++; continue; }
                 if(ch === quote){
                     if(stmt[i + 1] === quote){ i++; }    // doubled-quote escape
                     else { quote = null; }
@@ -1381,9 +1423,10 @@ class Database {
     // Remove SQL line comments while respecting quoted strings, so a ';'
     // appearing inside comment prose is never mistaken for a statement
     // terminator. Single/double-quote and backtick spans are preserved verbatim
-    // (doubled quotes treated as escapes); a `--` or `#` outside any quote or
-    // block comment skips to the end of its line. Newlines are kept so error
-    // positions stay meaningful.
+    // (a doubled quote escapes, and inside `'`/`"` so does a backslash - see
+    // opensBackslashEscape); a `--` or `#` outside any quote or block comment
+    // skips to the end of its line. Newlines are kept so error positions stay
+    // meaningful.
     //
     // `#` counts because MariaDB/MySQL honour it to end-of-line exactly like
     // `--`. Missing it made a `# note` line ahead of a destructive statement
@@ -1406,6 +1449,7 @@ class Database {
             const ch = sql[i];
             if(quote){
                 out += ch;
+                if(opensBackslashEscape(sql, i, quote)){ out += sql[++i]; continue; }
                 if(ch === quote){
                     if(sql[i + 1] === quote){ out += sql[++i]; }
                     else { quote = null; }
@@ -1437,7 +1481,7 @@ class Database {
     // ship, and _destructiveAutoStatement ends up classifying fragments rather than
     // real statements. `--` and `#` line comments are stripped first (same rule as
     // the callers used); the quote model matches stripSqlLineComments exactly
-    // (single/double-quote and backtick spans, doubled quotes treated as escapes).
+    // (single/double-quote and backtick spans, doubled-quote and backslash escapes).
     // Returns trimmed, non-empty statements.
     splitSqlStatements(sql){
         const stripped = this.stripSqlLineComments(sql);
@@ -1448,6 +1492,7 @@ class Database {
             const ch = stripped[i];
             if(quote){
                 current += ch;
+                if(opensBackslashEscape(stripped, i, quote)){ current += stripped[++i]; continue; }
                 if(ch === quote){
                     if(stripped[i + 1] === quote){ current += stripped[++i]; }
                     else { quote = null; }
@@ -16437,6 +16482,56 @@ Database.MIGRATION_PRECONDITIONS = {
                    'anchor_reward_reconcile_log.reward_derive_block_index are already present, ' +
                    'converged from the table definitions by the startup drift reconciler, so this ' +
                    'migration has nothing left to add.';
+        }
+    },
+    // Adds validator_rewards.round_qualifier and anchor_reward_reconcile_log.round_qualifier,
+    // and REBUILDS validator_rewards.reward_unique to include the qualifier. It is mode=manual,
+    // and unlike the derive-block entry above the drift reconciler converges only PART of that
+    // end state: both columns are NOT NULL *with a DEFAULT* in src/sql, so alterTableForDrift
+    // ADDs them, but reconcileTableIndexes never DROPs an index name already held by a
+    // differently-defined live index, so an AGED database keeps the four-column key and logs a
+    // "cannot be applied" drift warning every boot. A database CREATED from the current src/sql
+    // gets the five-column index directly from validator_rewards.sql (createTable executes every
+    // statement in the file, including its CREATE UNIQUE INDEX), so it needs nothing from this
+    // file and would otherwise sit PENDING with no ledger row forever.
+    //
+    // The predicate keys on the LIVE INDEX SHAPE, not on the column, and that is the whole point.
+    // The columns arrive on their own, so a column-only test would baseline exactly the database
+    // this migration exists for: qualifier column present, reward_unique still four-column, the
+    // qualifier-aware writers silently re-collapsing two distinct archive rewards. That state
+    // must NOT be baselined, so the index check is the gate and the columns are only a
+    // completeness check on the other half of the file.
+    //
+    // ONE bind parameter: _migrationPreconditionSkip passes [this.dbName] and nothing else, so
+    // the database name is bound once in a CTE and reused by each subquery.
+    //
+    // non_unique = 0 is asserted, not assumed: a same-named NON-unique index carrying the
+    // qualifier would satisfy a name-and-column test while deduplicating nothing.
+    //
+    // Any missing object, a partial shape, or a count that will not parse returns null and the
+    // file runs, which is idempotent (IF [NOT] EXISTS throughout, and the DROP/ADD index pair
+    // re-creates an identical definition).
+    '2026-08-24-validator-rewards-round-qualifier.sql': {
+        sql: "WITH p AS (SELECT ? AS db) SELECT " +
+             "(SELECT COUNT(*) FROM information_schema.columns, p WHERE table_schema = p.db " +
+             "AND table_name = 'validator_rewards' AND column_name = 'round_qualifier') AS reward_col, " +
+             "(SELECT COUNT(*) FROM information_schema.columns, p WHERE table_schema = p.db " +
+             "AND table_name = 'anchor_reward_reconcile_log' AND column_name = 'round_qualifier') AS log_col, " +
+             "(SELECT COUNT(*) FROM information_schema.statistics, p WHERE table_schema = p.db " +
+             "AND table_name = 'validator_rewards' AND index_name = 'reward_unique' " +
+             "AND column_name = 'round_qualifier' AND non_unique = 0) AS key_col",
+        skipWhen: (rows) => {
+            if(!rows.length) return null;
+            const row = rows[0] || {};
+            const counts = [row.reward_col, row.log_col, row.key_col];
+            for(const raw of counts){
+                if(raw == null) return null;
+                const n = Number(raw);
+                if(Number.isNaN(n) || n < 1) return null;
+            }
+            return 'validator_rewards.reward_unique already carries round_qualifier and both ' +
+                   'round_qualifier columns are present, so this database is already on the ' +
+                   'qualified reward identity and this migration has nothing left to rebuild.';
         }
     },
 };

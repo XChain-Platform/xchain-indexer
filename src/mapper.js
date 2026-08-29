@@ -43,17 +43,24 @@ class Mapper {
         // Collect every address/tick to map first, then write each group in one batched
         // INSERT instead of a serial per-address/per-tick round-trip - recipient-scaling
         // actions (DIVIDEND/AIRDROP/CALLBACK) can carry thousands of addresses here.
+        // Addresses are the keys of a plain object, so they arrive unique and need no dedup
+        // scan; ticks do repeat across addresses, so dedup those through a Set, which probes
+        // in O(1) and preserves the first-seen order the batched INSERT already wrote.
+        let ticks = new Set();
+
         for(let address in list){
 
-            if(!this.util.isNull(address) && !mapped.address.includes(address))
+            if(!this.util.isNull(address))
                 mapped.address.push(address);
 
             for(let tick of list[address]){
-                if(!this.util.isNull(tick) && !mapped.tick.includes(tick))
-                    mapped.tick.push(tick);
+                if(!this.util.isNull(tick))
+                    ticks.add(tick);
             }
 
         }
+
+        mapped.tick = [...ticks];
 
         await this.indexerDb.createActionMappings(action_index, 'address', mapped.address);
         await this.indexerDb.createActionMappings(action_index, 'tick', mapped.tick);
