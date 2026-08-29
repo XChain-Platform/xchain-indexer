@@ -9,7 +9,7 @@ If you're reporting a security issue, **stop here** and read [`SECURITY.md`](./S
 ## Quick links
 
 - Project overview: [`README.md`](./README.md)
-- Full component docs: the [`xchain-documentation`](https://github.com/XChain-Platform/xchain-documentation/tree/master/indexer) repository (architecture, configuration, database schema, operations)
+- Full component docs: the [`xchain-documentation`](https://github.com/XChain-Platform/xchain-documentation/tree/master/components/indexer) repository (architecture, configuration, database schema, operations)
 - Disclosure policy: [`SECURITY.md`](./SECURITY.md)
 - License: [`LICENSE.md`](./LICENSE.md) + [`NOTICE.md`](./NOTICE.md) (GNU Affero General Public License v3.0, dual-licensed)
 
