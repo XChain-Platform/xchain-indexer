@@ -68,6 +68,7 @@ const abas    = require('../archive_batch_author_activation.js');
 const ahug    = require('../archive_head_unverified_gate_activation.js');
 const aact    = require('../anchor_activation.js');
 const aaq     = require('../anchor-action-query.js');
+const diag    = require('../diagnosticEvents.js');
 
 const ALLOWED_CHAINS = ['BTC', 'LTC', 'DOGE'];
 
@@ -479,6 +480,19 @@ class Anchor {
                     ' batch ' + data['MATCH_BATCH_SEQ'] + ' (' + data['MATCH_COUNT'] + ' matches, ' + data['TOTAL_CHUNKS'] + ' chunk(s))' +
                     ' : ' + data['STATUS']);
 
+        // A refused archive head prints through the same console.log as an
+        // accepted one, at the same level, one word apart. The event separates
+        // them for anything reading the stream.
+        if(diag.isAnchorFailureStatus(data['STATUS']))
+            diag.noteAnchorFailed({
+                chain:          data['CHAIN'],
+                reason:         data['STATUS'],
+                network:        data['NETWORK'],
+                version:        format,
+                checkpoint_seq: data['CHECKPOINT_SEQ'],
+                block_index:    data['BLOCK_INDEX']
+            });
+
         await this.indexerDb.createAnchorAction(data);
 
         // Head-side archive reassembly gate: the chunk-side gate in _parseContinuation only
@@ -521,6 +535,14 @@ class Anchor {
                 let crc = this._archiveCrc(b64);
                 if(crc === null || crc !== String(data['BATCH_CRC32'])){
                     console.warn("\t ANCHOR v" + format + " : batch " + data['MATCH_BATCH_SEQ'] + ' head-side reassembly CRC mismatch, flagging invalid_archive');
+                    diag.noteAnchorFailed({
+                        chain:           data['CHAIN'],
+                        reason:          'invalid_archive: head-side reassembly CRC mismatch',
+                        network:         data['NETWORK'],
+                        version:         format,
+                        match_batch_seq: data['MATCH_BATCH_SEQ'],
+                        block_index:     data['BLOCK_INDEX']
+                    });
                     await this.indexerDb.setAnchorArchiveStatus(Number(data['ACTION_INDEX']), 'invalid_archive');
                 }
             }
@@ -782,6 +804,19 @@ class Anchor {
                     ' (' + sections.length + ' section(s): ' + sections.map(s => s.CHAIN).join(',') + ')' +
                     ' : ' + data['STATUS']);
 
+        // A bundle verdict is all-or-nothing, so one event carries every chain the
+        // rejected bundle would have checkpointed. A bundle too malformed to yield
+        // a section names no chain at all, which is itself the reason.
+        if(diag.isAnchorFailureStatus(data['STATUS']))
+            diag.noteAnchorFailed({
+                chain:          sections.map(s => s.CHAIN).join(','),
+                reason:         data['STATUS'],
+                network:        data['NETWORK'],
+                version:        0,
+                snapshot_block: data['SNAPSHOT_BLOCK'],
+                block_index:    data['BLOCK_INDEX']
+            });
+
         // One row per section, in wire order. A bundle too malformed to yield a single
         // section still records ONE row at section_index 0 carrying the header and the
         // verdict, so a rejected action is never invisible on chain.
@@ -936,6 +971,19 @@ class Anchor {
         console.log("\t ANCHOR v2 : batch " + data['MATCH_BATCH_SEQ'] + ' chunk ' + data['CHUNK_INDEX'] +
                     '/' + data['TOTAL_CHUNKS'] + ' : ' + data['STATUS']);
 
+        // A continuation chunk carries no chain of its own; the batch seq is what
+        // ties it back to the head that names one.
+        if(diag.isAnchorFailureStatus(data['STATUS']))
+            diag.noteAnchorFailed({
+                chain:           parent ? parent.chain : undefined,
+                reason:          data['STATUS'],
+                network:         this.config['NETWORK'],
+                version:         2,
+                match_batch_seq: data['MATCH_BATCH_SEQ'],
+                chunk_index:     data['CHUNK_INDEX'],
+                block_index:     data['BLOCK_INDEX']
+            });
+
         await this.indexerDb.createAnchorAction(data);
 
         // When the last chunk lands, verify the reassembled archive against the
@@ -958,6 +1006,14 @@ class Anchor {
                 let crc = this._archiveCrc(b64);
                 if(crc === null || crc !== String(parent.batch_crc32)){
                     console.warn("\t ANCHOR v2 : batch " + data['MATCH_BATCH_SEQ'] + ' reassembly CRC mismatch, flagging invalid_archive');
+                    diag.noteAnchorFailed({
+                        chain:           parent.chain,
+                        reason:          'invalid_archive: reassembly CRC mismatch',
+                        network:         this.config['NETWORK'],
+                        version:         2,
+                        match_batch_seq: data['MATCH_BATCH_SEQ'],
+                        block_index:     data['BLOCK_INDEX']
+                    });
                     await this.indexerDb.setAnchorArchiveStatus(Number(parent.action_index), 'invalid_archive');
                 }
             }

@@ -47,6 +47,7 @@ const crypto        = require('crypto');
 const { installObservability } = require('./observability');   // default-off /metrics + structured log shim
 const { installIndexerMetrics } = require('./indexerMetrics');  // poll-freshness heartbeat gauge
 const { parseCorsOrigin } = require('./corsOrigin.js');
+const { installCrashHandlers } = require('./diagnosticEvents.js');
 
 // Constant-time API-key comparison. A plain `!==` short-circuits at the first
 // mismatching byte, leaking the key that guards reward-forging writes through
@@ -1781,6 +1782,12 @@ async function startApi(){
     });
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT',  () => shutdown('SIGINT'));
+
+    // Crash visibility. Registered here rather than at module scope because
+    // several suites require modules of this repo in-process under mocha, which
+    // installs its own handlers: a module-scope handler that exits would abort
+    // the whole run instead of failing one test.
+    installCrashHandlers();
 
 }
 

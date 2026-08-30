@@ -69,6 +69,7 @@ const { rethrowIfInfraFault } = require('./actions/faultGuard');
 // The validator_rewards ledger-key qualifier rule, shared with the two JS writers so the
 // SQL predicate here and they cannot disagree about which reward type is qualified.
 const arKey = require('./anchor_reward_key.js');
+const diag = require('./diagnosticEvents.js');
 
 // A stake weight, as stake_weighted_quorum.bcnum accepts one (plain decimal string).
 // Kept identical to that predicate's pattern so this producer can never emit a row the
@@ -9178,6 +9179,16 @@ class Database {
             [String(call_id).toLowerCase(), String(reason),
              detail == null ? null : String(detail).substring(0, 250),
              block_index, block_index]);
+        // The row alone is not visibility: this table is node-local, never
+        // replicated, and read only when somebody asks getcrosschaincallresult
+        // about this exact call. The event is what a collector can key on, and it
+        // rides the write so the two can never drift.
+        diag.noteXcallRejected({
+            call_id:     String(call_id).toLowerCase(),
+            reason:      String(reason),
+            detail:      detail == null ? undefined : String(detail).substring(0, 250),
+            block_index: block_index
+        });
     }
 
     // Drop the refusal diagnostics for a call (called once it executes).
