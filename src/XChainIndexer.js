@@ -35,6 +35,8 @@ const HubClient    = require('./hub_client.js');
 const HubDbSync    = require('./hub_db_sync.js');
 const anchorRewardDerive = require('./anchor_reward_derive.js');
 const AnchorProofClient  = require('./anchor_proof_client.js');
+const rollcallClose      = require('./rollcall_close.js');
+const { RollcallProofClient } = require('./rollcall_proof_client.js');
 const HubPushQueue = require('./hub_push_queue.js');
 const UtxoTracker  = require('./UtxoTracker.js');
 const Genesis      = require('./genesis.js');
@@ -520,6 +522,13 @@ class XChainIndexer {
         // inert off BTC and costs nothing unconfigured); an unset DOGE_INDEXER_URL means no
         // matured reward can be proven, which DEFERS the block rather than paying blind.
         this.anchorProof = new AnchorProofClient(this.config);
+
+        // DOGE roll-call visibility for the BTC-side epoch close. Same shape and the
+        // same reason as anchorProof: the presence proofs land on DOGE while the
+        // membership verdict is taken here, so the close asks the DOGE indexer for
+        // the raw signed rows and judges them itself. Inert off BTC; unconfigured
+        // means every close DEFERS rather than reading silence as absence.
+        this.rollcallProof = new RollcallProofClient(this.config);
 
         // Overlay hub-served operational params on top of local config defaults (best-effort)
         await this._applyHubConfigOverlay();
@@ -1262,6 +1271,16 @@ class XChainIndexer {
                         // deriving a set this node's peers would not.
                         await anchorRewardDerive.deriveAnchorRewards(this.indexerDb, this.config, blockToParse, this.anchorProof);
 
+                        // ROLLCALL epoch close (validator liveness eviction, §3.4). BTC-only and
+                        // gated on ROLLCALL_ACTIVATION, so below the gate (or off-BTC) this is a
+                        // no-op and legacy behavior stays byte-identical. Sits HERE, before the
+                        // cooldown sweep below, because an eviction mints real `unstakes` rows at
+                        // this block and the sweep must see them in the same pass. Throws
+                        // RollcallProofUnavailableError when the epoch cannot be decided from
+                        // here, which defers the block rather than reading a silent DOGE peer as
+                        // a federation-wide absence.
+                        await rollcallClose.closeRollcallEpochs(this.indexerDb, this.config, blockToParse, this.rollcallProof, this.util);
+
                         // Check for any cancelled items (dispensers)
                         await this.util.processCancellations(this.actions, this.indexerDb, blockToParse, blockTime);
 
@@ -1429,6 +1448,19 @@ class XChainIndexer {
                             'unproven or partial reward set would fork). Retrying after ' +
                             this.config['BLOCK_CHECK_INTERVAL'] + 'ms.');
                         this.stallReason = 'anchor_reward_proof_unavailable';
+                        this.stallClearsAt = null;          // clears when DOGE visibility returns, not on a clock
+                    } else if(error && error.name === 'RollcallProofUnavailableError'){
+                        // A ROLLCALL epoch could not be decided from HERE. Closing it anyway
+                        // would take the worst possible reading of silence: an unreachable or
+                        // stale DOGE peer answers "no signatures", which is indistinguishable
+                        // from the entire federation being absent, and acting on it would evict
+                        // every validator at once. Deferring is the only outcome that keeps this
+                        // node's verdict identical to its peers'.
+                        console.error('ROLLCALL PROOF UNAVAILABLE at block ' + lastIndexerBlock + ': ' +
+                            (error && error.message) + ' HALTING block processing (not committing; ' +
+                            'silence is not absence). Retrying after ' +
+                            this.config['BLOCK_CHECK_INTERVAL'] + 'ms.');
+                        this.stallReason = 'rollcall_proof_unavailable';
                         this.stallClearsAt = null;          // clears when DOGE visibility returns, not on a clock
                     } else {
                         this.util.logError(`Error while parsing block data at block ${lastIndexerBlock}:`, error);

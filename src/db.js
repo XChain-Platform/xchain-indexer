@@ -13310,6 +13310,149 @@ class Database {
         return await this.doQuery(query, [e, h].concat(keys));
     }
 
+    // Record an epoch's close verdict, BTC side. Written once per epoch at C,
+    // whether or not it rolled: an epoch missing from this table is
+    // indistinguishable from one that has not closed yet, and the K-streak has to
+    // know which epochs to skip.
+    //
+    // `responsibleSources` is pinned here and never re-derived (see the table
+    // comment). Pass it only for a ROLLED epoch; an unrolled one decides nothing
+    // and stores NULL.
+    async insertRollcall(epochHeight, snapshotBlock, closeBlock, rolled, responsibleSources){
+        let e = parseInt(epochHeight);
+        if(!Number.isFinite(e)) return false;
+        let pinned = (rolled && Array.isArray(responsibleSources))
+                   ? JSON.stringify(responsibleSources.map((s) => String(s)))
+                   : null;
+        let query = `INSERT INTO rollcalls (epoch_height, snapshot_block, close_block, rolled, responsible_set_json)
+                     VALUES (?, ?, ?, ?, ?)
+                     ON DUPLICATE KEY UPDATE snapshot_block=VALUES(snapshot_block),
+                                             close_block=VALUES(close_block),
+                                             rolled=VALUES(rolled),
+                                             responsible_set_json=VALUES(responsible_set_json)`;
+        await this.doQuery(query, [e, parseInt(snapshotBlock), parseInt(closeBlock), rolled ? 1 : 0, pinned]);
+        return true;
+    }
+
+    // Pin one absence row per responsible source that did not sign at a ROLLED
+    // epoch. `evicted` marks the rows that completed a K-streak at this close; it
+    // is the key the rollback's delegations repair finds the affected sources by,
+    // because an eviction writes no DELEGATE-revoke row to self-join on.
+    async insertRollcallAbsences(rows){
+        if(!Array.isArray(rows) || rows.length === 0) return 0;
+        let values = [], placeholders = [];
+        for(let r of rows){
+            let source_id = await this.getAddressId(r.source);
+            if(source_id === null) continue;   // a source with no address row cannot have staked
+            placeholders.push('(?, ?, ?, ?)');
+            values.push(parseInt(r.epoch_height), source_id, parseInt(r.close_block), r.evicted ? 1 : 0);
+        }
+        if(placeholders.length === 0) return 0;
+        let query = `INSERT INTO rollcall_absences (epoch_height, source_id, close_block, evicted)
+                     VALUES ${placeholders.join(', ')}
+                     ON DUPLICATE KEY UPDATE close_block=VALUES(close_block), evicted=VALUES(evicted)`;
+        await this.doQuery(query, values);
+        return placeholders.length;
+    }
+
+    // The last `limit` ROLLED epochs at or below `beforeEpochHeight`, newest first,
+    // each with its pinned responsible set. This is the streak's lookback window:
+    // unrolled epochs are excluded here rather than filtered later, so they are
+    // never counted and never streak-ending.
+    async getRolledRollcallEpochs(beforeEpochHeight, limit){
+        let e = parseInt(beforeEpochHeight), n = parseInt(limit);
+        if(!Number.isFinite(e) || !Number.isFinite(n) || n <= 0) return [];
+        let query = `SELECT epoch_height, snapshot_block, close_block, responsible_set_json
+                       FROM rollcalls
+                      WHERE rolled = 1 AND epoch_height <= ?
+                      ORDER BY epoch_height DESC
+                      LIMIT ?`;
+        return await this.doQuery(query, [e, n]);
+    }
+
+    // Which of `epochHeights` this source was recorded absent at. Bounded by the
+    // caller's list, which is the lookback window, so the answer size is fixed by
+    // the protocol constant rather than by history.
+    async getRollcallAbsenceEpochsForSource(source, epochHeights){
+        if(!Array.isArray(epochHeights) || epochHeights.length === 0) return [];
+        let source_id = await this.getAddressId(source);
+        if(source_id === null) return [];
+        let epochs = epochHeights.map((h) => parseInt(h)).filter((h) => Number.isFinite(h));
+        if(epochs.length === 0) return [];
+        let query = `SELECT epoch_height FROM rollcall_absences
+                      WHERE source_id = ? AND epoch_height IN (${epochs.map(() => '?').join(', ')})`;
+        let rows = await this.doQuery(query, [source_id].concat(epochs));
+        return rows.map((r) => parseInt(r.epoch_height));
+    }
+
+    // Every stake row an eviction must sweep for `source`, grouped by signing key.
+    //
+    // INCLUDES PENDING-ACTIVATION ROWS, which is the difference from the UNSTAKE
+    // path and is deliberate: UNSTAKE leaves them alone because the actor chose an
+    // amount that did not cover them, but an eviction is not an amount, it is a
+    // removal. Leaving them would let a 1-XCHAIN top-up landed just before the
+    // epoch walk the source straight back in.
+    async getSweepableStakeBySource(source, blockIndex, includePending){
+        let source_id = await this.getAddressId(source);
+        if(source_id === null) return [];
+        let valid_id = await this.getStatusId('valid');
+        if(valid_id === null) return [];
+        let query = `SELECT s.signing_pubkey_id                     AS signing_pubkey_id,
+                            ip.pubkey                               AS signing_pubkey,
+                            SUM(CAST(s.amount AS DECIMAL(30,8)))    AS amount
+                       FROM stakes s
+                            LEFT JOIN index_pubkeys ip ON (ip.id = s.signing_pubkey_id)
+                      WHERE s.source_id = ? AND s.status_id = ? AND s.deactivation_block IS NULL`;
+        let args = [source_id, valid_id];
+        if(!includePending && blockIndex !== undefined && blockIndex !== null){
+            query += ' AND s.activation_block <= ?';
+            args.push(blockIndex);
+        }
+        query += ' GROUP BY s.signing_pubkey_id, ip.pubkey';
+        let rows = await this.doQuery(query, args);
+        return rows.map((r) => ({
+            signing_pubkey_id: r.signing_pubkey_id,
+            signing_pubkey:    r.signing_pubkey,
+            amount:            (r.amount === null || r.amount === undefined) ? '0' : String(r.amount)
+        }));
+    }
+
+    // SOURCE-SCOPED deactivation stamp, and the scoping is a correctness
+    // requirement rather than tidiness. setStakeDeactivationByPubkey has no
+    // source_id term, so against a key held by two sources it would deactivate the
+    // OTHER source's stake as well -- an eviction of one validator silently
+    // un-membering a second. `includePending` drops the activation_block ceiling so
+    // the sweep covers the pending rows getSweepableStakeBySource counted.
+    async setStakeDeactivationBySourceAndPubkey(source, pubkey, deactivationBlock, currentBlock, includePending){
+        let source_id = await this.getAddressId(source);
+        let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
+        if(source_id === null || pubkey_id === null) return false;
+        let valid_id = await this.getStatusId('valid');
+        let query = `UPDATE stakes SET deactivation_block=?
+                     WHERE source_id=? AND signing_pubkey_id=? AND status_id=? AND deactivation_block IS NULL`;
+        let args = [deactivationBlock, source_id, pubkey_id, valid_id];
+        if(!includePending){
+            query += ' AND activation_block <= ?';
+            args.push(currentBlock);
+        }
+        await this.doQuery(query, args);
+        return true;
+    }
+
+    // Stamp EVERY active delegation of a source, which setDelegationDeactivation
+    // cannot do: it stamps one (source, pubkey) pair, so an evicted source keeping
+    // any delegated key would stay inside the capability predicate through the
+    // DELEGATE branch and the eviction would not remove it.
+    async setAllDelegationDeactivationsBySource(source, deactivationBlock){
+        let source_id = await this.getAddressId(source);
+        if(source_id === null) return 0;
+        let valid_id = await this.getStatusId('valid');
+        let query = `UPDATE delegations SET deactivation_block=?
+                     WHERE source_id=? AND status_id=? AND deactivation_block IS NULL`;
+        let result = await this.doQuery(query, [deactivationBlock, source_id, valid_id]);
+        return (result && result.affectedRows !== undefined) ? result.affectedRows : 0;
+    }
+
     // Validators with a `passed` possession-proof inside PROOF_WINDOW_BLOCKS of
     // `blockIndex` - the "verified full node" set (before the live-stake intersect,
     // which callers apply via hasCapability('full_node')). Returns one row per

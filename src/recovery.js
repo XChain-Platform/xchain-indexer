@@ -66,6 +66,7 @@ const swq     = require('./stake_weighted_quorum.js');
 const eq      = require('./equivocation_header.js');
 const ccr     = require('./cross_chain_royalty_activation.js');
 const ar      = require('./anchor_reward_activation.js');
+const rca     = require('./rollcall_activation.js');
 const abas    = require('./archive_batch_author_activation.js');
 const srb     = require('./snapshot_reorg_buffer.js');
 const cmsh    = require('./capability_min_stake_history.js');
@@ -894,8 +895,16 @@ class AnchorRecovery {
                                            ar.isAnchorRewardActive(Number(r.block_index), network);
                 let derivedArchiveReward = String(r.reward_type) === 'anchor_archive' &&
                                            ar.isArchiveRewardActive(Number(r.block_index), network);
+                // rollcall_publish rides the same pin for the same reason: its amount is a
+                // frozen consensus constant paid to the ELECTED leader, never taken from the
+                // wire, so an archive claiming a larger figure must not be staged
+                // COLLECT-spendable. Its block_index is the EARN block (the epoch height),
+                // which is what isRollcallActive gates on.
+                let derivedRollcallReward = String(r.reward_type) === 'rollcall_publish' &&
+                                            rca.isRollcallActive(Number(r.block_index), network);
                 let frozen = derivedChainReward ? ar.ANCHOR_REWARD_AMOUNT
-                           : derivedArchiveReward ? ar.ARCHIVE_REWARD_AMOUNT : null;
+                           : derivedArchiveReward ? ar.ARCHIVE_REWARD_AMOUNT
+                           : derivedRollcallReward ? rca.ROLLCALL_REWARD_AMOUNT : null;
                 let amount = (frozen !== null) ? frozen : String(r.amount);
                 if(frozen !== null && String(r.amount) !== frozen)
                     this.log('recovery: WARNING archived ' + r.reward_type + ' #' + r.round_number +

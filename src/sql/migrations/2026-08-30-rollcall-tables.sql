@@ -15,6 +15,8 @@
 --                       INCLUDING unrolled ones, because the K-streak has to
 --                       know which epochs to skip and a missing row is
 --                       indistinguishable from an epoch that has not closed.
+--                       Carries the pinned responsible set, without which the
+--                       streak cannot tell "present" from "was not in R".
 --   rollcall_absences   BTC side. One row per responsible source that did not
 --                       sign at a ROLLED epoch, pinned at close and never
 --                       re-derived, because SLASH rewrites stakes.amount in
@@ -48,6 +50,7 @@ CREATE TABLE IF NOT EXISTS rollcalls (
     snapshot_block BIGINT UNSIGNED NOT NULL,
     close_block    BIGINT UNSIGNED NOT NULL,
     rolled         TINYINT UNSIGNED NOT NULL,
+    responsible_set_json LONGTEXT DEFAULT NULL,
     PRIMARY KEY (epoch_height),
     KEY idx_rollcalls_close (close_block),
     KEY idx_rollcalls_rolled (rolled, epoch_height)
