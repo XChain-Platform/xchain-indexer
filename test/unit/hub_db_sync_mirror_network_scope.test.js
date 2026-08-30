@@ -114,7 +114,24 @@ describe('HubDbSync mirror network scope @regression @tier2', function () {
         assert.strictEqual(sync._applyRow.callCount, 3);
     });
 
-    it('re-pages from 0 and keeps every local row when the hub holds fewer rows than the mirror', async function () {
+    // Two separate claims, and the delete is the one that needs justifying.
+    //
+    // _purgeForeignNetworkRows sets the bar: page contents may never justify a delete,
+    // because a filtered endpoint, a paging hole or a partial drain can each make a valid
+    // row LOOK unserved. The tests below hold that line, and nothing here relaxes it.
+    //
+    // An advertised ceiling is not page contents. It is the source's own MAX(id) for the
+    // table, stated in the subscription ready frame, and none of those three hazards can
+    // move it. It is also unfiltered for every table that reaches this comparison, since
+    // the two ceilings computed with a status filter belong to FULL_REPAGE_TABLES, whose
+    // cursor is already 0.
+    //
+    // Restarting the cursor alone leaves the mirror broken: the apply is id-parity
+    // INSERT IGNORE, so the hub's real row 5 is silently dropped by a stale local row 5
+    // that a rebuilt hub's id space now reuses. _applyRow is stubbed in this file, so a
+    // callCount assertion proves rows were OFFERED and never that they landed; the
+    // integration suite covers the collision against a real database.
+    it('clears the scope and re-pages when the local cursor sits above the hub ceiling', async function () {
         // Same network on both sides, so no row is provably foreign; the hub's advertised
         // ceiling is the only evidence that the local cursor is not in its id space.
         const { sync, seen } = makeSync({ network: 'testnet', foreign: 0, unscopedMax: 40, scopedMax: 40 });
@@ -126,9 +143,76 @@ describe('HubDbSync mirror network scope @regression @tier2', function () {
         assert.deepStrictEqual(sinceIds(httpGet), [0], 'a cursor above the hub ceiling must start over');
         assert.strictEqual(sync._applyRow.callCount, 20);
         assert.strictEqual(mark, 55);
-        assert.strictEqual(seen.deletes.length, 1, 'only the network purge runs');
-        assert.deepStrictEqual(seen.deletes[0].args, ['testnet'],
-            'rows the hub does not carry are never deleted on that basis alone');
+        const scopePurge = seen.deletes.filter((d) => / WHERE network = \?$/.test(d.sql));
+        assert.strictEqual(scopePurge.length, 1,
+            'the retired id space must be cleared, or INSERT IGNORE drops every row the re-page delivers');
+        assert.deepStrictEqual(scopePurge[0].args, ['testnet'], 'the purge is scoped like the cursor that detected it');
+    });
+
+    // The rebuilt-hub case, which is the one the ceiling comparison exists for. A hub whose
+    // database was dropped and recreated restarts its auto-increment at 1 and therefore
+    // advertises max_id 0 until its first row lands, so 0 is the signature of a rebuild and
+    // must be read as a measurement. HubDbBroadcaster omits the key entirely when its query
+    // throws, which is what makes absent and zero distinguishable here; treating zero as
+    // missing information leaves the mirror serving a chain history that no longer exists,
+    // with nothing logged and every service reporting healthy.
+    it('treats an advertised ceiling of ZERO as authoritative, not as missing information', async function () {
+        const { sync, seen } = makeSync({ network: 'testnet', foreign: 0, unscopedMax: 11243, scopedMax: 11243 });
+        sync._readyMaxIds = { state_checkpoints: 0 };
+        const httpGet = stubHub(sync, [], 77);
+
+        const mark = await sync._bootstrapTable('state_checkpoints');
+
+        assert.deepStrictEqual(sinceIds(httpGet), [0], 'an empty source is still a position: start over');
+        const scopePurge = seen.deletes.filter((d) => / WHERE network = \?$/.test(d.sql));
+        assert.strictEqual(scopePurge.length, 1, 'a rebuilt hub must not leave the old id space behind');
+        assert.deepStrictEqual(scopePurge[0].args, ['testnet']);
+        assert.strictEqual(mark, 77);
+    });
+
+    // ABSENT is not ZERO. An older hub advertises no max_ids at all, and must keep the
+    // fail-open behaviour: the field is additive, so a missing ceiling is no evidence of
+    // anything and must never authorise a delete. This is the half of the original
+    // decision that was right, kept explicit so it cannot be lost to the change above.
+    it('never purges on the ceiling basis when the hub advertises no ceiling', async function () {
+        const { sync, seen } = makeSync({ network: 'testnet', foreign: 0, unscopedMax: 40, scopedMax: 40 });
+        sync._readyMaxIds = undefined;                        // an older hub, silent on max_ids
+        const httpGet = stubHub(sync, [41, 42], 88);
+
+        await sync._bootstrapTable('state_checkpoints');
+
+        assert.deepStrictEqual(sinceIds(httpGet), [40], 'with no ceiling the cursor is all we have; resume');
+        assert.strictEqual(seen.deletes.filter((d) => / WHERE network = \?$/.test(d.sql)).length, 0,
+            'page contents must never justify deleting a mirrored row');
+    });
+
+    // The ceiling says the id space is retired; it does NOT say which rows belong to this
+    // mirror. With no proven network the purge would be an unqualified DELETE FROM <table>,
+    // which is a whole-table wipe on the strength of evidence about ids alone. The cursor
+    // still restarts, so these consumers are left exactly as they were before the fence.
+    it('re-pages but never deletes when the mirror has no proven network scope', async function () {
+        const { sync, seen } = makeSync({ network: undefined, foreign: 0, unscopedMax: 40, scopedMax: 40 });
+        sync._readyMaxIds = { state_checkpoints: 20 };
+        const httpGet = stubHub(sync, [1, 2], 33);
+
+        await sync._bootstrapTable('state_checkpoints');
+
+        assert.deepStrictEqual(sinceIds(httpGet), [0], 'the cursor must still restart');
+        assert.strictEqual(seen.deletes.length, 0, 'an unscoped delete would clear the whole table');
+    });
+
+    // The same guard for a hub that advertises other tables but not this one, which is how
+    // a partially-upgraded hub presents. Reading a missing key as 0 would wipe the mirror.
+    it('never purges when the hub advertises a ceiling for other tables but not this one', async function () {
+        const { sync, seen } = makeSync({ network: 'testnet', foreign: 0, unscopedMax: 40, scopedMax: 40 });
+        sync._readyMaxIds = { oracle_prices: 5 };
+        const httpGet = stubHub(sync, [41], 99);
+
+        await sync._bootstrapTable('state_checkpoints');
+
+        assert.deepStrictEqual(sinceIds(httpGet), [40]);
+        assert.strictEqual(seen.deletes.filter((d) => / WHERE network = \?$/.test(d.sql)).length, 0,
+            'a key this hub never stated is absent, not zero');
     });
 
     it('leaves the cursor alone when the local mirror sits at or below the hub ceiling', async function () {

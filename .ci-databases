@@ -28,6 +28,7 @@ xchain_anchor_reward_qualifier=TEST_ANCHOR_QUALIFIER_DB
 xchain_archive_watermarks=TEST_ARCHIVE_WATERMARKS_DB
 xchain_attest_relay_identity=TEST_ATTEST_RELAY_DB
 xchain_recovery_id_drill=TEST_RECOVERY_DRILL_DB
+xchain_hub_mirror_rebuilt=TEST_HUB_MIRROR_DB
 
 # A NAMESPACE, not a single database: recovery-determinism-e2e derives several
 # schema names from it. Mapping it still works, because every derived name then
