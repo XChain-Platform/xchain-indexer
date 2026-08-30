@@ -13396,6 +13396,61 @@ class Database {
         return rows.map((r) => parseInt(r.epoch_height));
     }
 
+    // Public roll-call verdict history, BTC side (JSON-RPC getrollcalls). Newest
+    // first, each row carrying its absence count via a correlated subquery rather
+    // than a stored counter, since an UNROLLED epoch writes no absences by
+    // construction and the count must fall out of that rather than be tracked in
+    // parallel. Never selects responsible_set_json: that field pins K-streak
+    // membership and is an internal detail, not a public one.
+    //
+    // STRICT on purpose. doQuery collapses a non-transactional query error into
+    // [], which here would be indistinguishable from "no epoch has closed yet",
+    // and the consumer that matters treats an empty list as SILENCE: the
+    // dashboard's consecutive-unrolled alarm is the only detector for a
+    // federation that has stopped rolling, so a missing table or a broken query
+    // would hand it a permanently quiet answer about a permanently broken rail.
+    // Driven, not assumed: run against the regtest BTC indexer before the
+    // migration was applied, doQuery logged ER_NO_SUCH_TABLE and returned rows=0.
+    async getRollcalls(limit){
+        let n = parseInt(limit);
+        if(!Number.isFinite(n) || n <= 0) n = 20;
+        if(n > 100) n = 100;
+        let query = `SELECT r.epoch_height, r.snapshot_block, r.close_block, r.rolled,
+                            (SELECT COUNT(*) FROM rollcall_absences ra
+                              WHERE ra.epoch_height = r.epoch_height) AS absent_count
+                       FROM rollcalls r
+                      ORDER BY r.epoch_height DESC
+                      LIMIT ?`;
+        return await this.doQueryStrict(query, [n]);
+    }
+
+    // Public roll-call absences for one staking source, BTC side (JSON-RPC
+    // getrollcallabsences). `source` is an address as a caller types it, resolved
+    // to source_id the same way every other address-keyed read on this table does
+    // (getRollcallAbsenceEpochsForSource, getSweepableStakeBySource); an unknown
+    // or unresolvable address is not an error, it just has no absences on file.
+    // The join back to index_addresses hands the caller the canonical address
+    // string rather than echoing its raw input, so a `^<id>` wire reference
+    // resolves to the real address in the response.
+    //
+    // STRICT for the same reason as getRollcalls: an operator reading `validator
+    // status` must never see "no absences on record" because the query failed.
+    // That reading is the one that makes them stop worrying.
+    async getRollcallAbsencesBySource(source, limit){
+        let n = parseInt(limit);
+        if(!Number.isFinite(n) || n <= 0) n = 20;
+        if(n > 100) n = 100;
+        let source_id = await this.getAddressId(source);
+        if(source_id === null) return [];
+        let query = `SELECT a.epoch_height, ia.address AS source, a.close_block, a.evicted
+                       FROM rollcall_absences a
+                       INNER JOIN index_addresses ia ON (ia.id = a.source_id)
+                      WHERE a.source_id = ?
+                      ORDER BY a.epoch_height DESC
+                      LIMIT ?`;
+        return await this.doQueryStrict(query, [source_id, n]);
+    }
+
     // Every stake row an eviction must sweep for `source`, grouped by signing key.
     //
     // INCLUDES PENDING-ACTIVATION ROWS, which is the difference from the UNSTAKE

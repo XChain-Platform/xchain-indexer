@@ -1605,6 +1605,54 @@ async function startApi(){
         // be unit-tested without standing up the Express/JSON-RPC stack.
         async getstakesourcebypubkey({pubkey, block_index}){
             return getStakeSourceByPubkey(indexer, { pubkey, block_index });
+        },
+
+        // Public roll-call verdict history, BTC side (validator liveness eviction
+        // spec). Feeds xchain-node's `validator status` (an operator's last rolled
+        // epoch + absence streak) and xchain-dashboard's consecutive-UNROLLED
+        // alarm, the only detector for a federation that has silently stopped
+        // rolling. Plain public read, not a federation read: absences are DERIVED
+        // chain data the explorer also needs, and this table is authoritative
+        // (anything the hub reports about roll calls is publisher state only).
+        // Never returns responsible_set_json: that field pins K-streak membership
+        // and is an internal detail this surface does not expose.
+        // Body: { limit?: number }
+        async getrollcalls({limit}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            let max = Number(limit);
+            if(!Number.isFinite(max) || max <= 0) max = 20;
+            if(max > 100) max = 100;
+            // Committed-only read off an independent pooled connection
+            let db = indexer.indexerDb.apiView();
+            try {
+                let rows = await db.getRollcalls(max);
+                return { rollcalls: rows };
+            } catch (err) {
+                console.error('getrollcalls error:', err);
+                return { error: 'failed to look up roll calls' };
+            }
+        },
+
+        // Roll-call absences for one staking source, BTC side. `source` is an
+        // address as a caller types it; an unknown or unresolvable source is not
+        // an error, it just has no absences on file.
+        // Body: { source, limit?: number }
+        async getrollcallabsences({source, limit}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            let max = Number(limit);
+            if(!Number.isFinite(max) || max <= 0) max = 20;
+            if(max > 100) max = 100;
+            // Committed-only read off an independent pooled connection
+            let db = indexer.indexerDb.apiView();
+            try {
+                let rows = await db.getRollcallAbsencesBySource(source, max);
+                return { absences: rows };
+            } catch (err) {
+                console.error('getrollcallabsences error:', err);
+                return { error: 'failed to look up roll call absences' };
+            }
         }
 
     };
