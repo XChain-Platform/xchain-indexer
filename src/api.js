@@ -162,12 +162,50 @@ const FEDERATION_READ_METHODS = new Set([
     'getactionconfirmations',
     'getanchoraction',
     'getanchorconfirmations',
+    'getrollcallsigners',
     'getarchiveanchor',
     'getreorghistory',
     'getpendingcrosschaincalls',
     'getcrosschaincall',
     'getcrosschaincallresult'
 ]);
+
+// Upper bound on the key lists getrollcallsigners will answer over. The BTC
+// close asks for |R(E)| + 1 keys, so this is a sanity ceiling on a malformed or
+// hostile caller, not a paging limit: the method never enumerates, so a caller
+// that needs more keys than this is not doing what the method is for.
+const ROLLCALL_READ_MAX_KEYS = 2048;
+
+// sha256 of THIS indexer's vendored action-manifest.json, cached after the first
+// read. The BTC-side epoch close compares it against its own vendored copy and
+// DEFERS on a mismatch.
+//
+// Why this exists at all: a DOGE indexer running a decoder that predates the
+// ROLLCALL allowlist entry drops every roll call at decode
+// (XChainDecoder VALID_ACTION_NAMES) and would then answer a perfectly
+// well-formed "nobody signed" -- which the BTC side would read as a
+// federation-wide absence and act on. Depth cannot detect a peer's software
+// version, so the manifest hash is the version signal, and it converts that
+// silent wrong answer into a loud stall.
+let _rollcallManifestHash = null;
+function rollcallManifestHash(){
+    if(_rollcallManifestHash !== null) return _rollcallManifestHash;
+    try {
+        const fs   = require('fs');
+        const path = require('path');
+        const p    = path.join(__dirname, '..', 'test', 'fixtures', 'action-manifest.json');
+        _rollcallManifestHash = crypto.createHash('sha256')
+            .update(fs.readFileSync(p)).digest('hex');
+    } catch (e) {
+        // Fail LOUD rather than silently agreeing with every peer: a null hash can
+        // never equal the caller's, so the close defers instead of trusting an
+        // indexer whose manifest we could not read.
+        console.error('rollcallManifestHash: cannot read vendored action-manifest.json:', e.message);
+        _rollcallManifestHash = null;
+        return null;
+    }
+    return _rollcallManifestHash;
+}
 
 // Start up the API
 async function startApi(){
@@ -1304,6 +1342,108 @@ async function startApi(){
         // from a previous response's next_after_action_index. Omitting it reads the first
         // page, which is what every pre-pagination caller does, so the method stays
         // backward compatible on the wire.
+        // ROLLCALL federation read: "which of THESE keys have a presence signature
+        // on chain for THIS epoch, inside THIS window?" Served off the committed
+        // view, DOGE side.
+        //
+        // BOUNDED BY THE CALLER'S KEY LISTS, never by enumeration. The BTC close
+        // asks for exactly the keys of R(E) plus the elected leader, so the answer
+        // size is fixed by the asker and no attacker-inflated action set can
+        // exhaust a page walk into `unknown` or truncate it into a false absence.
+        // An enumerating variant of this read would be a denial-of-service surface
+        // that evicts live validators, which is why it does not exist.
+        //
+        // Everything here is STRUCTURE. This indexer cannot check LEDGER_HASH
+        // against anything (it has no BTC view), so it returns the raw signed
+        // material and the BTC side re-verifies against its OWN ledger_hash and
+        // discards any row whose carried hash differs.
+        //
+        // `hcut` is the window cut: the highest DOGE block at or before
+        // `max_block_time` (the BTC header stamp at E + ACCEPT_WINDOW). The caller
+        // must treat a null cut, or a tip that has not buried the cut by
+        // ROLLCALL_DOGE_MATURITY, as `unknown` and DEFER -- never as "nobody was
+        // present", which would evict the whole federation on a lagging peer.
+        //
+        // `manifest_hash` is what turns a silent failure loud: a DOGE indexer
+        // running a decoder that predates the ROLLCALL allowlist entry drops every
+        // roll call at decode and would answer a perfectly well-formed "nobody
+        // signed". The BTC side compares this against its own vendored manifest and
+        // defers on a mismatch, so a stale peer stalls a block instead of evicting
+        // a federation.
+        async getrollcallsigners({network, epoch_height, max_block_time, pubkeys, publishers}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            if(String(indexer.config['COIN']) !== 'DOGE')
+                return { error: 'getrollcallsigners is DOGE-only' };
+            if(network !== undefined && String(network) !== String(indexer.config['NETWORK']))
+                return { error: 'network mismatch' };
+
+            let epoch = parseInt(epoch_height);
+            let maxT  = parseInt(max_block_time);
+            if(!Number.isFinite(epoch) || epoch < 0) return { error: 'invalid epoch_height' };
+            if(!Number.isFinite(maxT))               return { error: 'invalid max_block_time' };
+
+            let keys = Array.isArray(pubkeys)    ? pubkeys    : [];
+            let pubs = Array.isArray(publishers) ? publishers : [];
+            // Hex-shaped and bounded. A caller asking about a key it cannot name is
+            // asking to enumerate, which this method does not do.
+            const HEX64 = /^[0-9a-fA-F]{64}$/;
+            keys = keys.filter((k) => HEX64.test(String(k))).map((k) => String(k).toLowerCase());
+            pubs = pubs.filter((k) => HEX64.test(String(k))).map((k) => String(k).toLowerCase());
+            if(keys.length > ROLLCALL_READ_MAX_KEYS || pubs.length > ROLLCALL_READ_MAX_KEYS)
+                return { error: 'too many keys requested' };
+
+            try {
+                // Federation READ isolation: committed-only, off the block tx.
+                let db = indexer.indexerDb.apiView();
+
+                let tipIndex = await db.getLatestBlockIndex();
+                let tipRow   = await db.doQuery(
+                    'SELECT block_time FROM blocks WHERE block_index = ?', [tipIndex]);
+                let tipTime  = (tipRow && tipRow[0]) ? parseInt(tipRow[0].block_time) : null;
+
+                let hcut = await db.getRollcallWindowCut(maxT);
+
+                let signers = {};
+                for(let k of keys) signers[k] = null;
+                let publishersOut = {};
+                for(let k of pubs) publishersOut[k] = null;
+
+                // A null cut means no DOGE block is inside the window yet. Answer the
+                // shape with an explicit null hcut so the caller defers rather than
+                // reading empty maps as a positive "none".
+                if(hcut !== null){
+                    for(let r of await db.getRollcallSignersForKeys(epoch, keys, hcut)){
+                        signers[String(r.pubkey).toLowerCase()] = {
+                            sig:          String(r.sig).toLowerCase(),
+                            ledger_hash:  String(r.ledger_hash).toLowerCase(),
+                            publisher:    String(r.publisher).toLowerCase(),
+                            action_index: Number(r.action_index),
+                            block_index:  Number(r.block_index)
+                        };
+                    }
+                    for(let r of await db.getRollcallPublishers(epoch, pubs, hcut)){
+                        publishersOut[String(r.publisher).toLowerCase()] = {
+                            action_index: Number(r.action_index),
+                            block_index:  Number(r.block_index)
+                        };
+                    }
+                }
+
+                return {
+                    hcut,
+                    tip_block_index: (tipIndex === null || tipIndex === undefined) ? null : Number(tipIndex),
+                    tip_block_time:  Number.isFinite(tipTime) ? tipTime : null,
+                    manifest_hash:   rollcallManifestHash(),
+                    signers,
+                    publishers: publishersOut
+                };
+            } catch (err) {
+                console.error('getrollcallsigners error:', err);
+                return { error: 'failed to look up rollcall signers' };
+            }
+        },
+
         async getanchorconfirmations({txid, after_action_index}){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };

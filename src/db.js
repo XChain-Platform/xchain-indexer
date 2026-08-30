@@ -13259,6 +13259,57 @@ class Database {
         return rows.length;
     }
 
+    // The ROLLCALL window cut: the highest DOGE block whose raw header stamp is at
+    // or before `maxBlockTime` (the BTC header stamp at E + ACCEPT_WINDOW).
+    //
+    // Both inputs are replicated chain data, so every honest DOGE indexer past the
+    // maturity computes the SAME cut and the BTC side gets an answer it can agree
+    // on without trusting the responder. Returns null when no block qualifies,
+    // which the caller must read as "no cut exists yet" and defer -- never as an
+    // empty present set, which would evict the whole federation.
+    async getRollcallWindowCut(maxBlockTime){
+        let t = parseInt(maxBlockTime);
+        if(!Number.isFinite(t)) return null;
+        let rows = await this.doQuery(
+            'SELECT MAX(block_index) AS hcut FROM blocks WHERE block_time <= ?', [t]);
+        let hcut = (rows && rows[0] && rows[0].hcut !== null && rows[0].hcut !== undefined)
+                 ? parseInt(rows[0].hcut) : null;
+        return Number.isFinite(hcut) ? hcut : null;
+    }
+
+    // First-seen signature rows for an epoch, BOUNDED BY THE CALLER'S KEY LIST.
+    //
+    // Bounded on purpose: the answer size is fixed by the asker (|R(E)|), never by
+    // how many actions an attacker landed, so there is no page walk to exhaust into
+    // a wrong absence. `block_index <= hcut` applies the window.
+    async getRollcallSignersForKeys(epochHeight, pubkeys, hcut){
+        let e = parseInt(epochHeight), h = parseInt(hcut);
+        if(!Number.isFinite(e) || !Number.isFinite(h)) return [];
+        if(!Array.isArray(pubkeys) || pubkeys.length === 0) return [];
+        let keys = pubkeys.map((k) => String(k).toLowerCase());
+        let query = `SELECT epoch_height, pubkey, sig, ledger_hash, publisher, action_index, block_index
+                       FROM rollcall_signers
+                      WHERE epoch_height = ? AND block_index <= ?
+                        AND pubkey IN (${keys.map(() => '?').join(', ')})`;
+        return await this.doQuery(query, [e, h].concat(keys));
+    }
+
+    // Earliest in-window ROLLCALL for an epoch published by each requested key.
+    // Feeds the publish reward, which pays the ELECTED leader only, so the caller
+    // asks about exactly one key in practice.
+    async getRollcallPublishers(epochHeight, publishers, hcut){
+        let e = parseInt(epochHeight), h = parseInt(hcut);
+        if(!Number.isFinite(e) || !Number.isFinite(h)) return [];
+        if(!Array.isArray(publishers) || publishers.length === 0) return [];
+        let keys = publishers.map((k) => String(k).toLowerCase());
+        let query = `SELECT publisher, MIN(action_index) AS action_index, MIN(block_index) AS block_index
+                       FROM rollcall_signers
+                      WHERE epoch_height = ? AND block_index <= ?
+                        AND publisher IN (${keys.map(() => '?').join(', ')})
+                      GROUP BY publisher`;
+        return await this.doQuery(query, [e, h].concat(keys));
+    }
+
     // Validators with a `passed` possession-proof inside PROOF_WINDOW_BLOCKS of
     // `blockIndex` - the "verified full node" set (before the live-stake intersect,
     // which callers apply via hasCapability('full_node')). Returns one row per
