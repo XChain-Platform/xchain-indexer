@@ -38,6 +38,7 @@ const Anchor  = require('../../../src/actions/anchor.js');
 const ed25519 = require('../../../src/ed25519.js');
 const swq     = require('../../../src/stake_weighted_quorum.js');
 const abs     = require('../../../src/archive_batch_author_activation.js');
+const aact    = require('../../../src/anchor_activation.js');
 
 const PUBLISHER = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const ATTACKER  = 'mzBc4XEFSdzCDcTxAgf6EZXgsZWpztRhef';
@@ -234,7 +235,11 @@ describe('ANCHOR archive batch capture by a junk head @regression @tier1', funct
         indexer.config = Object.assign({}, indexer.config, { NETWORK: 'mainnet' });
         handler = new Anchor(indexer);
         seedJunkHeadAheadOfTheRealOne(3);
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 40, SOURCE: PUBLISHER });
+        // AT the ANCHOR activation height: the activation gate runs before every flag day,
+        // so a default (low) mainnet height would be rejected as pre-restart and this case
+        // would never reach the rule it is pinning. ARCHIVE_BATCH_AUTHOR stays inert here.
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 40, SOURCE: PUBLISHER,
+                                    BLOCK_INDEX: aact.ANCHOR_ACTIVATION.mainnet });
         await handler.parse(['2', '9', '1', '3', 'BBBB'], data, null);
         assert.strictEqual(data['STATUS'], 'invalid: TOTAL_CHUNKS (does not match parent v1)',
             'below the flag day the pre-existing (capturable) verdict must be reproduced byte for byte');

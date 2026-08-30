@@ -29,6 +29,12 @@ const swq     = require('../../../src/stake_weighted_quorum.js');
 const ahug    = require('../../../src/archive_head_unverified_gate_activation.js');
 const aact    = require('../../../src/anchor_activation.js');
 
+// A mainnet fixture must be mined AT OR ABOVE the ANCHOR activation height or the
+// activation gate rejects it before any flag day is consulted, and these cases are
+// about the flag day, not the restart. Both mainnet flag days here are the inert
+// sentinel 999999999, so this height leaves them inert exactly as intended.
+const MAINNET_ACTIVE = aact.ANCHOR_ACTIVATION.mainnet;
+
 const PUBKEY_A = 'a'.repeat(64);
 const SIG      = '1'.repeat(128);
 const HASH     = (c) => c.repeat(64);
@@ -250,14 +256,14 @@ describe('Anchor head-side reassembly gate: unverified flag-day @regression', fu
     });
 
     it('gate INERT (mainnet), unverified head, corrupt blob: deployed valid-only rule stands, no stamp', async function () {
-        let r = await stampedAt('mainnet', 100, true);
+        let r = await stampedAt('mainnet', MAINNET_ACTIVE, true);
         assert.strictEqual(r.status, 'unverified');
         assert.strictEqual(r.stamped, false,
             'below the flag day the head-side gate must keep its deployed valid-only rule, or the widening forks the fleet ungated');
     });
 
     it('gate INERT (mainnet), VALID head, corrupt blob: the always-on half of the gate still stamps', async function () {
-        let r = await stampedAt('mainnet', 100, false);
+        let r = await stampedAt('mainnet', MAINNET_ACTIVE, false);
         assert.strictEqual(r.status, 'valid');
         assert.strictEqual(r.stamped, true, 'the flag day governs ONLY the unverified admission, never the valid path');
     });
