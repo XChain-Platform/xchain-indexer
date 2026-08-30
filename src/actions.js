@@ -277,6 +277,7 @@ const xexec              = require('./actions/xexec.js');
 
 // Full-node possession-proof verdict (verified-validator tier)
 const nodeproof          = require('./actions/nodeproof.js');
+const rollcall           = require('./actions/rollcall.js');
 const PreflightMemo      = require('./preflightMemo.js');
 
 class Actions {
@@ -400,6 +401,9 @@ class Actions {
 
         // NODEPROOF: full-node possession-proof verdict handler
         this.actionNodeproof        = new nodeproof(this);
+
+        // ROLLCALL: validator liveness presence proofs (DOGE-gated in the handler)
+        this.actionRollcall         = new rollcall(this);
 
         // Cross-chain contract call instances (XCALL dispatches v0/v2 internally;
         // XEXEC is the target-chain injection handler)
@@ -655,6 +659,7 @@ class Actions {
 
         // Full-node possession-proof verdict (verified-validator tier)
         if(action=='NODEPROOF')          await this.actionNodeproof.parse(params, data, error);
+        if(action=='ROLLCALL')           await this.actionRollcall.parse(params, data, error);
 
         // Increment the in-memory observability counter for this action type. STATUS
         // is 'valid' for accepted actions and an 'invalid: ...' string (or undefined

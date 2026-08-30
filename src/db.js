@@ -13227,6 +13227,38 @@ class Database {
         return true;
     }
 
+    // ROLLCALL presence signatures, DOGE side. Raw hex, never mapper ids: the BTC
+    // close queries this table BY KEY over a bounded list it supplies, so an id
+    // the caller cannot reproduce would make the answer unusable.
+    //
+    // INSERT IGNORE on the (epoch_height, pubkey) primary key is what makes this a
+    // FIRST-SEEN index: the first valid signature landed for a key in an epoch is
+    // the one served, and a later action carrying the same key is a no-op rather
+    // than an overwrite. No spam row can pre-empt a real signer, because only the
+    // holder of that key can produce a signature that verifies, and the handler
+    // has already verified every row it passes here.
+    async insertRollcallSigners(rows){
+        if(!Array.isArray(rows) || rows.length === 0) return 0;
+        let placeholders = rows.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
+        let values = [];
+        for(let r of rows){
+            values.push(
+                parseInt(r.epoch_height),
+                String(r.pubkey).toLowerCase(),
+                String(r.sig).toLowerCase(),
+                String(r.ledger_hash).toLowerCase(),
+                String(r.publisher).toLowerCase(),
+                parseInt(r.action_index),
+                parseInt(r.block_index)
+            );
+        }
+        let query = `INSERT IGNORE INTO rollcall_signers
+                        (epoch_height, pubkey, sig, ledger_hash, publisher, action_index, block_index)
+                     VALUES ${placeholders}`;
+        await this.doQuery(query, values);
+        return rows.length;
+    }
+
     // Validators with a `passed` possession-proof inside PROOF_WINDOW_BLOCKS of
     // `blockIndex` - the "verified full node" set (before the live-stake intersect,
     // which callers apply via hasCapability('full_node')). Returns one row per
