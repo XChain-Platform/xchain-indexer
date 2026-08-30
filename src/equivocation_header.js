@@ -73,6 +73,14 @@ const ENGINE_TAGS = {
     CHECKPOINT: 'XCHECKPOINT',
     CONFIG:     'XCONFIG',
     NODEPROOF:  'XNODEPROOF',
+    // ROLLCALL presence proofs. Namespacing ONLY, exactly like XNODEPROOF: the
+    // tag is deliberately absent from SLASH's ENGINE_CAPABILITY map, so no
+    // ROLLCALL canonical is a slashable family. Several valid ROLLCALLs per
+    // epoch are expected (a leader's, sweepers', self-publishes), every one
+    // carrying signatures over the SAME canonical for that epoch, so two of
+    // them are never conflicting content for one key. ROUND_ID is the BTC
+    // EPOCH_HEIGHT in decimal, VIEW is 0.
+    ROLLCALL:   'XROLLCALL',
 };
 
 // Whether the EQUIV header is in effect for a settlement whose BTC-anchored snapshot
