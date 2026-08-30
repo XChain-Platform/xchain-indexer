@@ -450,6 +450,15 @@ class ProtocolChanges {
         // (See xchain-documentation/protocol/actions/NODEPROOF.md)
         this.addChange('NODEPROOF',          '0.2.0',0,0,0,0,0,0);
 
+        // ROLLCALL: validator liveness presence proofs (v0; validator-broadcast).
+        // Inverts its NODEPROOF neighbour above: DOGE-only, because that is where
+        // every validator can already publish. Carries a BTC epoch height and is
+        // proved BTC-side at the epoch close. Registered at all-zero columns like
+        // every other action: the per-network HEIGHT gate is ROLLCALL_ACTIVATION in
+        // rollcall_activation.js, not this registry, so mainnet stays inert here.
+        // (See xchain-documentation/protocol/actions/rollcall.md)
+        this.addChange('ROLLCALL',           '0.2.0',0,0,0,0,0,0);
+
         this.addChange('UNIFIED_FEES',   '0.2.0',0,0,0,0,0,0);
         // INVENTORY-ONLY, gates nothing. Nothing calls
         // isEnabled('VM_ACTIONS'): the VM actions it nominally covered

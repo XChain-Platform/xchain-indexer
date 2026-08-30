@@ -312,6 +312,12 @@
       "explorerRender": true,
       "walletForm": true
     },
+    "ROLLCALL": {
+      "category": "validator",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "explorerRender": true
+    },
     "SEND": {
       "category": "wire-user",
       "wireDecoded": true,
