@@ -30,19 +30,19 @@ const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('./stateHas
 // no checkpoint identity of its own, so it is never a getanchoraction match. Kept here
 // as the single source of truth for both the SQL filter and the tests.
 //
-// 7 is the checkpoint BUNDLE, whose rows are per-SECTION and each carry a full
+// 0 is the checkpoint BUNDLE, whose rows are per-SECTION and each carry a full
 // checkpoint identity, so a (chain, network, block_index, checkpoint_seq) lookup
 // resolves to exactly the section row the caller asked for and needs no new RPC (D17).
-// 1 and 6 are the archive legs, which carry the wrapper checkpoint's identity. The
-// retired 0/3/4/5 are OUT: the indexer no longer parses them, so admitting them here
-// would let a pre-retirement row keep raising the replay watermark
+// 1 is the archive head, which carries the wrapper checkpoint's identity. Every
+// pre-activation version is OUT: the indexer no longer parses them, so admitting them
+// here would let a pre-restart row keep raising the replay watermark
 // (getMaxAnchorCheckpointSeq reads this same set) against bundles it can never be
 // compared with. Rows on chain keep their version byte and stay readable through the
 // txid-keyed reads, which filter no version at all.
-const CHECKPOINT_VERSIONS = [1, 6, 7];
+const CHECKPOINT_VERSIONS = [0, 1];
 
-// The subset of CHECKPOINT_VERSIONS that IS a checkpoint in its own right: a v7
-// bundle SECTION. The other members (1/6) are archive heads, which carry their
+// The subset of CHECKPOINT_VERSIONS that IS a checkpoint in its own right: a v0
+// bundle SECTION. The other member (1) is the archive head, which carries its
 // WRAPPER checkpoint's identity, so an archive head and a bundle section can and do
 // collide on one (chain, network, block_index, checkpoint_seq) key - both legs anchor
 // the same checkpoint, for different purposes. On that shared key the archive head is
@@ -52,7 +52,7 @@ const CHECKPOINT_VERSIONS = [1, 6, 7];
 // ranked before recency (SQL and selectAnchorRow both), and only a version filter
 // reaches the archive leg on such a key.
 //
-// Derived by subtraction rather than written as [7] so that a future checkpoint
+// Derived by subtraction rather than written as [0] so that a future checkpoint
 // version added to CHECKPOINT_VERSIONS joins the section family automatically; the
 // archive family is ARCHIVE_HEAD_VERSIONS, which owns that definition already.
 const CHECKPOINT_SECTION_VERSIONS = CHECKPOINT_VERSIONS.filter(v => !ARCHIVE_HEAD_VERSIONS.includes(v));
@@ -64,7 +64,7 @@ const CHECKPOINT_SECTION_VERSIONS_SQL = 'IN (' + CHECKPOINT_SECTION_VERSIONS.joi
 const TXID_RE = /^[0-9a-fA-F]{64}$/;
 
 // One checkpoint identity can carry more than one anchor row: a reorg-replayed
-// re-anchor, and the v0/v3 checkpoint anchor plus the v1 archive anchor that
+// re-anchor, and the v0 bundle section plus the v1 archive head that
 // shares its checkpoint_seq. The caller filters those by txid/version, so fetch
 // the (tiny) candidate set rather than only the highest action_index. Bounded so
 // a pathological identity can never stream unbounded rows into the RPC.
@@ -78,7 +78,7 @@ const ANCHOR_ROW_LIMIT = 20;
 // silently turn a present anchor into 'absent' for the hub.
 //
 // The family term ranks ahead of action_index for a reason the row limit makes
-// concrete: anyone can land additional v6 archive rows carrying this same wrapper
+// concrete: anyone can land additional archive rows carrying this same wrapper
 // checkpoint identity, each at a higher action_index, and under a pure
 // action_index DESC order ANCHOR_ROW_LIMIT of those would push the real section row
 // out of the fetched window entirely. Then no downstream tie-break can recover it.
@@ -111,10 +111,10 @@ const ANCHOR_ACTIONS_SQL =
 // The binding is the archive head's SOURCE, resolved through actions.source_id
 // (the authoritative source for auth per the actions schema, never re-derived
 // from the transaction). anchor_actions carries no source column of its own; the
-// `publisher` column is the v4/v5/v6 elected-PUBLISHER PUBKEY, a different thing
+// `publisher` column is the elected-PUBLISHER PUBKEY carried by the v0/v1 tail, a different thing
 // entirely, and a v1 head has none at all.
 //
-// The head is the canonical one: the earliest (lowest action_index) v1/v6 row for
+// The head is the canonical one: the earliest (lowest action_index) archive-head row for
 // the batch, byte-identical to db.getAnchorV1ByBatchSeq's rule, because
 // match_batch_seq is not unique (re-broadcast / failover double-publish). The
 // selection is deliberately status-agnostic, matching that rule: a node with no
@@ -194,7 +194,7 @@ const ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL =
        AND cadr.address = ?
      ORDER BY c.chunk_index ASC, c.action_index ASC`;
 
-// The batch's canonical head row identity (earliest v1/v6 row for the seq,
+// The batch's canonical head row identity (earliest archive-head row for the seq,
 // status-agnostic) reduced to what the flag-day predicate needs: the DOGE height it
 // landed at. This is the one row every node agrees on for a batch seq without
 // consulting status, which is why the publisher-authorship gate is anchored to it
@@ -227,7 +227,7 @@ const ARCHIVE_ANCHOR_ROW_LIMIT = 50;
 // CONTENT-ADDRESSED archive-anchor lookup: "is this exact archive batch already
 // on-chain?", answered WITHOUT the batch seq.
 //
-// This is the read the hub's archive publish path needs to be crash-safe. The v1/v6
+// This is the read the hub's archive publish path needs to be crash-safe. The archive-head
 // head is broadcast before the batch is recorded locally, so a crash in between
 // re-elects the same match rows on the next flush, and the re-election allocates a
 // FRESH match_batch_seq. Every existing archive read is keyed on that seq
@@ -349,8 +349,8 @@ function validateAnchorActionParams({ chain, network, block_index, checkpoint_se
 // re-anchor supersedes an earlier one. A supplied txid/version narrows to that exact
 // anchor. Returns null when nothing matches.
 //
-// FAMILY BEFORE RECENCY. A checkpoint key can carry both a v7 bundle section and a
-// v1/v6 archive head (the archive wraps the same checkpoint), and the archive head
+// FAMILY BEFORE RECENCY. A checkpoint key can carry both a v0 bundle section and a
+// v1 archive head (the archive wraps the same checkpoint), and the archive head
 // usually lands at the higher action_index. getanchoraction is a per-SECTION reader:
 // its unfiltered question is "is THIS checkpoint anchored", and answering it with the
 // co-located archive head hands the caller a different transaction's txid and status
@@ -549,7 +549,7 @@ function buildAnchorConfirmationsResponse(config, latest, rows) {
             block_index:        (row.block_index != null) ? Number(row.block_index) : null,
             checkpoint_seq:     (row.checkpoint_seq != null) ? Number(row.checkpoint_seq) : null,
             snapshot_block:     (row.snapshot_block != null) ? Number(row.snapshot_block) : null,
-            // The v4/v5/v6 ELECTED PUBLISHER pubkey the reward is attested to. Null on the
+            // The ELECTED PUBLISHER pubkey the reward is attested to. Null on the
             // unattested versions, which is itself the answer for a caller checking one.
             publisher:          row.publisher ? String(row.publisher).toLowerCase() : null,
             match_batch_seq:    (row.match_batch_seq != null) ? Number(row.match_batch_seq) : null,

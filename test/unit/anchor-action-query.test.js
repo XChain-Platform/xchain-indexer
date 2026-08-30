@@ -41,16 +41,16 @@ function anchorRow(overrides) {
 
 describe('anchor-action-query: CHECKPOINT_VERSIONS', function () {
     it('is exactly the checkpoint-bearing versions (v2 continuation excluded)', function () {
-        // 7 is the bundle SECTION, which carries a full checkpoint identity of its own;
-        // 1 and 6 are the archive legs, which carry their wrapper checkpoint's. The
-        // retired 0/3/4/5 are OUT: nothing parses them any more, and admitting them would
-        // let a pre-retirement row keep raising the replay watermark that
+        // 0 is the bundle SECTION, which carries a full checkpoint identity of its own;
+        // 1 is the archive head, which carries its wrapper checkpoint's. Every pre-restart
+        // version is OUT: nothing parses them any more, and admitting one would let a
+        // pre-restart row keep raising the replay watermark that
         // getMaxAnchorCheckpointSeq reads off this same set.
-        assert.deepStrictEqual(CHECKPOINT_VERSIONS, [1, 6, 7]);
+        assert.deepStrictEqual(CHECKPOINT_VERSIONS, [0, 1]);
         assert.ok(!CHECKPOINT_VERSIONS.includes(2), 'v2 (archive continuation) is not a checkpoint');
-        for (const retired of [0, 3, 4, 5])
+        for (const retired of [3, 4, 5, 6, 7])
             assert.ok(!CHECKPOINT_VERSIONS.includes(retired),
-                'ANCHOR v' + retired + ' is retired (D2) and must not re-enter the checkpoint set');
+                'ANCHOR v' + retired + ' is pre-restart and must not re-enter the checkpoint set');
     });
 });
 
@@ -210,8 +210,8 @@ describe('anchor-action-query: validateAnchorActionParams() txid/version', funct
 
     it('accepts a checkpoint-bearing version and rejects v2 / unknown versions', function () {
         assert.strictEqual(validateAnchorActionParams(Object.assign({}, base, { version: 1 })).version, 1);
-        assert.strictEqual(validateAnchorActionParams(Object.assign({}, base, { version: 7 })).version, 7);
-        assert.strictEqual(validateAnchorActionParams(Object.assign({}, base, { version: 0 })).ok, false);
+        assert.strictEqual(validateAnchorActionParams(Object.assign({}, base, { version: 0 })).version, 0);
+        assert.strictEqual(validateAnchorActionParams(Object.assign({}, base, { version: 7 })).ok, false);
         assert.strictEqual(validateAnchorActionParams(Object.assign({}, base, { version: 2 })).ok, false);
         assert.strictEqual(validateAnchorActionParams(Object.assign({}, base, { version: 9 })).ok, false);
         assert.strictEqual(validateAnchorActionParams(Object.assign({}, base, { version: 1.5 })).ok, false);
@@ -225,9 +225,16 @@ describe('anchor-action-query: selectAnchorRow()', function () {
         anchorRow({ action_index: 42, version: 0, txid: TXID_A })    // v0 checkpoint anchor
     ];
 
-    it('with no filter returns the highest action_index (pre-filter behavior)', function () {
-        assert.strictEqual(selectAnchorRow(rows, {}).action_index, 90);
-        assert.strictEqual(selectAnchorRow(rows, null).action_index, 90);
+    it('with no filter ranks the section family first, then the highest action_index', function () {
+        // Both rows are now live versions: v0 is the bundle SECTION and v1 the archive
+        // head that wraps the same checkpoint, so FAMILY ranks ahead of recency and the
+        // unfiltered answer is the section even though the archive head lands later.
+        assert.strictEqual(selectAnchorRow(rows, {}).action_index, 42);
+        assert.strictEqual(selectAnchorRow(rows, null).action_index, 42);
+        // Within ONE family recency still governs.
+        let sameFamily = [anchorRow({ action_index: 91, version: 1, txid: TXID_B }),
+                          anchorRow({ action_index: 90, version: 1, txid: TXID_A })];
+        assert.strictEqual(selectAnchorRow(sameFamily, {}).action_index, 91);
     });
 
     it('narrows to the announced txid even when a newer anchor supersedes it', function () {
@@ -262,7 +269,7 @@ describe('anchor-action-query: selectAnchorRow()', function () {
     });
 });
 
-// ── A v7 section and a v6 archive head sharing ONE checkpoint key ───────────────
+// ── A v0 section and a v1 archive head sharing ONE checkpoint key ───────────────
 //
 // The archive leg wraps the same checkpoint the bundle section anchors, so both rows
 // carry the identical (chain, network, block_index, checkpoint_seq), and the archive
@@ -270,33 +277,33 @@ describe('anchor-action-query: selectAnchorRow()', function () {
 // regtest indexer: getanchoraction(BTC, regtest, 11237, 11243) with no version and no
 // txid answered from the archive head, so a caller asking "is this checkpoint
 // anchored" was handed a different transaction's txid and status and could not tell.
-// The hub's own adopt path filters on version 7 and never saw it; every unfiltered
+// The hub's own adopt path filters on the bundle version and never saw it; every unfiltered
 // reader (the SDK, the e2e harnesses, third parties) did.
 describe('anchor-action-query: section vs co-located archive head', function () {
-    const SECTION_TXID = '7'.repeat(64);
-    const ARCHIVE_TXID = '6'.repeat(64);
+    const SECTION_TXID = '7'.repeat(64);   // the bundle section's transaction
+    const ARCHIVE_TXID = '6'.repeat(64);   // the archive head's, a different transaction
 
     // The venue's own key and action indexes, in the pure action_index DESC order the
     // read used before the family term, which is what makes the archive head win.
     function colocated() {
         return [
-            anchorRow({ action_index: 1305, version: 6, chain: 'BTC', block_index: 11237,
+            anchorRow({ action_index: 1305, version: 1, chain: 'BTC', block_index: 11237,
                         checkpoint_seq: 11243, txid: ARCHIVE_TXID }),
-            anchorRow({ action_index: 1298, version: 7, chain: 'BTC', block_index: 11237,
+            anchorRow({ action_index: 1298, version: 0, chain: 'BTC', block_index: 11237,
                         checkpoint_seq: 11243, txid: SECTION_TXID })
         ];
     }
 
     it('unfiltered, returns the checkpoint SECTION, not the higher-action_index archive head', function () {
         let row = selectAnchorRow(colocated(), {});
-        assert.strictEqual(Number(row.version), 7);
+        assert.strictEqual(Number(row.version), 0);
         assert.strictEqual(row.action_index, 1298);
         assert.strictEqual(row.txid, SECTION_TXID);
     });
 
     it('answers the same with no filter object at all', function () {
-        assert.strictEqual(Number(selectAnchorRow(colocated(), null).version), 7);
-        assert.strictEqual(Number(selectAnchorRow(colocated(), undefined).version), 7);
+        assert.strictEqual(Number(selectAnchorRow(colocated(), null).version), 0);
+        assert.strictEqual(Number(selectAnchorRow(colocated(), undefined).version), 0);
     });
 
     it('is independent of the arrival order (the family ranks, not the position)', function () {
@@ -318,27 +325,27 @@ describe('anchor-action-query: section vs co-located archive head', function () 
 
     it('still reaches the archive head by its own txid', function () {
         let row = selectAnchorRow(colocated(), { txid: ARCHIVE_TXID });
-        assert.strictEqual(Number(row.version), 6);
+        assert.strictEqual(Number(row.version), 1);
         assert.strictEqual(row.action_index, 1305);
     });
 
-    it('resolves the section by version 7 and by its own txid', function () {
-        assert.strictEqual(selectAnchorRow(colocated(), { version: 7 }).action_index, 1298);
+    it('resolves the section by version 0 and by its own txid', function () {
+        assert.strictEqual(selectAnchorRow(colocated(), { version: 0 }).action_index, 1298);
         assert.strictEqual(selectAnchorRow(colocated(), { txid: SECTION_TXID }).action_index, 1298);
     });
 
     it('leaves an archive-only key answering unfiltered (the archive leg is not broken)', function () {
         let archiveOnly = [colocated()[0]];
         let row = selectAnchorRow(archiveOnly, {});
-        assert.strictEqual(Number(row.version), 6);
+        assert.strictEqual(Number(row.version), 1);
         assert.strictEqual(row.action_index, 1305);
     });
 
     it('keeps newest-wins WITHIN the section family (a reorg-replayed re-anchor supersedes)', function () {
         let rows = [
-            anchorRow({ action_index: 1310, version: 6, checkpoint_seq: 11243, txid: ARCHIVE_TXID }),
-            anchorRow({ action_index: 1301, version: 7, checkpoint_seq: 11243, txid: TXID_B }),
-            anchorRow({ action_index: 1298, version: 7, checkpoint_seq: 11243, txid: SECTION_TXID })
+            anchorRow({ action_index: 1310, version: 1, checkpoint_seq: 11243, txid: ARCHIVE_TXID }),
+            anchorRow({ action_index: 1301, version: 0, checkpoint_seq: 11243, txid: TXID_B }),
+            anchorRow({ action_index: 1298, version: 0, checkpoint_seq: 11243, txid: SECTION_TXID })
         ];
         assert.strictEqual(selectAnchorRow(rows, {}).action_index, 1301);
     });
@@ -347,7 +354,7 @@ describe('anchor-action-query: section vs co-located archive head', function () 
         // Neither family may be empty, and together they must be the whole served set:
         // a version in CHECKPOINT_VERSIONS that is in neither would be silently
         // unrankable, which is the defect wearing a new version byte.
-        assert.deepStrictEqual(CHECKPOINT_SECTION_VERSIONS, [7]);
+        assert.deepStrictEqual(CHECKPOINT_SECTION_VERSIONS, [0]);
         let union = CHECKPOINT_SECTION_VERSIONS.concat(
             CHECKPOINT_VERSIONS.filter(v => ARCHIVE_HEAD_VERSIONS.includes(v)));
         assert.deepStrictEqual(union.slice().sort((a, b) => a - b), CHECKPOINT_VERSIONS.slice().sort((a, b) => a - b));
@@ -443,7 +450,7 @@ describe('anchor-action-query: getanchorconfirmations', function () {
 
     function txidRow(overrides) {
         return Object.assign({
-            action_index: 9, version: 4, chain: 'BTC', network: 'regtest', block_index: 850000,
+            action_index: 9, version: 0, chain: 'BTC', network: 'regtest', block_index: 850000,
             checkpoint_seq: 7, snapshot_block: 950000, publisher: 'AA'.repeat(32),
             match_batch_seq: null, block_index_doge: 100, status: 'valid'
         }, overrides || {});
@@ -478,7 +485,7 @@ describe('anchor-action-query: getanchorconfirmations', function () {
             assert.strictEqual(buildAnchorConfirmationsResponse(CONFIG, 200, [txidRow()]).anchors[0].publisher,
                 'aa'.repeat(32));
             assert.strictEqual(
-                buildAnchorConfirmationsResponse(CONFIG, 200, [txidRow({ version: 0, publisher: null })]).anchors[0].publisher,
+                buildAnchorConfirmationsResponse(CONFIG, 200, [txidRow({ version: 2, publisher: null })]).anchors[0].publisher,
                 null);
         });
 
@@ -492,7 +499,7 @@ describe('anchor-action-query: getanchorconfirmations', function () {
         });
 
         it('returns every anchor the transaction carries, not just one', function () {
-            let r = buildAnchorConfirmationsResponse(CONFIG, 200, [txidRow({ version: 6, match_batch_seq: 3 }), txidRow()]);
+            let r = buildAnchorConfirmationsResponse(CONFIG, 200, [txidRow({ version: 1, match_batch_seq: 3 }), txidRow()]);
             assert.strictEqual(r.anchors.length, 2);
             assert.strictEqual(r.anchors[0].match_batch_seq, 3);
         });

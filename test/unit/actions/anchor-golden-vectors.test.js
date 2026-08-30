@@ -72,11 +72,17 @@ describe('Anchor canonical vectors byte-identity to xchain-documentation @regres
             'xchain-documentation/protocol/test-vectors/anchor_canonical.json; reconcile both copies.');
     });
 
-    it('the retired per-chain vectors are gone (v0/v3/v4/v5 deleted, not deprecated)', function () {
-        for (const v of ['v0', 'v3', 'v4', 'v5'])
+    it('the pre-restart vectors are gone (v3..v7 deleted, not deprecated)', function () {
+        // The version set RESTARTED at 0 at ANCHOR_ACTIVATION, so every pre-restart byte
+        // (the per-chain anchors v3/v4/v5, the old archive head v6 and the old bundle v7)
+        // names a wire no parser reads any more. Keeping a case for one would pin bytes
+        // nothing produces, and the byte itself is now re-used by the live set.
+        for (const v of ['v3', 'v4', 'v5', 'v6', 'v7'])
             assert.strictEqual(GOLDEN.vectors[v], undefined,
-                'vector ' + v + ' is retired (D2); its parser is deleted, so keeping the case would ' +
+                'vector ' + v + ' is retired; its parser is deleted, so keeping the case would ' +
                 'pin a wire nothing produces or reads');
+        assert.deepStrictEqual(Object.keys(GOLDEN.vectors), ['v0'],
+            'the frozen vector set is exactly the v0 bundle');
     });
 });
 
@@ -119,9 +125,9 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
         return parts.slice(1);
     }
 
-    async function parseV7() {
-        const data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7, COIN: 'DOGE' });
-        await handler.parse(wireToParams(GOLDEN.vectors.v7), data, null);
+    async function parseV0() {
+        const data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
+        await handler.parse(wireToParams(GOLDEN.vectors.v0), data, null);
         return data;
     }
 
@@ -135,8 +141,8 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
         return cursor;
     }
 
-    it('v7: the frozen bytes parse to one valid row per section, in wire order', async function () {
-        const data = await parseV7();
+    it('v0: the frozen bytes parse to one valid row per section, in wire order', async function () {
+        const data = await parseV0();
         assert.strictEqual(data['STATUS'], 'valid', `unexpected STATUS ${data['STATUS']}`);
 
         const rows = writtenRows();
@@ -157,7 +163,7 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
             assert.strictEqual(String(row['STATE_ROOT_VERSION']), String(want.state_root_version));
             assert.strictEqual(row['BLOCK_MERKLE_ROOT'], want.block_merkle_root);
             assert.strictEqual(String(row['BLOCK_MERKLE_VERSION']), String(want.block_merkle_version));
-            assert.strictEqual(Number(row['FORMAT']), 7);
+            assert.strictEqual(Number(row['FORMAT']), 0);
             assert.strictEqual(row['STATUS'], 'valid');
         });
         // The fixture lists LTC first; the wire (and therefore section_index 0) is BTC.
@@ -168,21 +174,21 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
     it('sanity: the section walk locates the frozen vector\'s three CHAIN slots', function () {
         // If this drifts, the duplicate-chain case below would be mutating some other
         // field and would pass for the wrong reason.
-        const params = wireToParams(GOLDEN.vectors.v7);
+        const params = wireToParams(GOLDEN.vectors.v0);
         assert.deepStrictEqual([0, 1, 2].map(n => params[sectionStart(params, n)]),
             WIRE_SECTIONS.map(s => s.chain));
     });
 
-    it('v7: a bundle naming the same CHAIN twice is invalid as a WHOLE, with zero rewards (D39)', async function () {
+    it('v0: a bundle naming the same CHAIN twice is invalid as a WHOLE, with zero rewards (D39)', async function () {
         // Built out of the frozen bytes: rewrite the LAST section's CHAIN to repeat the
         // first one's. The hub's selector groups by (chain, network) and can only produce
         // one section per chain, so a repeat is malformed or forged - and a second
         // checkpoint claim for one chain under a single publisher signature cannot be
         // skipped, because every per-chain reader resolves an identity to a row without
         // seeing the sibling row that contradicts it.
-        const params = wireToParams(GOLDEN.vectors.v7);
+        const params = wireToParams(GOLDEN.vectors.v0);
         params[sectionStart(params, 2)] = params[sectionStart(params, 0)];   // LTC -> BTC
-        const data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7, COIN: 'DOGE' });
+        const data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
         await handler.parse(params, data, null);
 
         assert.strictEqual(data['STATUS'], 'invalid: SECTION 2 CHAIN (duplicate)');
@@ -193,16 +199,16 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
             'the verdict is all-or-nothing: no section row is left valid');
     });
 
-    it('v7: the duplicate guard is scoped to ONE bundle, so a chain repeats across actions', async function () {
+    it('v0: the duplicate guard is scoped to ONE bundle, so a chain repeats across actions', async function () {
         // The frozen vector parsed twice: each action carries BTC/DOGE/LTC once, and the
         // second must be as valid as the first. A guard leaking across actions would make
         // the second cycle's bundle invalid forever.
-        assert.strictEqual((await parseV7())['STATUS'], 'valid');
-        assert.strictEqual((await parseV7())['STATUS'], 'valid');
+        assert.strictEqual((await parseV0())['STATUS'], 'valid');
+        assert.strictEqual((await parseV0())['STATUS'], 'valid');
     });
 
-    it('v7: the header NETWORK and block_index are denormalized onto EVERY section row', async function () {
-        await parseV7();
+    it('v0: the header NETWORK and block_index are denormalized onto EVERY section row', async function () {
+        await parseV0();
         for (const row of writtenRows()) {
             assert.strictEqual(row['NETWORK'], BUNDLE.network,
                 'every section carries the BUNDLE network: idx_anchor_checkpoint and ' +
@@ -211,8 +217,8 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
         }
     });
 
-    it('v7: publisher and publisher_attestations are written on every section row', async function () {
-        const data = await parseV7();
+    it('v0: publisher and publisher_attestations are written on every section row', async function () {
+        const data = await parseV0();
         assert.strictEqual(data['PUBLISHER'], BUNDLE.publisher);
         for (const row of writtenRows()) {
             assert.strictEqual(row['PUBLISHER'], BUNDLE.publisher);
@@ -221,8 +227,8 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
         }
     });
 
-    it('v7: each section row stores its OWN signature list', async function () {
-        await parseV7();
+    it('v0: each section row stores its OWN signature list', async function () {
+        await parseV0();
         writtenRows().forEach((row, i) => {
             const want = WIRE_SECTIONS[i].validator_signatures;
             const got  = JSON.parse(row['VALIDATOR_SIGNATURES']);
@@ -235,8 +241,8 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
         });
     });
 
-    it('v7: exactly ONE anchor_bundle reward per bundle, over the exact canonical bytes', async function () {
-        const data = await parseV7();
+    it('v0: exactly ONE anchor_bundle reward per bundle, over the exact canonical bytes', async function () {
+        const data = await parseV0();
         assert.ok(indexer.indexerDb.createValidatorReward.calledOnce,
             'a bundle earns ONE reward, not one per section');
         const [publisher, round, type, amount, earnBlock, , , qualifier] =
@@ -260,8 +266,8 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
             'the bundle XANCPUB canonical drifted from the frozen six-field layout');
     });
 
-    it('v7: each section canonical is rebuilt with the HEADER network, at the section\'s own block', async function () {
-        await parseV7();
+    it('v0: each section canonical is rebuilt with the HEADER network, at the section\'s own block', async function () {
+        await parseV0();
         const eq = require('../../../src/equivocation_header.js');
         for (const row of writtenRows()) {
             const canonical = handler._canonical(row);
@@ -274,7 +280,7 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
                             row['BLOCK_INDEX_CHECKPOINTED'] + '|' + row['CHECKPOINT_SEQ'];
             assert.strictEqual(canonical,
                 eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, roundId, 0, base),
-                'a v7 section canonical must byte-match the per-chain XCHECKPOINT the hub signed');
+                'a v0 section canonical must byte-match the per-chain XCHECKPOINT the hub signed');
         }
     });
 });

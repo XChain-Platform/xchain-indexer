@@ -127,7 +127,7 @@ describe('getArchiveReplayWatermarks() against a real MariaDB @tier3', function 
     it('reads batch and checkpoint seq off the archive-head rows', async function () {
         await insert([
             { action_index: 1, version: 1, checkpoint_seq: 100, match_batch_seq: 5, status_id: status.valid },
-            { action_index: 2, version: 6, checkpoint_seq: 200, match_batch_seq: 7, status_id: status.unverified },
+            { action_index: 2, version: 1, checkpoint_seq: 200, match_batch_seq: 7, status_id: status.unverified },
         ]);
         assert.deepStrictEqual(await db.getArchiveReplayWatermarks(),
                                { batchSeq: 7, checkpointSeq: 200 });
@@ -150,7 +150,11 @@ describe('getArchiveReplayWatermarks() against a real MariaDB @tier3', function 
     it('ignores rows the parse rejected, so a junk anchor cannot move either watermark', async function () {
         await insert([
             { action_index: 1, version: 1, checkpoint_seq: 100, match_batch_seq: 5, status_id: status.valid },
-            { action_index: 2, version: 6, checkpoint_seq: 777777, match_batch_seq: 4242, status_id: status.invalid },
+            // An ARCHIVE-HEAD version deliberately, not a retired one: the point is that
+            // the STATUS filter rejects it. A non-archive version here would be excluded
+            // by the version predicate instead and the case would pass without ever
+            // exercising what it claims to.
+            { action_index: 2, version: 1, checkpoint_seq: 777777, match_batch_seq: 4242, status_id: status.invalid },
         ]);
         assert.deepStrictEqual(await db.getArchiveReplayWatermarks(),
                                { batchSeq: 5, checkpointSeq: 100 });
@@ -158,7 +162,7 @@ describe('getArchiveReplayWatermarks() against a real MariaDB @tier3', function 
 
     it('counts an unverified row, because an unmirrored node stores every well-formed ANCHOR that way', async function () {
         await insert([
-            { action_index: 1, version: 6, checkpoint_seq: 300, match_batch_seq: 11, status_id: status.unverified },
+            { action_index: 1, version: 1, checkpoint_seq: 300, match_batch_seq: 11, status_id: status.unverified },
         ]);
         assert.deepStrictEqual(await db.getArchiveReplayWatermarks(),
                                { batchSeq: 11, checkpointSeq: 300 });

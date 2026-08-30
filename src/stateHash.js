@@ -241,24 +241,30 @@ function isBetStatusStateHashActive(blockIndex, network, coin){
 
 // ── Archive-head anchor versions ──────────────────────────────────────────────
 // The anchor_actions versions that carry an archive HEAD (a signed batch header
-// whose v2 continuation chunks reassemble against it): v1 (legacy archive anchor)
-// and v6 (the publisher-bearing archive anchor of the ARCHIVE_REWARD flag-day).
+// whose v2 continuation chunks reassemble against it): v1, the publisher-bearing
+// archive anchor, and nothing else. It is a one-member set because the wire
+// families are version-disjoint by construction (bundle {0}, archive head {1},
+// chunk {2}); it stays a SET rather than a scalar so a later archive version joins
+// it without touching the ten splice sites that read the SQL fragment.
 // Every predicate that selects "the archive parent of a v2 chunk" MUST
 // use this set: the invalid_archive stamp, its reorg reset, the forward
 // updated_rows class and the state-hash class below all target the same rows.
 // SINGLE SOURCE OF TRUTH for xchain-indexer rollback.js + this file's class 6,
 // and (via the byte-identical xchain-sync twin) ClientRollback.js +
-// updatedRows.js. db.js/recovery.js carry matching literal IN (1, 6) predicates.
-const ARCHIVE_HEAD_VERSIONS = [1, 6];
+// updatedRows.js. db.js/recovery.js carry matching predicates.
+const ARCHIVE_HEAD_VERSIONS = [1];
 // SQL fragment form, spliced as `p.version ` + ARCHIVE_HEAD_VERSIONS_SQL.
 const ARCHIVE_HEAD_VERSIONS_SQL = 'IN (' + ARCHIVE_HEAD_VERSIONS.join(', ') + ')';
 
-// ── invalid_archive v6-coverage state-hash flag-day ───────────────────────────
-// Widens the anchor_invalid state-hash class (class 6 below) from v1-only
-// parents to the full ARCHIVE_HEAD_VERSIONS set, closing the integrity-hash
-// blind spot where an invalid_archive stamp on a v6 parent was invisible to the
-// follower's recompute (a follower silently dropping that upsert diverged with
-// no halt). Changes the class's row selection, hence the hashed preimage, so it
+// ── invalid_archive archive-head-coverage state-hash flag-day ─────────────────
+// Widens the anchor_invalid state-hash class (class 6 below) from a hard-coded
+// v1 parent to whatever ARCHIVE_HEAD_VERSIONS holds, closing the integrity-hash
+// blind spot where an invalid_archive stamp on a non-v1 archive head was invisible
+// to the follower's recompute (a follower silently dropping that upsert diverged
+// with no halt). With the version set restarted the two predicates coincide (the
+// archive head IS v1 again), so the gate is inert in effect and kept only so the
+// widening stays landed for the next archive version. Changes the class's row
+// selection, hence the hashed preimage, so it
 // is gated exactly like POLL_FINALIZE above (per-chain keys on the chain's OWN
 // local block_index) and landed DEFAULT INERT: below the threshold the query
 // keeps the legacy v1-only predicate and the preimage stays byte-identical to
@@ -322,7 +328,7 @@ function isArchiveInvalidStateHashActive(blockIndex, network, coin){
 // free either: xchain-sync updatedRows.js carries the SAME broken key on the
 // replication side (fixed there un-gated, since shipping a row is not a preimage)
 // and must be live FIRST, or a follower is asked to hash a stamped parent row it
-// was never sent. Testnet is NOT armed at genesis the way the v6-coverage gate
+// was never sent. Testnet is NOT armed at genesis the way the head-coverage gate
 // above was: that ruling was made one day after the testnet re-genesis, and
 // testnet has run for a week since, so a height of 0 here would be retroactive
 // rather than a flag day. regtest is armed at 0 so fresh regtest stacks exercise
@@ -467,8 +473,8 @@ async function buildStateHashData(db, blockIndex, opts){
 
     // 6. invalid_archive stamp on anchor_actions archive-head parent rows. When the
     //    final v2 chunk of a chunked archive batch lands at block B and the
-    //    reassembled blob fails its CRC check, anchor.js stamps the parent (v1, or
-    //    v6 after the ARCHIVE_REWARD flag-day) 'invalid_archive' in place. The
+    //    reassembled blob fails its CRC check, anchor.js stamps the parent archive
+    //    head (v1) 'invalid_archive' in place. The
     //    parent's action_index is in an earlier block, so it is invisible to the
     //    action-scoped consensus hashes and to the per-block stream. Resolved via
     //    the status name (not status_id) to stay id-independent across nodes.

@@ -15,8 +15,8 @@
  * XChain Platform Action - ANCHOR (validator-broadcast, DOGE-only)
  *
  * On-chain commitment of federation state: the per-network checkpoint BUNDLE
- * (v7), the cross-chain match archive (v1), archive continuation chunks (v2),
- * and the publisher-bearing archive anchor (v6).
+ * (v0), the publisher-bearing cross-chain match archive head (v1), and archive
+ * continuation chunks (v2).
  * Parsed rows land in anchor_actions: the permanent on-chain record that
  * makes every checkpoint + the complete match archive recoverable from a
  * full chain parse alone (src/recovery.js). Live indexers keep settling
@@ -35,18 +35,26 @@
  * Spec: xchain-documentation/protocol/actions/ANCHOR.md
  *
  * FORMATS:
- *   v1 - VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|MATCH_BATCH_SEQ|MATCH_COUNT|BATCH_CRC32|TOTAL_CHUNKS|ARCHIVE_B64|SIG_COUNT|PUBKEY|SIG|...
- *   v2 - VERSION|MATCH_BATCH_SEQ|CHUNK_INDEX|TOTAL_CHUNKS|ARCHIVE_B64_CHUNK
- *   v6 - v1 archive anchor + PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|... appended after the root signature list (archive-reward re-derivation)
- *   v7 - the per-network checkpoint BUNDLE: one header, SECTION_COUNT per-chain
+ *   v0 - the per-network checkpoint BUNDLE: one header, SECTION_COUNT per-chain
  *        sections, one publisher-attestation tail (see _parseBundle)
+ *   v1 - VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|MATCH_BATCH_SEQ|MATCH_COUNT|BATCH_CRC32|TOTAL_CHUNKS|ARCHIVE_B64|SIG_COUNT|PUBKEY|SIG|...|PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|...
+ *   v2 - VERSION|MATCH_BATCH_SEQ|CHUNK_INDEX|TOTAL_CHUNKS|ARCHIVE_B64_CHUNK
  *
- * Versions 0/3/4/5 (one anchor per chain per cycle) are RETIRED. The hub never
- * emits them, the parsers are deleted, and their doc + vector cases are gone:
- * pre-launch, a superseded wire is deleted rather than deprecated (operator
- * ruling 2026-08-26). Rows already on testnet stay stamped and are never
- * re-elected; the version literals they still appear in are archive-read sets,
- * not parse paths.
+ * ACTIVATION. The version set RESTARTS at 0 at ANCHOR_ACTIVATION (see
+ * ../anchor_activation.js), so the first check in parse() is the anchor's own
+ * DOGE mined height: below the threshold EVERY ANCHOR of EVERY version is
+ * 'invalid: ANCHOR before activation', because the same byte meant something
+ * else on the pre-restart wire and no parser can tell the two apart from the
+ * bytes alone. At/above it this table is the whole wire set, so any other
+ * version byte falls out of the unknown-version check below.
+ *
+ * The pre-restart versions (the per-chain anchors, the tail-less archive head
+ * and the old bundle/archive-head bytes) are RETIRED, not deprecated: their
+ * parsers are deleted rather than kept behind a height, because pre-launch a
+ * superseded wire is deleted (operator ruling 2026-08-26) and the activation
+ * height already makes every row that used them invalid. Those rows keep their
+ * version byte on chain and stay readable through the txid-keyed reads; the
+ * rewards they already earned are recorded, not re-derived.
  *
  ********************************************************************/
 
@@ -58,6 +66,7 @@ const ar      = require('../anchor_reward_activation.js');
 const arKey   = require('../anchor_reward_key.js');
 const abas    = require('../archive_batch_author_activation.js');
 const ahug    = require('../archive_head_unverified_gate_activation.js');
+const aact    = require('../anchor_activation.js');
 const aaq     = require('../anchor-action-query.js');
 
 const ALLOWED_CHAINS = ['BTC', 'LTC', 'DOGE'];
@@ -72,26 +81,29 @@ class Anchor {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
+        // The whole ANCHOR wire set. Membership here is what makes a version byte
+        // parseable at all (the unknown-version check in parse() reads this object), so
+        // adding a key is a consensus change and deleting one retires a wire.
         this.formats = {};
-        this.formats[1] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|MATCH_BATCH_SEQ|MATCH_COUNT|BATCH_CRC32|TOTAL_CHUNKS|ARCHIVE_B64|SIG_COUNT|PUBKEY|SIG|...';
-        this.formats[2] = 'VERSION|MATCH_BATCH_SEQ|CHUNK_INDEX|TOTAL_CHUNKS|ARCHIVE_B64_CHUNK';
-        // v6 (archive-reward re-derivation flag-day): the v1 archive anchor PLUS the
-        // elected archive-leader PUBLISHER pubkey and a 2f+1 oracle_publish attestation over
-        // the 'anchor_archive' XANCPUB canonical, appended AFTER the wrapper signature list.
-        // The indexer re-derives the anchor_archive reward from these bytes, retiring the
-        // last key-authenticated reward push.
-        this.formats[6] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|MATCH_BATCH_SEQ|MATCH_COUNT|BATCH_CRC32|TOTAL_CHUNKS|ARCHIVE_B64|SIG_COUNT|PUBKEY|SIG|...|PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|...';
-        // v7 (checkpoint bundle): ONE anchor per network per cycle carrying every
-        // checkpointed chain as a section. The section body is the retired v5 field order
-        // from CHAIN through the root signature list MINUS NETWORK (the header carries it
-        // once and the parser rebuilds every section canonical with it), and the single
-        // publisher tail attests the whole bundle.
+        // v0 (checkpoint bundle): ONE anchor per network per cycle carrying every
+        // checkpointed chain as a section. The section body runs from CHAIN through the
+        // root signature list MINUS NETWORK (the header carries it once and the parser
+        // rebuilds every section canonical with it), and the single publisher tail
+        // attests the whole bundle.
         // The template grammar has no repeating-group syntax; the bare `...` after
         // SECTION_COUNT stands for SECTION_COUNT sections, each
         // CHAIN|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ
         // |SECTION_SNAPSHOT_BLOCK|STATE_ROOT|STATE_ROOT_VERSION|BLOCK_MERKLE_ROOT
         // |BLOCK_MERKLE_VERSION|SIG_COUNT|(PUBKEY|SIG)..., walked positionally by _parseBundle.
-        this.formats[7] = 'VERSION|NETWORK|SNAPSHOT_BLOCK|SECTION_COUNT|...|PUBLISHER|ATTEST_SIG_COUNT|...';
+        this.formats[0] = 'VERSION|NETWORK|SNAPSHOT_BLOCK|SECTION_COUNT|...|PUBLISHER|ATTEST_SIG_COUNT|...';
+        // v1 (archive head): the checkpoint wrapper carrying the match-archive segment,
+        // PLUS the elected archive-leader PUBLISHER pubkey and an oracle_publish
+        // attestation over the 'anchor_archive' XANCPUB canonical, appended AFTER the
+        // wrapper signature list. The tail is ALWAYS present; ATTEST_SIG_COUNT may be 0
+        // when the attestation round degrades, so one shape covers both the attested and
+        // the degraded round and a tail-less archive wire is not a legal encoding.
+        this.formats[1] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|MATCH_BATCH_SEQ|MATCH_COUNT|BATCH_CRC32|TOTAL_CHUNKS|ARCHIVE_B64|SIG_COUNT|PUBKEY|SIG|...|PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|...';
+        this.formats[2] = 'VERSION|MATCH_BATCH_SEQ|CHUNK_INDEX|TOTAL_CHUNKS|ARCHIVE_B64_CHUNK';
     }
 
     // Canonical signing string: MUST byte-match the hub's
@@ -101,20 +113,21 @@ class Anchor {
         let base = ['XCHECKPOINT', d['CHAIN'], d['NETWORK'], String(d['BLOCK_INDEX_CHECKPOINTED']),
                     d['BLOCK_HASH'], d['LEDGER_HASH'], d['ACTIONS_HASH'], d['CONTRACT_HASH'],
                     String(d['CHECKPOINT_SEQ']), String(d['SNAPSHOT_BLOCK'])].join('|');
-        // v0 ROUND_ID = chain|network|block|checkpoint_seq; v1 appends batch_seq so the
-        // per-block (v0) and archive (v1) canonicals (which share checkpoint_seq) get
-        // DISTINCT equivocation keys (R-4 false-slash fix). Must byte-match the hub.
+        // A checkpoint ROUND_ID is chain|network|block|checkpoint_seq; the archive head
+        // appends batch_seq so the checkpoint and archive canonicals (which share
+        // checkpoint_seq) get DISTINCT equivocation keys (R-4 false-slash fix). Must
+        // byte-match the hub.
         let roundId = d['CHAIN'] + '|' + d['NETWORK'] + '|' + d['BLOCK_INDEX_CHECKPOINTED'] + '|' + d['CHECKPOINT_SEQ'];
-        if(Number(d['FORMAT']) === 1 || Number(d['FORMAT']) === 6){
-            // Archive (v1, and its publisher-bearing v6): rootless checkpoint base + archive
-            // extension. Byte-matches the hub's _archiveCanonical, which nests the bare
-            // _rawCanonicalCheckpoint; v6's wrapper sigs are produced over the SAME archive
-            // canonical (the publisher tail is attested separately via _rewardCanonical).
+        if(Number(d['FORMAT']) === 1){
+            // Archive head: rootless checkpoint base + archive extension. Byte-matches the
+            // hub's _archiveCanonical, which nests the bare _rawCanonicalCheckpoint; the
+            // wrapper sigs are produced over the SAME archive canonical (the publisher tail
+            // is attested separately via _rewardCanonical).
             base += '|' + String(d['MATCH_BATCH_SEQ']) + '|' + String(d['MATCH_COUNT']) + '|' +
                     d['BATCH_CRC32'] + '|' + String(d['TOTAL_CHUNKS']);
             roundId += '|' + d['MATCH_BATCH_SEQ'];
-        } else if(Number(d['FORMAT']) === 7){
-            // A v7 SECTION is root-bearing by construction (the bundle is only ever cut from
+        } else if(Number(d['FORMAT']) === 0){
+            // A v0 SECTION is root-bearing by construction (the bundle is only ever cut from
             // rows that carry both light-client roots), so its canonical always appends the
             // root suffix. Byte-matches the hub's post-flag-day canonicalCheckpoint suffix +
             // the SDK/explorer reconstructions. `d` here is ONE section, already rebuilt with
@@ -135,16 +148,16 @@ class Anchor {
     // (ar.ANCHOR_REWARD_AMOUNT), NEVER taken from the wire. A distinct 'XANCPUB|...' roundId
     // prefix gives the attestation its OWN equivocation family, so a validator that signs both
     // the checkpoint root canonical and this reward attestation in the same round is never
-    // falsely slashable (same R-4 reasoning as the v0/v1 roundId split above).
+    // falsely slashable (same R-4 reasoning as the checkpoint/archive roundId split above).
     _rewardCanonical(d){
-        // Archive leg (v6): the attested tuple is the anchor_archive reward, keyed on
+        // Archive leg (v1): the attested tuple is the anchor_archive reward, keyed on
         // MATCH_BATCH_SEQ (the archive round number) with the frozen ARCHIVE amount. MUST
         // byte-match the hub's StateAnchorPublisher._archiveAttestationCanonical. The
         // 'XANCPUB|archive|...' roundId is disjoint from the bundle's ('XANCPUB|bundle|...')
         // and from the retired per-chain family ('XANCPUB|BTC|...'), so the attestation
         // families can never equivocation-collide (same R-4 reasoning as the checkpoint
         // roundId splits above).
-        if(Number(d['FORMAT']) === 6){
+        if(Number(d['FORMAT']) === 1){
             let base = ['XANCPUB', 'anchor_archive', String(d['MATCH_BATCH_SEQ']),
                         String(d['SNAPSHOT_BLOCK']), String(d['PUBLISHER'] || '').toLowerCase(),
                         ar.ARCHIVE_REWARD_AMOUNT].join('|');
@@ -154,7 +167,7 @@ class Anchor {
             }
             return base;
         }
-        // Bundle leg (v7): ONE attested reward per bundle, type 'anchor_bundle', round
+        // Bundle leg (v0): ONE attested reward per bundle, type 'anchor_bundle', round
         // SNAPSHOT_BLOCK. The layout keeps the shipped SIX positional fields so
         // slash.js's XANCPUB family (which reads snapshot_block at field index 3 for
         // every member) judges a bundle equivocation without a third branch; field 2 is
@@ -174,6 +187,17 @@ class Anchor {
 
     async parse(params, data, error){
         let format = data['FORMAT'];
+
+        // Activation FIRST, ahead of the version table: below ANCHOR_ACTIVATION the same
+        // version bytes belonged to the pre-restart wire set, so no shape check on these
+        // bytes means anything and every ANCHOR down there is invalid whatever it decodes
+        // to. Keyed on the anchor's OWN DOGE mined height (data['BLOCK_INDEX'], the same
+        // key the unverified-head gate below reads), never on SNAPSHOT_BLOCK or the
+        // checkpointed height, which belong to other chains. isAnchorActive fails closed on
+        // a non-numeric height or an unknown network.
+        if(!error && !aact.isAnchorActive(Number(data['BLOCK_INDEX']), this.config['NETWORK']))
+            error = 'invalid: ANCHOR before activation';
+
         if(!error && (format === null || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
 
@@ -181,12 +205,16 @@ class Anchor {
         if(!error && String(this.config['COIN']) !== 'DOGE')
             error = 'invalid: ANCHOR only valid on DOGE';
 
+        // Dispatch by family. An unparseable version still lands on a body parser (carrying
+        // the error), and the archive-head parser is the fall-through, so a rejected action
+        // is recorded rather than dropped.
         if(format === 2) return await this._parseContinuation(params, data, error);
-        if(format === 7) return await this._parseBundle(params, data, error);
+        if(format === 0) return await this._parseBundle(params, data, error);
         return await this._parseCheckpoint(params, data, error, format);
     }
 
-    // ANCHOR v1/v6: the archive anchor (a checkpoint wrapper carrying the match archive).
+    // ANCHOR v1: the archive head (a checkpoint wrapper carrying the match archive plus
+    // the publisher-attestation tail).
     async _parseCheckpoint(params, data, error, format){
 
         data['CHAIN']                   = String(params[1] || '').toUpperCase();
@@ -199,7 +227,7 @@ class Anchor {
         data['CHECKPOINT_SEQ']          = params[8];
         data['SNAPSHOT_BLOCK']          = params[9];
 
-        // v1/v6 only: the archive segment sits between SNAPSHOT_BLOCK and SIG_COUNT.
+        // Archive head only: the archive segment sits between SNAPSHOT_BLOCK and SIG_COUNT.
         data['MATCH_BATCH_SEQ'] = params[10];
         data['MATCH_COUNT']     = params[11];
         data['BATCH_CRC32']     = String(params[12] || '').toLowerCase();
@@ -230,13 +258,6 @@ class Anchor {
             else if(!data['ARCHIVE_B64'] || !/^[0-9a-zA-Z_-]+$/.test(String(data['ARCHIVE_B64'])))
                 error = 'invalid: ARCHIVE_B64 (format)';
         }
-        // v6 (publisher-bearing archive anchor) may only appear at/above the ARCHIVE_REWARD
-        // flag-day; below it the legacy v1 + push path stands and this version does not exist.
-        if(!error && format === 6){
-            if(!ar.isArchiveRewardActive(Number(data['SNAPSHOT_BLOCK']), data['NETWORK']))
-                error = 'invalid: ANCHOR v6 before ARCHIVE_REWARD flag-day';
-        }
-
         // Parse the signature list
         let sigs = [];
         let sigCount = 0;
@@ -257,16 +278,25 @@ class Anchor {
             }
         }
 
-        // v6: PUBLISHER pubkey + the publisher-attestation sig list, appended AFTER
-        // the wrapper sig list (located by sigBase + 1 + 2*sigCount).
+        // The publisher tail: PUBLISHER pubkey + the publisher-attestation sig list,
+        // appended AFTER the wrapper sig list (located by sigBase + 1 + 2*sigCount). It is
+        // ALWAYS present on an archive head, so a wire carrying version 1 without one fails
+        // here on 'PUBLISHER format' rather than parsing as some tail-less shape.
+        //
+        // ATTEST_SIG_COUNT 0 is LEGAL: it is what the hub emits when the attestation round
+        // did not reach quorum, and it is the same degraded shape the bundle leg already
+        // uses. A degraded round must not cost the federation its checkpoint, so the count
+        // rides at 0, publisher_attestations stores NULL, and the reward derivation below
+        // simply finds no attestation to meet quorum with. Negative is still rejected: it
+        // is not a shape any signer produces.
         let publisherSigs = [];
-        if(!error && format === 6){
+        if(!error && format === 1){
             try {
                 let pubBase = sigBase + 1 + 2 * sigCount;
                 data['PUBLISHER'] = String(params[pubBase] || '').toLowerCase();
                 if(!/^[0-9a-f]{64}$/.test(data['PUBLISHER'])) throw new Error('PUBLISHER format');
                 let attestCount = parseInt(params[pubBase + 1]);
-                if(!Number.isFinite(attestCount) || attestCount < 1) throw new Error('ATTEST_SIG_COUNT');
+                if(!Number.isFinite(attestCount) || attestCount < 0) throw new Error('ATTEST_SIG_COUNT');
                 for(let i = 0; i < attestCount; i++){
                     let pubkey = params[pubBase + 2 + 2 * i];
                     let sig    = params[pubBase + 2 + 2 * i + 1];
@@ -326,7 +356,7 @@ class Anchor {
         // Verify 2f+1 oracle_publish signatures over the canonical.
         // SNAPSHOT_BLOCK comes from the wire payload (a BTC height), NOT from
         // the DOGE block this ANCHOR landed in.
-        // Hoisted so the v4/v5 publisher-attestation check below can REUSE the same
+        // Hoisted so the publisher-attestation check below can REUSE the same
         // oracle_publish set + weighting (no second query, no chance of a divergent set).
         let weighted = false, validators = null, snapPubkeys = null, oracleN = 0;
         if(!error){
@@ -368,17 +398,19 @@ class Anchor {
             }
         }
 
-        // v6: verify the PUBLISHER-attestation quorum (a SECOND 2f+1 over the XANCPUB
+        // Verify the PUBLISHER-attestation quorum (a SECOND 2f+1 over the XANCPUB
         // canonical) and DERIVE the archive reward from chain, retiring the trusted hub push.
         // The attestation reuses the SAME oracle_publish set + weighting resolved for the root
         // quorum. The reward is credited only when the root quorum passed (error still null,
         // snapshot present), the attestation quorum is met, and PUBLISHER is in the snapshot
         // set. A degraded or forged attestation NEVER fails the anchor: the checkpoint still
         // records as 'valid'; only the reward is skipped, and every indexer reaches the same
-        // verdict deterministically. amount is the FROZEN consensus constant; reconcile keeps
-        // the smallest-pubkey winner on a failover double-publish, so the COLLECT rail stays
-        // single-winner fleet-wide. Reward type anchor_archive, round = MATCH_BATCH_SEQ.
-        if(!error && format === 6 && snapPubkeys && oracleN > 0){
+        // verdict deterministically. This is also the whole path a degraded ATTEST_SIG_COUNT 0
+        // tail takes: no attestation, no quorum, no reward, checkpoint intact. amount is the
+        // FROZEN consensus constant; reconcile keeps the smallest-pubkey winner on a failover
+        // double-publish, so the COLLECT rail stays single-winner fleet-wide. Reward type
+        // anchor_archive, round = MATCH_BATCH_SEQ.
+        if(!error && format === 1 && snapPubkeys && oracleN > 0){
             let rewardCanonical = this._rewardCanonical(data);
             let attSigners = [], attSeen = new Set();
             for(let s of publisherSigs){
@@ -412,9 +444,8 @@ class Anchor {
                 // rebase, so it alone does not identify the reward: two genuinely distinct
                 // archive anchors can carry a reissued seq. The qualifier is the snapshot
                 // block that already distinguishes them in the SIGNED tuple (_rewardCanonical
-                // puts SNAPSHOT_BLOCK in the v6 XANCPUB canonical), carried into the ledger
-                // key so both real publishes survive the upsert and the reconcile. 0 for the
-                // per-chain legs, whose CHECKPOINT_SEQ is a height that only advances.
+                // puts SNAPSHOT_BLOCK in the archive XANCPUB canonical), carried into the
+                // ledger key so both real publishes survive the upsert and the reconcile.
                 let rewardQual  = arKey.rewardRoundQualifier(rewardType, data['SNAPSHOT_BLOCK']);
                 let ok = await this.indexerDb.createValidatorReward(
                     data['PUBLISHER'], rewardRound, rewardType,
@@ -429,7 +460,7 @@ class Anchor {
         }
 
         data['VALIDATOR_SIGNATURES'] = JSON.stringify(sigs);
-        // v6 publisher-attestation tail: persist the RAW wire publisher signature list
+        // The publisher-attestation tail: persist the RAW wire publisher signature list
         // (publisherSigs, hex-shape-checked only at parse time) so createAnchorAction can
         // store it in anchor_actions.publisher_attestations.
         // NOTE: this is UNVERIFIED transport, NOT the quorum-verified subset.
@@ -439,7 +470,7 @@ class Anchor {
         // absent from the snapshot, or the tail of an anchor whose attestation quorum
         // was not met. Any consumer MUST re-verify (as anchor_reward_derive.js does
         // from anchor_reward_attestations) and never treat this column as pre-verified.
-        // Empty (null) for v1, which carries no publisher tail.
+        // NULL on a degraded ATTEST_SIG_COUNT 0 tail, which carries no signatures at all.
         data['PUBLISHER_ATTESTATIONS'] = (publisherSigs.length > 0) ? JSON.stringify(publisherSigs) : null;
         if(!data['STATUS']) data['STATUS'] = (error) ? error : 'valid';
 
@@ -451,7 +482,7 @@ class Anchor {
         await this.indexerDb.createAnchorAction(data);
 
         // Head-side archive reassembly gate: the chunk-side gate in _parseContinuation only
-        // fires when the parent v1/v6 head already exists, so when the completing
+        // fires when the parent archive head already exists, so when the completing
         // continuation chunk is broadcast BEFORE its head every stored chunk is 'orphan' and
         // the reassembly CRC is never checked. Re-run the completeness + CRC check here when
         // the head lands last, applying the SAME status handling and index-coverage rule as
@@ -459,7 +490,7 @@ class Anchor {
         // across nodes.
         //
         // The head's own status may be 'valid' OR, at/after the flag day below,
-        // 'unverified': a node with no mirrored oracle_publish snapshot stores every v1/v6
+        // 'unverified': a node with no mirrored oracle_publish snapshot stores every archive
         // head 'unverified', yet the head still carries the same signed BATCH_CRC32 and the
         // chunk-side path verifies regardless of the parent head's status, so 'valid' alone
         // leaves the ordering nondeterminism open on exactly those nodes.
@@ -498,12 +529,12 @@ class Anchor {
         await this.mapper.createMappings(data);
     }
 
-    // ANCHOR v7: the per-network checkpoint BUNDLE.
+    // ANCHOR v0: the per-network checkpoint BUNDLE.
     //
     // ONE action carries every chain checkpointed this cycle. The wire is a header
     // (NETWORK, the bundle SNAPSHOT_BLOCK, SECTION_COUNT), SECTION_COUNT positional
     // sections, and ONE publisher-attestation tail for the whole bundle. Each section is
-    // the retired v5 field order from CHAIN through its own signature list MINUS NETWORK:
+    // the checkpoint field order from CHAIN through its own signature list MINUS NETWORK:
     // the header carries the network once, and this parser REBUILDS every section's
     // XCHECKPOINT canonical with it, then WRITES it onto every section row so
     // idx_anchor_checkpoint and getMaxAnchorCheckpointSeq(chain, network) keep working
@@ -547,7 +578,7 @@ class Anchor {
         if(!error){
             for(let i = 0; i < Number(data['SECTION_COUNT']); i++){
                 let s = {
-                    FORMAT:                    7,
+                    FORMAT:                    0,
                     SECTION_INDEX:             i,
                     NETWORK:                   data['NETWORK'],
                     CHAIN:                     String(params[cursor]     || '').toUpperCase(),
@@ -736,7 +767,7 @@ class Anchor {
                         rewardRound, 'anchor_bundle',
                         Number(data['BLOCK_INDEX']), Number(data['ACTION_INDEX']), rewardQual);
             } else {
-                console.warn('\t ANCHOR v7 : publisher-attestation quorum not met or PUBLISHER not in oracle_publish set; reward skipped (bundle still valid)');
+                console.warn('\t ANCHOR v0 : publisher-attestation quorum not met or PUBLISHER not in oracle_publish set; reward skipped (bundle still valid)');
             }
         }
 
@@ -747,7 +778,7 @@ class Anchor {
         data['PUBLISHER_ATTESTATIONS'] = (publisherSigs.length > 0) ? JSON.stringify(publisherSigs) : null;
         if(!data['STATUS']) data['STATUS'] = (error) ? error : 'valid';
 
-        console.log("\t ANCHOR v7 : " + data['NETWORK'] + ' @ snapshot ' + data['SNAPSHOT_BLOCK'] +
+        console.log("\t ANCHOR v0 : " + data['NETWORK'] + ' @ snapshot ' + data['SNAPSHOT_BLOCK'] +
                     ' (' + sections.length + ' section(s): ' + sections.map(s => s.CHAIN).join(',') + ')' +
                     ' : ' + data['STATUS']);
 
@@ -770,7 +801,7 @@ class Anchor {
         await this.mapper.createMappings(data);
     }
 
-    // Shape-check one v7 section's fixed fields. Returns the failure reason (which the
+    // Shape-check one v0 section's fixed fields. Returns the failure reason (which the
     // caller prefixes with 'SECTION n ') or null when the section is well formed. Split
     // out so the reason strings stay in one place and read the same as the archive leg's.
     //
@@ -797,7 +828,7 @@ class Anchor {
         for(let f of ['BLOCK_HASH', 'LEDGER_HASH', 'ACTIONS_HASH', 'CONTRACT_HASH']){
             if(!/^[0-9a-f]{64}$/.test(String(s[f]))) return f + ' (format)';
         }
-        // Roots are REQUIRED: a v7 bundle is root-bearing by construction (§2.1), so a
+        // Roots are REQUIRED: a v0 bundle is root-bearing by construction (§2.1), so a
         // rootless section is malformed rather than a legacy shape to tolerate.
         if(!/^[0-9a-f]{64}$/.test(String(s.STATE_ROOT)))        return 'STATE_ROOT (format)';
         if(!/^[0-9a-f]{64}$/.test(String(s.BLOCK_MERKLE_ROOT))) return 'BLOCK_MERKLE_ROOT (format)';
@@ -811,7 +842,7 @@ class Anchor {
     // publisher-scoped flag day is not active for this batch, in which case every
     // caller keeps the legacy canonical-head behavior.
     //
-    // The gate is anchored to the batch's CANONICAL head (earliest v1/v6 row for the
+    // The gate is anchored to the batch's CANONICAL head (earliest archive-head row for the
     // seq): it is the one row every node resolves identically without consulting
     // status, so head-side and chunk-side verdicts for one batch always apply the SAME
     // rule. No head at all means no batch to scope, hence null. The height is
@@ -848,7 +879,7 @@ class Anchor {
         // flag day is inert (legacy canonical-head rule).
         let scope  = null;
         if(!error){
-            // The canonical head (earliest v1/v6 row for the seq, status-agnostic) is
+            // The canonical head (earliest archive-head row for the seq, status-agnostic) is
             // both the legacy parent AND the flag-day anchor, so a head and its chunks
             // can never be judged under two different rules.
             let canonical = await this.indexerDb.getAnchorV1ByBatchSeq(Number(data['MATCH_BATCH_SEQ']));

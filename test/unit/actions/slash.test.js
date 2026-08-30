@@ -554,7 +554,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
     // XCHECKPOINT (root canonical, snapshot_block at index 9) and XANCPUB (reward
     // attestation, snapshot_block at index 3) share the CHECKPOINT engine tag.
 
-    // Realistic XCHECKPOINT raw canonical, in the root-bearing shape an ANCHOR v7 section
+    // Realistic XCHECKPOINT raw canonical, in the root-bearing shape an ANCHOR v0 section
     // carries; snapshot_block is field index 9, ahead of the root suffix.
     function checkpointContent(snap, ledgerHash) {
         return ['XCHECKPOINT', 'BTC', 'regtest', '199', 'aa'.repeat(32), ledgerHash,
@@ -603,7 +603,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         assert.deepStrictEqual(indexer.indexerDb.getValidatorsByCapability.firstCall.args, ['oracle_publish', 100]);
     });
 
-    it('ACCEPTS a bundle-leg XANCPUB equivocation (anchor_bundle scope, ANCHOR v7)', async function () {
+    it('ACCEPTS a bundle-leg XANCPUB equivocation (anchor_bundle scope, ANCHOR v0)', async function () {
         // The bundle canonical repeats SNAPSHOT_BLOCK as its round_reference, keeping the
         // SIX positional fields (D22) so this branch finds the block at index 3 with no
         // third case in slash.js. Two attested publishers for one bundle round is a
@@ -662,11 +662,11 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
     const Anchor = require('../../../src/actions/anchor.js');
     const CP_SNAP = 100;
     function builtCheckpoint(ledgerHash) {
-        // FORMAT 7 = a bundle SECTION, the only checkpoint canonical the hub still signs.
+        // FORMAT 0 = a bundle SECTION, the only checkpoint canonical the hub still signs.
         // The root suffix it appends sits AFTER segment 9, so the slot read is unmoved -
         // which is the point of pinning it against the real builder rather than a literal.
         return Anchor.prototype._canonical.call({}, {
-            FORMAT: 7, CHAIN: 'BTC', NETWORK: 'regtest',
+            FORMAT: 0, CHAIN: 'BTC', NETWORK: 'regtest',
             BLOCK_INDEX_CHECKPOINTED: 199, BLOCK_HASH: 'aa'.repeat(32),
             LEDGER_HASH: ledgerHash, ACTIONS_HASH: 'cc'.repeat(32),
             CONTRACT_HASH: 'dd'.repeat(32), CHECKPOINT_SEQ: 5, SNAPSHOT_BLOCK: CP_SNAP,
@@ -676,12 +676,12 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
     }
     function builtBundleAttestation(publisher) {
         return Anchor.prototype._rewardCanonical.call({}, {
-            FORMAT: 7, NETWORK: 'regtest', SNAPSHOT_BLOCK: CP_SNAP, PUBLISHER: publisher,
+            FORMAT: 0, NETWORK: 'regtest', SNAPSHOT_BLOCK: CP_SNAP, PUBLISHER: publisher,
         });
     }
     function builtArchiveAttestation(publisher) {
         return Anchor.prototype._rewardCanonical.call({}, {
-            FORMAT: 6, CHAIN: 'BTC', NETWORK: 'regtest', MATCH_BATCH_SEQ: 7,
+            FORMAT: 1, CHAIN: 'BTC', NETWORK: 'regtest', MATCH_BATCH_SEQ: 7,
             SNAPSHOT_BLOCK: CP_SNAP, PUBLISHER: publisher, CHECKPOINT_SEQ: 5,
         });
     }
@@ -726,7 +726,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         const msgA = builtBundleAttestation('aaaa'.repeat(16));
         const msgB = builtBundleAttestation('bbbb'.repeat(16));
         assert.strictEqual(equivContent(msgA).split('|')[3], String(CP_SNAP),
-            'Anchor._rewardCanonical\'s v7 branch no longer carries SNAPSHOT_BLOCK at segment 3; ' +
+            'Anchor._rewardCanonical\'s v0 branch no longer carries SNAPSHOT_BLOCK at segment 3; ' +
             'slash._resolveSlot reads index 3 for every XANCPUB family and would resolve the wrong ' +
             'bond slot. Content was: ' + equivContent(msgA));
         assert.strictEqual(equivContent(msgA).split('|').length, 6,

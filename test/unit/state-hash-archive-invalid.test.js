@@ -123,9 +123,9 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
         BET_STATUS_STATE_HASH_ACTIVATION.regtest     = betPrev;
     });
 
-    it('shared constant: ARCHIVE_HEAD_VERSIONS is [1, 6] and renders IN (1, 6)', function(){
-        assert.deepStrictEqual(ARCHIVE_HEAD_VERSIONS, [1, 6]);
-        assert.strictEqual(ARCHIVE_HEAD_VERSIONS_SQL, 'IN (1, 6)');
+    it('shared constant: ARCHIVE_HEAD_VERSIONS is [1] and renders IN (1)', function(){
+        assert.deepStrictEqual(ARCHIVE_HEAD_VERSIONS, [1]);
+        assert.strictEqual(ARCHIVE_HEAD_VERSIONS_SQL, 'IN (1)');
     });
 
     it('shared constant: the chunk-height key is c.block_index_doge, the legacy key c.block_index', function(){
@@ -217,7 +217,7 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
         });
     });
 
-    it('at/after the version threshold: the class selects the full archive-head set IN (1, 6), key set unchanged', async function(){
+    it('at/after the version threshold: the class selects the shared archive-head set, key set unchanged', async function(){
         await withHeight(ARCHIVE_INVALID_STATE_HASH_ACTIVATION, 0, async () => {
             const captured = [];
             const db = makeAnchorDb(captured);
@@ -225,8 +225,8 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
                 const { data } = await build(db);
                 const sql = anchorSqlOf(captured);
                 assert.ok(sql.indexOf('p.version ' + ARCHIVE_HEAD_VERSIONS_SQL) !== -1,
-                    'active predicate must be p.version IN (1, 6), or a v6 invalid_archive stamp stays invisible to the integrity hash');
-                assert.ok(!/p\.version = 1 /.test(sql), 'the v1-only predicate must be gone when active');
+                    'the active predicate must be spliced from ARCHIVE_HEAD_VERSIONS, or an invalid_archive stamp on a future archive head stays invisible to the integrity hash');
+                assert.ok(!/p\.version = 1 /.test(sql), 'the hard-coded v1-only predicate must be gone when active');
                 assert.deepStrictEqual(Object.keys(data), PREFEATURE_KEYS,
                     'widening changes row selection only, never the preimage key set');
             } finally { db.close(); }
@@ -260,7 +260,7 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
                 const captured = [];
                 const db = makeAnchorDb(captured);
                 try {
-                    seedFailedBatch(db, { headVersion: 6, headActionIndex: 100 });
+                    seedFailedBatch(db, { headVersion: 1, headActionIndex: 100 });
                     seedFailedBatch(db, { headVersion: 1, batchSeq: 8, headActionIndex: 90, chunkActionIndex: 302 });
                     const { data } = await build(db);
                     const sql = anchorSqlOf(captured);
@@ -270,7 +270,7 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
                         'the never-populated legacy key must be gone when armed');
                     assert.deepStrictEqual(data.anchor_invalid,
                         [{ action_index: 90, status: 'invalid_archive' }, { action_index: 100, status: 'invalid_archive' }],
-                        'both archive-head versions are selected, in action_index order');
+                        'every stamped archive head in the block is selected, in action_index order');
                 } finally { db.close(); }
             });
         });
@@ -321,14 +321,14 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
                 const dropped = makeAnchorDb();
                 const again   = makeAnchorDb();
                 try {
-                    seedFailedBatch(stamped, { headVersion: 6 });
-                    seedFailedBatch(again,   { headVersion: 6 });
+                    seedFailedBatch(stamped, { headVersion: 1 });
+                    seedFailedBatch(again,   { headVersion: 1 });
                     // The follower that silently dropped the invalid_archive upsert: same
                     // batch, same completing chunk, parent still on its pre-stamp status.
                     const validId = dropped.status('valid');
                     dropped.status('invalid_archive');
                     const unverifiedId = dropped.status('unverified');
-                    dropped.anchor({ action_index: 100, version: 6, match_batch_seq: 7, total_chunks: 2,
+                    dropped.anchor({ action_index: 100, version: 1, match_batch_seq: 7, total_chunks: 2,
                                      status_id: unverifiedId, block_index_doge: B - 3 });
                     dropped.anchor({ action_index: 301, version: 2, match_batch_seq: 7, chunk_index: 1, total_chunks: 2,
                                      status_id: validId, block_index_doge: B });
