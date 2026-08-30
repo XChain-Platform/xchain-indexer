@@ -124,6 +124,22 @@ The module is vendored byte-identically from xchain-hub. Edit it there
 and re-run `xchain-hub/bin/sync-observability.sh`; a local edit fails the
 parity check CI runs across the vendored copies.
 
+### Shim controls, and the defaults in force
+
+These four names configure the shim itself. The fleet deploy path carries them
+into the container: `xchain-node` forwards any of them set in the module config
+store or in the deploy host's environment (`ModuleService.resolveObservabilityEnv`),
+and the validator compose files under `claude/deploy/testnet-validators/` name
+them outright. Nothing is fabricated when neither source sets one, so these
+defaults hold on an unconfigured box:
+
+| Variable | Default | Effect |
+|---|---|---|
+| `LOG_LEVEL` | `info` | Lowest level emitted. `debug` \| `info` \| `warn` \| `error`; an unrecognised value falls back to `info`. |
+| `LOG_FORMAT` | `text` | `text` emits `<iso-ts> <level> [<service>] <msg> key=value`; `json` emits one NDJSON record per line. |
+| `METRICS_ENABLED` | `false` | Registers the `/metrics` route. The counter registry is built either way, so counters are collected whether or not the route is exposed. |
+| `XCHAIN_LOG_PATCH` | `1` | Routes bare `console.*` calls through the shim so they carry the level and service prefix. `0` leaves `console` untouched, which is what the test bootstrap sets. |
+
 ## Scripts
 
 | Command | Description |

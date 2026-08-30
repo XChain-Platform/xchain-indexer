@@ -23,6 +23,12 @@ function realObservability(){
 }
 
 describe('indexer poll-freshness heartbeat metric (item 9bee49e8)', function () {
+
+    // The observability registry is process-wide (one process is one service),
+    // so a case asserting a series is ABSENT has to start from a clean registry
+    // rather than inheriting the previous case's series.
+    afterEach(function () { require('../../src/observability')._resetObservability(); });
+
     it('renders the last-commit timestamp on the scrape surface', function () {
         const observability = realObservability();
         const indexer = { lastBlockCommittedAt: 1754870400000 };
@@ -94,9 +100,18 @@ describe('indexer poll-freshness heartbeat metric (item 9bee49e8)', function () 
             'a booting indexer has not iterated yet, and a 0 would render as 1970');
     });
 
-    it('registers nothing when metrics are off', function () {
+    it('still registers the series when metrics are off, where only the endpoint is gated', function () {
+        // Gating the registry on METRICS_ENABLED would leave this counter absent
+        // on the default fleet, which is every box: nothing could record into
+        // it, so enabling metrics later starts from zero history instead of
+        // revealing what happened.
         const off = installObservability(null, { service: 'xchain-indexer', env: {} });
-        assert.strictEqual(off.registry, null);
-        assert.strictEqual(installIndexerMetrics(off, { lastBlockCommittedAt: Date.now() }), false);
+        assert.strictEqual(off.enabled, false, 'the endpoint stays off');
+        assert.ok(off.registry, 'the registry itself is not gated');
+        assert.strictEqual(installIndexerMetrics(off, { lastBlockCommittedAt: Date.now() }), true);
+    });
+
+    it('refuses to register without a registry at all', function () {
+        assert.strictEqual(installIndexerMetrics({ registry: null }, { lastBlockCommittedAt: Date.now() }), false);
     });
 });

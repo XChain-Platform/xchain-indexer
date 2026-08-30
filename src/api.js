@@ -61,6 +61,17 @@ function keyEquals(provided, expected){
 
 dotenv.config();
 
+// Before anything else logs. The env-validation failures immediately below are
+// exactly the lines an operator needs levelled and timestamped, and
+// installObservability does not run until ~160 lines further down.
+const { patchConsole } = require('./observability');
+patchConsole({
+    service: 'xchain-indexer',
+    version: require('../package.json').version,
+    coin:    process.env.INDEXER_COIN || '',
+    network: process.env.INDEXER_NETWORK || ''
+});
+
 // Validate required environment variables
 const REQUIRED_ENV = [
     'DECODER_DB_HOST','DECODER_DB_PORT','DECODER_DB_NAME','DECODER_DB_USER','DECODER_DB_PASS',
