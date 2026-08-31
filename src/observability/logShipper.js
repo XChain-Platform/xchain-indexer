@@ -109,7 +109,20 @@ function formatFieldValue(value) {
  * every console.error line and page the fleet on first deploy.
  */
 function formatTextLine(record) {
-    let line = `${record.ts} ${record.level} [${record.service}] ${record.msg}`;
+    // ONE console call is ONE line. A trailing Error (or any object) expands across
+    // lines under util.inspect, and only the FIRST line carries the timestamp, level
+    // and service - every continuation is an orphan. Measured on the live fleet:
+    // `  fatal: true,` appeared six times in the hub and three in each indexer,
+    // naming no operation, no error and no coin, because it was the middle of a
+    // pretty-printed mariadb SqlError. Those fragments are unparseable by anything
+    // keying on the prefix, which is every consumer of these logs.
+    //
+    // Escape the breaks rather than emit them. Nothing is lost: the stack still
+    // ships, on one line, exactly as formatFieldValue already renders a `stack`
+    // field. JSON mode needs no equivalent - JSON.stringify escapes newlines, so
+    // an NDJSON record is one physical line already and keeps the true characters.
+    const msg = String(record.msg).replace(/\r\n|\r|\n/g, '\\n');
+    let line = `${record.ts} ${record.level} [${record.service}] ${msg}`;
     for (const [k, v] of Object.entries(record)) {
         if (ENVELOPE_KEYS.has(k) || v === undefined) continue;
         line += ` ${String(k).replace(/[\s"'=]/g, '_')}=${formatFieldValue(v)}`;
