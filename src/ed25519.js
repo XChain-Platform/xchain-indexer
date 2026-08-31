@@ -80,8 +80,57 @@ function buildPriceV0Payload(round, timestamp, pairs, network, btcBlockHeight) {
     return raw;
 }
 
+// Build the canonical signable payload for a PRICE batch: ONE signature set over
+// several rounds. This must match exactly what the hub producer signs
+// (OracleConsensus._buildPriceBatchPayload) and what the hub re-checks on ingest
+// (PriceAggregator._buildPriceBatchPayload).
+//
+// `rounds` is [{ round, timestamp, btcBlockHeight, pairs }] and each `pairs` entry is
+// { pair | coinPair, price }. The builder sorts the rounds ascending and normalizes each
+// round's pairs itself rather than requiring sorted input: three twin call sites in two
+// repos would otherwise each have to re-derive the ordering contract, and one of them
+// getting it subtly wrong is exactly the divergence that stalls the federation.
+//
+// The EQUIV header is UNCONDITIONAL here, unlike buildPriceV0Payload's height gate. v0
+// gates because it has pre-flag-day history whose bytes may not move; v2 has none (it is
+// ungated and every network it runs on already has EQUIV active). The unwrapped bare-JSON form is also the exact shape that
+// breaks SLASH's "an ORACLE-tagged canonical always carries `round`" invariant, which is
+// why v2 carries its own engine tag. Do NOT "fix" this into a v0-style gate.
+function buildPriceBatchPayload(firstRound, lastRound, btcBlockHeight, rounds) {
+    let sortedRounds = [...rounds]
+        .sort((a, b) => parseInt(a.round) - parseInt(b.round))
+        .map(r => {
+            let pairs = r.pairs.map(p => ({ pair: p.coinPair || p.pair, price: String(p.price) }));
+            let sortedPairs = [...pairs].sort((a, b) => {
+                if (a.pair < b.pair) return -1;
+                if (a.pair > b.pair) return 1;
+                return 0;
+            });
+            return {
+                round:            parseInt(r.round),
+                timestamp:        parseInt(r.timestamp),
+                btc_block_height: parseInt(r.btcBlockHeight),
+                pairs:            sortedPairs
+            };
+        });
+    let raw = JSON.stringify({
+        first_round:      parseInt(firstRound),
+        last_round:       parseInt(lastRound),
+        btc_block_height: parseInt(btcBlockHeight),
+        rounds:           sortedRounds
+    });
+    // ROUND_ID carries the batch anchor AND the round window: two honest batches that
+    // split one window differently at the same anchor must not land on one equiv key,
+    // which would read as equivocation. XORACLEB has no view change -> VIEW=0.
+    let roundId = String(parseInt(btcBlockHeight)) + '|' +
+                  String(parseInt(firstRound))     + '|' +
+                  String(parseInt(lastRound));
+    return eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, roundId, 0, raw);
+}
+
 module.exports = {
     pubkeyFromHex,
     verify,
-    buildPriceV0Payload
+    buildPriceV0Payload,
+    buildPriceBatchPayload
 };

@@ -49,6 +49,7 @@ const GATES = [
     // one-sided height edit changes when it is paid.
     ['attest_broadcast_fee_activation.js',  'ATTEST_BROADCAST_FEE_CAP'],
     ['anchor_reward_activation.js',         'ANCHOR_REWARD_DERIVE_ACTIVATION'],
+    ['anchor_activation.js',                'ANCHOR_ACTIVATION'],
     // constants.js claims the whole anchor/archive reward block is "kept byte-identical to
     // the local copies ... by the cross-service regression suite"; these are the exports of
     // that block nothing else compared to canon (ARCHIVE_REWARD_ACTIVATION is locked by

@@ -124,10 +124,11 @@ describe('archive-anchor content query: ARCHIVE_ANCHOR_BY_CONTENT_SQL @regressio
     });
 
     it('restricts to ARCHIVE HEAD versions only (a v2 chunk carries no checkpoint identity)', function () {
-        assert.deepStrictEqual(ARCHIVE_HEAD_VERSIONS, [1, 6]);
-        assert.ok(/a\.version IN \(1, 6\)/.test(ARCHIVE_ANCHOR_BY_CONTENT_SQL));
+        assert.deepStrictEqual(ARCHIVE_HEAD_VERSIONS, [1]);
+        assert.ok(/a\.version IN \(1\)/.test(ARCHIVE_ANCHOR_BY_CONTENT_SQL));
         assert.ok(!/a\.version\s*=\s*1\b/.test(ARCHIVE_ANCHOR_BY_CONTENT_SQL),
-            'a hand-copied version literal drifts the moment a new head version lands');
+            'the predicate must stay spliced from the shared set: a hand-copied version ' +
+            'literal drifts the moment a new head version lands');
     });
 
     it('is bounded and picks the EARLIEST head, the same canonical rule the other head picks use', function () {
@@ -249,8 +250,11 @@ describe('archive-anchor content query: buildArchiveAnchorResponse() @regression
         assert.strictEqual(buildArchiveAnchorResponse(CONFIG, null, head(), []).confirmations, 0);
     });
 
-    it('a v6 (publisher-bearing) head answers the same question as a v1', function () {
-        assert.strictEqual(buildArchiveAnchorResponse(CONFIG, 705, head({ version: 6 }), []).version, 6);
+    it('echoes the head row\'s own version rather than assuming one', function () {
+        // The response reports whatever archive-head version the row carries, so a future
+        // archive version joining ARCHIVE_HEAD_VERSIONS answers this question unchanged.
+        for (const version of ARCHIVE_HEAD_VERSIONS.concat([9]))
+            assert.strictEqual(buildArchiveAnchorResponse(CONFIG, 705, head({ version }), []).version, version);
     });
 
     it('a missing txid linkage surfaces as null rather than removing the row', function () {

@@ -2250,6 +2250,10 @@ class Utility {
                     if(!this.bcgt(row.amount, '0')) continue;
                     let creditIndex = await completionAttribution(row.action_index);
                     await db.createCredit(creditIndex, gas, String(row.amount), row.source_address);
+                    // Release the bond the stake locked, rather than minting it back. Same
+                    // shape as the contract release below.
+                    await db.createEscrow(creditIndex, gas,
+                                          this.bcsub(0, row.amount, 64), row.source_address);
                     addressesToRebalance.add(row.source_address);
                     ticksToRebalance.add(gas);
                 }
@@ -2268,15 +2272,26 @@ class Utility {
                     if(!this.bcgt(row.amount, '0')) continue;
                     let creditIndex = await completionAttribution(row.action_index);
                     await db.createCredit(creditIndex, row.tick, String(row.amount), row.source_address);
+                    // RELEASE the escrow the stake locked, rather than minting the tokens back.
+                    // The negative escrow row offsets the credit, so the pair is net-zero on
+                    // `ledger = credits - debits + escrows` and supply is unchanged - which is
+                    // the whole point: a cooldown maturing is tokens becoming spendable again,
+                    // not tokens being created. Mirrors order.js:499's release idiom.
+                    await db.createEscrow(creditIndex, row.tick,
+                                          this.bcsub(0, row.amount, 64), row.source_address);
                     addressesToRebalance.add(row.source_address);
                     ticksToRebalance.add(row.tick);
                 }
             }
         }
-        // Update balances AND token supply for everything the release credits touched. The credit
-        // is a net mint (the matching debit was burned at STAKE time), so tokens.supply must be
-        // recomputed from the ledger or the per-block sanityCheck (ledger == supply == balances)
-        // trips on the released tick and halts the indexer. Mirrors every other ledger-mutating path.
+        // Update balances AND token supply for everything the release credits touched, so the
+        // per-block sanityCheck (ledger == supply == balances) sees a consistent picture.
+        //
+        // Both loops now pair their credit with a negative escrow row, so a maturing cooldown
+        // is tokens becoming spendable again rather than tokens being created, and supply does
+        // not move on either path. The two were briefly asymmetric while only the contract half
+        // was fixed; the operator's decision to roll testnet back and reparse forward removed
+        // the reason to keep the capability half on the old rules.
         if(addressesToRebalance.size > 0){
             await db.updateBalances(Array.from(addressesToRebalance));
             await db.updateTokens(Array.from(ticksToRebalance));

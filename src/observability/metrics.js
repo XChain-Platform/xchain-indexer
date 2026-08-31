@@ -279,9 +279,25 @@ class Registry {
         this.seriesDropped.inc({ metric: metricName }, 1);
     }
 
+    // Re-declaring the SAME metric hands back the one already registered;
+    // re-declaring a name with a different type or label set still throws,
+    // because that is a genuine collision that would corrupt the exposition.
+    //
+    // The distinction earns its keep now that the registry is process-wide and
+    // always constructed: modules register their counters wherever they happen
+    // to be required, and a service that wires observability twice must not die
+    // at startup over a duplicate declaration that asks for exactly what is
+    // already there.
     _register(metric) {
-        if (this.metrics.has(metric.name)) {
-            throw new Error(`metric already registered: ${metric.name}`);
+        const existing = this.metrics.get(metric.name);
+        if (existing) {
+            const same = existing.type === metric.type
+                && existing.labelNames.length === metric.labelNames.length
+                && existing.labelNames.every((n, i) => n === metric.labelNames[i]);
+            if (!same) {
+                throw new Error(`metric already registered with a different shape: ${metric.name}`);
+            }
+            return existing;
         }
         this.metrics.set(metric.name, metric);
         return metric;

@@ -4,7 +4,7 @@
 # XChain Platform Indexer
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-2.7.17-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-0.11.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/tests-5200%2B%20passing-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/node-%3E%3D22-green" alt="Node">
   <img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue" alt="License">
@@ -39,7 +39,7 @@ State-processing engine for the XChain Platform. Reads decoded blockchain transa
 - **Action mapping**: address/ticker/action_index cross-references for fast lookups
 - **Circuit-breaker DB connections**: automatic failure detection and recovery
 - **Watchdog timeout**: configurable per-block processing timeout detects deadlocks
-- **Hub-facing RPCs**: `getownstake`, `getactivevalidators`, `getactivestakeweights`, `getcapabilityvalidators`, `getstakeweightsbycapability`, `getfullnodeverifiers`, `getpendingattestation_requests`, `getrelayedattestation_requests`, `getopencrosschainorders`, `getpendingcrosschaincalls`, `getcrosschaincall`, `getcrosschaincallresult`, `getactionconfirmations`, `getstakesourcebypubkey`, `getlatestblock`, `getblockhashes`; ingests `pushvalidatorrewards` from hub
+- **Hub-facing RPCs**: `getownstake`, `getactivevalidators`, `getactivestakeweights`, `getcapabilityvalidators`, `getstakeweightsbycapability`, `getfullnodeverifiers`, `getpendingattestation_requests`, `getrelayedattestation_requests`, `getopencrosschainorders`, `getpendingcrosschaincalls`, `getcrosschaincall`, `getcrosschaincallresult`, `getactionconfirmations`, `getstakesourcebypubkey`, `getlatestblock`, `getblockhashes`. `pushvalidatorrewards` is retired: it refuses every reward type, because every validator reward is derived from on-chain bytes
 - **Comprehensive test suite**: unit, integration, e2e, boundary, security, fuzz, chaos, mutation, regression, performance, smoke
 
 ## Documentation
@@ -123,6 +123,22 @@ variable list and the exported metric names are in
 The module is vendored byte-identically from xchain-hub. Edit it there
 and re-run `xchain-hub/bin/sync-observability.sh`; a local edit fails the
 parity check CI runs across the vendored copies.
+
+### Shim controls, and the defaults in force
+
+These four names configure the shim itself. The fleet deploy path carries them
+into the container: `xchain-node` forwards any of them set in the module config
+store or in the deploy host's environment (`ModuleService.resolveObservabilityEnv`),
+and the validator compose files under `claude/deploy/testnet-validators/` name
+them outright. Nothing is fabricated when neither source sets one, so these
+defaults hold on an unconfigured box:
+
+| Variable | Default | Effect |
+|---|---|---|
+| `LOG_LEVEL` | `info` | Lowest level emitted. `debug` \| `info` \| `warn` \| `error`; an unrecognised value falls back to `info`. |
+| `LOG_FORMAT` | `text` | `text` emits `<iso-ts> <level> [<service>] <msg> key=value`; `json` emits one NDJSON record per line. |
+| `METRICS_ENABLED` | `false` | Registers the `/metrics` route. The counter registry is built either way, so counters are collected whether or not the route is exposed. |
+| `XCHAIN_LOG_PATCH` | `1` | Routes bare `console.*` calls through the shim so they carry the level and service prefix. `0` leaves `console` untouched, which is what the test bootstrap sets. |
 
 ## Scripts
 

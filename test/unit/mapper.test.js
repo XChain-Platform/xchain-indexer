@@ -80,6 +80,16 @@ describe('Mapper @regression @tier3', function () {
         assert.strictEqual(tickValues.length, 1);
     });
 
+    it('leaves a null ticker out of the batched call', async function () {
+        indexer.util.addAddressTicker('1AddrAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', null);
+        indexer.util.addAddressTicker('1AddrAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', 'REAL_TICK');
+        const data = createBaseData({ ACTION: 'SEND', ACTION_INDEX: 1, STATUS: 'valid' });
+        await mapper.createMappings(data);
+        const tickCalls = indexer.indexerDb.createActionMappings.args.filter(a => a[1] === 'tick');
+        assert.strictEqual(tickCalls.length, 1);
+        assert.deepStrictEqual(tickCalls[0][2], ['REAL_TICK']);
+    });
+
     it('passes an empty list to createActionMappings when addresses list is empty', async function () {
         const data = createBaseData({ ACTION: 'SEND', ACTION_INDEX: 1, STATUS: 'valid' });
         await mapper.createMappings(data);

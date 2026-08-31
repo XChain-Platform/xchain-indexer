@@ -185,6 +185,23 @@ describe('anchor_reward_derive (BTC-side derivation) @regression @tier2', functi
                 [keys[0].pubkey, 3, 'anchor_archive', ar.ARCHIVE_REWARD_AMOUNT, 0, true, 200, 0]);
         });
 
+        it('derives ONE anchor_bundle reward per bundle, at the ANCHOR amount, qualifier 0', async function () {
+            // ANCHOR v7 writes exactly one attestation row per bundle, whatever its section
+            // count, so the derive pass must produce exactly one reward and one reconcile.
+            // round_reference IS the snapshot block, a height that only advances, so unlike
+            // the archive leg the qualifier stays 0.
+            const keys = [makeKey()];
+            const row  = makeRow(keys, { reward_type: 'anchor_bundle', round_reference: 8100, snapshot_block: 8100 });
+            const db   = stubDb(keys, [row]);
+            const derived = await derive.deriveAnchorRewards(db, cfg, maturedAt(8100), stubProof());
+            assert.strictEqual(derived, 1, 'one bundle, one derived reward group');
+            assert.ok(db.createValidatorReward.calledOnce, 'never one reward per section');
+            assert.deepStrictEqual(db.createValidatorReward.firstCall.args,
+                [keys[0].pubkey, 8100, 'anchor_bundle', ar.ANCHOR_REWARD_AMOUNT, 8100, true, maturedAt(8100), 0]);
+            assert.strictEqual(db.reconcileAnchorRewardWinner.firstCall.args[4], 0,
+                'a bundle round_reference only advances, so it needs no snapshot qualifier');
+        });
+
         // The archive leg's round_reference is MATCH_BATCH_SEQ, a dense counter the hub
         // allocates from its own tables, and a wipe-and-replay rebase resets those tables - so
         // the same seq can name two genuinely distinct archive anchors. snapshot_block is what
@@ -270,6 +287,43 @@ describe('anchor_reward_derive (BTC-side derivation) @regression @tier2', functi
                 assert.strictEqual(asked.snapshotBlock, 0);
                 assert.strictEqual(asked.publisher, keys[0].pubkey.toLowerCase());
                 assert.ok(asked.minConfirmations > 0, 'a depth requirement must be stated, never defaulted to zero');
+            });
+
+            // The mint gate's burial depth is a LEDGER input: it decides the BTC height at
+            // which a reward materializes, so every node must apply the identical number.
+            // It therefore comes from the frozen constant beside the activation map, never
+            // from coins.resolveConfirmations / coins.DEFAULT_CONFIRMATIONS: the registry
+            // classifies `confirmations` as operator-tunable depth, leaves it out of the
+            // pinned consensus subset, and lets XCHAIN_CONFIRMATIONS_DOGE move it per node.
+            // This case goes red the moment someone wires the registry knob back in.
+            it('takes the depth from the frozen ledger constant, not the operator knob', async function () {
+                const saved = process.env.XCHAIN_CONFIRMATIONS_DOGE;
+                process.env.XCHAIN_CONFIRMATIONS_DOGE = '2';
+                try {
+                    const keys  = [makeKey()];
+                    const db    = stubDb(keys, [makeRow(keys, { snapshot_block: 0 })]);
+                    const proof = stubProof();
+                    await derive.deriveAnchorRewards(db, cfg, maturedAt(0), proof);
+                    assert.strictEqual(proof.proveMined.firstCall.args[0].minConfirmations,
+                        ar.ANCHOR_REWARD_DOGE_MIN_CONFIRMATIONS,
+                        'the mint gate must state the frozen depth, unmoved by the env override');
+                } finally {
+                    if(saved === undefined) delete process.env.XCHAIN_CONFIRMATIONS_DOGE;
+                    else process.env.XCHAIN_CONFIRMATIONS_DOGE = saved;
+                }
+            });
+
+            // Drift alarm. The frozen ledger depth and the registry's DOGE default are two
+            // numbers with two owners that must agree at rest: the hub attests at the
+            // registry value (floor-clamped to it on mainnet and testnet) and this gate
+            // mints at the frozen one, so a silent retune of coins/DOGE.js would let a hub
+            // attest shallower than the fleet will ever mint and stall block processing.
+            // Parting them is a deliberate flag-day act, and this case makes it loud.
+            it('the frozen depth still matches the coin registry default (drift alarm)', function () {
+                const coins = require('../../src/coins');
+                assert.strictEqual(ar.ANCHOR_REWARD_DOGE_MIN_CONFIRMATIONS, coins.DEFAULT_CONFIRMATIONS.DOGE,
+                    'anchor-reward mint depth and coins/DOGE.js confirmations have drifted; ' +
+                    'moving either is a flag-day change that must move both');
             });
 
             it('DEFERS the block (throws) when the anchor cannot be proven either way', async function () {

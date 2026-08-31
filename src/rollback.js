@@ -891,7 +891,13 @@ class Rollback {
                     await this.indexerDb.doQuery(query, args);
                 }
 
-                // Loop through the data tables and delete records above the action_index
+                // Loop through the data tables and delete records above the action_index.
+                // This is the whole price rollback path for `prices`: an orphaned PRICE v0
+                // round row and an orphaned PRICE batch row are both removed WHOLESALE by
+                // action_index, so batch_first_round/batch_last_round/round_count/rounds_json
+                // are cleared exactly as round_number/pairs_json/sigs_json are, by virtue of
+                // the row itself being gone; no v2-specific delete or partial-column reset is
+                // needed on top of this generic loop.
                 for(let table of this.dataTables){
                     query = `DELETE FROM ` + table + ` WHERE action_index >= ?`;
                     args  = [firstActionIndex];
@@ -969,6 +975,47 @@ class Rollback {
                     let newEscrow = (offerRows.length > 0) ? offerRows[0].action_index : null;
                     await this.indexerDb.doQuery("UPDATE tokens SET escrow_action_index=? WHERE tick_id=(SELECT id FROM index_tickers WHERE tick=? LIMIT 1)", [newEscrow, row.tick]);
                 }
+            }
+
+            // ROLLCALL eviction repair, and it MUST run before the block-table loop below
+            // deletes the rollcall_absences rows it reads.
+            //
+            // The generic delegations repair above cannot cover an eviction. That repair is a
+            // self-join on an orphaned DELEGATE-revoke row, and an eviction writes no revoke
+            // row: it stamps every delegation of the source directly. So the only record of
+            // which sources were stamped is `evicted = 1` in rollcall_absences, which is
+            // exactly why that column exists. The stakes side needs nothing here -- the
+            // eviction wrote real `unstakes` rows at the close block, so the orphaned-unstake
+            // join above already re-NULLs those stamps.
+            try {
+                let rcStaking = this.config['STAKING'];
+                let rcDelay   = Number((rcStaking && rcStaking['ACTIVATION_DELAY_BLOCKS'])
+                                       ? rcStaking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS']);
+                await this.indexerDb.doQuery(
+                    `UPDATE delegations d
+                        JOIN rollcall_absences ra ON ra.source_id = d.source_id
+                        SET d.deactivation_block = NULL
+                        WHERE ra.evicted = 1
+                          AND ra.close_block >= ?
+                          AND d.deactivation_block IS NOT NULL
+                          AND d.deactivation_block = ra.close_block + ?`,
+                    [block_index, rcDelay]);
+            } catch(e){
+                // Swallow ONLY a genuine schema gap (1054/1146) on a DB that predates the
+                // ROLLCALL migration; no eviction can exist on such a node, so there is
+                // nothing to repair. Every other fault must surface.
+                if(!(e && (e.errno === 1054 || e.errno === 1146))) throw e;
+            }
+
+            // The two BTC-side ROLLCALL tables delete on close_block. They are declared
+            // rollback: 'special' rather than 'block' because neither has a block_index
+            // column, so the generic blockTables loop below would throw 1054 on them and
+            // fail the entire rollback transaction on every reorg.
+            try {
+                await this.indexerDb.doQuery(`DELETE FROM rollcall_absences WHERE close_block >= ?`, [block_index]);
+                await this.indexerDb.doQuery(`DELETE FROM rollcalls WHERE close_block >= ?`, [block_index]);
+            } catch(e){
+                if(!(e && (e.errno === 1054 || e.errno === 1146))) throw e;
             }
 
             // Delete data from tables using block_index

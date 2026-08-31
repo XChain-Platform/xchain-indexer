@@ -57,7 +57,8 @@ const swq     = require('./stake_weighted_quorum.js');
 const eq      = require('./equivocation_header.js');
 const ar      = require('./anchor_reward_activation.js');
 const arKey   = require('./anchor_reward_key.js');
-const coins   = require('./coins');
+// No coin-registry require here on purpose: nothing inside the block transaction may read a
+// field the registry advertises as operator-tunable (see minConfirmations below).
 
 // Rebuild the XANCPUB canonical for a mirrored attestation row. MUST byte-match
 // anchor.js._rewardCanonical (DOGE parse side) and the hub's publisher canonical, or the
@@ -76,7 +77,22 @@ function rewardCanonical(row){
         }
         return base;
     }
-    // Per-chain (v4/v5): reward_type is 'anchor_<CHAIN>'; CHAIN drives the disjoint roundId.
+    if(String(row.reward_type) === 'anchor_bundle'){
+        // Bundle leg (v7): ONE reward per per-network bundle. round_reference IS the
+        // snapshot block, so field 2 and field 3 repeat it; the six-field positional
+        // layout is kept so slash.js reads snapshot_block at index 3 for every XANCPUB
+        // family. MUST byte-match anchor.js._rewardCanonical's v7 branch and the hub's
+        // bundle attestation canonical.
+        let base = ['XANCPUB', 'anchor_bundle', roundReference,
+                    String(snapshotBlock), publisher, ar.ANCHOR_REWARD_AMOUNT].join('|');
+        if(eq.isEquivHeaderActive(snapshotBlock, network)){
+            let roundId = 'XANCPUB|bundle|' + network + '|' + snapshotBlock;
+            return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, roundId, 0, base);
+        }
+        return base;
+    }
+    // Per-chain (retired v4/v5 rows still mirrored): reward_type is 'anchor_<CHAIN>';
+    // CHAIN drives the disjoint roundId.
     let chain = String(row.reward_type).slice('anchor_'.length);
     let base = ['XANCPUB', 'anchor_' + chain, roundReference,
                 String(snapshotBlock), publisher, ar.ANCHOR_REWARD_AMOUNT].join('|');
@@ -154,7 +170,15 @@ async function deriveAnchorRewards(indexerDb, config, blockIndex, proof){
     if(!Number.isFinite(watermark) || watermark < 0) return 0;
     let rows = await indexerDb.getPendingAnchorRewardAttestations(network, watermark);
     if(!rows || rows.length === 0) return 0;
-    let minConfirmations = coins.DEFAULT_CONFIRMATIONS.DOGE;
+    // The burial depth this mint gate requires, from the frozen ledger constants beside the
+    // activation map, NOT from the coin registry: the registry's `confirmations` is
+    // classified as operator-tunable depth, sits outside the pinned consensus subset, and is
+    // env-overridable per node (coins.resolveConfirmations), so sourcing a ledger input from
+    // it let two nodes derive the same reward at different BTC heights while their consensus
+    // pins verified clean. The hub's own attest gate keeps reading the registry knob, which
+    // is local trust policy there; on mainnet and testnet that knob is floor-clamped to the
+    // same default, so a hub can never attest shallower than this gate will mint.
+    let minConfirmations = ar.ANCHOR_REWARD_DOGE_MIN_CONFIRMATIONS;
 
     // Group by the logical reward (reward_type, round_reference, round_qualifier): every
     // attesting publisher for a round must be inserted BEFORE reconcile, so a failover

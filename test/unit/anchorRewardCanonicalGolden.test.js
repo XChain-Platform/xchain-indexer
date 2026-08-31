@@ -97,6 +97,48 @@ describe('XANCPUB reward canonical: derive copy vs the frozen wire format @regre
             'pre-flag-day archive canonical drifted from the frozen wire format');
     });
 
+    it('post-flag-day bundle: EQUIV-wrapped, bundle round-id family, frozen ANCHOR amount', function () {
+        // ANCHOR v7: round_reference IS the snapshot block, so fields 2 and 3 repeat it.
+        // The SIX-field layout is load-bearing (D22): slash.js reads snapshot_block at
+        // index 3 for every XANCPUB family, so a five-field bundle canonical would make
+        // every bundle equivocation read 'invalid: snapshot_block'.
+        assert.strictEqual(derive.rewardCanonical(row({ reward_type: 'anchor_bundle', round_reference: 100 })),
+            'EQUIV|XCHECKPOINT|XANCPUB|bundle|regtest|100|0||XANCPUB|anchor_bundle|100|100|' +
+            PUBLISHER + '|10.00000000',
+            'bundle XANCPUB canonical drifted from the frozen wire format');
+    });
+
+    it('pre-flag-day bundle: the bare bundle XANCPUB string', function () {
+        assert.strictEqual(
+            derive.rewardCanonical(row({ reward_type: 'anchor_bundle', round_reference: 1000,
+                                         snapshot_block: 1000, network: 'mainnet' })),
+            'XANCPUB|anchor_bundle|1000|1000|' + PUBLISHER + '|10.00000000',
+            'pre-flag-day bundle canonical drifted from the frozen wire format');
+    });
+
+    it('the bundle canonical byte-matches the DOGE parse-side builder for the same tuple', function () {
+        // Copy 2 of 3 (actions/anchor.js) rebuilt over the same tuple. These two are the
+        // pair that must agree or the BTC-side re-verification never matches the DOGE-side
+        // attestation and the reward silently never derives, fleet-wide.
+        const Anchor = require('../../src/actions/anchor.js');
+        const parseSide = Anchor.prototype._rewardCanonical.call({}, {
+            FORMAT: 7, NETWORK: 'regtest', SNAPSHOT_BLOCK: 100, PUBLISHER: PUBLISHER
+        });
+        assert.strictEqual(
+            derive.rewardCanonical(row({ reward_type: 'anchor_bundle', round_reference: 100 })),
+            parseSide,
+            'the BTC derive copy and the DOGE parse copy of the bundle XANCPUB canonical have forked');
+    });
+
+    it('the bundle round-id family stays disjoint from the per-chain and archive families', function () {
+        const roundIdOf = (s) => s.split('||')[0];
+        const bundle   = derive.rewardCanonical(row({ reward_type: 'anchor_bundle', round_reference: 100 }));
+        const perChain = derive.rewardCanonical(row({ round_reference: 100 }));
+        const archive  = derive.rewardCanonical(row({ reward_type: 'anchor_archive', round_reference: 100 }));
+        assert.notStrictEqual(roundIdOf(bundle), roundIdOf(perChain));
+        assert.notStrictEqual(roundIdOf(bundle), roundIdOf(archive));
+    });
+
     it('ends on the frozen consensus amount, never a wire value', function () {
         assert.ok(derive.rewardCanonical(row()).endsWith('|' + ar.ANCHOR_REWARD_AMOUNT),
             'per-chain canonical must end with the frozen ANCHOR_REWARD_AMOUNT');

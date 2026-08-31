@@ -19,6 +19,20 @@ COPY ./src /XChainIndexer/src
 # containerized indexer crash-loops at the genesis block on a missing-file read
 # (the direct-node self-tests passed only because data/ is on disk in the repo).
 COPY ./data/genesis /XChainIndexer/data/genesis
+
+# The vendored action manifest is RUNTIME data despite living under test/. The
+# getrollcallsigners federation read reports its sha256 so a BTC indexer can tell
+# a DOGE peer running a decoder that predates an action's allowlist entry, which
+# would silently drop every instance of it, from a peer that genuinely has none
+# to report. Without this line that read answers a null hash, the asking side's
+# fail-closed manifest check can never match, and every roll-call epoch close
+# defers forever behind a container that looks perfectly healthy. Measured on the
+# regtest DOGE indexer before this landed: manifest_hash null, file absent.
+# It stays the test/fixtures path rather than gaining a src/ twin because the
+# platform's sync-action-manifest.sh already keeps this exact copy byte-identical
+# to canonical in every consumer; a second copy would be a new drift surface that
+# script does not know about.
+COPY ./test/fixtures/action-manifest.json /XChainIndexer/test/fixtures/action-manifest.json
 COPY ./.en[v] /XChainIndexer/.env
 
 # Exec-form node, not `npm run api`. npm builds an npm -> sh -c -> node tree and

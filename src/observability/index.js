@@ -14,13 +14,22 @@
  *
  * XChain shared observability - service wiring
  *
- * One call, installObservability(app, { service }), gives an xchain-* service a
- * Prometheus /metrics endpoint plus a structured log shim. Both are DEFAULT
- * OFF: with no env set the call registers no route, starts no timer, opens no
- * socket, and returns a handle whose logger is a thin console passthrough. That
- * is deliberate. These services are consensus-critical and public-facing, so a
- * new listening surface has to be an operator decision, not a side effect of a
- * deploy.
+ * Two calls wire an xchain-* service up:
+ *
+ *   patchConsole({ service })       at the TOP of the entry file, before any
+ *                                   line is logged; routes bare console.* calls
+ *                                   through the shim so levels, formats and
+ *                                   redaction apply without rewriting call
+ *                                   sites.
+ *   installObservability(app, ...)  where the Express app exists; adds the
+ *                                   /metrics route and HTTP instrumentation.
+ *
+ * No socket and no route without env: METRICS_ENABLED alone opens the endpoint,
+ * and shipping needs both LOG_SHIP_ENABLED and a URL. These services are
+ * consensus-critical and public-facing, so a new listening surface stays an
+ * operator decision rather than a side effect of a deploy. The metrics REGISTRY
+ * is not gated, only the endpoint is: counters have to exist on the default
+ * fleet or nothing can ever record into them.
  *
  * Env (all optional):
  *   METRICS_ENABLED=1        turn the endpoint on (default off)
@@ -30,6 +39,7 @@
  *                            when metrics are enabled; set 0 for endpoint-only)
  *   LOG_FORMAT=json          emit NDJSON log lines instead of plain text
  *   LOG_LEVEL=info           debug|info|warn|error
+ *   XCHAIN_LOG_PATCH=0       leave console.* alone (test bootstraps set this)
  *   LOG_SHIP_ENABLED=1 + LOG_SHIP_URL=...   POST NDJSON batches to a collector
  *   (see logShipper.js for the remaining LOG_SHIP_* tuning knobs)
  *
@@ -45,8 +55,30 @@
 'use strict';
 
 const crypto = require('crypto');
+const util = require('util');
 const { Registry, collectDefaultMetrics, DEFAULT_DURATION_BUCKETS } = require('./metrics');
 const { createLogShipper, readLogEnv } = require('./logShipper');
+
+// Process-wide handles. A service is one process loading exactly one vendored
+// copy of this module, so module scope is the right scope: a globalThis key
+// would buy nothing and would collide across a monorepo test run.
+let _logger = null;
+let _registry = null;
+let _patched = null;
+// The shipper's housekeeping counters (log_lines_emitted_total and friends)
+// can only be registered once per registry. Now that the registry is shared and
+// always constructed, a second shipper on it would throw at construction, which
+// on the real wiring path (patchConsole at the top of api.js, then
+// installObservability further down) would take the service out at startup.
+let _shipperAttached = false;
+// The bound pre-patch console. Every shipper built after patchConsole must
+// write HERE, not to the global console: the shim's default sink is the global
+// object by reference, so a second shipper taking that default would emit its
+// formatted line INTO the patched console and get it formatted a second time
+// (`<ts> warn [svc] <ts> warn [svc] msg`).
+let _sink = null;
+
+const CONSOLE_METHODS = { log: 'info', info: 'info', warn: 'warn', error: 'error', debug: 'debug' };
 
 function toBool(v, fallback = false) {
     if (v === undefined || v === null || v === '') return fallback;
@@ -130,18 +162,27 @@ function installObservability(app, opts = {}) {
         coin    = '',
         network = '',
         env     = process.env,
-        console: sink = console
+        console: sink = null
     } = opts;
 
     const config = readObservabilityEnv(env);
 
-    let registry = null;
-    if (config.metricsEnabled) {
-        registry = new Registry();
-        collectDefaultMetrics(registry, { service, version, coin, network });
-    }
+    // The registry is ALWAYS constructed, and only the /metrics route is gated.
+    // Building it under METRICS_ENABLED meant every counter a consensus module
+    // registers "when metrics are on" simply did not exist on the default
+    // fleet, which is every box: the counters were unreachable, not merely
+    // unscraped. Registering series costs nothing until something renders them.
+    const registry = getRegistry({ service, version, coin, network });
 
-    const logger = createLogShipper({ service, version, env, console: sink, registry, transport: opts.logTransport || null });
+    // One process, one shipper. When patchConsole already built it and this
+    // caller wants no special sink or transport, adopt it rather than running a
+    // second one: two shippers would split the line counters and each hold
+    // their own ship buffer.
+    const adopt = _logger && !opts.console && !opts.logTransport;
+    const logger = adopt
+        ? _logger
+        : newShipper({ service, version, env, console: sink, transport: opts.logTransport || null });
+    if (!_logger) _logger = logger;
 
     if (!config.metricsEnabled || !app || typeof app.use !== 'function') {
         return {
@@ -229,11 +270,142 @@ function installObservability(app, opts = {}) {
     };
 }
 
+/**
+ * The process's metrics registry, created on first ask. Consensus modules
+ * register counters at require time, long before installObservability runs,
+ * so this must not depend on the wiring order of any api.js.
+ */
+function getRegistry(info = {}) {
+    if (!_registry) {
+        _registry = new Registry();
+        collectDefaultMetrics(_registry, {
+            service: info.service || 'xchain-service',
+            version: info.version || '',
+            coin:    info.coin    || '',
+            network: info.network || ''
+        });
+    }
+    return _registry;
+}
+
+// Returned once and resolved on every call, so a module can do
+// `const log = getLogger()` at require time and still reach the real shipper
+// once patchConsole/installObservability has run. Before either, it falls
+// through to the global console rather than throwing: a module that logs while
+// being required must not be able to kill the process.
+const _lazyLogger = {
+    log(level, msg, fields) {
+        if (_logger) return _logger.log(level, msg, fields);
+        const fn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
+        fn(fields && Object.keys(fields).length ? `${msg} ${util.inspect(fields, { depth: 2 })}` : String(msg));
+        return null;
+    },
+    debug(msg, fields) { return this.log('debug', msg, fields); },
+    info(msg, fields)  { return this.log('info',  msg, fields); },
+    warn(msg, fields)  { return this.log('warn',  msg, fields); },
+    error(msg, fields) { return this.log('error', msg, fields); }
+};
+
+function getLogger() { return _lazyLogger; }
+
+// Attaches the shared registry to the FIRST shipper only; later shippers get
+// their own line accounting and leave the shared series alone.
+function newShipper(opts) {
+    const registry = _shipperAttached ? null : getRegistry(opts);
+    if (registry) _shipperAttached = true;
+    return createLogShipper({ ...opts, console: opts.console || _sink || console, registry });
+}
+
+/**
+ * Routes the service's existing bare console.* calls through the log shim, so
+ * levels, formats and redaction apply to the ~850 hub call sites and their
+ * siblings without rewriting one of them.
+ *
+ * Called at the TOP of an entry file, before anything logs. Every service logs
+ * before installObservability runs today (hub api.js:29 vs :407, and the same
+ * shape in the decoder, indexer, encoder and tracker), and the lines that get
+ * lost that way are the env-validation and crash lines an operator most needs
+ * framed. That is why this is a separate call rather than part of install.
+ *
+ * Set XCHAIN_LOG_PATCH=0 to disable, which is what each repo's test bootstrap
+ * does: the suites stub and reassign console freely, and they must see stock
+ * console regardless of require order.
+ *
+ * @param {object} opts
+ * @param {string} opts.service   service name stamped on every line
+ * @returns {{patched:boolean, logger:object, unpatch:function}}
+ */
+function patchConsole(opts = {}) {
+    const { service = 'xchain-service', version = '', coin = '', network = '', env = process.env } = opts;
+
+    if (_patched) return _patched;
+    if (String(env.XCHAIN_LOG_PATCH || '') === '0') {
+        return { patched: false, logger: getLogger(), unpatch: () => {} };
+    }
+
+    // Bind the originals into a NEW object BEFORE replacing anything. The shim's
+    // default sink is the global console object by reference, so handing the
+    // logger the live console and then patching it makes every line recurse
+    // into itself.
+    const sink = {};
+    const originals = {};
+    for (const name of Object.keys(CONSOLE_METHODS)) {
+        const fn = typeof console[name] === 'function' ? console[name] : console.log;
+        originals[name] = console[name];
+        sink[name] = fn.bind(console);
+    }
+    sink.log = sink.log || sink.info;
+    _sink = sink;
+
+    const logger = newShipper({ service, version, coin, network, env, console: sink });
+    _logger = logger;
+
+    for (const [name, level] of Object.entries(CONSOLE_METHODS)) {
+        // util.format is console's own argument semantics: printf-style format
+        // strings resolve (about 40 hub sites use them) and a trailing Error
+        // keeps its stack. A trailing object is NOT promoted into fields;
+        // structured fields come from getLogger(), never from a guess about
+        // what a console call meant.
+        console[name] = (...args) => { logger.log(level, util.format(...args)); };
+    }
+
+    _patched = {
+        patched: true,
+        logger,
+        unpatch() {
+            for (const [name, fn] of Object.entries(originals)) {
+                if (fn === undefined) delete console[name];
+                else console[name] = fn;
+            }
+            _patched = null;
+            _sink = null;
+            if (_logger === logger) _logger = null;
+        }
+    };
+    return _patched;
+}
+
+function unpatchConsole() { if (_patched) _patched.unpatch(); }
+
+// Tests only: drops the process-wide handles so an assertion about a fresh
+// process does not inherit the previous test's shipper or registry.
+function _resetObservability() {
+    unpatchConsole();
+    _logger = null;
+    _registry = null;
+    _shipperAttached = false;
+}
+
 module.exports = {
     installObservability,
     readObservabilityEnv,
     routeLabel,
     Registry,
     collectDefaultMetrics,
-    createLogShipper
+    createLogShipper,
+    patchConsole,
+    unpatchConsole,
+    getLogger,
+    getRegistry,
+    _resetObservability
 };

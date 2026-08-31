@@ -2269,5 +2269,65 @@ describe('Batch @regression @tier3', function () {
             assert.strictEqual(indexer.indexerDb.getAddressBalances.callCount, 0);
         });
 
+        // The floor's ONE database read is the fork seam. nominalExecuteFee catches so a
+        // deterministic failure degrades to the pre-D10 null verdict instead of halting the
+        // block loop, but null is also what a transient DB fault produces, and null short-
+        // circuits the predicate to false: the faulted node writes 'valid' and dispatches every
+        // sub-command while a healthy peer writes one collapsed invalid record. That is a
+        // validator-local verdict committed into the block, the exact class faultGuard.js is
+        // for, and the sibling ISSUE probe already avoids it by calling probeTokenInfo unwrapped.
+        describe('the EXECUTE floor probe must not swallow an infrastructure fault', function () {
+
+            function gasTokenThrows(err) {
+                indexer.indexerDb.getTokenInfo
+                    .withArgs('XCHAIN', sinon.match.any, sinon.match.any)
+                    .rejects(err);
+            }
+
+            function dbError(errno) {
+                const e = new Error('mariadb errno ' + errno);
+                e.errno = errno;
+                return e;
+            }
+
+            it('a deadlock (1213) propagates instead of becoming a node-local valid verdict', async function () {
+                gasTokenThrows(dbError(1213));
+                await assert.rejects(() => run(true, repeat(exec, 3), '0.00000000'), /1213/);
+            });
+
+            it('a lock-wait timeout (1205) propagates too', async function () {
+                gasTokenThrows(dbError(1205));
+                await assert.rejects(() => run(true, repeat(exec, 3), '0.00000000'), /1205/);
+            });
+
+            it('an executor host fault propagates on its code, not an errno', async function () {
+                const e = new Error('executor unavailable');
+                e.code = 'EXECUTOR_UNAVAILABLE';
+                gasTokenThrows(e);
+                await assert.rejects(() => run(true, repeat(exec, 3), '0.00000000'), /executor unavailable/);
+            });
+
+            it('the benign older-schema gaps (1146, 1054) are still absorbed as UNKNOWN', async function () {
+                // faultGuard leaves these two to the caller: a missing table or column is an
+                // older-schema gap, not a transient fault, so every node on that schema answers
+                // the same way and the pre-D10 null verdict stays deterministic.
+                for(const errno of [1146, 1054]){
+                    gasTokenThrows(dbError(errno));
+                    const data = await run(true, repeat(exec, 3), '0.00000000');
+                    assert.strictEqual(data['STATUS'], 'valid', 'errno ' + errno + ' must not collapse the batch');
+                }
+            });
+
+            it('an errno-less deterministic throw is still absorbed, so the block loop cannot halt on it', async function () {
+                // The property the original catch existed for, and the one the guard must not
+                // take away: contract-shaped failures carry no errno and no fault code.
+                gasTokenThrows(new Error('deterministic failure with no errno'));
+                const data = await run(true, repeat(exec, 3), '0.00000000');
+
+                assert.strictEqual(data['STATUS'], 'valid');
+                assert.strictEqual(actionsCtx.processAction.callCount, 3);
+            });
+        });
+
     });
 });

@@ -47,13 +47,87 @@ const LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
 // Key names whose values never leave the box in a log line.
 const SECRET_KEY_RE = /(pass(word|phrase)?|secret|token|api[_-]?key|apikey|auth|credential|wif|priv(ate)?[_-]?key|mnemonic|seed|cookie|session)/i;
 
-// `password=hunter2`, `api_key: abc`, `token="x"` embedded in free text.
-const SECRET_INLINE_RE = /\b(pass(?:word|phrase)?|secret|token|api[_-]?key|apikey|authorization|credential|wif|priv(?:ate)?[_-]?key|mnemonic|seed)\b(\s*[:=]\s*)("[^"]*"|'[^']*'|\S+)/gi;
+// `password=hunter2`, `api_key: abc`, `token="x"`, `HUB_DB_SECRET=...` embedded
+// in free text.
+//
+// The key is allowed to carry a prefix and a suffix, and the leading boundary is
+// "not preceded by another key character" rather than `\b`. `\b` does not fire
+// between two word characters, and `_` is a word character, so an anchored
+// pattern silently misses every env-shaped name the services actually print:
+// `HUB_DB_SECRET`, `INDEXER_DB_PASS`, `db_password`. Those are precisely what an
+// env-validation failure puts on stdout, and with LOG_SHIP_* on they would go
+// off-box in the clear.
+const SECRET_INLINE_RE = /(?<![A-Za-z0-9])([A-Za-z0-9_]*(?:pass(?:word|phrase|wd)?|secret|token|api[_-]?key|apikey|authorization|credential|wif|priv(?:ate)?[_-]?key|mnemonic|seed)[A-Za-z0-9_]*\s*[:=]\s*)(?:bearer\s+)?("[^"]*"|'[^']*'|\S+)/gi;
+
+// A bearer token with no key in front of it, as a header line is usually quoted.
+// The `authorization: Bearer x` shape is handled above, where the value group
+// would otherwise capture the word "Bearer" and leave the token in the clear.
+const BEARER_RE = /\bbearer\s+[A-Za-z0-9._~+/-]{8,}={0,2}/gi;
 
 const REDACTED = '[redacted]';
 
+// Deliberately NOT swept here: bare hex. Hub and indexer lines are full of
+// legitimate 64-char hex (txids, block hashes, state roots, digests) and
+// redacting those would gut the logs this spec exists to make readable. The
+// watch collector applies a hex-key sweep at its own boundary instead, where the
+// output is a committed report rather than an operator's live tail.
 function scrubMessage(msg) {
-    return String(msg).replace(SECRET_INLINE_RE, (_m, key, sep) => `${key}${sep}${REDACTED}`);
+    return String(msg)
+        .replace(SECRET_INLINE_RE, (_m, keyAndSep) => `${keyAndSep}${REDACTED}`)
+        .replace(BEARER_RE, REDACTED);
+}
+
+// Envelope keys are rendered as the line's own prefix, so they never repeat in
+// the key=value tail.
+const ENVELOPE_KEYS = new Set(['ts', 'level', 'service', 'msg', 'version']);
+
+// A bare token only where it cannot be confused with the next pair: anything
+// carrying whitespace, `=` or a quote is JSON-quoted so a reader can split the
+// tail on unquoted spaces. This is the half of the text format the watch
+// collector's parser is written against (claude/scripts/xchain-watch.js).
+function formatFieldValue(value) {
+    if (value === null) return 'null';
+    if (typeof value === 'string') {
+        return value !== '' && !/[\s"'=]/.test(value) ? value : JSON.stringify(value);
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    let json;
+    try { json = JSON.stringify(value); } catch { json = '"[unserializable]"'; }
+    if (json === undefined) json = 'null';
+    return /[\s]/.test(json) ? JSON.stringify(json) : json;
+}
+
+/**
+ * Renders a record as the fleet's default text line:
+ *
+ *     <iso-ts> <level> [<service>] <msg> key=value key=value
+ *
+ * The message stays immediately after the service tag so every existing
+ * substring grep across the platform (handover greps, StatusService, the
+ * decoder's wait loops) keeps matching: the prefix is the only addition. The level token is lowercase on purpose: an uppercase ERROR would
+ * be counted by the server-monitor's `grep -cE 'ERROR|FATAL'` rate alert on
+ * every console.error line and page the fleet on first deploy.
+ */
+function formatTextLine(record) {
+    // ONE console call is ONE line. A trailing Error (or any object) expands across
+    // lines under util.inspect, and only the FIRST line carries the timestamp, level
+    // and service - every continuation is an orphan. Measured on the live fleet:
+    // `  fatal: true,` appeared six times in the hub and three in each indexer,
+    // naming no operation, no error and no coin, because it was the middle of a
+    // pretty-printed mariadb SqlError. Those fragments are unparseable by anything
+    // keying on the prefix, which is every consumer of these logs.
+    //
+    // Escape the breaks rather than emit them. Nothing is lost: the stack still
+    // ships, on one line, exactly as formatFieldValue already renders a `stack`
+    // field. JSON mode needs no equivalent - JSON.stringify escapes newlines, so
+    // an NDJSON record is one physical line already and keeps the true characters.
+    const msg = String(record.msg).replace(/\r\n|\r|\n/g, '\\n');
+    let line = `${record.ts} ${record.level} [${record.service}] ${msg}`;
+    for (const [k, v] of Object.entries(record)) {
+        if (ENVELOPE_KEYS.has(k) || v === undefined) continue;
+        line += ` ${String(k).replace(/[\s"'=]/g, '_')}=${formatFieldValue(v)}`;
+    }
+    return line;
 }
 
 // Depth-limited so a cyclic or huge object cannot stall the hot path; anything
@@ -181,7 +255,7 @@ class LogShipper {
 
         this.stats.emitted += 1;
         if (this._levelCounter) this._levelCounter.inc({ level }, 1);
-        this._emitLocal(level, record, msg);
+        this._emitLocal(level, record);
         if (this.config.shipEnabled) this._enqueue(record);
         return record;
     }
@@ -191,13 +265,16 @@ class LogShipper {
     warn(msg, fields)  { return this.log('warn',  msg, fields); }
     error(msg, fields) { return this.log('error', msg, fields); }
 
-    _emitLocal(level, record, rawMsg) {
+    _emitLocal(level, record) {
         const fn = level === 'error' ? (this.console.error || this.console.log)
             : level === 'warn' ? (this.console.warn || this.console.log)
                 : this.console.log;
         if (!fn) return;
+        // Both modes carry the same record. Printing only the scrubbed message
+        // here would discard every field, and the fleet runs text mode, so the
+        // fields would exist nowhere an operator can reach.
         if (this.config.format === 'json') fn.call(this.console, JSON.stringify(record));
-        else fn.call(this.console, scrubMessage(rawMsg));
+        else fn.call(this.console, formatTextLine(record));
     }
 
     _enqueue(record) {
@@ -269,4 +346,8 @@ class LogShipper {
 
 function createLogShipper(opts = {}) { return new LogShipper(opts); }
 
-module.exports = { LogShipper, createLogShipper, readLogEnv, redactFields, scrubMessage, LEVELS, REDACTED };
+module.exports = {
+    LogShipper, createLogShipper, readLogEnv, redactFields, scrubMessage,
+    formatTextLine, formatFieldValue, LEVELS, REDACTED,
+    SECRET_KEY_RE, SECRET_INLINE_RE
+};

@@ -10,7 +10,7 @@
 //
 // an archive batch could be CAPTURED by a junk head row.
 //
-// getAnchorV1ByBatchSeq picks the earliest v1/v6 row for a match_batch_seq and is
+// getAnchorV1ByBatchSeq picks the earliest archive-head (v1) row for a match_batch_seq and is
 // status-agnostic by design (a status filter would fork mirrored vs unmirrored
 // nodes, which is worse), so a permissionless ANCHOR whose signatures do not verify
 // could be that earliest row. It then governed BOTH consensus-visible verdicts for
@@ -38,6 +38,7 @@ const Anchor  = require('../../../src/actions/anchor.js');
 const ed25519 = require('../../../src/ed25519.js');
 const swq     = require('../../../src/stake_weighted_quorum.js');
 const abs     = require('../../../src/archive_batch_author_activation.js');
+const aact    = require('../../../src/anchor_activation.js');
 
 const PUBLISHER = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const ATTACKER  = 'mzBc4XEFSdzCDcTxAgf6EZXgsZWpztRhef';
@@ -52,10 +53,13 @@ const PUBKEY_A = 'a'.repeat(64);
 const SIG      = '1'.repeat(128);
 const HASH     = (c) => c.repeat(64);
 
-// A v1 archive head on the wire (the head-lands-last case parses a real one).
+// A v1 archive head on the wire (the head-lands-last case parses a real one). The
+// publisher tail is always present; these cases ride the degraded ATTEST_SIG_COUNT 0
+// shape, so nothing here turns on the attestation quorum or a derived reward.
 function v1HeadParams(f) {
     return ['1', 'BTC', 'regtest', '500', HASH('0'), HASH('1'), HASH('2'), HASH('3'),
-            '0', '100', f.batch_seq, '1', f.crc, f.total_chunks, f.head_b64, '1', PUBKEY_A, SIG];
+            '0', '100', f.batch_seq, '1', f.crc, f.total_chunks, f.head_b64, '1', PUBKEY_A, SIG,
+            PUBKEY_A, '0'];
 }
 
 function gz64(str) { return zlib.gzipSync(Buffer.from(str, 'utf8'), { level: 9 }).toString('base64url'); }
@@ -231,7 +235,11 @@ describe('ANCHOR archive batch capture by a junk head @regression @tier1', funct
         indexer.config = Object.assign({}, indexer.config, { NETWORK: 'mainnet' });
         handler = new Anchor(indexer);
         seedJunkHeadAheadOfTheRealOne(3);
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 40, SOURCE: PUBLISHER });
+        // AT the ANCHOR activation height: the activation gate runs before every flag day,
+        // so a default (low) mainnet height would be rejected as pre-restart and this case
+        // would never reach the rule it is pinning. ARCHIVE_BATCH_AUTHOR stays inert here.
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 40, SOURCE: PUBLISHER,
+                                    BLOCK_INDEX: aact.ANCHOR_ACTIVATION.mainnet });
         await handler.parse(['2', '9', '1', '3', 'BBBB'], data, null);
         assert.strictEqual(data['STATUS'], 'invalid: TOTAL_CHUNKS (does not match parent v1)',
             'below the flag day the pre-existing (capturable) verdict must be reproduced byte for byte');

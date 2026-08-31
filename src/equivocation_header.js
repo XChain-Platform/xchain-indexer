@@ -59,9 +59,28 @@ const ENGINE_TAGS = {
     XCALL:      'XCALL',
     ATTEST:     'XATTEST',
     ORACLE:     'XORACLE',
+    // PRICE batches. A DISTINCT tag from ORACLE, not a reuse: a batch canonical
+    // carries first_round/last_round and no scalar `round`, and SLASH v0 reads
+    // `round` out of an ORACLE-tagged content to judge equivocation, skipping its
+    // distinct-rounds guard when either side lacks one. Under a shared tag an
+    // honest validator that signed one per-round consensus canonical and one batch
+    // at the same BTC anchor would be provably equivocating, for a full bond burn plus permanent
+    // capability disqualification. The batch ROUND_ID is
+    // `<anchor>|<first_round>|<last_round>` (pipes are safe here; equivKey treats
+    // the round id as opaque), so two honest batches that split one window
+    // differently do not collide on one key either.
+    ORACLE_BATCH: 'XORACLEB',
     CHECKPOINT: 'XCHECKPOINT',
     CONFIG:     'XCONFIG',
     NODEPROOF:  'XNODEPROOF',
+    // ROLLCALL presence proofs. Namespacing ONLY, exactly like XNODEPROOF: the
+    // tag is deliberately absent from SLASH's ENGINE_CAPABILITY map, so no
+    // ROLLCALL canonical is a slashable family. Several valid ROLLCALLs per
+    // epoch are expected (a leader's, sweepers', self-publishes), every one
+    // carrying signatures over the SAME canonical for that epoch, so two of
+    // them are never conflicting content for one key. ROUND_ID is the BTC
+    // EPOCH_HEIGHT in decimal, VIEW is 0.
+    ROLLCALL:   'XROLLCALL',
 };
 
 // Whether the EQUIV header is in effect for a settlement whose BTC-anchored snapshot

@@ -37,17 +37,17 @@ const jsonRouter    = require('express-json-rpc-router');
 const { buildHealthResponse, committedView, inFlightBlockIndex } = require('./health');
 const { createShutdown, createIndexerDrain } = require('./shutdown');
 const { getStakeSourceByPubkey } = require('./stake-source');
-const { canonicalizeRewardType } = require('./reward-push-gate');
+const { rewardPushRetiredError } = require('./reward-push-gate');
 const anchorActionQuery = require('./anchor-action-query');
 const reorgHistoryQuery = require('./reorg-history-query');
 const { stampGiveDecimals } = require('./crossChainOfferDecimals');
 const merkle        = require('./merkle');
 const stateSubtree  = require('./state_subtree_activation');
-const ar            = require('./anchor_reward_activation.js');
 const crypto        = require('crypto');
 const { installObservability } = require('./observability');   // default-off /metrics + structured log shim
 const { installIndexerMetrics } = require('./indexerMetrics');  // poll-freshness heartbeat gauge
 const { parseCorsOrigin } = require('./corsOrigin.js');
+const { installCrashHandlers } = require('./diagnosticEvents.js');
 
 // Constant-time API-key comparison. A plain `!==` short-circuits at the first
 // mismatching byte, leaking the key that guards reward-forging writes through
@@ -61,6 +61,17 @@ function keyEquals(provided, expected){
 }
 
 dotenv.config();
+
+// Before anything else logs. The env-validation failures immediately below are
+// exactly the lines an operator needs levelled and timestamped, and
+// installObservability does not run until ~160 lines further down.
+const { patchConsole } = require('./observability');
+patchConsole({
+    service: 'xchain-indexer',
+    version: require('../package.json').version,
+    coin:    process.env.INDEXER_COIN || '',
+    network: process.env.INDEXER_NETWORK || ''
+});
 
 // Validate required environment variables
 const REQUIRED_ENV = [
@@ -163,12 +174,50 @@ const FEDERATION_READ_METHODS = new Set([
     'getactionconfirmations',
     'getanchoraction',
     'getanchorconfirmations',
+    'getrollcallsigners',
     'getarchiveanchor',
     'getreorghistory',
     'getpendingcrosschaincalls',
     'getcrosschaincall',
     'getcrosschaincallresult'
 ]);
+
+// Upper bound on the key lists getrollcallsigners will answer over. The BTC
+// close asks for |R(E)| + 1 keys, so this is a sanity ceiling on a malformed or
+// hostile caller, not a paging limit: the method never enumerates, so a caller
+// that needs more keys than this is not doing what the method is for.
+const ROLLCALL_READ_MAX_KEYS = 2048;
+
+// sha256 of THIS indexer's vendored action-manifest.json, cached after the first
+// read. The BTC-side epoch close compares it against its own vendored copy and
+// DEFERS on a mismatch.
+//
+// Why this exists at all: a DOGE indexer running a decoder that predates the
+// ROLLCALL allowlist entry drops every roll call at decode
+// (XChainDecoder VALID_ACTION_NAMES) and would then answer a perfectly
+// well-formed "nobody signed" -- which the BTC side would read as a
+// federation-wide absence and act on. Depth cannot detect a peer's software
+// version, so the manifest hash is the version signal, and it converts that
+// silent wrong answer into a loud stall.
+let _rollcallManifestHash = null;
+function rollcallManifestHash(){
+    if(_rollcallManifestHash !== null) return _rollcallManifestHash;
+    try {
+        const fs   = require('fs');
+        const path = require('path');
+        const p    = path.join(__dirname, '..', 'test', 'fixtures', 'action-manifest.json');
+        _rollcallManifestHash = crypto.createHash('sha256')
+            .update(fs.readFileSync(p)).digest('hex');
+    } catch (e) {
+        // Fail LOUD rather than silently agreeing with every peer: a null hash can
+        // never equal the caller's, so the close defers instead of trusting an
+        // indexer whose manifest we could not read.
+        console.error('rollcallManifestHash: cannot read vendored action-manifest.json:', e.message);
+        _rollcallManifestHash = null;
+        return null;
+    }
+    return _rollcallManifestHash;
+}
 
 // Start up the API
 async function startApi(){
@@ -1305,6 +1354,108 @@ async function startApi(){
         // from a previous response's next_after_action_index. Omitting it reads the first
         // page, which is what every pre-pagination caller does, so the method stays
         // backward compatible on the wire.
+        // ROLLCALL federation read: "which of THESE keys have a presence signature
+        // on chain for THIS epoch, inside THIS window?" Served off the committed
+        // view, DOGE side.
+        //
+        // BOUNDED BY THE CALLER'S KEY LISTS, never by enumeration. The BTC close
+        // asks for exactly the keys of R(E) plus the elected leader, so the answer
+        // size is fixed by the asker and no attacker-inflated action set can
+        // exhaust a page walk into `unknown` or truncate it into a false absence.
+        // An enumerating variant of this read would be a denial-of-service surface
+        // that evicts live validators, which is why it does not exist.
+        //
+        // Everything here is STRUCTURE. This indexer cannot check LEDGER_HASH
+        // against anything (it has no BTC view), so it returns the raw signed
+        // material and the BTC side re-verifies against its OWN ledger_hash and
+        // discards any row whose carried hash differs.
+        //
+        // `hcut` is the window cut: the highest DOGE block at or before
+        // `max_block_time` (the BTC header stamp at E + ACCEPT_WINDOW). The caller
+        // must treat a null cut, or a tip that has not buried the cut by
+        // ROLLCALL_DOGE_MATURITY, as `unknown` and DEFER -- never as "nobody was
+        // present", which would evict the whole federation on a lagging peer.
+        //
+        // `manifest_hash` is what turns a silent failure loud: a DOGE indexer
+        // running a decoder that predates the ROLLCALL allowlist entry drops every
+        // roll call at decode and would answer a perfectly well-formed "nobody
+        // signed". The BTC side compares this against its own vendored manifest and
+        // defers on a mismatch, so a stale peer stalls a block instead of evicting
+        // a federation.
+        async getrollcallsigners({network, epoch_height, max_block_time, pubkeys, publishers}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            if(String(indexer.config['COIN']) !== 'DOGE')
+                return { error: 'getrollcallsigners is DOGE-only' };
+            if(network !== undefined && String(network) !== String(indexer.config['NETWORK']))
+                return { error: 'network mismatch' };
+
+            let epoch = parseInt(epoch_height);
+            let maxT  = parseInt(max_block_time);
+            if(!Number.isFinite(epoch) || epoch < 0) return { error: 'invalid epoch_height' };
+            if(!Number.isFinite(maxT))               return { error: 'invalid max_block_time' };
+
+            let keys = Array.isArray(pubkeys)    ? pubkeys    : [];
+            let pubs = Array.isArray(publishers) ? publishers : [];
+            // Hex-shaped and bounded. A caller asking about a key it cannot name is
+            // asking to enumerate, which this method does not do.
+            const HEX64 = /^[0-9a-fA-F]{64}$/;
+            keys = keys.filter((k) => HEX64.test(String(k))).map((k) => String(k).toLowerCase());
+            pubs = pubs.filter((k) => HEX64.test(String(k))).map((k) => String(k).toLowerCase());
+            if(keys.length > ROLLCALL_READ_MAX_KEYS || pubs.length > ROLLCALL_READ_MAX_KEYS)
+                return { error: 'too many keys requested' };
+
+            try {
+                // Federation READ isolation: committed-only, off the block tx.
+                let db = indexer.indexerDb.apiView();
+
+                let tipIndex = await db.getLatestBlockIndex();
+                let tipRow   = await db.doQuery(
+                    'SELECT block_time FROM blocks WHERE block_index = ?', [tipIndex]);
+                let tipTime  = (tipRow && tipRow[0]) ? parseInt(tipRow[0].block_time) : null;
+
+                let hcut = await db.getRollcallWindowCut(maxT);
+
+                let signers = {};
+                for(let k of keys) signers[k] = null;
+                let publishersOut = {};
+                for(let k of pubs) publishersOut[k] = null;
+
+                // A null cut means no DOGE block is inside the window yet. Answer the
+                // shape with an explicit null hcut so the caller defers rather than
+                // reading empty maps as a positive "none".
+                if(hcut !== null){
+                    for(let r of await db.getRollcallSignersForKeys(epoch, keys, hcut)){
+                        signers[String(r.pubkey).toLowerCase()] = {
+                            sig:          String(r.sig).toLowerCase(),
+                            ledger_hash:  String(r.ledger_hash).toLowerCase(),
+                            publisher:    String(r.publisher).toLowerCase(),
+                            action_index: Number(r.action_index),
+                            block_index:  Number(r.block_index)
+                        };
+                    }
+                    for(let r of await db.getRollcallPublishers(epoch, pubs, hcut)){
+                        publishersOut[String(r.publisher).toLowerCase()] = {
+                            action_index: Number(r.action_index),
+                            block_index:  Number(r.block_index)
+                        };
+                    }
+                }
+
+                return {
+                    hcut,
+                    tip_block_index: (tipIndex === null || tipIndex === undefined) ? null : Number(tipIndex),
+                    tip_block_time:  Number.isFinite(tipTime) ? tipTime : null,
+                    manifest_hash:   rollcallManifestHash(),
+                    signers,
+                    publishers: publishersOut
+                };
+            } catch (err) {
+                console.error('getrollcallsigners error:', err);
+                return { error: 'failed to look up rollcall signers' };
+            }
+        },
+
         async getanchorconfirmations({txid, after_action_index}){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
@@ -1414,140 +1565,34 @@ async function startApi(){
             }
         },
 
-        // Receive validator reward records pushed from xchain-hub (anchor publish
-        // rails only). oracle_round, attest_fee and attest_bcast are DERIVED deterministically
-        // during block processing; accepting a push for them would let a stale
-        // hub race the derivation and open a replay-divergence window, so they
-        // are rejected outright.
-        // Staged retirement: per-chain anchor rewards become on-chain DERIVED
-        // at/above the ANCHOR_REWARD flag-day, so this endpoint rejects them there (see
-        // the gate below). The same retirement extends to anchor_archive at/above
-        // the ARCHIVE_REWARD flag-day (derived from the ANCHOR v6 publisher attestation).
-        // The handler remains the transport for pre-flag-day rounds until pre-v4/pre-v6
-        // history is buried, at which point the whole handler + its WRITE_METHODS entry
-        // are deleted (the decisive close of the forge vector).
-        // Body: { round, reward_type, block_index, rewards: [{pubkey, amount}, ...] }
-        async pushvalidatorrewards({round, reward_type, block_index, rewards}){
-            if(round === undefined || round === null)
-                return { error: 'round is required' };
-            if(!Array.isArray(rewards))
-                return { error: 'rewards must be an array' };
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            // Canonicalize the reward_type case BEFORE any gate/store/reconcile.
-            // The validator_rewards column is utf8_general_ci and the derived
-            // winner is written as 'anchor_' + CHAIN.toUpperCase(), so a mixed-case
-            // push (e.g. 'anchor_btc') would otherwise slip the case-sensitive
-            // flag-day gate below AND collation-collide with the derived winner in
-            // reconcileAnchorRewardWinner, deleting the legit row (forge/fork).
-            let type = canonicalizeRewardType(reward_type || 'oracle_round');
-            if(!/^anchor_[A-Za-z_]+$/.test(type))
-                return { error: 'reward_type ' + type + ' is not pushable (derived during block processing)' };
-            let blockIdx = block_index || 0;
-            // Staged retirement: at/above the ANCHOR_REWARD flag-day a per-chain anchor
-            // reward (anchor_<CHAIN>) is DERIVED on-chain from the ANCHOR v4/v5 publisher
-            // attestation, so accepting an unauthenticated push for it is exactly the forge
-            // vector this change retires; reject it (defense in depth; the upgraded hub no
-            // longer pushes it). Pre-flag-day anchor_<CHAIN> rewards still push. block_index
-            // is the BTC snapshot_block the flag-day is keyed on. The handler itself stays
-            // until pre-v4/pre-v6 history is buried.
-            //
-            // The gate takes BOTH planes, because block_index alone is a key the CALLER
-            // supplies: a key-holder sending block_index 0 read every flag-day as inactive,
-            // got a wire-amount COLLECT-spendable row written, and the MIN(pubkey) collapse
-            // below then DELETED the legitimately derived winner for that round. `round` is
-            // the plane that binds: for the per-chain legs round_reference IS CHECKPOINT_SEQ,
-            // and StateCheckpointEngine.deriveCheckpointSeq(snapshotBlock) returns
-            // snapshotBlock, so round IS the BTC snapshot_block. reconcileAnchorRewardWinner
-            // keys on (reward_type, round_reference), so a forged row can only displace the
-            // derived winner while it carries the derived round, and that round is by
-            // definition at/above the flag-day. Lowering round instead moves the row off any
-            // round a derive will ever write, so it can no longer collide.
-            // Written as OR-of-predicates and never as a max(): round is only checked for
-            // presence above, so Number(round) on a non-numeric round is NaN, and a max()
-            // over NaN is NaN, which fails the gate open and hands the bypass back.
-            // A legitimate pre-flag-day push is unaffected: the hub sends round =
-            // checkpoint_seq of a pre-flag-day snapshot_block (RewardTracker), and the
-            // legacy dense seq it replaced was strictly smaller still.
-            // anchor_archive gets no binding from this: its round is MATCH_BATCH_SEQ, a
-            // dense hub-allocated counter rather than a height. The leg below therefore
-            // takes its second plane from the node's OWN committed tip instead of `round`.
-            if(/^anchor_(BTC|LTC|DOGE)$/.test(type) &&
-               (ar.isAnchorRewardActive(Number(blockIdx), indexer.config && indexer.config['NETWORK']) ||
-                ar.isAnchorRewardActive(Number(round),    indexer.config && indexer.config['NETWORK'])))
-                return { error: 'reward_type ' + type + ' at block ' + blockIdx + ' / round ' + round +
-                                ' is derived on-chain from ANCHOR v4/v5; push retired' };
-            // The same staged retirement for the ARCHIVE leg. At/above the
-            // ARCHIVE_REWARD flag-day anchor_archive is DERIVED on-chain from the ANCHOR v6
-            // publisher attestation, so accepting a key-authenticated push for it is exactly
-            // the insider-with-key forge surface this retires; reject it (the upgraded hub
-            // no longer pushes it). The canonicalizer above pins the type's case so no
-            // collation-variant can slip this case-sensitive comparison.
-            //
-            // Two planes here too, for the reason the per-chain leg takes two: block_index
-            // is a key the CALLER supplies, and a key-holder sending 0 read the flag-day as
-            // inactive, got a wire-amount COLLECT-spendable row written, and the MIN(pubkey)
-            // reconcile below then DELETED the derived winner for that round. The archive
-            // leg cannot borrow `round` as the second plane (MATCH_BATCH_SEQ is a dense
-            // counter, not a height), so it takes the node's own committed tip, which no
-            // request body can move. ARCHIVE_REWARD_ACTIVATION is a BTC-anchored
-            // snapshot_block and the hub pushes archive rewards only to the BTC indexer
-            // (RewardTracker._pushRewardsToBtcIndexer), so the tip is a comparable quantity
-            // only there; any other chain refuses the type outright rather than falling back
-            // to the wire plane alone. OR-of-predicates, never a max(): see the note above.
-            if(type === 'anchor_archive'){
-                let chain = String((indexer.config && indexer.config['CHAIN']) || '');
-                if(chain !== 'BTC')
-                    return { error: 'reward_type anchor_archive is not pushable to a ' + (chain || 'chainless') +
-                                    ' indexer (the archive flag-day is BTC-anchored); push retired' };
-                let tip = null;
-                try { tip = await committedView(indexer.indexerDb).getLatestBlockIndex(); }
-                catch (err) { tip = null; }
-                // Fail closed on an unreadable tip: falling through would leave the gate
-                // resting on the caller-supplied plane alone, which is the hole. The wording
-                // deliberately does NOT match RewardTracker.isTerminalPushError, so a
-                // legitimate pre-flag-day push is retried rather than dropped on a blip.
-                if(!Number.isFinite(Number(tip)))
-                    return { error: 'anchor_archive gate could not read the local committed tip; retry' };
-                if(ar.isArchiveRewardActive(Number(blockIdx), indexer.config && indexer.config['NETWORK']) ||
-                   ar.isArchiveRewardActive(Number(tip),      indexer.config && indexer.config['NETWORK']))
-                    return { error: 'reward_type anchor_archive at block ' + blockIdx + ' / tip ' + tip +
-                                    ' is derived on-chain from ANCHOR v6; push retired' };
-            }
-            let written = 0;
-            let skipped = 0;
-            // apiView(): these writes land on an independent pooled connection. A
-            // push arriving while a block is mid-processing must never join the
-            // block's open transaction: the block's reorg/error rollback would
-            // silently revert rewards this handler already acked with
-            // {status:'success'}, and the hub never retries a successful push.
-            let apiDb = indexer.indexerDb.apiView();
-            for(let r of rewards){
-                if(!r || !r.pubkey || !r.amount){ skipped++; continue; }
-                try {
-                    let ok = await apiDb.createValidatorReward(r.pubkey, round, type, r.amount, blockIdx);
-                    if(ok) written++;
-                    else skipped++;
-                } catch (err) {
-                    console.error('pushvalidatorrewards: error writing reward for ' + r.pubkey + ':', err);
-                    skipped++;
-                }
-            }
-            // Replace-on-push for anchor rewards: one logical anchor → exactly
-            // one winner. Collapse any failover-race duplicates to the
-            // deterministic (smallest-pubkey) winner so a loser row pushed to
-            // this indexer can't survive as a phantom COLLECT-claimable reward
-            // or diverge the recovery ledger hash.
-            if(written > 0 && /^anchor_[A-Za-z_]+$/.test(type)){
-                try {
-                    let removed = await apiDb.reconcileAnchorRewardWinner(round, type, blockIdx, null);
-                    if(removed > 0)
-                        console.log('pushvalidatorrewards: retracted ' + removed + ' superseded anchor reward(s) for ' + type + ' #' + round + ' (kept deterministic winner)');
-                } catch (err) {
-                    console.warn('pushvalidatorrewards: anchor reconciliation failed for ' + type + ' #' + round + ':', err && err.message);
-                }
-            }
-            return { status: 'success', written: written, skipped: skipped };
+        // Receive validator reward records pushed from xchain-hub. RETIRED: this rail
+        // no longer writes anything, for any reward type, on any network.
+        //
+        // Every reward it ever carried is now DERIVED deterministically from on-chain
+        // bytes. oracle_round, attest_fee and attest_bcast always were, and were rejected
+        // outright here. The per-chain anchor_<CHAIN> reward is derived from the ANCHOR
+        // v4/v5 publisher attestation at/above the anchor-reward flag-day, and
+        // anchor_archive from the ANCHOR v6 publisher attestation at/above the
+        // archive-reward flag-day. Mainnet is past both heights and both are 0 on testnet
+        // and regtest, so a staged gate here would refuse every push on every live
+        // network anyway: unreachable code guarding a key-authenticated write into a
+        // COLLECT-spendable table.
+        //
+        // The write path is DELETED rather than gated, which is the decisive close of the
+        // forge vector. No request body reaches createValidatorReward or the
+        // smallest-pubkey reconcileAnchorRewardWinner collapse any more, so a leaked or
+        // insider-held API key cannot mint a spendable reward row nor delete the derived
+        // winner for a round, and neither can a future refactor that loosens a gate input.
+        //
+        // The METHOD itself stays, and stays in WRITE_METHODS so it is still key-gated,
+        // so that an un-upgraded hub gets an explicit terminal refusal it logs and drops.
+        // Deleting the method outright would answer with a JSON-RPC method-not-found and
+        // no `result`, which RewardTracker's push loop reads as an acceptance and drops
+        // silently instead - the same lost reward, with no operator-visible reason.
+        // Body: { round, reward_type, block_index, rewards: [...] }; only reward_type is
+        // read, and only to name the refusal.
+        async pushvalidatorrewards({reward_type}){
+            return { error: rewardPushRetiredError(reward_type) };
         },
 
         // Resolve the staking source address that owned/delegated a signing
@@ -1560,6 +1605,54 @@ async function startApi(){
         // be unit-tested without standing up the Express/JSON-RPC stack.
         async getstakesourcebypubkey({pubkey, block_index}){
             return getStakeSourceByPubkey(indexer, { pubkey, block_index });
+        },
+
+        // Public roll-call verdict history, BTC side (validator liveness eviction
+        // spec). Feeds xchain-node's `validator status` (an operator's last rolled
+        // epoch + absence streak) and xchain-dashboard's consecutive-UNROLLED
+        // alarm, the only detector for a federation that has silently stopped
+        // rolling. Plain public read, not a federation read: absences are DERIVED
+        // chain data the explorer also needs, and this table is authoritative
+        // (anything the hub reports about roll calls is publisher state only).
+        // Never returns responsible_set_json: that field pins K-streak membership
+        // and is an internal detail this surface does not expose.
+        // Body: { limit?: number }
+        async getrollcalls({limit}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            let max = Number(limit);
+            if(!Number.isFinite(max) || max <= 0) max = 20;
+            if(max > 100) max = 100;
+            // Committed-only read off an independent pooled connection
+            let db = indexer.indexerDb.apiView();
+            try {
+                let rows = await db.getRollcalls(max);
+                return { rollcalls: rows };
+            } catch (err) {
+                console.error('getrollcalls error:', err);
+                return { error: 'failed to look up roll calls' };
+            }
+        },
+
+        // Roll-call absences for one staking source, BTC side. `source` is an
+        // address as a caller types it; an unknown or unresolvable source is not
+        // an error, it just has no absences on file.
+        // Body: { source, limit?: number }
+        async getrollcallabsences({source, limit}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            let max = Number(limit);
+            if(!Number.isFinite(max) || max <= 0) max = 20;
+            if(max > 100) max = 100;
+            // Committed-only read off an independent pooled connection
+            let db = indexer.indexerDb.apiView();
+            try {
+                let rows = await db.getRollcallAbsencesBySource(source, max);
+                return { absences: rows };
+            } catch (err) {
+                console.error('getrollcallabsences error:', err);
+                return { error: 'failed to look up roll call absences' };
+            }
         }
 
     };
@@ -1737,6 +1830,12 @@ async function startApi(){
     });
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT',  () => shutdown('SIGINT'));
+
+    // Crash visibility. Registered here rather than at module scope because
+    // several suites require modules of this repo in-process under mocha, which
+    // installs its own handlers: a module-scope handler that exits would abort
+    // the whole run instead of failing one test.
+    installCrashHandlers();
 
 }
 

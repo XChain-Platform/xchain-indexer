@@ -369,21 +369,39 @@ function verifyConsensusPin(network){
 
 // Per-coin cross-chain confirmation thresholds via the hub's standard
 // three-tier idiom: env XCHAIN_CONFIRMATIONS_<COIN> -> p2pConfig -> per-coin
-// default. On mainnet an override may only RAISE the depth (CF-1):
+// default. On mainnet AND testnet an override may only RAISE the depth (CF-1):
 // the defaults are a consensus-safety floor, and a single validator running a
 // lowered depth would co-sign source actions the rest of the federation still
-// considers reorg-able. testnet/regtest keep the full override for drills.
+// considers reorg-able. Only regtest, the single-operator drill network, keeps
+// the full override.
+//
+// testnet is consensus-real for this purpose: a multi-operator federation run by
+// outside operators (the validator runbook hands them HUB_NETWORK=testnet) with an
+// ARMED consensus pin, so the same fork risk applies and a clean pin must not read
+// as covering this depth. Every sibling seam gates on regtest alone for that reason:
+// resolveFeeDestination above, XChainHub._oracleMaxAgeSeconds,
+// XchainPriceSource.pinOffRegtest and CapabilitySnapshot._resolveReorgBuffer.
+//
+// Raising stays legal on every network because raising is unilaterally
+// conservative: the validator simply waits longer. Only lowering forks co-signing.
+// The floor also keeps a hub from ever attesting an anchor SHALLOWER than the BTC
+// indexer's reward-mint gate will accept, which is frozen at the same per-coin
+// default (ANCHOR_REWARD_DOGE_MIN_CONFIRMATIONS in anchor_reward_activation.js).
+// The mint gate is NOT this knob and never reads it: it is a ledger input, this is
+// local hub trust policy, and on regtest the two may legitimately differ.
 function resolveConfirmations(cfg, network){
     cfg = cfg || {};
     const out = {};
+    const floored = (network === 'mainnet' || network === 'testnet');
     for(const tick of ALLOWED_COINS){
         const key = 'XCHAIN_CONFIRMATIONS_' + tick;
         const def = DEFAULT_CONFIRMATIONS[tick];
         let val = parseInt(process.env[key], 10) || parseInt(cfg[key], 10) || def;
         if(!Number.isFinite(val) || val <= 0) val = def;
-        if(network === 'mainnet' && val < def){
-            console.warn('[coins] ' + key + '=' + val + ' is below the mainnet floor ' + def +
-                '; clamping to ' + def + ' (confirmation overrides may only raise the depth on mainnet)');
+        if(floored && val < def){
+            console.warn('[coins] ' + key + '=' + val + ' is below the ' + network + ' floor ' + def +
+                '; clamping to ' + def + ' (confirmation overrides may only raise the depth on ' +
+                'mainnet and testnet; regtest keeps the full override)');
             val = def;
         }
         out[tick] = val;

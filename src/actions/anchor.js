@@ -14,10 +14,9 @@
  *
  * XChain Platform Action - ANCHOR (validator-broadcast, DOGE-only)
  *
- * On-chain commitment of federation state: quorum-signed checkpoints (v0),
- * the cross-chain match archive (v1), archive continuation chunks (v2),
- * SPV light-client roots (v3), and publisher-attestation reward anchors
- * (v4 rootless / v5 root-bearing).
+ * On-chain commitment of federation state: the per-network checkpoint BUNDLE
+ * (v0), the publisher-bearing cross-chain match archive head (v1), and archive
+ * continuation chunks (v2).
  * Parsed rows land in anchor_actions: the permanent on-chain record that
  * makes every checkpoint + the complete match archive recoverable from a
  * full chain parse alone (src/recovery.js). Live indexers keep settling
@@ -36,13 +35,26 @@
  * Spec: xchain-documentation/protocol/actions/ANCHOR.md
  *
  * FORMATS:
- *   v0 - VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...
- *   v1 - VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|MATCH_BATCH_SEQ|MATCH_COUNT|BATCH_CRC32|TOTAL_CHUNKS|ARCHIVE_B64|SIG_COUNT|PUBKEY|SIG|...
+ *   v0 - the per-network checkpoint BUNDLE: one header, SECTION_COUNT per-chain
+ *        sections, one publisher-attestation tail (see _parseBundle)
+ *   v1 - VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|MATCH_BATCH_SEQ|MATCH_COUNT|BATCH_CRC32|TOTAL_CHUNKS|ARCHIVE_B64|SIG_COUNT|PUBKEY|SIG|...|PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|...
  *   v2 - VERSION|MATCH_BATCH_SEQ|CHUNK_INDEX|TOTAL_CHUNKS|ARCHIVE_B64_CHUNK
- *   v3 - v0 checkpoint + STATE_ROOT|STATE_ROOT_VERSION|BLOCK_MERKLE_ROOT|BLOCK_MERKLE_VERSION appended before SIG_COUNT (SPV Phase 2)
- *   v4 - v0 checkpoint + PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|... appended after the root signature list (anchor-reward re-derivation)
- *   v5 - v3 checkpoint + PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|... appended after the root signature list (anchor-reward re-derivation)
- *   v6 - v1 archive anchor + PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|... appended after the root signature list (archive-reward re-derivation)
+ *
+ * ACTIVATION. The version set RESTARTS at 0 at ANCHOR_ACTIVATION (see
+ * ../anchor_activation.js), so the first check in parse() is the anchor's own
+ * DOGE mined height: below the threshold EVERY ANCHOR of EVERY version is
+ * 'invalid: ANCHOR before activation', because the same byte meant something
+ * else on the pre-restart wire and no parser can tell the two apart from the
+ * bytes alone. At/above it this table is the whole wire set, so any other
+ * version byte falls out of the unknown-version check below.
+ *
+ * The pre-restart versions (the per-chain anchors, the tail-less archive head
+ * and the old bundle/archive-head bytes) are RETIRED, not deprecated: their
+ * parsers are deleted rather than kept behind a height, because pre-launch a
+ * superseded wire is deleted (operator ruling 2026-08-26) and the activation
+ * height already makes every row that used them invalid. Those rows keep their
+ * version byte on chain and stay readable through the txid-keyed reads; the
+ * rewards they already earned are recorded, not re-derived.
  *
  ********************************************************************/
 
@@ -50,12 +62,13 @@ const zlib    = require('zlib');
 const ed25519 = require('../ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
-const ckpt    = require('../checkpoint_commitment_activation.js');
 const ar      = require('../anchor_reward_activation.js');
 const arKey   = require('../anchor_reward_key.js');
 const abas    = require('../archive_batch_author_activation.js');
 const ahug    = require('../archive_head_unverified_gate_activation.js');
+const aact    = require('../anchor_activation.js');
 const aaq     = require('../anchor-action-query.js');
+const diag    = require('../diagnosticEvents.js');
 
 const ALLOWED_CHAINS = ['BTC', 'LTC', 'DOGE'];
 
@@ -69,28 +82,29 @@ class Anchor {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
+        // The whole ANCHOR wire set. Membership here is what makes a version byte
+        // parseable at all (the unknown-version check in parse() reads this object), so
+        // adding a key is a consensus change and deleting one retires a wire.
         this.formats = {};
-        this.formats[0] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...';
-        this.formats[1] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|MATCH_BATCH_SEQ|MATCH_COUNT|BATCH_CRC32|TOTAL_CHUNKS|ARCHIVE_B64|SIG_COUNT|PUBKEY|SIG|...';
+        // v0 (checkpoint bundle): ONE anchor per network per cycle carrying every
+        // checkpointed chain as a section. The section body runs from CHAIN through the
+        // root signature list MINUS NETWORK (the header carries it once and the parser
+        // rebuilds every section canonical with it), and the single publisher tail
+        // attests the whole bundle.
+        // The template grammar has no repeating-group syntax; the bare `...` after
+        // SECTION_COUNT stands for SECTION_COUNT sections, each
+        // CHAIN|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ
+        // |SECTION_SNAPSHOT_BLOCK|STATE_ROOT|STATE_ROOT_VERSION|BLOCK_MERKLE_ROOT
+        // |BLOCK_MERKLE_VERSION|SIG_COUNT|(PUBKEY|SIG)..., walked positionally by _parseBundle.
+        this.formats[0] = 'VERSION|NETWORK|SNAPSHOT_BLOCK|SECTION_COUNT|...|PUBLISHER|ATTEST_SIG_COUNT|...';
+        // v1 (archive head): the checkpoint wrapper carrying the match-archive segment,
+        // PLUS the elected archive-leader PUBLISHER pubkey and an oracle_publish
+        // attestation over the 'anchor_archive' XANCPUB canonical, appended AFTER the
+        // wrapper signature list. The tail is ALWAYS present; ATTEST_SIG_COUNT may be 0
+        // when the attestation round degrades, so one shape covers both the attested and
+        // the degraded round and a tail-less archive wire is not a legal encoding.
+        this.formats[1] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|MATCH_BATCH_SEQ|MATCH_COUNT|BATCH_CRC32|TOTAL_CHUNKS|ARCHIVE_B64|SIG_COUNT|PUBKEY|SIG|...|PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|...';
         this.formats[2] = 'VERSION|MATCH_BATCH_SEQ|CHUNK_INDEX|TOTAL_CHUNKS|ARCHIVE_B64_CHUNK';
-        // v3 (SPV Phase 2, spec §6.3 / D6): v0 checkpoint PLUS the two light-client roots
-        // + their version bytes, appended before SIG_COUNT (positional, never inserted
-        // mid-string). The signatures cover the post-flag-day checkpoint canonical, which
-        // includes the same roots, so they are signed, not just transported.
-        this.formats[3] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|STATE_ROOT|STATE_ROOT_VERSION|BLOCK_MERKLE_ROOT|BLOCK_MERKLE_VERSION|SIG_COUNT|PUBKEY|SIG|...';
-        // v4 / v5 (anchor-reward re-derivation flag-day): the checkpoint anchor PLUS the
-        // elected PUBLISHER pubkey and a SECOND 2f+1 oracle_publish attestation (XANCPUB) over
-        // the reward tuple, appended AFTER the root signature list (positional, never mid-string).
-        // v4 = rootless (v0-shaped) + publisher; v5 = root-bearing (v3-shaped) + publisher. The
-        // indexer re-derives the reward from these bytes, so the trusted hub push is retired.
-        this.formats[4] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...|PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|...';
-        this.formats[5] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|STATE_ROOT|STATE_ROOT_VERSION|BLOCK_MERKLE_ROOT|BLOCK_MERKLE_VERSION|SIG_COUNT|PUBKEY|SIG|...|PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|...';
-        // v6 (archive-reward re-derivation flag-day): the v1 archive anchor PLUS the
-        // elected archive-leader PUBLISHER pubkey and a 2f+1 oracle_publish attestation over
-        // the 'anchor_archive' XANCPUB canonical, appended AFTER the wrapper signature list.
-        // The indexer re-derives the anchor_archive reward from these bytes, retiring the
-        // last key-authenticated reward push.
-        this.formats[6] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|MATCH_BATCH_SEQ|MATCH_COUNT|BATCH_CRC32|TOTAL_CHUNKS|ARCHIVE_B64|SIG_COUNT|PUBKEY|SIG|...|PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|...';
     }
 
     // Canonical signing string: MUST byte-match the hub's
@@ -100,25 +114,27 @@ class Anchor {
         let base = ['XCHECKPOINT', d['CHAIN'], d['NETWORK'], String(d['BLOCK_INDEX_CHECKPOINTED']),
                     d['BLOCK_HASH'], d['LEDGER_HASH'], d['ACTIONS_HASH'], d['CONTRACT_HASH'],
                     String(d['CHECKPOINT_SEQ']), String(d['SNAPSHOT_BLOCK'])].join('|');
-        // v0 ROUND_ID = chain|network|block|checkpoint_seq; v1 appends batch_seq so the
-        // per-block (v0) and archive (v1) canonicals (which share checkpoint_seq) get
-        // DISTINCT equivocation keys (R-4 false-slash fix). Must byte-match the hub.
+        // A checkpoint ROUND_ID is chain|network|block|checkpoint_seq; the archive head
+        // appends batch_seq so the checkpoint and archive canonicals (which share
+        // checkpoint_seq) get DISTINCT equivocation keys (R-4 false-slash fix). Must
+        // byte-match the hub.
         let roundId = d['CHAIN'] + '|' + d['NETWORK'] + '|' + d['BLOCK_INDEX_CHECKPOINTED'] + '|' + d['CHECKPOINT_SEQ'];
-        if(Number(d['FORMAT']) === 1 || Number(d['FORMAT']) === 6){
-            // Archive (v1, and its publisher-bearing v6): rootless checkpoint base + archive
-            // extension. Byte-matches the hub's _archiveCanonical, which nests the bare
-            // _rawCanonicalCheckpoint; v6's wrapper sigs are produced over the SAME archive
-            // canonical (the publisher tail is attested separately via _rewardCanonical).
+        if(Number(d['FORMAT']) === 1){
+            // Archive head: rootless checkpoint base + archive extension. Byte-matches the
+            // hub's _archiveCanonical, which nests the bare _rawCanonicalCheckpoint; the
+            // wrapper sigs are produced over the SAME archive canonical (the publisher tail
+            // is attested separately via _rewardCanonical).
             base += '|' + String(d['MATCH_BATCH_SEQ']) + '|' + String(d['MATCH_COUNT']) + '|' +
                     d['BATCH_CRC32'] + '|' + String(d['TOTAL_CHUNKS']);
             roundId += '|' + d['MATCH_BATCH_SEQ'];
-        } else if(Number(d['FORMAT']) === 3 || Number(d['FORMAT']) === 5){
-            // SPV Phase 2 (spec §6.1/§6.3): v3 (and the root-bearing v5) IS the root-carrying
-            // checkpoint, so its canonical always appends the root suffix. Byte-matches the hub's
-            // post-flag-day canonicalCheckpoint suffix + the SDK/explorer reconstructions. Gating
-            // on the VERSION (not the flag-day) keeps a legacy v0/v4 rootless even after the
-            // flag-day: those sigs were produced over the rootless canonical. v5 carries roots and
-            // is rejected pre-CHECKPOINT_COMMITMENT in parse.
+        } else if(Number(d['FORMAT']) === 0){
+            // A v0 SECTION is root-bearing by construction (the bundle is only ever cut from
+            // rows that carry both light-client roots), so its canonical always appends the
+            // root suffix. Byte-matches the hub's post-flag-day canonicalCheckpoint suffix +
+            // the SDK/explorer reconstructions. `d` here is ONE section, already rebuilt with
+            // the header NETWORK and with SNAPSHOT_BLOCK = that section's own
+            // SECTION_SNAPSHOT_BLOCK: the signatures were produced over the section's block,
+            // never over the bundle's MAX.
             base += '|' + [String(d['STATE_ROOT'] || '').toLowerCase(), String(d['STATE_ROOT_VERSION']),
                            String(d['BLOCK_MERKLE_ROOT'] || '').toLowerCase(), String(d['BLOCK_MERKLE_VERSION'])].join('|');
         }
@@ -133,15 +149,16 @@ class Anchor {
     // (ar.ANCHOR_REWARD_AMOUNT), NEVER taken from the wire. A distinct 'XANCPUB|...' roundId
     // prefix gives the attestation its OWN equivocation family, so a validator that signs both
     // the checkpoint root canonical and this reward attestation in the same round is never
-    // falsely slashable (same R-4 reasoning as the v0/v1 roundId split above).
+    // falsely slashable (same R-4 reasoning as the checkpoint/archive roundId split above).
     _rewardCanonical(d){
-        // Archive leg (v6): the attested tuple is the anchor_archive reward, keyed on
+        // Archive leg (v1): the attested tuple is the anchor_archive reward, keyed on
         // MATCH_BATCH_SEQ (the archive round number) with the frozen ARCHIVE amount. MUST
         // byte-match the hub's StateAnchorPublisher._archiveAttestationCanonical. The
-        // 'XANCPUB|archive|...' roundId is disjoint from every per-chain roundId
-        // ('XANCPUB|BTC|...' etc.), so the two attestation families can never equivocation-
-        // collide (same R-4 reasoning as the v0/v1 checkpoint roundId split).
-        if(Number(d['FORMAT']) === 6){
+        // 'XANCPUB|archive|...' roundId is disjoint from the bundle's ('XANCPUB|bundle|...')
+        // and from the retired per-chain family ('XANCPUB|BTC|...'), so the attestation
+        // families can never equivocation-collide (same R-4 reasoning as the checkpoint
+        // roundId splits above).
+        if(Number(d['FORMAT']) === 1){
             let base = ['XANCPUB', 'anchor_archive', String(d['MATCH_BATCH_SEQ']),
                         String(d['SNAPSHOT_BLOCK']), String(d['PUBLISHER'] || '').toLowerCase(),
                         ar.ARCHIVE_REWARD_AMOUNT].join('|');
@@ -151,11 +168,19 @@ class Anchor {
             }
             return base;
         }
-        let base = ['XANCPUB', 'anchor_' + d['CHAIN'], String(d['CHECKPOINT_SEQ']),
+        // Bundle leg (v0): ONE attested reward per bundle, type 'anchor_bundle', round
+        // SNAPSHOT_BLOCK. The layout keeps the shipped SIX positional fields so
+        // slash.js's XANCPUB family (which reads snapshot_block at field index 3 for
+        // every member) judges a bundle equivocation without a third branch; field 2 is
+        // round_reference, which for a bundle IS the snapshot block, hence the repeat.
+        // The 'XANCPUB|bundle|...' roundId is disjoint from the per-chain
+        // ('XANCPUB|CHAIN|...') and archive ('XANCPUB|archive|...') families, so no
+        // publisher becomes falsely slashable for signing in two of them.
+        let base = ['XANCPUB', 'anchor_bundle', String(d['SNAPSHOT_BLOCK']),
                     String(d['SNAPSHOT_BLOCK']), String(d['PUBLISHER'] || '').toLowerCase(),
                     ar.ANCHOR_REWARD_AMOUNT].join('|');
         if(eq.isEquivHeaderActive(d['SNAPSHOT_BLOCK'], d['NETWORK'])){
-            let roundId = 'XANCPUB|' + d['CHAIN'] + '|' + d['NETWORK'] + '|' + d['CHECKPOINT_SEQ'] + '|' + d['SNAPSHOT_BLOCK'];
+            let roundId = 'XANCPUB|bundle|' + d['NETWORK'] + '|' + d['SNAPSHOT_BLOCK'];
             return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, roundId, 0, base);
         }
         return base;
@@ -163,6 +188,17 @@ class Anchor {
 
     async parse(params, data, error){
         let format = data['FORMAT'];
+
+        // Activation FIRST, ahead of the version table: below ANCHOR_ACTIVATION the same
+        // version bytes belonged to the pre-restart wire set, so no shape check on these
+        // bytes means anything and every ANCHOR down there is invalid whatever it decodes
+        // to. Keyed on the anchor's OWN DOGE mined height (data['BLOCK_INDEX'], the same
+        // key the unverified-head gate below reads), never on SNAPSHOT_BLOCK or the
+        // checkpointed height, which belong to other chains. isAnchorActive fails closed on
+        // a non-numeric height or an unknown network.
+        if(!error && !aact.isAnchorActive(Number(data['BLOCK_INDEX']), this.config['NETWORK']))
+            error = 'invalid: ANCHOR before activation';
+
         if(!error && (format === null || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
 
@@ -170,11 +206,16 @@ class Anchor {
         if(!error && String(this.config['COIN']) !== 'DOGE')
             error = 'invalid: ANCHOR only valid on DOGE';
 
+        // Dispatch by family. An unparseable version still lands on a body parser (carrying
+        // the error), and the archive-head parser is the fall-through, so a rejected action
+        // is recorded rather than dropped.
         if(format === 2) return await this._parseContinuation(params, data, error);
+        if(format === 0) return await this._parseBundle(params, data, error);
         return await this._parseCheckpoint(params, data, error, format);
     }
 
-    // ANCHOR v0/v1: checkpoint (+ optional archive segment)
+    // ANCHOR v1: the archive head (a checkpoint wrapper carrying the match archive plus
+    // the publisher-attestation tail).
     async _parseCheckpoint(params, data, error, format){
 
         data['CHAIN']                   = String(params[1] || '').toUpperCase();
@@ -187,23 +228,13 @@ class Anchor {
         data['CHECKPOINT_SEQ']          = params[8];
         data['SNAPSHOT_BLOCK']          = params[9];
 
-        let sigBase = 10;
-        if(format === 1 || format === 6){
-            data['MATCH_BATCH_SEQ'] = params[10];
-            data['MATCH_COUNT']     = params[11];
-            data['BATCH_CRC32']     = String(params[12] || '').toLowerCase();
-            data['TOTAL_CHUNKS']    = params[13];
-            data['ARCHIVE_B64']     = String(params[14] || '');
-            sigBase = 15;
-        } else if(format === 3 || format === 5){
-            // SPV Phase 2: the two light-client roots + version bytes, before SIG_COUNT.
-            // v5 is the root-bearing publisher anchor (v3 shape + publisher tail).
-            data['STATE_ROOT']           = String(params[10] || '').toLowerCase();
-            data['STATE_ROOT_VERSION']   = params[11];
-            data['BLOCK_MERKLE_ROOT']    = String(params[12] || '').toLowerCase();
-            data['BLOCK_MERKLE_VERSION'] = params[13];
-            sigBase = 14;
-        }
+        // Archive head only: the archive segment sits between SNAPSHOT_BLOCK and SIG_COUNT.
+        data['MATCH_BATCH_SEQ'] = params[10];
+        data['MATCH_COUNT']     = params[11];
+        data['BATCH_CRC32']     = String(params[12] || '').toLowerCase();
+        data['TOTAL_CHUNKS']    = params[13];
+        data['ARCHIVE_B64']     = String(params[14] || '');
+        let sigBase = 15;
 
         // Structural validation
         if(!error && ALLOWED_CHAINS.indexOf(data['CHAIN']) === -1)
@@ -218,7 +249,7 @@ class Anchor {
             if(!error && !/^[0-9a-f]{64}$/.test(String(data[f])))
                 error = 'invalid: ' + f + ' (format)';
         }
-        if(!error && (format === 1 || format === 6)){
+        if(!error){
             if(!/^[0-9]+$/.test(String(data['MATCH_BATCH_SEQ'])) ||
                !/^[0-9]+$/.test(String(data['MATCH_COUNT'])) ||
                !/^[0-9]+$/.test(String(data['TOTAL_CHUNKS'])) || Number(data['TOTAL_CHUNKS']) < 1)
@@ -228,33 +259,6 @@ class Anchor {
             else if(!data['ARCHIVE_B64'] || !/^[0-9a-zA-Z_-]+$/.test(String(data['ARCHIVE_B64'])))
                 error = 'invalid: ARCHIVE_B64 (format)';
         }
-        // v4/v5 (publisher-bearing anchors) may only appear at/above the ANCHOR_REWARD
-        // flag-day; below it the legacy push path stands and these versions do not exist.
-        if(!error && (format === 4 || format === 5)){
-            if(!ar.isAnchorRewardActive(Number(data['SNAPSHOT_BLOCK']), data['NETWORK']))
-                error = 'invalid: ANCHOR v' + format + ' before ANCHOR_REWARD flag-day';
-        }
-        // v6 (publisher-bearing archive anchor) may only appear at/above the ARCHIVE_REWARD
-        // flag-day; below it the legacy v1 + push path stands and this version does not exist.
-        if(!error && format === 6){
-            if(!ar.isArchiveRewardActive(Number(data['SNAPSHOT_BLOCK']), data['NETWORK']))
-                error = 'invalid: ANCHOR v6 before ARCHIVE_REWARD flag-day';
-        }
-        // v3 and the root-bearing v5 may only appear at/above the CHECKPOINT_COMMITMENT
-        // flag-day (else their signed canonical would have no root suffix, so the sigs could
-        // never verify).
-        if(!error && (format === 3 || format === 5)){
-            if(!ckpt.isCheckpointCommitmentActive(Number(data['SNAPSHOT_BLOCK']), data['NETWORK']))
-                error = 'invalid: ANCHOR v' + format + ' before CHECKPOINT_COMMITMENT flag-day';
-            else if(!/^[0-9a-f]{64}$/.test(String(data['STATE_ROOT'])))
-                error = 'invalid: STATE_ROOT (format)';
-            else if(!/^[0-9a-f]{64}$/.test(String(data['BLOCK_MERKLE_ROOT'])))
-                error = 'invalid: BLOCK_MERKLE_ROOT (format)';
-            else if(!/^[0-9]+$/.test(String(data['STATE_ROOT_VERSION'])) ||
-                    !/^[0-9]+$/.test(String(data['BLOCK_MERKLE_VERSION'])))
-                error = 'invalid: STATE_ROOT_VERSION / BLOCK_MERKLE_VERSION (format)';
-        }
-
         // Parse the signature list
         let sigs = [];
         let sigCount = 0;
@@ -275,16 +279,25 @@ class Anchor {
             }
         }
 
-        // v4/v5: PUBLISHER pubkey + the publisher-attestation sig list, appended AFTER
-        // the root sig list (located by sigBase + 1 + 2*sigCount).
+        // The publisher tail: PUBLISHER pubkey + the publisher-attestation sig list,
+        // appended AFTER the wrapper sig list (located by sigBase + 1 + 2*sigCount). It is
+        // ALWAYS present on an archive head, so a wire carrying version 1 without one fails
+        // here on 'PUBLISHER format' rather than parsing as some tail-less shape.
+        //
+        // ATTEST_SIG_COUNT 0 is LEGAL: it is what the hub emits when the attestation round
+        // did not reach quorum, and it is the same degraded shape the bundle leg already
+        // uses. A degraded round must not cost the federation its checkpoint, so the count
+        // rides at 0, publisher_attestations stores NULL, and the reward derivation below
+        // simply finds no attestation to meet quorum with. Negative is still rejected: it
+        // is not a shape any signer produces.
         let publisherSigs = [];
-        if(!error && (format === 4 || format === 5 || format === 6)){
+        if(!error && format === 1){
             try {
                 let pubBase = sigBase + 1 + 2 * sigCount;
                 data['PUBLISHER'] = String(params[pubBase] || '').toLowerCase();
                 if(!/^[0-9a-f]{64}$/.test(data['PUBLISHER'])) throw new Error('PUBLISHER format');
                 let attestCount = parseInt(params[pubBase + 1]);
-                if(!Number.isFinite(attestCount) || attestCount < 1) throw new Error('ATTEST_SIG_COUNT');
+                if(!Number.isFinite(attestCount) || attestCount < 0) throw new Error('ATTEST_SIG_COUNT');
                 for(let i = 0; i < attestCount; i++){
                     let pubkey = params[pubBase + 2 + 2 * i];
                     let sig    = params[pubBase + 2 + 2 * i + 1];
@@ -325,7 +338,7 @@ class Anchor {
         // checkpoint, and the equal case is already tolerated elsewhere in this guard since
         // an exact re-broadcast is signature-bound to identical content and can only produce
         // a duplicate row.
-        if(!error && (format === 1 || format === 6)){
+        if(!error){
             let wm = await this.indexerDb.getArchiveReplayWatermarks();
             let batchStale      = (wm.batchSeq !== null && Number(data['MATCH_BATCH_SEQ']) < wm.batchSeq);
             let checkpointStale = (wm.checkpointSeq !== null && Number(data['CHECKPOINT_SEQ']) < wm.checkpointSeq);
@@ -335,7 +348,7 @@ class Anchor {
 
         // v1 archive integrity (single-chunk batches verify inline; chunked batches verify
         // at reassembly when the last v2 arrives)
-        if(!error && (format === 1 || format === 6) && Number(data['TOTAL_CHUNKS']) === 1){
+        if(!error && Number(data['TOTAL_CHUNKS']) === 1){
             let crc = this._archiveCrc(data['ARCHIVE_B64']);
             if(crc === null)                          error = 'invalid: ARCHIVE_B64 (not gzip)';
             else if(crc !== data['BATCH_CRC32'])      error = 'invalid: BATCH_CRC32 (archive mismatch)';
@@ -344,7 +357,7 @@ class Anchor {
         // Verify 2f+1 oracle_publish signatures over the canonical.
         // SNAPSHOT_BLOCK comes from the wire payload (a BTC height), NOT from
         // the DOGE block this ANCHOR landed in.
-        // Hoisted so the v4/v5 publisher-attestation check below can REUSE the same
+        // Hoisted so the publisher-attestation check below can REUSE the same
         // oracle_publish set + weighting (no second query, no chance of a divergent set).
         let weighted = false, validators = null, snapPubkeys = null, oracleN = 0;
         if(!error){
@@ -386,19 +399,19 @@ class Anchor {
             }
         }
 
-        // v4/v5: verify the PUBLISHER-attestation quorum (a SECOND 2f+1 over the XANCPUB
-        // canonical) and DERIVE the anchor reward from chain, retiring the trusted hub push.
+        // Verify the PUBLISHER-attestation quorum (a SECOND 2f+1 over the XANCPUB
+        // canonical) and DERIVE the archive reward from chain, retiring the trusted hub push.
         // The attestation reuses the SAME oracle_publish set + weighting resolved for the root
         // quorum. The reward is credited only when the root quorum passed (error still null,
         // snapshot present), the attestation quorum is met, and PUBLISHER is in the snapshot
         // set. A degraded or forged attestation NEVER fails the anchor: the checkpoint still
         // records as 'valid'; only the reward is skipped, and every indexer reaches the same
-        // verdict deterministically. amount is the FROZEN consensus constant; reconcile keeps
-        // the smallest-pubkey winner on a failover double-publish, so the COLLECT rail stays
-        // single-winner fleet-wide.
-        // v6 rides the identical rails for the ARCHIVE leg: reward type anchor_archive,
-        // round = MATCH_BATCH_SEQ, frozen ARCHIVE_REWARD_AMOUNT.
-        if(!error && (format === 4 || format === 5 || format === 6) && snapPubkeys && oracleN > 0){
+        // verdict deterministically. This is also the whole path a degraded ATTEST_SIG_COUNT 0
+        // tail takes: no attestation, no quorum, no reward, checkpoint intact. amount is the
+        // FROZEN consensus constant; reconcile keeps the smallest-pubkey winner on a failover
+        // double-publish, so the COLLECT rail stays single-winner fleet-wide. Reward type
+        // anchor_archive, round = MATCH_BATCH_SEQ.
+        if(!error && format === 1 && snapPubkeys && oracleN > 0){
             let rewardCanonical = this._rewardCanonical(data);
             let attSigners = [], attSeen = new Set();
             for(let s of publisherSigs){
@@ -424,17 +437,16 @@ class Anchor {
                 // byte-neutral to the DOGE ledger. The attestation-quorum check above still
                 // runs; only the createValidatorReward/reconcile write is relocated.
             } else if(attQuorumMet && snapPubkeys.has(String(data['PUBLISHER']))){
-                let rewardType  = (format === 6) ? 'anchor_archive' : 'anchor_' + data['CHAIN'];
-                let rewardRound = (format === 6) ? Number(data['MATCH_BATCH_SEQ']) : Number(data['CHECKPOINT_SEQ']);
-                let rewardAmt   = (format === 6) ? ar.ARCHIVE_REWARD_AMOUNT : ar.ANCHOR_REWARD_AMOUNT;
+                let rewardType  = 'anchor_archive';
+                let rewardRound = Number(data['MATCH_BATCH_SEQ']);
+                let rewardAmt   = ar.ARCHIVE_REWARD_AMOUNT;
                 // The archive leg's rewardRound is MATCH_BATCH_SEQ, the dense hub counter the
                 // replay-guard comment above describes as restarting across a wipe-and-replay
                 // rebase, so it alone does not identify the reward: two genuinely distinct
                 // archive anchors can carry a reissued seq. The qualifier is the snapshot
                 // block that already distinguishes them in the SIGNED tuple (_rewardCanonical
-                // puts SNAPSHOT_BLOCK in the v6 XANCPUB canonical), carried into the ledger
-                // key so both real publishes survive the upsert and the reconcile. 0 for the
-                // per-chain legs, whose CHECKPOINT_SEQ is a height that only advances.
+                // puts SNAPSHOT_BLOCK in the archive XANCPUB canonical), carried into the
+                // ledger key so both real publishes survive the upsert and the reconcile.
                 let rewardQual  = arKey.rewardRoundQualifier(rewardType, data['SNAPSHOT_BLOCK']);
                 let ok = await this.indexerDb.createValidatorReward(
                     data['PUBLISHER'], rewardRound, rewardType,
@@ -449,7 +461,7 @@ class Anchor {
         }
 
         data['VALIDATOR_SIGNATURES'] = JSON.stringify(sigs);
-        // v4/v5/v6 publisher-attestation tail: persist the RAW wire publisher signature list
+        // The publisher-attestation tail: persist the RAW wire publisher signature list
         // (publisherSigs, hex-shape-checked only at parse time) so createAnchorAction can
         // store it in anchor_actions.publisher_attestations.
         // NOTE: this is UNVERIFIED transport, NOT the quorum-verified subset.
@@ -459,20 +471,32 @@ class Anchor {
         // absent from the snapshot, or the tail of an anchor whose attestation quorum
         // was not met. Any consumer MUST re-verify (as anchor_reward_derive.js does
         // from anchor_reward_attestations) and never treat this column as pre-verified.
-        // Empty (null) for v0-v3, which carry no publisher tail. data['PUBLISHER'] is
-        // already set above for v4+.
+        // NULL on a degraded ATTEST_SIG_COUNT 0 tail, which carries no signatures at all.
         data['PUBLISHER_ATTESTATIONS'] = (publisherSigs.length > 0) ? JSON.stringify(publisherSigs) : null;
         if(!data['STATUS']) data['STATUS'] = (error) ? error : 'valid';
 
         console.log("\t ANCHOR v" + format + " : " + data['CHAIN'] + '/' + data['NETWORK'] +
                     ' @ ' + data['BLOCK_INDEX_CHECKPOINTED'] + ' seq ' + data['CHECKPOINT_SEQ'] +
-                    ((format === 1 || format === 6) ? ' batch ' + data['MATCH_BATCH_SEQ'] + ' (' + data['MATCH_COUNT'] + ' matches, ' + data['TOTAL_CHUNKS'] + ' chunk(s))' : '') +
+                    ' batch ' + data['MATCH_BATCH_SEQ'] + ' (' + data['MATCH_COUNT'] + ' matches, ' + data['TOTAL_CHUNKS'] + ' chunk(s))' +
                     ' : ' + data['STATUS']);
+
+        // A refused archive head prints through the same console.log as an
+        // accepted one, at the same level, one word apart. The event separates
+        // them for anything reading the stream.
+        if(diag.isAnchorFailureStatus(data['STATUS']))
+            diag.noteAnchorFailed({
+                chain:          data['CHAIN'],
+                reason:         data['STATUS'],
+                network:        data['NETWORK'],
+                version:        format,
+                checkpoint_seq: data['CHECKPOINT_SEQ'],
+                block_index:    data['BLOCK_INDEX']
+            });
 
         await this.indexerDb.createAnchorAction(data);
 
         // Head-side archive reassembly gate: the chunk-side gate in _parseContinuation only
-        // fires when the parent v1/v6 head already exists, so when the completing
+        // fires when the parent archive head already exists, so when the completing
         // continuation chunk is broadcast BEFORE its head every stored chunk is 'orphan' and
         // the reassembly CRC is never checked. Re-run the completeness + CRC check here when
         // the head lands last, applying the SAME status handling and index-coverage rule as
@@ -480,7 +504,7 @@ class Anchor {
         // across nodes.
         //
         // The head's own status may be 'valid' OR, at/after the flag day below,
-        // 'unverified': a node with no mirrored oracle_publish snapshot stores every v1/v6
+        // 'unverified': a node with no mirrored oracle_publish snapshot stores every archive
         // head 'unverified', yet the head still carries the same signed BATCH_CRC32 and the
         // chunk-side path verifies regardless of the parent head's status, so 'valid' alone
         // leaves the ordering nondeterminism open on exactly those nodes.
@@ -497,7 +521,7 @@ class Anchor {
         // do not re-argue it here.
         let admitUnverifiedHead = ahug.isArchiveHeadUnverifiedGateActive(
             Number(data['BLOCK_INDEX']), this.config['NETWORK']);
-        if(!error && (format === 1 || format === 6) &&
+        if(!error &&
            (data['STATUS'] === 'valid' || (admitUnverifiedHead && data['STATUS'] === 'unverified')) &&
            Number(data['TOTAL_CHUNKS']) > 1){
             // At/after the publisher-scoped-archive flag day, the head reassembles its OWN
@@ -511,6 +535,14 @@ class Anchor {
                 let crc = this._archiveCrc(b64);
                 if(crc === null || crc !== String(data['BATCH_CRC32'])){
                     console.warn("\t ANCHOR v" + format + " : batch " + data['MATCH_BATCH_SEQ'] + ' head-side reassembly CRC mismatch, flagging invalid_archive');
+                    diag.noteAnchorFailed({
+                        chain:           data['CHAIN'],
+                        reason:          'invalid_archive: head-side reassembly CRC mismatch',
+                        network:         data['NETWORK'],
+                        version:         format,
+                        match_batch_seq: data['MATCH_BATCH_SEQ'],
+                        block_index:     data['BLOCK_INDEX']
+                    });
                     await this.indexerDb.setAnchorArchiveStatus(Number(data['ACTION_INDEX']), 'invalid_archive');
                 }
             }
@@ -519,11 +551,333 @@ class Anchor {
         await this.mapper.createMappings(data);
     }
 
+    // ANCHOR v0: the per-network checkpoint BUNDLE.
+    //
+    // ONE action carries every chain checkpointed this cycle. The wire is a header
+    // (NETWORK, the bundle SNAPSHOT_BLOCK, SECTION_COUNT), SECTION_COUNT positional
+    // sections, and ONE publisher-attestation tail for the whole bundle. Each section is
+    // the checkpoint field order from CHAIN through its own signature list MINUS NETWORK:
+    // the header carries the network once, and this parser REBUILDS every section's
+    // XCHECKPOINT canonical with it, then WRITES it onto every section row so
+    // idx_anchor_checkpoint and getMaxAnchorCheckpointSeq(chain, network) keep working
+    // with no query change.
+    //
+    // Verdict is ALL-OR-NOTHING (spec D15). The publisher signed for every section, and
+    // the stale-seq guard is strictly-less, so the only stale section is a replay or a
+    // forgery rather than an ordinary cadence gap. One bad section therefore invalidates
+    // the whole action ('invalid: SECTION n <reason>') and writes NO reward; a partially
+    // credited bundle would let a forger pick which chains a real publisher gets paid for.
+    //
+    // Rows: one per section, section_index in WIRE order (0..SECTION_COUNT-1), each row
+    // carrying its own chain/block_index/checkpoint_seq/roots/signatures plus the
+    // denormalized network, publisher and publisher_attestations. The PK is
+    // (action_index, section_index), so rollback's generic `action_index >= ?` delete
+    // still drops a bundle's rows together.
+    async _parseBundle(params, data, error){
+
+        data['NETWORK']        = String(params[1] || '');
+        data['SNAPSHOT_BLOCK'] = params[2];
+        data['SECTION_COUNT']  = params[3];
+
+        if(!error && String(data['NETWORK']) !== String(this.config['NETWORK'] || ''))
+            error = 'invalid: NETWORK (not this network)';
+        if(!error && !/^[0-9]+$/.test(String(data['SNAPSHOT_BLOCK'])))
+            error = 'invalid: SNAPSHOT_BLOCK (format)';
+        if(!error && (!/^[0-9]+$/.test(String(data['SECTION_COUNT'])) || Number(data['SECTION_COUNT']) < 1))
+            error = 'invalid: SECTION_COUNT (format)';
+
+        // Positional extraction. A section is 13 fixed slots (CHAIN .. SIG_COUNT) plus
+        // 2*SIG_COUNT signature slots, so the cursor walks the sections and lands on the
+        // publisher tail. No length cap on SECTION_COUNT is needed: a forged count runs
+        // out of params on the first section it cannot fill, which fails the shape checks
+        // below and stops the walk.
+        const SECTION_FIXED_FIELDS = 13;
+        let sections = [];
+        let cursor   = 4;
+        // Chains already claimed by an earlier section of THIS bundle, for the D39
+        // duplicate guard below. Scoped to the walk so it cannot leak across actions.
+        let seenChains = new Set();
+        if(!error){
+            for(let i = 0; i < Number(data['SECTION_COUNT']); i++){
+                let s = {
+                    FORMAT:                    0,
+                    SECTION_INDEX:             i,
+                    NETWORK:                   data['NETWORK'],
+                    CHAIN:                     String(params[cursor]     || '').toUpperCase(),
+                    BLOCK_INDEX_CHECKPOINTED:  params[cursor + 1],
+                    BLOCK_HASH:                String(params[cursor + 2] || '').toLowerCase(),
+                    LEDGER_HASH:               String(params[cursor + 3] || '').toLowerCase(),
+                    ACTIONS_HASH:              String(params[cursor + 4] || '').toLowerCase(),
+                    CONTRACT_HASH:             String(params[cursor + 5] || '').toLowerCase(),
+                    CHECKPOINT_SEQ:            params[cursor + 6],
+                    // The section's OWN snapshot block. The bundle header's is the MAX over
+                    // sections (D6), and a lagging chain rides at its own; signatures were
+                    // produced over this one, so the canonical and the oracle_publish set
+                    // both resolve here rather than at the header's.
+                    SNAPSHOT_BLOCK:            params[cursor + 7],
+                    STATE_ROOT:                String(params[cursor + 8] || '').toLowerCase(),
+                    STATE_ROOT_VERSION:        params[cursor + 9],
+                    BLOCK_MERKLE_ROOT:         String(params[cursor + 10] || '').toLowerCase(),
+                    BLOCK_MERKLE_VERSION:      params[cursor + 11]
+                };
+                let reason = this._validateSectionShape(s, seenChains);
+                if(reason){ error = 'invalid: SECTION ' + i + ' ' + reason; break; }
+                seenChains.add(s.CHAIN);
+
+                let sigCount = parseInt(params[cursor + 12]);
+                if(!Number.isFinite(sigCount) || sigCount < 1){
+                    error = 'invalid: SECTION ' + i + ' SIG_COUNT'; break;
+                }
+                let sigs = [], sigReason = null;
+                for(let k = 0; k < sigCount; k++){
+                    let pubkey = params[cursor + SECTION_FIXED_FIELDS + 2 * k];
+                    let sig    = params[cursor + SECTION_FIXED_FIELDS + 2 * k + 1];
+                    if(!pubkey || !sig)                   { sigReason = 'missing sig data at index ' + k; break; }
+                    if(!/^[0-9a-fA-F]{64}$/.test(pubkey)) { sigReason = 'pubkey format at index ' + k;    break; }
+                    if(!/^[0-9a-fA-F]{128}$/.test(sig))   { sigReason = 'sig format at index ' + k;       break; }
+                    sigs.push({ pubkey: pubkey.toLowerCase(), sig: sig.toLowerCase() });
+                }
+                if(sigReason){ error = 'invalid: SECTION ' + i + ' ' + sigReason; break; }
+                s.SIGS = sigs;
+                sections.push(s);
+                cursor += SECTION_FIXED_FIELDS + 2 * sigCount;
+            }
+        }
+
+        // The header block is the election and attestation block, and §2.1 fixes it as the
+        // MAX over the sections. Checked rather than assumed: a header block higher than
+        // every section's would move the attestation round (and the reward's earn block)
+        // onto an oracle_publish set no section's signatures were ever bound to.
+        if(!error && sections.length > 0){
+            let maxSection = sections.reduce((m, s) => Math.max(m, Number(s.SNAPSHOT_BLOCK)), 0);
+            if(Number(data['SNAPSHOT_BLOCK']) !== maxSection)
+                error = 'invalid: SNAPSHOT_BLOCK (not the section maximum)';
+        }
+
+        // The bundle publisher tail, at the cursor the section walk left behind.
+        let publisherSigs = [];
+        if(!error){
+            try {
+                data['PUBLISHER'] = String(params[cursor] || '').toLowerCase();
+                if(!/^[0-9a-f]{64}$/.test(data['PUBLISHER'])) throw new Error('PUBLISHER format');
+                let attestCount = parseInt(params[cursor + 1]);
+                if(!Number.isFinite(attestCount) || attestCount < 1) throw new Error('ATTEST_SIG_COUNT');
+                for(let i = 0; i < attestCount; i++){
+                    let pubkey = params[cursor + 2 + 2 * i];
+                    let sig    = params[cursor + 2 + 2 * i + 1];
+                    if(!pubkey || !sig)                       throw new Error('missing attestation sig at index ' + i);
+                    if(!/^[0-9a-fA-F]{64}$/.test(pubkey))     throw new Error('attestation pubkey format at index ' + i);
+                    if(!/^[0-9a-fA-F]{128}$/.test(sig))       throw new Error('attestation sig format at index ' + i);
+                    publisherSigs.push({ pubkey: pubkey.toLowerCase(), sig: sig.toLowerCase() });
+                }
+            } catch(e){
+                error = 'invalid: ' + e.message;
+            }
+        }
+
+        // Stale-seq replay guard, per section, against that chain's own watermark. Strictly
+        // less, exactly as the archive leg reads it: an equal seq is a signature-bound
+        // re-broadcast that can only produce a duplicate row, while a genuinely lower seq
+        // is something the hub's selector cannot emit (its MAX subquery only ever climbs),
+        // so it is a replay or a forgery. Under D15 it takes the whole bundle down.
+        if(!error){
+            for(let s of sections){
+                let maxSeq = await this.indexerDb.getMaxAnchorCheckpointSeq(s.CHAIN, s.NETWORK);
+                if(maxSeq !== null && Number(s.CHECKPOINT_SEQ) < maxSeq){
+                    error = 'invalid: SECTION ' + s.SECTION_INDEX +
+                            ' CHECKPOINT_SEQ (stale; replay of an older checkpoint)';
+                    break;
+                }
+            }
+        }
+
+        // Verify each section's 2f+1 oracle_publish quorum over its OWN canonical, against
+        // the set at its OWN snapshot block. Sets are memoized per block so the common case
+        // (every section sharing the bundle block) costs one query, and so two sections at
+        // the same block can never be judged against two different sets.
+        let sets = new Map();
+        const oracleSetFor = async (snapshotBlock, network) => {
+            let key = String(snapshotBlock);
+            if(sets.has(key)) return sets.get(key);
+            let weighted   = swq.isStakeWeightedQuorumActive(Number(snapshotBlock), network);
+            let validators = weighted
+                ? await this.indexerDb.getStakeWeightsByCapability('oracle_publish', Number(snapshotBlock))
+                : await this.indexerDb.getValidatorsByCapability('oracle_publish', Number(snapshotBlock));
+            let entry = {
+                weighted, validators,
+                oracleN:     (validators && validators.length) ? validators.length : 0,
+                snapPubkeys: new Set((validators || []).map(v => String(v.pubkey).toLowerCase()))
+            };
+            sets.set(key, entry);
+            return entry;
+        };
+
+        let bundleSet = null;
+        if(!error){
+            // A single section with no locally mirrored snapshot makes the WHOLE bundle
+            // 'unverified', never a mix: the verdict is one column on N rows, and recovery
+            // re-verifies from the archived snapshots either way.
+            for(let s of sections){
+                let set = await oracleSetFor(s.SNAPSHOT_BLOCK, s.NETWORK);
+                if(set.oracleN === 0){ data['STATUS'] = 'unverified'; break; }
+            }
+        }
+        if(!error && !data['STATUS']){
+            for(let s of sections){
+                let set = await oracleSetFor(s.SNAPSHOT_BLOCK, s.NETWORK);
+                let canonical = this._canonical(s);
+                let validSigners = [], seen = new Set();
+                for(let sig of s.SIGS){
+                    let pk = String(sig.pubkey || '').toLowerCase();
+                    if(!pk || seen.has(pk)) continue;
+                    if(!set.snapPubkeys.has(pk)) continue;
+                    if(!ed25519.verify(canonical, sig.sig, sig.pubkey)) continue;
+                    // Marked seen only AFTER the signature verifies, matching the archive
+                    // leg and the hub/SDK/explorer/sync verifiers: marking on first
+                    // encounter lets a garbage-then-valid pair for one qualified validator
+                    // suppress the real signature and fail a quorate section closed.
+                    seen.add(pk);
+                    validSigners.push(pk);
+                }
+                let quorumMet = set.weighted
+                    ? swq.meetsStakeThreshold(set.validators, validSigners)
+                    : (validSigners.length >= ((set.oracleN <= 1) ? 1 : Math.max(2 * Math.floor((set.oracleN - 1) / 3) + 1, Math.ceil((set.oracleN + 1) / 2))));
+                if(!quorumMet){
+                    error = 'invalid: SECTION ' + s.SECTION_INDEX + ' insufficient ' +
+                            (set.weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + set.oracleN + ')');
+                    break;
+                }
+            }
+            if(!error) bundleSet = await oracleSetFor(data['SNAPSHOT_BLOCK'], data['NETWORK']);
+        }
+
+        // ONE publisher attestation for the whole bundle: reward type 'anchor_bundle',
+        // round_reference SNAPSHOT_BLOCK, qualifier 0, the FROZEN ANCHOR_REWARD_AMOUNT.
+        // A degraded or forged attestation never fails the anchor, exactly as on the
+        // archive leg: the sections still record 'valid', only the reward is skipped.
+        if(!error && bundleSet && bundleSet.oracleN > 0){
+            let rewardCanonical = this._rewardCanonical(data);
+            let attSigners = [], attSeen = new Set();
+            for(let s of publisherSigs){
+                let pk = String(s.pubkey || '').toLowerCase();
+                if(!pk || attSeen.has(pk)) continue;
+                if(!bundleSet.snapPubkeys.has(pk)) continue;
+                if(!ed25519.verify(rewardCanonical, s.sig, s.pubkey)) continue;
+                attSeen.add(pk);
+                attSigners.push(pk);
+            }
+            let attQuorumMet = bundleSet.weighted
+                ? swq.meetsStakeThreshold(bundleSet.validators, attSigners)
+                : (attSigners.length >= ((bundleSet.oracleN <= 1) ? 1 : Math.max(2 * Math.floor((bundleSet.oracleN - 1) / 3) + 1, Math.ceil((bundleSet.oracleN + 1) / 2))));
+            if(ar.isAnchorRewardDeriveActive(Number(data['SNAPSHOT_BLOCK']), data['NETWORK'])){
+                // At/above the derive-relocation flag-day the reward is materialized by the
+                // BTC indexer from the mirrored anchor_reward_attestations row (that is where
+                // the oracle_publish stake resolves; ANCHOR is DOGE-only, staking is BTC-only).
+                // This DOGE-side write always dropped silently, so skipping it is byte-neutral
+                // to the DOGE ledger. The attestation quorum above still runs.
+            } else if(attQuorumMet && bundleSet.snapPubkeys.has(String(data['PUBLISHER']))){
+                let rewardRound = Number(data['SNAPSHOT_BLOCK']);
+                // Qualifier 0: unlike the archive leg's reissuable MATCH_BATCH_SEQ, a
+                // bundle's round_reference IS the snapshot block, a height that only
+                // advances, so the (type, round) pair already names one logical reward.
+                let rewardQual  = arKey.rewardRoundQualifier('anchor_bundle', data['SNAPSHOT_BLOCK']);
+                let ok = await this.indexerDb.createValidatorReward(
+                    data['PUBLISHER'], rewardRound, 'anchor_bundle',
+                    ar.ANCHOR_REWARD_AMOUNT, Number(data['SNAPSHOT_BLOCK']), true, null, rewardQual);
+                if(ok)
+                    await this.indexerDb.reconcileAnchorRewardWinner(
+                        rewardRound, 'anchor_bundle',
+                        Number(data['BLOCK_INDEX']), Number(data['ACTION_INDEX']), rewardQual);
+            } else {
+                console.warn('\t ANCHOR v0 : publisher-attestation quorum not met or PUBLISHER not in oracle_publish set; reward skipped (bundle still valid)');
+            }
+        }
+
+        // The tail is persisted on EVERY section row (denormalized), keeping the shipped
+        // contract of these two columns: RAW wire bytes, UNVERIFIED transport, consumers
+        // re-verify. Written even when the bundle is invalid, so the on-chain record is
+        // complete for a later audit.
+        data['PUBLISHER_ATTESTATIONS'] = (publisherSigs.length > 0) ? JSON.stringify(publisherSigs) : null;
+        if(!data['STATUS']) data['STATUS'] = (error) ? error : 'valid';
+
+        console.log("\t ANCHOR v0 : " + data['NETWORK'] + ' @ snapshot ' + data['SNAPSHOT_BLOCK'] +
+                    ' (' + sections.length + ' section(s): ' + sections.map(s => s.CHAIN).join(',') + ')' +
+                    ' : ' + data['STATUS']);
+
+        // A bundle verdict is all-or-nothing, so one event carries every chain the
+        // rejected bundle would have checkpointed. A bundle too malformed to yield
+        // a section names no chain at all, which is itself the reason.
+        if(diag.isAnchorFailureStatus(data['STATUS']))
+            diag.noteAnchorFailed({
+                chain:          sections.map(s => s.CHAIN).join(','),
+                reason:         data['STATUS'],
+                network:        data['NETWORK'],
+                version:        0,
+                snapshot_block: data['SNAPSHOT_BLOCK'],
+                block_index:    data['BLOCK_INDEX']
+            });
+
+        // One row per section, in wire order. A bundle too malformed to yield a single
+        // section still records ONE row at section_index 0 carrying the header and the
+        // verdict, so a rejected action is never invisible on chain.
+        if(sections.length === 0){
+            await this.indexerDb.createAnchorAction(Object.assign({}, data, { SECTION_INDEX: 0 }));
+        } else {
+            for(let s of sections){
+                let row = Object.assign({}, data, s, {
+                    VALIDATOR_SIGNATURES: JSON.stringify(s.SIGS),
+                    STATUS:               data['STATUS']
+                });
+                delete row.SIGS;
+                await this.indexerDb.createAnchorAction(row);
+            }
+        }
+
+        await this.mapper.createMappings(data);
+    }
+
+    // Shape-check one v0 section's fixed fields. Returns the failure reason (which the
+    // caller prefixes with 'SECTION n ') or null when the section is well formed. Split
+    // out so the reason strings stay in one place and read the same as the archive leg's.
+    //
+    // `seenChains` is the set of chains earlier sections of the SAME bundle already
+    // claimed, which is why this is called in wire order and why the guard lives here
+    // rather than in a post-pass: the reason has to name the LATER section, the one that
+    // is the duplicate.
+    _validateSectionShape(s, seenChains){
+        if(ALLOWED_CHAINS.indexOf(s.CHAIN) === -1) return 'CHAIN (unknown)';
+        // D39: one chain, one section. The hub's selector groups by (chain, network) and
+        // can only ever produce one row per chain per bundle, so a repeat is malformed or
+        // forged. It must take the whole bundle down rather than be skipped, for the same
+        // reason a stale section does (D15): a second section for a chain is a SECOND
+        // checkpoint claim under one publisher signature, and every per-chain reader
+        // (idx_anchor_checkpoint, getanchoraction, the SDK's chain filter, the explorer's
+        // per-chain table) resolves a checkpoint identity to a row without knowing a
+        // sibling row contradicts it. Skipping the duplicate would also make the verdict
+        // depend on which copy the parser happened to reach first.
+        if(seenChains && seenChains.has(s.CHAIN)) return 'CHAIN (duplicate)';
+        if(!/^[0-9]+$/.test(String(s.BLOCK_INDEX_CHECKPOINTED)) ||
+           !/^[0-9]+$/.test(String(s.CHECKPOINT_SEQ)) ||
+           !/^[0-9]+$/.test(String(s.SNAPSHOT_BLOCK)))
+            return 'BLOCK_INDEX / CHECKPOINT_SEQ / SECTION_SNAPSHOT_BLOCK (format)';
+        for(let f of ['BLOCK_HASH', 'LEDGER_HASH', 'ACTIONS_HASH', 'CONTRACT_HASH']){
+            if(!/^[0-9a-f]{64}$/.test(String(s[f]))) return f + ' (format)';
+        }
+        // Roots are REQUIRED: a v0 bundle is root-bearing by construction (§2.1), so a
+        // rootless section is malformed rather than a legacy shape to tolerate.
+        if(!/^[0-9a-f]{64}$/.test(String(s.STATE_ROOT)))        return 'STATE_ROOT (format)';
+        if(!/^[0-9a-f]{64}$/.test(String(s.BLOCK_MERKLE_ROOT))) return 'BLOCK_MERKLE_ROOT (format)';
+        if(!/^[0-9]+$/.test(String(s.STATE_ROOT_VERSION)) ||
+           !/^[0-9]+$/.test(String(s.BLOCK_MERKLE_VERSION)))
+            return 'STATE_ROOT_VERSION / BLOCK_MERKLE_VERSION (format)';
+        return null;
+    }
+
     // The author an archive batch's chunk set is scoped to, or null when the
     // publisher-scoped flag day is not active for this batch, in which case every
     // caller keeps the legacy canonical-head behavior.
     //
-    // The gate is anchored to the batch's CANONICAL head (earliest v1/v6 row for the
+    // The gate is anchored to the batch's CANONICAL head (earliest archive-head row for the
     // seq): it is the one row every node resolves identically without consulting
     // status, so head-side and chunk-side verdicts for one batch always apply the SAME
     // rule. No head at all means no batch to scope, hence null. The height is
@@ -560,7 +914,7 @@ class Anchor {
         // flag day is inert (legacy canonical-head rule).
         let scope  = null;
         if(!error){
-            // The canonical head (earliest v1/v6 row for the seq, status-agnostic) is
+            // The canonical head (earliest archive-head row for the seq, status-agnostic) is
             // both the legacy parent AND the flag-day anchor, so a head and its chunks
             // can never be judged under two different rules.
             let canonical = await this.indexerDb.getAnchorV1ByBatchSeq(Number(data['MATCH_BATCH_SEQ']));
@@ -617,6 +971,19 @@ class Anchor {
         console.log("\t ANCHOR v2 : batch " + data['MATCH_BATCH_SEQ'] + ' chunk ' + data['CHUNK_INDEX'] +
                     '/' + data['TOTAL_CHUNKS'] + ' : ' + data['STATUS']);
 
+        // A continuation chunk carries no chain of its own; the batch seq is what
+        // ties it back to the head that names one.
+        if(diag.isAnchorFailureStatus(data['STATUS']))
+            diag.noteAnchorFailed({
+                chain:           parent ? parent.chain : undefined,
+                reason:          data['STATUS'],
+                network:         this.config['NETWORK'],
+                version:         2,
+                match_batch_seq: data['MATCH_BATCH_SEQ'],
+                chunk_index:     data['CHUNK_INDEX'],
+                block_index:     data['BLOCK_INDEX']
+            });
+
         await this.indexerDb.createAnchorAction(data);
 
         // When the last chunk lands, verify the reassembled archive against the
@@ -639,6 +1006,14 @@ class Anchor {
                 let crc = this._archiveCrc(b64);
                 if(crc === null || crc !== String(parent.batch_crc32)){
                     console.warn("\t ANCHOR v2 : batch " + data['MATCH_BATCH_SEQ'] + ' reassembly CRC mismatch, flagging invalid_archive');
+                    diag.noteAnchorFailed({
+                        chain:           parent.chain,
+                        reason:          'invalid_archive: reassembly CRC mismatch',
+                        network:         this.config['NETWORK'],
+                        version:         2,
+                        match_batch_seq: data['MATCH_BATCH_SEQ'],
+                        block_index:     data['BLOCK_INDEX']
+                    });
                     await this.indexerDb.setAnchorArchiveStatus(Number(parent.action_index), 'invalid_archive');
                 }
             }

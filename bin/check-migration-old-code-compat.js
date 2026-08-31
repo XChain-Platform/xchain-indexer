@@ -96,6 +96,34 @@ const OLD_STATEMENTS = {
                      actions_hash, contract_hash, checkpoint_seq, snapshot_block, validator_signatures)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '[]')`,
     },
+    // From the pre-ANCHOR-v7 db.createAnchorAction. It names no section_index and keys
+    // the exists-probe / UPDATE on action_index alone, which is exactly what the
+    // (action_index, section_index) primary key must not break: the added column has to
+    // carry a usable DEFAULT for the INSERT, and the widened key must still admit an old
+    // writer's single row per action.
+    anchor_actions: {
+        insert: `INSERT INTO anchor_actions
+                        (version, chain, network, block_index, block_hash, ledger_hash, actions_hash,
+                         contract_hash, checkpoint_seq, snapshot_block, state_root, state_root_version,
+                         block_merkle_root, block_merkle_version, match_batch_seq, match_count,
+                         batch_crc32, total_chunks, chunk_index, archive_b64, validator_signatures,
+                         publisher, publisher_attestations,
+                         status_id, block_index_doge, action_index)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        update: `UPDATE anchor_actions SET version=?, chain=?, network=?, block_index=?, block_hash=?,
+                        ledger_hash=?, actions_hash=?, contract_hash=?, checkpoint_seq=?, snapshot_block=?,
+                        state_root=?, state_root_version=?, block_merkle_root=?, block_merkle_version=?,
+                        match_batch_seq=?, match_count=?, batch_crc32=?, total_chunks=?, chunk_index=?,
+                        archive_b64=?, validator_signatures=?, publisher=?, publisher_attestations=?,
+                        status_id=?, block_index_doge=?
+                 WHERE action_index=?`,
+        exists: 'SELECT action_index FROM anchor_actions WHERE action_index=? LIMIT 1',
+        maxSeq: `SELECT MAX(a.checkpoint_seq) AS max_seq
+                   FROM anchor_actions a
+                   JOIN index_statuses s ON s.id = a.status_id
+                  WHERE a.chain = ? AND a.network = ?
+                    AND s.status IN ('valid', 'unverified')`,
+    },
     // From `git show b5c8fcf:src/stateCommitment.js` (the ref six of the fleet's nine
     // indexers were running on 2026-07-29). Seven columns named, so the migrations
     // that add contract_state_root and the escrow shadow column have to be
@@ -276,6 +304,12 @@ async function main(){
     if(OLD_STATEMENTS.state_checkpoints && affected.includes('state_checkpoints'))
         await raw(OLD_STATEMENTS.state_checkpoints.insert,
                   ['BTC', 'regtest', 500, 'h', 'l', 'a', 'c', 900000, 900000]);
+    const H64 = 'c'.repeat(64);
+    if(OLD_STATEMENTS.anchor_actions && affected.includes('anchor_actions'))
+        await raw(OLD_STATEMENTS.anchor_actions.insert,
+                  [1, 'BTC', 'regtest', 500, H64, H64, H64, H64, 900000, 900000,
+                   null, null, null, null, 0, 1, 'deadbeef', 1, null, 'Zm9v', '[]',
+                   null, null, validId, 700, 5001]);
     const ROOT = 'b'.repeat(64);
     if(OLD_STATEMENTS.state_tree_roots && affected.includes('state_tree_roots'))
         await raw(OLD_STATEMENTS.state_tree_roots.insert,
@@ -317,11 +351,18 @@ async function main(){
                 const rows = await raw('SELECT `' + col + '` AS v FROM `' + table + '`');
                 if(!rows.length) continue;
                 const wantNull = /\bNULL\b/i.test(tail) && !/NOT\s+NULL/i.test(tail);
-                const dflt     = (tail.match(/DEFAULT\s+'([^']*)'/i) || [])[1];
+                // Quoted OR bare: a numeric default is written unquoted (`DEFAULT 0`), and
+                // reading only the quoted form left every integer column's default
+                // unasserted - the note then printed `=undefined` and the case passed over
+                // exactly the claim it exists to make.
+                const dflt     = (tail.match(/DEFAULT\s+'([^']*)'/i) ||
+                                  tail.match(/DEFAULT\s+(-?\d+(?:\.\d+)?)\b/i) || [])[1];
                 for(const r of rows){
                     if(wantNull && r.v !== null)
                         throw new Error(table + '.' + col + ' should be NULL on legacy rows, saw ' + JSON.stringify(r.v));
-                    if(dflt !== undefined && r.v !== dflt)
+                    // Compared as strings: a numeric column comes back as a number while the
+                    // declared default is parsed out of the DDL text.
+                    if(dflt !== undefined && String(r.v) !== String(dflt))
                         throw new Error(table + '.' + col + ' should be the declared default ' +
                                         JSON.stringify(dflt) + ' on legacy rows, saw ' + JSON.stringify(r.v));
                 }
@@ -353,6 +394,29 @@ async function main(){
             await raw(OLD_STATEMENTS.state_checkpoints.insert,
                       ['BTC', 'regtest', 501, 'h2', 'l2', 'a2', 'c2', 900001, 900001]);
             notes.push('state_checkpoints: one row per seq still accepted (abort path writes normally)');
+        }
+        if(affected.includes('anchor_actions')){
+            const S = OLD_STATEMENTS.anchor_actions;
+            // The INSERT names no section_index, so the added NOT NULL column has to carry a
+            // usable DEFAULT or this throws under strict mode - which is the whole
+            // old-code-compatibility claim for the ANCHOR v7 primary-key change.
+            await raw(S.insert, [1, 'BTC', 'regtest', 501, H64, H64, H64, H64, 900001, 900001,
+                                 null, null, null, null, 1, 1, 'deadbeef', 1, null, 'Zm9v', '[]',
+                                 null, null, validId, 701, 5002]);
+            // The old UPDATE keys on action_index ALONE. Under the widened
+            // (action_index, section_index) key it must still find and rewrite the row an
+            // old writer inserted, which it does because that row is at section 0.
+            await raw(S.update, [1, 'BTC', 'regtest', 501, H64, H64, H64, H64, 900001, 900001,
+                                 null, null, null, null, 1, 2, 'deadbeef', 1, null, 'Zm9v', '[]',
+                                 null, null, validId, 701, 5002]);
+            if((await raw(S.exists, [5001])).length !== 1) throw new Error('anchor_actions exists-check broke');
+            const seq = await raw(S.maxSeq, ['BTC', 'regtest']);
+            if(!seq.length || Number(seq[0].max_seq) !== 900001)
+                throw new Error('anchor_actions replay-watermark read broke: ' + JSON.stringify(seq));
+            const sect = await raw('SELECT DISTINCT section_index AS s FROM anchor_actions');
+            if(sect.length !== 1 || Number(sect[0].s) !== 0)
+                throw new Error('an old writer\'s rows must all land at section 0, saw ' + JSON.stringify(sect));
+            notes.push('anchor_actions: old insert/update/exists/max-seq all OK, every old row at section 0');
         }
         if(affected.includes('state_tree_roots')){
             const S = OLD_STATEMENTS.state_tree_roots;

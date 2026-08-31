@@ -145,6 +145,79 @@ describe('Database.MIGRATION_PRECONDITIONS[validator-rewards derive_block_index]
     });
 });
 
+const QUALIFIER_FILE = '2026-08-24-validator-rewards-round-qualifier.sql';
+
+describe('Database.MIGRATION_PRECONDITIONS[validator-rewards round_qualifier] @regression @tier1', function () {
+
+    const pre = Database.MIGRATION_PRECONDITIONS[QUALIFIER_FILE];
+    // The converged shape: both qualifier columns present AND reward_unique carrying
+    // the qualifier as a UNIQUE index.
+    const present = { reward_col: 1, log_col: 1, key_col: 1 };
+
+    it('is registered', function () {
+        assert.ok(pre, QUALIFIER_FILE + ' must have a MIGRATION_PRECONDITIONS entry');
+        assert.strictEqual(typeof pre.sql, 'string');
+        assert.strictEqual(typeof pre.skipWhen, 'function');
+    });
+
+    it('binds the database name EXACTLY once (_migrationPreconditionSkip passes one parameter)', function () {
+        assert.strictEqual((pre.sql.match(/\?/g) || []).length, 1,
+            'the precondition query must carry exactly one bind parameter');
+        assert.match(pre.sql, /SELECT \? AS db/);
+        assert.match(pre.sql, /table_schema = p\.db/);
+    });
+
+    it('keys on the live INDEX shape, not merely on the column', function () {
+        // The columns arrive on their own (NOT NULL WITH DEFAULT, so alterTableForDrift
+        // ADDs them); the KEY does not. A predicate testing the column alone would
+        // baseline exactly the database this migration exists for.
+        assert.match(pre.sql, /information_schema\.statistics/i);
+        assert.match(pre.sql, /index_name = 'reward_unique'/);
+        assert.match(pre.sql, /column_name = 'round_qualifier'/);
+        assert.match(pre.sql, /non_unique = 0/);
+    });
+
+    it('names both qualifier columns the migration adds', function () {
+        assert.match(pre.sql, /table_name = 'validator_rewards'/);
+        assert.match(pre.sql, /table_name = 'anchor_reward_reconcile_log'/);
+    });
+
+    it('baselines when both columns and the qualified unique key are present', function () {
+        const reason = pre.skipWhen([present]);
+        assert.ok(reason, 'expected a skip reason when the converged shape is fully present');
+        assert.match(reason, /reward_unique/);
+        assert.match(reason, /round_qualifier/);
+    });
+
+    it('does NOT baseline the TRAP state: qualifier columns present, reward_unique still four-column', function () {
+        // The exact state the migration exists to converge, and the one a column-only
+        // predicate would silently have marked done: the drift reconciler ADDed both
+        // columns at boot while reconcileTableIndexes refused to rebuild the key it did
+        // not create, so the qualifier-aware writers run against the OLD identity.
+        assert.strictEqual(pre.skipWhen([{ ...present, key_col: 0 }]), null);
+    });
+
+    it('does NOT baseline when the validator_rewards column is missing', function () {
+        assert.strictEqual(pre.skipWhen([{ ...present, reward_col: 0 }]), null);
+    });
+
+    it('does NOT baseline when the reconcile-log column is missing', function () {
+        assert.strictEqual(pre.skipWhen([{ ...present, log_col: 0 }]), null);
+    });
+
+    it('does NOT baseline on an empty result set', function () {
+        assert.strictEqual(pre.skipWhen([]), null);
+    });
+
+    it('does NOT baseline when a count is NULL (unreadable)', function () {
+        assert.strictEqual(pre.skipWhen([{ ...present, key_col: null }]), null);
+    });
+
+    it('does NOT baseline when a count is unparsable', function () {
+        assert.strictEqual(pre.skipWhen([{ ...present, key_col: 'not-a-number' }]), null);
+    });
+});
+
 // The header rewrite changed the file's sha256, which is its identity in
 // schema_migrations, so every DB that applied a prior revision must heal rather
 // than fail the immutability guard forever.
@@ -317,6 +390,100 @@ describe('runMigrations() precondition baseline branch @regression @tier1', func
         const { inserts, result } = await runAgainst(66);
         assert.ok(result.pending.includes(FILE), 'expected ' + FILE + ' in result.pending, got: ' + JSON.stringify(result));
         assert.ok(!result.baselined.includes(FILE));
+        assert.strictEqual(inserts.length, 0, 'no ledger row should be inserted for a still-pending migration');
+    });
+});
+
+// Same end-to-end drive for the round-qualifier migration, whose predicate keys on the
+// live INDEX shape. The trap case is what makes this worth running through the real
+// runner branch rather than the predicate alone: a database whose qualifier COLUMNS were
+// added by the boot drift reconciler, while reward_unique is still the four-column key,
+// must come out PENDING with no ledger row - baselining it would record the migration as
+// done on exactly the schema it exists to converge.
+describe('runMigrations() precondition baseline branch, round_qualifier @regression @tier1', function () {
+
+    const fs     = require('fs');
+    const path   = require('path');
+    const crypto = require('crypto');
+
+    const MIG_DIR = path.join(__dirname, '..', '..', 'src', 'sql', 'migrations');
+    const sha256  = (s) => crypto.createHash('sha256').update(s).digest('hex');
+
+    // Every migration in the ledger EXCEPT the qualifier file, so it is the only one
+    // that reaches the apply loop and the only precondition that is evaluated.
+    function ledgerWithoutQualifier(){
+        const out = new Map();
+        for (const f of fs.readdirSync(MIG_DIR).filter(f => f.endsWith('.sql'))) {
+            out.set(f, sha256(fs.readFileSync(path.join(MIG_DIR, f), 'utf8')));
+        }
+        out.delete(QUALIFIER_FILE);
+        return out;
+    }
+
+    async function runAgainstShape(shape) {
+        const inserts = [];
+        const logged  = [];
+        const ledger  = ledgerWithoutQualifier();
+
+        const conn = {
+            query: async function (sql, params) {
+                if (/GET_LOCK/i.test(sql))     return [{ l: 1 }];
+                if (/RELEASE_LOCK/i.test(sql)) return [{}];
+                if (/SELECT name, checksum FROM schema_migrations/i.test(sql)) {
+                    return Array.from(ledger, ([name, checksum]) => ({ name, checksum }));
+                }
+                if (/CREATE TABLE IF NOT EXISTS schema_migrations/i.test(sql)) return {};
+                if (/round_qualifier/i.test(sql) && /information_schema/i.test(sql)) return [shape];
+                if (/^INSERT INTO schema_migrations/i.test(sql.trim())) { inserts.push(params); return {}; }
+                if (/^(UPDATE|INSERT|CREATE|ALTER|DROP)/i.test(sql.trim())) return {};
+                return [];
+            },
+            release: async function () {},
+        };
+        const db = {
+            dbName: 'test_indexer',
+            transactionConnection: null,
+            getConnection: async () => conn,
+            _ensureMigrationsLedger: async () => {},
+            _runMigrationsInner: Database.prototype._runMigrationsInner,
+            _migrationPreconditionSkip: Database.prototype._migrationPreconditionSkip,
+            _assertPubkeyColumnIsUncompressedWide: async () => {},
+            _assertStakeWeightOrderingCollation: Database.prototype._assertStakeWeightOrderingCollation,
+            _migrationMode: Database.prototype._migrationMode,
+            splitSqlStatements: Database.prototype.splitSqlStatements,
+            stripSqlLineComments: Database.prototype.stripSqlLineComments,
+            _destructiveAutoStatement: Database.prototype._destructiveAutoStatement,
+            _isIdRepairUpdate: Database.prototype._isIdRepairUpdate,
+        };
+        const realLog = console.log, realErr = console.error, realWarn = console.warn;
+        console.log = console.error = console.warn = (...a) => { logged.push(a.join(' ')); };
+        let result;
+        try {
+            result = await Database.prototype.runMigrations.call(db, {});
+        } finally {
+            console.log = realLog; console.error = realErr; console.warn = realWarn;
+        }
+        return { inserts, logged, result };
+    }
+
+    it('baselines when reward_unique already carries round_qualifier', async function () {
+        const { inserts, logged, result } = await runAgainstShape({ reward_col: 1, log_col: 1, key_col: 1 });
+        assert.ok(result.baselined.includes(QUALIFIER_FILE),
+            'expected ' + QUALIFIER_FILE + ' in result.baselined, got: ' + JSON.stringify(result));
+        assert.ok(!result.applied.includes(QUALIFIER_FILE), 'a baselined migration must not also be recorded as applied');
+        assert.ok(!result.pending.includes(QUALIFIER_FILE), 'a baselined migration must not stay pending');
+        assert.strictEqual(inserts.length, 1, 'exactly one ledger row should be inserted (the baseline)');
+        assert.strictEqual(inserts[0][0], QUALIFIER_FILE);
+        assert.ok(logged.some(l => /BASELINED/.test(l) && l.includes(QUALIFIER_FILE)),
+            'expected a BASELINED log line: ' + logged.join(' | '));
+    });
+
+    it('leaves it PENDING on the trap shape: columns drift-healed, key still four-column', async function () {
+        const { inserts, result } = await runAgainstShape({ reward_col: 1, log_col: 1, key_col: 0 });
+        assert.ok(result.pending.includes(QUALIFIER_FILE),
+            'expected ' + QUALIFIER_FILE + ' in result.pending, got: ' + JSON.stringify(result));
+        assert.ok(!result.baselined.includes(QUALIFIER_FILE),
+            'baselining the four-column key would record the migration as done on the one schema it exists to converge');
         assert.strictEqual(inserts.length, 0, 'no ledger row should be inserted for a still-pending migration');
     });
 });

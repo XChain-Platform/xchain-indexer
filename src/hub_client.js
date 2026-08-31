@@ -95,6 +95,18 @@ class HubClient {
         return this._requireHubAccepted('pushoracleprice', await this._call('pushoracleprice', priceData));
     }
 
+    // Push a validated PRICE batch (a signed window of rounds) to the hub for cross-chain
+    // aggregation via pushpricebatch. batchData mirrors pushPriceRound's payload one-for-one
+    // (source_chain, btc_block_height, sigs, action_index, block_index, push_generation) plus
+    // rounds[] carrying the window's per-round data and block_time, the landing block's own
+    // time. block_time is required here (not just for a single round) because the hub keys its
+    // pair-name flag day per round on it, and batching widens the hub/chain time skew from the
+    // ~10 minutes a single round carries to ~70 minutes for a six-round window.
+    async pushPriceBatch(batchData){
+        if(!this.enabled) return;
+        return this._requireHubAccepted('pushpricebatch', await this._call('pushpricebatch', batchData));
+    }
+
     // Notify the hub that a reorg rolled back PRICE actions on this chain so it can
     // retract any price_snapshots / oracle_prices rows seeded from those actions.
     // sourceChain:     the chain this indexer serves (BTC/LTC/DOGE)

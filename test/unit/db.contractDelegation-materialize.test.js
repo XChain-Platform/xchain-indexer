@@ -283,13 +283,13 @@ describe('DELEGATE v1 rotation reaches all three lookup surfaces @regression @ti
             seen.push({ sql, args });
             // The rotated key (77) is what the row now carries, so the Pass 1 select matches.
             if (/SELECT[\s\S]*FROM contract_stakes/i.test(sql) && args && args[1] === 77)
-                return [{ action_index: 100, amount: '10' }];
+                return [{ action_index: 100, amount: '10', source_address: 'owner1' }];
             return [];
         });
 
         const slashed = await db.slashContractStake(42, 77, 20, '4', 306);
 
-        assert.strictEqual(db.util.bcformat(slashed, 8), '4.00000000', 'the slash must actually deduct');
+        assert.strictEqual(db.util.bcformat(slashed.total, 8), '4.00000000', 'the slash must actually deduct');
         const upd = seen.find(c => /UPDATE contract_stakes SET amount/i.test(c.sql));
         assert.ok(upd, 'the stake row was debited');
         assert.strictEqual(db.util.bcformat(upd.args[0], 8), '6.00000000', 'residual written back');

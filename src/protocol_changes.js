@@ -257,7 +257,7 @@ const EMISSION_ISSUANCE_LIMITS_MAINNET_TIME = 9999999999;
 // The registry stays put across the 0.9.0 -> 0.10.0 move: every change registers
 // at 0.1.0 or 0.2.0, and isEnabled() ranks components numerically rather than
 // lexically, so 0.10.0 outranks both and the enabled set holds at 90 of 90.
-const CONSENSUS_VERSION = '0.11.0';
+const CONSENSUS_VERSION = '0.12.0';
 
 // Predicate for the NATIVE_FEE_PRICE_TIME_GATE flag-day. Its ONE consumer is
 // utility.getFeeOraclePrices (query selection); nothing else in src/ consults it.
@@ -449,6 +449,15 @@ class ProtocolChanges {
         // verified set earns the full-node oracle-round reward tranche. BTC-only.
         // (See xchain-documentation/protocol/actions/NODEPROOF.md)
         this.addChange('NODEPROOF',          '0.2.0',0,0,0,0,0,0);
+
+        // ROLLCALL: validator liveness presence proofs (v0; validator-broadcast).
+        // Inverts its NODEPROOF neighbour above: DOGE-only, because that is where
+        // every validator can already publish. Carries a BTC epoch height and is
+        // proved BTC-side at the epoch close. Registered at all-zero columns like
+        // every other action: the per-network HEIGHT gate is ROLLCALL_ACTIVATION in
+        // rollcall_activation.js, not this registry, so mainnet stays inert here.
+        // (See xchain-documentation/protocol/actions/rollcall.md)
+        this.addChange('ROLLCALL',           '0.2.0',0,0,0,0,0,0);
 
         this.addChange('UNIFIED_FEES',   '0.2.0',0,0,0,0,0,0);
         // INVENTORY-ONLY, gates nothing. Nothing calls

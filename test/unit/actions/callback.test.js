@@ -498,6 +498,19 @@ describe('Callback @regression @tier3', function () {
             const credited = indexer.indexerDb.createCredit.getCalls().map(c => c.args[3]);
             assert.ok(!credited.includes(HOLDER2));
         });
+
+        // Load-bearing: emptiness gates the check here, so a configured-but-empty ALLOW_LIST
+        // credits every holder. AIRDROP gates on list existence and would credit nobody.
+        it('an ALLOW_LIST that resolves empty still credits every holder', async function () {
+            setup({ ALLOW_LIST: 70 });
+            indexer.indexerDb.getList.resolves([]);
+            const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE: OWNER, BLOCK_INDEX: 100 });
+            await handler.parse(['0', 'TEST', null], data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+            const credited = indexer.indexerDb.createCredit.getCalls().map(c => c.args[3]);
+            assert.ok(credited.includes(HOLDER1));
+            assert.ok(credited.includes(HOLDER2));
+        });
     });
 
     it('falls back to a generic message when native fee fails without error text', async function () {

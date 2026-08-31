@@ -1122,7 +1122,23 @@ class Attest {
         // One request_id materializes exactly once. A duplicate v3 is rejected here
         // rather than deduped in the DB layer so the outcome is an explicit, stored
         // verdict every node reaches identically.
-        if(!error && await this.indexerDb.getAttestationRequestById(requestId))
+        //
+        // getRelayRequestById, not getAttestationRequestById: only an ADMITTED row
+        // consumes the id. The rejected verdict this branch writes is stored too, and
+        // counting stored rows made the guard self-blocking - request_id comes off the
+        // wire and is public before the federation broadcasts, so one malformed v3
+        // naming a pending id got stored as rejected and then answered this check for
+        // the real relay, permanently. Same reasoning as the relay-identity guard
+        // below, which already read only admitted rows.
+        //
+        // Ungated on purpose, and the reason is a measurement with an expiry date: at
+        // the time of the change no ATTEST action of any version had ever been admitted
+        // on any live network (three mainnet chains, three testnet chains, regtest), so
+        // no stored verdict anywhere changes and a from-genesis replay is byte-identical
+        // with or without this line. That is what removed the flag day, and it stops
+        // being true the moment the first v3 lands: any later change to which rows this
+        // guard counts reinterprets real history and needs an activation height.
+        if(!error && await this.indexerDb.getRelayRequestById(requestId))
             error = 'invalid: REQUEST_ID (already present on this chain)';
 
         // ...and one RELAY IDENTITY materializes exactly once, which the check above does

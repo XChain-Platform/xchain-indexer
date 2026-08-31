@@ -57,7 +57,9 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         db.getActiveValidators       = sinon.stub().resolves([{ pubkey: offender.pubHex, amount: '1000' }]);  // whole-federation set (XCONFIG membership)
         db.getOrCreatePubkeyId       = sinon.stub().resolves(7);
         db.hasCapabilitySlashEvent   = sinon.stub().resolves(false);
-        db.slashCapabilityStake      = sinon.stub().resolves('1000');
+        // { total, releases }: the burn reports WHOSE escrow it reduced, because the handler
+        // has to release the bond out of the staker's escrow before redirecting any of it.
+        db.slashCapabilityStake      = sinon.stub().resolves({ total: '1000', releases: [{ address: 'staker1', amount: '1000' }] });
         // #3163: the handler resolves a delegated offender to its owning stake source at
         // the equivocation height before burning. Default to null (offender stakes in its
         // own name); the delegated-offender case overrides this per-test.
@@ -111,6 +113,74 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         // 5th is ownerSourceId (#3163): null because this offender stakes in its own name.
         assert.deepStrictEqual(indexer.indexerDb.slashCapabilityStake.firstCall.args, [7, 200, 999, true, null]);
         assert.ok(indexer.indexerDb.createCapabilitySlashEvent.calledOnce, 'an audit event must be written');
+    });
+
+    // A bond is LOCKED in the staker's escrow, so a slash REDIRECTS tokens rather than
+    // minting them. These assert the whole ledger effect of one slash, not that a call was
+    // made: supply delta = credits - debits + escrows.
+    function ledgerOf(applied){
+        const [, , credits, debits, escrows] = applied.firstCall.args;
+        const sum = rows => (rows || []).reduce((a, r) => a + Number(r[1]), 0);
+        return { credits, debits, escrows, sum,
+                 delta: sum(credits) - sum(debits) + sum(escrows) };
+    }
+
+    it('releases the burned bond from the STAKERS escrow, per owner, not from the submitter', async function () {
+        indexer.config.STAKING = { CAPABILITIES: { cross_chain: { MIN_STAKE: '5000',
+            SLASH: { BOUNTY_BPS: 500 } } } };                       // 5% bounty, remainder BURNED
+        indexer.indexerDb.slashCapabilityStake = sinon.stub().resolves({
+            total: '1000',
+            releases: [{ address: 'stakerA', amount: '600' }, { address: 'stakerB', amount: '400' }]
+        });
+        const applied = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
+
+        const { msgA, msgB } = dexProof();
+        const d = data();
+        await handler.parse(params('cross_chain', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.strictEqual(d['STATUS'], 'valid');
+        const L = ledgerOf(applied);
+        // The release is keyed to whoever HOLDS the lock. A delegated key's bond lives on the
+        // owning source, so this is not data['SOURCE'] and cannot be assumed to be one address.
+        assert.deepStrictEqual(L.escrows.map(r => r[2]).sort(), ['stakerA', 'stakerB']);
+        assert.strictEqual(L.sum(L.escrows), -1000, 'the whole bond must come out of escrow');
+        assert.strictEqual(L.sum(L.credits), 50,    'only the 5% bounty re-enters circulation');
+        // 950 was redirected to a treasury with no address, i.e. genuinely burned. Supply
+        // falls by exactly that, and by nothing else.
+        assert.strictEqual(L.delta, -950,
+            'supply must fall by the UNREDIRECTED remainder - no more (a mint) and no less (a strand)');
+    });
+
+    it('a fully redirected slash moves no supply at all', async function () {
+        indexer.config.STAKING = { CAPABILITIES: { cross_chain: { MIN_STAKE: '5000',
+            SLASH: { BOUNTY_BPS: 500, TREASURY_ADDRESS: 'addrT' } } } };
+        indexer.indexerDb.slashCapabilityStake = sinon.stub().resolves({
+            total: '1000', releases: [{ address: 'stakerA', amount: '1000' }]
+        });
+        const applied = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
+
+        const { msgA, msgB } = dexProof();
+        const d = data();
+        await handler.parse(params('cross_chain', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        const L = ledgerOf(applied);
+        assert.strictEqual(L.sum(L.credits), 1000, 'bounty + treasury account for the whole bond');
+        assert.strictEqual(L.sum(L.escrows), -1000);
+        assert.strictEqual(L.delta, 0, 'nothing was destroyed, so supply must not move');
+    });
+
+    it('a zero burn writes no escrow release', async function () {
+        indexer.indexerDb.slashCapabilityStake = sinon.stub().resolves({ total: '0', releases: [] });
+        const applied = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
+
+        const { msgA, msgB } = dexProof();
+        const d = data();
+        await handler.parse(params('cross_chain', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.strictEqual(d['STATUS'], 'valid', 'an emptied bond still records a valid slash');
+        const L = ledgerOf(applied);
+        assert.strictEqual(L.escrows.length, 0);
+        assert.strictEqual(L.delta, 0);
     });
 
     // A delegated signing key owns no stake, so burning by its own pubkey
@@ -336,14 +406,160 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         assert.strictEqual(d['STATUS'], 'valid', 'the gate must leave sub-flag-day acceptance untouched');
     });
 
+    // ── XORACLEB: PRICE batch canonicals ──
+    //
+    // A batch canonical declares first_round/last_round and NO scalar `round`, which is the
+    // exact shape the XORACLE leg's invariant ("a content with no `round` cannot have come
+    // from buildPriceV0Payload") does not cover: under a shared tag its distinct-rounds
+    // guard would skip, and an honest validator that signed one v0 round and one batch
+    // at the same BTC anchor would read as a provable equivocator, for a full bond burn
+    // plus permanent capability disqualification. The distinct tag plus the composite
+    // ROUND_ID `<anchor>|<first_round>|<last_round>` is what keeps that from happening.
+
+    // buildPriceBatchPayload's emitted JSON (key order as the builder emits it).
+    function batchContent(first, last, btcHeight, price) {
+        return JSON.stringify({
+            first_round: first, last_round: last, btc_block_height: btcHeight,
+            rounds: [{ round: first, timestamp: 1700000000, btc_block_height: btcHeight,
+                       pairs: [{ pair: 'BTCUSD', price: String(price) }] }]
+        });
+    }
+    const batchRoundId = (anchor, first, last) => [anchor, first, last].join('|');
+
+    it('ACCEPTS a genuine XORACLEB equivocation (two batches over ONE window at one anchor)', async function () {
+        const anchor = 961123;
+        const rid = batchRoundId(anchor, 100, 105);
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, rid, 0, batchContent(100, 105, anchor, 60000));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, rid, 0, batchContent(100, 105, anchor, 61000));
+        const d = data();
+        await handler.parse(params('price', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.strictEqual(d['STATUS'], 'valid', 'got ' + d['STATUS']);
+        // The capability map must route XORACLEB to `price`, and the snapshot block must be
+        // the FIRST segment of the composite round id, not the whole id.
+        assert.deepStrictEqual(indexer.indexerDb.getValidatorsByCapability.firstCall.args, ['price', anchor]);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.calledOnce, 'a real double-signed batch must burn');
+    });
+
+    it('REJECTS an honest v0 round paired with an honest batch at ONE anchor', async function () {
+        // The defect this row exists to prevent: under a shared engine tag these two share
+        // the equiv key, differ in content, and burn a full bond off two honest signatures.
+        const anchor = 961123;
+        const v0 = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE, String(anchor), 0, priceContent(100, anchor, 60000));
+        const v2 = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, batchRoundId(anchor, 100, 105), 0,
+                                          batchContent(100, 105, anchor, 60000));
+        const d = data();
+        await handler.parse(params('price', offender.pubHex, v0, offender.privateKey, v2, offender.privateKey), d, null);
+
+        assert.notStrictEqual(d['STATUS'], 'valid', 'an honest v0 round and an honest batch are not one slot');
+        assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled,
+            'a validator that signed one honest round and one honest batch must keep its bond');
+    });
+
+    it('REJECTS two honest batches that split ONE window differently at one anchor', async function () {
+        // Two leaders may legitimately cut the same window at different points, so the
+        // window is in the round id and the two batches never collide on one key.
+        const anchor = 961123;
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, batchRoundId(anchor, 100, 105), 0,
+                                            batchContent(100, 105, anchor, 60000));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, batchRoundId(anchor, 100, 102), 0,
+                                            batchContent(100, 102, anchor, 60000));
+        const d = data();
+        await handler.parse(params('price', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.notStrictEqual(d['STATUS'], 'valid', 'got ' + d['STATUS']);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled,
+            'two honest sub-ranges at one anchor must keep the bond');
+    });
+
+    it('REJECTS a batch pair sharing one key whose contents declare DIFFERENT windows', async function () {
+        // The in-content leg of the same defence: contents that end at different rounds are
+        // two messages, not two versions of one, whatever the shared header says.
+        const anchor = 961123;
+        const rid = batchRoundId(anchor, 100, 105);
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, rid, 0, batchContent(100, 105, anchor, 60000));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, rid, 0, batchContent(100, 102, anchor, 60000));
+        const d = data();
+        await handler.parse(params('price', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.notStrictEqual(d['STATUS'], 'valid', 'got ' + d['STATUS']);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled,
+            'a window that differs only at its LAST round is still a distinct window');
+    });
+
+    it('REJECTS a batch pair whose content anchor disagrees with the ROUND_ID anchor', async function () {
+        const anchor = 961123;
+        const rid = batchRoundId(anchor, 100, 105);
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, rid, 0, batchContent(100, 105, anchor, 60000));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, rid, 0, batchContent(100, 105, 961999, 61000));
+        const d = data();
+        await handler.parse(params('price', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.ok(String(d['STATUS']).indexOf('ORACLE_BATCH btc_block_height') >= 0, 'got: ' + d['STATUS']);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
+    });
+
+    it('REJECTS an XORACLEB round id that is not <anchor>|<first>|<last>', async function () {
+        // The membership snapshot is read off segment 0, so a round id of another shape
+        // must never resolve to a block at all.
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, '961123|100', 0, batchContent(100, 105, 961123, 60000));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, '961123|100', 0, batchContent(100, 105, 961123, 61000));
+        const d = data();
+        await handler.parse(params('price', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.ok(String(d['STATUS']).indexOf('ORACLE_BATCH round id') >= 0, 'got: ' + d['STATUS']);
+        assert.ok(indexer.indexerDb.getValidatorsByCapability.notCalled);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
+    });
+
+    it('REJECTS an XORACLEB round id whose window runs backwards', async function () {
+        const rid = batchRoundId(961123, 105, 100);
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, rid, 0, batchContent(105, 100, 961123, 60000));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, rid, 0, batchContent(105, 100, 961123, 61000));
+        const d = data();
+        await handler.parse(params('price', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.ok(String(d['STATUS']).indexOf('ORACLE_BATCH window') >= 0, 'got: ' + d['STATUS']);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
+    });
+
+    it('REJECTS an XORACLEB proof labelled with a capability other than price', async function () {
+        const rid = batchRoundId(961123, 100, 105);
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, rid, 0, batchContent(100, 105, 961123, 60000));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, rid, 0, batchContent(100, 105, 961123, 61000));
+        const d = data();
+        await handler.parse(params('oracle_publish', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.ok(/CAPABILITY \(does not match engine\)/.test(d['STATUS']), 'got ' + d['STATUS']);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
+    });
+
+    it('the XORACLEB discrimination is NOT gated on SLASH_ORACLE_ROUND_DISCRIMINATED', async function () {
+        // A new tag has no pre-fix verdicts to reproduce, so there must be no height window
+        // in which two honest splits burn a bond.
+        ctx.protocolChanges.isEnabled = sinon.stub().callsFake(async (name) =>
+            name !== 'SLASH_ORACLE_ROUND_DISCRIMINATED');
+        const anchor = 961123;
+        const rid = batchRoundId(anchor, 100, 105);
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, rid, 0, batchContent(100, 105, anchor, 60000));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE_BATCH, rid, 0, batchContent(100, 102, anchor, 60000));
+        const d = data();
+        await handler.parse(params('price', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.notStrictEqual(d['STATUS'], 'valid', 'got ' + d['STATUS']);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
+    });
+
     // ── CHECKPOINT engine tag: two content families ──
     // XCHECKPOINT (root canonical, snapshot_block at index 9) and XANCPUB (reward
     // attestation, snapshot_block at index 3) share the CHECKPOINT engine tag.
 
-    // Realistic XCHECKPOINT raw canonical; snapshot_block is field index 9.
+    // Realistic XCHECKPOINT raw canonical, in the root-bearing shape an ANCHOR v0 section
+    // carries; snapshot_block is field index 9, ahead of the root suffix.
     function checkpointContent(snap, ledgerHash) {
         return ['XCHECKPOINT', 'BTC', 'regtest', '199', 'aa'.repeat(32), ledgerHash,
-                'cc'.repeat(32), 'dd'.repeat(32), '5', String(snap)].join('|');
+                'cc'.repeat(32), 'dd'.repeat(32), '5', String(snap),
+                'ee'.repeat(32), '1', 'ff'.repeat(32), '1'].join('|');
     }
     // XANCPUB reward-attestation canonical (per-chain leg); snapshot_block is field index 3.
     function ancpubContent(snap, publisher) {
@@ -385,6 +601,23 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
 
         assert.strictEqual(d['STATUS'], 'valid');
         assert.deepStrictEqual(indexer.indexerDb.getValidatorsByCapability.firstCall.args, ['oracle_publish', 100]);
+    });
+
+    it('ACCEPTS a bundle-leg XANCPUB equivocation (anchor_bundle scope, ANCHOR v0)', async function () {
+        // The bundle canonical repeats SNAPSHOT_BLOCK as its round_reference, keeping the
+        // SIX positional fields (D22) so this branch finds the block at index 3 with no
+        // third case in slash.js. Two attested publishers for one bundle round is a
+        // reward-attestation double-sign exactly as on the per-chain and archive legs.
+        const round = 'XANCPUB|bundle|regtest|100';
+        const base  = (pub) => ['XANCPUB', 'anchor_bundle', '100', '100', pub, '50'].join('|');
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, round, 0, base('aaaa'.repeat(16)));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, round, 0, base('bbbb'.repeat(16)));
+        const d = data();
+        await handler.parse(params('oracle_publish', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.strictEqual(d['STATUS'], 'valid');
+        assert.deepStrictEqual(indexer.indexerDb.getValidatorsByCapability.firstCall.args, ['oracle_publish', 100]);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.calledOnce);
     });
 
     it('REJECTS an XANCPUB pair that disagrees on snapshot_block', async function () {
@@ -429,16 +662,26 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
     const Anchor = require('../../../src/actions/anchor.js');
     const CP_SNAP = 100;
     function builtCheckpoint(ledgerHash) {
+        // FORMAT 0 = a bundle SECTION, the only checkpoint canonical the hub still signs.
+        // The root suffix it appends sits AFTER segment 9, so the slot read is unmoved -
+        // which is the point of pinning it against the real builder rather than a literal.
         return Anchor.prototype._canonical.call({}, {
             FORMAT: 0, CHAIN: 'BTC', NETWORK: 'regtest',
             BLOCK_INDEX_CHECKPOINTED: 199, BLOCK_HASH: 'aa'.repeat(32),
             LEDGER_HASH: ledgerHash, ACTIONS_HASH: 'cc'.repeat(32),
             CONTRACT_HASH: 'dd'.repeat(32), CHECKPOINT_SEQ: 5, SNAPSHOT_BLOCK: CP_SNAP,
+            STATE_ROOT: 'ee'.repeat(32), STATE_ROOT_VERSION: 1,
+            BLOCK_MERKLE_ROOT: 'ff'.repeat(32), BLOCK_MERKLE_VERSION: 1,
+        });
+    }
+    function builtBundleAttestation(publisher) {
+        return Anchor.prototype._rewardCanonical.call({}, {
+            FORMAT: 0, NETWORK: 'regtest', SNAPSHOT_BLOCK: CP_SNAP, PUBLISHER: publisher,
         });
     }
     function builtArchiveAttestation(publisher) {
         return Anchor.prototype._rewardCanonical.call({}, {
-            FORMAT: 6, CHAIN: 'BTC', NETWORK: 'regtest', MATCH_BATCH_SEQ: 7,
+            FORMAT: 1, CHAIN: 'BTC', NETWORK: 'regtest', MATCH_BATCH_SEQ: 7,
             SNAPSHOT_BLOCK: CP_SNAP, PUBLISHER: publisher, CHECKPOINT_SEQ: 5,
         });
     }
@@ -477,6 +720,26 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         assert.strictEqual(d['STATUS'], 'valid');
         assert.deepStrictEqual(indexer.indexerDb.getValidatorsByCapability.firstCall.args,
             ['oracle_publish', CP_SNAP]);
+    });
+
+    it('resolves the BUNDLE XANCPUB slot from a canonical the real builder produced', async function () {
+        const msgA = builtBundleAttestation('aaaa'.repeat(16));
+        const msgB = builtBundleAttestation('bbbb'.repeat(16));
+        assert.strictEqual(equivContent(msgA).split('|')[3], String(CP_SNAP),
+            'Anchor._rewardCanonical\'s v0 branch no longer carries SNAPSHOT_BLOCK at segment 3; ' +
+            'slash._resolveSlot reads index 3 for every XANCPUB family and would resolve the wrong ' +
+            'bond slot. Content was: ' + equivContent(msgA));
+        assert.strictEqual(equivContent(msgA).split('|').length, 6,
+            'the bundle canonical must keep SIX positional fields (D22): a five-field layout ' +
+            'would make every bundle equivocation read as invalid: snapshot_block');
+
+        const d = data();
+        await handler.parse(params('oracle_publish', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.strictEqual(d['STATUS'], 'valid');
+        assert.deepStrictEqual(indexer.indexerDb.getValidatorsByCapability.firstCall.args,
+            ['oracle_publish', CP_SNAP],
+            'slash.js needs NO third branch for the bundle: index 3 already finds its snapshot_block');
     });
 
     it('the hand-written checkpoint fixture still matches the real builder segment for segment', function () {

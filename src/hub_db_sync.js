@@ -89,7 +89,26 @@ const RETRACTION_COLUMNS = {
 // regardless of grace, and the value never enters any ledger row. There is no
 // historical byte-shape that a height gate would have to preserve.
 const HUB_SYNC_WATERMARK_GRACE_S = Object.freeze({
-    price:  600,
+    // Covers the PRICE hourly batch window (3600s), the post-window
+    // signing-round grace (300s, ORACLE_BATCH_GRACE_MS), and ~900s of
+    // headroom for DOGE confirmation and indexing before the batch lands
+    // locally: 3600 + 300 + 900 = 4800. The prior value (600) was calibrated
+    // to the 10-minute round cadence batching replaces; left at 600 it opens
+    // this barrier's escape hatch ~55 minutes before a batch window can have
+    // finished, letting a chain-only node process blocks against a mirror
+    // that is still missing the current window. Raising it means an isolated
+    // chain-only node can now trail the tip by up to ~75 minutes at this
+    // barrier instead of ~10 (it only ever LAGS, never diverges: both sides
+    // of the fee-staleness comparison are chain-derived, so a node that waits
+    // computes the same verdict as one that was live). Hub-connected nodes,
+    // which is every validator and the documented non-validator topology,
+    // never hit this escape hatch and are unaffected. Moves fleet-wide in
+    // lockstep with batching like every other value in this
+    // object, and needs no activation gate of its own by the reasoning below:
+    // node-local, never persisted or hashed, and a reindex replays with the
+    // mirror already far ahead of the tip so the barrier opens immediately
+    // regardless of grace.
+    price:  4800,
     oracle: 600,
     match:  120,
     // Calls carry their OWN margin, currently equal to match's, because the two
@@ -665,20 +684,76 @@ class HubDbSync {
             return null;
         }
 
+        // Clear anything the mirror holds for a network other than the one it serves,
+        // BEFORE the cursor below is read from it, and keep the resolved scope for every
+        // id read in this bootstrap. Null scope means the scope could not be proven, and
+        // then nothing is deleted and every read stays unscoped (see _mirrorNetworkScope).
+        let scope = await this._mirrorNetworkScope(table);
+        if (scope) await this._purgeForeignNetworkRows(table, scope);
+
         // Determine the highest existing ID in the local copy so we only fetch newer rows.
         // EXCEPT the FULL_REPAGE_TABLES (see above): a since_id = MAX(local id) cursor is
         // INSERT-shaped and can never re-fetch an in-place upgrade (and capability_snapshots
         // also has locally-assigned ids). Re-page those from 0; the natural-key UNIQUE +
         // idempotent _applyRow (INSERT IGNORE / ODKU) dedupe, and the in-loop cursor still
         // advances off the hub's wire ids.
+        //
+        // The read is network-scoped where the table supports it: an id is the CURRENT
+        // hub's auto-increment value, so a row from any other hub's id space is not a
+        // position in this hub's stream and must not seed a cursor into it.
         let lastId = 0;
         if (!FULL_REPAGE_TABLES.includes(table)) {
-            try {
-                let rows = await this.hubDb.doQuery('SELECT MAX(id) AS max_id FROM ' + table);
-                if (rows.length > 0 && rows[0].max_id) lastId = Number(rows[0].max_id);
-            } catch (e) {
-                // Table may not exist yet; bootstrap starts at 0
-            }
+            lastId = await this._localMaxId(table, scope);
+        }
+
+        // Second fence on the same class, for the id spaces no local column can separate
+        // (two hubs on the SAME network, so every row scopes in; or the SAME hub after its
+        // database was rebuilt, which restarts the auto-increment at 1). A cursor above
+        // every id the hub holds cannot be a position in its stream: since_id asks for rows
+        // past the end of its table and the drain reports zero rows on every attempt with
+        // no other signal. The hub states its own MAX(id) per table in the subscription
+        // ready message, so compare against that and start the cursor over when the local
+        // one sits above it.
+        //
+        // ABSENT IS NOT ZERO, and conflating them is what let a rebuilt hub strand this
+        // mirror forever. An older hub that advertises nothing leaves the key ABSENT and
+        // must stay on the fail-open path (the field is additive). A hub that advertises
+        // 0 has SUCCESSFULLY read its own empty table: HubDbBroadcaster only assigns a
+        // number when the query returns, and leaves the key absent when it throws. So 0 is
+        // a measurement, and it is the single strongest signal a rebuild produces, because
+        // a freshly rebuilt hub advertises exactly 0 until its first row lands. Gating this
+        // fence on `readyCeiling > 0` discarded precisely that measurement, so the one
+        // state the fence exists for was the one state it could not see.
+        //
+        // THE CURSOR IS ONLY HALF OF IT. Re-paging from 0 fixes where we READ but not what
+        // we HOLD, and for these tables that is not enough in two compounding ways. Readers
+        // take the newest row (state_checkpoints readers take MAX(checkpoint_seq)), so rows
+        // from the old id space keep winning over everything the re-page delivers. And the
+        // apply is id-parity INSERT IGNORE, so a stale row SITTING ON an id the rebuilt hub
+        // now reuses silently drops the real row - the same mechanism _purgeForeignNetworkRows
+        // documents below. Both are fixed only by clearing the table for this scope first.
+        //
+        // Deletion clears the bar that method sets ("provable from the row and this mirror's
+        // own configuration, with no dependence on what one snapshot response happened to
+        // contain"). The ceiling is the SOURCE's authoritative statement about its own id
+        // space, not the contents of a page: a paging hole, a filtered endpoint or a partial
+        // drain cannot move it. It is unfiltered for exactly the tables this fence governs -
+        // FULL_REPAGE_TABLES never reach here (their cursor is already 0), which is what
+        // keeps the two status-filtered ceilings the broadcaster computes, cross_chain_matches
+        // and cross_chain_calls, out of this comparison; they would understate.
+        //
+        // Fail-safe direction: a false trip costs one full re-page of a small append-only
+        // table and converges to an exact copy of the source, which is what the mirror is
+        // for. Not tripping strands the mirror silently and permanently.
+        let readyCeiling = (this._readyMaxIds && this._readyMaxIds[table] != null)
+            ? Number(this._readyMaxIds[table]) : NaN;
+        if (lastId > 0 && Number.isFinite(readyCeiling) && lastId > readyCeiling) {
+            console.warn('HubDbSync: local ' + table + ' cursor ' + lastId + ' sits above the hub ceiling ' +
+                readyCeiling + ', so the local rows are not from this hub id space' +
+                (readyCeiling === 0 ? ' (the hub reports an EMPTY table, the signature of a rebuilt hub database)' : '') +
+                '; clearing the mirror for this scope and re-paging from 0');
+            await this._purgeRebuiltSourceRows(table, scope, lastId, readyCeiling);
+            lastId = 0;
         }
 
         // Page until a SHORT page. The previous single-fetch version treated any
@@ -765,11 +840,10 @@ class HubDbSync {
         // in-place upgrades this catch-up would otherwise try to chase (#2491).
         let hubReadyMaxId = this._readyMaxIds && this._readyMaxIds[table];
         if (hubReadyMaxId && applyErrors === 0 && !FULL_REPAGE_TABLES.includes(table)) {
-            let localRows = [];
-            try {
-                localRows = await this.hubDb.doQuery('SELECT MAX(id) AS max_id FROM ' + table);
-            } catch (e) { /* ignore */ }
-            let localMax = (localRows.length > 0 && localRows[0].max_id) ? Number(localRows[0].max_id) : 0;
+            // Same network scope as the cursor read: an unscoped MAX(id) here compares a
+            // foreign hub's id against this hub's ceiling and reaches the opposite verdict
+            // about whether a gap exists.
+            let localMax = await this._localMaxId(table, scope);
             if (localMax < hubReadyMaxId) {
                 console.log('HubDbSync: gap detected in ' + table + ' (local=' + localMax +
                             ' hub_ready=' + hubReadyMaxId + '), fetching catch-up rows');
@@ -858,6 +932,138 @@ class HubDbSync {
 
         if (!fullyDrained) return null;
         return watermark !== null ? watermark : 0;
+    }
+
+    // The network this mirror may hold rows for, or null when that cannot be proven.
+    //
+    // A hub is deployed per network and stamps its own network on every federation-state
+    // row it serves, so a mirrored row carrying a different one was served by a hub this
+    // mirror no longer follows. Two conditions must both hold before anything is scoped
+    // on that basis: the consumer told this client which network it serves (the display
+    // mirror in the explorer does not, and a null return leaves the unscoped behavior
+    // exactly as it is), and the LOCAL mirror table actually carries the column. The
+    // second check reads the primed column cache rather than a hardcoded table list, so
+    // a table that gains or loses the column is picked up from the schema itself.
+    async _mirrorNetworkScope(table) {
+        if (typeof this.network !== 'string' || this.network === '') return null;
+        let cols;
+        try { cols = await this._localColumns(table); } catch (e) { return null; }
+        return (cols && typeof cols.has === 'function' && cols.has('network')) ? this.network : null;
+    }
+
+    // Highest local id for a mirrored table, restricted to `scope`'s network when one was
+    // proven. Returns 0 when nothing matches or the read fails (the table may not exist
+    // yet), which starts the caller's cursor at the beginning of the hub's table.
+    async _localMaxId(table, scope) {
+        try {
+            let sql  = 'SELECT MAX(id) AS max_id FROM ' + table + (scope ? ' WHERE network = ?' : '');
+            let rows = await this.hubDb.doQuery(sql, scope ? [scope] : undefined);
+            if (rows && rows.length > 0 && rows[0].max_id) return Number(rows[0].max_id);
+        } catch (e) {
+            // Table may not exist yet; the caller starts at 0.
+        }
+        return 0;
+    }
+
+    // Delete mirrored rows belonging to a network other than the one this mirror serves.
+    //
+    // Pointing an indexer at a hub for a different network leaves every row the earlier
+    // hub served sitting in the mirror, carrying that hub's id space, and three separate
+    // things break while they are there. Readers scope every query by network
+    // (db.getPendingAnchorRewardAttestations), so the rows can never be consumed. The
+    // bootstrap cursor is a MAX(id) over the table, so a foreign row with a higher id
+    // than anything the current hub holds makes since_id ask for rows past the end of the
+    // hub's table and the drain reports zero rows on every bootstrap for the life of the
+    // mirror. And those foreign ids SIT ON the ids the current hub's own rows carry, where
+    // the id-parity INSERT IGNORE apply drops the real row without an error, so scoping
+    // the cursor on its own would still leave the mirror empty of the rows it should hold.
+    //
+    // Deletion is safe here in a way that "delete what the hub did not serve" is not:
+    // belonging to another network is a property of the ROW, provable from the row and
+    // this mirror's own configuration, with no dependence on what one snapshot response
+    // happened to contain. A filtered snapshot endpoint, a paging hole or a partial drain
+    // can each make a valid row look unserved; none of them can make it change network.
+    async _purgeForeignNetworkRows(table, network) {
+        let result;
+        try {
+            result = await this.hubDb.doQuery('DELETE FROM ' + table + ' WHERE network <> ?', [network]);
+        } catch (e) {
+            console.warn('HubDbSync: could not clear foreign-network rows from ' + table + ':', e);
+            return 0;
+        }
+        // doQuery collapses a non-transactional query error into [], which carries no
+        // affectedRows and is otherwise indistinguishable from a clean zero-row delete.
+        // Say so: an unreported purge leaves the cursor poisoned and the table draining
+        // zero rows, which is precisely the silent stall this method exists to end.
+        let removed = Number(result && result.affectedRows);
+        if (!Number.isFinite(removed)) {
+            console.warn('HubDbSync: foreign-network purge of ' + table + ' reported no result; ' +
+                'if the mirror keeps draining zero rows, this read is where to look');
+            return 0;
+        }
+        if (removed <= 0) return 0;
+        console.warn('HubDbSync: removed ' + removed + ' row(s) from ' + table + ' belonging to a network ' +
+            'other than ' + network + '; a mirror holds only what the hub it follows serves, and those rows ' +
+            'block both the id cursor and the id-parity apply');
+        return removed;
+    }
+
+    // Clear a mirrored table whose local rows belong to an id space the hub no longer has.
+    //
+    // The trigger is the caller's ceiling comparison: the hub advertised its own MAX(id)
+    // for this table and the local cursor sits above it. On an append-only, never-retracted
+    // table (the only kind this fence governs) that is not possible while both sides share
+    // an id space, so the source's has been replaced - a rebuilt hub database restarting
+    // its auto-increment at 1, or a different hub on the same network.
+    //
+    // Why the whole scope and not just the rows above the ceiling. The rows above it are
+    // provably gone from the source, but the ones at or below it are the worse half: after
+    // a rebuild, local id 5 and hub id 5 are DIFFERENT ROWS that merely share a number, and
+    // the id-parity INSERT IGNORE apply then drops the hub's real row on arrival without an
+    // error. Leaving them would re-page the whole table and still mirror almost none of it.
+    //
+    // Scoped exactly like the cursor that detected the problem, so on a mirror serving one
+    // network this touches only that network's rows and leaves a null scope unscoped rather
+    // than widening the delete beyond what was proven.
+    async _purgeRebuiltSourceRows(table, scope, localMax, ceiling) {
+        // NO PROVEN SCOPE, NO DELETE. Without a network this would be an unqualified
+        // DELETE FROM <table>, and the caller reaches here on evidence about an ID SPACE,
+        // which is a far thinner warrant than a whole-table wipe. Two consumers land here
+        // with a null scope: one that named no network (the explorer's display mirror) and
+        // one whose mirror table has no network column, and neither has proven which rows
+        // are even in scope. _mirrorNetworkScope and _purgeForeignNetworkRows already take
+        // exactly this position, and it would be strange for the more speculative delete to
+        // be the bolder one. The cursor still restarts, which is the pre-existing behaviour
+        // for these consumers and leaves them no worse than before.
+        if (!scope) {
+            console.warn('HubDbSync: ' + table + ' cursor ' + localMax + ' sits above the hub ceiling ' +
+                ceiling + ', but this mirror has no proven network scope, so the retired rows are LEFT IN ' +
+                'PLACE (an unscoped delete here would clear the whole table). Re-paging only; if this mirror ' +
+                'keeps serving rows the hub does not have, give it a network.');
+            return 0;
+        }
+        let result;
+        try {
+            result = await this.hubDb.doQuery('DELETE FROM ' + table + ' WHERE network = ?', [scope]);
+        } catch (e) {
+            console.warn('HubDbSync: could not clear the stale id space from ' + table + ':', e);
+            return 0;
+        }
+        // Same reasoning as the foreign-network purge: doQuery collapses a non-transactional
+        // error into [], which is indistinguishable from a clean zero-row delete. Say so,
+        // because an unreported purge here leaves the id-parity collision in place and the
+        // re-page below then applies almost nothing, which is the silent stall this exists to end.
+        let removed = Number(result && result.affectedRows);
+        if (!Number.isFinite(removed)) {
+            console.warn('HubDbSync: rebuilt-source purge of ' + table + ' reported no result; ' +
+                'if the mirror keeps serving rows the hub does not have, this read is where to look');
+            return 0;
+        }
+        if (removed <= 0) return 0;
+        console.warn('HubDbSync: removed ' + removed + ' row(s) from ' + table + ' carrying a retired id space ' +
+            '(local cursor ' + localMax + ' above the hub ceiling ' + ceiling + '); the mirror will be rebuilt ' +
+            'from the hub in full');
+        return removed;
     }
 
     // Converge the half of a retract/revive the bootstrap cannot re-deliver (#3211).
@@ -2433,3 +2639,6 @@ async function ensureTables(dbConn, sqlDir) {
 
 module.exports = HubDbSync;
 module.exports.ensureTables = ensureTables;
+// Exported so tests assert against the frozen source of truth rather than
+// restating its numbers, which would let a future change here pass a stale test.
+module.exports.HUB_SYNC_WATERMARK_GRACE_S = HUB_SYNC_WATERMARK_GRACE_S;

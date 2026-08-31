@@ -16,12 +16,13 @@
  *
  * Durable retry queue for best-effort pushes to xchain-hub.
  *
- * The PRICE handlers push validated rounds (PRICE v0) and oracle prices
- * (PRICE v1) to the hub. Those pushes are network calls and can fail when the
- * hub is restarting, overloaded, or partitioned. The raw on-chain action is
- * always retained locally in the `prices` table, but the hub never reads that
- * table, so a dropped push used to permanently remove the row from the hub's
- * oracle_prices / price_snapshots and from every indexer that mirrors the hub.
+ * The PRICE handlers push validated rounds (PRICE v0), oracle prices
+ * (PRICE v1), and batches of rounds (PRICE v0) to the hub. Those pushes are
+ * network calls and can fail when the hub is restarting, overloaded, or
+ * partitioned. The raw on-chain action is always retained locally in the
+ * `prices` table, but the hub never reads that table, so a dropped push used
+ * to permanently remove the row from the hub's oracle_prices / price_snapshots
+ * and from every indexer that mirrors the hub.
  *
  * To make those pushes durable, EVERY push is persisted to the
  * `pending_hub_pushes` table up front (write-ahead), inside the same block
@@ -30,13 +31,15 @@
  * delivered live (push failure, hub outage, or a crash in that window) survives
  * for this poller. It drains that table on a fixed interval,
  * re-sending each row with exponential backoff until the hub accepts it (the
- * hub's pushpriceround / pushoracleprice handlers dedupe, so a replay the hub
- * already has returns cleanly). A `price_round` row that keeps failing past the
- * attempt cap is marked `failed`, which stops the retries, and the same drain tick
- * sweeps terminal rows once they pass the retention window so the table stays
- * bounded. `oracle_price` and the `*_retraction` rows carry NO cap: neither is
- * re-derivable from a later block, so they stay `pending` and retry at the max
- * backoff until the hub takes them (see _attempt).
+ * hub's pushpriceround / pushoracleprice / pushpricebatch handlers dedupe, so a
+ * replay the hub already has returns cleanly). A `price_round` row that keeps
+ * failing past the attempt cap is marked `failed`, which stops the retries, and
+ * the same drain tick sweeps terminal rows once they pass the retention window
+ * so the table stays bounded. `oracle_price`, `price_batch`, and the
+ * `*_retraction` rows carry NO cap: none is re-derivable from a later block
+ * (a `price_batch` is the SOLE carrier of every round in its window for a
+ * chain-only node), so they stay `pending` and retry at the max backoff until
+ * the hub takes them (see _attempt).
  *
  ********************************************************************/
 
@@ -227,6 +230,9 @@ class HubPushQueue {
                 await this.hubClient.pushPriceRound(payload);
             } else if(row.push_type === 'oracle_price'){
                 await this.hubClient.pushOraclePrice(payload);
+            } else if(row.push_type === 'price_batch'){
+                // PRICE v0: a signed window of rounds, delivered to pushpricebatch.
+                await this.hubClient.pushPriceBatch(payload);
             } else if(row.push_type === 'price_retraction'){
                 // Reorg retraction parked by rollback.js when the live RPC failed.
                 // pushpricereorg is idempotent over a replayed range. A deferred drain bounds the
@@ -272,11 +278,22 @@ class HubPushQueue {
             // as safe as it is for a retraction. `price_round` keeps the cap: price.js says it IS
             // re-derivable, so it stays disposable.
             //
+            // `price_batch` (PRICE v0) is durable for the SAME reason, not the opposite one: unlike
+            // a single `price_round`, which price.js can re-derive from the on-chain action alone, a
+            // batch is the SOLE carrier of every round in its window for a chain-only node with no
+            // hub of its own. Retiring a `price_batch` row to 'failed' after the finite cap does not
+            // just lose one re-derivable round, it permanently destroys up to an hour of price
+            // history (ORACLE_BATCH_WINDOW_ROUNDS rounds) that no later block or replay can recover.
+            // Do NOT "simplify" this back to matching `price_round`'s disposable classification: the
+            // two push types look like siblings but carry opposite re-derivability, which is exactly
+            // why they take opposite cap treatment.
+            //
             // Retrying forever is only bounded because HubClient resolves TERMINAL hub rejections
             // rather than throwing them: a payload the hub can never accept leaves the
             // queue on the delivered path, so nothing immortal accumulates here.
             let isDurable = typeof row.push_type === 'string' &&
-                (row.push_type.endsWith('_retraction') || row.push_type === 'oracle_price');
+                (row.push_type.endsWith('_retraction') || row.push_type === 'oracle_price' ||
+                 row.push_type === 'price_batch');
             let cap = isDurable ? Number.MAX_SAFE_INTEGER : this.maxAttempts;
             await this.indexerDb.recordHubPushAttempt(row.id, msg, cap);
             console.warn('HubPushQueue: push failed for row ' + row.id +

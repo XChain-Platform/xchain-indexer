@@ -91,6 +91,10 @@ const ENGINE_CAPABILITY = {
     [eq.ENGINE_TAGS.XCALL]:      'cross_chain',
     [eq.ENGINE_TAGS.CHECKPOINT]: 'oracle_publish',
     [eq.ENGINE_TAGS.ORACLE]:     'price',
+    // PRICE batches are signed by the same price-capable set as v0 rounds, under the
+    // same locked snapshot, so they burn the same bond. The tag is distinct only so a v0
+    // round and a batch at one BTC anchor can never share an equiv key.
+    [eq.ENGINE_TAGS.ORACLE_BATCH]: 'price',
     [eq.ENGINE_TAGS.ATTEST]:     'attestation',
     [eq.ENGINE_TAGS.CONFIG]:     CONFIG_CAPABILITY,
 };
@@ -106,6 +110,20 @@ function _parseOracleContent(content){
     if(obj === null || typeof obj !== 'object' || Array.isArray(obj)) return null;
     let num = (v) => Number.isInteger(v) ? v : null;
     return { round: num(obj.round), height: num(obj.btc_block_height) };
+}
+
+// Read the (first_round, last_round, btc_block_height) triple out of an XORACLEB signed
+// content (ed25519.buildPriceBatchPayload's JSON.stringify output). A batch declares a
+// WINDOW and no scalar `round`, which is why it carries its own engine tag and its own
+// reader here. Same null discipline as _parseOracleContent: an absent or non-integer field
+// yields null rather than 0, so two absent windows never compare EQUAL and re-open the
+// false-pair hole.
+function _parseBatchContent(content){
+    let obj = null;
+    try { obj = JSON.parse(String(content)); } catch(e){ return null; }
+    if(obj === null || typeof obj !== 'object' || Array.isArray(obj)) return null;
+    let num = (v) => Number.isInteger(v) ? v : null;
+    return { first: num(obj.first_round), last: num(obj.last_round), height: num(obj.btc_block_height) };
 }
 
 class Slash {
@@ -264,7 +282,7 @@ class Slash {
             ' : key=' + equivKey.substring(0, 24) + '...' +
             ' : ' + status);
 
-        let credits = [], debits = [];
+        let credits = [], debits = [], escrows = [];
 
         if(status === 'valid'){
             // Burn the whole bond (active stakes + cooldown unstakes); returns total XCHAIN burned.
@@ -286,15 +304,26 @@ class Slash {
             // that is deliberate, not a rejection, so the outcome never depends on stake
             // motion after the offence.
             let ownerSourceId = await this.indexerDb.getStakeSourceForDelegatedPubkey(pubkeyId, snapshotBlock);
-            let burned = await this.indexerDb.slashCapabilityStake(pubkeyId, data['BLOCK_INDEX'], data['ACTION_INDEX'], burnPending, ownerSourceId);
+            let burn   = await this.indexerDb.slashCapabilityStake(pubkeyId, data['BLOCK_INDEX'], data['ACTION_INDEX'], burnPending, ownerSourceId);
+            let burned = burn.total;
 
             // Bounty / treasury split. Governance config (Phase D); absent → pure burn.
             let split = this._bountyTreasurySplit(capability, burned);
 
-            // Bounty re-enters circulation to the submitter; treasury to its destination
-            // (a configured address, else BURN = no credit). Burned stake left circulation
-            // at STAKE time, so there is NO debit here; only the redirected credits.
             let gas = this.config['GAS'];
+            // Release the bond from the staker's escrow BEFORE redirecting any of it: a bond
+            // is LOCKED at STAKE time, so the credits below move tokens already inside the
+            // supply equation. Supply falls by exactly the un-redirected remainder.
+
+            // Keyed per owner, never to data['SOURCE']: one burn spans several rows, and a
+            // DELEGATED key's bond lives on the OWNING source rather than the submitter.
+            for(let r of burn.releases){
+                escrows.push([gas, this.util.bcsub(0, r.amount, 64), r.address]);
+                this.util.addAddressTicker(r.address, gas);
+            }
+
+            // Bounty re-enters circulation to the submitter; treasury to its destination
+            // (a configured address, else BURN = no credit).
             if(this.util.bcgt(split.bounty, '0'))
                 credits.push([gas, split.bounty, data['SOURCE']]);
             if(split.treasuryAddr && this.util.bcgt(split.treasury, '0'))
@@ -321,7 +350,7 @@ class Slash {
         }
 
         // Apply ledger changes + reconcile balances/supply.
-        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
+        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
         let tickers   = this.util.getTickersList(),
             addresses = Object.keys(this.util.getAddressesList());
         await this.indexerDb.updateBalances(addresses);
@@ -393,6 +422,50 @@ class Slash {
                 }
             }
             return { snapshotBlock: Number(roundId) };
+        }
+        // XORACLEB (PRICE batches): the ROUND_ID is the COMPOSITE
+        // `<anchor>|<first_round>|<last_round>`, so the BTC anchor is its first segment.
+        if(engineTag === eq.ENGINE_TAGS.ORACLE_BATCH){
+            // The round id legitimately contains '|' and equivKey treats it as opaque, so
+            // it is parsed HERE and never by field-splitting the whole key (the checkpoint
+            // round id `chain|network|block_index|checkpoint_seq` has the same property).
+            // parse() already peeled ENGINE_TAG and VIEW off the ends, so exactly three
+            // integer segments must remain; anything else does not name a batch slot.
+            let seg = String(roundId).split('|');
+            if(seg.length !== 3 || !seg.every(s => /^[0-9]+$/.test(s)))
+                return { error: 'invalid: ORACLE_BATCH round id (format)' };
+            let anchor = Number(seg[0]), first = Number(seg[1]), last = Number(seg[2]);
+            if(first > last)
+                return { error: 'invalid: ORACLE_BATCH window (first_round > last_round)' };
+
+            // A batch is named by (anchor, window), and the spec explicitly permits two
+            // leaders to split ONE window differently at one anchor. Two batches over
+            // different sub-ranges are therefore two messages, not two versions of one, and
+            // pairing them would burn an honest bond. Discriminate on the in-content window
+            // the way the XORACLE leg above discriminates on `round`, each end independently
+            // so a half-declared window still narrows the pair.
+            //
+            // Ungated, unlike SLASH_ORACLE_ROUND_DISCRIMINATED: that gate exists only because
+            // XORACLE has pre-fix verdicts it must keep reproducing. XORACLEB is a new tag
+            // whose first acceptance is this branch (the XCONFIG precedent), so there is no
+            // earlier verdict to stay identical with, and no window in which an honest split
+            // would burn a bond.
+            let pa = _parseBatchContent(contentA);
+            let pb = _parseBatchContent(contentB);
+            if(pa !== null && pb !== null){
+                if((pa.first !== null && pb.first !== null && pa.first !== pb.first) ||
+                   (pa.last  !== null && pb.last  !== null && pa.last  !== pb.last))
+                    return { error: 'invalid: ORACLE_BATCH window mismatch (distinct windows, not equivocation)' };
+                // The anchor is what membership resolves at, so a content naming a different
+                // one is not evidence about this slot. The WINDOW is deliberately not
+                // cross-checked against the header: it is offender-attested there, and a pair
+                // whose contents agree with each other but not with the header is still two
+                // conflicting signatures under one key, which is equivocation.
+                if((pa.height !== null && pa.height !== anchor) ||
+                   (pb.height !== null && pb.height !== anchor))
+                    return { error: 'invalid: ORACLE_BATCH btc_block_height (does not match ROUND_ID)' };
+            }
+            return { snapshotBlock: anchor };
         }
         // XATTEST: the canonical is delimiter-less and carries no block. Recover it from
         // the mirrored request row keyed by the ROUND_ID (= request_id). Deterministic

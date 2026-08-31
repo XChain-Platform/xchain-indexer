@@ -18,6 +18,20 @@
  *
  ********************************************************************/
 
+// Runtime floor, asserted above the require it protects. The pinned mariadb 3.5.x line is
+// ESM-only ("type": "module"), and require() loads ESM without a flag only from Node 22.12.0;
+// below that the next line throws a bare ERR_REQUIRE_ESM that names neither the Node version
+// nor the reason. engines.node cannot enforce this (npm only warns, and nothing in the tree
+// sets engine-strict), and .nvmrc says only "22", so the check lives here, where the failure
+// actually happens. Same guard, same wording, as xchain-hub/src/db.js.
+const [NODE_MAJOR, NODE_MINOR] = String(process.versions.node).split('.').map(Number);
+if (NODE_MAJOR < 22 || (NODE_MAJOR === 22 && NODE_MINOR < 12)) {
+    throw new Error('xchain-indexer requires Node >= 22.12.0 (running ' + process.versions.node +
+        '): the pinned mariadb 3.5.x driver is ESM-only and require() can load ESM without ' +
+        'a flag only from Node 22.12. Upgrade the runtime (see .nvmrc), or start Node with ' +
+        '--experimental-require-module.');
+}
+
 // Load required libraries
 const mariadb = require('mariadb');
 const fs      = require('fs');
@@ -44,7 +58,9 @@ const stakeWeightCollation = require('./stake_weight_collation_activation');
 // byte-identical from xchain-documentation/protocol/constants.js, same convention
 // as the XCALL_MAX_CALLS_PER_BLOCK sibling it mirrors.
 const { ATTEST_MAX_EXPIRIES_PER_BLOCK,
-        CROSS_SETTLE_MAX_PER_BLOCK } = require('./protocol/constants.js');
+        CROSS_SETTLE_MAX_PER_BLOCK,
+        ORACLE_VM_ROUND_WINDOW,
+        ORACLE_VM_MAX_ROWS } = require('./protocol/constants.js');
 const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS,
         ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
         ARCHIVE_ANCHOR_BY_CONTENT_SQL, selectArchiveHeadRow,
@@ -53,6 +69,7 @@ const { rethrowIfInfraFault } = require('./actions/faultGuard');
 // The validator_rewards ledger-key qualifier rule, shared with the two JS writers so the
 // SQL predicate here and they cannot disagree about which reward type is qualified.
 const arKey = require('./anchor_reward_key.js');
+const diag = require('./diagnosticEvents.js');
 
 // A stake weight, as stake_weighted_quorum.bcnum accepts one (plain decimal string).
 // Kept identical to that predicate's pattern so this producer can never emit a row the
@@ -133,6 +150,56 @@ const BLOCK_HASH_VERSION = 1;
 // integer FK column; the digit string is handed to SQL verbatim (never via Number()) so a
 // large id keeps full precision. See xchain-documentation/protocol/Index_Id_References.md.
 const CANONICAL_CARET_ID = /^[1-9][0-9]*$/;
+
+
+// Whether this indexer resolves `capability` from the hub-mirrored capability_snapshots
+// rather than from local stake rows. Capability staking is BTC-only at the protocol level,
+// so every non-BTC indexer has an empty local set and would otherwise compute a quorum
+// against zero stake.
+//
+// Deliberately a module-level function rather than a method: every resolver is invoked by
+// tier-1 regression tests against a partial object, so a `this`-dependent predicate would
+// make their behaviour depend on how they were called rather than on the config.
+//
+// `price` redirects unconditionally, exactly like cross_chain and oracle_publish. Off BTC
+// the local `stakes` path is empty for every capability, so without the redirect a PRICE
+// round on LTC/DOGE sums to zero stake and records 'invalid: insufficient signer stake'
+// with signatures that all verify.
+//
+// ONE predicate for ALL FOUR capability reads (validator set, stake weights, active count,
+// per-pubkey membership). If any one of them consulted a different source, a node would
+// tally signatures against one validator set and divide by a quorum denominator computed
+// from another, reaching a verdict no other node reaches.
+function usesCapabilitySnapshot(config, capability){
+    if(!config || config['COIN'] === 'BTC') return false;
+    return capability === 'cross_chain' || capability === 'oracle_publish' || capability === 'price';
+}
+
+// True when str[i] opens a backslash escape inside the currently open quoted span.
+//
+// MariaDB/MySQL honour `\<char>` inside `'` and `"` string literals by default, so a
+// `\'` does NOT close the literal. Every quote walker below must consult this helper
+// instead of closing a span on the next matching quote, or the scan desyncs from the
+// statements the server would run: `INSERT ... VALUES ('it\'s fine'); DROP TABLE
+// balances;` closes at the `\'`, re-opens at the literal's real closing quote, and
+// swallows the `;` and the DROP into one chunk whose first keyword is INSERT,
+// invisible to the ^-anchored destructive checks in _destructiveAutoStatement, which
+// then score the file auto-eligible.
+//
+// Backtick spans are excluded: a backslash inside an identifier quote is a literal
+// character there, so consuming the next char would desync in the other direction.
+// A trailing lone backslash opens nothing, so no walker indexes past end-of-input.
+//
+// Module-level, not a method: hasUnquotedHash is deliberately a local closure because
+// runMigrations' callers build partial `this` objects, and a prototype hop would break
+// the guard on those (see the comment at that closure).
+//
+// Holds only while sql_mode omits NO_BACKSLASH_ESCAPES. Nothing in this tree sets
+// sql_mode and the pool params below set none; if that ever changes, every caller of
+// this helper must be revisited.
+function opensBackslashEscape(str, i, quote){
+    return str[i] === '\\' && quote !== '`' && i + 1 < str.length;
+}
 
 class Database {
 
@@ -809,6 +876,7 @@ class Database {
             for(let i = 0; i < s.length; i++){
                 const c = s[i];
                 if(q){
+                    if(opensBackslashEscape(s, i, q)){ i++; continue; }
                     if(c === q){
                         if(s[i + 1] === q){ i++; }
                         else { q = null; }
@@ -956,6 +1024,7 @@ class Database {
         for(; i < stmt.length; i++){
             const ch = stmt[i];
             if(quote){
+                if(opensBackslashEscape(stmt, i, quote)){ i++; continue; }
                 if(ch === quote){
                     if(stmt[i + 1] === quote){ i++; }    // doubled-quote escape
                     else { quote = null; }
@@ -1355,9 +1424,10 @@ class Database {
     // Remove SQL line comments while respecting quoted strings, so a ';'
     // appearing inside comment prose is never mistaken for a statement
     // terminator. Single/double-quote and backtick spans are preserved verbatim
-    // (doubled quotes treated as escapes); a `--` or `#` outside any quote or
-    // block comment skips to the end of its line. Newlines are kept so error
-    // positions stay meaningful.
+    // (a doubled quote escapes, and inside `'`/`"` so does a backslash - see
+    // opensBackslashEscape); a `--` or `#` outside any quote or block comment
+    // skips to the end of its line. Newlines are kept so error positions stay
+    // meaningful.
     //
     // `#` counts because MariaDB/MySQL honour it to end-of-line exactly like
     // `--`. Missing it made a `# note` line ahead of a destructive statement
@@ -1380,6 +1450,7 @@ class Database {
             const ch = sql[i];
             if(quote){
                 out += ch;
+                if(opensBackslashEscape(sql, i, quote)){ out += sql[++i]; continue; }
                 if(ch === quote){
                     if(sql[i + 1] === quote){ out += sql[++i]; }
                     else { quote = null; }
@@ -1411,7 +1482,7 @@ class Database {
     // ship, and _destructiveAutoStatement ends up classifying fragments rather than
     // real statements. `--` and `#` line comments are stripped first (same rule as
     // the callers used); the quote model matches stripSqlLineComments exactly
-    // (single/double-quote and backtick spans, doubled quotes treated as escapes).
+    // (single/double-quote and backtick spans, doubled-quote and backslash escapes).
     // Returns trimmed, non-empty statements.
     splitSqlStatements(sql){
         const stripped = this.stripSqlLineComments(sql);
@@ -1422,6 +1493,7 @@ class Database {
             const ch = stripped[i];
             if(quote){
                 current += ch;
+                if(opensBackslashEscape(stripped, i, quote)){ current += stripped[++i]; continue; }
                 if(ch === quote){
                     if(stripped[i + 1] === quote){ current += stripped[++i]; }
                     else { quote = null; }
@@ -8393,6 +8465,15 @@ class Database {
         results = await this.doQuery(query, args);
     }
 
+    // Set the lifecycle status of one `order_matches` row.
+    // A COINPay match is written `pending_coinpay` and becomes `valid` when the
+    // obligation settles; the status lives on the match row, not in order_statuses.
+    async updateOrderMatchStatus(action_index, status){
+        let status_id = await this.createStatus(status);
+        let query = `UPDATE order_matches SET status_id=? WHERE action_index=?`;
+        await this.doQuery(query, [status_id, action_index]);
+    }
+
 
     //////////////////////////////////////////////////////////////////////////
     // COINPay Methods
@@ -9098,6 +9179,16 @@ class Database {
             [String(call_id).toLowerCase(), String(reason),
              detail == null ? null : String(detail).substring(0, 250),
              block_index, block_index]);
+        // The row alone is not visibility: this table is node-local, never
+        // replicated, and read only when somebody asks getcrosschaincallresult
+        // about this exact call. The event is what a collector can key on, and it
+        // rides the write so the two can never drift.
+        diag.noteXcallRejected({
+            call_id:     String(call_id).toLowerCase(),
+            reason:      String(reason),
+            detail:      detail == null ? undefined : String(detail).substring(0, 250),
+            block_index: block_index
+        });
     }
 
     // Drop the refusal diagnostics for a call (called once it executes).
@@ -12164,6 +12255,12 @@ class Database {
     // Count distinct active validators (by pubkey) qualified for the given capability.
     // Used for PBFT quorum calculation: quorum = max(2 * floor((N - 1) / 3) + 1, ceil((N + 1) / 2)).
     async getActiveCapabilityCount(capability, blockIndex, minStakeOverride){
+        // Same redirect, same predicate, as the set and weight resolvers: this count is the
+        // quorum DENOMINATOR, so if it came from the local (empty off BTC) path while the
+        // capable set came from the mirror, the two would disagree about who is capable and
+        // this node would reach a quorum verdict no other node reaches.
+        if(usesCapabilitySnapshot(this.config, capability))
+            return await this.getCapabilitySnapshotCount(capability, blockIndex);
         let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
         let capConfig = caps[capability];
         if(!capConfig) return 0;
@@ -12199,13 +12296,18 @@ class Database {
         let action_index    = data['ACTION_INDEX'];
         let version         = data['VERSION'];
         let validation      = data['VALIDATION_STATUS'] || 'pending';
-        // v0 fields
+        // v0 fields (round_number holds FIRST_ROUND on a batch row; see prices.sql)
         let round_number    = data['ROUND'] || null;
         let round_timestamp = data['TIMESTAMP'] || null;
         let pair_count      = data['PAIR_COUNT'] || null;
         let pairs_json      = data['PAIRS_JSON'] || null;
         let sig_count       = data['SIG_COUNT'] || null;
         let sigs_json       = data['SIGS_JSON'] || null;
+        // v2 fields (BATCH window; NULL on a v0/v1 row)
+        let batch_first_round = data['BATCH_FIRST_ROUND'] || null;
+        let batch_last_round  = data['BATCH_LAST_ROUND'] || null;
+        let round_count       = data['ROUND_COUNT'] || null;
+        let rounds_json       = data['ROUNDS_JSON'] || null;
         // v1 fields
         let coin_id         = (data['V1_COIN'])  ? await this.createCoin(data['V1_COIN'])     : null;
         let tick_id         = (data['V1_TICK'])  ? await this.createTicker(data['V1_TICK'])   : null;
@@ -12224,22 +12326,26 @@ class Database {
             query = `UPDATE prices SET
                         version=?, source_id=?, round_number=?, round_timestamp=?,
                         pair_count=?, pairs_json=?, sig_count=?, sigs_json=?,
+                        batch_first_round=?, batch_last_round=?, round_count=?, rounds_json=?,
                         coin_id=?, tick_id=?, fiat_id=?, value=?, fee=?, memo_id=?,
                         validation_status=?, status_id=?
                     WHERE action_index=?`;
             args = [version, source_id, round_number, round_timestamp,
                     pair_count, pairs_json, sig_count, sigs_json,
+                    batch_first_round, batch_last_round, round_count, rounds_json,
                     coin_id, tick_id, fiat_id, value, fee, memo_id,
                     validation, status_id, action_index];
         } else {
             query = `INSERT INTO prices
                         (version, source_id, round_number, round_timestamp,
                          pair_count, pairs_json, sig_count, sigs_json,
+                         batch_first_round, batch_last_round, round_count, rounds_json,
                          coin_id, tick_id, fiat_id, value, fee, memo_id,
                          validation_status, status_id, action_index)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
             args = [version, source_id, round_number, round_timestamp,
                     pair_count, pairs_json, sig_count, sigs_json,
+                    batch_first_round, batch_last_round, round_count, rounds_json,
                     coin_id, tick_id, fiat_id, value, fee, memo_id,
                     validation, status_id, action_index];
         }
@@ -12651,6 +12757,26 @@ class Database {
         return result;
     }
 
+    // Whether `capability` resolves from the hub-mirrored capability_snapshots on this
+    // chain instead of the local `stakes` rows.
+    //
+    // Capability staking is BTC-only at the protocol level (coins/DOGE.js and coins/LTC.js
+    // both declare CAPABILITIES: {}), so off BTC the local path returns an empty set for
+    // every capability and the mirror is the only way a non-BTC indexer reaches the
+    // BTC-anchored validator set at all.
+    //
+    // ONE predicate for ALL FOUR capability reads: getValidatorsByCapability (who is
+    // capable), getStakeWeightsByCapability (how much stake each capable signer carries),
+    // getActiveCapabilityCount (the PBFT denominator) and hasCapability (the per-signer
+    // truncation fallback). If any one of them consulted a different source, a node would
+    // tally signatures against one validator set and divide by a quorum denominator computed
+    // from another, reaching a verdict no other node reaches.
+    //
+    // `snapshot_block` in capability_snapshots is a BTC HEIGHT, so every caller on this path
+    // must key the read on the action's BTC anchor, never the landing chain's own height:
+    // off BTC a landing-chain height matches nothing, and on regtest, where the chains'
+    // heights overlap, it can match the wrong snapshot.
+
     // Return all pubkeys whose SUM(active stake) at `blockIndex` meets the
     // capability's MIN_STAKE. Used by xchain-hub's CapabilitySnapshot to lock
     // the validator set at a block boundary for PBFT quorum calculations -
@@ -12658,13 +12784,10 @@ class Database {
     // arrive at the same set, so consensus on quorum N is deterministic.
     // Spec: capability-staking model §6 (deterministic quorum selection).
     async getValidatorsByCapability(capability, blockIndex, minStakeOverride){
-        // Off-BTC chains have no local capability stakes (capability staking is BTC-only),
-        // so resolve the qualifying set from the hub-mirrored capability_snapshots at the
-        // (BTC-anchored) block. Scoped to the capabilities verified on a non-BTC chain:
-        // `cross_chain` (cross-chain match settlement) and `oracle_publish` (the DOGE-only
-        // ANCHOR action); other capabilities keep the existing local-stakes path (which is
-        // empty off BTC, exactly as before).
-        if(this.config['COIN'] !== 'BTC' && (capability === 'cross_chain' || capability === 'oracle_publish'))
+        // Off-BTC chains have no local capability stakes, so the qualifying set comes from
+        // the hub-mirrored capability_snapshots. `blockIndex` MUST be a BTC height on this
+        // path (snapshot_block is BTC-anchored); see usesCapabilitySnapshot.
+        if(usesCapabilitySnapshot(this.config, capability))
             return await this.getCapabilitySnapshotValidators(capability, blockIndex);
         let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
         let capConfig = caps[capability];
@@ -12789,9 +12912,10 @@ class Database {
     // must resolve identically on the hub and every indexer or validation forks.
     async getStakeWeightsByCapability(capability, blockIndex, minStakeOverride){
         // Off-BTC chains have no local capability stakes - read the source-keyed
-        // weights from the hub-mirrored capability_snapshots (same capability scoping
-        // as getValidatorsByCapability).
-        if(this.config['COIN'] !== 'BTC' && (capability === 'cross_chain' || capability === 'oracle_publish'))
+        // weights from the hub-mirrored capability_snapshots. Routed through the SAME
+        // predicate as getValidatorsByCapability so the count set and the weight set can
+        // never come from different sources; see usesCapabilitySnapshot.
+        if(usesCapabilitySnapshot(this.config, capability))
             return await this.getCapabilitySnapshotWeights(capability, blockIndex);
         let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
         let capConfig = caps[capability];
@@ -13020,11 +13144,12 @@ class Database {
     // Check whether a pubkey's active stake qualifies for a capability.
     // Returns true if SUM(active stake amount for pubkey) >= governance.min_stake[capability].
     async hasCapability(pubkey, capability, blockIndex, minStakeOverride){
-        // Off-BTC chains verify cross_chain (match settlement) and oracle_publish (the
-        // DOGE-only ANCHOR action) against the hub-mirrored capability snapshot
-        // (presence = qualified) since capability stakes live only on BTC. Other
-        // capabilities keep the local-stakes path. See getValidatorsByCapability.
-        if(this.config['COIN'] !== 'BTC' && (capability === 'cross_chain' || capability === 'oracle_publish'))
+        // Off-BTC chains verify the mirrored capabilities against the hub-mirrored capability
+        // snapshot (presence = qualified) since capability stakes live only on BTC. Routed
+        // through the SAME predicate as the three set/weight/count resolvers, so the
+        // truncation fallback in actions/price.js cannot land on a path that answers false
+        // for every signer while the capable-set read answered from the mirror.
+        if(usesCapabilitySnapshot(this.config, capability))
             return await this.isPubkeyInCapabilitySnapshot(pubkey, capability, blockIndex);
         let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
         let capConfig = caps[capability];
@@ -13111,6 +13236,287 @@ class Database {
                      VALUES (?, ?, ?, ?, ?, ?, 1, ?)`;
         await this.doQuery(query, [actionIndex, String(challengeId).toLowerCase(), epochHeight, targetHeight, pubkey_id, source_id, blockIndex]);
         return true;
+    }
+
+    // ROLLCALL presence signatures, DOGE side. Raw hex, never mapper ids: the BTC
+    // close queries this table BY KEY over a bounded list it supplies, so an id
+    // the caller cannot reproduce would make the answer unusable.
+    //
+    // INSERT IGNORE on the (epoch_height, pubkey) primary key is what makes this a
+    // FIRST-SEEN index: the first valid signature landed for a key in an epoch is
+    // the one served, and a later action carrying the same key is a no-op rather
+    // than an overwrite. No spam row can pre-empt a real signer, because only the
+    // holder of that key can produce a signature that verifies, and the handler
+    // has already verified every row it passes here.
+    async insertRollcallSigners(rows){
+        if(!Array.isArray(rows) || rows.length === 0) return 0;
+        let placeholders = rows.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
+        let values = [];
+        for(let r of rows){
+            values.push(
+                parseInt(r.epoch_height),
+                String(r.pubkey).toLowerCase(),
+                String(r.sig).toLowerCase(),
+                String(r.ledger_hash).toLowerCase(),
+                String(r.publisher).toLowerCase(),
+                parseInt(r.action_index),
+                parseInt(r.block_index)
+            );
+        }
+        let query = `INSERT IGNORE INTO rollcall_signers
+                        (epoch_height, pubkey, sig, ledger_hash, publisher, action_index, block_index)
+                     VALUES ${placeholders}`;
+        await this.doQuery(query, values);
+        return rows.length;
+    }
+
+    // The ROLLCALL window cut: the highest DOGE block whose raw header stamp is at
+    // or before `maxBlockTime` (the BTC header stamp at E + ACCEPT_WINDOW).
+    //
+    // Both inputs are replicated chain data, so every honest DOGE indexer past the
+    // maturity computes the SAME cut and the BTC side gets an answer it can agree
+    // on without trusting the responder. Returns null when no block qualifies,
+    // which the caller must read as "no cut exists yet" and defer -- never as an
+    // empty present set, which would evict the whole federation.
+    async getRollcallWindowCut(maxBlockTime){
+        let t = parseInt(maxBlockTime);
+        if(!Number.isFinite(t)) return null;
+        let rows = await this.doQuery(
+            'SELECT MAX(block_index) AS hcut FROM blocks WHERE block_time <= ?', [t]);
+        let hcut = (rows && rows[0] && rows[0].hcut !== null && rows[0].hcut !== undefined)
+                 ? parseInt(rows[0].hcut) : null;
+        return Number.isFinite(hcut) ? hcut : null;
+    }
+
+    // First-seen signature rows for an epoch, BOUNDED BY THE CALLER'S KEY LIST.
+    //
+    // Bounded on purpose: the answer size is fixed by the asker (|R(E)|), never by
+    // how many actions an attacker landed, so there is no page walk to exhaust into
+    // a wrong absence. `block_index <= hcut` applies the window.
+    async getRollcallSignersForKeys(epochHeight, pubkeys, hcut){
+        let e = parseInt(epochHeight), h = parseInt(hcut);
+        if(!Number.isFinite(e) || !Number.isFinite(h)) return [];
+        if(!Array.isArray(pubkeys) || pubkeys.length === 0) return [];
+        let keys = pubkeys.map((k) => String(k).toLowerCase());
+        let query = `SELECT epoch_height, pubkey, sig, ledger_hash, publisher, action_index, block_index
+                       FROM rollcall_signers
+                      WHERE epoch_height = ? AND block_index <= ?
+                        AND pubkey IN (${keys.map(() => '?').join(', ')})`;
+        return await this.doQuery(query, [e, h].concat(keys));
+    }
+
+    // Earliest in-window ROLLCALL for an epoch published by each requested key.
+    // Feeds the publish reward, which pays the ELECTED leader only, so the caller
+    // asks about exactly one key in practice.
+    async getRollcallPublishers(epochHeight, publishers, hcut){
+        let e = parseInt(epochHeight), h = parseInt(hcut);
+        if(!Number.isFinite(e) || !Number.isFinite(h)) return [];
+        if(!Array.isArray(publishers) || publishers.length === 0) return [];
+        let keys = publishers.map((k) => String(k).toLowerCase());
+        let query = `SELECT publisher, MIN(action_index) AS action_index, MIN(block_index) AS block_index
+                       FROM rollcall_signers
+                      WHERE epoch_height = ? AND block_index <= ?
+                        AND publisher IN (${keys.map(() => '?').join(', ')})
+                      GROUP BY publisher`;
+        return await this.doQuery(query, [e, h].concat(keys));
+    }
+
+    // Record an epoch's close verdict, BTC side. Written once per epoch at C,
+    // whether or not it rolled: an epoch missing from this table is
+    // indistinguishable from one that has not closed yet, and the K-streak has to
+    // know which epochs to skip.
+    //
+    // `responsibleSources` is pinned here and never re-derived (see the table
+    // comment). Pass it only for a ROLLED epoch; an unrolled one decides nothing
+    // and stores NULL.
+    async insertRollcall(epochHeight, snapshotBlock, closeBlock, rolled, responsibleSources){
+        let e = parseInt(epochHeight);
+        if(!Number.isFinite(e)) return false;
+        let pinned = (rolled && Array.isArray(responsibleSources))
+                   ? JSON.stringify(responsibleSources.map((s) => String(s)))
+                   : null;
+        let query = `INSERT INTO rollcalls (epoch_height, snapshot_block, close_block, rolled, responsible_set_json)
+                     VALUES (?, ?, ?, ?, ?)
+                     ON DUPLICATE KEY UPDATE snapshot_block=VALUES(snapshot_block),
+                                             close_block=VALUES(close_block),
+                                             rolled=VALUES(rolled),
+                                             responsible_set_json=VALUES(responsible_set_json)`;
+        await this.doQuery(query, [e, parseInt(snapshotBlock), parseInt(closeBlock), rolled ? 1 : 0, pinned]);
+        return true;
+    }
+
+    // Pin one absence row per responsible source that did not sign at a ROLLED
+    // epoch. `evicted` marks the rows that completed a K-streak at this close; it
+    // is the key the rollback's delegations repair finds the affected sources by,
+    // because an eviction writes no DELEGATE-revoke row to self-join on.
+    async insertRollcallAbsences(rows){
+        if(!Array.isArray(rows) || rows.length === 0) return 0;
+        let values = [], placeholders = [];
+        for(let r of rows){
+            let source_id = await this.getAddressId(r.source);
+            if(source_id === null) continue;   // a source with no address row cannot have staked
+            placeholders.push('(?, ?, ?, ?)');
+            values.push(parseInt(r.epoch_height), source_id, parseInt(r.close_block), r.evicted ? 1 : 0);
+        }
+        if(placeholders.length === 0) return 0;
+        let query = `INSERT INTO rollcall_absences (epoch_height, source_id, close_block, evicted)
+                     VALUES ${placeholders.join(', ')}
+                     ON DUPLICATE KEY UPDATE close_block=VALUES(close_block), evicted=VALUES(evicted)`;
+        await this.doQuery(query, values);
+        return placeholders.length;
+    }
+
+    // The last `limit` ROLLED epochs at or below `beforeEpochHeight`, newest first,
+    // each with its pinned responsible set. This is the streak's lookback window:
+    // unrolled epochs are excluded here rather than filtered later, so they are
+    // never counted and never streak-ending.
+    async getRolledRollcallEpochs(beforeEpochHeight, limit){
+        let e = parseInt(beforeEpochHeight), n = parseInt(limit);
+        if(!Number.isFinite(e) || !Number.isFinite(n) || n <= 0) return [];
+        let query = `SELECT epoch_height, snapshot_block, close_block, responsible_set_json
+                       FROM rollcalls
+                      WHERE rolled = 1 AND epoch_height <= ?
+                      ORDER BY epoch_height DESC
+                      LIMIT ?`;
+        return await this.doQuery(query, [e, n]);
+    }
+
+    // Which of `epochHeights` this source was recorded absent at. Bounded by the
+    // caller's list, which is the lookback window, so the answer size is fixed by
+    // the protocol constant rather than by history.
+    async getRollcallAbsenceEpochsForSource(source, epochHeights){
+        if(!Array.isArray(epochHeights) || epochHeights.length === 0) return [];
+        let source_id = await this.getAddressId(source);
+        if(source_id === null) return [];
+        let epochs = epochHeights.map((h) => parseInt(h)).filter((h) => Number.isFinite(h));
+        if(epochs.length === 0) return [];
+        let query = `SELECT epoch_height FROM rollcall_absences
+                      WHERE source_id = ? AND epoch_height IN (${epochs.map(() => '?').join(', ')})`;
+        let rows = await this.doQuery(query, [source_id].concat(epochs));
+        return rows.map((r) => parseInt(r.epoch_height));
+    }
+
+    // Public roll-call verdict history, BTC side (JSON-RPC getrollcalls). Newest
+    // first, each row carrying its absence count via a correlated subquery rather
+    // than a stored counter, since an UNROLLED epoch writes no absences by
+    // construction and the count must fall out of that rather than be tracked in
+    // parallel. Never selects responsible_set_json: that field pins K-streak
+    // membership and is an internal detail, not a public one.
+    //
+    // STRICT on purpose. doQuery collapses a non-transactional query error into
+    // [], which here would be indistinguishable from "no epoch has closed yet",
+    // and the consumer that matters treats an empty list as SILENCE: the
+    // dashboard's consecutive-unrolled alarm is the only detector for a
+    // federation that has stopped rolling, so a missing table or a broken query
+    // would hand it a permanently quiet answer about a permanently broken rail.
+    // Driven, not assumed: run against the regtest BTC indexer before the
+    // migration was applied, doQuery logged ER_NO_SUCH_TABLE and returned rows=0.
+    async getRollcalls(limit){
+        let n = parseInt(limit);
+        if(!Number.isFinite(n) || n <= 0) n = 20;
+        if(n > 100) n = 100;
+        let query = `SELECT r.epoch_height, r.snapshot_block, r.close_block, r.rolled,
+                            (SELECT COUNT(*) FROM rollcall_absences ra
+                              WHERE ra.epoch_height = r.epoch_height) AS absent_count
+                       FROM rollcalls r
+                      ORDER BY r.epoch_height DESC
+                      LIMIT ?`;
+        return await this.doQueryStrict(query, [n]);
+    }
+
+    // Public roll-call absences for one staking source, BTC side (JSON-RPC
+    // getrollcallabsences). `source` is an address as a caller types it, resolved
+    // to source_id the same way every other address-keyed read on this table does
+    // (getRollcallAbsenceEpochsForSource, getSweepableStakeBySource); an unknown
+    // or unresolvable address is not an error, it just has no absences on file.
+    // The join back to index_addresses hands the caller the canonical address
+    // string rather than echoing its raw input, so a `^<id>` wire reference
+    // resolves to the real address in the response.
+    //
+    // STRICT for the same reason as getRollcalls: an operator reading `validator
+    // status` must never see "no absences on record" because the query failed.
+    // That reading is the one that makes them stop worrying.
+    async getRollcallAbsencesBySource(source, limit){
+        let n = parseInt(limit);
+        if(!Number.isFinite(n) || n <= 0) n = 20;
+        if(n > 100) n = 100;
+        let source_id = await this.getAddressId(source);
+        if(source_id === null) return [];
+        let query = `SELECT a.epoch_height, ia.address AS source, a.close_block, a.evicted
+                       FROM rollcall_absences a
+                       INNER JOIN index_addresses ia ON (ia.id = a.source_id)
+                      WHERE a.source_id = ?
+                      ORDER BY a.epoch_height DESC
+                      LIMIT ?`;
+        return await this.doQueryStrict(query, [source_id, n]);
+    }
+
+    // Every stake row an eviction must sweep for `source`, grouped by signing key.
+    //
+    // INCLUDES PENDING-ACTIVATION ROWS, which is the difference from the UNSTAKE
+    // path and is deliberate: UNSTAKE leaves them alone because the actor chose an
+    // amount that did not cover them, but an eviction is not an amount, it is a
+    // removal. Leaving them would let a 1-XCHAIN top-up landed just before the
+    // epoch walk the source straight back in.
+    async getSweepableStakeBySource(source, blockIndex, includePending){
+        let source_id = await this.getAddressId(source);
+        if(source_id === null) return [];
+        let valid_id = await this.getStatusId('valid');
+        if(valid_id === null) return [];
+        let query = `SELECT s.signing_pubkey_id                     AS signing_pubkey_id,
+                            ip.pubkey                               AS signing_pubkey,
+                            SUM(CAST(s.amount AS DECIMAL(30,8)))    AS amount
+                       FROM stakes s
+                            LEFT JOIN index_pubkeys ip ON (ip.id = s.signing_pubkey_id)
+                      WHERE s.source_id = ? AND s.status_id = ? AND s.deactivation_block IS NULL`;
+        let args = [source_id, valid_id];
+        if(!includePending && blockIndex !== undefined && blockIndex !== null){
+            query += ' AND s.activation_block <= ?';
+            args.push(blockIndex);
+        }
+        query += ' GROUP BY s.signing_pubkey_id, ip.pubkey';
+        let rows = await this.doQuery(query, args);
+        return rows.map((r) => ({
+            signing_pubkey_id: r.signing_pubkey_id,
+            signing_pubkey:    r.signing_pubkey,
+            amount:            (r.amount === null || r.amount === undefined) ? '0' : String(r.amount)
+        }));
+    }
+
+    // SOURCE-SCOPED deactivation stamp, and the scoping is a correctness
+    // requirement rather than tidiness. setStakeDeactivationByPubkey has no
+    // source_id term, so against a key held by two sources it would deactivate the
+    // OTHER source's stake as well -- an eviction of one validator silently
+    // un-membering a second. `includePending` drops the activation_block ceiling so
+    // the sweep covers the pending rows getSweepableStakeBySource counted.
+    async setStakeDeactivationBySourceAndPubkey(source, pubkey, deactivationBlock, currentBlock, includePending){
+        let source_id = await this.getAddressId(source);
+        let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
+        if(source_id === null || pubkey_id === null) return false;
+        let valid_id = await this.getStatusId('valid');
+        let query = `UPDATE stakes SET deactivation_block=?
+                     WHERE source_id=? AND signing_pubkey_id=? AND status_id=? AND deactivation_block IS NULL`;
+        let args = [deactivationBlock, source_id, pubkey_id, valid_id];
+        if(!includePending){
+            query += ' AND activation_block <= ?';
+            args.push(currentBlock);
+        }
+        await this.doQuery(query, args);
+        return true;
+    }
+
+    // Stamp EVERY active delegation of a source, which setDelegationDeactivation
+    // cannot do: it stamps one (source, pubkey) pair, so an evicted source keeping
+    // any delegated key would stay inside the capability predicate through the
+    // DELEGATE branch and the eviction would not remove it.
+    async setAllDelegationDeactivationsBySource(source, deactivationBlock){
+        let source_id = await this.getAddressId(source);
+        if(source_id === null) return 0;
+        let valid_id = await this.getStatusId('valid');
+        let query = `UPDATE delegations SET deactivation_block=?
+                     WHERE source_id=? AND status_id=? AND deactivation_block IS NULL`;
+        let result = await this.doQuery(query, [deactivationBlock, source_id, valid_id]);
+        return (result && result.affectedRows !== undefined) ? result.affectedRows : 0;
     }
 
     // Validators with a `passed` possession-proof inside PROOF_WINDOW_BLOCKS of
@@ -13250,6 +13656,18 @@ class Database {
         return rows.map(r => ({ pubkey: String(r.pubkey), amount: r.amount == null ? '0' : String(r.amount) }));
     }
 
+    // How many DISTINCT signing keys the mirrored snapshot holds for a capability at a
+    // BTC-anchored block. DISTINCT because a key delegated by two sources produces two rows
+    // (see getCapabilitySnapshotValidators): the PBFT denominator counts capable SIGNERS, so
+    // counting rows would inflate N above the set the tally is drawn from.
+    async getCapabilitySnapshotCount(capability, snapshotBlock){
+        let query = `SELECT COUNT(DISTINCT signing_pubkey) AS cnt
+                     FROM capability_snapshots
+                     WHERE capability = ? AND snapshot_block = ?`;
+        let rows = await this._mirrorDb().doQuery(query, [capability, snapshotBlock]);
+        return rows.length > 0 ? Number(rows[0].cnt) : 0;
+    }
+
     // Whether a pubkey is in the mirrored capability snapshot at a block (qualified).
     async isPubkeyInCapabilitySnapshot(pubkey, capability, snapshotBlock){
         let query = `SELECT 1 FROM capability_snapshots
@@ -13265,11 +13683,19 @@ class Database {
      * verification source. Spec: xchain-documentation/protocol/actions/ANCHOR.md
      */
 
-    // Create/Update record in `anchor_actions` table (one row per ANCHOR action_index).
+    // Create/Update record in `anchor_actions` table.
+    //
+    // Keyed on (action_index, section_index), not action_index alone: an ANCHOR v7 bundle
+    // is ONE action carrying N per-chain sections, and each section gets its own row so
+    // idx_anchor_checkpoint and every per-chain reader keep working unchanged. Every
+    // version that carries a single body (v1/v2/v6 archive rows) writes section_index 0,
+    // which is also the column's DEFAULT, so old rows and old writers land where they
+    // always did.
     async createAnchorAction(data){
         data            = this.normalizeDataValues(data);
         let status_id   = await this.createStatus(data['STATUS']);
         let action_index = data['ACTION_INDEX'];
+        let section_index = (data['SECTION_INDEX'] != null) ? Number(data['SECTION_INDEX']) : 0;
         let version      = Number(data['FORMAT']);
         // Publisher tail (#2486): v4/v5/v6 only; NULL otherwise. Mirrors validator_signatures
         // exactly: anchor.js pre-serializes the XANCPUB sig list to a JSON string (as it does
@@ -13277,6 +13703,7 @@ class Database {
         let publisher = data['PUBLISHER'] || null;
         let publisherAttestations = data['PUBLISHER_ATTESTATIONS'] || null;
         let args = [
+            section_index,
             version,
             data['CHAIN'] || null,
             data['NETWORK'] || null,
@@ -13306,26 +13733,28 @@ class Database {
             status_id,
             data['BLOCK_INDEX']
         ];
-        let exists = (await this.doQuery("SELECT action_index FROM anchor_actions WHERE action_index=? LIMIT 1", [action_index])).length > 0;
+        let exists = (await this.doQuery(
+            "SELECT action_index FROM anchor_actions WHERE action_index=? AND section_index=? LIMIT 1",
+            [action_index, section_index])).length > 0;
         if(exists){
             await this.doQuery(
-                `UPDATE anchor_actions SET version=?, chain=?, network=?, block_index=?, block_hash=?,
+                `UPDATE anchor_actions SET section_index=?, version=?, chain=?, network=?, block_index=?, block_hash=?,
                         ledger_hash=?, actions_hash=?, contract_hash=?, checkpoint_seq=?, snapshot_block=?,
                         state_root=?, state_root_version=?, block_merkle_root=?, block_merkle_version=?,
                         match_batch_seq=?, match_count=?, batch_crc32=?, total_chunks=?, chunk_index=?,
                         archive_b64=?, validator_signatures=?, publisher=?, publisher_attestations=?,
                         status_id=?, block_index_doge=?
-                 WHERE action_index=?`, args.concat([action_index]));
+                 WHERE action_index=? AND section_index=?`, args.concat([action_index, section_index]));
         } else {
             await this.doQuery(
                 `INSERT INTO anchor_actions
-                        (version, chain, network, block_index, block_hash, ledger_hash, actions_hash,
+                        (section_index, version, chain, network, block_index, block_hash, ledger_hash, actions_hash,
                          contract_hash, checkpoint_seq, snapshot_block, state_root, state_root_version,
                          block_merkle_root, block_merkle_version, match_batch_seq, match_count,
                          batch_crc32, total_chunks, chunk_index, archive_b64, validator_signatures,
                          publisher, publisher_attestations,
                          status_id, block_index_doge, action_index)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, args.concat([action_index]));
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, args.concat([action_index]));
         }
     }
 
@@ -13350,10 +13779,12 @@ class Database {
 
     // Look up the on-chain ANCHOR checkpoint record for one checkpoint identity
     // (chain, network, block_index, checkpoint_seq), joined to its status. Only
-    // checkpoint-bearing versions (0/1/3/4/5/6, per the ANCHOR_CHECKPOINT_VERSIONS
+    // checkpoint-bearing versions (1/6/7, per the ANCHOR_CHECKPOINT_VERSIONS
     // constant below; version 2 is an archive continuation chunk with no checkpoint
-    // identity of its own, and v6 is the publisher-bearing archive anchor that
-    // DOES carry a checkpoint identity). Returns the highest action_index
+    // identity of its own, v6 is the publisher-bearing archive anchor that DOES carry
+    // one, and a v7 row is one bundle SECTION, which carries its own). A bundle
+    // therefore answers this read per section, with no bundle-level RPC of its own.
+    // Returns the highest action_index
     // match (a reorg-replayed re-anchor supersedes an earlier one) or null. Read path
     // for the getanchoraction RPC: it lets the hub confirm an announced anchor actually
     // landed on-chain, with the matching payload, at DOGE depth, before trusting an
@@ -13533,6 +13964,14 @@ class Database {
     }
 
     // Flag an anchor row (e.g. 'invalid_archive' when chunk reassembly fails CRC).
+    //
+    // Keyed on action_index ALONE, deliberately, even though the table's PK is now
+    // (action_index, section_index): the anchor verdict is ALL-OR-NOTHING (spec D15), so
+    // every section row of one action always carries the same status and stamping them
+    // together is the correct behavior, not an oversight. Do not "fix" this into a
+    // section-scoped update: an archive head is a single-body v1/v6 row at section 0
+    // anyway, and a per-section stamp would let one action hold two verdicts, which no
+    // reader is built to reconcile.
     async setAnchorArchiveStatus(actionIndex, status){
         let status_id = await this.createStatus(status);
         await this.doQuery("UPDATE anchor_actions SET status_id = ? WHERE action_index = ?", [status_id, actionIndex]);
@@ -14138,9 +14577,16 @@ class Database {
 
     // Slash a staker. Deducts `amount` from active contract_stakes rows first (LIFO by
     // activation_block / action_index), then from contract_unstakes rows if any remainder.
-    // Returns the actual amount slashed (may be less than `amount` if available balance is lower).
     // Does NOT credit the destination or emit the slash_events row - caller (_processSlashEmission)
     // wires those side effects.
+    //
+    // Returns { total, releases }:
+    //   total    - the amount actually slashed, as a string (less than `amount` when the
+    //              available stake is lower).
+    //   releases - [{ address, amount }] per OWNING address, in LIFO row order, summing to
+    //              `total`. Staked tokens sit in the staker's ESCROW, so the caller releases
+    //              them there before crediting the destination. Per-owner because one slash
+    //              reduces several rows and a delegated key's rows can span sources.
     //
     // SIGNING-KEY ROTATIONS (#4366). `pubkeyId` is resolved from the pubkey the contract emitted,
     // which it read out of the same snapshot getContractStakeDataForVM built, and that snapshot
@@ -14151,13 +14597,25 @@ class Database {
     // applied). No rotation-aware lookup belongs here: the row IS the rotation.
     async slashContractStake(targetContractIndex, pubkeyId, tickId, amount, blockIndex, executionIndex, slashPosition){
         let valid_id = await this.getStatusId('valid');
-        if(valid_id === null) return '0';
+        if(valid_id === null) return { total: '0', releases: [] };
         let remaining = String(amount);
         let totalSlashed = '0';
         // The staked tick may carry up to MAX_TOKEN_DECIMALS (18); do all slash arithmetic at its own
         // precision so an >8-dp token isn't truncated mid-deduction (which would leave dust unslashed
         // or corrupt the residual stake). XCHAIN(8) math is unchanged (item 5303).
         let dec = await this.getTokenDecimalPrecision(tickId);
+        // Escrow release breakdown, accumulated as the rows are debited. Insertion order is
+        // the deterministic LIFO scan order, so every node writes its escrow rows alike.
+        let releases = new Map();
+        let addRelease = (address, take) => {
+            // An unresolvable source cannot have its escrow released against anyone, and
+            // guessing would strand the lock. Halt instead.
+            if(address === null || address === undefined)
+                throw new Error('slashContractStake: stake row has no source address; its escrow is not releasable');
+            let cur = releases.get(address);
+            releases.set(address, this.util.bcstr(this.util.bcadd(cur === undefined ? '0' : cur, take, dec)));
+        };
+        let asReleases = () => Array.from(releases, ([address, amt]) => ({ address, amount: amt }));
         // Pass 1: deduct from ACTIVE (never-unstaked) contract_stakes rows (LIFO - highest
         // action_index first). The deactivation filter is load-bearing: UNSTAKE v1 leaves the
         // contract_stakes row's `amount` intact (it only sets a FUTURE deactivation_block =
@@ -14171,11 +14629,13 @@ class Database {
         // the window slashed the phantom contract_stakes copy (crediting the destination) while the
         // sweep still refunded the contract_unstakes row - +X to the destination AND +X back to the
         // staker against one debit (silent supply inflation + total slash evasion).
-        let stakesQ = `SELECT action_index, amount FROM contract_stakes
-                       WHERE target_contract_index=? AND signing_pubkey_id=? AND tick_id=? AND status_id=?
-                         AND CAST(amount AS DECIMAL(60,18)) > 0
-                         AND deactivation_block IS NULL
-                       ORDER BY action_index DESC`;
+        let stakesQ = `SELECT cs.action_index, cs.amount, a.address AS source_address
+                       FROM contract_stakes cs
+                           LEFT JOIN index_addresses a ON (a.id = cs.source_id)
+                       WHERE cs.target_contract_index=? AND cs.signing_pubkey_id=? AND cs.tick_id=? AND cs.status_id=?
+                         AND CAST(cs.amount AS DECIMAL(60,18)) > 0
+                         AND cs.deactivation_block IS NULL
+                       ORDER BY cs.action_index DESC`;
         let stakeRows = await this.doQuery(stakesQ, [Number(targetContractIndex), pubkeyId, tickId, valid_id]);
         for(let row of stakeRows){
             if(!this.util.bcgt(remaining, '0')) break;
@@ -14185,20 +14645,23 @@ class Database {
             await this.doQuery('UPDATE contract_stakes SET amount=? WHERE action_index=?', [newAmt, row.action_index]);
             // Record the in-place debit so a reorg can restore rowAmt verbatim (see rollback.js).
             await this.createContractSlashDebit(executionIndex, slashPosition, 'contract_stakes', row.action_index, rowAmt, take, blockIndex);
+            addRelease(row.source_address, take);
             remaining = this.util.bcsub(remaining, take, dec);
             totalSlashed = this.util.bcadd(totalSlashed, take, dec);
         }
-        if(!this.util.bcgt(remaining, '0')) return totalSlashed;
+        if(!this.util.bcgt(remaining, '0')) return { total: this.util.bcstr(totalSlashed), releases: asReleases() };
         // Pass 2: deduct from contract_unstakes rows (cooldown-locked but still slashable)
         let pendingId = await this.getStatusId('pending');
         let unstakeStatusIds = [valid_id];
         if(pendingId !== null) unstakeStatusIds.push(pendingId);
         let placeholders = unstakeStatusIds.map(() => '?').join(',');
-        let unstakesQ = `SELECT action_index, amount FROM contract_unstakes
-                         WHERE target_contract_index=? AND signing_pubkey_id=? AND tick_id=?
-                           AND status_id IN (${placeholders})
-                           AND CAST(amount AS DECIMAL(60,18)) > 0
-                         ORDER BY action_index DESC`;
+        let unstakesQ = `SELECT cu.action_index, cu.amount, a.address AS source_address
+                         FROM contract_unstakes cu
+                             LEFT JOIN index_addresses a ON (a.id = cu.source_id)
+                         WHERE cu.target_contract_index=? AND cu.signing_pubkey_id=? AND cu.tick_id=?
+                           AND cu.status_id IN (${placeholders})
+                           AND CAST(cu.amount AS DECIMAL(60,18)) > 0
+                         ORDER BY cu.action_index DESC`;
         let unstakeRows = await this.doQuery(unstakesQ, [Number(targetContractIndex), pubkeyId, tickId, ...unstakeStatusIds]);
         for(let row of unstakeRows){
             if(!this.util.bcgt(remaining, '0')) break;
@@ -14208,10 +14671,11 @@ class Database {
             await this.doQuery('UPDATE contract_unstakes SET amount=? WHERE action_index=?', [newAmt, row.action_index]);
             // Record the in-place debit so a reorg can restore rowAmt verbatim (see rollback.js).
             await this.createContractSlashDebit(executionIndex, slashPosition, 'contract_unstakes', row.action_index, rowAmt, take, blockIndex);
+            addRelease(row.source_address, take);
             remaining = this.util.bcsub(remaining, take, dec);
             totalSlashed = this.util.bcadd(totalSlashed, take, dec);
         }
-        return totalSlashed;
+        return { total: this.util.bcstr(totalSlashed), releases: asReleases() };
     }
 
     // Record one in-place slash debit, enabling reorg restoration of stake amounts.
@@ -14232,8 +14696,13 @@ class Database {
 
     // Burn an equivocating validator's ENTIRE capability bond (active `stakes` + cooldown-
     // locked `unstakes`), recording each in-place reduction in capability_slash_debits so a
-    // reorg restores the pre-slash amounts verbatim (see rollback.js). Returns the total
-    // XCHAIN burned as a string.
+    // reorg restores the pre-slash amounts verbatim (see rollback.js).
+    //
+    // Returns { total, releases }, the same shape as slashContractStake and for the same
+    // reason: the bond sits in the staker's ESCROW and the caller releases it there before
+    // crediting bounty/treasury. `releases` is [{ address, amount }] per owning address in
+    // LIFO row order, summing to `total` (the XCHAIN burned, as a string); a delegated key's
+    // rows resolve to the OWNING source, so one burn can span several addresses.
     //
     // Unlike slashContractStake (per-contract, per-tick, partial `amount`), capability stake
     // is a single XCHAIN bond per signing pubkey (XCHAIN-only - no contract/tick), and a
@@ -14256,8 +14725,18 @@ class Database {
     // outcome must not depend on stake motion after the offence.
     async slashCapabilityStake(pubkeyId, blockIndex, slashActionIndex, burnPending, ownerSourceId = null){
         let valid_id = await this.getStatusId('valid');
-        if(valid_id === null) return '0';
+        if(valid_id === null) return { total: '0', releases: [] };
         let totalSlashed = '0';
+        // Escrow release breakdown, accumulated as the rows are burned; XCHAIN is 8-dp,
+        // matching the arithmetic below. LIFO scan order, so every node writes it alike.
+        let releases = new Map();
+        let addRelease = (address, take) => {
+            // Same halt as slashContractStake: an unattributable bond cannot be released.
+            if(address === null || address === undefined)
+                throw new Error('slashCapabilityStake: stake row has no source address; its escrow is not releasable');
+            let cur = releases.get(address);
+            releases.set(address, this.util.bcstr(this.util.bcadd(cur === undefined ? '0' : cur, take, 8)));
+        };
         // Pass 1: ACTIVE (never-unstaked) stakes rows (LIFO - highest action_index first). Same
         // correctness point as slashContractStake: after UNSTAKE the `stakes` row keeps its amount
         // but carries a FUTURE deactivation_block and its tokens are mirrored into a cooldown
@@ -14274,18 +14753,20 @@ class Database {
         // predicate is dropped; below it the legacy activation-gated burn is preserved for
         // replay/fleet consistency. The `deactivation_block IS NULL` guard is INDEPENDENT and stays
         // in both regimes (it is the Pass-1/Pass-2 double-burn defense, not an activation gate).
-        let activationClause = burnPending ? '' : 'AND activation_block <= ?';
+        let activationClause = burnPending ? '' : 'AND s.activation_block <= ?';
         // Target the owning source when the offender was a delegated key (#3163),
         // otherwise the offender's own signing key. Exactly one column is matched, so
         // there is no chance of double-counting a row across both spellings.
         let targetCol = (ownerSourceId !== null && ownerSourceId !== undefined) ? 'source_id' : 'signing_pubkey_id';
         let targetVal = (ownerSourceId !== null && ownerSourceId !== undefined) ? ownerSourceId : pubkeyId;
-        let stakesQ = `SELECT action_index, amount FROM stakes
-                       WHERE ${targetCol}=? AND status_id=?
+        let stakesQ = `SELECT s.action_index, s.amount, a.address AS source_address
+                       FROM stakes s
+                           LEFT JOIN index_addresses a ON (a.id = s.source_id)
+                       WHERE s.${targetCol}=? AND s.status_id=?
                          ${activationClause}
-                         AND CAST(amount AS DECIMAL(30,8)) > 0
-                         AND deactivation_block IS NULL
-                       ORDER BY action_index DESC`;
+                         AND CAST(s.amount AS DECIMAL(30,8)) > 0
+                         AND s.deactivation_block IS NULL
+                       ORDER BY s.action_index DESC`;
         let stakeArgs = burnPending ? [targetVal, valid_id] : [targetVal, valid_id, blockIndex];
         let stakeRows = await this.doQuery(stakesQ, stakeArgs);
         for(let row of stakeRows){
@@ -14294,6 +14775,7 @@ class Database {
             await this.doQuery('UPDATE stakes SET amount=? WHERE action_index=?', ['0', row.action_index]);
             // prev_amount = the whole row (we burn it entirely); delta = the same.
             await this.createCapabilitySlashDebit(slashActionIndex, 'stakes', row.action_index, rowAmt, rowAmt, blockIndex);
+            addRelease(row.source_address, rowAmt);
             totalSlashed = this.util.bcadd(totalSlashed, rowAmt, 8);
         }
         // Pass 2: cooldown-locked unstakes rows (status valid/pending) - slashable too (closes R-4:
@@ -14304,19 +14786,22 @@ class Database {
         let placeholders = unstakeStatusIds.map(() => '?').join(',');
         // Same owner-vs-own-key targeting as Pass 1 (#3163): cooldown-locked tokens of a
         // delegated key's OWNER are part of the bond and must burn with it.
-        let unstakesQ = `SELECT action_index, amount FROM unstakes
-                         WHERE ${targetCol}=? AND status_id IN (${placeholders})
-                           AND CAST(amount AS DECIMAL(30,8)) > 0
-                         ORDER BY action_index DESC`;
+        let unstakesQ = `SELECT u.action_index, u.amount, a.address AS source_address
+                         FROM unstakes u
+                             LEFT JOIN index_addresses a ON (a.id = u.source_id)
+                         WHERE u.${targetCol}=? AND u.status_id IN (${placeholders})
+                           AND CAST(u.amount AS DECIMAL(30,8)) > 0
+                         ORDER BY u.action_index DESC`;
         let unstakeRows = await this.doQuery(unstakesQ, [targetVal, ...unstakeStatusIds]);
         for(let row of unstakeRows){
             let rowAmt = String(row.amount);
             if(!this.util.bcgt(rowAmt, '0')) continue;
             await this.doQuery('UPDATE unstakes SET amount=? WHERE action_index=?', ['0', row.action_index]);
             await this.createCapabilitySlashDebit(slashActionIndex, 'unstakes', row.action_index, rowAmt, rowAmt, blockIndex);
+            addRelease(row.source_address, rowAmt);
             totalSlashed = this.util.bcadd(totalSlashed, rowAmt, 8);
         }
-        return totalSlashed;
+        return { total: this.util.bcstr(totalSlashed), releases: Array.from(releases, ([address, amount]) => ({ address, amount })) };
     }
 
     // Record one in-place capability-stake slash debit so a reorg can restore the row's
@@ -14841,6 +15326,41 @@ class Database {
                      ORDER BY action_index ASC
                      LIMIT 1`;
         let rows = await this.doQueryStrict(query, [String(originChain || ''), Number(originActionIndex)]);
+        return rows.length > 0 ? rows[0] : null;
+    }
+
+    // Cross-chain relay: has THIS request_id already been ADMITTED on this chain?
+    //
+    // Narrow by design, and deliberately not a change to getAttestationRequestById
+    // above. That shared lookup answers "show me the request row for this id" and
+    // four consensus paths depend on it seeing every stored row, rejected verdicts
+    // included (v1 response resolution, v2 expiry, v4 relay response, slash round
+    // lookup). Only the v3 admission guard needs the narrower question, so only the
+    // v3 admission guard gets this query.
+    //
+    // 'rejected' rows are excluded for the same reason getRelayRequestByOrigin
+    // excludes them, and the omission was exploitable in exactly the shape that
+    // sibling was written to prevent. request_id arrives on the wire and is derivable
+    // in public from the origin chain's v0, so anyone can watch an origin chain, take
+    // the id of a request the federation is about to relay, and broadcast a
+    // deliberately malformed v3 naming it. The malformed one is rejected but still
+    // stored, and a guard that counts stored rows then reads that audit row as "this
+    // id is taken" and refuses the federation's real relay forever. One transaction
+    // fee, one permanently unservable request. A rejected row escrowed nothing, was
+    // never pending and was never served, so it consumed no materialization.
+    //
+    // ORDER BY action_index keeps the FIRST admission canonical on every node, and
+    // doQueryStrict for the reason spelled out on getRelayRequestByOrigin: null here
+    // is what ADMITS the v3, so a swallowed query error collapsing to [] would make
+    // one faulting node materialize a request every other node refused.
+    async getRelayRequestById(requestId){
+        let query = `SELECT action_index, request_id, request_status
+                     FROM attests
+                     WHERE request_id = ? AND version = 0
+                       AND request_status <> 'rejected'
+                     ORDER BY action_index ASC
+                     LIMIT 1`;
+        let rows = await this.doQueryStrict(query, [String(requestId || '').toLowerCase()]);
         return rows.length > 0 ? rows[0] : null;
     }
 
@@ -15676,19 +16196,69 @@ class Database {
         // is "getPriceAtRound(settleRound) === null"). The prices/rounds
         // asymmetry is closed on the `prices` side above (stale tips are kept
         // with the price withheld) rather than by hiding history here.
+        // The window is taken in ROUNDS, then the rows of those rounds are loaded.
+        // The old shape was a flat row cap taken newest-first, which silently made
+        // the visible history a function of the pair count and, worse, left the
+        // eviction boundary invisible: a round outside the payload and a round that
+        // never existed both came back null, and the price-bet family's void guard
+        // reads exactly that null, so the loser of a settled bet could reclaim their
+        // stake by waiting for the settle round to scroll out of the preload.
+        //
+        // Ungated, on the same measurement Item 1 rests on and with the same expiry
+        // date: at the time of the change there were zero deployed contracts and zero
+        // executions on every live network, so getOracleDataForVM had never once run
+        // against a real contract and no replay observes any of this. Once a contract
+        // deploys, what this preload contains IS consensus history and any later
+        // change to the window needs an activation height.
+        //
+        // One number, not six: price_snapshots is a single hub-mirrored set and every
+        // chain path reads the identical rows, so the window applies fleet-wide rather
+        // than per chain.
         let rounds = {};
-        const MAX_ORACLE_ROUNDS = 50000;
+
+        // Step one: which rounds does the window cover? DISTINCT rounds, newest
+        // first, so the answer does not move when a pair is added or a pair misses a
+        // round. Fewer rounds than the window means nothing was evicted at all, and
+        // the floor stays 0: on a young chain (regtest, a fresh testnet) every round
+        // that ever existed is loaded, and a floor above 0 there would report rounds
+        // as "hidden" that simply never happened.
+        let windowRows = await this.doQuery(
+            `SELECT DISTINCT round_number
+             FROM price_snapshots
+             WHERE status = 'finalized' AND price IS NOT NULL AND reference_block <= ?
+             ORDER BY round_number DESC
+             LIMIT ${ORACLE_VM_ROUND_WINDOW}`, [blockCap]);
+        let roundFloor = (windowRows.length >= ORACLE_VM_ROUND_WINDOW)
+            ? Number(windowRows[windowRows.length - 1].round_number)
+            : 0;
+
+        // Step two: every row at or above the floor, under a hard payload ceiling.
         let roundQuery = `SELECT coin_pair, price, round_number, block_timestamp
                           FROM price_snapshots
                           WHERE status = 'finalized' AND price IS NOT NULL AND reference_block <= ?
+                            AND round_number >= ?
                           ORDER BY round_number DESC
-                          LIMIT ${MAX_ORACLE_ROUNDS}`;
-        let roundRows = await this.doQuery(roundQuery, [blockCap]);
-        if(roundRows.length >= MAX_ORACLE_ROUNDS)
-            console.error('[oracle snapshot] round set capped at ' + MAX_ORACLE_ROUNDS +
-                ' rows for block ' + blockIndex + ' - getPriceAtRound may miss older rounds');
+                          LIMIT ${ORACLE_VM_MAX_ROWS}`;
+        let roundRows = await this.doQuery(roundQuery, [blockCap, roundFloor]);
+
+        // The ceiling truncates newest-first, so the OLDEST loaded round is the one
+        // that may be missing pairs. Claiming it is covered would hand a contract the
+        // exact ambiguity this floor exists to remove, for the one round where a
+        // wrong answer is most likely, so the guarantee starts one round above it.
+        if(roundRows.length >= ORACLE_VM_MAX_ROWS){
+            let oldestLoaded = Number(roundRows[roundRows.length - 1].round_number);
+            roundFloor = oldestLoaded + 1;
+            console.error('[oracle snapshot] round set hit the ' + ORACLE_VM_MAX_ROWS +
+                ' row ceiling at block ' + blockIndex + ' - the guaranteed window is ' +
+                'now rounds >= ' + roundFloor + ', short of the ' + ORACLE_VM_ROUND_WINDOW +
+                '-round window (too many coin pairs for the ceiling)');
+        }
+
         for(let r of roundRows){
             let cp = String(r.coin_pair);
+            // A partial round above the raised floor is worse than no round: it would
+            // answer "never existed" for the pairs the ceiling cut off.
+            if(Number(r.round_number) < roundFloor) continue;
             if(!rounds[cp]) rounds[cp] = {};
             rounds[cp][String(r.round_number)] = {
                 price:       r.price,
@@ -15697,7 +16267,11 @@ class Database {
             };
         }
 
-        return { snapshotAge, prices, rounds };
+        // roundFloor rides along to the VM, where readonly-accessors.js turns a read
+        // below it into a distinguishable "outside the loaded window" answer instead
+        // of the null that means "this round never existed". 0 means nothing is
+        // hidden: the preload holds all the history there is.
+        return { snapshotAge, prices, rounds, roundFloor };
     }
 
     // Get the latest finalized price for a coin pair at or before a given block height
@@ -16091,6 +16665,35 @@ Database.MIGRATION_CHECKSUM_REBASELINES = {
         ],
         to: 'a911c38ca928743bb65c763c8143a5a3ad63de18da72b32da83a4971c1735ed8',
     },
+    // The same 758fc1db comment cleanup (internal-reference scrub) caught three more
+    // already-applied files, and unlike the entry above these were never rebaselined, so
+    // every aged testnet/regtest DB logged `content CHANGED` on each start AND - the part
+    // that actually bites - `node src/migrate.js` FAILED CLOSED on the first of them, which
+    // made the whole pending manual backlog unappliable on those hosts. Found 2026-08-26
+    // while working that backlog; the startup warning had been dismissed as noise for two
+    // weeks, which is exactly the failure mode a guard that always fires produces.
+    //
+    // Comment lines only in all three, verified by comparing the comment-stripped residue
+    // rather than assumed: the scrub removed internal ticket ids and an internal tracker
+    // reference from the header prose. The executable SQL is byte-identical.
+    //
+    // The third file's predecessor was an ORPHANED BLOB, unreachable from any commit (the
+    // published-history rewrite, same cause as the five noted above), so `git log` finds
+    // nothing for it; it was recovered by scanning the whole object store (2586 blob
+    // candidates) and only then compared. Mainnet is NOT affected: the BTC mainnet ledger
+    // already records the current hash for all three, so this heals aged non-mainnet DBs.
+    '2026-07-16-mirror-twin-bigint-unsigned-align.sql': {
+        from: '1d981cd5d128c2ec8de391289b11fdc43932f65ee5d3fd8a61c32e7b01be0569', // fd9267e2, pre-scrub
+        to:   'fac090271fd2cebaea9b914d344f94483d97d0ec5b7854bf42263df0153c1d48',
+    },
+    '2026-07-26-tokens-backfill-lock-mint-supply.sql': {
+        from: '03ec334fdfafd207d5ca7d39887422175ab0ed9f83947c21a6d30c2391419215', // ef66d9e3, pre-scrub
+        to:   'f2e53e5a3de9f08b162528323b6cb78bbbddf9591859bf555313801929689c84',
+    },
+    '2026-07-29-state-checkpoints-uq-chain-seq.sql': {
+        from: '05dfd2ef7d246929a451521aa7c4c6e0f21faf019dd06f1f16384a450675267c', // orphaned blob 8a293ccf, pre-scrub
+        to:   '0796c26842434c39b056e9875ba5ee7dbbcfd92d340e2899f7921e03147c5458',
+    },
 };
 
 // Applicability preconditions the runner evaluates against the LIVE schema before it
@@ -16171,6 +16774,56 @@ Database.MIGRATION_PRECONDITIONS = {
                    'anchor_reward_reconcile_log.reward_derive_block_index are already present, ' +
                    'converged from the table definitions by the startup drift reconciler, so this ' +
                    'migration has nothing left to add.';
+        }
+    },
+    // Adds validator_rewards.round_qualifier and anchor_reward_reconcile_log.round_qualifier,
+    // and REBUILDS validator_rewards.reward_unique to include the qualifier. It is mode=manual,
+    // and unlike the derive-block entry above the drift reconciler converges only PART of that
+    // end state: both columns are NOT NULL *with a DEFAULT* in src/sql, so alterTableForDrift
+    // ADDs them, but reconcileTableIndexes never DROPs an index name already held by a
+    // differently-defined live index, so an AGED database keeps the four-column key and logs a
+    // "cannot be applied" drift warning every boot. A database CREATED from the current src/sql
+    // gets the five-column index directly from validator_rewards.sql (createTable executes every
+    // statement in the file, including its CREATE UNIQUE INDEX), so it needs nothing from this
+    // file and would otherwise sit PENDING with no ledger row forever.
+    //
+    // The predicate keys on the LIVE INDEX SHAPE, not on the column, and that is the whole point.
+    // The columns arrive on their own, so a column-only test would baseline exactly the database
+    // this migration exists for: qualifier column present, reward_unique still four-column, the
+    // qualifier-aware writers silently re-collapsing two distinct archive rewards. That state
+    // must NOT be baselined, so the index check is the gate and the columns are only a
+    // completeness check on the other half of the file.
+    //
+    // ONE bind parameter: _migrationPreconditionSkip passes [this.dbName] and nothing else, so
+    // the database name is bound once in a CTE and reused by each subquery.
+    //
+    // non_unique = 0 is asserted, not assumed: a same-named NON-unique index carrying the
+    // qualifier would satisfy a name-and-column test while deduplicating nothing.
+    //
+    // Any missing object, a partial shape, or a count that will not parse returns null and the
+    // file runs, which is idempotent (IF [NOT] EXISTS throughout, and the DROP/ADD index pair
+    // re-creates an identical definition).
+    '2026-08-24-validator-rewards-round-qualifier.sql': {
+        sql: "WITH p AS (SELECT ? AS db) SELECT " +
+             "(SELECT COUNT(*) FROM information_schema.columns, p WHERE table_schema = p.db " +
+             "AND table_name = 'validator_rewards' AND column_name = 'round_qualifier') AS reward_col, " +
+             "(SELECT COUNT(*) FROM information_schema.columns, p WHERE table_schema = p.db " +
+             "AND table_name = 'anchor_reward_reconcile_log' AND column_name = 'round_qualifier') AS log_col, " +
+             "(SELECT COUNT(*) FROM information_schema.statistics, p WHERE table_schema = p.db " +
+             "AND table_name = 'validator_rewards' AND index_name = 'reward_unique' " +
+             "AND column_name = 'round_qualifier' AND non_unique = 0) AS key_col",
+        skipWhen: (rows) => {
+            if(!rows.length) return null;
+            const row = rows[0] || {};
+            const counts = [row.reward_col, row.log_col, row.key_col];
+            for(const raw of counts){
+                if(raw == null) return null;
+                const n = Number(raw);
+                if(Number.isNaN(n) || n < 1) return null;
+            }
+            return 'validator_rewards.reward_unique already carries round_qualifier and both ' +
+                   'round_qualifier columns are present, so this database is already on the ' +
+                   'qualified reward identity and this migration has nothing left to rebuild.';
         }
     },
 };

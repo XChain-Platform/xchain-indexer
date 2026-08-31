@@ -1,8 +1,8 @@
 {
   "name": "xchain-indexer",
   "description": "xchain-indexer is a free open source token platform indexer for the XChain platform",
-  "version": "0.11.0",
-  "xchainRequiresHub": "0.11.0",
+  "version": "0.12.0",
+  "xchainRequiresHub": "0.12.0",
   "license": "AGPL-3.0-or-later",
   "repository": {
     "type": "git",
@@ -15,7 +15,7 @@
     "express-json-rpc-router": "^1.4.0",
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.2.0",
-    "mariadb": "3.5.2",
+    "mariadb": "3.5.3",
     "mathjs": "15.2.0",
     "ws": "^8.21.0",
     "xchain-vm": "file:./xchain-vm"
@@ -26,7 +26,7 @@
     "vendor:vm": "bash bin/vendor-vm.sh",
     "check:vm": "bash bin/vendor-vm.sh check",
     "check:consensus-time": "if grep -rn 'getCurrentTime(' src/actions/ 2>/dev/null; then echo 'ERROR: getCurrentTime() (wall-clock Date.now) must never be called inside src/actions/. Block processing must use the deterministic block timestamp (data[\"BLOCK_TIME\"]); a wall-clock value here diverges consensus state across validator instances'; exit 1; else echo 'OK: no wall-clock time usage in src/actions/'; fi",
-    "test": "mocha --timeout 30000 --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js' 'test/regression/**/*.test.js' 'test/security/**/*.test.js'",
+    "test": "mocha --timeout 30000 --require ./test/setup.js --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js' 'test/regression/**/*.test.js' 'test/security/**/*.test.js'",
     "coverage": "c8 --reporter=text --reporter=html --include 'src/**/*.js' mocha --timeout 30000 --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js' 'test/regression/**/*.test.js' --exit",
     "coverage:check": "c8 --check-coverage --lines 87 --statements 87 --branches 83.6 --functions 81.4 --reporter=text-summary --include 'src/**/*.js' mocha --timeout 30000 --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js' 'test/regression/**/*.test.js' --exit",
     "ci": "npm run check:vm && mocha --timeout 30000 --recursive --exit 'test/unit/**/*.test.js' 'test/unit/*.test.js' 'test/regression/**/*.test.js' 'test/security/**/*.test.js'",
@@ -82,7 +82,7 @@
     "js-yaml": "^4.3.1"
   },
   "engines": {
-    "comment": "Bounded to Node 22: the vendored xchain-vm dependency pulls isolated-vm 5.0.4, whose native binding fails node-gyp on Node 24 (removed V8 API). Node 22 also matches the node:22-bookworm image the indexer ships in. See .nvmrc.",
-    "node": ">=22.0.0 <23"
+    "comment": "Bounded to Node 22: the vendored xchain-vm dependency pulls isolated-vm 5.0.4, whose native binding fails node-gyp on Node 24 (removed V8 API). Node 22 also matches the node:22-bookworm image the indexer ships in. See .nvmrc. The FLOOR is 22.12, not 22.0: the pinned mariadb 3.5.x driver is ESM-only and unflagged require(esm) landed in 22.12, so 22.0-22.11 die on require('mariadb') in src/db.js. npm only warns on engines, so src/db.js asserts the same floor in code.",
+    "node": ">=22.12.0 <23"
   }
 }

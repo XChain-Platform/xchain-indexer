@@ -9,7 +9,7 @@
 // contact legal@dankest.llc.
 //
 // Regression for the archive reassembly CRC check must fire when the
-// v1/v6 head lands AFTER its continuation chunks (chunks-before-head ordering),
+// v1 archive head lands AFTER its continuation chunks (chunks-before-head ordering),
 // not only from the chunk side. Before the head-side gate, a corrupt multi-chunk
 // batch whose completing chunk arrives first leaves the head 'valid' with the
 // signed BATCH_CRC32 never verified until a recovery run.
@@ -27,10 +27,21 @@ const Anchor  = require('../../../src/actions/anchor.js');
 const ed25519 = require('../../../src/ed25519.js');
 const swq     = require('../../../src/stake_weighted_quorum.js');
 const ahug    = require('../../../src/archive_head_unverified_gate_activation.js');
+const aact    = require('../../../src/anchor_activation.js');
+
+// A mainnet fixture must be mined AT OR ABOVE the ANCHOR activation height or the
+// activation gate rejects it before any flag day is consulted, and these cases are
+// about the flag day, not the restart. Both mainnet flag days here are the inert
+// sentinel 999999999, so this height leaves them inert exactly as intended.
+const MAINNET_ACTIVE = aact.ANCHOR_ACTIVATION.mainnet;
 
 const PUBKEY_A = 'a'.repeat(64);
 const SIG      = '1'.repeat(128);
 const HASH     = (c) => c.repeat(64);
+// The lowest DOGE height at which a testnet ANCHOR parses at all: below the v0
+// activation every version is 'invalid: ANCHOR before activation', which would make
+// these reassembly cases pass for the wrong reason.
+const TESTNET_ACTIVE = aact.ANCHOR_ACTIVATION.testnet;
 
 function crc32Hex(str) {
     let buf = Buffer.from(str, 'utf8');
@@ -50,9 +61,13 @@ function crc32Hex(str) {
 function gz64(str) { return zlib.gzipSync(Buffer.from(str, 'utf8'), { level: 9 }).toString('base64url'); }
 
 // v1 archive head carrying only its own leading blob slice + TOTAL_CHUNKS geometry.
+// The publisher tail is ALWAYS present on a v1; these cases ride the degraded shape
+// (ATTEST_SIG_COUNT 0), so no reward is derived and nothing here depends on the
+// attestation quorum.
 function v1HeadParams(f) {
     let p = ['1', 'BTC', f.network || 'regtest', '500', HASH('0'), HASH('1'), HASH('2'), HASH('3'),
-             '0', '100', f.batch_seq, '1', f.crc, f.total_chunks, f.head_b64, '1', PUBKEY_A, SIG];
+             '0', '100', f.batch_seq, '1', f.crc, f.total_chunks, f.head_b64, '1', PUBKEY_A, SIG,
+             PUBKEY_A, '0'];
     return p;
 }
 
@@ -117,7 +132,7 @@ describe('Anchor head-side reassembly gate @regression', function () {
             'with the completing chunks not yet present the chunk-side gate (not the head) owns the check');
     });
 
-    // Status axis: a node with no mirrored oracle_publish snapshot stores every v1/v6
+    // Status axis: a node with no mirrored oracle_publish snapshot stores every v1
     // head 'unverified' (oracleN === 0). The chunk-side path runs regardless of the
     // parent head's status, so the head-side gate must too, or head-last ordering skips
     // the CRC check on exactly those nodes and re-opens the ordering nondeterminism.
@@ -241,20 +256,20 @@ describe('Anchor head-side reassembly gate: unverified flag-day @regression', fu
     });
 
     it('gate INERT (mainnet), unverified head, corrupt blob: deployed valid-only rule stands, no stamp', async function () {
-        let r = await stampedAt('mainnet', 100, true);
+        let r = await stampedAt('mainnet', MAINNET_ACTIVE, true);
         assert.strictEqual(r.status, 'unverified');
         assert.strictEqual(r.stamped, false,
             'below the flag day the head-side gate must keep its deployed valid-only rule, or the widening forks the fleet ungated');
     });
 
     it('gate INERT (mainnet), VALID head, corrupt blob: the always-on half of the gate still stamps', async function () {
-        let r = await stampedAt('mainnet', 100, false);
+        let r = await stampedAt('mainnet', MAINNET_ACTIVE, false);
         assert.strictEqual(r.status, 'valid');
         assert.strictEqual(r.stamped, true, 'the flag day governs ONLY the unverified admission, never the valid path');
     });
 
     it('gate ARMED (testnet), unverified head, corrupt blob: stamps from genesis', async function () {
-        let r = await stampedAt('testnet', 100, true);
+        let r = await stampedAt('testnet', TESTNET_ACTIVE, true);
         assert.strictEqual(r.status, 'unverified');
         assert.strictEqual(r.stamped, true,
             'testnet is armed at 0, so an unverified head runs the same CRC check as a valid one');

@@ -2123,6 +2123,58 @@ describe('Database.getAttestationRequestById() @regression @tier1', function () 
     });
 });
 
+// getRelayRequestById: the v3-admission-only request_id lookup
+describe('Database.getRelayRequestById() @regression @tier1', function () {
+    it('returns null when no ADMITTED row holds the id', async function () {
+        const db = dbWithDoQuery([]);
+        assert.strictEqual(await db.getRelayRequestById('a'.repeat(64)), null);
+    });
+
+    it('returns the admitted row when one holds the id', async function () {
+        const db = dbWithDoQuery([{ action_index: 5, request_id: 'a'.repeat(64), request_status: 'pending' }]);
+        const result = await db.getRelayRequestById('A'.repeat(64));
+        assert.strictEqual(result.action_index, 5);
+        assert.strictEqual(db.doQueryStrict.firstCall.args[1][0], 'a'.repeat(64),
+            'the id is lower-cased before binding, as the wire value is caller-controlled');
+    });
+
+    it('excludes rejected rows, which is the whole point of the separate query', async function () {
+        // A rejected v3 is still stored. Counting it let one malformed front-run at a
+        // public request_id block the federation's real relay for that id forever, so
+        // this clause is the fix, not a filter for tidiness.
+        const db = dbWithDoQuery([]);
+        await db.getRelayRequestById('a'.repeat(64));
+        const sql = db.doQueryStrict.firstCall.args[0];
+        assert.match(sql, /request_status\s*<>\s*'rejected'/,
+            'a rejected audit row consumed no materialization and must not answer the guard');
+        assert.match(sql, /version\s*=\s*0/,
+            'only a v0 request row holds the id; a response row shares it');
+        assert.match(sql, /ORDER BY\s+action_index ASC/,
+            'the FIRST admission is canonical, so every node reaches the same verdict');
+    });
+
+    it('reads through doQueryStrict, because null here ADMITS the request', async function () {
+        // Under doQuery a swallowed query fault returns [], which this method turns into
+        // null, which the v3 guard reads as "id is free" - one faulting node then
+        // materializes a BTC request every other node refused.
+        const db = makeDb();
+        sinon.stub(db, 'doQuery').resolves([]);
+        sinon.stub(db, 'doQueryStrict').rejects(new Error('attests is not a table'));
+        await assert.rejects(() => db.getRelayRequestById('a'.repeat(64)), /attests/);
+        assert.strictEqual(db.doQuery.called, false, 'the lenient path must not be reachable here');
+    });
+
+    it('leaves getAttestationRequestById counting every stored row', async function () {
+        // The shared lookup keeps four consensus callers (v1 response, v2 expiry, v4
+        // relay response, slash round lookup) and their behaviour is deliberately
+        // unchanged: they ask a different question and need to see rejected rows.
+        const db = dbWithDoQuery([]);
+        await db.getAttestationRequestById('a'.repeat(64));
+        assert.doesNotMatch(db.doQuery.firstCall.args[0], /rejected/,
+            'narrowing the shared lookup is what the ruling refused');
+    });
+});
+
 // updateAttestationRequestStatus
 describe('Database.updateAttestationRequestStatus() @regression @tier1', function () {
     it('calls doQuery with UPDATE', async function () {

@@ -66,6 +66,7 @@ const swq     = require('./stake_weighted_quorum.js');
 const eq      = require('./equivocation_header.js');
 const ccr     = require('./cross_chain_royalty_activation.js');
 const ar      = require('./anchor_reward_activation.js');
+const rca     = require('./rollcall_activation.js');
 const abas    = require('./archive_batch_author_activation.js');
 const srb     = require('./snapshot_reorg_buffer.js');
 const cmsh    = require('./capability_min_stake_history.js');
@@ -885,12 +886,25 @@ class AnchorRecovery {
                 // its own ARCHIVE_REWARD flag-day (derived from the ANCHOR v6 attestation
                 // with the frozen ARCHIVE_REWARD_AMOUNT); below each flag-day the legacy
                 // operator-tunable amount is kept as archived (matches the live push path).
-                let derivedChainReward   = /^anchor_(BTC|LTC|DOGE)$/.test(String(r.reward_type)) &&
+                // anchor_bundle (ANCHOR v7) rides the per-chain pin: it is the same
+                // ANCHOR_REWARD_AMOUNT under the same anchor-reward flag-day, one per
+                // per-network bundle instead of one per chain. Without it an archived
+                // bundle reward would be staged at whatever amount the archive claims.
+                let derivedChainReward   = (/^anchor_(BTC|LTC|DOGE)$/.test(String(r.reward_type)) ||
+                                            String(r.reward_type) === 'anchor_bundle') &&
                                            ar.isAnchorRewardActive(Number(r.block_index), network);
                 let derivedArchiveReward = String(r.reward_type) === 'anchor_archive' &&
                                            ar.isArchiveRewardActive(Number(r.block_index), network);
+                // rollcall_publish rides the same pin for the same reason: its amount is a
+                // frozen consensus constant paid to the ELECTED leader, never taken from the
+                // wire, so an archive claiming a larger figure must not be staged
+                // COLLECT-spendable. Its block_index is the EARN block (the epoch height),
+                // which is what isRollcallActive gates on.
+                let derivedRollcallReward = String(r.reward_type) === 'rollcall_publish' &&
+                                            rca.isRollcallActive(Number(r.block_index), network);
                 let frozen = derivedChainReward ? ar.ANCHOR_REWARD_AMOUNT
-                           : derivedArchiveReward ? ar.ARCHIVE_REWARD_AMOUNT : null;
+                           : derivedArchiveReward ? ar.ARCHIVE_REWARD_AMOUNT
+                           : derivedRollcallReward ? rca.ROLLCALL_REWARD_AMOUNT : null;
                 let amount = (frozen !== null) ? frozen : String(r.amount);
                 if(frozen !== null && String(r.amount) !== frozen)
                     this.log('recovery: WARNING archived ' + r.reward_type + ' #' + r.round_number +

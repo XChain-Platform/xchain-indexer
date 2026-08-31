@@ -723,6 +723,51 @@ describe('Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1', function 
         ],
     };
 
+    // The three files the 758fc1db internal-reference scrub caught. Their entries were
+    // missing until 2026-08-26, and the cost was not the log noise: `node src/migrate.js`
+    // fails CLOSED on a checksum mismatch, so the first of these made the entire pending
+    // manual backlog unappliable on every aged testnet/regtest host.
+    const SCRUBBED = {
+        '2026-07-16-mirror-twin-bigint-unsigned-align.sql': '1d981cd5d128c2ec8de391289b11fdc43932f65ee5d3fd8a61c32e7b01be0569',
+        '2026-07-26-tokens-backfill-lock-mint-supply.sql':  '03ec334fdfafd207d5ca7d39887422175ab0ed9f83947c21a6d30c2391419215',
+        '2026-07-29-state-checkpoints-uq-chain-seq.sql':    '05dfd2ef7d246929a451521aa7c4c6e0f21faf019dd06f1f16384a450675267c',
+    };
+
+    Object.entries(SCRUBBED).forEach(function ([file, recorded]) {
+        it(file + ': heals from its pre-scrub revision', function () {
+            const r = Database.MIGRATION_CHECKSUM_REBASELINES[file];
+            assert.ok(r, file + ' must have a rebaseline entry - without it `node src/migrate.js` ' +
+                'fails closed on any DB that applied the pre-scrub revision, taking every OTHER ' +
+                'pending manual migration down with it.');
+            assert.ok([].concat(r.from).includes(recorded),
+                file + ': recorded revision ' + recorded.slice(0, 12) + ' is not covered.');
+        });
+    });
+
+    // The invariant that JUSTIFIES those three rebaselines, pinned so it cannot rot: a
+    // rebaseline is only legitimate while the edit was comment-only. Hashing the
+    // comment-stripped residue makes a future edit to the STATEMENTS fail here loudly,
+    // instead of silently riding a heal entry that no longer describes the change.
+    const EXECUTABLE_RESIDUE = {
+        '2026-07-16-mirror-twin-bigint-unsigned-align.sql': 'f704908ec8c87fe8faa43e991df277e8a0c303a628add80c7a809a723f04da34',
+        '2026-07-26-tokens-backfill-lock-mint-supply.sql':  '554ee749cb1836ced104797186ff4ae5e048d07ac528898be25def30b3bcf273',
+        '2026-07-29-state-checkpoints-uq-chain-seq.sql':    'dd0a8cf50b0c0f03ebb4f517003275e11a8843ded0e144a5041ef138a91b94cc',
+    };
+
+    Object.entries(EXECUTABLE_RESIDUE).forEach(function ([file, residue]) {
+        it(file + ': executable SQL is unchanged from what the rebaseline was verified against', function () {
+            const raw = fs.readFileSync(path.join(MIG_DIR, file), 'utf8');
+            const stripped = raw.split('\n').filter(function (l) {
+                return !/^\s*--/.test(l) && l.trim() !== '';
+            }).join('\n');
+            const got = crypto.createHash('sha256').update(stripped).digest('hex');
+            assert.strictEqual(got, residue,
+                file + ': the executable statements moved. A checksum rebaseline covers ' +
+                'comment-only edits ONLY, so this file now needs its own dated migration ' +
+                'rather than an entry in MIGRATION_CHECKSUM_REBASELINES.');
+        });
+    });
+
     Object.entries(XC805).forEach(function ([file, expected]) {
         it(file + ': heals from both its pre-rename and its license-header revision', function () {
             const r = Database.MIGRATION_CHECKSUM_REBASELINES[file];
