@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-08-30
+
+### Added
+- ROLLCALL: the epoch close, its cross-chain proof client, and the tables and migration behind them.
+- A source absent across consecutive rolled epochs is deactivated by a synthetic unstake.
+- Refused cross-chain calls and refused anchors are recorded as events.
+
+### Fixed
+- The MariaDB connector moves to 3.5.3, closing three high-severity advisories against the pinned 3.5.2.
+- The hub-state mirror recovers when the hub database is rebuilt.
+- An unfiltered anchor lookup returns the checkpoint section rather than a co-located archive head.
+- The anchor-reward mint gate reads a frozen depth, and migration SQL splitting honours backslash escapes.
+- A mirror that once followed another network can refill itself.
+
+### Changed
+- The anchor wire version set restarts, and anchors below activation are invalid.
+- The mainnet anchor activation height moves above the chain tip, so the restarted set arms as a deliberate flag day.
+- Service logging routes through the shared log shim, one line per console call.
+
 ## [0.11.0] - 2026-08-25
 
 Consensus-affecting changes in this release ship behind per-chain activation

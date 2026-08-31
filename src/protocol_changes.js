@@ -257,7 +257,7 @@ const EMISSION_ISSUANCE_LIMITS_MAINNET_TIME = 9999999999;
 // The registry stays put across the 0.9.0 -> 0.10.0 move: every change registers
 // at 0.1.0 or 0.2.0, and isEnabled() ranks components numerically rather than
 // lexically, so 0.10.0 outranks both and the enabled set holds at 90 of 90.
-const CONSENSUS_VERSION = '0.11.0';
+const CONSENSUS_VERSION = '0.12.0';
 
 // Predicate for the NATIVE_FEE_PRICE_TIME_GATE flag-day. Its ONE consumer is
 // utility.getFeeOraclePrices (query selection); nothing else in src/ consults it.
