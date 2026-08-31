@@ -48,10 +48,21 @@
 // every read MUST go through the Number.isFinite guard below -- a bare
 // `height >= ROLLCALL_ACTIVATION[network]` arms mainnet at height 0, since
 // `0 >= null` is true in JS.
+//
+// REGTEST IS INERT TOO, by operator ruling 2026-08-31. Arming a network commits
+// EVERY BTC indexer on it to a wired DOGE peer, because the epoch close cannot
+// decide a non-empty responsible set without one and correctly halts rather
+// than read silence as absence. A single-coin BTC regtest venue -- the e2e
+// matrix job, any future single-coin job, a developer running BTC alone -- has
+// no DOGE peer and can never have one, so a hardcoded regtest height asserted
+// something false of every such venue and wedged them at their first close. A
+// venue that genuinely runs both chains opts in instead. The cost is accepted
+// and named: the ROLLCALL acceptance suite has no armed venue until an arming
+// mechanism exists that does not read env here (see the CONSENSUS note above).
 const ROLLCALL_ACTIVATION = {
     mainnet: null,        // INERT placeholder: the operator owns this height
     testnet: 151200,      // 1008 x 150 = 144 x 1050; tip was 150400 on 2026-08-30, ~5.5 days out
-    regtest: 0,
+    regtest: null,      // INERT: a BTC-only regtest venue has no DOGE peer to prove a close
 };
 
 // Epoch cadence in BTC blocks. Weekly on the live networks per the 2026-08-30
@@ -110,9 +121,9 @@ function isRollcallActive(epochHeight, network){
 }
 
 /**
- * Whether `height` is an epoch boundary on `network`. Epoch 0 IS a real epoch on
- * regtest (ROLLCALL_ACTIVATION.regtest is 0), so callers must not treat a falsy
- * height as "no epoch".
+ * Whether `height` is an epoch boundary on `network`. This is pure cadence and
+ * does NOT consult ROLLCALL_ACTIVATION, so height 0 is a boundary wherever the
+ * interval divides it and callers must not treat a falsy height as "no epoch".
  * @param {number|string} height BTC height
  * @param {string} network mainnet|testnet|regtest
  * @returns {boolean}

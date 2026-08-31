@@ -85,7 +85,19 @@ async function run(params, dataOver, coin){
 describe('ROLLCALL handler (§3.3) - AT7 reason falsification', function(){
 
     let signer;
-    before(function(){ signer = identity(); });
+    // The handler only reaches its falsification reasons on an ARMED network; below
+    // activation every roll call is inert and reports "VERSION (unknown)", which
+    // would turn this whole suite green for the wrong reason. Regtest went INERT on
+    // 2026-08-31 (a single-coin BTC regtest venue has no DOGE peer to prove a close),
+    // so the suite arms it for its own duration. The inert path keeps its own test
+    // below, which sets its own height rather than relying on the shipped value.
+    let savedActivation;
+    before(function(){
+        signer = identity();
+        savedActivation = rca.ROLLCALL_ACTIVATION[NETWORK];
+        rca.ROLLCALL_ACTIVATION[NETWORK] = 0;
+    });
+    after(function(){ rca.ROLLCALL_ACTIVATION[NETWORK] = savedActivation; });
 
     function goodSigs(){
         return [{ pubkey: signer.pubkey, sig: signFor(signer, EPOCH, LEDGER) }];
