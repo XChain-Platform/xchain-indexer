@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.1] - 2026-08-31
+
+### Fixed
+- A reward whose anchor was attested before a restart is judged on the anchor bytes as written, so a chain no longer halts forever at the first such reward and can be replayed from genesis.
+
 ## [0.12.0] - 2026-08-30
 
 ### Added
