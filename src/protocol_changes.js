@@ -257,7 +257,12 @@ const EMISSION_ISSUANCE_LIMITS_MAINNET_TIME = 9999999999;
 // The registry stays put across the 0.9.0 -> 0.10.0 move: every change registers
 // at 0.1.0 or 0.2.0, and isEnabled() ranks components numerically rather than
 // lexically, so 0.10.0 outranks both and the enabled set holds at 90 of 90.
-const CONSENSUS_VERSION = '0.12.0';
+// 0.12.0 -> 0.12.1 registers nothing new. The patch restores admission of anchor
+// bytes the judge already had to read, so the enabled set is identical and no
+// activation argument moved; the pin advances only because it must track the
+// package version, which is what keeps a node from applying a rule set it was
+// not built for.
+const CONSENSUS_VERSION = '0.12.1';
 
 // Predicate for the NATIVE_FEE_PRICE_TIME_GATE flag-day. Its ONE consumer is
 // utility.getFeeOraclePrices (query selection); nothing else in src/ consults it.

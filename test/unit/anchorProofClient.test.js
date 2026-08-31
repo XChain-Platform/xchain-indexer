@@ -172,12 +172,51 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
         // we cannot distinguish a forge from a row we simply cannot read, so we must defer.
         it('returns unknown when the txid carries no attestation-bearing anchor at all', function () {
             // v2 is the archive continuation chunk: it carries no publisher tail, so it is
-            // not evidence either way. A pre-restart version reads the same, which is what
-            // keeps a mixed-fleet cut-over deferring rather than forfeiting a reward.
+            // not evidence either way. The pre-restart versions do NOT read the same any
+            // more: treating them as unreadable is what halted BTC testnet at 150455 forever
+            // (a pre-restart-attested reward maturing after the restart could never be
+            // proven). They are attestation-bearing rows every node can read, so they are
+            // evidence - proving their own family (6 archive, 7 bundle) and deterministically
+            // rejecting outside it (4/5, the retired per-chain wires, prove nothing).
             const c = client();
             assert.strictEqual(c._judge([anchor({ version: 2, publisher: null })], expectation()), 'unknown');
-            for (const version of [4, 5, 6, 7])
-                assert.strictEqual(c._judge([anchor({ version })], expectation()), 'unknown', 'v' + version);
+        });
+
+        // The pre-restart era, in one place. The version restart renumbered the archive head
+        // 6 -> 1 and the bundle 7 -> 0 (anchor.js dispatch), so a pre-restart anchor row
+        // keeps its legacy wire byte while naming the same shape. A reward attested before
+        // the restart but maturing after it (BTC testnet 150456) must prove against that
+        // byte; the family exclusivity holds across eras; and the retired per-chain wires
+        // reject deterministically instead of deferring the block forever.
+        it('verifies a buried, tuple-matching pre-restart v6 archive head (the 150456 shape)', function () {
+            assert.strictEqual(client()._judge([anchor({ version: 6 })], expectation()), 'verified');
+        });
+
+        it('verifies a buried pre-restart v7 bundle against its anchor_bundle reward', function () {
+            const a = anchor({ version: 7, match_batch_seq: null, checkpoint_seq: 900 });
+            const e = expectation({ rewardType: 'anchor_bundle', roundReference: 900 });
+            assert.strictEqual(client()._judge([a], e), 'verified');
+        });
+
+        it('keeps the family exclusive across eras: v6 proves no bundle, v7 proves no archive', function () {
+            const c = client();
+            const e = expectation({ rewardType: 'anchor_bundle', roundReference: 900 });
+            assert.strictEqual(c._judge([anchor({ version: 6 })], e), 'rejected');
+            assert.strictEqual(c._judge([anchor({ version: 7, match_batch_seq: null })], expectation()), 'rejected');
+        });
+
+        it('rejects (never defers on) a txid carrying only retired per-chain v4/v5 anchors', function () {
+            const c = client();
+            for (const version of [4, 5])
+                assert.strictEqual(c._judge([anchor({ version })], expectation()), 'rejected', 'v' + version);
+        });
+
+        it('drops a post-activation forgery on a legacy byte via its wire-determined status', function () {
+            // At/above ANCHOR_ACTIVATION a legacy byte parses 'invalid: VERSION (unknown)',
+            // chain data every DOGE node computes identically, so the row is not evidence
+            // and the mis-bind resolves 'rejected' rather than minting or deferring.
+            const a = anchor({ version: 6, status: 'invalid: VERSION (unknown)' });
+            assert.strictEqual(client()._judge([a], expectation()), 'rejected');
         });
 
         it('picks the matching anchor when a transaction carries several', function () {
@@ -457,13 +496,17 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
             assert.strictEqual(client()._judge([a], bundleReward()), 'rejected');
         });
 
-        // A pre-restart anchor is not in the attested set at all, so it is no evidence about
-        // a bundle reward either way: the block defers rather than forfeiting the reward.
-        it('defers on a pre-restart anchor offered as proof of a bundle reward', function () {
+        // Pre-restart anchors are attested rows every node can read, so they are evidence:
+        // the bundle's own pre-restart byte (7) proves its reward, and the rest of the
+        // legacy set resolves 'rejected' deterministically instead of deferring the block
+        // forever (the BTC testnet 150455 halt).
+        it('judges a pre-restart anchor offered as proof of a bundle reward', function () {
             const c = client();
-            for (const version of [4, 5, 6, 7])
+            for (const version of [4, 5, 6])
                 assert.strictEqual(c._judge([anchor({ version, checkpoint_seq: SNAP, snapshot_block: SNAP })],
-                                            bundleReward()), 'unknown', 'v' + version);
+                                            bundleReward()), 'rejected', 'v' + version);
+            assert.strictEqual(c._judge([anchor({ version: 7, checkpoint_seq: SNAP, snapshot_block: SNAP })],
+                                        bundleReward()), 'verified', 'v7 is the bundle\'s own pre-restart byte');
         });
 
         // "Cannot tell" must stay apart from "no". A transaction carrying only unattested rows
@@ -528,8 +571,11 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
     // deterministic permanent NO rather than an 'unknown' that would wedge the block loop
     // waiting for an anchor no live wire can ever carry.
     describe('_judge: the retired per-chain leg', function () {
-        it('exposes exactly the two live families', function () {
-            assert.deepStrictEqual(AnchorProofClient.ATTESTED_VERSIONS.slice().sort((a, b) => a - b), [0, 1]);
+        it('exposes the live and pre-restart attested versions', function () {
+            // 0/1 are the live wires; 4-7 are the pre-restart bytes, kept so an attested
+            // reward maturing after the version restart still finds its anchor (6/7 prove
+            // their renumbered family, 4/5 reject deterministically via the family map).
+            assert.deepStrictEqual(AnchorProofClient.ATTESTED_VERSIONS.slice().sort((a, b) => a - b), [0, 1, 4, 5, 6, 7]);
         });
 
         it('rejects every per-chain reward_type, whatever the transaction carries', function () {

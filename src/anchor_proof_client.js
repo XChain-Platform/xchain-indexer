@@ -52,7 +52,18 @@ const url   = require('url');
 
 // Attestation-bearing ANCHOR versions. A reward exists only for these; anything else on
 // the txid is a different anchor and cannot stand in as proof of this one.
-const ATTESTED_VERSIONS = [0, 1];
+//
+// The pre-restart wire bytes stay in this set on purpose. Rewards attested against them
+// can still be IN FLIGHT: the hub wrote the attestation row before the version restart,
+// and the row matures on the fleet watermark, which can land after the restart deployed
+// (BTC testnet block 150456 did exactly this). Dropping the legacy bytes from this set
+// made such a row eternally 'unknown' - the loop below never saw an attested anchor on
+// the txid, and "cannot tell" defers the block forever. Keeping 4/5 (the retired
+// per-chain wires) alongside 6/7 also keeps a mis-bind deterministic: a txid carrying
+// only per-chain anchors judges 'rejected' rather than deferring, exactly as it did
+// before the restart. Which versions can PROVE which family stays the job of
+// REWARD_FAMILY_VERSIONS below; membership here only says "this is an attested anchor".
+const ATTESTED_VERSIONS = [0, 1, 4, 5, 6, 7];
 
 // Which anchor versions can prove which reward FAMILY, and nothing else.
 //
@@ -65,9 +76,21 @@ const ATTESTED_VERSIONS = [0, 1];
 //
 // The per-chain family is gone with the per-chain wires: those rewards were attested before
 // the version restart, are already recorded, and are never re-derived (spec D9).
+//
+// Each family also admits its PRE-RESTART wire byte. The restart renumbered the same two
+// shapes rather than defining new ones - anchor.js's own dispatch reads wire byte 6
+// through the v1 archive branch and 7 through the v0 bundle branch - but a pre-restart
+// anchor ROW keeps the byte it was mined with, so a pre-restart-attested reward maturing
+// after the restart must find its anchor under the legacy byte or it can never be proven
+// (the BTC testnet halt at 150455/150456). The exclusivity the map exists for survives the
+// alias: 6 admits only into archive and 7 only into bundle, so a bundle section still
+// cannot prove an archive reward in either era. A post-activation anchor forged on a
+// legacy byte cannot ride in: at/above ANCHOR_ACTIVATION those bytes parse
+// 'invalid: VERSION (unknown)', a wire-determined status every DOGE node computes
+// identically, and the deterministic-invalid filter in _judge drops the row as evidence.
 const REWARD_FAMILY_VERSIONS = {
-    archive: [1],
-    bundle:  [0]
+    archive: [1, 6],
+    bundle:  [0, 7]
 };
 
 // The reward family a reward_type names. reward_type is inside the XANCPUB canonical the
@@ -329,7 +352,9 @@ class AnchorProofClient {
         let bundleBlock = null;
         if(family === 'bundle'){
             for(let a of anchors){
-                if(Number(a.version) !== 0) continue;
+                // Either era's bundle rows (v0, or pre-restart v7) reconstruct the header;
+                // one transaction carries one bundle, so the eras never mix on one txid.
+                if(!REWARD_FAMILY_VERSIONS.bundle.includes(Number(a.version))) continue;
                 let b = Number(a.snapshot_block);
                 if(Number.isFinite(b) && (bundleBlock === null || b > bundleBlock)) bundleBlock = b;
             }
@@ -338,9 +363,9 @@ class AnchorProofClient {
         for(let a of anchors){
             if(!ATTESTED_VERSIONS.includes(Number(a.version))) continue;   // a sibling anchor in the same tx, not our proof
             sawAttested = true;
-            // One family, one wire version (REWARD_FAMILY_VERSIONS above). A v0 bundle section
-            // can never prove an archive reward and a v1 archive head can never prove a bundle
-            // one, whatever else on the transaction matches.
+            // One family, one wire version per era (REWARD_FAMILY_VERSIONS above). A bundle
+            // section can never prove an archive reward and an archive head can never prove a
+            // bundle one, in either era, whatever else on the transaction matches.
             if(!versions.includes(Number(a.version))) continue;
             // Decoded-invalid never anchored anything, EXCEPT where the invalidity is a
             // node-class verdict rather than chain data (NODE_CLASS_DEPENDENT_STATUS above):
