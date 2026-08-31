@@ -35,6 +35,7 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 const sinon  = require('sinon');
+const crypto = require('crypto');
 
 const { getTestConfig } = require('../fixtures/config');
 const Utility           = require('../../src/utility');
@@ -328,5 +329,46 @@ describe('api.js getrollcalls / getrollcallabsences wiring (source-scan) @regres
     it('getrollcalls delegates to db.getRollcalls and getrollcallabsences to db.getRollcallAbsencesBySource', function () {
         assert.match(bodies['getrollcalls'], /db\.getRollcalls\(max\)/);
         assert.match(bodies['getrollcallabsences'], /db\.getRollcallAbsencesBySource\(source, max\)/);
+    });
+});
+
+// The federation read reports the sha256 of the vendored action manifest, and it
+// reads that file from a path under test/. The Dockerfile copies only src/,
+// xchain-vm, the package files and data/genesis, so for as long as this pairing
+// is not asserted the read answers null in every containerized deployment while
+// passing every test on a developer's disk. The asking side then fail-closes on
+// a hash that can never match and defers the epoch close forever, behind an
+// indexer that reports healthy. Measured live on the regtest DOGE indexer:
+// manifest_hash null, file absent from the image.
+describe('the manifest the federation read hashes actually ships @regression @tier1', function () {
+
+    // Read the path out of api.js rather than restating it: a refactor that moves
+    // the file must break this test, not silently pass it against a stale literal.
+    function manifestPathFromApi() {
+        const src = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
+        const m = src.match(/path\.join\(__dirname,\s*'\.\.'\s*,\s*((?:'[^']+'\s*,\s*)*'[^']+')\s*\)/);
+        assert.ok(m, 'could not find the manifest path expression in src/api.js');
+        return m[1].split(',').map((s) => s.trim().replace(/^'|'$/g, ''));
+    }
+
+    it('the Dockerfile copies the file src/api.js hashes for manifest_hash', function () {
+        const parts = manifestPathFromApi();
+        assert.ok(parts.includes('action-manifest.json'),
+            'expected api.js to hash action-manifest.json; got ' + JSON.stringify(parts));
+        const rel = parts.join('/');
+        const docker = fs.readFileSync(path.join(__dirname, '../../Dockerfile'), 'utf8');
+        const copies = [...docker.matchAll(/^COPY\s+\.\/(\S+)/gm)].map((x) => x[1]);
+        const shipped = copies.some((c) => rel === c || rel.startsWith(c.replace(/\/$/, '') + '/'));
+        assert.ok(shipped,
+            'the Dockerfile ships none of ' + JSON.stringify(copies) + ' covering ' + rel +
+            ', so manifest_hash is null in every container and every roll-call close defers forever');
+    });
+
+    it('that file exists and hashes to something, so the read cannot answer null', function () {
+        const parts = manifestPathFromApi();
+        const abs = path.join(__dirname, '../..', ...parts);
+        assert.ok(fs.existsSync(abs), 'the manifest api.js hashes does not exist at ' + abs);
+        const hash = crypto.createHash('sha256').update(fs.readFileSync(abs)).digest('hex');
+        assert.match(hash, /^[0-9a-f]{64}$/, 'manifest_hash must be a real sha256, never null');
     });
 });
