@@ -142,6 +142,19 @@ function dbFor(fed, over){
 
 describe('ROLLCALL epoch close (§3.4)', function(){
 
+    // The close returns 0 immediately below activation, so on an inert network every
+    // assertion here would pass by doing nothing. Regtest went INERT on 2026-08-31
+    // (a single-coin BTC regtest venue has no DOGE peer to prove a close), so the
+    // suite arms it for its own duration and restores it after. Regtest stays the
+    // right target: its 30/12/2 cadence is the short-interval case, and the live
+    // networks' 1008/144/36 would need epoch heights in the hundreds of thousands.
+    let savedActivation;
+    before(function(){
+        savedActivation = rca.ROLLCALL_ACTIVATION[NETWORK];
+        rca.ROLLCALL_ACTIVATION[NETWORK] = 0;
+    });
+    after(function(){ rca.ROLLCALL_ACTIVATION[NETWORK] = savedActivation; });
+
     describe('when the close does not run at all', function(){
 
         it('is a no-op off BTC, where no stake row lives', async function(){

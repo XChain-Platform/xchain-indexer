@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A mirror that once followed another network can refill itself.
 
 ### Changed
+- ROLLCALL is inert on regtest: arming a network commits every BTC indexer on it to a wired DOGE peer, which a single-coin regtest venue cannot have.
 - The anchor wire version set restarts, and anchors below activation are invalid.
 - The mainnet anchor activation height moves above the chain tip, so the restarted set arms as a deliberate flag day.
 - Service logging routes through the shared log shim, one line per console call.

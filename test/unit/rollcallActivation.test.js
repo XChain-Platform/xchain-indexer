@@ -139,8 +139,14 @@ describe('rollcall_activation', function () {
             assert.strictEqual(act.isRollcallActive(151201, 'testnet'), true);
         });
 
-        it('is active from genesis on regtest, epoch 0 included', function () {
-            assert.strictEqual(act.isRollcallActive(0, 'regtest'), true);
+        // Regtest is inert by the 2026-08-31 ruling, for the same JS trap reason
+        // mainnet is: a single-coin BTC regtest venue has no DOGE peer, and the
+        // close halts rather than read silence as absence, so an armed height
+        // wedged every such venue at its first epoch close.
+        it('never arms an inert regtest, at any height', function () {
+            assert.strictEqual(0 >= act.ROLLCALL_ACTIVATION.regtest, true, 'the JS trap this guard exists for');
+            for (const h of [0, 30, 60, 99999999])
+                assert.strictEqual(act.isRollcallActive(h, 'regtest'), false, 'regtest armed at ' + h);
         });
 
         it('fails closed on an unknown network or unparseable height', function () {
@@ -180,11 +186,20 @@ describe('rollcall_activation', function () {
             assert.strictEqual(act.rollcallCloseHeight(151200, 'testnet'), 151200 + 144 + 36);
         });
 
+        // Testnet is the only network shipping armed, so it carries this on its own.
+        // The regtest legs arm it explicitly rather than being dropped, because the
+        // round trip is cadence arithmetic and regtest is the only cadence that
+        // differs (30/12/2 against 1008/144/36), so dropping it would stop testing
+        // the short-interval case entirely.
         it('round-trips a close block back to its epoch on an ARMED network', function () {
-            for (const [E, net] of [[30, 'regtest'], [60, 'regtest'], [151200, 'testnet']]) {
-                const C = act.rollcallCloseHeight(E, net);
-                assert.strictEqual(act.rollcallEpochClosingAt(C, net), E, net + ' close ' + C);
-            }
+            const saved = act.ROLLCALL_ACTIVATION.regtest;
+            act.ROLLCALL_ACTIVATION.regtest = 0;
+            try {
+                for (const [E, net] of [[30, 'regtest'], [60, 'regtest'], [151200, 'testnet']]) {
+                    const C = act.rollcallCloseHeight(E, net);
+                    assert.strictEqual(act.rollcallEpochClosingAt(C, net), E, net + ' close ' + C);
+                }
+            } finally { act.ROLLCALL_ACTIVATION.regtest = saved; }
         });
 
         it('returns null for a block where no epoch closes', function () {
