@@ -4,8 +4,8 @@
 # XChain Platform Indexer
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.11.0-blue" alt="Version">
-  <img src="https://img.shields.io/badge/tests-5200%2B%20passing-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/version-0.12.1-blue" alt="Version">
+  <img src="https://img.shields.io/badge/tests-8%2C173%2B%20passing-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/node-%3E%3D22-green" alt="Node">
   <img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue" alt="License">
 </p>
@@ -146,26 +146,26 @@ defaults hold on an unconfigured box:
 |---|---|
 | `npm run api` | Start the indexer and API server |
 | `bin/run-db-tiers.sh` | Run the DB-backed tiers against a throwaway MariaDB it starts and drops |
-| `npm test` | Run unit tests (~4,600 tests) |
-| `npm run test:integration` | Integration tests (~215 tests, requires MariaDB) |
+| `npm test` | Run unit tests (~7,483 tests) |
+| `npm run test:integration` | Integration tests (~275 tests, requires MariaDB) |
 | `npm run test:e2e` | End-to-end tests (43 tests, requires full stack) |
-| `npm run test:boundary` | Boundary condition tests |
-| `npm run test:smoke` | Smoke tests (unit + connected) |
-| `npm run test:security` | Security tests |
-| `npm run test:fuzz` | Fuzz tests (property-based) |
-| `npm run test:fuzz:quick` | Quick fuzz (1,000 iterations, tier1) |
-| `npm run test:fuzz:full` | Full fuzz (10,000 iterations) |
-| `npm run test:chaos` | Chaos engineering tests |
+| `npm run test:boundary` | Boundary condition tests (132 tests) |
+| `npm run test:smoke` | Smoke tests (unit + connected, 23 tests) |
+| `npm run test:security` | Security tests (117 tests) |
+| `npm run test:fuzz` | Fuzz tests (property-based, 122 tests) |
+| `npm run test:fuzz:quick` | Quick fuzz (1,000 iterations, tier1, 84 tests) |
+| `npm run test:fuzz:full` | Full fuzz (10,000 iterations, 122 tests) |
+| `npm run test:chaos` | Chaos engineering tests (44 tests) |
 | `npm run test:mutation` | Mutation tests |
 | `npm run test:mutation:tier1` | Tier1 mutation tests |
 | `npm run test:mutation:report` | Mutation tests with coverage report |
-| `npm run test:perf` | All performance tests |
-| `npm run test:perf:regimes` | Load-regime scenarios: fast chain (DOGE) and fee spike |
-| `npm run test:regression` | Regression tests (tagged across all suites) |
-| `npm run test:regression:fast` | Fast regression (tier1 + tier4, unit only) |
-| `npm run test:regression:full` | Full regression suite |
-| `npm run test:nodb` | All tests that don't require a database |
-| `npm run test:full` | Complete test suite |
+| `npm run test:perf` | All performance tests (26 tests) |
+| `npm run test:perf:regimes` | Load-regime scenarios: fast chain (DOGE) and fee spike (9 tests) |
+| `npm run test:regression` | Regression tests (tagged across all suites, 6,830 tests) |
+| `npm run test:regression:fast` | Fast regression (tier1 + tier4, unit only, 3,250 tests) |
+| `npm run test:regression:full` | Full regression suite (6,830 tests) |
+| `npm run test:nodb` | All tests that don't require a database (7,736 tests) |
+| `npm run test:full` | Complete test suite (8,077 tests) |
 
 ### Running the DB-backed tiers
 
