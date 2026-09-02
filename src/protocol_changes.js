@@ -262,7 +262,16 @@ const EMISSION_ISSUANCE_LIMITS_MAINNET_TIME = 9999999999;
 // activation argument moved; the pin advances only because it must track the
 // package version, which is what keeps a node from applying a rule set it was
 // not built for.
-const CONSENSUS_VERSION = '0.12.1';
+//
+// 0.12.1 -> 0.14.0 registers nothing HERE either, and that is worth stating
+// because this train IS consensus-breaking. Attestation responsible-set widening
+// is gated by its own block-anchored map (attest_responsible_widening_activation.js),
+// the same shape every other flag day in this repo uses, rather than by a
+// registry entry; this pin advances only to track the package version. 0.13.0 is
+// skipped deliberately at the operator's request, and nothing here resolves
+// versions by contiguity: isEnabled() ranks numerically, so 0.14.0 outranks every
+// registered change exactly as 0.12.1 did.
+const CONSENSUS_VERSION = '0.14.0';
 
 // Predicate for the NATIVE_FEE_PRICE_TIME_GATE flag-day. Its ONE consumer is
 // utility.getFeeOraclePrices (query selection); nothing else in src/ consults it.
