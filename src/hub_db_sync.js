@@ -363,6 +363,71 @@ function priceUpsertSql(cols, rowCount) {
 // the round-ceiling rule, which needs no set at all.
 const PRICE_FINALIZED_KEY_CAP = 500000;
 
+// ── price_snapshots bootstrap bound ──────────────────────────────────────────
+//
+// price_snapshots is the one mirrored table with UNBOUNDED retention, and the
+// hub never prunes it: 36 coin pairs at the default 600s round interval write
+// ~5,184 rows a day forever. Every one of them was applied on every bootstrap,
+// one awaited INSERT at a time, BEFORE the price barrier could arm - so a fresh
+// or restarted indexer's time-to-first-block was a function of how long the
+// oracle had been running rather than of how far behind that indexer was
+// (measured 2026-08: 411,609 rows held a 372-block TBTC reparse for ~13 min).
+//
+// THE BARRIER IS NOT THE PROBLEM and is untouched here. What the bootstrap must
+// still drain is the set of rounds any block this node will process can read,
+// and that set is bounded, because every consensus read of this table is
+// anchored to the block being processed:
+//   - db.getLatestPrice - the newest finalized round at/below the block
+//     (reference_block on the reference chain, block_timestamp under H-3);
+//   - db.getPricesInTimeRange - rounds within FIAT_DISPENSER_PRICE_WINDOW of the
+//     block time (reverseOraclePriceMatch reaches two windows back);
+//   - db.getOracleDataForVM - the newest ORACLE_VM_ROUND_WINDOW rounds at/below
+//     the block, plus the roundFloor it hands the VM. That one is a ROUND count,
+//     not a time span, and it is VM-visible: a mirror holding fewer rounds than
+//     its peers computes a different roundFloor and forks the contract hash, so
+//     it is the binding constraint on how far back the mirror must reach.
+// So the bound is: everything at or after a HORIZON supplied by the consumer
+// (the block time of the first block this indexer will ever parse, already set
+// back by its own read windows - see XChainIndexer._priceMirrorHorizon), plus a
+// margin of history below that horizon deep enough to cover the VM round window.
+//
+// Nothing is ever deleted by this bound: it only decides what a bootstrap
+// INSERTS. An existing full-history mirror keeps every row it holds, and a
+// consumer that supplies no horizon (the explorer's vendored display mirror)
+// mirrors the whole table exactly as before.
+
+// How many rounds of pre-horizon history the mirror aims to hold. Must stay
+// STRICTLY ABOVE protocol/constants.js ORACLE_VM_ROUND_WINDOW (1200), the deepest
+// round window any consensus read can see; the headroom absorbs skipped rounds and
+// a raise of that constant landing before every node redeploys. Deliberately NOT
+// imported from there: this file is vendored verbatim into xchain-explorer, whose
+// protocol/constants.js is a different file that does not define it, so a require
+// would resolve to `undefined` in the vendored copy and silently disable the floor.
+// test/unit/hub_db_sync_price_bootstrap_bound.test.js asserts the lockstep against
+// the real constant instead.
+const PRICE_MIRROR_ROUND_MARGIN = 1500;
+
+// The deepest round window a consensus read can reach (protocol/constants.js
+// ORACLE_VM_ROUND_WINDOW). Held here as the drain's own acceptance threshold: a
+// bootstrap that retained fewer pre-horizon rounds than this, while the hub served
+// more, has cut into VM-visible history and refuses to certify (see _bootstrapTable).
+const PRICE_MIRROR_MIN_PRE_HORIZON_ROUNDS = 1200;
+
+// Pre-horizon lookback a drain starts from, in seconds: PRICE_MIRROR_ROUND_MARGIN
+// rounds at the hub's default 600s ORACLE_ROUND_INTERVAL (xchain-hub constants.js
+// DEFAULT_ORACLE_ROUND_INTERVAL_MS). A deployment on a different cadence is NOT
+// assumed to fit: the drain counts the rounds it actually retained and widens the
+// span itself when it came up short, so this is a starting point, never a
+// correctness assumption.
+const PRICE_MIRROR_LOOKBACK_S = PRICE_MIRROR_ROUND_MARGIN * 600;
+
+// Factor the lookback grows by after a short drain, and the ceiling past which the
+// bound gives up and mirrors the table in full. Fail-open by construction: the
+// worst case is the unbounded behavior this bound exists to improve on, never a
+// mirror that is short of what consensus reads.
+const PRICE_MIRROR_LOOKBACK_GROWTH = 4;
+const PRICE_MIRROR_LOOKBACK_MAX_S  = PRICE_MIRROR_LOOKBACK_S * 64;
+
 // Natural key of a price_snapshots row: its UNIQUE (round_number, coin_pair).
 // String()-normalized on both sides so a wire number and a driver-returned
 // BIGINT/string for the same round produce the same key. NUL-joined because no
@@ -558,6 +623,30 @@ class HubDbSync {
         this._pendingPriceEvents   = [];
         this._pendingPriceOverflow = false;
         this._wsEpoch              = 0;
+
+        // price_snapshots bootstrap bound. Optional async hook returning the
+        // unix-second HORIZON below which no block this consumer will ever process can
+        // read a price round; the drain then applies rounds at/after it plus a margin of
+        // history below it (see the constant block above). Absent, unresolvable or
+        // non-positive => no bound at all, which is the unbounded full mirror: the
+        // explorer's vendored display mirror passes nothing and is unchanged.
+        this.getPriceMirrorHorizon = (typeof options.getPriceMirrorHorizon === 'function')
+            ? options.getPriceMirrorHorizon : null;
+        // How far below the horizon the current drain reaches, and the drain's own verdict
+        // on whether that span was deep enough. Instance state, not constants, because a
+        // short drain widens the span for the retry and a repeatedly short one disables the
+        // bound outright.
+        this._priceMirrorLookbackS     = PRICE_MIRROR_LOOKBACK_S;
+        this._priceMirrorBoundDisabled = false;
+        // Set when a block older than the bounded mirror's floor was seen; holds both price
+        // barriers shut until a drain has mirrored price_snapshots in full again.
+        this._priceMirrorRefloor       = false;
+        // Timestamp below which the local price_snapshots copy is deliberately incomplete,
+        // or 0 when it holds everything the hub served. Read by the price barriers: a block
+        // older than this is a block whose price reads the mirror cannot answer, so the
+        // bound is abandoned and the table re-mirrored in full rather than settled against
+        // (see _notePriceMirrorFloor).
+        this._priceMirrorFloorTs   = 0;
 
         // Serialization chain for the WebSocket message handler. Each incoming
         // message appends its async work to this promise so that a watermark
@@ -914,6 +1003,19 @@ class HubDbSync {
         let servedPriceKeys   = (table === 'price_snapshots') ? new Set() : null;
         let priceKeysComplete = true;
         let maxServedRound    = 0;
+        // price_snapshots only: the bootstrap bound. `priceHorizon` is the block
+        // time of the oldest block this consumer can still process, 0 when no bound applies.
+        // `priceFloor` is how far below it this drain reaches. Rows older than the floor are
+        // SERVED (so every warrant that rests on the drain having seen the hub's whole table
+        // - the reconciliation below above all - is untouched) but not APPLIED.
+        let priceHorizon = (table === 'price_snapshots') ? await this._resolvePriceMirrorHorizon() : 0;
+        let priceFloor   = (priceHorizon > 0) ? (priceHorizon - this._priceMirrorLookbackS) : 0;
+        // Distinct FINALIZED rounds below the horizon the hub served, and how many of them
+        // this drain kept. Finalized-only because that is the exact set every consensus read
+        // filters on, so it is what the acceptance check below must measure.
+        let preHorizonServed   = (priceHorizon > 0) ? new Set() : null;
+        let preHorizonRetained = (priceHorizon > 0) ? new Set() : null;
+        let priceSkipped       = 0;
 
         // Progress counter. `fetched` counts every row the hub served this drain, which is
         // the number that has to be seen moving on a cold start even where `applied` lags
@@ -948,12 +1050,29 @@ class HubDbSync {
         let flushPending = async () => {
             if (pending.length === 0) return true;
             let batch   = pending.map(p => p.row);
-            let batched = (batch.length > 1) ? await this._applyRowsBatched(table, batch) : false;
+            // A batch cannot express a per-row hold, so a drain under the mirror
+            // horizon takes the per-row path. Batching is an optimization only, and
+            // this is the same fallback a statement the driver rejects already takes.
+            let batched = (batch.length > 1 && !(priceHorizon > 0)) ? await this._applyRowsBatched(table, batch) : false;
             let ok      = true;
             for (let entry of pending) {
                 let row = entry.row;
+                // Decide the bound BEFORE the apply, and record the round on both
+                // sides of it. A row with no usable block_timestamp (0/absent) is never
+                // bounded out - the bound only ever narrows on evidence.
+                let boundOut = false;
+                if (priceHorizon > 0) {
+                    let rowTs = Number(row.block_timestamp);
+                    if (Number.isFinite(rowTs) && rowTs > 0 && rowTs < priceHorizon) {
+                        let finalizedRound = (String(row.status) === 'finalized');
+                        if (finalizedRound) preHorizonServed.add(String(row.round_number));
+                        if (rowTs < priceFloor) boundOut = true;
+                        else if (finalizedRound) preHorizonRetained.add(String(row.round_number));
+                    }
+                }
                 try {
-                    if (!batched) await this._applyRow(table, row);
+                    if (boundOut) priceSkipped++;
+                    else if (!batched) await this._applyRow(table, row);
                     if (servedMatchIds) {
                         servedMatchIds.add(String(row.match_id));
                         let sid = Number(row.id);
@@ -973,7 +1092,7 @@ class HubDbSync {
                             else servedPriceKeys.add(priceRoundKey(row.round_number, row.coin_pair));
                         }
                     }
-                    applied++;
+                    if (!boundOut) applied++;
                 } catch (err) {
                     applyErrors++;
                     console.warn('HubDbSync: failed to apply row in ' + table + ':', err);
@@ -993,7 +1112,10 @@ class HubDbSync {
                     ok = false;
                     break;
                 }
-                // Advance the cursor only for a row that actually applied.
+                // Advance the cursor only for a row that actually applied - or that the
+                // mirror bound deliberately declined, which is equally "handled" and can
+                // leave no hole: price_snapshots is a FULL_REPAGE table, so its cursor
+                // restarts at 0 on every drain and never carries this position forward.
                 let rowId = Number(row.id);
                 if (Number.isFinite(rowId) && rowId > lastId) lastId = rowId;
             }
@@ -1047,7 +1169,9 @@ class HubDbSync {
             if (applyErrors > 0) break;                      // hole hit: stop paging, retry from it
             if (result.rows.length < PAGE_LIMIT) break;      // short page = drained
         }
-        console.log('HubDbSync: bootstrapped ' + applied + ' rows into ' + table);
+        console.log('HubDbSync: bootstrapped ' + applied + ' rows into ' + table +
+            (priceSkipped > 0 ? ' (' + priceSkipped + ' row(s) below the ' + priceFloor +
+                ' mirror floor left unapplied)' : ''));
 
         // Defense-in-depth: if the hub told us its max_id at subscription time and our
         // local copy is still behind that ceiling, the REST snapshot window may have
@@ -1099,6 +1223,43 @@ class HubDbSync {
 
         // Fully drained only if the final page wasn't full and everything applied.
         let fullyDrained = lastPageCount < PAGE_LIMIT && applyErrors === 0;
+
+        // Mirror-bound acceptance check. The lookback is a SPAN IN SECONDS but the constraint it
+        // has to satisfy is a COUNT OF ROUNDS (getOracleDataForVM's window), and only the
+        // hub's own data says how many rounds a span holds - a deployment on a longer round
+        // interval fits far fewer. So the drain measures what it actually kept and refuses to
+        // certify a table it cut too thin: widen the span and report not-drained, which leaves
+        // the barrier shut and sends _bootstrapAll around again (a re-page is idempotent -
+        // every apply is an INSERT IGNORE/ODKU on the natural key). Past the ceiling the bound
+        // gives up entirely and the next drain mirrors the table in full, because a bounded
+        // mirror that cannot prove its own depth is worth less than a slow one.
+        if (fullyDrained && priceHorizon > 0 &&
+            preHorizonRetained.size < preHorizonServed.size &&
+            preHorizonRetained.size < PRICE_MIRROR_MIN_PRE_HORIZON_ROUNDS) {
+            let widened = this._priceMirrorLookbackS * PRICE_MIRROR_LOOKBACK_GROWTH;
+            if (widened > PRICE_MIRROR_LOOKBACK_MAX_S) {
+                this._priceMirrorBoundDisabled = true;        // full mirror from here on
+                console.warn('HubDbSync: price mirror bound gave up after reaching its ' +
+                    PRICE_MIRROR_LOOKBACK_MAX_S + 's ceiling with only ' + preHorizonRetained.size +
+                    ' pre-horizon round(s); the next drain mirrors price_snapshots in full');
+            } else {
+                this._priceMirrorLookbackS = widened;
+                console.warn('HubDbSync: price mirror bound kept only ' + preHorizonRetained.size +
+                    ' of the ' + preHorizonServed.size + ' round(s) the hub holds below the horizon, ' +
+                    'short of the ' + PRICE_MIRROR_MIN_PRE_HORIZON_ROUNDS + ' a consensus read can ' +
+                    'reach; widening the lookback to ' + widened + 's and re-draining');
+            }
+            this._priceMirrorFloorTs = 0;
+            return null;
+        }
+
+        // The floor the barriers police (see _notePriceMirrorFloor). Set only on a drain that
+        // both bounded something and passed the check above; a full drain clears it.
+        if (table === 'price_snapshots' && fullyDrained) {
+            this._priceMirrorFloorTs = (priceSkipped > 0) ? priceFloor : 0;
+            // A drain that bounded nothing IS the full mirror the re-floor was waiting for.
+            if (priceSkipped === 0) this._priceMirrorRefloor = false;
+        }
 
         // Reconcile the retractions the bootstrap can never re-deliver (#3211). Only after a
         // COMPLETE re-page: a partial drain has not seen every row the hub holds, so a
@@ -1160,6 +1321,58 @@ class HubDbSync {
 
         if (!fullyDrained) return null;
         return watermark !== null ? watermark : 0;
+    }
+
+    // The unix-second horizon for this drain's price_snapshots bound, or 0 when
+    // the whole table is to be mirrored. 0 on every path that cannot PROVE a horizon: no
+    // consumer hook (the explorer's display mirror), a hook that throws or returns a
+    // non-positive/non-finite value, or a bound this instance has already given up on.
+    // Fail-open is the only safe direction here: a wrong horizon costs a mirror that is
+    // short of what a consensus read needs, and no drain is worth that.
+    async _resolvePriceMirrorHorizon() {
+        if (!this.getPriceMirrorHorizon || this._priceMirrorBoundDisabled) return 0;
+        let horizon;
+        try {
+            horizon = await this.getPriceMirrorHorizon();
+        } catch (e) {
+            console.warn('HubDbSync: price mirror horizon unavailable (' + e.message +
+                '); mirroring price_snapshots in full');
+            return 0;
+        }
+        horizon = Number(horizon);
+        if (!Number.isFinite(horizon) || horizon <= 0) return 0;
+        // A horizon at or below the lookback would put the floor at/below zero, which is
+        // every row there has ever been: no bound, and say so rather than pretending to one.
+        if (horizon <= this._priceMirrorLookbackS) return 0;
+        return horizon;
+    }
+
+    // Police the floor of a bounded price mirror. The bound is derived from the
+    // OLDEST block this node expected to process; if it is ever asked to gate a block older
+    // than that, the premise is gone - the mirror is missing rounds that block's price reads
+    // can select, and a read against it would answer differently from a peer holding the
+    // history. So abandon the bound, shut BOTH price barriers (and only those - the
+    // oracle/match/call mirrors are complete and must keep serving), and re-mirror the table
+    // in full. Fail-closed: blocks defer while the re-drain runs rather than settling against
+    // a mirror that is knowingly short. Idempotent - the first call clears the floor, so the
+    // re-drain is scheduled once however many waiters trip it.
+    _notePriceMirrorFloor(blockTime) {
+        if (!(this._priceMirrorFloorTs > 0)) return;
+        blockTime = Number(blockTime);
+        if (!Number.isFinite(blockTime) || blockTime <= 0) return;
+        if (blockTime >= this._priceMirrorFloorTs) return;
+        console.error('HubDbSync: block time ' + blockTime + ' is below the bounded price mirror floor ' +
+            this._priceMirrorFloorTs + ' - this node is processing blocks older than the history its ' +
+            'price mirror holds. Abandoning the bound and re-mirroring price_snapshots in full ' +
+            '(blocks defer until it drains).');
+        this._priceMirrorBoundDisabled = true;
+        this._priceMirrorFloorTs       = 0;
+        this._priceMirrorRefloor       = true;
+        if (this.running) {
+            Promise.resolve()
+                .then(() => this._bootstrapAll())
+                .catch(err => console.warn('HubDbSync: full price re-mirror failed to start:', err));
+        }
     }
 
     // The network this mirror may hold rows for, or null when that cannot be proven.
@@ -1495,9 +1708,13 @@ class HubDbSync {
     //   1. A finalized round anchored at or past this height is local; every round
     //      eligible at this height is therefore local (rows arrive id-ordered, and
     //      live rows are buffered until the bootstrap drain completes, so the
-    //      local mirror is always a CONTIGUOUS prefix of the hub's table; a
-    //      fresh round streamed mid-drain can no longer raise the height over
-    //      still-missing earlier rounds. See _bufferPriceEvent, #2422).
+    //      local mirror is always a CONTIGUOUS run of the hub's table ending at its
+    //      newest row; a fresh round streamed mid-drain can no longer raise the
+    //      height over still-missing earlier rounds. See _bufferPriceEvent, #2422).
+    //      Under the bootstrap bound that run starts at the mirror floor
+    //      rather than at the hub's first row, which is sound for exactly the blocks
+    //      the floor was derived from and no others - hence _notePriceMirrorFloor,
+    //      which vetoes this case outright once a block below the floor turns up.
     //   2. The hub's stream watermark has passed this block's time plus a grace
     //      margin covering PBFT finalization lag (the hub has told us everything
     //      it produced through that instant, so the set of rounds at or before this
@@ -1508,6 +1725,11 @@ class HubDbSync {
     //      genuinely-behind mirror (hub unreachable → watermark frozen) still
     //      defers). blockTime may be absent (legacy callers), so then only case 1.
     _priceSyncSatisfied(blockHeight, blockTime) {
+        // A mirror that was bounded and has since been asked for a block below its
+        // floor holds neither case: its height says "caught up" while rounds that block can
+        // read are absent. Defer until the full re-mirror lands. Never set on an unbounded
+        // mirror, so this costs nothing on the default path.
+        if (this._priceMirrorRefloor) return false;
         if (this.priceSyncHeight >= blockHeight) return true;
         if (this.priceBootstrapped && Number.isFinite(blockTime) &&
             this.streamWatermark >= blockTime + this.priceWatermarkGraceS) return true;
@@ -1544,6 +1766,8 @@ class HubDbSync {
         // Nothing to wait on when sync is disabled (single-host: the local hub DB is the hub
         // itself, always current) or the target is not a finite height.
         if (!this.enabled || !Number.isFinite(blockHeight)) return Promise.resolve(this.priceSyncHeight);
+        // Before judging the block, judge the mirror against the block.
+        this._notePriceMirrorFloor(blockTime);
         if (this._priceSyncSatisfied(blockHeight, blockTime)) return Promise.resolve(this.priceSyncHeight);
 
         let ms = parseInt(timeoutMs);
@@ -1586,6 +1810,7 @@ class HubDbSync {
     //      genuinely-behind mirror (hub unreachable → watermark frozen) defers.
     _priceTimeSyncSatisfied(blockTime) {
         if (!Number.isFinite(blockTime)) return true;       // nothing to gate on
+        if (this._priceMirrorRefloor)    return false;      // see _priceSyncSatisfied
         if (this.priceBootstrapped && this.priceSyncMaxTimestamp >= blockTime) return true;
         if (this.priceBootstrapped &&
             this.streamWatermark >= blockTime + this.priceWatermarkGraceS) return true;
@@ -1619,6 +1844,7 @@ class HubDbSync {
     waitForPriceSyncTime(blockTime, timeoutMs) {
         blockTime = Number(blockTime);
         if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.priceSyncMaxTimestamp);
+        this._notePriceMirrorFloor(blockTime);            // same check as the height barrier
         if (this._priceTimeSyncSatisfied(blockTime))       return Promise.resolve(this.priceSyncMaxTimestamp);
 
         let ms = parseInt(timeoutMs);
@@ -3106,3 +3332,10 @@ module.exports.resolveBarrierHoldCeilingMs     = resolveBarrierHoldCeilingMs;
 module.exports.PRICE_BATCH_APPLY_ROWS         = PRICE_BATCH_APPLY_ROWS;
 module.exports.BOOTSTRAP_PROGRESS_INTERVAL_MS = BOOTSTRAP_PROGRESS_INTERVAL_MS;
 module.exports.priceUpsertSql                 = priceUpsertSql;
+// The price-mirror bootstrap bound numbers, exported for the same reason as the
+// grace constants above and, in the margin case, for one more: it has to stay above
+// protocol/constants.js ORACLE_VM_ROUND_WINDOW, and the only place that lockstep can be
+// checked is a test that reads both.
+module.exports.PRICE_MIRROR_ROUND_MARGIN           = PRICE_MIRROR_ROUND_MARGIN;
+module.exports.PRICE_MIRROR_MIN_PRE_HORIZON_ROUNDS = PRICE_MIRROR_MIN_PRE_HORIZON_ROUNDS;
+module.exports.PRICE_MIRROR_LOOKBACK_S             = PRICE_MIRROR_LOOKBACK_S;

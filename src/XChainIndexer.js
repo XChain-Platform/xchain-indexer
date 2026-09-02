@@ -777,7 +777,12 @@ class XChainIndexer {
                     // the mirror refuses hub-broadcast reorg retractions of THIS
                     // chain's rows unless their generation fence is below our own
                     // push_generations value, i.e. a rollback we actually performed.
-                    getOwnRollbackGeneration: () => this.indexerDb.getPushGeneration(this.config['COIN'])
+                    getOwnRollbackGeneration: () => this.indexerDb.getPushGeneration(this.config['COIN']),
+                    // Bound the price_snapshots bootstrap: the mirror needs the
+                    // rounds the blocks THIS node will parse can read, not the oracle's whole
+                    // history. Re-evaluated on every (re-)bootstrap, and null-safe - an
+                    // unresolvable horizon mirrors the table in full, as before.
+                    getPriceMirrorHorizon: () => this._priceMirrorHorizon()
                 });
                 // NOTE: do NOT start() here. The hub-mirror tables (price_snapshots,
                 // oracle_prices, cross_chain_*, capability_snapshots, state_checkpoints)
@@ -1899,6 +1904,60 @@ class XChainIndexer {
         }
         this.decoderReorgHalted = halted;
         return halted;
+    }
+
+    // Horizon for the hub price-mirror bound: the unix second below which no block
+    // this indexer will process can read a price round. HubDbSync bootstraps price_snapshots
+    // from here up, plus its own margin of pre-horizon rounds, instead of replaying the
+    // oracle's entire history (411,609 rows / ~13 min on a testnet BTC reparse, growing by
+    // ~5,184 rows a day forever) before the price barrier can arm.
+    //
+    // Derivation, and why each term is here:
+    //   - the oldest block this node will process from here. Resuming, that is the tip it
+    //     stopped at; with nothing indexed it is the decoder's FIRST block, which on a clean
+    //     reindex sits at genesis and correctly yields a horizon so old that nothing is bound
+    //     out at all. So a full replay still mirrors the full history, by construction.
+    //   - two FIAT_DISPENSER_PRICE_WINDOWs, because reverseOraclePriceMatch's batched read
+    //     reaches (blockTime - window) - window behind the block it settles.
+    //   - one day of slop for block-time non-monotonicity (MTP, the 2h future-time allowance)
+    //     and for a reorg rolling this node back below the resume point without a restart.
+    // HubDbSync adds the round-count margin its own consensus reads need on top of this, and
+    // polices the result: a block that turns up below the floor abandons the bound and
+    // re-mirrors in full rather than settling short.
+    //
+    // Returns null - meaning "mirror everything", the unbounded behavior - whenever the
+    // horizon cannot be established: no blocks anywhere yet, an unresolvable block time, or
+    // any read fault. Never throws.
+    async _priceMirrorHorizon(){
+        const SLOP_SECONDS = 86400;
+        // Local null test rather than this.util.isNull: util is wired in start(), and a
+        // horizon that silently answered "mirror everything" because a helper was missing
+        // would be indistinguishable from a horizon that could not be established.
+        const absent = (v) => (v === null || v === undefined);
+        try {
+            let lastIndexed = await this.indexerDb.getBlockIndex('indexer', 'last');
+            // Anchor on a block that EXISTS. Resuming, that is the last block parsed rather
+            // than the next one: the next block is often not decoded yet (a caught-up node
+            // restarting), and one block earlier is the conservative direction anyway. Its
+            // time is read from this node's own blocks table, which is guaranteed to hold it.
+            let anchorDb    = absent(lastIndexed) ? this.decoderDb : this.indexerDb;
+            let anchorBlock = absent(lastIndexed)
+                                 ? await this.decoderDb.getBlockIndex('decoder', 'first')
+                                 : Number(lastIndexed);
+            if(absent(anchorBlock)) return null;
+            // Raw stamp, not protocol time: this is a retention boundary compared against
+            // hub round timestamps, not a consensus gate, and getRawBlockTime is the reader
+            // that does not depend on the previous-block window existing yet.
+            let blockTime = await anchorDb.getRawBlockTime(anchorBlock);
+            if(blockTime === false || !Number.isFinite(Number(blockTime)) || Number(blockTime) <= 0)
+                return null;
+            let fiatWindow = parseInt((this.config || {})['FIAT_DISPENSER_PRICE_WINDOW']) || 86400;
+            return Number(blockTime) - (2 * fiatWindow) - SLOP_SECONDS;
+        } catch(e){
+            console.warn('XChainIndexer: price mirror horizon unavailable (' + (e && e.message) +
+                '); the hub price mirror will bootstrap in full');
+            return null;
+        }
     }
 
     _startHubConfigPolling(){
