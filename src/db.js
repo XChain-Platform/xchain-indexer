@@ -69,6 +69,10 @@ const { rethrowIfInfraFault } = require('./actions/faultGuard');
 // The validator_rewards ledger-key qualifier rule, shared with the two JS writers so the
 // SQL predicate here and they cannot disagree about which reward type is qualified.
 const arKey = require('./anchor_reward_key.js');
+// The frozen anchor/archive reward heights: the derive flag-day and the fleet-agreed
+// mirror-completeness watermark. Recovery-restored rewards claim their ORIGINAL derive
+// height from here, so a restored row and a live-derived one carry the same stamp.
+const ar = require('./anchor_reward_activation.js');
 const diag = require('./diagnosticEvents.js');
 
 // A stake weight, as stake_weighted_quorum.bcnum accepts one (plain decimal string).
@@ -3084,18 +3088,7 @@ class Database {
     async _maybeApplyPendingRewards(address, source_id, materializedBlock){
         if(source_id === null || source_id === undefined)
             return;
-        if(!this._recoveryPendingChecked){
-            // One-time probe. The table is auto-created by verifyTables, so it always exists;
-            // guard anyway so a partially-migrated DB degrades to "no pending" instead of throwing.
-            try {
-                let probe = await this.doQuery("SELECT COUNT(*) AS c FROM recovery_pending_rewards WHERE applied=0");
-                this._recoveryPendingRemaining = (probe.length > 0) ? Number(probe[0].c) : 0;
-            } catch(e){
-                this._recoveryPendingRemaining = 0;
-            }
-            this._recoveryPendingChecked = true;
-        }
-        if(this._recoveryPendingRemaining <= 0)
+        if(!await this._probeRecoveryPending())
             return;
         // Stamp applied_block = the block this address was first seen at (createAddress
         // passes its block context). It is the forward-window key xchain-sync streams
@@ -3104,6 +3097,91 @@ class Database {
         // case, but a recovery-then-incremental-catch-up has the same gap).
         let applied = await this._applyPendingRewardsForAddress(address, source_id, materializedBlock);
         this._recoveryPendingRemaining -= applied;
+    }
+
+    // The cheap gate shared by both recovery-reward triggers (the createAddress hook above and
+    // the per-block due sweep below). One-time probe of the unapplied staged count, so normal
+    // indexing (no recovery in progress) pays a single COUNT(*) and then short-circuits on
+    // every later call. The table is auto-created by verifyTables, so it always exists; the
+    // guard keeps a partially-migrated DB degrading to "no pending" instead of throwing.
+    // Returns true iff staged rows remain. The rollback re-arm clears _recoveryPendingChecked
+    // to force a re-probe when it re-arms rows.
+    async _probeRecoveryPending(){
+        if(!this._recoveryPendingChecked){
+            try {
+                let probe = await this.doQuery("SELECT COUNT(*) AS c FROM recovery_pending_rewards WHERE applied=0");
+                this._recoveryPendingRemaining = (probe.length > 0) ? Number(probe[0].c) : 0;
+            } catch(e){
+                this._recoveryPendingRemaining = 0;
+            }
+            this._recoveryPendingChecked = true;
+        }
+        return this._recoveryPendingRemaining > 0;
+    }
+
+    // The block a recovery-restored reward claims as its MATERIALIZATION block, from the
+    // earn-block the ANCHOR archive carries. Thin wrapper so both the apply path and the
+    // due sweep read the one rule (anchor_reward_activation.restoredRewardDeriveHeight):
+    // the restored row claims the height the LIVE fleet derived it at
+    // (earn + ANCHOR_REWARD_MIRROR_MATURITY), never the height recovery re-applied it at.
+    // null below the derive flag-day / on an inert network, where the legacy NULL stamp stands.
+    _restoredRewardDeriveBlock(earnBlock){
+        let network = String((this.config && this.config['NETWORK']) || '');
+        return ar.restoredRewardDeriveHeight(earnBlock, network);
+    }
+
+    // Per-block recovery-reward due sweep. Materializes every staged reward whose ORIGINAL
+    // derive height has been reached by the block now being processed and whose source address
+    // already holds its deterministic in-block id.
+    //
+    // This, not the createAddress hook, is what lands a derive-era restored reward: the source
+    // address is always interned at or before the reward's earn block, which is
+    // ANCHOR_REWARD_MIRROR_MATURITY blocks BELOW the height the fleet minted the reward at, so
+    // the hook always sees the row as not-yet-due and leaves it staged. Landing it here instead
+    // is what makes the recovered node hold the identical reward set as a live node at every
+    // height: materializing at the address's first-seen block credited a COLLECT-spendable
+    // reward for the whole window between that block and the real derive height, a window in
+    // which no live node had it (a larger SUM(validator_rewards), which is a ledger fork at the
+    // next COLLECT). Runs at the same point in the block as deriveAnchorRewards, so a restored
+    // reward becomes claimable in exactly the block a live-derived one does.
+    //
+    // No-op outside an in-progress recovery (the shared cheap gate), and on a chain whose
+    // staging table is empty - which is every chain but BTC, since validator_rewards only ever
+    // resolves a source there. Returns the number of rows materialized.
+    async _applyPendingRewardsDueAtBlock(blockIndex){
+        if(!await this._probeRecoveryPending())
+            return 0;
+        let bi = Number(blockIndex);
+        if(!Number.isFinite(bi))
+            return 0;
+        // The highest earn-block whose derive height has been reached at this block. Rows above
+        // it are still maturing and stay staged. Never negative, so an early chain cannot
+        // sweep everything in at genesis.
+        let dueEarnBlock = bi - ar.ANCHOR_REWARD_MIRROR_MATURITY;
+        if(dueEarnBlock < 0)
+            return 0;
+        let rows = [];
+        try {
+            // Only addresses holding a DETERMINISTIC (block-stamped) id: an out-of-band id is
+            // not reproducible across nodes, so materializing under one would fork the source.
+            rows = await this.doQuery(
+                `SELECT DISTINCT rpr.source_address AS source_address, ia.id AS source_id
+                   FROM recovery_pending_rewards rpr
+                   JOIN index_addresses ia ON ia.address = rpr.source_address
+                  WHERE rpr.applied=0 AND rpr.block_index <= ? AND ia.block_index IS NOT NULL`,
+                [dueEarnBlock]);
+        } catch(e){
+            // Schema gap only (table/column absent on a non-recovery stack, where nothing was
+            // staged). Every other fault propagates so the block transaction aborts rather
+            // than committing a block that silently skipped a due reward.
+            if(!(e && (e.errno === 1146 || e.errno === 1054))) throw e;
+            return 0;
+        }
+        let count = 0;
+        for(let s of (rows || []))
+            count += await this._applyPendingRewardsForAddress(s.source_address, s.source_id, bi);
+        this._recoveryPendingRemaining -= count;
+        return count;
     }
 
     // Materialize every unapplied staged reward for this source address into validator_rewards
@@ -3119,6 +3197,13 @@ class Database {
     // on the staging row as applied_block, the forward-window key xchain-sync streams the
     // row by when its validator_rewards block_index (earn-block) sits below the replication
     // window. Left NULL when not supplied (legacy callers); the collector skips NULL rows.
+    //
+    // DUE-GATED: a derive-era staged row is materialized only once materializedBlock has
+    // reached the height the live fleet derived it at (_restoredRewardDeriveBlock). A row that
+    // is not yet due is left staged for the per-block due sweep above, so no caller (the
+    // createAddress hook, the rollback re-drain) can put a restored reward on the books at a
+    // height where a live node does not hold it. A caller that names no block (legacy/test
+    // paths) cannot judge dueness, so it applies as before.
     async _applyPendingRewardsForAddress(source_address, source_id, materializedBlock){
         let rows = await this.doQuery(
             "SELECT id, validator_pubkey, reward_type, round_reference, amount, block_index FROM recovery_pending_rewards WHERE source_address=? AND applied=0",
@@ -3127,6 +3212,20 @@ class Database {
             ? null : Number(materializedBlock);
         let count = 0;
         for(let r of rows){
+            // The block this reward was FIRST derived at (operator ruling (a),
+            // 2026-08-29). Two things ride on it, and both are the reason a restored row may
+            // not claim the restoring height instead:
+            //   1. the reorg-scoping delete. rollback.js drops validator_rewards on
+            //      derive_block_index >= reorg as well as on the earn-block, because a reward
+            //      whose CREATING block is orphaned is one a from-genesis replay to that height
+            //      has not derived yet. A restored row left NULL here was invisible to that
+            //      delete and survived as a COLLECT-spendable credit no live node still held.
+            //   2. the height it may first appear at (the due gate below).
+            // NULL below the derive flag-day: no BTC-side row was minted by the derive path
+            // there, so the legacy stamp stays byte-identical.
+            let deriveBlock = this._restoredRewardDeriveBlock(r.block_index);
+            if(deriveBlock !== null && appliedBlock !== null && appliedBlock < deriveBlock)
+                continue;   // still maturing; the per-block due sweep lands it at deriveBlock
             let pubkey_id = await this.getOrCreatePubkeyId(String(r.validator_pubkey).toLowerCase());
             if(pubkey_id === null)
                 continue;   // leave unapplied; surfaces as a parity gap rather than a bad FK
@@ -3142,11 +3241,11 @@ class Database {
             // sit one archive reward below a from-genesis replay's.
             await this.doQuery(
                 `INSERT IGNORE INTO validator_rewards
-                    (source_id, signing_pubkey_id, reward_type, round_reference, round_qualifier, amount, block_index)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    (source_id, signing_pubkey_id, reward_type, round_reference, round_qualifier, amount, block_index, derive_block_index)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
                 [source_id, pubkey_id, String(r.reward_type), r.round_reference,
                  arKey.rewardRoundQualifier(r.reward_type, r.block_index),
-                 String(r.amount), Number(r.block_index)]);
+                 String(r.amount), Number(r.block_index), deriveBlock]);
             await this.doQuery("UPDATE recovery_pending_rewards SET applied=1, source_id=?, applied_block=? WHERE id=?",
                 [source_id, appliedBlock, r.id]);
             count++;

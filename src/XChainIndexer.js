@@ -397,6 +397,14 @@ class XChainIndexer {
         // inject at the same block. The hub-side relay margin is the primary guarantee; this
         // is defense-in-depth. See _waitForDirectCallPresence.
         this.callPresenceTimeoutMs = parseInt(process.env.XCALL_DIRECT_PRESENCE_TIMEOUT_MS || '10000');
+
+        // Grace (seconds) for the direct-hub-DB barrier's hub-clock escape hatch. Resolved in
+        // start() from the SAME frozen constant the HubDbSync call barrier uses
+        // (HUB_SYNC_WATERMARK_GRACE_S.call / HUB_SYNC_CALL_GRACE_S), because the two barriers
+        // decide the same question and a per-node value forks settlement. Resolution happens at
+        // startup, never inside the block loop, so an invalid regtest override throws at boot
+        // (resolveWatermarkGrace's contract) instead of wedging the tip mid-run.
+        this.directCallGraceS = null;
     }
 
     // Handle indicating if indexer is synced
@@ -432,22 +440,30 @@ class XChainIndexer {
     //   * Coverage condition (proceed): the local hub mirror covers this block once
     //     MAX(effective_time) over finalized rows >= block_time. Nothing later than block_time can
     //     change the effective-at/before set, so reading now matches a node that saw every row on
-    //     time. This is the SOLE proceed condition; the prior wall-clock gate is removed.
+    //     time.
     //   * Empty-table fast path (proceed): no finalized rows means there is nothing to wait on.
+    //   * Hub-clock escape hatch (proceed): the hub's OWN clock, read as UNIX_TIMESTAMP() on the
+    //     same connection in the same query, has passed block_time + directCallGraceS. See the
+    //     long note at the escape in the loop body; this is the ruled fix for the forever-defer
+    //     wedge, and is the direct-mode twin of _callSyncSatisfied's streamWatermark
+    //     escape in hub_db_sync.js.
     //   * Mirror-lags (defer): if the highest finalized effective_time is still BELOW block_time
-    //     the mirror is genuinely behind, so this block's call set would be incomplete. We do NOT
-    //     proceed with that partial set. Instead we poll the mirror with a bounded sleep loop
-    //     (mirroring the indexer's other sync barriers) and, if it has not caught up within
-    //     callPresenceTimeoutMs, THROW so the caller defers the block and retries it from the top
-    //     of the loop (lastIndexerBlock is not advanced). This is wait-then-retry, not
-    //     throw-and-halt: a behind mirror blocks block PROCESSING (the consensus-correct outcome)
-    //     until it catches up, rather than committing a divergent, partial-set block.
+    //     and the hub clock has not yet cleared the grace, the mirror may genuinely be behind, so
+    //     this block's call set could be incomplete. We do NOT proceed with that partial set.
+    //     Instead we poll the mirror with a bounded sleep loop (mirroring the indexer's other sync
+    //     barriers) and, if neither condition is met within callPresenceTimeoutMs, THROW so the
+    //     caller defers the block and retries it from the top of the loop (lastIndexerBlock is not
+    //     advanced). This is wait-then-retry, not throw-and-halt: a behind mirror blocks block
+    //     PROCESSING (the consensus-correct outcome) until it catches up or the grace clears,
+    //     rather than committing a divergent, partial-set block.
     //
     // CRITICAL fast path: the common cases (regtest single shared hub DB already current, or no
     // pending lag) hit the coverage / empty-table condition on the very first query and return
     // with zero added latency. Only a genuinely-lagging distributed mirror enters the poll loop.
-    // A wall-clock proceed (Date.now) is deliberately NOT used: it let a lagging node proceed with
-    // fewer cross-chain calls than canonical and diverge the actions hash (the bug this fixes).
+    // An UNGRACED wall-clock proceed (Date.now >= block_time) is still deliberately NOT used: it
+    // let a lagging node proceed with fewer cross-chain calls than canonical and diverge the
+    // actions hash. The escape hatch is not that gate: it is keyed on the HUB's clock, not the
+    // node's, and only opens a full call grace past block_time.
     // Deliver the hub pushes staged (and durably written via enqueueHubPushTx) during the block
     // transaction that just committed. Each push_type maps to the same HubClient method the
     // HubPushQueue drain uses; on success the durable pending_hub_pushes row is dropped, on any
@@ -573,14 +589,33 @@ class XChainIndexer {
         return mayReadPrice;
     }
 
+    // Wall-clock instant (epoch ms) the DIRECT call-presence barrier's hub-clock escape can
+    // FIRST open for a block, or null when that cannot be determined. The mirrored twin of
+    // _barrierClearsAt, which cannot serve this path because it returns null without a
+    // HubDbSync. Health verdict only: it gates no wait, no read and no write.
+    _directCallBarrierClearsAt(blockTime){
+        blockTime = Number(blockTime);
+        if(!this.hubDb || !Number.isFinite(blockTime)) return null;
+        let graceS = Number(this.directCallGraceS);
+        if(!Number.isFinite(graceS)) graceS = HUB_SYNC_WATERMARK_GRACE_S.call;
+        return (blockTime + graceS) * 1000;
+    }
+
     async _waitForDirectCallPresence(blockTime){
         blockTime = Number(blockTime);
         if(!this.hubDb || !Number.isFinite(blockTime)) return;
         let timeoutMs = Number(this.callPresenceTimeoutMs);
         if(!Number.isFinite(timeoutMs) || timeoutMs <= 0) timeoutMs = 10000;
+        // Grace for the hub-clock escape below. Resolved at startup (start()); the frozen
+        // constant is the fallback so a hand-built caller (unit tests) and any future path
+        // that skips start() still gets the protocol value rather than NaN, which would make
+        // every `hubNow >= blockTime + grace` comparison false and restore the wedge.
+        let graceS = Number(this.directCallGraceS);
+        if(!Number.isFinite(graceS)) graceS = HUB_SYNC_WATERMARK_GRACE_S.call;
         let deadline = Date.now() + timeoutMs;
         let pollMs = 250;
-        let lastTs = null;          // last observed mirror watermark, for the timeout diagnostic
+        let lastTs  = null;         // last observed mirror watermark, for the timeout diagnostic
+        let lastNow = null;         // last observed HUB clock, same
         while(true){
             // Coverage check: proceed the instant the local hub mirror covers block_time, i.e.
             // the highest finalized effective_time is at/after it, or there is nothing to wait on.
@@ -588,13 +623,55 @@ class XChainIndexer {
             // barrier waits (it never proceeds against an unread table).
             let covered = false;
             try {
+                // UNIX_TIMESTAMP() rides along on the SAME query and the SAME connection as the
+                // watermark, so the escape below compares two readings taken at one instant from
+                // one clock. Reading the hub's clock separately (or substituting this node's)
+                // would let skew between them decide a consensus barrier.
                 let rows = await this.hubDb.doQuery(
-                    "SELECT MAX(effective_time) AS ts FROM cross_chain_calls WHERE status = 'finalized'");
+                    "SELECT MAX(effective_time) AS ts, UNIX_TIMESTAMP() AS hub_now " +
+                    "FROM cross_chain_calls WHERE status = 'finalized'");
                 if(rows.length === 0 || rows[0].ts === null){
                     covered = true;                         // no finalized rows: nothing to wait on
                 } else {
                     lastTs = Number(rows[0].ts);
-                    if(lastTs >= blockTime) covered = true; // mirror covers this block
+                    if(lastTs >= blockTime){
+                        covered = true;                     // mirror covers this block
+                    } else {
+                        // Hub-clock escape hatch. Without it this barrier keys liveness
+                        // on CALL TRAFFIC: the only proceed condition was a finalized row at/after
+                        // block_time, so the moment XCALL traffic goes idle, chain time walks past
+                        // the newest finalized effective_time and NOTHING can ever satisfy the
+                        // barrier again. Every block defers, forever, on a chain that is perfectly
+                        // healthy. The hub_db_sync path never had this failure mode because
+                        // _callSyncSatisfied also opens on `streamWatermark >= blockTime + grace`.
+                        //
+                        // This is that same escape, keyed on the same frozen grace, with the hub's
+                        // clock standing in for the stream watermark. The two are the same reading:
+                        // streamWatermark is literally the hub's Math.floor(Date.now()/1000),
+                        // broadcast on a heartbeat (HubDbBroadcaster.broadcastWatermark); in direct
+                        // mode there is no stream to carry it, so we ask the hub's database for it.
+                        //
+                        // Why it is safe to proceed: the hub stamps a call row's effective_time
+                        // FORWARD of the instant it writes it (CrossChainCallEngine adds the relay
+                        // margin), so a row effective at or before block_time was already committed
+                        // before block_time on the hub's clock. Once that same clock reads a full
+                        // call grace past block_time, any such row is present in the table we just
+                        // read, and the set we are about to inject is the canonical one. This is
+                        // NOT the removed ungraced `Date.now() >= block_time` gate: that one used
+                        // the NODE's clock, allowed zero margin, and did let a lagging reader
+                        // proceed with a partial set.
+                        // NULL/absent must not coerce to 0 (Number(null) === 0 is finite, and a
+                        // 0 that compared true would open the escape on a hub that answered
+                        // nothing). Normalize the missing reading to null, which is not finite.
+                        let hubNow = rows[0].hub_now;
+                        lastNow = (hubNow === null || hubNow === undefined) ? null : Number(hubNow);
+                        if(Number.isFinite(lastNow) && lastNow >= blockTime + graceS){
+                            covered = true;
+                            console.log('Direct call-presence barrier: hub clock ' + lastNow +
+                                ' is past block_time ' + blockTime + ' + ' + graceS + 's grace ' +
+                                '(call mirror at ' + lastTs + '); proceeding.');
+                        }
+                    }
                 }
             } catch(e){
                 // Table not ready / transient error: treat as not covered and keep waiting.
@@ -611,10 +688,12 @@ class XChainIndexer {
             // bound is exhausted, throw so the caller retries this block from the top of the loop.
             if(Date.now() >= deadline)
                 this.util.throwError('direct call-presence barrier timed out after ' + timeoutMs +
-                    'ms waiting for block_time ' + blockTime + ' (call mirror at ' + lastTs + ')' +
+                    'ms waiting for block_time ' + blockTime + ' (call mirror at ' + lastTs +
+                    ', hub clock at ' + lastNow + ', escape at ' + (blockTime + graceS) + ')' +
                     (this._callPresenceLastErr ? ' [last query error: ' + this._callPresenceLastErr + ']' : ''));
             console.log('Waiting on hub call mirror: block_time ' + blockTime +
-                ' not yet covered (mirror at ' + lastTs + '); retrying...');
+                ' not yet covered (mirror at ' + lastTs + ', hub clock at ' + lastNow +
+                ', escape at ' + (blockTime + graceS) + '); retrying...');
             await this.util.sleep(Math.min(pollMs, Math.max(1, deadline - Date.now())));
         }
     }
@@ -624,6 +703,11 @@ class XChainIndexer {
         console.log('Starting up ' + this.name + ' v' + this.version + '...');
 
         this.config = config.getConfig();
+
+        // Resolve the direct-hub-DB call barrier's grace now that NETWORK is known. Same
+        // constant, same env override, same regtest-only rules as the mirrored path.
+        this.directCallGraceS = resolveWatermarkGrace(
+            HUB_SYNC_WATERMARK_GRACE_S.call, 'HUB_SYNC_CALL_GRACE_S', this.config['NETWORK']);
 
         // Create instance of the utility class, sharing the indexer's single
         // config object (NOT a fresh getConfig()) so a later hub overlay can't
@@ -1269,7 +1353,14 @@ class XChainIndexer {
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (direct call-presence barrier): ', err);
                         this.stallReason = 'call_presence_barrier';
-                        this.stallClearsAt = null;          // no watermark fallback to key on
+                        // The barrier now HAS a time-keyed escape (hub clock >= block_time +
+                        // call grace), so this stall does have a first-clearable instant and
+                        // /status can say so instead of reporting an open-ended stall on a
+                        // future-stamped block. Keyed on this node's wall clock while the
+                        // barrier itself reads the hub's: the two are the same host in the
+                        // single-host topology this barrier serves, and this value gates no
+                        // wait, no read and no write (health verdict only, see _barrierClearsAt).
+                        this.stallClearsAt = this._directCallBarrierClearsAt(blockTime);
                         break;
                     }
                 }
@@ -1411,6 +1502,17 @@ class XChainIndexer {
                         // here, which defers the block rather than reading a silent DOGE peer as
                         // a federation-wide absence.
                         await rollcallClose.closeRollcallEpochs(this.indexerDb, this.config, blockToParse, this.rollcallProof, this.util);
+
+                        // Land any RECOVERY-restored anchor/archive reward whose original derive
+                        // height this block has reached. A node rebuilt from an ANCHOR archive
+                        // cannot re-derive these (its attestation mirror is exactly what was
+                        // lost), so recovery stages them and they materialize here, at the same
+                        // point in the block and at the same height the derivation above would
+                        // have minted them: earn-block + the fleet-agreed mirror maturity. Same
+                        // cheap gate as the createAddress hook, so a node with nothing staged
+                        // (every node not mid-recovery, and every chain but BTC) pays one COUNT(*)
+                        // for the process lifetime.
+                        await this.indexerDb._applyPendingRewardsDueAtBlock(blockToParse);
 
                         // Check for any cancelled items (dispensers)
                         await this.util.processCancellations(this.actions, this.indexerDb, blockToParse, blockTime);
@@ -1631,9 +1733,9 @@ class XChainIndexer {
     // Called once at startup. Best-effort: logs a warning and returns without modifying config
     // if the hub is unreachable or returns an unexpected response.
     async _applyHubConfigOverlay(){
-        if(!this.hubClient || !this.hubClient.enabled) return;
+        if(!this.hubClient || !this.hubClient.configEnabled) return;
         try {
-            let { ok, configs, seq, watermark, coinConsensusHashes } = this._unwrapHubConfigResponse(await this.hubClient._call('getallconfigs', {}));
+            let { ok, configs, seq, watermark, coinConsensusHashes } = this._unwrapHubConfigResponse(await this.hubClient.getAllConfigs());
             if(!ok){
                 console.warn('XChainIndexer: hub config overlay skipped, hub returned no usable config (using local defaults)');
                 return;
@@ -1800,7 +1902,7 @@ class XChainIndexer {
     }
 
     _startHubConfigPolling(){
-        if(!this.hubClient || !this.hubClient.enabled) return;
+        if(!this.hubClient || !this.hubClient.configEnabled) return;
         if(this._hubConfigPollTimer) return;
         // Same reader the staleness boundary is derived from, so the reported boundary is
         // always three of THESE intervals.
@@ -1813,7 +1915,7 @@ class XChainIndexer {
             if(this._hubConfigPollRunning) return;   // a prior slow poll is still in flight
             this._hubConfigPollRunning = true;
             try {
-                let { ok, configs, seq, watermark, coinConsensusHashes } = this._unwrapHubConfigResponse(await this.hubClient._call('getallconfigs', {}));
+                let { ok, configs, seq, watermark, coinConsensusHashes } = this._unwrapHubConfigResponse(await this.hubClient.getAllConfigs());
                 // A usable envelope (not a { error: ... } failure result) means the hub
                 // actually answered with config. A failed fetch must NOT refresh the freshness
                 // signal, or a persistently config-DB-failing hub reports healthy while the

@@ -23,6 +23,7 @@ const swq       = require('./stake_weighted_quorum.js');
 const pmsh      = require('./attestation/providerMinStakeHistory.js');
 const ProviderRegistry = require('./attestation/providerRegistry.js');
 const lifecycle = require('./tableLifecycle.js');
+const ar        = require('./anchor_reward_activation.js');
 const { ARCHIVE_HEAD_VERSIONS_SQL } = require('./stateHash.js');
 
 class Rollback {
@@ -1089,11 +1090,24 @@ class Rollback {
             // predicate never fired and the reward was silently lost forever. MUST run AFTER the
             // validator_rewards/index_addresses deletes above. No-op (and the table may be absent
             // on a non-recovery stack) outside an in-progress recovery, so it is wrapped cheaply.
+            //
+            // The floor is NOT the reorg height alone. A restored row carries the
+            // MATERIALIZATION block it was first derived at (earn + the frozen mirror
+            // maturity), so the derive-scoped delete above takes it whenever that height is
+            // orphaned - which happens for earn-blocks a whole maturity window BELOW the reorg
+            // point. Re-arming only from the reorg height would leave those rows applied=1 with
+            // no validator_rewards row behind them: the reward would be gone from this node for
+            // good while the live fleet re-derives it from its mirror when the canonical chain
+            // reaches the same height again. restoredRewardRearmFloor drops the floor by exactly
+            // the maturity window on a network where derivation is armed, and stays at the reorg
+            // height everywhere else (nothing below it can carry a derive stamp).
+            let rearmFloor = ar.restoredRewardRearmFloor(block_index, String(this.config['NETWORK'] || ''));
+            if(rearmFloor === null) rearmFloor = block_index;
             try {
                 let rearm = await this.indexerDb.doQuery(
                     `UPDATE recovery_pending_rewards
                         SET applied=0, source_id=NULL, applied_block=NULL
-                      WHERE applied=1 AND block_index >= ?`, [block_index]);
+                      WHERE applied=1 AND block_index >= ?`, [rearmFloor]);
                 if(rearm && rearm.affectedRows)
                     this.indexerDb._recoveryPendingChecked = false;
                 let survivors = await this.indexerDb.doQuery(
@@ -1104,6 +1118,9 @@ class Rollback {
                 // Re-materialize at the reorg point B (block_index): the survivor's reward
                 // earn-block may be < B, so stamp applied_block = B as the forward-window key
                 // xchain-sync streams it by (its earn-block sits below the post-reorg window).
+                // A row whose ORIGINAL derive height is still ahead of B is left staged by the
+                // apply path's due gate and lands again when the replay reaches that height,
+                // which is the same block a live node re-derives it at.
                 for(let s of (survivors || []))
                     await this.indexerDb._applyPendingRewardsForAddress(s.source_address, s.source_id, block_index);
             } catch(e){

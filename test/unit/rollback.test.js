@@ -16,6 +16,7 @@ const sinon = require('sinon');
 const { createMockIndexer } = require('../fixtures/mocks');
 
 const Rollback = require('../../src/rollback.js');
+const ar = require('../../src/anchor_reward_activation.js');
 
 describe('Rollback @regression @tier3', function () {
     let indexer, rollback;
@@ -192,6 +193,31 @@ describe('Rollback @regression @tier3', function () {
         const indexIdx = calls.findIndex(c => /DELETE FROM index_addresses WHERE block_index/.test(c.args[0]));
         assert.ok(indexIdx >= 0, 'expected the index_addresses rollback delete');
         assert.ok(delIdx < indexIdx, 'the derive-block delete must precede the index-lookup deletes');
+    });
+
+    it('re-arms recovery-staged rewards from the DERIVE floor, not the reorg height alone', async function () {
+        // A recovery-restored reward carries the materialization block it was first
+        // derived at (earn + the frozen mirror maturity), so the derive-scoped delete above
+        // takes rows whose EARN block sits a whole maturity window below the reorg point.
+        // Re-arming only from the reorg height would leave those staging rows applied=1 with
+        // no validator_rewards row behind them: lost on this node, while the live fleet
+        // re-derives them from its mirror when the canonical chain reaches the height again.
+        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]); // firstActionIndex
+        indexer.indexerDb.doQuery.resolves([]);
+        await rollback.rollback(100);
+        const rearm = indexer.indexerDb.doQuery.getCalls().find(c =>
+            /UPDATE recovery_pending_rewards/.test(c.args[0]));
+        assert.ok(rearm, 'expected the recovery-reward re-arm');
+        assert.deepStrictEqual(rearm.args[1], [ar.restoredRewardRearmFloor(100, 'regtest')]);
+        assert.strictEqual(rearm.args[1][0], 0, 'a reorg to 100 on regtest floors at 0 (100 - maturity, clamped)');
+        // Deep enough that the floor is a real subtraction rather than the clamp.
+        indexer.indexerDb.doQuery.resetHistory();
+        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
+        indexer.indexerDb.doQuery.resolves([]);
+        await rollback.rollback(800000);
+        const deep = indexer.indexerDb.doQuery.getCalls().find(c =>
+            /UPDATE recovery_pending_rewards/.test(c.args[0]));
+        assert.deepStrictEqual(deep.args[1], [800000 - ar.ANCHOR_REWARD_MIRROR_MATURITY]);
     });
 
     it('does NOT restore a reconcile loser that was itself materialized inside the orphaned range', async function () {

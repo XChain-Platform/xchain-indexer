@@ -295,6 +295,37 @@ function anchorRewardDeriveHeight(snapshotBlock){
     return sb + ANCHOR_REWARD_MIRROR_MATURITY;
 }
 
+// The materialization block a RECOVERY-RESTORED anchor/archive reward claims, given the
+// EARN block the ANCHOR archive carries for it. A restored row must claim the block it was
+// FIRST derived at, never the height at which recovery happened to re-apply it: the
+// live fleet minted the row at earnBlock + ANCHOR_REWARD_MIRROR_MATURITY (the fleet-agreed
+// watermark above, identical on every node), so stamping that height is what makes a
+// recovered node's validator_rewards set match a live node's at EVERY height - including
+// under the reorg-scoping delete, which drops a reward whose creating block is orphaned.
+// Returns null below the derive flag-day (or on an inert/unknown network), where no BTC-side
+// row was ever minted by the derive path and the legacy NULL stamp must stay byte-identical.
+function restoredRewardDeriveHeight(earnBlock, network){
+    if(!isAnchorRewardDeriveActive(earnBlock, network)) return null;
+    return anchorRewardDeriveHeight(earnBlock);
+}
+
+// The lowest EARN block whose restored reward can have been removed by a rollback to
+// `reorgBlock`, i.e. the floor the recovery re-arm must sweep. A restored row is removed by
+// EITHER scoping delete: block_index (earn) >= reorgBlock, or derive_block_index
+// (= earn + maturity) >= reorgBlock, which is earn >= reorgBlock - maturity. Re-arming only
+// the earn-block floor would leave a derive-scope-deleted row marked applied=1 forever, so
+// the reward would be lost on this node while the live fleet re-derives it from its mirror.
+// Clamped at the derive flag-day (rows below it carry no derive stamp and can only be taken
+// by the earn-block delete) and at the reorg height (never re-arm MORE than the earn floor
+// when derivation is inert on this network).
+function restoredRewardRearmFloor(reorgBlock, network){
+    let h = parseInt(reorgBlock);
+    if(!Number.isFinite(h)) return null;
+    let threshold = ANCHOR_REWARD_DERIVE_ACTIVATION[network];
+    if(threshold === null || threshold === undefined) return h;
+    return Math.max(0, Math.min(h, Math.max(h - ANCHOR_REWARD_MIRROR_MATURITY, Number(threshold))));
+}
+
 module.exports = {
     ANCHOR_REWARD_ACTIVATION,
     ANCHOR_REWARD_AMOUNT,
@@ -306,5 +337,7 @@ module.exports = {
     isAnchorRewardDeriveActive,
     ANCHOR_REWARD_MIRROR_MATURITY,
     ANCHOR_REWARD_DOGE_MIN_CONFIRMATIONS,
-    anchorRewardDeriveHeight
+    anchorRewardDeriveHeight,
+    restoredRewardDeriveHeight,
+    restoredRewardRearmFloor
 };
