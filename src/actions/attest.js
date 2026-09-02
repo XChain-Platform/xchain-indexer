@@ -50,6 +50,7 @@ const attestAdmission = require('../attest_admission_activation.js');
 const attestRequestCap = require('../attest_request_cap_activation.js');
 const attestRelay     = require('../attest_relay_activation.js');
 const attestBcastFee  = require('../attest_broadcast_fee_activation.js');
+const wid     = require('../attest_responsible_widening_activation.js');
 const eq      = require('../equivocation_header.js');
 const srb     = require('../snapshot_reorg_buffer.js');
 const ProviderRegistry = require('../attestation/providerRegistry.js');
@@ -609,8 +610,21 @@ class Attest {
             // buries it internally, so every site that computes this request's
             // responsible set (admission, the persisted RESPONSIBLE_SET_JSON, the expiry
             // missed_count charge, the fulfilled fee split, and here) resolves ONE set.
+            //
+            // WIDENED at the RESPONSE's own height (spec 8.2 liveness ladder). The set is
+            // still RESOLVED at the declared height, so which validators are ranked is
+            // unchanged; the ladder only decides how far down that ranking a signature is
+            // admitted. Evaluating it here rather than at the declared height is what makes
+            // the two sides agree: the signing hub derived its slots from the indexer tip it
+            // polled, and a response cannot be mined below that tip, so this set is always a
+            // SUPERSET of the one that signed and a signature authorized at proposal time can
+            // never be rejected here. The flag-day itself is gated on the REQUEST's block, so
+            // a request admitted below it never widens.
+            let responseWiden = wid.widenSlots(
+                data['BLOCK_INDEX'], declaredBlock, request.deadline_block, this.config['NETWORK']
+            );
             let responsible = new Set(await this._computeResponsibleSet(
-                requestId, request.redundancy, declaredBlock, request.provider_id
+                requestId, request.redundancy, declaredBlock, request.provider_id, responseWiden
             ));
             verifiedSigs = verifiedSigs.filter(s => responsible.has(s.pubkey));
             validSigs    = verifiedSigs.length;
@@ -809,7 +823,15 @@ class Attest {
     // REQUIRED at/above STAKE_WEIGHTED_QUORUM; omitting it fails closed to an empty
     // set. See _providerFloorFilter for why the floor rides the SWQ gate rather than
     // a new flag day, and providerMinStakeHistory.js for where the value comes from.
-    async _computeResponsibleSet(requestId, redundancy, blockIndex, providerId){
+    // `widen` is the liveness ladder's extra slot count (attest_responsible_widening_activation.js),
+    // supplied ONLY by the two sites that judge a RESPONSE (the v1 verify filter and the
+    // fulfilled fee split) and derived there from the response's own height. Every other
+    // caller passes nothing and gets 0, which is this routine byte-for-byte unchanged:
+    // v0 admission and the persisted RESPONSIBLE_SET_JSON record the ASSIGNMENT, and the
+    // v2 expiry missed_count charge faults the ASSIGNED set, so neither may move. A
+    // validator pulled in late by the ladder is permitted to earn, never charged for a
+    // request that was already failing before it was eligible.
+    async _computeResponsibleSet(requestId, redundancy, blockIndex, providerId, widen){
         // The SWQ gate is BTC-ANCHORED, so only evaluate it where `blockIndex`
         // actually is a BTC height.
         //
@@ -884,7 +906,9 @@ class Attest {
                 return true;
             });
         }
-        return withHash.slice(0, Math.max(1, Number(redundancy) || 1)).map(v => v.pubkey);
+        let extra = Number(widen);
+        if(!Number.isFinite(extra) || extra < 0) extra = 0;
+        return withHash.slice(0, Math.max(1, Number(redundancy) || 1) + extra).map(v => v.pubkey);
     }
 
     // Drop weighted-snapshot rows whose staking source does not clear the provider's
@@ -1401,8 +1425,13 @@ class Attest {
             this.util.addAddressTicker(rewardPool, gas);
             credits.push([gas, feeAmount, rewardPool]);
 
+            // Same widened set the v1 verify filter admitted signatures from, and for the
+            // same reason: a validator the ladder let sign must be in the split it earned a
+            // share of. `data` is the v1 action, so its BLOCK_INDEX is the response height.
             let responsible = await this._computeResponsibleSet(
-                String(request.request_id), request.redundancy, Number(request.block_index), request.provider_id
+                String(request.request_id), request.redundancy, Number(request.block_index), request.provider_id,
+                wid.widenSlots(data['BLOCK_INDEX'], Number(request.block_index),
+                               request.deadline_block, this.config['NETWORK'])
             );
             let broadcastFee = '0';
             if(responsible.length > 0){

@@ -22,6 +22,7 @@
  ********************************************************************/
 
 const { computeArmedMapFingerprint } = require('./armedMapFingerprint');
+const { computeConsensusRulesDigest } = require('./consensus_rules_digest');
 const { hubConfigStaleness, stallWedged, waitingOnFutureBlock, stallClassOf, atProcessableTip } = require('./XChainIndexer');
 
 // Committed-only view of a db handle, for any read that ADVERTISES A HEIGHT.
@@ -180,6 +181,13 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
         // fleet sweep can confirm every deployed indexer runs the same armed map
         // before a flag-day height. Per-file hashes live behind computeArmedMapFingerprint.
         armed_map_fingerprint: computeArmedMapFingerprint().fingerprint,
+        // The CROSS-REPO half of the same question. armed_map_fingerprint hashes this
+        // repo's own file bytes and so is only comparable against another indexer;
+        // this digest hashes the DECIDED HEIGHTS of the gates the hub evaluates too,
+        // so an operator (or a fleet sweep) can compare an indexer against the hub
+        // federation it follows and see a flag-day disagreement BEFORE it has produced
+        // divergent state rather than after.
+        consensus_rules_digest: computeConsensusRulesDigest().digest,
         reorgsProcessed:  reorgStats ? reorgStats.reorgsProcessed : null,
         lastReorgBlock:   reorgStats ? reorgStats.lastReorgBlock  : null,
         lastReorgAt:      reorgStats ? reorgStats.lastReorgAt     : null,
