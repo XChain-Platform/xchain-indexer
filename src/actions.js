@@ -893,6 +893,9 @@ class Actions {
         // abandoned processTransaction can still resume and try to write on the shared
         // connection, which by then may belong to a REAL block's transaction. The stale epoch
         // rejects those zombie writes inside the db layer before they reach the driver.
+        // runInDryRunEpoch, never runInTxEpoch: the fence is wanted here, consensus authority
+        // is not. This IS a public unauthenticated path, and a barrier that keys on the
+        // mere presence of a context reads this one as proof of a running block loop.
         let dryRunEpoch = this.indexerDb.currentTxEpoch();
         try {
             // The payer's fee-token balance at PRE-action state, read inside this
@@ -903,7 +906,7 @@ class Actions {
             // handler's verdict stands untouched.
             if(feeBalanceTick && !this.util.isNull(source)){
                 try {
-                    sourceFeeBalance = await this.indexerDb.runInTxEpoch(dryRunEpoch, async () => {
+                    sourceFeeBalance = await this.indexerDb.runInDryRunEpoch(dryRunEpoch, async () => {
                         let addressId = await this.indexerDb.getAddressId(source);
                         if(addressId === null || addressId === undefined) return '0';
                         let tickId = await this.indexerDb.getTickerId(feeBalanceTick);
@@ -921,7 +924,7 @@ class Actions {
             // handler, so a stuck handler would otherwise wedge block advancement for the full
             // hang; on timeout the catch+finally roll back and release the lock within the
             // caller's bounded window instead.
-            let dryRunProcessing = this.indexerDb.runInTxEpoch(dryRunEpoch,
+            let dryRunProcessing = this.indexerDb.runInDryRunEpoch(dryRunEpoch,
                 () => this.processTransaction(syntheticTx));
             // Keep the abandoned promise's late settlement (typically the epoch fence firing)
             // from surfacing as an unhandledRejection; the fence, not this handler, is what

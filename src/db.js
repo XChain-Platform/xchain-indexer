@@ -1699,7 +1699,7 @@ class Database {
 
     // Run fn with `epoch` installed as the watchdog-fence context for every DB call fn makes
     // (transitively, across awaits). Returns fn's return value (the block-processing promise).
-    // Used only by the block loop; behavior on the non-timeout path is unchanged because the
+    // Used by the BLOCK LOOP; behavior on the non-timeout path is unchanged because the
     // installed epoch always equals the current _txEpoch until the transaction is torn down.
     // The context records WHICH Database instance owns the guarded transaction: the indexer
     // process holds several instances of this class (indexer DB, decoder DB, hub-DB mirror),
@@ -1708,8 +1708,26 @@ class Database {
     // fee validation) draws from that instance's own pool and can never land in the guarded
     // transaction, so it must not be fenced (its epoch counter never advances, so comparing
     // across instances fences every such read; caught live on regtest 2026-07-08).
+    // `consensus: true` marks this context as real block processing, which is what
+    // _assertPriceBarrierNotSkipped keys on; see runInDryRunEpoch below for why the flag
+    // exists and why THIS is the defaulted side.
     runInTxEpoch(epoch, fn){
-        return txEpochStore.run({ owner: this, epoch: epoch }, fn);
+        return txEpochStore.run({ owner: this, epoch: epoch, consensus: true }, fn);
+    }
+
+    // Same M-16 fence, no consensus authority. The fee-quote dry run needs the
+    // zombie-write protection above - it holds the shared transaction and can be abandoned by
+    // its watchdog exactly as a block can - but it is NOT block processing and it commits
+    // nothing. _assertPriceBarrierNotSkipped used "a txEpochStore context exists" as its proof
+    // that a caller is the block loop, and this call site made that proof false: a public
+    // /feequote whose dry run read the price mirror during a barrier-skipped block answered
+    // `handler threw: ... PRICE_BARRIER_DEFERRED` and, worse, set priceBarrierForceBlock, so an
+    // unauthenticated read wrote block-loop state. Splitting the two kinds is the whole fix.
+    // The DEFAULT is deliberately on runInTxEpoch: an unlabelled future caller is then treated
+    // as consensus and trips the barrier as before, which is over-firing rather than silently
+    // escaping a consensus guard. Opting OUT has to be a visible act, and this is it.
+    runInDryRunEpoch(epoch, fn){
+        return txEpochStore.run({ owner: this, epoch: epoch, consensus: false }, fn);
     }
 
     // Watchdog fence (M-16). Reject a write whose issuing epoch no longer matches the current
@@ -1741,11 +1759,16 @@ class Database {
     // mirror. The block rolls back, priceBarrierForceBlock makes the retry take the barrier,
     // and it commits on the second attempt. Same machinery the watchdog path already uses.
     //
-    // Scoped to block processing by the txEpochStore context, which only the block loop
-    // installs and which propagates across awaits into sibling Database instances (the hub
-    // mirror reads run on this exact path). No stored context = an API / healthcheck read,
-    // which is free to read whatever the mirror currently holds and is never fenced. That
-    // scoping is what stops a concurrent api.js fee quote from tripping a consensus guard.
+    // Scoped to block processing by the txEpochStore context's `consensus` flag, which only
+    // runInTxEpoch sets and which propagates across awaits into sibling Database instances (the
+    // hub mirror reads run on this exact path). Two ways out, and BOTH are needed: no stored
+    // context = an API / healthcheck read, and a stored context with consensus false = the
+    // fee-quote dry run, which installs a context of its own for the M-16 fence.
+    // Either is free to read whatever the mirror currently holds, because neither commits
+    // anything - only a block can carry an uncovered mirror read into consensus state. Testing
+    // for the flag rather than for the context's mere existence is what actually stops a
+    // concurrent api.js fee quote from tripping a consensus guard; testing for existence alone
+    // did not, and cost three sweep drives and a wrong "fee price unavailable" on screen.
     // The deferral is thrown as a typed Error carrying PRICE_BARRIER_DEFERRED, because the
     // readers this backstop fires on sit INSIDE action catches that swallow deterministic
     // contract failures (xexec's execution catch, the XCALL/ATTEST callback catches). A bare
@@ -1754,7 +1777,8 @@ class Database {
     // (every injected XEXEC on a transaction-less block recorded result_status='error'
     // while healthy peers recorded 'ok'). The code is what makes rethrowIfInfraFault propagate.
     _assertPriceBarrierNotSkipped(site){
-        if(txEpochStore.getStore() === undefined) return;
+        const ctx = txEpochStore.getStore();
+        if(ctx === undefined || ctx.consensus !== true) return;
         const ix = this.indexer;
         if(!ix || !ix.priceBarrierSkipped) return;
         // Escalate THIS block: the retry must not skip again, or it loops forever.
