@@ -48,6 +48,11 @@ const GATES = [
     // escrow carve-out, so a one-sided edit changes the amount paid at the flag-day exactly as a
     // one-sided height edit changes when it is paid.
     ['attest_broadcast_fee_activation.js',  'ATTEST_BROADCAST_FEE_CAP'],
+    ['attest_responsible_widening_activation.js',      'ATTEST_RESPONSIBLE_WIDENING_ACTIVATION'],
+    // Not an activation MAP but the consensus constants the same gate reads: the ladder's
+    // confirmations and maxSlots decide WHICH validators may sign at the flag-day exactly as
+    // the heights decide when, so a one-sided edit forks v1 signature admission.
+    ['attest_responsible_widening_activation.js',      'ATTEST_RESPONSIBLE_WIDENING'],
     ['anchor_reward_activation.js',         'ANCHOR_REWARD_DERIVE_ACTIVATION'],
     ['anchor_activation.js',                'ANCHOR_ACTIVATION'],
     // constants.js claims the whole anchor/archive reward block is "kept byte-identical to
