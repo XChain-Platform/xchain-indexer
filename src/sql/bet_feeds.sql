@@ -21,12 +21,12 @@ CREATE TABLE bet_feeds (
     label          VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci, -- Feed label (market title)
     outcomes       VARCHAR(1100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci, -- Canonical comma-joined outcome labels (trimmed, no surrounding whitespace)
     tick_id        BIGINT UNSIGNED,          -- id of record in index_tickers table (wager token)
-    fee            VARCHAR(11),              -- Oracle fee as a PERCENT of the total pot (2dp; '1.00' = 1%)
+    fee            VARCHAR(11) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,              -- Oracle fee as a PERCENT of the total pot (2dp; '1.00' = 1%)
     deadline       BIGINT UNSIGNED,          -- unix timestamp betting closes / earliest resolve (64-bit per Y2038 discipline)
     refund_window  BIGINT UNSIGNED,          -- seconds after deadline the oracle has to resolve
     expire_at      BIGINT UNSIGNED,          -- materialized deadline + refund_window; computed and range-checked at parse
                                              -- (the expiry-pass predicate is not indexable without it)
-    min_amount     VARCHAR(250),             -- Minimum stake per bet (NULL = none)
+    min_amount     VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,             -- Minimum stake per bet (NULL = none)
     allow_list     BIGINT UNSIGNED,          -- action_index of a list from the lists table (only members may bet)
     block_list     BIGINT UNSIGNED,          -- action_index of a list from the lists table (members may NOT bet; block wins)
     -- utf8mb4: nominally base64, but the value is stored as it landed on the wire with

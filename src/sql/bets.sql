@@ -18,7 +18,7 @@ CREATE TABLE bets (
     feed_action_index BIGINT UNSIGNED NOT NULL, -- action_index of the bet_feeds market this bet is placed on
     outcome           INT UNSIGNED,             -- Outcome index bet on (0..outcome count-1 of the feed)
     tick_id           BIGINT UNSIGNED,          -- id of record in index_tickers table (denormalized = feed wager tick)
-    amount            VARCHAR(250),             -- Stake escrowed at place time
+    amount            VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,             -- Stake escrowed at place time
     memo_id           BIGINT UNSIGNED,          -- id of record in index_memos table
     status_id         BIGINT UNSIGNED,          -- id of record in index_statuses table (parse status of the place tx)
     bet_status_id     BIGINT UNSIGNED,          -- id of record in index_statuses table (current bet status:

@@ -17,10 +17,10 @@ CREATE TABLE orders (
     action_index     BIGINT UNSIGNED NOT NULL, -- Unique action index
     give_coin_id     BIGINT UNSIGNED,          -- id of record in index_coins table
     give_tick_id     BIGINT UNSIGNED,          -- id of record in index_tickers table
-    give_amount      VARCHAR(250),             -- Amount of GIVE_TICK in order
+    give_amount      VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,             -- Amount of GIVE_TICK in order
     get_coin_id      BIGINT UNSIGNED,          -- id of record in index_coins table
     get_tick_id      BIGINT UNSIGNED,          -- id of record in index_tickers table
-    get_amount       VARCHAR(250),             -- Amount of GET_TICK in order
+    get_amount       VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,             -- Amount of GET_TICK in order
     get_address_id   BIGINT UNSIGNED,          -- id of record in index_addresses table
     give_ownership   TINYINT(1) NOT NULL DEFAULT 0, -- 1 = order escrows GIVE_TICK ownership instead of a balance amount
     get_ownership    TINYINT(1) NOT NULL DEFAULT 0, -- 1 = order requires matcher to currently own GET_TICK and transfer it

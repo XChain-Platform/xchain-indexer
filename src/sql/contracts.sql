@@ -16,7 +16,7 @@ DROP TABLE IF EXISTS contracts;
 CREATE TABLE contracts (
     action_index          BIGINT UNSIGNED NOT NULL,
     source_id             BIGINT UNSIGNED NOT NULL,
-    code                  MEDIUMTEXT NOT NULL,
+    code                  MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
     code_hash             CHAR(64) NOT NULL,
     api_version           INT UNSIGNED NOT NULL DEFAULT 1,
     status_id             BIGINT UNSIGNED,

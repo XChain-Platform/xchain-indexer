@@ -17,7 +17,7 @@ CREATE TABLE sends (
     action_index   BIGINT UNSIGNED NOT NULL, -- Unique action index
     tick_id        BIGINT UNSIGNED,          -- id of record in index_ticks table
     destination_id BIGINT UNSIGNED,          -- id of record in index_addresses table
-    amount         VARCHAR(250),              -- Amount of token in send
+    amount         VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,              -- Amount of token in send
     memo_id        BIGINT UNSIGNED,          -- id of record in index_memos table 
     status_id      BIGINT UNSIGNED           -- id of record in index_statuses table
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;

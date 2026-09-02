@@ -18,7 +18,7 @@
 DROP TABLE IF EXISTS gated_files;
 CREATE TABLE gated_files (
     action_index        BIGINT UNSIGNED NOT NULL, -- ACTION_INDEX of the gated FILE action
-    gate_ticker         VARCHAR(250) NOT NULL,    -- Token ticker that gates this file
+    gate_ticker         VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,    -- Token ticker that gates this file
     encryption_method   TINYINT UNSIGNED NOT NULL,-- 1 = AES-256-GCM
     key_hash            CHAR(64) NOT NULL,        -- hex sha256(K), groups pack members
     -- Publisher-scoped unlock: the publishing SOURCE, and the unlock threshold.
@@ -37,7 +37,7 @@ CREATE TABLE gated_files (
     -- empty = unconditional. VARCHAR(40) matches the SDK's wire bound exactly: the
     -- wire rejects anything longer so this column can never truncate a valid value
     -- and make consensus validity depend on the DB's mode.
-    gate_min_amount     VARCHAR(40) NULL,
+    gate_min_amount     VARCHAR(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL,
     status_id           BIGINT UNSIGNED,          -- id of record in index_statuses table
     raw_data            MEDIUMBLOB                -- Ciphertext bytes (mirrored from decoder for serving)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;

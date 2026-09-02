@@ -39,8 +39,8 @@ CREATE TABLE votes (
     poll_index        BIGINT UNSIGNED NOT NULL,   -- FK to polls.action_index
     voter_address_id  BIGINT UNSIGNED NOT NULL,   -- FK to index_addresses (the SOURCE that cast the ballot)
     choice            SMALLINT UNSIGNED NOT NULL, -- option index into the poll's options array
-    share             VARCHAR(60),                -- relative share for this option (split mode); '1' in approval mode
-    memo              MEDIUMTEXT,                 -- optional voter note
+    share             VARCHAR(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,                -- relative share for this option (split mode); '1' in approval mode
+    memo              MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,                 -- optional voter note
     resolved_block    BIGINT UNSIGNED,            -- reserved for finalization re-arm on reorg (Phase 2)
     status_id         BIGINT UNSIGNED             -- FK to index_statuses (validation status of the ballot action)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;

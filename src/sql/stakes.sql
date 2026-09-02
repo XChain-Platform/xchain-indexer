@@ -18,7 +18,7 @@ CREATE TABLE stakes (
     source_id           BIGINT UNSIGNED NOT NULL,        -- FK to index_addresses (staking address)
     version             TINYINT UNSIGNED NOT NULL DEFAULT 1,  -- STAKE format: 1=new stake, 2=top-up of existing stake
     signing_pubkey_id   BIGINT UNSIGNED NOT NULL,        -- FK to index_pubkeys (Ed25519 hot key)
-    amount              VARCHAR(250) NOT NULL,           -- XCHAIN added by this action (active stake = SUM of amounts for pubkey)
+    amount              VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,           -- XCHAIN added by this action (active stake = SUM of amounts for pubkey)
     status_id           BIGINT UNSIGNED,                 -- valid/invalid/etc
     block_index         BIGINT UNSIGNED NOT NULL,
     activation_block    BIGINT UNSIGNED NOT NULL DEFAULT 0,  -- block when this stake row becomes active (block_index + ACTIVATION_DELAY_BLOCKS)

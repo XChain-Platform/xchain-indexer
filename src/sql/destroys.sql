@@ -16,7 +16,7 @@ DROP TABLE IF EXISTS destroys;
 CREATE TABLE destroys (
     action_index BIGINT UNSIGNED NOT NULL, -- Action index (NOT unique: one row per multi-destroy leg)
     tick_id      BIGINT UNSIGNED,          -- id of record in index_ticks table
-    amount       VARCHAR(250),              -- Amount of token to destroy
+    amount       VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,              -- Amount of token to destroy
     memo_id      BIGINT UNSIGNED,          -- id of record in index_memos table
     status_id    BIGINT UNSIGNED           -- id of record in index_statuses table
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;

@@ -18,7 +18,7 @@ CREATE TABLE deposits (
     contract_index      BIGINT UNSIGNED,                -- NULL when the action is invalid with a non-numeric wire value (storage normalization)
     source_id           BIGINT UNSIGNED NOT NULL,
     tick_id             BIGINT UNSIGNED,                -- NULL when the action is invalid with an unresolvable TICK (e.g. a ^<id> ref to a non-existent tick); storage normalization, never on a valid row
-    amount              VARCHAR(250) NOT NULL,
+    amount              VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
     status_id           BIGINT UNSIGNED,
     block_index         BIGINT UNSIGNED NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;

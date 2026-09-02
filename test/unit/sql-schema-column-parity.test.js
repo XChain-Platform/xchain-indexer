@@ -344,6 +344,14 @@ describe('SQL schema column parity (definition path vs ledger path) @regression'
             // 2026-07-10 ADDed it, 2026-07-16-reposition-state-key-bin.sql MODIFYs it into
             // position; the last-MODIFY-wins case holds that MODIFY equal to contract_state.sql.
             'contract_state.state_key_bin',
+            // 2026-07-29-gated-files-threshold-and-publisher.sql ADDed it as plain
+            // VARCHAR(40) NULL; 2026-09-02-utf8mb4-raw-wire-fields.sql MODIFYs it to utf8mb4
+            // (GATE_MIN_AMOUNT is a raw wire field, persisted whether the FILE parsed or not).
+            'gated_files.gate_min_amount',
+            // Both ADDed by 2026-07-05-polls-binding-callback-columns.sql and MODIFYed to
+            // utf8mb4 by 2026-09-02-utf8mb4-raw-wire-fields.sql, same raw-wire-field reason.
+            'polls.callback_method',
+            'polls.gas_escrow',
         ],
         'The set of ADD COLUMNs exempted from the shape comparison changed. Each entry is a column ' +
         'whose shape is now enforced ONLY through the last-MODIFY-wins case, so add one here only ' +

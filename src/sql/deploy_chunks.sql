@@ -19,7 +19,7 @@ CREATE TABLE deploy_chunks (
     code_hash     CHAR(64) NOT NULL,          -- chunk-group id = sha256 of the assembled UTF-8 source
     chunk_index   INT UNSIGNED NOT NULL,      -- 0-based position within the group
     total_chunks  INT UNSIGNED NOT NULL,      -- declared group size
-    code_part     MEDIUMTEXT NOT NULL,        -- one base64 slice of base64(code)
+    code_part     MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,        -- one base64 slice of base64(code)
     block_index   BIGINT UNSIGNED NOT NULL,
     status_id     BIGINT UNSIGNED
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;

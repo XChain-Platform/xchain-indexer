@@ -47,11 +47,14 @@ const Database          = require('../../src/db');
 const SQL_DIR = path.join(__dirname, '..', '..', 'src', 'sql');
 const MIG_DIR = path.join(SQL_DIR, 'migrations');
 
-// The ruled scope: columns that ingest free-form wire text. Deliberately absent, each
-// for a reason recorded in 2026-08-19-utf8mb4-user-text-columns.sql: contracts.code and
-// contract_state.* (consensus preimage / height-gated collation flag-day),
-// polls.callback_params (its ADD COLUMN migration is checksum-immutable at plain
-// MEDIUMTEXT), and the grammar-constrained numeric / hex / enum fields.
+// The ruled scope of the 2026-08-19 pass: columns that ingest free-form wire text. The two
+// groups it deliberately excluded - contracts.code and the grammar-constrained raw fields -
+// were widened later by the 2026-09-02 pair and are covered by their own sibling suite,
+// utf8mb4-raw-wire-fields.test.js, driven from src/utf8mb4Columns.js. Still absent from
+// both, each for a reason recorded in that module: index_addresses.address (the consensus
+// preimages pin COLLATE utf8_bin on it), contract_state.* (height-gated collation
+// flag-day), and polls.callback_params (its ADD COLUMN migration is checksum-immutable at
+// plain MEDIUMTEXT).
 const USER_TEXT_COLUMNS = {
     transactions: ['data'],
     index_memos:  ['memo'],

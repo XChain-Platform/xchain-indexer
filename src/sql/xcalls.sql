@@ -20,12 +20,12 @@ CREATE TABLE xcalls (
     contract_index        BIGINT UNSIGNED,          -- requesting contract's DEPLOY action_index (v0 rows)
     target_chain          VARCHAR(10),
     target_contract_index BIGINT UNSIGNED,
-    method                VARCHAR(64),
-    params_json           TEXT,
+    method                VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+    params_json           TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
     gas_limit             BIGINT UNSIGNED,
     cross_hops            INT,
-    callback_method       VARCHAR(64),
-    callback_params_json  TEXT,
+    callback_method       VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+    callback_params_json  TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
     deadline_block        BIGINT UNSIGNED,          -- this-chain block height after which the request expires locally
     request_status        VARCHAR(20),              -- pending → completed | expired (the exactly-once callback interlock)
     result_status         VARCHAR(20),              -- outcome delivered to the callback (feeds xchain.crossChain.getCallResult)

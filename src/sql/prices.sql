@@ -36,8 +36,8 @@ CREATE TABLE prices (
     coin_id             BIGINT UNSIGNED,                  -- FK to index_coins (which chain's token)
     tick_id             BIGINT UNSIGNED,                  -- FK to index_tickers (token name)
     fiat_id             BIGINT UNSIGNED,                  -- FK to index_fiats (currency code)
-    value               VARCHAR(250),                     -- price as decimal string
-    fee                 VARCHAR(250),                     -- oracle usage fee as decimal
+    value               VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,                     -- price as decimal string
+    fee                 VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,                     -- oracle usage fee as decimal
     memo_id             BIGINT UNSIGNED,                  -- FK to index_memos
     -- shared fields
     validation_status   VARCHAR(20) NOT NULL DEFAULT 'pending',  -- valid/invalid/pending (PBFT signature validation result for v0)
