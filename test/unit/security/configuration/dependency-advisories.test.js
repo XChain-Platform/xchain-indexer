@@ -89,6 +89,23 @@ describe('Security: remediated dependency advisories @regression @tier4', functi
     // reach here, not dev-only: express-rate-limit and geoip-lite both parse the
     // client request IP, so a padded or mapped form could key a different
     // rate-limit bucket than its canonical address.
+
+    // mariadb <=3.5.2 is the production DB driver every service here opens its
+    // pool with, not a dev-only reach. GHSA-cqhc-2h57-wpxf (HIGH) sends the
+    // password in the clear to a man in the middle even when the pool asked for
+    // `ssl: true`, because the connector falls back to a plaintext handshake
+    // rather than failing closed; GHSA-42r5-vhpq-m858 is the same
+    // cleartext-credential exposure stated as its own advisory; and
+    // GHSA-g5xc-5w98-jfvm is SQL injection through Buffer parameter escaping
+    // under the big5, gbk, sjis, cp932 and gb18030 client charsets. Measured
+    // exposure in this topology is nil today (no repo passes `ssl:` to a pool,
+    // every DB connection is host-local, and none selects one of those
+    // charsets), which is why the fix rode the ordinary fleet path instead of a
+    // hotfix. The guard is what stops a lockfile refresh, or the first service
+    // that does dial a remote database over TLS, from landing back inside the
+    // range. 3.5.3 is the patch, and it also moves the driver's own lru-cache
+    // onto the 11.x line, so a splice that bumps mariadb and leaves lru-cache
+    // at 10.4.3 has not actually installed the fixed driver.
     const advisories = [
         { name: 'fast-uri', minSafe: [3, 1, 5], majorSeries: 3 },
         { name: 'brace-expansion', minSafe: [5, 0, 9], majorSeries: 5 },
@@ -103,7 +120,8 @@ describe('Security: remediated dependency advisories @regression @tier4', functi
         { name: 'shell-quote', minSafe: [1, 9, 0], majorSeries: 1 },
         { name: 'form-data', minSafe: [4, 0, 6], majorSeries: 4 },
         { name: 'tmp', minSafe: [0, 2, 6], majorSeries: 0 },
-        { name: 'ip-address', minSafe: [10, 3, 1], majorSeries: 10 }
+        { name: 'ip-address', minSafe: [10, 3, 1], majorSeries: 10 },
+        { name: 'mariadb', minSafe: [3, 5, 3], majorSeries: 3 }
     ];
 
     // Compares dotted numeric version triples without pulling in semver.
@@ -200,5 +218,19 @@ describe('Security: remediated dependency advisories @regression @tier4', functi
         assert.ok(axios.VERSION, 'axios did not expose a VERSION');
         assert.ok(cmp(parse(axios.VERSION), [1, 18, 0]) >= 0,
             `installed axios is ${axios.VERSION}, inside the vulnerable range (fixed in 1.18.0)`);
+    });
+
+    // Same reasoning as ADV-5, for the one entry in this list every service
+    // opens a socket with. mariadb's `exports` block hides its own
+    // package.json from require() and the module exports no version constant,
+    // so read the installed manifest off disk instead.
+    it('ADV-10: the installed mariadb reports a patched runtime version', function () {
+        if (!lockEntries('mariadb').length) return this.skip();
+        const manifest = path.join(root, 'node_modules', 'mariadb', 'package.json');
+        if (!fs.existsSync(manifest)) return this.skip();
+
+        const installed = JSON.parse(fs.readFileSync(manifest, 'utf8')).version;
+        assert.ok(cmp(parse(installed), [3, 5, 3]) >= 0,
+            `installed mariadb is ${installed}, inside the vulnerable range (fixed in 3.5.3)`);
     });
 });
