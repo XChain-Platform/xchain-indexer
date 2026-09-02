@@ -231,7 +231,11 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
         let m;
         while ((m = re.exec(INDEXER_SRC)) !== null) {
             const field = /_barrierClearsAt\(blockTime,\s*'([A-Za-z]+)'\)/.exec(m[2]);
-            pairs.push([m[1], field ? field[1] : null]);
+            // The direct-hub-DB call barrier has no HubDbSync to read a grace off, so it
+            // keys on the indexer's own resolved field through its own helper. Map it to
+            // that field so this test still pins WHICH grace the barrier uses.
+            const direct = /_directCallBarrierClearsAt\(blockTime\)/.test(m[2]);
+            pairs.push([m[1], field ? field[1] : (direct ? 'directCallGraceS' : null)]);
         }
         return pairs;
     }
@@ -243,7 +247,11 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
         ['oracle_sync_barrier',   'oracleWatermarkGraceS'],
         ['match_sync_barrier',    'matchWatermarkGraceS'],
         ['call_sync_barrier',     'callWatermarkGraceS'],
-        ['call_presence_barrier', null],                          // no watermark to key on
+        // Direct-hub-DB twin of call_sync_barrier. A null here (no watermark to key on)
+        // is what makes such a barrier wedge forever: it leaves no time-keyed escape at
+        // all. This one has one, resolved onto the indexer from the SAME frozen call
+        // grace hub_db_sync uses.
+        ['call_presence_barrier', 'directCallGraceS'],
         ['anchor_attest_barrier', 'anchorAttestWatermarkGraceS'],
         ['snapshot_sync_barrier', null]                           // presence, not wall clock
     ];
@@ -262,8 +270,22 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
         // misses a call site degrades silently rather than throwing.
         for (const [reason, field] of EXPECTED) {
             if (field === null) continue;
-            assert.ok(new RegExp('this\\.' + field + '\\s*=').test(SYNC_SRC),
-                field + ' (used by ' + reason + ') is not assigned in hub_db_sync.js');
+            // directCallGraceS lives on the indexer, not on HubDbSync: the direct barrier
+            // runs precisely when there is no HubDbSync instance to read one off.
+            const src = (field === 'directCallGraceS') ? INDEXER_SRC : SYNC_SRC;
+            assert.ok(new RegExp('this\\.' + field + '\\s*=').test(src),
+                field + ' (used by ' + reason + ') is not assigned in its owning module');
         }
+    });
+
+    it('the direct call barrier resolves its grace from the frozen call constant', function () {
+        // The whole point of the escape is that the direct path and the mirrored path
+        // open on the SAME number. A private default here, or a resolver that skips
+        // resolveWatermarkGrace, would let two operators of one chain inject a cross-chain
+        // call at different blocks.
+        assert.ok(/resolveWatermarkGrace\(\s*\n?\s*HUB_SYNC_WATERMARK_GRACE_S\.call,\s*'HUB_SYNC_CALL_GRACE_S'/.test(INDEXER_SRC),
+            'directCallGraceS must be resolved through hub_db_sync resolveWatermarkGrace on the frozen call grace');
+        assert.ok(/module\.exports\.resolveWatermarkGrace\s*=/.test(SYNC_SRC),
+            'hub_db_sync must export resolveWatermarkGrace for the direct barrier to share it');
     });
 });
