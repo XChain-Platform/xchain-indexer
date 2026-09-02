@@ -356,6 +356,21 @@ function priceUpsertSql(cols, rowCount) {
          + ' ON DUPLICATE KEY UPDATE ' + sets.join(', ');
 }
 
+// Memory bound on the served-key set the price reconciliation builds over a full
+// re-page (_reconcileForeignPriceRounds). One key per FINALIZED (round, pair) the
+// hub serves; at hourly rounds across a handful of pairs this is decades of history,
+// so the cap only ever trips on a pathological table. Above it the pass degrades to
+// the round-ceiling rule, which needs no set at all.
+const PRICE_FINALIZED_KEY_CAP = 500000;
+
+// Natural key of a price_snapshots row: its UNIQUE (round_number, coin_pair).
+// String()-normalized on both sides so a wire number and a driver-returned
+// BIGINT/string for the same round produce the same key. NUL-joined because no
+// coin_pair can contain it, so no two distinct pairs can collide into one key.
+function priceRoundKey(round, pair) {
+    return String(round) + ' ' + String(pair);
+}
+
 class HubDbSync {
 
     constructor(hubDb, options) {
@@ -887,6 +902,18 @@ class HubDbSync {
         // can close that half of #3211.
         let servedMatchIds = (table === 'cross_chain_matches') ? new Set() : null;
         let maxServedId    = 0;
+        // price_snapshots only: the same problem with the opposite cause. Its snapshot
+        // endpoint is UNFILTERED (hub api.js: SELECT * ... WHERE id > ?), so a complete
+        // re-page is the hub's whole table, which makes "the hub does not hold this round
+        // as finalized" provable from the drain alone. Nothing else can prove it here: the
+        // table carries no `network` column, so _mirrorNetworkScope returns null and BOTH
+        // purges above are structurally unreachable for it (and the id-ceiling fence never
+        // even runs, because FULL_REPAGE forces the cursor to 0). Collect the finalized
+        // (round_number, coin_pair) keys the hub actually served so the pass below can
+        // clear what it did not. See _reconcileForeignPriceRounds.
+        let servedPriceKeys   = (table === 'price_snapshots') ? new Set() : null;
+        let priceKeysComplete = true;
+        let maxServedRound    = 0;
 
         // Progress counter. `fetched` counts every row the hub served this drain, which is
         // the number that has to be seen moving on a cold start even where `applied` lags
@@ -931,6 +958,20 @@ class HubDbSync {
                         servedMatchIds.add(String(row.match_id));
                         let sid = Number(row.id);
                         if (Number.isFinite(sid) && sid > maxServedId) maxServedId = sid;
+                    }
+                    if (servedPriceKeys) {
+                        let rn = Number(row.round_number);
+                        if (Number.isFinite(rn) && rn > maxServedRound) maxServedRound = rn;
+                        // Only FINALIZED rows are recorded: every consensus read of this
+                        // table filters status='finalized' (getLatestPrice, getPrice's
+                        // MAX(round_number) join, _refreshPriceSyncHeight), so that is
+                        // exactly the set whose contamination is load-bearing, and a hub
+                        // that serves a round as skipped is stating it holds no finalized
+                        // row there.
+                        if (String(row.status) === 'finalized') {
+                            if (servedPriceKeys.size >= PRICE_FINALIZED_KEY_CAP) priceKeysComplete = false;
+                            else servedPriceKeys.add(priceRoundKey(row.round_number, row.coin_pair));
+                        }
                     }
                     applied++;
                 } catch (err) {
@@ -1081,6 +1122,13 @@ class HubDbSync {
             // _bootstrapDrained so reconnect / live-row refreshes cannot arm from
             // a holed mirror (see #1788).
             if (table === 'price_snapshots') {
+                // Clear the rounds this hub does not hold BEFORE the buffered replay and
+                // before the height refresh. Ordering is load-bearing in both directions:
+                // every live round that arrived during the drain is still BUFFERED (not
+                // applied), so the pass cannot mistake one for a foreign row; and the
+                // refresh below must read the cleaned table, or the barrier arms off a
+                // height the mirror is about to lose.
+                await this._reconcileForeignPriceRounds(servedPriceKeys, priceKeysComplete, maxServedRound);
                 // Replay the live rounds buffered during this drain (#2422),
                 // serialized through the message chain: every already-received
                 // event is guaranteed buffered ahead of this task and no new
@@ -1300,6 +1348,109 @@ class HubDbSync {
         console.warn('HubDbSync: reconciled ' + stale.length + ' cross_chain_matches row(s) the hub has retracted ' +
                      'but this mirror still held as finalized (missed retraction converged, #3211)');
         await this._refreshMatchSyncTimestamp();
+    }
+
+    // Clear finalized price rounds this hub does not hold.
+    //
+    // Repointing an indexer at a different hub - another network, a rebuilt database, a
+    // re-genesised testnet - leaves every round the previous hub served sitting in the
+    // mirror. price_snapshots is the one mirrored table with NO defence against that.
+    // It carries no `network` column, so _mirrorNetworkScope returns null and both
+    // _purgeForeignNetworkRows and _purgeRebuiltSourceRows are unreachable for it; and
+    // being a FULL_REPAGE table its cursor is forced to 0, so the id-ceiling fence that
+    // detects a retired id space never runs. The re-page then converges only the keys the
+    // two hubs SHARE, because _applyRow's upsert is keyed on (round_number, coin_pair):
+    // a foreign round the new hub has never reached is simply never addressed.
+    //
+    // Those survivors are not inert. Every consensus read takes the NEWEST finalized row
+    // by round_number - db.getLatestPrice (ORDER BY round_number DESC LIMIT 1, the native
+    // fee gate's price source) and the getPrice() preload (MAX(round_number) per pair) -
+    // so a foreign round numbered above anything the new hub has reached wins every read
+    // for the life of the mirror, and its old block_timestamp then fails the staleness
+    // guard. That is the observed shape: a correctly-configured LTC testnet indexer
+    // serving a 4.4-day-old XCHAIN/USD and a frozen LTC/USD with the fee gate shut, on a
+    // mirror that was never going to converge, until the table was purged by hand.
+    //
+    // What makes the delete provable, and why it is a stronger warrant than the two
+    // purges above rather than a weaker one: the hub's price_snapshots snapshot endpoint
+    // applies NO filter (`SELECT * FROM price_snapshots WHERE id > ?`), unlike the
+    // status-filtered match/call feeds. So a COMPLETE drain - short final page, zero apply
+    // errors, which is the only state this runs in - has seen every row the hub holds. A
+    // local finalized row at a key that drain did not serve as finalized is therefore a
+    // row the hub does not have: either a round it never produced, or one it holds as
+    // skipped/disputed, which the status-gated upsert deliberately refuses to downgrade.
+    // Neither is recoverable by any later delivery, exactly like the retraction
+    // _reconcileRetractedMatches converges.
+    //
+    // Delete rather than mark: unlike a match, a price round has no status consensus
+    // treats as a tombstone (a 'skipped' row IS a legitimate hub row), and the hub's own
+    // row for that key re-arrives on the next drain if it exists. Local `skipped` rows are
+    // left alone: no consensus read sees them, and the upsert converges them in place.
+    async _reconcileForeignPriceRounds(servedKeys, keysComplete, maxServedRound) {
+        if (!servedKeys) return;
+        let locals, stale;
+        if (!keysComplete) {
+            // The set overflowed its memory cap, so absence from it proves nothing. Fall
+            // back to the weaker half that needs no set: the drain saw every row the hub
+            // holds, so no round above the highest it served exists there. This still
+            // clears the shape that poisons the ORDER BY round_number DESC readers, and
+            // leaves any lower-numbered foreign round for the operator.
+            console.warn('HubDbSync: price round reconciliation exceeded its key cap (' +
+                PRICE_FINALIZED_KEY_CAP + '); falling back to the round-ceiling rule ' +
+                '(rounds above ' + maxServedRound + ' only)');
+            try {
+                locals = await this.hubDb.doQuery(
+                    "SELECT id FROM price_snapshots WHERE status = 'finalized' AND round_number > ?",
+                    [maxServedRound]);
+            } catch (e) {
+                console.warn('HubDbSync: price round reconciliation skipped (read failed):', e);
+                return;
+            }
+            stale = (locals || []).map(r => Number(r.id)).filter(Number.isFinite);
+        } else {
+            try {
+                locals = await this.hubDb.doQuery(
+                    "SELECT id, round_number, coin_pair FROM price_snapshots WHERE status = 'finalized'");
+            } catch (e) {
+                console.warn('HubDbSync: price round reconciliation skipped (read failed):', e);
+                return;
+            }
+            locals = locals || [];
+            stale = locals
+                .filter(r => !servedKeys.has(priceRoundKey(r.round_number, r.coin_pair)))
+                .map(r => Number(r.id))
+                .filter(Number.isFinite);
+            // Sanity fence on the KEY DERIVATION itself, not on the data. Every finalized
+            // row this drain served was applied to the local table moments ago, so it must
+            // read back into the served set. If the hub served finalized rounds and NOT ONE
+            // local finalized row matched, the two sides are not producing the same key
+            // (a column rename, a driver type change) and this pass would empty a healthy
+            // mirror. Refuse, loudly: a stalled reconciliation is recoverable, a wiped
+            // price history under a mirror the operator believes is converging is not.
+            if (servedKeys.size > 0 && locals.length > 0 && stale.length === locals.length) {
+                console.error('HubDbSync: price round reconciliation refused: the hub served ' +
+                    servedKeys.size + ' finalized round(s) but NONE of the ' + locals.length +
+                    ' local finalized row(s) matched a served key. That is a key-derivation ' +
+                    'mismatch, not contamination; leaving the mirror untouched.');
+                return;
+            }
+        }
+        if (stale.length === 0) return;
+        // Chunked so one oversized IN list can never blow the statement limit.
+        for (let i = 0; i < stale.length; i += 500) {
+            let chunk = stale.slice(i, i + 500);
+            try {
+                await this.hubDb.doQuery(
+                    'DELETE FROM price_snapshots WHERE id IN (' + chunk.map(() => '?').join(',') + ')', chunk);
+            } catch (e) {
+                console.warn('HubDbSync: price round reconciliation failed for a chunk:', e);
+                return;
+            }
+        }
+        console.warn('HubDbSync: removed ' + stale.length + ' finalized price_snapshots row(s) this hub does ' +
+            'not hold (a repointed or rebuilt hub leaves the previous one\'s rounds behind, and the newest ' +
+            'round_number wins every price read); the mirror now holds only what this hub serves');
+        await this._refreshPriceSyncHeight();
     }
 
     // Re-read EVERY barrier height/timestamp from the local mirror and release the

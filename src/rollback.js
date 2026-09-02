@@ -1083,7 +1083,7 @@ class Rollback {
             // those same earn-blocks so the reward can be re-materialized on the canonical chain.
             // Key on the reward's earn-block (block_index), NOT on whether the source address
             // rolled out: a reward row is dropped iff its earn-block is in the orphaned range,
-            // independent of its source address. The common (and previously-missed) case is an
+            // independent of its source address. The common (and easily missed) case is an
             // address first seen BEFORE the range that earns a reward INSIDE it: the reward row
             // is deleted but the address survives, so the old "source_id NOT IN index_addresses"
             // predicate never fired and the reward was silently lost forever. MUST run AFTER the

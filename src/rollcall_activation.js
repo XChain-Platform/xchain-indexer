@@ -121,9 +121,9 @@ function isRollcallActive(epochHeight, network){
 }
 
 /**
- * Whether `height` is an epoch boundary on `network`. This is pure cadence and
- * does NOT consult ROLLCALL_ACTIVATION, so height 0 is a boundary wherever the
- * interval divides it and callers must not treat a falsy height as "no epoch".
+ * Whether `height` is an epoch boundary on `network`. Epoch 0 IS a real epoch on
+ * an armed regtest venue (ROLLCALL_REGTEST_ARMED_HEIGHT is 0), so callers must
+ * not treat a falsy height as "no epoch".
  * @param {number|string} height BTC height
  * @param {string} network mainnet|testnet|regtest
  * @returns {boolean}
