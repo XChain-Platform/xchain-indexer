@@ -33,6 +33,10 @@ const retention         = require('./retention.js');
 const stateCommitAct    = require('./state_commitment_activation.js');
 const HubClient    = require('./hub_client.js');
 const HubDbSync    = require('./hub_db_sync.js');
+// The frozen call-barrier grace and its resolver, shared with the direct-hub-DB
+// (no-mirror) call-presence barrier so both paths open on the SAME constant.
+const { HUB_SYNC_WATERMARK_GRACE_S, resolveWatermarkGrace,
+        HUB_SYNC_BARRIER_HOLD_CEILING_S, resolveBarrierHoldCeilingMs } = require('./hub_db_sync.js');
 const anchorRewardDerive = require('./anchor_reward_derive.js');
 const AnchorProofClient  = require('./anchor_proof_client.js');
 const rollcallClose      = require('./rollcall_close.js');
@@ -172,6 +176,62 @@ function atProcessableTip(isSynced, stallReason, stallClearsAtMs, now){
     return !!isSynced || waitingOnFutureBlock(stallReason, stallClearsAtMs, now);
 }
 
+// ── Mirror-barrier hold: how long ONE block has been stuck behind the hub-mirror
+// barriers, and whether that has passed the named ceiling.
+//
+// Every hub-mirror barrier bounds a single ATTEMPT (HUB_PRICE_SYNC_TIMEOUT_MS) and then
+// defers, and the block loop retries the same block with an identical fresh wait. Those
+// per-attempt bounds compose into no bound at all: a mirror whose stream watermark has
+// stopped advancing holds a block forever while each individual log line reads like an
+// ordinary, self-clearing defer. What that looks like from outside is a metronome, a few
+// blocks released whenever the watermark happens to jump, and a throughput ceiling below
+// chain pace. So the hold is measured across retries, keyed on the BLOCK rather than the
+// reason (a block that cycles between two barriers is still one stuck block), and it has
+// a named ceiling.
+//
+// nextBarrierHold folds one poll-loop observation into the hold record and is pure, so
+// the whole rule is testable without a block loop. It returns the new record, or null
+// when there is no hold to carry.
+//
+// Three things reset it, and each is a case where the wait is NOT open-ended:
+//   - no stall reason at all (the loop is advancing),
+//   - a different block at the head of the queue (the previous one committed),
+//   - a future-stamped block (waitingOnFutureBlock). That wait already has its own named
+//     bound, the block's own timestamp, it is consensus working as designed, and no
+//     mirror action can shorten it by one second. Accumulating it here would fire the
+//     ceiling on the healthiest case there is.
+function nextBarrierHold(prev, block, stallReason, stallClearsAtMs, now){
+    if(!stallReason || block == null) return null;
+    if(waitingOnFutureBlock(stallReason, stallClearsAtMs, now)) return null;
+    if(prev && prev.block === block)
+        return { block: block, reason: stallReason, since: prev.since, notified: prev.notified };
+    return { block: block, reason: stallReason, since: now, notified: false };
+}
+
+// True for the stall reasons a hub-mirror resubscribe could actually clear. Every mirror
+// barrier's reason ends in '_barrier' (price/oracle/match/call/call_presence/anchor_attest/
+// snapshot); the host faults deliberately do not (vm_executor_unavailable,
+// anchor_reward_proof_unavailable, rollcall_proof_unavailable). A suffix rule rather than
+// a list, so a barrier added later is covered by naming it the way every existing one is
+// named.
+function isMirrorBarrierReason(stallReason){
+    return typeof stallReason === 'string' && /_barrier$/.test(stallReason);
+}
+
+// Milliseconds the current hold has lasted, or 0 when nothing is held.
+function barrierHoldMs(hold, now){
+    if(!hold || !Number.isFinite(hold.since)) return 0;
+    return Math.max(0, now - hold.since);
+}
+
+// True once a hold has reached the named ceiling. A ceiling of 0 (or an unusable value)
+// disables the check, which is the documented off switch: the barrier still defers
+// exactly as before, it simply is not reported or re-driven under this name.
+function barrierCeilingExceeded(hold, ceilingMs, now){
+    if(!Number.isFinite(ceilingMs) || ceilingMs <= 0) return false;
+    return barrierHoldMs(hold, now) >= ceilingMs;
+}
+
 class XChainIndexer {
 
     constructor(decoderDbHost, decoderDbPort, decoderDbName, decoderDbUser, decoderDbPass, indexerDbHost, indexerDbPort, indexerDbName, indexerDbUser, indexerDbPass, hubDbHost, hubDbPort, hubDbName, hubDbUser, hubDbPass, utxoTrackerUrl, utxoTrackerPort){
@@ -281,6 +341,20 @@ class XChainIndexer {
         // validation is deterministic across operators. On timeout the block is deferred and
         // retried rather than validated against a stale price copy.
         this.priceSyncTimeoutMs = parseInt(process.env.HUB_PRICE_SYNC_TIMEOUT_MS || '60000');
+
+        // Mirror-barrier hold ceiling. priceSyncTimeoutMs above bounds ONE barrier attempt;
+        // this bounds the whole hold across retries, a quantity nothing else here bounds at
+        // all. Read from the same named constant HubDbSync throttles its forced resync on,
+        // so the crossing and the remedy cannot disagree. Purely operational: it opens no
+        // barrier and commits no block (see nextBarrierHold).
+        this.barrierHoldCeilingMs = resolveBarrierHoldCeilingMs();
+        // { block, reason, since, notified } for the block currently held behind a mirror
+        // barrier, or null when nothing is held. Folded by nextBarrierHold() once per
+        // poll-loop pass and cleared on every successful commit.
+        this.barrierHold = null;
+        // Count of ceiling crossings since boot, surfaced on /health so a fleet sweep can
+        // see that a mirror needed re-driving without reading container logs.
+        this.barrierCeilingHits = 0;
 
         // Action-scoped barrier state, all node-local and never hashed.
         // priceBarrierBlock      - the block the two flags below describe.
@@ -440,6 +514,55 @@ class XChainIndexer {
         let graceS = Number(this.hubDbSync[graceField]);
         if(!Number.isFinite(graceS)) graceS = 0;
         return (blockTime + graceS) * 1000;
+    }
+
+    // Fold one poll-loop pass into the mirror-barrier hold, and act when it crosses the
+    // named ceiling. Called once per pass, right after the catch-up loop exits,
+    // where `this.stallReason` and `this.stallClearsAt` already carry whatever the defer
+    // sites set. Reading them here rather than instrumenting each of the nine defer sites
+    // keeps one rule in one place, and a barrier added later is covered for free.
+    //
+    // What crossing the ceiling does, and what it deliberately does NOT do. It logs under
+    // a distinct name, counts the crossing for /health, and asks the mirror to reconnect
+    // and re-bootstrap. It does not open the barrier, shorten a grace, skip a block or
+    // change a single hashed value: the block keeps deferring, fail-closed, until its
+    // barrier is genuinely satisfied. So the ceiling can never fork settlement, and a node
+    // whose mirror really is missing rows is no more permissive after it fires than before.
+    //
+    // Returns the hold in ms (0 when nothing is held), for the caller and for tests.
+    _noteBarrierHold(blockToParse, now = Date.now()){
+        let prev = this.barrierHold;
+        this.barrierHold = nextBarrierHold(prev, blockToParse, this.stallReason, this.stallClearsAt, now);
+        let hold = this.barrierHold;
+        if(!hold) return 0;
+        if(!barrierCeilingExceeded(hold, this.barrierHoldCeilingMs, now)) return barrierHoldMs(hold, now);
+
+        // The remedy fits the MIRROR barriers only. A host fault (vm_executor_unavailable,
+        // anchor_reward_proof_unavailable) is held by something a hub resubscribe cannot
+        // touch, and re-driving the mirror for it would be a misleading log line attached to
+        // a pointless reconnect. The hold and its ceiling still apply to those: naming how
+        // long a block has been stuck is worth having whatever is holding it.
+        let mirrorBarrier = isMirrorBarrierReason(hold.reason);
+
+        // Announce the crossing ONCE per held block, then keep re-driving the mirror on the
+        // ceiling cadence: requestResync() throttles itself on the same value, so calling it
+        // every pass costs nothing and a mirror that recovers and re-stalls is re-driven again.
+        if(!hold.notified){
+            hold.notified = true;
+            this.barrierCeilingHits++;
+            console.error('Mirror-barrier hold ceiling reached: block ' + blockToParse + ' has been held at ' +
+                hold.reason + ' for ' + Math.round(barrierHoldMs(hold, now) / 1000) + 's, past the ' +
+                Math.round(this.barrierHoldCeilingMs / 1000) + 's ceiling (HUB_SYNC_BARRIER_HOLD_CEILING_S, default ' +
+                HUB_SYNC_BARRIER_HOLD_CEILING_S + 's). The block is still deferring, which is correct. ' +
+                (mirrorBarrier
+                    ? 'Forcing a hub-mirror resync: a stream watermark that stops advancing holds every ' +
+                      'one of these barriers open-endedly, and only a fresh subscribe-then-bootstrap re-arms it.'
+                    : 'Not a hub-mirror barrier, so no resync is forced; this is a host fault to investigate.'));
+        }
+        if(mirrorBarrier && this.hubDbSync && typeof this.hubDbSync.requestResync === 'function')
+            this.hubDbSync.requestResync('block ' + blockToParse + ' held at ' + hold.reason +
+                                         ' past the ' + Math.round(this.barrierHoldCeilingMs / 1000) + 's ceiling');
+        return barrierHoldMs(hold, now);
     }
 
     _evaluatePriceBarrier(blockToParse, blockTransactions){
@@ -1373,6 +1496,10 @@ class XChainIndexer {
                     this.stallReason = null;
                     this.stallClearsAt = null;              // the stall is over, so is its deadline
                     this.lastBlockCommittedAt = Date.now();
+                    // Whatever this block was held behind, it is not held any more. Cleared here
+                    // as well as by nextBarrierHold's block-changed reset so a commit ends the
+                    // hold immediately, rather than at the next pass through the poll loop.
+                    this.barrierHold = null;
 
                     // The block is committed, so nothing else may attribute a price
                     // read to it. Clearing priceBarrierSkipped keeps the choke-point
@@ -1482,6 +1609,13 @@ class XChainIndexer {
                 }
 
             }
+
+            // The catch-up loop has stopped, either caught up or because a barrier deferred
+            // the block at the head of the queue. Fold that into the mirror-barrier hold so a
+            // block that keeps being deferred across passes is measured against the named
+            // ceiling instead of retrying forever behind identically-healthy-looking log
+            // lines. A no-op when nothing is stalled; see _noteBarrierHold.
+            this._noteBarrierHold(this.util.isNull(lastIndexerBlock) ? null : Number(lastIndexerBlock) + 1);
 
             if(!this.synced && !this.util.bclt(lastIndexerBlock, lastDecoderBlock)){
                 this.synced = true;
@@ -1857,4 +1991,8 @@ module.exports.stallWedged                           = stallWedged;
 module.exports.waitingOnFutureBlock                  = waitingOnFutureBlock;
 module.exports.stallClassOf                          = stallClassOf;
 module.exports.atProcessableTip                      = atProcessableTip;
+module.exports.nextBarrierHold                       = nextBarrierHold;
+module.exports.barrierHoldMs                         = barrierHoldMs;
+module.exports.barrierCeilingExceeded                = barrierCeilingExceeded;
+module.exports.isMirrorBarrierReason                 = isMirrorBarrierReason;
 module.exports.hubConfigCoinKey                      = hubConfigCoinKey;

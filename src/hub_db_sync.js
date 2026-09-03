@@ -155,6 +155,53 @@ function resolveWatermarkGrace(frozen, envKey, network){
     return parseInt(String(override).trim(), 10);
 }
 
+// ── Mirror-barrier hold ceiling: the NAMED bound on a barrier wait ──
+//
+// The graces above decide WHEN a barrier opens. Nothing above decides how long a
+// barrier may hold ONE block before the mirror itself is treated as the fault, and
+// that omission is what let testnet throughput sit below chain pace with every log
+// line reading healthy: each defer is bounded by HUB_PRICE_SYNC_TIMEOUT_MS, the block
+// loop retries, and the retry re-arms an identical wait. Per-attempt bounds compose
+// into an unbounded total, so the wait had no ceiling at all, only a cadence.
+//
+// This is that ceiling: the longest one block may sit behind the hub-mirror barriers
+// before the node stops calling it an ordinary defer, says so under a distinct name,
+// and forces the mirror to reconnect and re-bootstrap (HubDbSync.requestResync). The
+// remedy is aimed at the actual failure mode: every one of these barriers is satisfied
+// by the stream watermark, the watermark only advances while _bootstrapDrained is set,
+// and that flag is cleared by any disconnect until a re-bootstrap drains. A mirror
+// whose drain never completes therefore freezes every barrier indefinitely while its
+// socket looks alive, and only a fresh subscribe-then-bootstrap cycle clears it.
+//
+// OPERATIONAL, NOT CONSENSUS, and it is the difference that makes this safe. It never
+// opens a barrier, never shortens a grace and never lets a block commit one second
+// earlier: a node past the ceiling is still deferring, fail-closed, exactly as before.
+// It changes only what the node LOGS, what /health reports, and whether it re-drives
+// its own mirror. So unlike the graces, a per-node value cannot fork settlement, and
+// the env override below is honored on every network rather than regtest alone.
+//
+// Sized well above one barrier-timeout cycle (60s default) and above the 5s reconnect
+// plus a full bootstrap drain, so an ordinary slow drain finishes on its own and only
+// a mirror that is genuinely not converging reaches the ceiling.
+const HUB_SYNC_BARRIER_HOLD_CEILING_S = 900;
+
+// Resolve the hold ceiling in MILLISECONDS. Operational, so an override is honored on
+// every network; an unusable value (non-numeric, negative, fractional) falls back to
+// the named default with a warning rather than throwing, because a bad value here can
+// only mis-time a log line and must never keep an indexer from booting. 0 disables the
+// ceiling (no forced resync, no named crossing), which is the documented off switch.
+function resolveBarrierHoldCeilingMs(raw){
+    const override = (raw === undefined) ? process.env.HUB_SYNC_BARRIER_HOLD_CEILING_S : raw;
+    if(override === undefined || override === null || override === '')
+        return HUB_SYNC_BARRIER_HOLD_CEILING_S * 1000;
+    if(!/^\d+$/.test(String(override).trim())){
+        console.log('WARNING: HUB_SYNC_BARRIER_HOLD_CEILING_S="' + override + '" is not a non-negative ' +
+            'integer number of seconds; using the default ceiling ' + HUB_SYNC_BARRIER_HOLD_CEILING_S + 's.');
+        return HUB_SYNC_BARRIER_HOLD_CEILING_S * 1000;
+    }
+    return parseInt(String(override).trim(), 10) * 1000;
+}
+
 // ── signed-retraction verification helpers ───────────────────────────
 
 // Rebuild the retraction canonical from the wire event. MUST byte-match the
@@ -450,6 +497,14 @@ class HubDbSync {
         this.callWatermarkGraceS   = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.call,   'HUB_SYNC_CALL_GRACE_S',   this.network);
         this.anchorAttestWatermarkGraceS = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.anchorAttest, 'HUB_SYNC_ANCHOR_ATTEST_GRACE_S', this.network);
         this._anchorAttestWaiters  = [];                   // pending waitForAnchorAttestationSync() resolvers
+
+        // Named ceiling on a mirror-barrier hold. Held here as well as on the
+        // indexer because requestResync() rate-limits itself by the same value: one forced
+        // resync per ceiling window, so a mirror that cannot converge is re-driven on a
+        // known cadence instead of being reconnect-stormed once per block-poll tick.
+        this.barrierHoldCeilingMs = resolveBarrierHoldCeilingMs();
+        this._lastResyncRequestAt = 0;
+        this.forcedResyncCount    = 0;
 
         // Watermark advancement is gated on a completed bootstrap: WS heartbeats
         // certify only what was delivered ON THE SOCKET, so until the REST
@@ -2627,6 +2682,58 @@ class HubDbSync {
         });
     }
 
+    // Force a fresh subscribe-then-bootstrap cycle on this mirror.
+    //
+    // Called by the block loop when one block has been held at a mirror-completeness
+    // barrier for longer than the named hold ceiling. Every one of those barriers opens
+    // on the stream watermark, the watermark only advances while _bootstrapDrained is
+    // set, and nothing else in this module ever re-arms that flag once a drain has
+    // stalled: the socket can stay open and heartbeating (so the watchdog is satisfied)
+    // while the mirror certifies nothing, indefinitely. Tearing the socket down puts the
+    // mirror back through the ONE path that does re-arm it, which the close handler
+    // already implements and exercises on every ordinary disconnect
+    // (_scheduleReconnect -> _connectWebSocket -> _refreshAllSyncHeights -> _bootstrapAll).
+    //
+    // This opens NO barrier and commits NO block: a mirror that is genuinely missing
+    // rows keeps deferring after the resync, which is the fail-closed outcome. It only
+    // ensures the wait is bounded by a re-drive rather than by nothing at all.
+    //
+    // Safe to fire while a re-bootstrap is already draining, which is the case it is most
+    // likely to hit: _bootstrapTable pages from the LOCAL max id as since_id, so a restarted
+    // drain resumes where the applied rows end rather than starting over. The cost of a
+    // mistimed resync is one in-flight page refetched, and the throttle below caps that at
+    // one per ceiling window.
+    //
+    // Rate-limited to one resync per ceiling window, and a no-op on a disabled or
+    // stopped mirror, so the block loop can call it on every deferring poll tick.
+    // Returns true when a resync was actually kicked.
+    requestResync(reason) {
+        if (!this.enabled || !this.running) return false;
+        if (!Number.isFinite(this.barrierHoldCeilingMs) || this.barrierHoldCeilingMs <= 0) return false;
+        const now = Date.now();
+        if (this._lastResyncRequestAt && (now - this._lastResyncRequestAt) < this.barrierHoldCeilingMs) return false;
+        this._lastResyncRequestAt = now;
+        this.forcedResyncCount++;
+        console.warn('HubDbSync: forcing a mirror resync (' + String(reason || 'barrier hold ceiling reached') + ')');
+        if (this.ws) {
+            // terminate() over close(): a half-open socket may never complete a closing
+            // handshake, and the 'close' handler runs either way to schedule the reconnect.
+            try {
+                if (typeof this.ws.terminate === 'function') this.ws.terminate();
+                else if (typeof this.ws.close === 'function') this.ws.close();
+            } catch (err) {
+                console.warn('HubDbSync: forced resync could not terminate the socket:', err && err.message);
+            }
+            return true;
+        }
+        // No live socket: poll mode, or a reconnect already pending. Re-drive the
+        // bootstrap directly so a stuck poll-mode mirror still gets a fresh pull.
+        Promise.resolve()
+            .then(() => this._bootstrapAll())
+            .catch(err => console.warn('HubDbSync: forced resync bootstrap failed:', err && err.message));
+        return true;
+    }
+
     _scheduleReconnect() {
         if (!this.running) return;
         setTimeout(async () => {
@@ -2828,6 +2935,19 @@ module.exports.ensureTables = ensureTables;
 // Exported so tests assert against the frozen source of truth rather than
 // restating its numbers, which would let a future change here pass a stale test.
 module.exports.HUB_SYNC_WATERMARK_GRACE_S = HUB_SYNC_WATERMARK_GRACE_S;
+// Exported for the direct-hub-DB (no-mirror) call barrier in XChainIndexer.js, which
+// opens on the SAME frozen call grace as _callSyncSatisfied's watermark escape. It has
+// to resolve that grace through this exact function, not a private copy: the regtest
+// override, the off-regtest ignore-with-warning and the invalid-value throw are part of
+// the constant's contract, and two nodes resolving it differently fork settlement.
+module.exports.resolveWatermarkGrace = resolveWatermarkGrace;
+
+// The named ceiling on a mirror-barrier hold, and its resolver. Exported so
+// XChainIndexer reads the SAME value the resync rate-limiter uses: a block loop that
+// declared a crossing on one number while the mirror throttled on another would either
+// storm the hub or never re-drive it at all.
+module.exports.HUB_SYNC_BARRIER_HOLD_CEILING_S = HUB_SYNC_BARRIER_HOLD_CEILING_S;
+module.exports.resolveBarrierHoldCeilingMs     = resolveBarrierHoldCeilingMs;
 // The batch's chunk size and the drain's progress cadence, plus the shared upsert
 // builder: exported so the test can prove the batched statement and the per-row
 // statement are the same statement, which is the only thing keeping the ODKU body

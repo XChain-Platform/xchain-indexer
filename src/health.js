@@ -23,7 +23,8 @@
 
 const { computeArmedMapFingerprint } = require('./armedMapFingerprint');
 const { computeConsensusRulesDigest } = require('./consensus_rules_digest');
-const { hubConfigStaleness, stallWedged, waitingOnFutureBlock, stallClassOf, atProcessableTip } = require('./XChainIndexer');
+const { hubConfigStaleness, stallWedged, waitingOnFutureBlock, stallClassOf, atProcessableTip,
+        barrierHoldMs, barrierCeilingExceeded } = require('./XChainIndexer');
 
 // Committed-only view of a db handle, for any read that ADVERTISES A HEIGHT.
 // A bare read routes through db.getConnection(), which hands back the block
@@ -167,6 +168,23 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
         // operator exactly when to expect the chain to move again instead of leaving a
         // multi-hour, entirely valid stall looking like a dead service.
         stallClearsAt:    indexer.stallClearsAt || null,
+        // How long ONE block has been held behind the hub-mirror barriers, and the named
+        // ceiling on that hold. stallClearsAt above answers "when can this barrier FIRST
+        // open"; these answer "how long has it stayed shut", a quantity nothing else here
+        // bounds. A rising barrierHoldMs with stallClass 'barrier_defer' is the
+        // metronome signature: every log line healthy, the deferred block never changing.
+        // The future-stamped-block wait is excluded from the hold deliberately (it has its
+        // own bound, the block's own stamp), so a non-zero value here is never miner clock
+        // skew: it is a mirror barrier or a host fault, and stallReason says which.
+        barrierHoldMs:        barrierHoldMs(indexer.barrierHold, now),
+        barrierHoldBlock:     (indexer.barrierHold && indexer.barrierHold.block != null)
+                                ? indexer.barrierHold.block : null,
+        barrierHoldCeilingMs: indexer.barrierHoldCeilingMs || null,
+        // true while the current hold is past the ceiling. Reporting only: the block is still
+        // deferring fail-closed, and the node has forced a hub-mirror resync (mirror barriers
+        // only) rather than relaxed anything. barrierCeilingHits counts crossings since boot.
+        barrierCeilingExceeded: barrierCeilingExceeded(indexer.barrierHold, indexer.barrierHoldCeilingMs, now),
+        barrierCeilingHits:     indexer.barrierCeilingHits || 0,
         lastHubConfigFetchAt: lastHubConfigFetchAt,
         hubConfigAgeSeconds:  hubConfigAgeSeconds,
         hubConfigStale:       hubConfigStale,
