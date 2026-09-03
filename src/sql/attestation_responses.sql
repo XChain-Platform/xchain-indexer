@@ -26,10 +26,14 @@
 -- land on chain periodically in full-bodied batches. ATTEST responses take that
 -- road (the ATTEST response-mirror design).
 --
--- Hub-authored, INSERT-ONLY federation-state table mirrored to every indexer via
--- hub_db_sync (HUB_STATE_TABLES). NO column is ever updated after insert, which
--- is what keeps it out of the in-place-upgrade apply paths (price_snapshots,
--- cross_chain_calls) and lets the apply stay a plain INSERT IGNORE.
+-- Hub-authored federation-state table mirrored to every indexer via hub_db_sync
+-- (HUB_STATE_TABLES). Every consensus-bearing column is fixed at insert. The ONE
+-- column set later is `batch_action_index`: when the ATTEST v5 batch carrying this
+-- row lands on DOGE, the hub records the batch action on the row and re-broadcasts
+-- it, and the mirror apply upserts that single column on the natural key. It is a
+-- display link (the explorer batch link) and nothing reads it into hashed state, so
+-- a stale value after a DOGE reorg is a cosmetic gap until the batch re-lands, never
+-- a fork.
 --
 -- ONE ROW PER TERMINAL ROUND. `status` is `ok` or `expired`, today's terminal v1
 -- vocabulary. The retryable statuses (no_quorum, timeout, provider_error) are
@@ -88,6 +92,7 @@ CREATE TABLE attestation_responses (
     signer_pubkeys       TEXT         NOT NULL,                    -- JSON array, ordered responsible-set pubkeys that signed
     signatures           TEXT         NOT NULL,                    -- JSON [{pubkey,sig}], Ed25519 over the mirror-era canonical
     widen                TINYINT UNSIGNED DEFAULT 0,               -- the widening step the leader used; INFORMATIONAL, the verifier recomputes it
+    batch_action_index   BIGINT UNSIGNED DEFAULT NULL,             -- the DOGE action_index of the ATTEST v5 batch that carried this row; the ONE column set after insert, display link only, never a consensus input
     finalized_at         BIGINT UNSIGNED DEFAULT NULL              -- hub wall clock at quorum; AUDIT ONLY, never a consensus input, never compared across hubs
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 

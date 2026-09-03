@@ -75,6 +75,15 @@ const { buildResponseCanonicalRaw } = require('./attest_response_canonical.js');
 //   responseBodyBytes  the DECODED body. Hashed here, not by the caller, so the
 //                      hash the canonical signs and the hash the caller stores can
 //                      never be two different computations.
+//   effectiveTime      null selects the LEGACY canonical (the chain path never sets
+//                      this); a canonical-integer-spelled number selects the MIRROR
+//                      era and is appended, signed, inside the canonical (spec §3.1).
+//                      A row that fails to spell it canonically cannot have been
+//                      produced by an honest leader (the hub bounds it before
+//                      signing), so that failure is treated exactly like any other
+//                      unverifiable row: a pinned error, never a thrown exception,
+//                      because a single bad mirror row must not crash the block loop
+//                      on every node that reaches it.
 //   atBlock            the block this response is being judged AT. Drives the
 //                      widening ladder (see below) and stands in for the declared
 //                      height only on the unreachable branch noted there. On the
@@ -103,6 +112,10 @@ async function verifyAttestationResponse(input){
     let responseStatus    = input.responseStatus;
     let meta              = input.meta;
     let responseBodyBytes = input.responseBodyBytes;
+    // The chain path never passes this key at all (legacy era); normalize the
+    // missing-key case to the same null the canonical module treats as legacy, so
+    // there is exactly one spelling of "legacy" rather than two (undefined vs null).
+    let effectiveTime     = (input.effectiveTime === undefined) ? null : input.effectiveTime;
     let atBlock           = input.atBlock;
     let gateBlock         = input.gateBlock;
     let error             = input.error || null;
@@ -158,24 +171,40 @@ async function verifyAttestationResponse(input){
     // here keeps the identical evaluation without re-keying anything.
     let canonId  = (await protocolChanges.isEnabled('ATTEST_CANONICAL_LOWERCASE_ID', gateBlock))
                  ? String(requestId) : String(requestIdRaw);
-    // LEGACY ERA ONLY, for now. `effectiveTime: null` makes buildResponseCanonicalRaw
-    // return the historical five-field concatenation byte for byte, which is the whole
-    // reason this call stands in for a hand-rolled string in the handler: one
-    // spelling of the canonical, shared with the hub twin. The mirror-era canonical
-    // appends the signed effective_time; wiring that through is the mirror applier's
-    // row, and it belongs HERE as a caller-selected field, never as something this
-    // module infers from the row it is verifying.
-    let canonRaw = buildResponseCanonicalRaw({
-        requestId:     canonId,
-        providerId:    String(providerId),
-        responseHash:  responseHash,
-        status:        String(responseStatus),
-        meta:          meta,
-        effectiveTime: null,
-    });
-    if(eq.isEquivHeaderActive(declaredBlock, network))
-        canonRaw = eq.buildEquivCanonical(eq.ENGINE_TAGS.ATTEST, canonId, 0, canonRaw);
-    let canonical    = Buffer.from(canonRaw, 'utf8');
+    // BOTH ERAS, one call. `effectiveTime` null builds the historical five-field
+    // concatenation byte for byte (the whole reason this call stands in for a
+    // hand-rolled string in the handler: one spelling of the canonical, shared with
+    // the hub twin); a canonical-integer-spelled number appends it, signed, as the
+    // mirror-era field (§3.1). The module THROWS rather than silently accepting a
+    // non-canonical spelling, because a value that round-trips through Number() and
+    // back is not the bytes an honest leader would have signed. That throw must
+    // never reach the caller as an exception: a hub-authored row is untrusted input,
+    // and an untrusted row that cannot be verified is exactly the case this module
+    // exists to skip deterministically, not to crash the block loop over. Caught
+    // below and turned into the same kind of pinned error every other unverifiable
+    // row already gets.
+    let canonRaw = null;
+    try {
+        canonRaw = buildResponseCanonicalRaw({
+            requestId:     canonId,
+            providerId:    String(providerId),
+            responseHash:  responseHash,
+            status:        String(responseStatus),
+            meta:          meta,
+            effectiveTime: effectiveTime,
+        });
+    } catch(e){
+        // An error already set upstream (a pre-verification skip) always wins: this
+        // row was never going to be verified anyway, and overwriting a more specific
+        // upstream reason with this one would lose it for no benefit.
+        if(!error) error = 'invalid: EFFECTIVE_TIME is not a canonical integer spelling';
+    }
+    let canonical = null;
+    if(canonRaw !== null){
+        if(eq.isEquivHeaderActive(declaredBlock, network))
+            canonRaw = eq.buildEquivCanonical(eq.ENGINE_TAGS.ATTEST, canonId, 0, canonRaw);
+        canonical = Buffer.from(canonRaw, 'utf8');
+    }
     let validSigs    = 0;
     let verifiedSigs = [];
 

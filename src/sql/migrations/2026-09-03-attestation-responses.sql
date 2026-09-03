@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS attestation_responses (
     signer_pubkeys       TEXT         NOT NULL,                    -- JSON array, ordered responsible-set pubkeys that signed
     signatures           TEXT         NOT NULL,                    -- JSON [{pubkey,sig}], Ed25519 over the mirror-era canonical
     widen                TINYINT UNSIGNED DEFAULT 0,               -- the widening step the leader used; INFORMATIONAL, the verifier recomputes it
+    batch_action_index   BIGINT UNSIGNED DEFAULT NULL,             -- the DOGE action_index of the ATTEST v5 batch that carried this row; the ONE column set after insert, display link only, never a consensus input
     finalized_at         BIGINT UNSIGNED DEFAULT NULL              -- hub wall clock at quorum; AUDIT ONLY, never a consensus input, never compared across hubs
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 

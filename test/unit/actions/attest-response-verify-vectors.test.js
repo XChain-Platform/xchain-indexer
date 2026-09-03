@@ -52,6 +52,7 @@ const crypto = require('crypto');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Attest  = require('../../../src/actions/attest.js');
+const avr     = require('../../../src/attest_response_verify.js');
 const swq     = require('../../../src/stake_weighted_quorum.js');
 const attestAdmission = require('../../../src/attest_admission_activation.js');
 const attestBcastFee  = require('../../../src/attest_broadcast_fee_activation.js');
@@ -515,6 +516,120 @@ describe('ATTEST v1 response verification: captured byte vectors @regression @ti
             await driveOnce([{ pubkey: K1.pubkey, sig: JUNK_SIG }]);
             assert.strictEqual(indexer.indexerDb.getValidatorsByCapability.callCount, 0,
                 'no capability read may run once an error is already set');
+        });
+    });
+
+    // -----------------------------------------------------------------------
+    // MIRROR-ERA CANONICAL (row 33, spec §3.1/§4.3). The chain path above never
+    // sets `effectiveTime` at all, so it stays on the legacy canonical (proved by
+    // every vector above staying green, unchanged). These vectors call the shared
+    // module directly, the way the mirror applier (`_applyMirroredResponse`, row 17)
+    // does, since the applier's own wiring is another builder's row and out of this
+    // file's jail; what is in scope is that the module itself selects the era it is
+    // told to, and never crashes on a row that cannot spell its own effective time.
+    // -----------------------------------------------------------------------
+
+    describe('mirror-era canonical: the caller-selected effectiveTime', function () {
+
+        // Same shape as v1Data/v1Params above, but calling the module directly:
+        // atBlock === declaredBlock (90) keeps the widening ladder at its unwidened
+        // floor, where RANK3[0] is the sole responsible signer, matching the
+        // "unwidened" vector in the widening-step block above.
+        function mirrorInput(effectiveTime, sigs, overrides = {}) {
+            return {
+                request:           makeRequestRow(),
+                sigs,
+                requestId:         REQ_ID_LOWER,
+                requestIdRaw:      REQ_ID_LOWER,
+                providerId:        'http_get',
+                responseStatus:    'ok',
+                meta:              'm',
+                responseBodyBytes: Buffer.from('hello', 'utf8'),
+                effectiveTime,
+                atBlock:           DECLARED_BLOCK,
+                gateBlock:         DECLARED_BLOCK,
+                error:             null,
+                coin:              'BTC',
+                network:           'regtest',
+                indexerDb:         indexer.indexerDb,
+                protocolChanges:   handler.actions.protocolChanges,
+                computeResponsibleSet: handler._computeResponsibleSet.bind(handler),
+                ...overrides,
+            };
+        }
+
+        // Capture the canonical the module actually builds for a given effectiveTime
+        // (via a throwaway signature; the canonical does not depend on the sigs
+        // list), then sign THAT string with the real key. Same two-pass technique
+        // driveSigned uses above, so this vector cannot be agreeing with a
+        // hand-derived formula that shares the implementation's own mistake.
+        async function learnCanonical(effectiveTime) {
+            const probe = await avr.verifyAttestationResponse(
+                mirrorInput(effectiveTime, [{ pubkey: RANK3[0], sig: JUNK_SIG }]));
+            assert.ok(probe.canonical, 'probe produced no canonical: nothing to sign');
+            return probe.canonical;
+        }
+
+        it('a mirror-era vector signed WITH the effective time verifies', async function () {
+            seatUnweighted([RANK3[0]]);
+            const learned = await learnCanonical(1234567890);
+            assert.ok(learned.toString('utf8').endsWith('|1234567890'),
+                'the signed effective time must ride the canonical bytes, not sit outside them');
+            const sig = crypto.sign(null, learned, KEY_BY_PUBKEY[RANK3[0]].priv).toString('hex');
+            const r = await avr.verifyAttestationResponse(
+                mirrorInput(1234567890, [{ pubkey: RANK3[0], sig }]));
+            assert.strictEqual(r.ok, true);
+            assert.strictEqual(r.error, null);
+            assert.strictEqual(r.validSigs, 1);
+        });
+
+        it('the same signature fails verification when effectiveTime is null (legacy) at verify time', async function () {
+            seatUnweighted([RANK3[0]]);
+            const learned = await learnCanonical(1234567890);
+            const sig = crypto.sign(null, learned, KEY_BY_PUBKEY[RANK3[0]].priv).toString('hex');
+            const r = await avr.verifyAttestationResponse(
+                mirrorInput(null, [{ pubkey: RANK3[0], sig }]));
+            assert.strictEqual(r.ok, false);
+            assert.strictEqual(r.validSigs, 0);
+            assert.strictEqual(r.error, 'invalid: insufficient valid signatures (0/1)');
+        });
+
+        it('the same signature fails verification against a DIFFERENT effective time', async function () {
+            seatUnweighted([RANK3[0]]);
+            const learned = await learnCanonical(1234567890);
+            const sig = crypto.sign(null, learned, KEY_BY_PUBKEY[RANK3[0]].priv).toString('hex');
+            const r = await avr.verifyAttestationResponse(
+                mirrorInput(1234567891, [{ pubkey: RANK3[0], sig }]));
+            assert.strictEqual(r.ok, false);
+            assert.strictEqual(r.validSigs, 0);
+            assert.strictEqual(r.error, 'invalid: insufficient valid signatures (0/1)');
+        });
+
+        it('a non-canonical spelling yields the pinned error verdict, never a throw', async function () {
+            seatUnweighted([RANK3[0]]);
+            const r = await avr.verifyAttestationResponse(
+                mirrorInput('0120', [{ pubkey: RANK3[0], sig: JUNK_SIG }]));
+            assert.strictEqual(r.ok, false);
+            assert.strictEqual(r.error, 'invalid: EFFECTIVE_TIME is not a canonical integer spelling');
+            assert.strictEqual(r.canonical, null);
+            assert.strictEqual(r.validSigs, 0);
+        });
+
+        it('an unspellable effectiveTime never throws out of the module (a bad row is skipped, not a crash)', async function () {
+            seatUnweighted([RANK3[0]]);
+            await assert.doesNotReject(avr.verifyAttestationResponse(
+                mirrorInput(-1, [{ pubkey: RANK3[0], sig: JUNK_SIG }])));
+            const r = await avr.verifyAttestationResponse(
+                mirrorInput(-1, [{ pubkey: RANK3[0], sig: JUNK_SIG }]));
+            assert.strictEqual(r.error, 'invalid: EFFECTIVE_TIME is not a canonical integer spelling');
+        });
+
+        it('an upstream error set before the call wins over the canonical-build failure', async function () {
+            seatUnweighted([RANK3[0]]);
+            const r = await avr.verifyAttestationResponse(
+                mirrorInput('0120', [{ pubkey: RANK3[0], sig: JUNK_SIG }],
+                    { error: 'invalid: REQUEST already fulfilled' }));
+            assert.strictEqual(r.error, 'invalid: REQUEST already fulfilled');
         });
     });
 });
