@@ -1006,6 +1006,10 @@ class Batch {
             // field clear below would otherwise delete them before the second command ran.
             //
             //   PROBE_SUB_VERDICTS - each dispatched sub-command's own verdict, in list order.
+            //                        A row is {status, refused}: a status the probe really got,
+            //                        or status null plus a `refused` note for the two things the
+            //                        probe declines to answer (a VM sub-action it never
+            //                        dispatches, and a controller guard it never enters).
             //   PROBE_ORACLE_FEES  - per-oracle fees owed, filled in by dispenser.js.
             //
             // Both are probe-LOCAL and deliberately separate from BATCH_VALUE_LEDGER: that
@@ -1086,13 +1090,27 @@ class Batch {
 
                 await this.actions.processAction(action, params, data, error);
 
-                if(isProbe)
+                if(isProbe){
+                    let subStatus = (data['STATUS'] === undefined) ? null : data['STATUS'];
+                    // A sub-command whose bound controller's guard the probe declines to enter is
+                    // UNJUDGED, not rejected. The refusal arrives here as an ordinary
+                    // `invalid: FEE_QUOTE_CONTROLLER_UNSUPPORTED ...` status, and every consumer
+                    // reads any non-empty status as the network having rejected the command - so
+                    // left alone it manufactures a false NEGATIVE, telling a composer the chain
+                    // will refuse a command the chain in fact accepts. Measured exactly that way
+                    // on testnet: with a transfer controller bound to an address, the standalone
+                    // SEND pre-flighted guard-inert and landed valid, while the identical send as
+                    // a batch sub-command reported "will fail". This is the same shape as the VM
+                    // refusal above (status null + a `refused` note), so it takes the same road,
+                    // and the note names the controller so the composer knows what to do next.
+                    let inert = this.util.isGuardInertError(subStatus);
                     data['PROBE_SUB_VERDICTS'].push({
                         position: batchPosition,
                         action:   action,
-                        status:   (data['STATUS'] === undefined) ? null : data['STATUS'],
-                        refused:  null
+                        status:   inert ? null : subStatus,
+                        refused:  inert ? this.util.describeGuardInert(subStatus) : null
                     });
+                }
             }
         }
 

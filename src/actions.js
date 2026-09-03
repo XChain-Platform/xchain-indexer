@@ -1293,10 +1293,16 @@ class Actions {
         // A controlled token whose guard the feequote path refused (never entered the VM,
         // see _invokeController): the native-fee verdict genuinely depends on a controller
         // guard we do not run on this public surface, so report it as not natively quotable
-        // rather than surfacing the sentinel as a spurious class-B invalidity.
-        if(typeof run.status === 'string' && run.status.indexOf('FEE_QUOTE_CONTROLLER_UNSUPPORTED') !== -1)
+        // rather than surfacing the sentinel as a spurious class-B invalidity. The sentinel
+        // carries WHICH controller declined, so quote that too: an action can consult several
+        // guards (a SEND consults the token's, the sender's and the recipient's), and "something
+        // here is controlled" is not an answer a wallet can act on.
+        if(this.util.isGuardInertError(run.status))
             return Object.assign(base, { supported: false, valid: false,
-                error: 'native fee pre-flight not supported for a controller-bound ' + action + ' (pay the fee in XCHAIN)' });
+                guardInert: true,
+                guardInertReason: this.util.describeGuardInert(run.status),
+                error: 'native fee pre-flight not supported for a controller-bound ' + action + ' ('
+                     + this.util.guardInertDetail(run.status) + '; pay the fee in XCHAIN)' });
 
         // The handler's verdict is authoritative; its reason (class-A or class-B) verbatim.
         if(run.status !== 'valid')
@@ -1537,7 +1543,9 @@ class Actions {
         // verdict genuinely depends on a guard we do not enter here. Surface it as a boolean
         // so the client falls through to its authenticated/certified tier rather than trusting
         // a guard-less verdict.
-        let guardInert = (typeof run.status === 'string' && run.status.indexOf('FEE_QUOTE_CONTROLLER_UNSUPPORTED') !== -1);
+        // The boolean says THAT the guard was skipped; guardInertReason says WHICH controller
+        // skipped it, so a client can name the cause instead of relaying a bare sentinel.
+        let guardInert = this.util.isGuardInertError(run.status);
         let valid      = (run.status === 'valid');
 
         // The dry-run already staged the handler's fee record, so echoing it costs nothing and
@@ -1571,6 +1579,7 @@ class Actions {
             status:     run.status,
             error:      valid ? null : (run.error || run.status || 'dry-run produced no status'),
             guardInert: guardInert,
+            guardInertReason: guardInert ? this.util.describeGuardInert(run.status) : null,
             feeExempt:  false,
             xchainFee:  xchainFee,
             feeMode:    resolvedMode,

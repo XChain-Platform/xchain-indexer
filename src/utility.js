@@ -51,6 +51,12 @@ const ADDRESS_PARAMS  = {
         regtest: { p2pkh: 0x6f, p2sh: 0xc4, hrp: null }
     }
 };
+// The status a handler records when a bound controller's guard cannot run: the read-only
+// pre-flight surfaces (feequote / preflight, and a BATCH's per-sub-command verdicts) refuse to
+// enter a controller VM, so the action is UNJUDGED rather than rejected. Matched as a substring
+// everywhere, because a handler wraps it ('invalid: ' + error) and the refusal appends the
+// controller detail after it. See Utility.guardInertError / isGuardInertError.
+const GUARD_INERT_SENTINEL = 'FEE_QUOTE_CONTROLLER_UNSUPPORTED';
 
 
 class Utility {
@@ -1867,6 +1873,41 @@ class Utility {
         }
     }
 
+    // ─── guard-inert refusals (the public probe declining to enter a controller VM) ──────────
+    //
+    // One sentinel, three surfaces (feequote, preflight, and a BATCH's per-sub-command verdict),
+    // so the recognizer and the message live here rather than being re-spelled at each of them.
+
+    // Is this status/error string a guard-inert refusal rather than a real rejection?
+    isGuardInertError(status){
+        return (typeof status === 'string') && status.indexOf(GUARD_INERT_SENTINEL) !== -1;
+    }
+
+    // The refusal itself, naming the controller that caused it (contract index + what bound it).
+    guardInertError(controllerIndex, binding){
+        let detail = 'contract ' + Number(controllerIndex);
+        if(binding && binding.actionClass) detail += ' controls ' + String(binding.actionClass);
+        if(binding && binding.subject)     detail += ' for ' + String(binding.subject);
+        return GUARD_INERT_SENTINEL + ' (' + detail + ')';
+    }
+
+    // Just the controller detail out of a guard-inert status string. The parenthetical is
+    // OPTIONAL by design: a bare sentinel with no parenthetical (e.g. one relayed by an
+    // older node) still yields a usable phrase rather than an empty parenthesis or a crash.
+    guardInertDetail(status){
+        if(!this.isGuardInertError(status)) return null;
+        let m = String(status).match(new RegExp(GUARD_INERT_SENTINEL + '\\s*\\(([^)]*)\\)'));
+        return (m && m[1].trim() !== '') ? m[1].trim() : 'controller not named by this node';
+    }
+
+    // The same refusal as a sentence a client can show. Returns null when `status` is not one.
+    describeGuardInert(status){
+        if(!this.isGuardInertError(status)) return null;
+        return 'a bound controller (' + this.guardInertDetail(status) + ') gates this action, and '
+             + 'the read-only pre-flight never enters a controller VM; use the authenticated '
+             + 'dry-run for a verdict';
+    }
+
     // Run the bound controller's `guard` for one native action when the token has an effective
     // controller for the routed action-class. Single enforcement point called at each token
     // handler's validated→settlement boundary (replaces the per-handler ad-hoc veto blocks).
@@ -1889,7 +1930,8 @@ class Utility {
         // Record that this tick's controller was consulted this action (PTLC completeness assertion).
         if(!data['_GUARDED_TICKS']) data['_GUARDED_TICKS'] = {};
         data['_GUARDED_TICKS'][String(opts.tick)] = true;
-        return this._invokeController(actions, db, Number(effective.contract_index), opts);
+        return this._invokeController(actions, db, Number(effective.contract_index), opts,
+            { actionClass: actionClass, subject: 'token ' + String(opts.tick) });
     }
 
     // Recipient/account-side enforcement: run the SUBJECT address's controller for the given class
@@ -1904,12 +1946,15 @@ class Utility {
         // Most-specific-wins: a class-specific binding overrides the catch-all 'all' binding.
         let effective = await db.getEffectiveAddressControllerForGuard(addressId, opts.actionClass, opts.data['BLOCK_INDEX'], opts.data['ACTION_INDEX']);
         if(!effective) return none;
-        return this._invokeController(actions, db, Number(effective.contract_index), opts);
+        return this._invokeController(actions, db, Number(effective.contract_index), opts,
+            { actionClass: opts.actionClass, subject: 'address ' + String(opts.address) });
     }
 
     // Shared tail for both controller kinds: the guard-of-guard skip, the gas-ceiling reservation
     // against SOURCE, the VM guard run (fail-closed in runControllerGuard), and the fee derivation.
-    async _invokeController(actions, db, controllerIndex, opts){
+    // `binding` describes what bound the controller (class + subject) and is used ONLY to name the
+    // cause in the guard-inert refusal below; it never influences enforcement.
+    async _invokeController(actions, db, controllerIndex, opts, binding){
         let data = opts.data;
         // Activation gate (single shared chokepoint for both token- and address-controller
         // guards). Until the CONTROLLER_GUARD flag-day the guard is a strict no-op on every
@@ -1934,8 +1979,17 @@ class Utility {
         // inherits the refusal for free. GUARD_INERT is set only on computeFeeQuote's synthetic tx
         // (never a decoded block tx, never the API-key-gated feequotedryrun), so this branch is dead
         // on block processing and cannot skip a guard on a real transaction.
+        //
+        // The sentinel NAMES its cause. A caller that gets back a bare
+        // FEE_QUOTE_CONTROLLER_UNSUPPORTED cannot tell which of an action's several possible
+        // guards declined - a SEND consults up to three (the token's, the sender's, the
+        // recipient's) - so a wallet could only say "something about this is controlled". The
+        // detail is appended, never substituted, so every existing consumer (which matches the
+        // sentinel as a SUBSTRING: actions.js, sdk preflight/tier1.js) is unaffected. Safe to
+        // change freely: this branch is reachable only on the synthetic GUARD_INERT probe tx, so
+        // the string never enters a decoded action's status and carries no consensus weight.
         if(data['GUARD_INERT'])
-            return { error: 'FEE_QUOTE_CONTROLLER_UNSUPPORTED', guardFee: 0, payoutLegs: null };
+            return { error: this.guardInertError(controllerIndex, binding), guardFee: 0, payoutLegs: null };
         // No guard-of-guard: a controller's own emission of the gated subject is not re-guarded;
         // cross-token / different-controller moves still guard, bounded by VM_MAX_CALL_DEPTH.
         if(data['IS_GUARD_EMISSION'] && Number(data['EMITTER']) === Number(controllerIndex))

@@ -377,7 +377,10 @@ describe('Programmable policy layer : Phase B enforcement @regression', function
                 mkDb({ contract_index: 9, is_unbind: 0 }),
                 guardOpts(Object.assign({}, BASE, { GUARD_INERT: true }))
             );
-            assert.strictEqual(res.error, 'FEE_QUOTE_CONTROLLER_UNSUPPORTED');
+            // The sentinel carries the controller that declined; it stays a substring
+            // match, which is how every consumer already reads it.
+            assert.strictEqual(util.isGuardInertError(res.error), true, res.error);
+            assert.ok(res.error.indexOf('contract 9') !== -1, 'names the controller: ' + res.error);
             assert.strictEqual(res.guardFee, 0);
             assert.strictEqual(calls.length, 0, 'controller VM must not run for a guard-inert feequote dry-run');
         });
@@ -393,7 +396,8 @@ describe('Programmable policy layer : Phase B enforcement @regression', function
                 { actionType: 'SEND', actionClass: 'transfer', address: 'addrB', from: 'addrA', to: 'addrB',
                   tick: 'AAA', amount: '10', data: Object.assign({}, BASE, { GUARD_INERT: true }), gasInfo: null, gasBalances: [] }
             );
-            assert.strictEqual(res.error, 'FEE_QUOTE_CONTROLLER_UNSUPPORTED');
+            assert.strictEqual(util.isGuardInertError(res.error), true, res.error);
+            assert.ok(res.error.indexOf('address addrB') !== -1, 'names the bound address: ' + res.error);
             assert.strictEqual(calls.length, 0);
         });
 
