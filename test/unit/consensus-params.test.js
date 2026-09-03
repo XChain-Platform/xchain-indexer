@@ -40,6 +40,17 @@ const GOLDEN_GAS_SCHEDULE = {
     // consensus_pin regenerated in the same change.
     BET_FEED_PER_DAY:   550,
     BET_PER_CREDIT:     100,
+    // SWEEP / CALLBACK: the unified prices those two move onto at the
+    // UNIFIED_FEES_SWEEP_CALLBACK flag day, which is UNARMED on mainnet AND testnet and
+    // genesis-active on regtest. The BASE keys are the point: the legacy per-DB-hit price
+    // had no floor, so on LTC/DOGE (where the protocol fee must be a real native-coin
+    // output) a small SWEEP priced UNDER the chain's dust threshold and could not be
+    // submitted at all. GAS_SCHEDULE is hashed whole by the coins registry, so adding
+    // these regenerated consensus_pin in the same change.
+    SWEEP_BASE:         5000,
+    SWEEP_PER_ITEM:     100,
+    CALLBACK_BASE:      5000,
+    CALLBACK_PER_RECIPIENT: 100,
     VM_EXECUTE_BASE:    1000,
     VM_GUARD_GAS_CEILING: 200000,
     VM_DEPLOY_BASE:     100000,

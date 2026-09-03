@@ -55,6 +55,11 @@ describe('Legacy db-hits fee accumulation @regression @tier3', function () {
             },
             processAction:   sinon.stub().resolves(),
         };
+        // This whole suite is about the LEGACY db-hits accumulator, so hold SWEEP and
+        // CALLBACK on their legacy branch: UNIFIED_FEES_SWEEP_CALLBACK moves both onto the
+        // unified gas schedule, which never calls getTransactionFee at all. DIVIDEND's
+        // equivalent (UNIFIED_FEES) is switched off per-case below, where it always was.
+        actionsCtx.protocolChanges.isEnabled.withArgs('UNIFIED_FEES_SWEEP_CALLBACK').resolves(false);
         // Capture db_hits; return a zero fee so fee-payment validation is skipped
         feeStub = sinon.stub(indexer.util, 'getTransactionFee').returns('0.00000000');
         indexer.util.resetLists();

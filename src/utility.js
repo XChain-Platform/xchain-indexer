@@ -1154,6 +1154,50 @@ class Utility {
         return { gasCost: gasCost, fee: fee };
     }
 
+    // Resolve one consensus-critical GAS_SCHEDULE cost, strictly.
+    //
+    // getUnifiedTransactionFee above silently substitutes 100 for a key its schedule does
+    // not carry. That is survivable for a key every shipped bundle has held since the
+    // unified schedule existed, but it is the wrong shape for a key added later: a node
+    // whose GAS_SCHEDULE omits or mistypes it would price the action at a phantom default,
+    // commit a different fee DEBIT than a correctly configured node, and fork on the first
+    // fee-bearing action of that kind. Same rule and same reasoning as
+    // resolveGuardGasCeiling: validate (integer, non-negative, no trailing garbage) and
+    // throw loudly rather than mint a default. CONSENSUS_CONFIG_PIN already fails a node
+    // closed at boot when its bundle's GAS_SCHEDULE differs from the pinned one, so this is
+    // the second line, reached only by a bundle that somehow got past it.
+    resolveGasScheduleCost(key){
+        let schedule = this.config['GAS_SCHEDULE'] || {};
+        let raw = schedule[key];
+        let val = parseInt(raw, 10);
+        if(raw === undefined || raw === null || !Number.isInteger(val) || val < 0 || String(raw).trim() !== String(val)){
+            throw new Error('GAS_SCHEDULE.' + key + ' missing or invalid (expected a non-negative integer, got ' + JSON.stringify(raw) + ')');
+        }
+        return val;
+    }
+
+    // Calculate a transaction fee on the unified gas schedule as a flat BASE cost plus a
+    // per-item cost: fee = (base + items * perItem) * GAS_PRICE.
+    //
+    // The base term is the point. A purely per-item price (what getUnifiedTransactionFee
+    // computes, and what the legacy per-DB-hit model computed) makes the smallest instance
+    // of an action arbitrarily cheap, and on a chain where the protocol fee MUST be paid as
+    // a native-coin output (LTC/DOGE: see detectFeePaymentMode, which rejects rather than
+    // falling back to an XCHAIN balance debit) an arbitrarily cheap fee is an output below
+    // the chain's dust threshold, which cannot be created at all. The action is then not
+    // expensive, it is unsubmittable. A base cost puts a floor under the output. See the
+    // SWEEP_BASE / CALLBACK_BASE comment in the coin bundles for how the values are sized.
+    //
+    // Returns { gasCost, fee }, the same shape getUnifiedTransactionFee returns, so both
+    // feed fees['GAS_COST'] / fees['AMOUNT'] identically.
+    getUnifiedBaseItemFee(items, baseKey, perItemKey){
+        let base    = this.resolveGasScheduleCost(baseKey);
+        let perItem = this.resolveGasScheduleCost(perItemKey);
+        let gasCost = this.bcadd(base, this.bcmul(items, perItem, 0), 0);
+        let fee     = this.bcmul(gasCost, this.config['GAS_PRICE'], 8);
+        return { gasCost: gasCost, fee: fee };
+    }
+
     // Flat premium charged when an ORDER/SWAP/DISPENSER create escrows ownership of a tick.
     // Added on top of the expiration fee in the UNIFIED_FEES path; legacy fees do not charge it.
     getOwnershipEscrowFee(){
