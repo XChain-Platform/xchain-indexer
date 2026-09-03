@@ -48,8 +48,16 @@ function makeCtx({ status = 'valid', actionIndex = 55, feeAmount = '1.00000000',
             // Watchdog-fence surface (M-16): the dry-run reads the epoch after
             // beginTransaction and runs processTransaction under it. The stub
             // mirrors the real Database contract (fixed epoch, pass-through run).
+            // BOTH fence entry points are stubbed. _dryRunAction runs under
+            // runInDryRunEpoch (the no-consensus-authority variant),
+            // never runInTxEpoch; stubbing only the latter made every call here throw
+            // `runInDryRunEpoch is not a function` inside the try, which the handler
+            // reports as a dry-run error, so the whole file went red without naming the
+            // missing surface. Keep runInTxEpoch too: it is the real Database's default
+            // and a future caller that takes it must not silently lose its stub.
             currentTxEpoch:      () => 0,
             runInTxEpoch:        (epoch, fn) => fn(),
+            runInDryRunEpoch:    (epoch, fn) => fn(),
             // Fee-balance surface. getAddressId is the READ-ONLY id lookup (null for
             // an address the ledger has never seen); createAddress is stubbed only so the test
             // can prove the balance read never reaches it.
