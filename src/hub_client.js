@@ -87,15 +87,38 @@ function hubRejectionReason(result){
 
 class HubClient {
 
-    constructor(hubUrl, apiKey){
+    constructor(hubUrl, apiKey, configUrl, configApiKey){
         this.hubUrl = hubUrl || process.env.HUB_API_URL || '';
         this.apiKey = apiKey || process.env.HUB_API_KEY || '';
+        // The config oracle is not reachable over the mirror feed. getallconfigs returns
+        // every service's connection parameters, DB user and password included, so the hub
+        // keeps it off the public feed port: api.js admits only FEED_RPC_METHODS there and
+        // answers everything else with -32601 'Method not available on this port'. Every
+        // push method this client sends IS on that allowlist, so an indexer pointed at a
+        // validator's feed port pushes and mirrors correctly and then fails its config poll
+        // once a minute forever, silently freezing the hub-supplied params at their startup
+        // values. Point HUB_CONFIG_URL at a private hub API port to separate the two roles.
+        // Unset, both fall back to the feed values, so a single-hub deployment is unchanged.
+        this.configUrl    = configUrl    || process.env.HUB_CONFIG_URL     || this.hubUrl;
+        this.configApiKey = configApiKey || process.env.HUB_CONFIG_API_KEY || this.apiKey;
         // Interim credential scoping: when the hub gates its retraction rails
         // (push*reorg) behind a dedicated HUB_REORG_API_KEY, the reorg pushes
         // must carry that key; everything else keeps the bulk key.
         // Unset = legacy single-key behavior.
         this.reorgApiKey = process.env.HUB_REORG_API_KEY || this.apiKey;
         this.enabled = !!this.hubUrl;
+        // Tracked separately from `enabled`: a deployment may carry a config oracle
+        // without a push endpoint, and the config poll must not be gated on the feed.
+        this.configEnabled = !!this.configUrl;
+    }
+
+    // Read the hub's operational params. The one method here that is NOT on the hub's
+    // feed-port allowlist, so it goes to configUrl (a private hub API port) rather than
+    // hubUrl; see the constructor. Left as a thin wrapper over _call so callers never
+    // have to know which endpoint a method belongs to.
+    async getAllConfigs(){
+        if(!this.configEnabled) return null;
+        return this._call('getallconfigs', {}, this.configApiKey, this.configUrl);
     }
 
     // Push a chain tip update to the hub (fire-and-forget). Network is
@@ -218,9 +241,9 @@ class HubClient {
         throw err;
     }
 
-    _call(method, params, apiKeyOverride){
+    _call(method, params, apiKeyOverride, urlOverride){
         return new Promise((resolve, reject) => {
-            let parsed = url.parse(this.hubUrl);
+            let parsed = url.parse(urlOverride || this.hubUrl);
             let isHttps = parsed.protocol === 'https:';
             let lib = isHttps ? https : http;
 
