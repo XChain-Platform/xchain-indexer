@@ -53,6 +53,9 @@ const attestBcastFee  = require('../attest_broadcast_fee_activation.js');
 const wid     = require('../attest_responsible_widening_activation.js');
 const eq      = require('../equivocation_header.js');
 const srb     = require('../snapshot_reorg_buffer.js');
+// The ONE response verifier: this chain path and the hub-mirror applier call the
+// same module, so an artifact cannot be judged differently by delivery route.
+const avr     = require('../attest_response_verify.js');
 const ProviderRegistry = require('../attestation/providerRegistry.js');
 const pmsh    = require('../attestation/providerMinStakeHistory.js');
 const { rethrowIfInfraFault } = require('./faultGuard.js');
@@ -508,143 +511,49 @@ class Attest {
             }
         }
 
-        // The DECLARED height of this round: the REQUEST's block, deterministic from the
-        // request_id every signer keyed on. Two different things are derived from it and
-        // they must not be conflated.
+        // Verification proper lives in attest_response_verify.js: ONE implementation
+        // that this chain path and the hub-mirror applier both call, so the two
+        // delivery routes can never reach different verdicts on the same artifact
+        // (spec attest-response-mirror.md §4.3). Everything consensus-relevant lives
+        // there, comments included; what stays here is the wire parsing above and the
+        // persistence below.
         //
-        // 1. The flag-day inputs (EQUIV header below) are evaluated on the DECLARED height,
-        //    verbatim. Shifting a flag-day boundary by the reorg buffer would move the
-        //    cutover block itself, which is its own fork.
-        // 2. The height the capability set is RESOLVED at is the declared height BURIED by
-        //    the canonical reorg buffer, because that is what the hub actually resolved at:
-        //    CapabilitySnapshot subtracts CANONICAL_REORG_BUFFER from every height it is
-        //    handed (_buriedBlockIndex) while AttestationRound passes the raw
-        //    request.block_index, so the responsible set the hub signed is the set at
-        //    (declared - 6). Verifying at the raw height resolved a DIFFERENT set whenever a
-        //    validator's stake activated or deactivated inside (declared - 6, declared],
-        //    which rejects a correct deterministic response or stalls the round. Gated:
-        //    below the flag-day this is the declared height unchanged, so pre-flag-day
-        //    acceptance is byte-preserved.
-        let declaredBlock = request ? Number(request.block_index) : Number(data['BLOCK_INDEX']);
-        let snapshotBlock = srb.buriedSnapshotBlock(declaredBlock, this.config['NETWORK']);
-
-        // Build canonical signing message (UTF-8 Buffer). At/above the EQUIV flag-day
-        // (WI-2 bump 2) the raw string is wrapped in the uniform header (TAG=XATTEST,
-        // ROUND_ID=request_id, VIEW=0, no view change), gated on the request's block +
-        // network; below it, the bare bytes. Byte-matches AttestationConsensus._buildCanonical.
-        let responseHash = crypto.createHash('sha256').update(responseBodyBytes).digest('hex');
-        // The id case inside the canonical is gated (see the normalization
-        // note above). Raw wire bytes below the flag-day (byte-identical to legacy
-        // verification), lowercased at/after it.
-        let canonId      = (await this.actions.protocolChanges.isEnabled('ATTEST_CANONICAL_LOWERCASE_ID', data['BLOCK_INDEX']))
-                         ? String(requestId) : String(requestIdRaw);
-        let canonRaw     = canonId + String(providerId) + responseHash + String(responseStatus) + String(meta || '');
-        if(eq.isEquivHeaderActive(declaredBlock, this.config['NETWORK']))
-            canonRaw = eq.buildEquivCanonical(eq.ENGINE_TAGS.ATTEST, canonId, 0, canonRaw);
-        let canonical    = Buffer.from(canonRaw, 'utf8');
-        let validSigs    = 0;
-        let verifiedSigs = [];
-        if(!error){
-            // Resolve the attestation-eligible set ONCE (hasCapability is ~5 sequential
-            // queries per signer), from the SAME derivation the responsible-set filter
-            // below uses. The two MUST agree on eligibility or a responsible signer is
-            // discarded here, before it is ever counted.
-            //
-            // At/above STAKE_WEIGHTED_QUORUM _computeResponsibleSet selects
-            // getStakeWeightsByCapability, whose _stakeWeightsSql qualifies a staking
-            // SOURCE on its aggregate and then emits ALL of that source's effective keys,
-            // while getValidatorsByCapability / hasCapability qualify each PUBKEY on its
-            // own aggregate (_effectiveCapabilitySetSql GROUP BY ip.pubkey HAVING, whose
-            // only widening branch is a `delegations` row). A source clearing MIN_STAKE
-            // only in aggregate across sub-threshold stake keys is therefore IN the
-            // weighted responsible set and OUT of the pubkey-aggregate set, so its valid
-            // signatures were dropped here and validSigs could never reach redundancy:
-            // the responsible set is exactly REDUNDANCY keys, so losing even one made the
-            // request permanently unfulfillable while every retry burned a real fee and
-            // expiry charged missed_count to the whole set, honest signers included.
-            //
-            // Selecting the weighted query here widens eligibility only UP TO the weighted
-            // set, and the responsible filter below is derived from that same query at
-            // this same block, so it still clips acceptance to the deterministic
-            // top-REDUNDANCY selection: no coalition that was not already responsible can
-            // land a response. Gated exactly as _computeResponsibleSet is, and for its
-            // reasons: BTC ONLY, because the SWQ anchor is a BTC height and evaluating it
-            // against an LTC/DOGE local height resolves TRUE out of band; and on the
-            // DECLARED height, because moving a flag-day boundary by the reorg buffer is
-            // its own fork. `snapshotBlock` is ALREADY the buried resolve height (see the
-            // note above), so it must NOT be buried a second time here.
-            let weighted    = (this.config['COIN'] === 'BTC')
-                           && swq.isStakeWeightedQuorumActive(declaredBlock, this.config['NETWORK']);
-            let capableRows = weighted
-                            ? await this.indexerDb.getStakeWeightsByCapability('attestation', snapshotBlock)
-                            : await this.indexerDb.getValidatorsByCapability('attestation', snapshotBlock);
-            // A truncated read has silently-dropped rows. Below the gate, fall back
-            // per-signer to hasCapability rather than drop a capable co-signer: that probe
-            // is the same pubkey aggregate the unweighted set is built from, so the two
-            // still agree. On the weighted branch there is NO per-signer equivalent -
-            // hasCapability sums WHERE s.signing_pubkey_id = ?, the pubkey aggregate
-            // again, so falling back to it would reinstate this exact bug on precisely the
-            // truncated read where the federation is largest. Take the truncated rows as
-            // they stand instead: _computeResponsibleSet resolves the responsible set from
-            // the SAME truncated read at the same block, so eligibility still covers it and
-            // the responsible filter stays the binding gate.
-            let capableSet  = (!weighted && capableRows && capableRows.truncated === true)
-                            ? null
-                            : new Set((capableRows || []).map(v => String(v.pubkey).toLowerCase()));
-            let seenPubkey = new Set();
-            for(let s of sigs){
-                if(seenPubkey.has(s.pubkey)) continue;
-                seenPubkey.add(s.pubkey);
-                if(capableSet
-                    ? !capableSet.has(s.pubkey)
-                    : !await this.indexerDb.hasCapability(s.pubkey, 'attestation', snapshotBlock))
-                    continue;
-                if(!ed25519.verify(canonical, s.sig, s.pubkey))
-                    continue;
-                verifiedSigs.push(s);
-            }
-
-            // Restrict the verified signers to the request's deterministic
-            // responsible set (the top-REDUNDANCY validators ranked by
-            // SHA256(request_id || pubkey), the same set _parseExpire charges
-            // missed_count to. Holding the attestation capability and producing a
-            // valid ed25519 signature is necessary but NOT sufficient: without
-            // this gate any quorum of capable validators could assemble a valid
-            // v1, so two different capable coalitions could each land a response
-            // (first-lands-wins, non-deterministic) and fulfilled_count (credited
-            // to whoever signed) would diverge from missed_count (charged to the
-            // hash-selected set on expiry). Filtering here makes fulfillment
-            // deterministic and keeps the two stat columns symmetric. (request is
-            // guaranteed non-null inside this !error block; a null lookup sets
-            // 'no matching request' above and skips the loop.)
-            // DECLARED, not buried: _computeResponsibleSet takes the declared height and
-            // buries it internally, so every site that computes this request's
-            // responsible set (admission, the persisted RESPONSIBLE_SET_JSON, the expiry
-            // missed_count charge, the fulfilled fee split, and here) resolves ONE set.
-            //
-            // WIDENED at the RESPONSE's own height (spec 8.2 liveness ladder). The set is
-            // still RESOLVED at the declared height, so which validators are ranked is
-            // unchanged; the ladder only decides how far down that ranking a signature is
-            // admitted. Evaluating it here rather than at the declared height is what makes
-            // the two sides agree: the signing hub derived its slots from the indexer tip it
-            // polled, and a response cannot be mined below that tip, so this set is always a
-            // SUPERSET of the one that signed and a signature authorized at proposal time can
-            // never be rejected here. The flag-day itself is gated on the REQUEST's block, so
-            // a request admitted below it never widens.
-            let responseWiden = wid.widenSlots(
-                data['BLOCK_INDEX'], declaredBlock, request.deadline_block, this.config['NETWORK']
-            );
-            let responsible = new Set(await this._computeResponsibleSet(
-                requestId, request.redundancy, declaredBlock, request.provider_id, responseWiden
-            ));
-            verifiedSigs = verifiedSigs.filter(s => responsible.has(s.pubkey));
-            validSigs    = verifiedSigs.length;
-
-            // Quorum: only REDUNDANCY validators are responsible for fetching (spec §8.2)
-            let redundancy = request ? Number(request.redundancy) : 0;
-            if(validSigs < redundancy)
-                error = 'invalid: insufficient valid signatures (' + validSigs + '/' + redundancy + ')';
-        }
+        // Three things are passed rather than read from `data` inside the module, and
+        // each is a deliberate seam for the mirror path:
+        //   atBlock    the block the response is judged AT. It drives the widening
+        //              ladder, which is evaluated at the RESPONSE's own height on
+        //              purpose. On this path that is the v1 action's block.
+        //   gateBlock  where ATTEST_CANONICAL_LOWERCASE_ID is evaluated. Today, and
+        //              here, the v1 ACTION's block (D57); the module must not re-key it.
+        //   computeResponsibleSet  injected, because it is a method over this.config,
+        //              this.providerRegistry and this.indexerDb, and every site that
+        //              computes a request's responsible set has to use the one derivation.
+        //
+        // The snapshot height is deliberately NOT passed: the module buries the local
+        // request row's own block itself, so no caller can name the height its
+        // signatures are checked at.
+        let verdict = await avr.verifyAttestationResponse({
+            request,
+            sigs,
+            requestId,
+            requestIdRaw,
+            providerId,
+            responseStatus,
+            meta,
+            responseBodyBytes,
+            atBlock:         data['BLOCK_INDEX'],
+            gateBlock:       data['BLOCK_INDEX'],
+            error,
+            coin:            this.config['COIN'],
+            network:         this.config['NETWORK'],
+            indexerDb:       this.indexerDb,
+            protocolChanges: this.actions.protocolChanges,
+            computeResponsibleSet: this._computeResponsibleSet.bind(this),
+        });
+        error            = verdict.error;
+        let validSigs    = verdict.validSigs;
+        let verifiedSigs = verdict.verifiedSigs;
+        let responseHash = verdict.responseHash;
 
         // Stash for DB write
         data['REQUEST_ID']       = requestId;
