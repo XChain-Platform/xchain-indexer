@@ -1390,6 +1390,28 @@ class XChainIndexer {
                     }
                 }
 
+                // Finalized ATTEST response mirror barrier. A mirrored attestation_responses
+                // row binds at the first block whose protocol time reaches its signed
+                // effective_time, and that block fires the contract callback, mints the
+                // synthetic v1 action and settles the request fee. A node that has not
+                // received the row by then does not lag, it forks: it commits that block with
+                // the callback un-fired while its peers commit it fired, and nothing later
+                // re-binds. So it defers, with no chain-only escape (see hub_db_sync.js).
+                // Armed on EVERY BTC block with no transaction predicate: the binding
+                // condition is a time, so a row can bind at a block carrying no ATTEST
+                // transaction at all, and there is nothing to scope the wait to. BTC-only,
+                // because all attestation stake and every request lives on BTC.
+                if(this.hubDbSync && this.config['COIN'] === 'BTC'){
+                    try {
+                        await this.hubDbSync.waitForAttestationResponseSync(blockTime, this.priceSyncTimeoutMs);
+                    } catch(err){
+                        console.warn('Deferring block ' + blockToParse + ' (attestation response mirror): ', err);
+                        this.stallReason = 'attest_response_sync_barrier';
+                        this.stallClearsAt = this._barrierClearsAt(blockTime, 'attestResponseWatermarkGraceS');
+                        break;
+                    }
+                }
+
                 // Cross-chain capability-snapshot barrier: wait until the capability snapshot
                 // for every effective cross-chain match AND call relay row has mirrored in, so
                 // neither is ever skipped (and applied later at a per-operator-variable height)

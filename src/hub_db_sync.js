@@ -741,6 +741,7 @@ class HubDbSync {
         this._releaseMatchWaiters();
         this._releaseCallWaiters();
         this._releaseAnchorAttestWaiters();
+        this._releaseAttestResponseWaiters();
     }
 
     // Adopt the hub's advertised heartbeat cadence (from the 'ready' message's
@@ -2755,6 +2756,74 @@ class HubDbSync {
                                  ' (stream watermark at ' + this.streamWatermark + ')'));
             }, ms);
             this._anchorAttestWaiters.push(waiter);
+        });
+    }
+
+    // ── Finalized ATTEST response mirror-completeness barrier ──────────────────
+    //
+    // Distinct from the anchor-reward barrier directly above, which covers
+    // anchor_reward_attestations. This one covers attestation_responses: the finalized
+    // ATTEST results that replaced the validator-paid on-chain response transaction.
+    //
+    // A mirror row binds at the first BTC block whose protocol time reaches the row's
+    // signed effective_time, and that block fires the contract callback, mints the
+    // synthetic v1 action and moves the reward split. A node that has not received the row
+    // by then does not merely lag: it settles that block with the callback un-fired and
+    // every downstream ledger hash different from its peers', permanently. So a node that
+    // cannot certify it holds everything the hub produced up to this block's time DEFERS.
+    //
+    // There is deliberately NO escape hatch on this barrier: no content watermark, no
+    // empty-mirror short circuit, no bootstrapped-flag fast path. An empty mirror is
+    // indistinguishable from a mirror that has not been told about the row that binds at
+    // this very block, and the price barrier's chain-only escape has no analogue here
+    // because the equivalent completeness proof is batch coverage (§6.3), not a clock.
+    // Poll mode is never satisfied either, because the stream watermark freezes there by
+    // design, and the resulting timeout defers the block, which is the correct fail-closed
+    // outcome for precisely the node whose mirror may be stale.
+    //
+    // Disabled sync is satisfied by definition: with no mirror the indexer reads the hub's
+    // MariaDB directly, so there is no delivery lag to wait out.
+    _attestResponseSyncSatisfied(blockTime) {
+        if (!this.enabled) return true;
+        blockTime = Number(blockTime);
+        if (!Number.isFinite(blockTime)) return true;
+        return this.streamWatermark >= blockTime + this.attestResponseWatermarkGraceS;
+    }
+
+    _releaseAttestResponseWaiters() {
+        if (!this._attestResponseWaiters || this._attestResponseWaiters.length === 0) return;
+        let stillWaiting = [];
+        for (let w of this._attestResponseWaiters) {
+            if (this._attestResponseSyncSatisfied(w.ts)) {
+                clearTimeout(w.timer);
+                w.resolve(this.streamWatermark);
+            } else {
+                stillWaiting.push(w);
+            }
+        }
+        this._attestResponseWaiters = stillWaiting;
+    }
+
+    // Block-processing barrier for the ATTEST response applier. Resolves once this mirror
+    // is certified caught up through blockTime; rejects after timeoutMs so the caller
+    // DEFERS the block and retries it, never binding a response set it cannot prove is
+    // complete.
+    waitForAttestationResponseSync(blockTime, timeoutMs) {
+        blockTime = Number(blockTime);
+        if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.streamWatermark);
+        if (this._attestResponseSyncSatisfied(blockTime))  return Promise.resolve(this.streamWatermark);
+
+        let ms = parseInt(timeoutMs);
+        if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
+        return new Promise((resolve, reject) => {
+            let waiter = { ts: blockTime, resolve: resolve, timer: null };
+            waiter.timer = setTimeout(() => {
+                this._attestResponseWaiters = this._attestResponseWaiters.filter(w => w !== waiter);
+                reject(new Error('attestation response mirror barrier timed out after ' + ms +
+                                 'ms waiting for block_time ' + blockTime +
+                                 ' (stream watermark at ' + this.streamWatermark + ')'));
+            }, ms);
+            this._attestResponseWaiters.push(waiter);
         });
     }
 
