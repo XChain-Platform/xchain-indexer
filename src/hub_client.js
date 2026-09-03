@@ -44,6 +44,39 @@ const TERMINAL_HUB_REJECTIONS = [
 // accepted. Covers BOTH shapes the hub uses: a check on `accepted` alone misses the
 // api.js { error } path, and that path carries the transient failures (a hub still
 // booting its aggregator, an unexpected exception inside a handler).
+// The hub's own JSON-RPC code for "you are being rate limited"
+// (xchain-hub/src/lib/rate_limit_policy.js). Keyed on rather than the HTTP status
+// because a fronting proxy can rewrite the status while the envelope survives.
+const HUB_RATE_LIMIT_RPC_CODE = -32029;
+
+// Turn the hub's RateLimit-* / Retry-After headers into the facts a backoff needs.
+// Present on BOTH the JSON 429 this client's own hub now sends and the plain-text
+// 429 express-rate-limit sends by default, so an indexer talking to an older hub
+// still learns the limit and the wait rather than reporting an unexplained parse
+// error.
+function readRateLimitHeaders(headers){
+    headers = headers || {};
+    let limit  = parseInt(headers['ratelimit-limit'] || headers['x-ratelimit-limit'], 10);
+    let retry  = parseInt(headers['retry-after'], 10);
+    if(!Number.isFinite(retry)) retry = parseInt(headers['ratelimit-reset'] || headers['x-ratelimit-reset'], 10);
+    return {
+        limit:        Number.isFinite(limit) ? limit : null,
+        retryAfterMs: Number.isFinite(retry) && retry >= 0 ? retry * 1000 : null
+    };
+}
+
+// Stamp an error as a throttle so callers can hold off instead of burning a
+// delivery attempt on a row the hub never even looked at. See HubPushQueue._attempt.
+function markRateLimited(err, facts){
+    err.rateLimited = true;
+    err.httpStatus  = facts.httpStatus || 429;
+    err.hubRateLimit    = facts.limit != null ? facts.limit : null;
+    // Default to one full minute: the hub's window is 60s, and waiting too long
+    // costs a retry tick while waiting too little re-trips the same guard.
+    err.retryAfterMs = facts.retryAfterMs != null ? facts.retryAfterMs : 60000;
+    return err;
+}
+
 function hubRejectionReason(result){
     if(!result || typeof result !== 'object') return null;
     if(result.error) return String((result.error && result.error.message) || result.error);
@@ -218,13 +251,52 @@ class HubClient {
                 let data = '';
                 res.on('data', (chunk) => { data += chunk; });
                 res.on('end', () => {
+                    let status = res.statusCode || 0;
+                    let rl     = readRateLimitHeaders(res.headers);
+                    let parsed;
                     try {
-                        let parsed = JSON.parse(data);
-                        if(parsed.error) return reject(new Error(parsed.error.message || JSON.stringify(parsed.error)));
-                        resolve(parsed.result);
+                        parsed = JSON.parse(data);
                     } catch (e) {
-                        reject(new Error('Invalid JSON response: ' + e.message));
+                        // A non-2xx with an unparseable body is a TRANSPORT verdict, not a
+                        // malformed reply, and reporting it as "Invalid JSON response" hid the
+                        // single most common one for a whole drill: express-rate-limit answers
+                        // 429 with the text/html string "Too many requests, please try again
+                        // later.", which surfaced downstream as `Unexpected token 'T'` and named
+                        // neither the throttle nor the limit. Name the status, and
+                        // for a 429 name the limit and the wait from the RateLimit-* headers.
+                        if(status === 429){
+                            let limitText = rl.limit != null ? rl.limit + ' req/min' : 'limit not advertised';
+                            let waitText  = rl.retryAfterMs != null ? Math.round(rl.retryAfterMs / 1000) + 's' : 'unknown';
+                            return reject(markRateLimited(new Error(
+                                'hub rate limit exceeded (' + limitText + '); retry after ' + waitText +
+                                ' [HTTP 429, non-JSON body]'), { limit: rl.limit, retryAfterMs: rl.retryAfterMs, httpStatus: status }));
+                        }
+                        if(status && (status < 200 || status >= 300))
+                            return reject(Object.assign(
+                                new Error('hub returned HTTP ' + status + ' with a non-JSON body: ' +
+                                    String(data).slice(0, 200)),
+                                { httpStatus: status }));
+                        return reject(new Error('Invalid JSON response: ' + e.message));
                     }
+                    if(parsed.error){
+                        let err = new Error(parsed.error.message || JSON.stringify(parsed.error));
+                        if(parsed.error.code !== undefined) err.rpcCode = parsed.error.code;
+                        if(status) err.httpStatus = status;
+                        // The hub's own JSON 429: the envelope already names the limit and the
+                        // window, so the message needs no rewriting; it only needs classifying
+                        // so HubPushQueue holds off instead of retrying into the same guard.
+                        if(status === 429 || parsed.error.code === HUB_RATE_LIMIT_RPC_CODE){
+                            let errData = parsed.error.data || {};
+                            markRateLimited(err, {
+                                limit:        Number.isFinite(errData.limit) ? errData.limit : rl.limit,
+                                retryAfterMs: Number.isFinite(errData.retryAfterSeconds)
+                                    ? errData.retryAfterSeconds * 1000 : rl.retryAfterMs,
+                                httpStatus:   status || 429
+                            });
+                        }
+                        return reject(err);
+                    }
+                    resolve(parsed.result);
                 });
             });
             req.on('error', (err) => reject(err));
@@ -236,3 +308,5 @@ class HubClient {
 }
 
 module.exports = HubClient;
+module.exports.HUB_RATE_LIMIT_RPC_CODE = HUB_RATE_LIMIT_RPC_CODE;
+module.exports.readRateLimitHeaders    = readRateLimitHeaders;

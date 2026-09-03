@@ -74,6 +74,14 @@ class HubPushQueue {
 
         this.timer    = null;
         this.draining = false;
+        // Wall clock before which no drain runs, set when the hub answers 429.
+        // A throttled push is the ONE failure the hub never judged: it did not see the
+        // payload, so the row is neither delivered nor rejected and retrying it inside the
+        // same window can only re-trip the same guard. Deferring the whole queue (not the
+        // single row) is what makes it converge: the drain sends up to batchSize rows
+        // back to back, so without this the first 429 is followed by 49 more, every one
+        // of them charging an attempt against rows the hub never read. 0 = no hold.
+        this._throttledUntilMs = 0;
         // Promise that resolves when the currently in-flight drain() finishes; null when idle. Lets
         // pause() await an in-flight drain instead of returning while it is still mid-batch.
         this._drainDone = null;
@@ -132,6 +140,9 @@ class HubPushQueue {
     async drain(){
         if(this.draining) return;
         if(this.paused) return;
+        // Hub-imposed hold from a previous 429. Checked before the prune/fetch so a
+        // throttled queue costs one clock read per tick, not a DB round trip.
+        if(this._throttledUntilMs && Date.now() < this._throttledUntilMs) return;
         this.draining = true;
         // Publish a completion promise so pause() can await this in-flight drain (HUB-RETRACT-3).
         let resolveDone;
@@ -154,6 +165,10 @@ class HubPushQueue {
             for(let row of rows){
                 if(!this._isDue(row, now)) continue;
                 await this._attempt(row);
+                // A 429 stops the batch where it stands. The remaining rows are still
+                // pending and still due, so the next tick past the hold picks them up
+                // unchanged; pushing them now would only deepen the throttle.
+                if(this._throttledUntilMs && Date.now() < this._throttledUntilMs) break;
             }
         } finally {
             this.draining = false;
@@ -259,6 +274,22 @@ class HubPushQueue {
             console.log('HubPushQueue: delivered ' + row.push_type + ' row ' + row.id + ' (attempt ' + attemptNo + ')');
         } catch (err){
             let msg = String((err && err.message) || err).slice(0, 480);
+            // A 429 is not a delivery attempt, it is the hub declining to look. Record
+            // NOTHING: charging an attempt would inflate this row's exponential backoff
+            // (and, for the capped `price_round` type, walk it toward 'failed') on the
+            // strength of a verdict the hub never rendered on the payload. Leaving
+            // attempts and last_attempted_at untouched keeps the row due the instant the
+            // hold clears, which is what turns a chain-only price replay against a REMOTE
+            // hub from a stall into a slow, converging drain. A hub on the
+            // node's own host or private network never gets here at all: it exempts those
+            // callers from the per-IP cap (HUB_RATE_LIMIT_EXEMPT_LOCAL).
+            if(err && err.rateLimited){
+                let waitMs = Number.isFinite(err.retryAfterMs) && err.retryAfterMs > 0 ? err.retryAfterMs : 60000;
+                this._throttledUntilMs = Date.now() + waitMs;
+                console.warn('HubPushQueue: hub rate-limited ' + row.push_type + ' row ' + row.id +
+                    '; holding the queue ' + Math.round(waitMs / 1000) + 's (' + msg + ')');
+                return;
+            }
             // Reorg retractions must NOT share the best-effort forward-push attempt cap. A
             // `price_round` push is re-derivable, so retiring it to 'failed' after maxAttempts is
             // fine. A '*_retraction' row is the ONLY remaining record that the hub must prune an orphaned

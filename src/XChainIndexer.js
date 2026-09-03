@@ -399,6 +399,14 @@ class XChainIndexer {
                 // Live delivery failed; the durable row stays for HubPushQueue's backoff retry.
                 console.warn('Staged hub push ' + entry.pushType + ' row ' + entry.id +
                     ' live delivery failed; HubPushQueue will retry:', err && err.message);
+                // A 429 says the hub is refusing this IP for the rest of its window, so the
+                // remaining staged entries would each buy one more rejection and one more
+                // log line. Stop here: every one of them is already durable in
+                // pending_hub_pushes, and HubPushQueue holds off until the window clears.
+                // This is the shape a chain-only node replaying a
+                // batch-bearing chain against a REMOTE hub takes, where the block loop
+                // outruns any per-IP cap by orders of magnitude.
+                if(err && err.rateLimited) break;
             }
         }
     }
