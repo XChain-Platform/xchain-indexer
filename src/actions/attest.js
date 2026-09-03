@@ -328,9 +328,12 @@ class Attest {
         // `llm` provider is a real invoice on each operator's own vendor account, while
         // the requester pays the same flat VM_ATTEST_REQUEST gas either way. Fees bound
         // that on a fee-bearing network; on testnet nothing is scarce, so the bound has
-        // to be this rule. Rejection rather than deferral, because the action is already
+        // to be this rule. Refusal rather than deferral, because the action is already
         // in this block and there is no later block to carry it to - see the semantics
-        // note in attest_request_cap_activation.js.
+        // note in attest_request_cap_activation.js, which also records what the refusal
+        // costs the author on a live chain: the emitting EXECUTE REVERTS (processEmission
+        // throws on a non-'valid' emission), taking the under-cap siblings and the
+        // execution's state writes with it, and no 'rejected' v0 row survives.
         //
         // Checked LAST among the admission rules, and only for an otherwise-valid
         // request, so a structurally invalid one never consumes a capped slot. Same
@@ -363,6 +366,14 @@ class Attest {
         // reorg-rollback reset, which only re-pends rows that went terminal via a
         // later block's flip (request_status IN ('fulfilled','errored','expired')
         // AND resolved_block >= reorg point), never promotes it back to pending.
+        //
+        // NO AUDIT ROW ACTUALLY SURVIVES, though, and this is a fail-safe rather than
+        // the observable behaviour: a v0 exists only as a VM emission, and
+        // execute.processEmission throws on any emission whose STATUS is not 'valid',
+        // which rolls the emitting EXECUTE's savepoint back over this write. Measured
+        // on BTC regtest 2026-09-02 and on the venue's whole history: not one
+        // 'rejected' v0 row has ever existed. Keep the branch anyway - it is what makes
+        // the write safe if a future emission path ever stops throwing.
         data['REQUEST_STATUS'] = (error) ? 'rejected' : 'pending';
 
         // Stamp the origin chain on an admitted relay-eligible request. This is
