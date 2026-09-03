@@ -265,6 +265,50 @@ const LOCAL_COLUMN_CACHE_TTL_MS = 5 * 60 * 1000;
 // multi-minute drain sees a handful; the cap only bounds a pathological hub.
 const PENDING_PRICE_EVENT_CAP = 10000;
 
+// ── price_snapshots bootstrap throughput and visibility ──────────────────────
+//
+// price_snapshots is the one mirrored table with UNBOUNDED retention, and the
+// hub never prunes it: 36 coin pairs at the default 600s round interval write
+// ~5,184 rows a day forever. Every one of them was applied on every bootstrap,
+// one awaited INSERT at a time, with a single log line at the very end, so an
+// operator watching a cold start could not tell a working drain from a wedged
+// one (measured 2026-08: 411,747 rows on a production hub, ~13 minutes of
+// deferred blocks).
+//
+// Both halves are addressed here, and neither changes what the mirror ends up
+// holding: rows are batched into multi-row upserts of the SAME statement the
+// per-row path builds (priceUpsertSql below is the one source for both, so they
+// cannot drift), and the page loop emits a throttled progress counter.
+//
+// The batch is an OPTIMIZATION ONLY and never a new failure mode. It engages for
+// price_snapshots alone, only across a run of rows carrying identical columns,
+// and any statement that does not come back as a driver OK result falls straight
+// back to the per-row path - which then applies that whole chunk in order and
+// keeps the "stop at the FIRST unappliable row" hole semantics _bootstrapTable
+// depends on. Set HUB_SYNC_BATCH_APPLY=false to force the per-row path.
+const PRICE_BATCH_APPLY_ROWS = 500;
+
+// How often a long drain reports progress. A drain that finishes inside this
+// interval stays silent, so nothing changes for the small mirrored tables.
+const BOOTSTRAP_PROGRESS_INTERVAL_MS = 15000;
+
+// The price_snapshots upsert, for `rowCount` rows at once. ONE builder for both
+// the per-row applier and the bootstrap's batch, because the ODKU body is the
+// consensus-relevant part (skipped -> finalized upgrades only, keyed on
+// VALUES(status) so it is independent of assignment order) and two copies of it
+// would be two chances to diverge. At rowCount 1 it emits exactly the statement
+// _applyRow emitted before this batching existed.
+function priceUpsertSql(cols, rowCount) {
+    let updatable = cols.filter(c => c !== 'id' && c !== 'round_number' && c !== 'coin_pair' && c !== 'status');
+    let sets = updatable.map(c => '`' + c + "` = IF(VALUES(status) = 'finalized', VALUES(`" + c + '`), `' + c + '`)');
+    sets.push("status = IF(VALUES(status) = 'finalized', 'finalized', status)");
+    let tuple = '(' + cols.map(() => '?').join(', ') + ')';
+    let tuples = [];
+    for (let i = 0; i < rowCount; i++) tuples.push(tuple);
+    return 'INSERT INTO price_snapshots (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES ' + tuples.join(', ')
+         + ' ON DUPLICATE KEY UPDATE ' + sets.join(', ');
+}
+
 class HubDbSync {
 
     constructor(hubDb, options) {
@@ -472,6 +516,21 @@ class HubDbSync {
         this._watchdogTimer = null;
         this.watermarkIntervalMs = parseInt(options.watermarkIntervalMs || process.env.HUB_SYNC_WATERMARK_INTERVAL_MS || '10000');
         this.watermarkTimeoutMs = this.watermarkIntervalMs * 3;
+
+        // Batched price applies and the drain's progress counter. Both are
+        // reporting/throughput only - no barrier, floor or mirrored row depends on
+        // either - so both carry a plain off switch rather than a fail-closed gate.
+        this._batchApplyDisabled = (options.batchApply === false) ||
+                                   (process.env.HUB_SYNC_BATCH_APPLY === 'false');
+        this._batchApplyWarned   = false;
+        this.batchApplyRows      = parseInt(options.batchApplyRows ||
+                                            process.env.HUB_SYNC_BATCH_APPLY_ROWS || String(PRICE_BATCH_APPLY_ROWS));
+        if (!Number.isFinite(this.batchApplyRows) || this.batchApplyRows < 2)
+            this.batchApplyRows = PRICE_BATCH_APPLY_ROWS;
+        this.bootstrapProgressMs = parseInt(options.bootstrapProgressMs ||
+                                            process.env.HUB_SYNC_BOOTSTRAP_PROGRESS_MS || String(BOOTSTRAP_PROGRESS_INTERVAL_MS));
+        if (!Number.isFinite(this.bootstrapProgressMs) || this.bootstrapProgressMs < 0)
+            this.bootstrapProgressMs = BOOTSTRAP_PROGRESS_INTERVAL_MS;
     }
 
     // Advance the stream watermark (monotonic) and re-evaluate every pending
@@ -773,6 +832,88 @@ class HubDbSync {
         // can close that half of #3211.
         let servedMatchIds = (table === 'cross_chain_matches') ? new Set() : null;
         let maxServedId    = 0;
+
+        // Progress counter. `fetched` counts every row the hub served this drain, which is
+        // the number that has to be seen moving on a cold start even where `applied` lags
+        // behind it. The hub states its own MAX(id) per table in the subscription ready
+        // message, so where that is known the line also carries how far through the id
+        // space this drain has reached.
+        let fetched        = 0;
+        let pagesFetched   = 0;
+        let drainStartedAt = Date.now();
+        let lastProgressAt = drainStartedAt;
+        let reportProgress = () => {
+            if (!(this.bootstrapProgressMs > 0)) return;
+            let now = Date.now();
+            if ((now - lastProgressAt) < this.bootstrapProgressMs) return;   // short drains stay silent
+            lastProgressAt = now;
+            let elapsedS = Math.max(1, Math.round((now - drainStartedAt) / 1000));
+            let ceiling  = Number(this._readyMaxIds && this._readyMaxIds[table]);
+            let share    = (Number.isFinite(ceiling) && ceiling > 0 && lastId > 0)
+                             ? ' (~' + Math.min(99, Math.floor((lastId / ceiling) * 100)) + '% of the hub id space)'
+                             : '';
+            console.log('HubDbSync: bootstrapping ' + table + ': ' + fetched + ' row(s) fetched, ' +
+                applied + ' applied, page ' + pagesFetched + ', through id ' + lastId + share +
+                ', ' + elapsedS + 's elapsed (' + Math.round(fetched / elapsedS) + ' rows/s)');
+        };
+
+        // Rows held back for the batch, in wire order. The flush applies them as ONE
+        // statement where it can and one at a time where it cannot, then runs the SAME
+        // per-row bookkeeping and cursor advance either way - so the drain's accounting,
+        // and its stop-at-the-first-unappliable-row rule, are what they were before
+        // batching existed, whichever path ran.
+        let pending      = [];
+        let flushPending = async () => {
+            if (pending.length === 0) return true;
+            let batch   = pending.map(p => p.row);
+            let batched = (batch.length > 1) ? await this._applyRowsBatched(table, batch) : false;
+            let ok      = true;
+            for (let entry of pending) {
+                let row = entry.row;
+                try {
+                    if (!batched) await this._applyRow(table, row);
+                    if (servedMatchIds) {
+                        servedMatchIds.add(String(row.match_id));
+                        let sid = Number(row.id);
+                        if (Number.isFinite(sid) && sid > maxServedId) maxServedId = sid;
+                    }
+                    applied++;
+                } catch (err) {
+                    applyErrors++;
+                    console.warn('HubDbSync: failed to apply row in ' + table + ':', err);
+                    // Stop the page at the FIRST unappliable row. Advancing the cursor past it
+                    // (here, or by applying a later row in this page and raising the local
+                    // MAX(id)) would make the next retry's since_id = SELECT MAX(id) skip it
+                    // forever, and once the retry drains cleanly the heartbeat gate opens over a
+                    // PERMANENT mirror hole (BOOTSTRAP-HOLE-1). Leaving it (and everything after
+                    // it) unapplied keeps local MAX(id) below the hole, so the retry re-fetches
+                    // from it and fails closed until it applies. A persistent bad row wedges this
+                    // table's barrier (defer) rather than silently forking - the module's
+                    // fail-closed contract, same as the schema-mismatch path.
+                    //
+                    // A batch cannot hide such a row: _applyRowsBatched only reports success on a
+                    // statement the driver accepted, and any other outcome sends every row in the
+                    // chunk back through this loop one at a time, where the bad one still stops it.
+                    ok = false;
+                    break;
+                }
+                // Advance the cursor only for a row that actually applied.
+                let rowId = Number(row.id);
+                if (Number.isFinite(rowId) && rowId > lastId) lastId = rowId;
+            }
+            pending = [];
+            reportProgress();
+            return ok;
+        };
+
+        // One line up front for a table big enough to take a while, so a cold start shows
+        // the drain BEGINNING rather than only its result. The counter above then reports
+        // every bootstrapProgressMs until it lands.
+        let announcedCeiling = Number(this._readyMaxIds && this._readyMaxIds[table]);
+        if (Number.isFinite(announcedCeiling) && announcedCeiling > PAGE_LIMIT)
+            console.log('HubDbSync: draining ' + table + ' from id ' + lastId +
+                ' (the hub reports ' + announcedCeiling + ' as its highest id)');
+
         for (let page = 0; page < MAX_PAGES; page++) {
             let path = '/hub-db/snapshot/' + table + '?since_id=' + lastId + '&limit=' + PAGE_LIMIT;
             let result = await this._httpGet(path);
@@ -792,33 +933,17 @@ class HubDbSync {
                 return null;
             }
 
+            pagesFetched++;
             for (let row of result.rows) {
-                try {
-                    await this._applyRow(table, row);
-                    if (servedMatchIds) {
-                        servedMatchIds.add(String(row.match_id));
-                        let sid = Number(row.id);
-                        if (Number.isFinite(sid) && sid > maxServedId) maxServedId = sid;
-                    }
-                    applied++;
-                } catch (err) {
-                    applyErrors++;
-                    console.warn('HubDbSync: failed to apply row in ' + table + ':', err);
-                    // Stop the page at the FIRST unappliable row. Advancing the cursor past it
-                    // (here, or by applying a later row in this page and raising the local
-                    // MAX(id)) would make the next retry's since_id = SELECT MAX(id) skip it
-                    // forever, and once the retry drains cleanly the heartbeat gate opens over a
-                    // PERMANENT mirror hole (BOOTSTRAP-HOLE-1). Leaving it (and everything after
-                    // it) unapplied keeps local MAX(id) below the hole, so the retry re-fetches
-                    // from it and fails closed until it applies. A persistent bad row wedges this
-                    // table's barrier (defer) rather than silently forking - the module's
-                    // fail-closed contract, same as the schema-mismatch path.
-                    break;
-                }
-                // Advance the cursor only for a row that actually applied.
-                let rowId = Number(row.id);
-                if (Number.isFinite(rowId) && rowId > lastId) lastId = rowId;
+                fetched++;
+                pending.push({ row: row });
+                // Flush on the chunk boundary; a failed flush already stopped at the bad row
+                // and left the cursor below it, so this page is over.
+                if (pending.length >= this.batchApplyRows && !(await flushPending())) break;
             }
+            // Whatever the chunk boundary left behind. Skipped after a failure so the
+            // already-cleared buffer is not re-walked and the hole is not stepped over.
+            if (applyErrors === 0) await flushPending();
             lastPageCount = result.rows.length;
             // The LAST page's watermark is the hub's most recent "complete through ts"
             // statement covering everything fetched so far.
@@ -1400,6 +1525,70 @@ class HubDbSync {
         });
     }
 
+    // Apply a run of price_snapshots rows in ONE multi-row upsert.
+    //
+    // Returns true only when every row in `rows` landed in that single statement;
+    // false means "not applied, use the per-row path", and the caller then applies
+    // the same rows through _applyRow in order. Never throws for that reason: the
+    // decision to batch must never be able to fail a drain that the per-row path
+    // would have completed.
+    //
+    // Applicability is deliberately narrow. price_snapshots only (the one mirrored
+    // table large enough for the round-trips to dominate), only when every row
+    // presents the identical mirrored column list (so one placeholder tuple is
+    // correct for all of them), and only when `status` is among those columns,
+    // which is the same condition _applyRow's price branch requires before it uses
+    // the ODKU upgrade path. Anything else declines.
+    //
+    // Rows sharing a natural key inside one statement are safe: MariaDB evaluates
+    // the ODKU per row against what the statement has already written, and the
+    // skipped -> finalized upgrade is keyed on VALUES(status), so a chunk holding
+    // both states for one round converges to the same row either order.
+    async _applyRowsBatched(table, rows) {
+        if (table !== 'price_snapshots') return false;
+        if (this._batchApplyDisabled) return false;
+        if (!Array.isArray(rows) || rows.length < 2) return false;
+
+        let allowed;
+        try {
+            allowed = await this._localColumns(table);
+        } catch (e) {
+            return false;                                    // not ready: the per-row path reports it
+        }
+
+        let cols = Object.keys(rows[0]).filter(c => allowed.has(c));
+        if (cols.length === 0 || !cols.includes('status')) return false;
+        let signature = cols.join('');
+
+        let args = [];
+        for (let row of rows) {
+            let rowCols = Object.keys(row).filter(c => allowed.has(c));
+            if (rowCols.join('') !== signature) return false;
+            for (let c of cols) args.push(coerceMirrorValue(row[c], this._cachedColumnType(table, c)));
+        }
+
+        let result;
+        try {
+            result = await this.hubDb.doQuery(priceUpsertSql(cols, rows.length), args);
+        } catch (e) {
+            result = null;                                   // treated as "did not land", below
+        }
+        // doQuery SWALLOWS a query error for a non-transactional statement and returns its
+        // `[]` default; a statement that ran comes back as the driver's OK result object.
+        // An array (or a throw, or nothing) therefore means this batch did not land, and the
+        // caller must re-apply these rows one at a time - where a genuine failure is visible
+        // per row and stops the page at the offending row, as it always did.
+        if (!result || Array.isArray(result)) {
+            if (!this._batchApplyWarned) {
+                this._batchApplyWarned = true;
+                console.warn('HubDbSync: batched ' + table + ' upsert did not land; falling back to ' +
+                    'per-row applies for this drain (set HUB_SYNC_BATCH_APPLY=false to disable batching)');
+            }
+            return false;
+        }
+        return true;
+    }
+
     // Apply a row to the local hub DB (INSERT IGNORE to keep idempotent).
     // Columns are FILTERED to the local mirror table's schema: the hub may serve
     // columns the mirror deliberately does not carry (e.g. state_checkpoints'
@@ -1441,12 +1630,9 @@ class HubDbSync {
         // stable regardless of ODKU assignment order), so an already-finalized
         // local row is never clobbered and re-delivery stays idempotent.
         if (table === 'price_snapshots' && cols.includes('status')) {
-            let updatable = cols.filter(c => c !== 'id' && c !== 'round_number' && c !== 'coin_pair' && c !== 'status');
-            let sets = updatable.map(c => '`' + c + "` = IF(VALUES(status) = 'finalized', VALUES(`" + c + '`), `' + c + '`)');
-            sets.push("status = IF(VALUES(status) = 'finalized', 'finalized', status)");
-            let query = 'INSERT INTO price_snapshots (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
-                      + ' ON DUPLICATE KEY UPDATE ' + sets.join(', ');
-            await this.hubDb.doQuery(query, args);
+            // priceUpsertSql(cols, 1) is this branch's original statement, moved out so the
+            // bootstrap's multi-row batch emits the same ODKU body by construction.
+            await this.hubDb.doQuery(priceUpsertSql(cols, 1), args);
             return;
         }
 
@@ -2642,3 +2828,10 @@ module.exports.ensureTables = ensureTables;
 // Exported so tests assert against the frozen source of truth rather than
 // restating its numbers, which would let a future change here pass a stale test.
 module.exports.HUB_SYNC_WATERMARK_GRACE_S = HUB_SYNC_WATERMARK_GRACE_S;
+// The batch's chunk size and the drain's progress cadence, plus the shared upsert
+// builder: exported so the test can prove the batched statement and the per-row
+// statement are the same statement, which is the only thing keeping the ODKU body
+// from being maintained twice.
+module.exports.PRICE_BATCH_APPLY_ROWS         = PRICE_BATCH_APPLY_ROWS;
+module.exports.BOOTSTRAP_PROGRESS_INTERVAL_MS = BOOTSTRAP_PROGRESS_INTERVAL_MS;
+module.exports.priceUpsertSql                 = priceUpsertSql;
