@@ -53,6 +53,10 @@ const GATES = [
     // confirmations and maxSlots decide WHICH validators may sign at the flag-day exactly as
     // the heights decide when, so a one-sided edit forks v1 signature admission.
     ['attest_responsible_widening_activation.js',      'ATTEST_RESPONSIBLE_WIDENING'],
+    // The height that decides whether a finalized response reaches indexers as an on-chain
+    // ATTEST v1 or through the hub mirror. It also selects which CANONICAL the responsible set
+    // signs, so a one-sided edit forks attestation settlement AND signature admission at once.
+    ['attest_response_mirror_activation.js',           'ATTEST_RESPONSE_MIRROR_ACTIVATION'],
     ['anchor_reward_activation.js',         'ANCHOR_REWARD_DERIVE_ACTIVATION'],
     ['anchor_activation.js',                'ANCHOR_ACTIVATION'],
     // constants.js claims the whole anchor/archive reward block is "kept byte-identical to
