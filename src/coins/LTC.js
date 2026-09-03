@@ -213,6 +213,26 @@ module.exports = {
         OWNERSHIP_ESCROW:      50000,
         AIRDROP_PER_RECIPIENT: 100,
         DIVIDEND_PER_RECIPIENT: 100,
+        // SWEEP / CALLBACK, priced on the unified schedule from the
+        // UNIFIED_FEES_SWEEP_CALLBACK flag day. The legacy flat per-DB-hit fee prices a
+        // small action BELOW the dust threshold of a native-fee chain (LTC/DOGE, where a
+        // missing fee output is rejected outright rather than falling back to an XCHAIN
+        // balance debit), so the fee output cannot be created and the action cannot be
+        // submitted at all: a Litecoin SWEEP needs ~273 DB hits before it clears LTC's
+        // 5460-satoshi floor at LTC $100 / XCHAIN $2.
+        //
+        // The BASE keys are what close that: gas is what buys the output, so the SMALLEST
+        // possible SWEEP or CALLBACK has to buy an above-dust one on its own. The floor a
+        // chain demands is dust_sats * COIN_USD / (1000 * XCHAIN_USD) gas units, so 5000 gas
+        // (0.05 XCHAIN) clears Litecoin while COIN/XCHAIN stays under ~915 and Dogecoin
+        // while it stays under ~50, both far outside any plausible band. The PER_ITEM keys
+        // hold the marginal cost at AIRDROP/DIVIDEND per-recipient parity; a SWEEP item is
+        // one swept balance, one closed order/swap/dispenser escrow, or one transferred
+        // ownership.
+        SWEEP_BASE:            5000,
+        SWEEP_PER_ITEM:        100,
+        CALLBACK_BASE:         5000,
+        CALLBACK_PER_RECIPIENT: 100,
         // BET (parimutuel betting, spec decision F): feed creation is duration-
         // metered like ORDER/SWAP/DISPENSER expiration (same free window via
         // UNIFIED_EXPIRATION_FEE_FREE_DAYS) but under its OWN per-day key so the
