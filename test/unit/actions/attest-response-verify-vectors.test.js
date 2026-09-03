@@ -174,6 +174,13 @@ describe('ATTEST v1 response verification: captured byte vectors @regression @ti
         sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
         sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(false);
         sinon.stub(attestBcastFee, 'isAttestBroadcastFeeActive').returns(false);
+        // Same treatment for the response-mirror flag day, which regtest also arms at
+        // genesis: at and above it the chain handler refuses an on-chain v1 before the
+        // verifier is reached at all, so every vector here would record the flag-day
+        // verdict instead of the canonical/quorum verdict it exists to pin. These vectors
+        // are the LEGACY era's; the gate has its own cases in attest.test.js.
+        sinon.stub(require('../../../src/attest_response_mirror_activation.js'),
+                   'isResponseMirrorActive').returns(false);
     });
 
     afterEach(function () {

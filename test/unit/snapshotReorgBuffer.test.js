@@ -201,6 +201,11 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
             // Legacy count path: the source-deduped weighted resolver has its own
             // coverage; this test is about WHICH HEIGHT, not which resolver.
             sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+            // And the response-mirror flag day, armed on regtest at genesis: above it the
+            // chain handler refuses an on-chain v1 before any height is resolved, so these
+            // burial vectors are the legacy era's (matches attest.test.js default).
+            sinon.stub(require('../../src/attest_response_mirror_activation.js'),
+                       'isResponseMirrorActive').returns(false);
             sinon.stub(ed25519, 'verify').returns(true);
         });
 

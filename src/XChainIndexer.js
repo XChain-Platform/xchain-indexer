@@ -480,6 +480,25 @@ class XChainIndexer {
                 } else if(entry.pushType === 'price_batch'){
                     // PRICE v0: a signed window of rounds, delivered to pushpricebatch.
                     await this.hubClient.pushPriceBatch(entry.payload);
+                } else if(entry.pushType === 'attest_batch'){
+                    // ATTEST v5: a signed window of finalized attestation responses parsed
+                    // off the DOGE rail, delivered to the hub's `pushattestbatch`, which
+                    // re-verifies the batch quorum, inserts the carried rows into
+                    // attestation_responses and broadcasts them. That road is how a
+                    // chain-only node's mirror gets rebuilt from chain parse alone, which
+                    // is why the row stays durable rather than best-effort.
+                    //
+                    // Payload shape (the hub destructures exactly these names):
+                    //   source_chain, network, window_start, window_end, row_count,
+                    //   btc_block_height, rows[], sigs[], action_index, block_index,
+                    //   block_time, push_generation
+                    //
+                    // Guarded on the method rather than called blind: a node whose
+                    // HubClient predates the endpoint must leave the durable
+                    // pending_hub_pushes row for a later drain instead of throwing a
+                    // TypeError into the block loop and burning an attempt on it.
+                    if(typeof this.hubClient.pushAttestBatch !== 'function') continue;
+                    await this.hubClient.pushAttestBatch(entry.payload);
                 } else {
                     // Unknown type: leave the durable row for HubPushQueue rather than guess.
                     continue;

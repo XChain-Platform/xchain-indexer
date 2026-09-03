@@ -170,13 +170,26 @@ const CANONICAL_CARET_ID = /^[1-9][0-9]*$/;
 // round on LTC/DOGE sums to zero stake and records 'invalid: insufficient signer stake'
 // with signatures that all verify.
 //
+// `attestation` joins them for the ATTEST v5/v6 response batch, which rides the DOGE rail
+// and must resolve its BATCH quorum against the capability snapshot at the signed BTC
+// anchor. Without the redirect that quorum sums to zero stake on every DOGE node, which is
+// the identical shape PRICE batching already hit.
+//
+// It widens ONLY who is capable, never who is responsible. The per-row responsible set is
+// resolved by actions/attest.js _computeResponsibleSet, which returns [] off BTC before it
+// reads anything, and that filter stays the binding gate on the on-chain v1 path: an ATTEST
+// v1 landing off BTC is refused for the same reason after this change as before it. That is
+// deliberate, and it is why per-row responsible-set verification happens on the BTC indexer
+// after the hub re-serves the row, never on the batch's landing chain.
+//
 // ONE predicate for ALL FOUR capability reads (validator set, stake weights, active count,
 // per-pubkey membership). If any one of them consulted a different source, a node would
 // tally signatures against one validator set and divide by a quorum denominator computed
 // from another, reaching a verdict no other node reaches.
 function usesCapabilitySnapshot(config, capability){
     if(!config || config['COIN'] === 'BTC') return false;
-    return capability === 'cross_chain' || capability === 'oracle_publish' || capability === 'price';
+    return capability === 'cross_chain' || capability === 'oracle_publish' ||
+           capability === 'price' || capability === 'attestation';
 }
 
 // True when str[i] opens a backslash escape inside the currently open quoted span.
@@ -15339,6 +15352,47 @@ class Database {
                 action_index, request_id, provider_id, response_hash, response_payload,
                 response_status, meta, signatures, status_id, block_index
             ]);
+        }
+    }
+
+    // Create the audit row for an ATTEST v5/v6 batch action in the consolidated `attests`
+    // table. Keyed on action_index like every other row there.
+    //
+    // A batch action carries no request, no provider and no response body, so this writes
+    // only the four columns that mean something for it:
+    //   version      5 (head) or 6 (continuation)
+    //   request_id   THE BATCH KEY. The column's role is "correlation key across versions",
+    //                and for the batch pair that is exactly what this is: a continuation
+    //                names its head by this value and nothing else. Empty on a wire so
+    //                malformed that no key could be derived from it.
+    //   provider_id  '' - NOT NULL with no provider to name, the same reason a rejected
+    //                ATTEST v4 with no matching request stores the empty string.
+    //   status_id    the batch verdict, which is what a replay re-derives.
+    //
+    // The wire BODY is deliberately not stored: absorption happens at parse time from the
+    // action's own params, so persisting the compressed bytes would duplicate chain data
+    // this table has no reader for. A cross-action chunk store, which head-side reassembly
+    // of a MULTI-chunk batch needs, is separate work: it wants its own columns on this
+    // table rather than a reinterpretation of these.
+    async createAttestationBatchAction(data){
+        data             = this.normalizeDataValues(data);
+        let status_id    = await this.createStatus(data['STATUS']);
+        let action_index = data['ACTION_INDEX'];
+        let version      = Number(data['VERSION']);
+        let batch_key    = String(data['REQUEST_ID'] || '').toLowerCase();
+        let block_index  = data['BLOCK_INDEX'];
+
+        let results = await this.doQuery("SELECT action_index FROM attests WHERE action_index=? LIMIT 1", [action_index]);
+        if(results.length > 0){
+            await this.doQuery(`UPDATE attests SET
+                                    version=?, request_id=?, provider_id='', status_id=?, block_index=?
+                                WHERE action_index=?`,
+                [version, batch_key, status_id, block_index, action_index]);
+        } else {
+            await this.doQuery(`INSERT INTO attests
+                                    (action_index, version, request_id, provider_id, status_id, block_index)
+                                VALUES (?, ?, ?, '', ?, ?)`,
+                [action_index, version, batch_key, status_id, block_index]);
         }
     }
 

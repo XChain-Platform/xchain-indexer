@@ -436,25 +436,49 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
                 'fulfilled_count is credited only for status ok');
         });
 
-        it('settles the request fee at the synthesized action, reading BLOCK_TIME for the oracle (D60)', async function () {
-            // Arm the broadcast-fee carve-out so the settle actually reaches the
-            // fee-oracle read: that read is the reason the synthesized action must carry
-            // BLOCK_TIME at all, and without it the conversion NaNs.
+        it('settles the request fee at the synthesized action, which carries BLOCK_TIME (D60)', async function () {
+            // D60 named the fee-ORACLE read as the reason the synthesized action must
+            // carry BLOCK_TIME. Above the mirror height that read is gone with the
+            // broadcast-fee carve-out (nobody broadcast anything to be reimbursed for),
+            // so BLOCK_TIME's remaining consumer on this path is the injected callback
+            // context, which is asserted below and is just as load-bearing: a callback
+            // running at the wrong time is consensus-visible contract state.
             attestBcastFee.isAttestBroadcastFeeActive.returns(true);
             indexer.util.getFeeOraclePrices = sinon.stub().resolves({ error: 'no prices' });
 
             const data = applyData({}, {}, { fee_amount: '10' });
             await handler.parse([1, REQ_ID], data, null);
 
-            assert.ok(indexer.util.getFeeOraclePrices.calledOnce, 'the settle reached the oracle read');
-            const args = indexer.util.getFeeOraclePrices.firstCall.args;
-            assert.strictEqual(args[2], 100,        'anchored on the applying block');
-            assert.strictEqual(args[3], BLOCK_TIME, 'and on the applying block TIME');
             assert.ok(indexer.indexerDb.createValidatorReward.calledOnce, 'the escrow splits to the signers');
             const reward = indexer.indexerDb.createValidatorReward.firstCall.args;
             assert.strictEqual(reward[0], PUBKEY_A);
             assert.strictEqual(reward[2], 'attest_fee');
             assert.strictEqual(reward[4], 100, 'the reward is stamped at the applying block, so a reorg of it rolls back');
+            assert.strictEqual(executeStub.parse.firstCall.args[1]['BLOCK_TIME'], BLOCK_TIME,
+                'the synthesized action carries BLOCK_TIME through to the callback context');
+        });
+
+        it('retires the broadcast-fee carve-out: no attest_bcast, whole escrow to the signers', async function () {
+            // A mirror-applied response was never broadcast by anyone, so there is no
+            // miner fee to reimburse. The carve-out flag day is ARMED here on purpose:
+            // what this asserts is that the mirror era retires it anyway, and that the
+            // retirement reaches the APPLIER, which settles through the same routine the
+            // chain handler does.
+            attestBcastFee.isAttestBroadcastFeeActive.returns(true);
+            indexer.util.getFeeOraclePrices = sinon.stub().resolves({
+                coinUsdPrice: '50000', xchainUsdPrice: '2.5', oracleRound: 7,
+            });
+            indexer.indexerDb.getTokenDecimalPrecision.resolves(8);
+
+            const data = applyData({}, {}, { action_index: 42, fee_amount: '6.00000000' });
+            await handler.parse([1, REQ_ID], data, null);
+
+            const rewards = indexer.indexerDb.createValidatorReward.getCalls()
+                .map(c => ({ type: c.args[2], amount: String(c.args[3]) }));
+            assert.deepStrictEqual(rewards, [{ type: 'attest_fee', amount: '6' }],
+                'the whole escrow splits, so a signer earns the retired carve-out on top of its share');
+            assert.strictEqual(indexer.util.getFeeOraclePrices.called, false,
+                'and the oracle conversion is never reached for a reimbursement that cannot apply');
         });
 
         it('defers the callback to the relay leg for a relay-materialized request', async function () {

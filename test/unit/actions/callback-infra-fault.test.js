@@ -185,6 +185,12 @@ describe('Callback injection infra-fault propagation @regression @tier2', functi
             indexer.util.resetLists();
             // Legacy COUNT path for the responsible set (matches attest.test.js default).
             sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+            // And the response-mirror flag day, armed on regtest at genesis: above it the
+            // chain handler refuses an on-chain v1 outright, so a callback is never
+            // injected and there is no fault to propagate. These cases are the legacy
+            // era's (matches attest.test.js default).
+            sinon.stub(require('../../../src/attest_response_mirror_activation.js'),
+                       'isResponseMirrorActive').returns(false);
         });
 
         const b64 = (s) => Buffer.from(s, 'utf8').toString('base64');

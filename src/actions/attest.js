@@ -14,12 +14,21 @@
  *
  * XChain Platform Action - ATTEST
  *
- * External-data attestation lifecycle with five version-discriminated phases:
+ * External-data attestation lifecycle with seven version-discriminated phases:
  *   v0: Request (VM emission only; originated by xchain.attestation.request())
  *   v1: Response (validator-broadcast PBFT bundle with signatures)
  *   v2: Expire (system-synthesized; never user-broadcast)
  *   v3: Relay request  (cross_chain-federation-broadcast, BTC only)
  *   v4: Relay response (cross_chain-federation-broadcast, origin chain only)
+ *   v5: Response BATCH head         (publisher-broadcast, DOGE only)
+ *   v6: Response BATCH continuation (publisher-broadcast, DOGE only)
+ *
+ * v5/v6 are the periodic on-chain carrier for responses that reached indexers
+ * through the hub mirror instead of on a per-response transaction. They exist so
+ * full history stays reconstructible from chain parse: a node replaying the chain
+ * rebuilds the mirror table from the batches and re-derives every callback. The
+ * wire layout, its chunking and its caps live in ../attest_batch_wire.js, which
+ * xchain-hub carries a byte-identical twin of.
  *
  * v3/v4 are the cross-chain delivery legs (spec §12, framework Phase 5). All
  * `attestation` capability stake lives on BTC, so an ATTEST emitted by an LTC or
@@ -40,6 +49,8 @@
  *   v2 - VERSION|REQUEST_ID         (synthesized only; REQUEST_ID is sufficient, handler looks up the row)
  *   v3 - VERSION|REQUEST_ID|ORIGIN_CHAIN|ORIGIN_ACTION_INDEX|PROVIDER_ID|REQUEST_PAYLOAD|REDUNDANCY|DEADLINE_BLOCKS|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...
  *   v4 - VERSION|REQUEST_ID|HOME_RESPONSE_ACTION_INDEX|RESPONSE_PAYLOAD|STATUS|META|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...
+ *   v5 - VERSION|BATCH_KEY|NETWORK|WINDOW_START|WINDOW_END|ROW_COUNT|BTC_BLOCK_HEIGHT|BATCH_CRC32|TOTAL_CHUNKS|BODY_B64
+ *   v6 - VERSION|BATCH_KEY|CHUNK_INDEX|TOTAL_CHUNKS|BATCH_CRC32|BODY_B64_CHUNK
  *
  ********************************************************************/
 
@@ -59,6 +70,10 @@ const avr     = require('../attest_response_verify.js');
 // The response-mirror flag day, keyed on the REQUEST's own block. utility.js reads
 // the same module for the applier pass's selection.
 const arm     = require('../attest_response_mirror_activation.js');
+// The v5/v6 wire: layout, chunking, caps and reassembly. Pure, and byte-twinned
+// into xchain-hub so the publisher that BUILDS a batch and this parser cannot
+// disagree about its bytes.
+const abw     = require('../attest_batch_wire.js');
 const ProviderRegistry = require('../attestation/providerRegistry.js');
 const pmsh    = require('../attestation/providerMinStakeHistory.js');
 const { rethrowIfInfraFault } = require('./faultGuard.js');
@@ -73,6 +88,13 @@ const HOME_CHAIN = 'BTC';
 // coin registry: a chain becomes relay-eligible by protocol decision, not by
 // being configured, and BTC is excluded because it needs no relay.
 const ALLOWED_ORIGIN_CHAINS = ['LTC', 'DOGE'];
+
+// The rail the periodic response batch (v5/v6) rides. DOGE, for the reason every
+// other bulk publish rail is DOGE: it is the cheap chain, and one batch per window
+// costs a transaction whether or not the window carried rows. This is a chain
+// DECISION, not a derivation from configuration, so it is written out here the way
+// ALLOWED_ORIGIN_CHAINS is. A batch on any other chain is invalid.
+const BATCH_CHAIN = 'DOGE';
 
 // Decoded-body ceiling for a mirror-applied response, the byte-twin of the hub's
 // ATTEST_RESPONSE_BODY_MAX_BYTES (xchain-hub/src/lib/attest_response_body_cap.js),
@@ -111,6 +133,10 @@ class Attest {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
+        // Hub client for the v5 batch's durable push. Absent on a hub-less node, which
+        // parses and judges batches exactly the same and simply pushes nothing.
+        this.hubClient = action.hubClient || null;
+
         // Providers are the built-in DEFAULTS (http_get, llm) overlaid with any
         // ATTESTATION.PROVIDERS block in the coin config (see providerRegistry.js).
         this.providerRegistry = new ProviderRegistry(this.config);
@@ -132,6 +158,11 @@ class Attest {
         // to how a node without relay support treats an unknown VERSION.
         this.formats[3] = 'VERSION|REQUEST_ID|ORIGIN_CHAIN|ORIGIN_ACTION_INDEX|PROVIDER_ID|REQUEST_PAYLOAD|REDUNDANCY|DEADLINE_BLOCKS|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...';
         this.formats[4] = 'VERSION|REQUEST_ID|HOME_RESPONSE_ACTION_INDEX|RESPONSE_PAYLOAD|STATUS|META|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...';
+        // The batch legs take their format strings from the wire module itself rather
+        // than restating them, so the layout has exactly one definition and the hub twin
+        // and this parser cannot drift by hand-copy.
+        this.formats[abw.ATTEST_BATCH_HEAD_VERSION]         = abw.ATTEST_BATCH_HEAD_FORMAT;
+        this.formats[abw.ATTEST_BATCH_CONTINUATION_VERSION] = abw.ATTEST_BATCH_CONTINUATION_FORMAT;
     }
 
     // Stringified request_id preimage values, in REQUEST_ID_PREIMAGE_FIELDS order.
@@ -166,6 +197,8 @@ class Attest {
         if(format === 2) return await this._parseExpire(params, data, error);
         if(format === 3) return await this._parseRelayRequest(params, data, error);
         if(format === 4) return await this._parseRelayResponse(params, data, error);
+        if(format === abw.ATTEST_BATCH_HEAD_VERSION)         return await this._parseBatchHead(params, data, error);
+        if(format === abw.ATTEST_BATCH_CONTINUATION_VERSION) return await this._parseBatchContinuation(params, data, error);
     }
 
     // ATTEST v0: Request (VM emission only)
@@ -530,6 +563,19 @@ class Attest {
             request = await this.indexerDb.getAttestationRequestById(requestId);
             if(!request){
                 error = 'invalid: REQUEST_ID (no matching request)';
+            } else if(this.isMirrorEraRequest(request)){
+                // THE FLAG-DAY GATE. At or above the response-mirror height a response
+                // reaches every indexer through the hub mirror, so an on-chain v1 for such
+                // a request is refused: without this a stale hub still running the legacy
+                // publisher would DOUBLE-DELIVER, the mirror applier and the chain handler
+                // each firing the callback and each settling the escrow.
+                //
+                // First among the request-derived branches on purpose. Every branch below
+                // also rejects, so an ordering that let one of them answer first could not
+                // admit the action, but it WOULD record a different reason for the same
+                // wire depending on the request's incidental state, and this string is
+                // consensus: it is the stored verdict a replay re-derives.
+                error = 'invalid: ATTEST v1 after mirror activation';
             } else if(request.request_status !== 'pending'){
                 error = 'invalid: REQUEST already ' + request.request_status;
             } else if(request.provider_id !== String(providerId)){
@@ -953,6 +999,212 @@ class Attest {
         }
 
         await this.mapper.createMappings(data);
+    }
+
+    // ATTEST v5: the response BATCH head.
+    //
+    // A window of finalized responses, compressed and chunked, carrying the batch quorum's
+    // signature set. It is what makes the hub mirror auditable: every terminal response body
+    // lands on chain, so a node that replays the chain rebuilds the mirror table and
+    // re-derives every callback without trusting any hub.
+    //
+    // THE DOGE SIDE VERIFIES THE BATCH QUORUM ONLY, NEVER THE PER-ROW RESPONSIBLE SET, and
+    // this is a constraint rather than a shortcut: `_computeResponsibleSet` returns [] off
+    // BTC by construction (attestation stake is BTC-only) and the stake-weighted gate tests
+    // the literal 'BTC', so a DOGE indexer cannot resolve a responsible set at all. Per-row
+    // verification therefore happens where the stake actually resolves, on the BTC indexer,
+    // through the shared verifier after the hub re-serves the row. A batch that carries a
+    // row the BTC side later rejects leaves that row unapplied and inert, exactly as a bad
+    // mirror row is.
+    //
+    // A failing batch is `invalid` identically on every node, with NO partial absorb: the
+    // one signature set covers the whole window, so dropping a row changes the signed bytes
+    // and fails every signature. A signed batch is atomic exactly as a signed round is.
+    async _parseBatchHead(params, data, error){
+
+        // DOGE-plane guard. Stored as a verdict rather than hard-returned like the relay
+        // legs, because a batch is publisher-broadcast on a known rail: one landing on
+        // BTC or LTC is a publisher fault worth a visible row, not an unknown version.
+        if(!error && String(this.config['COIN']) !== BATCH_CHAIN)
+            error = 'invalid: ATTEST v5 (batches ride the ' + BATCH_CHAIN + ' rail)';
+
+        let head = null;
+        if(!error){
+            head = abw.parseAttestBatchHead(params);
+            if(!head.ok) error = head.status;
+        }
+
+        // A batch names the network it covers, and the mirror is network-scoped, so a
+        // batch for another network must not be absorbed by this one even when both
+        // chains are reachable from one operator's stack.
+        if(!error && head.network !== String(this.config['NETWORK']))
+            error = 'invalid: NETWORK (batch declares ' + head.network + ')';
+
+        // Reassembly, then the quorum. A multi-chunk batch is absorbed only once its
+        // continuations are on chain; until then the head is a structurally sound action
+        // that has delivered nothing, which is the ANCHOR archive head's behaviour and for
+        // the same reason (a head can legitimately land before its chunks).
+        let batch = null;
+        if(!error && head.totalChunks === 1){
+            let assembled = abw.reassembleAttestBatch(head, []);
+            if(!assembled.ok) error = assembled.status;
+            else              batch = assembled.batch;
+        }
+
+        if(!error && batch){
+            let quorum = await this._verifyBatchQuorum(batch);
+            if(!quorum.ok) error = quorum.error;
+        }
+
+        data['REQUEST_ID'] = head && head.ok ? head.batchKey : '';
+        data['VERSION']    = abw.ATTEST_BATCH_HEAD_VERSION;
+        data['STATUS']     = error || 'valid';
+
+        console.log("\t ATTEST v5 : batch=" + String(data['REQUEST_ID']).substring(0,16) + '...' +
+                    (head && head.ok ? ' : window=' + head.windowStart + '-' + head.windowEnd +
+                                       ' rows=' + head.rowCount +
+                                       ' anchor=' + head.btcBlockHeight +
+                                       ' chunks=' + head.totalChunks : '') +
+                    ' : ' + data['STATUS']);
+
+        await this.indexerDb.createAttestationBatchAction(data);
+
+        // Durable transactional outbox, the `price_batch` pattern verbatim: the
+        // pending_hub_pushes row is written through the OPEN block transaction so it
+        // commits atomically with the action row and rolls back with it. The hub is what
+        // turns a parsed batch back into mirror rows every BTC indexer then verifies for
+        // itself, so this push is the chain-only rebuild road and not an optimisation.
+        if(!error && batch && this.hubClient && this.hubClient.enabled){
+            let pushGeneration = await this.indexerDb.getPushGeneration(data['COIN']);
+            let payload = this._buildBatchHubPush(batch, data, pushGeneration);
+            let pushId  = await this.indexerDb.enqueueHubPushTx('attest_batch', payload);
+            this.indexerDb.stageHubPush({ id: pushId, pushType: 'attest_batch', payload });
+        }
+
+        await this.mapper.createMappings(data);
+    }
+
+    // ATTEST v6: a batch continuation chunk.
+    //
+    // Carries one slice of the head's compressed body and nothing else: no window header,
+    // no signatures, no absorption. The head owns the verdict on the batch, so a
+    // continuation's own status only ever reports whether ITS bytes are well formed.
+    async _parseBatchContinuation(params, data, error){
+
+        if(!error && String(this.config['COIN']) !== BATCH_CHAIN)
+            error = 'invalid: ATTEST v6 (batches ride the ' + BATCH_CHAIN + ' rail)';
+
+        let chunk = null;
+        if(!error){
+            chunk = abw.parseAttestBatchContinuation(params);
+            if(!chunk.ok) error = chunk.status;
+        }
+
+        data['REQUEST_ID'] = chunk && chunk.ok ? chunk.batchKey : '';
+        data['VERSION']    = abw.ATTEST_BATCH_CONTINUATION_VERSION;
+        data['STATUS']     = error || 'valid';
+
+        console.log("\t ATTEST v6 : batch=" + String(data['REQUEST_ID']).substring(0,16) + '...' +
+                    (chunk && chunk.ok ? ' : chunk=' + chunk.chunkIndex + '/' + chunk.totalChunks : '') +
+                    ' : ' + data['STATUS']);
+
+        await this.indexerDb.createAttestationBatchAction(data);
+        await this.mapper.createMappings(data);
+    }
+
+    // The hub push payload for a valid batch. The KEY NAMES ARE THE INTERFACE and the
+    // transport validates none of them: the hub's `pushattestbatch` handler destructures
+    // exactly these, so a typo fails silently at runtime (an undefined field, a refused
+    // batch) rather than loudly at build time. A test pins this key set.
+    //
+    // `rows` and `sigs` are the reassembled body verbatim, so the hub re-verifies the same
+    // bytes this node verified rather than a re-serialization of them. `block_time` rides
+    // along for the same reason the PRICE batch carries it: batching widens the hub/chain
+    // skew, and a hub keying anything on time needs the LANDING action's own stamp.
+    //
+    // @param {Object} batch the reassembled batch body
+    // @param {Object} data the landing v5 action
+    // @param {number} pushGeneration the source-chain reorg fence
+    // @returns {Object} the pushattestbatch payload
+    _buildBatchHubPush(batch, data, pushGeneration){
+        return {
+            source_chain:     data['COIN'],
+            network:          batch.network,
+            window_start:     batch.window_start,
+            window_end:       batch.window_end,
+            row_count:        batch.row_count,
+            btc_block_height: batch.btc_block_height,
+            rows:             batch.rows,
+            sigs:             batch.sigs,
+            action_index:     data['ACTION_INDEX'],
+            block_index:      data['BLOCK_INDEX'],
+            block_time:       data['BLOCK_TIME'],
+            push_generation:  pushGeneration
+        };
+    }
+
+    // Verify the batch quorum over the batch canonical, against the `attestation`
+    // capability snapshot at the batch's signed BTC anchor.
+    //
+    // The set, the weights and the count all key on that anchor and never on this action's
+    // own height: capability_snapshots.snapshot_block is a BTC height, so a DOGE landing
+    // height matches nothing. Off BTC all three reads reach the mirrored snapshot through
+    // db.usesCapabilitySnapshot, which is why `attestation` had to join that redirect.
+    //
+    // Signer-set rule is the PRICE batch's, because both are the same trust decision on
+    // the same rail: stake-weighted (source-deduped) at and above STAKE_WEIGHTED_QUORUM,
+    // else the legacy PBFT count. A pubkey is marked seen only AFTER its signature
+    // verifies, so a garbage signature carrying a qualified validator's pubkey cannot be
+    // ordered ahead of the real one to consume its slot. This wire has no pre-flag-day
+    // history to preserve, so that rule is unconditional here rather than gated.
+    async _verifyBatchQuorum(batch){
+        let anchor    = Number(batch.btc_block_height);
+        let network   = this.config['NETWORK'];
+        let canonical = abw.buildAttestBatchCanonical(batch);
+
+        // Same truncation fallback the PRICE batch carries: getValidatorsByCapability caps
+        // at VALIDATOR_QUERY_LIMIT and hasCapability does not, so treating a TRUNCATED read
+        // as the whole set would silently drop a qualified signer and under-count.
+        let capableRows = await this.indexerDb.getValidatorsByCapability('attestation', anchor);
+        let capableSet  = (capableRows && capableRows.truncated === true)
+                        ? null
+                        : new Set((capableRows || []).map(v => String(v.pubkey).toLowerCase()));
+        let capabilityCache = new Map();
+
+        let signers = [], seen = new Set();
+        for(let s of batch.sigs){
+            let pubkey = String(s.pubkey || '').toLowerCase();
+            let sig    = String(s.sig || '').toLowerCase();
+            if(seen.has(pubkey)) continue;
+
+            let capable;
+            if(capableSet){
+                capable = capableSet.has(pubkey);
+            } else {
+                capable = capabilityCache.get(pubkey);
+                if(capable === undefined){
+                    capable = await this.indexerDb.hasCapability(pubkey, 'attestation', anchor);
+                    capabilityCache.set(pubkey, capable);
+                }
+            }
+            if(!capable) continue;
+            if(!ed25519.verify(canonical, sig, pubkey)) continue;
+
+            seen.add(pubkey);
+            signers.push(pubkey);
+        }
+
+        if(swq.isStakeWeightedQuorumActive(anchor, network)){
+            let validators = await this.indexerDb.getStakeWeightsByCapability('attestation', anchor);
+            if(!swq.meetsStakeThreshold(validators, signers))
+                return { ok: false, error: 'invalid: insufficient signer stake' };
+        } else {
+            let n = await this.indexerDb.getActiveCapabilityCount('attestation', anchor);
+            let quorum = (n <= 1) ? 1 : Math.max(2 * Math.floor((n - 1) / 3) + 1, Math.ceil((n + 1) / 2));
+            if(signers.length < quorum)
+                return { ok: false, error: 'invalid: insufficient PBFT quorum (' + signers.length + '/' + quorum + ')' };
+        }
+        return { ok: true, signers: signers };
     }
 
     // Compute the responsible validator set for a given request (same deterministic rule
@@ -1671,6 +1923,23 @@ class Attest {
     //                 reimbursement + N*share can never exceed the escrow by a ULP.
     async _broadcastFeeReimbursement(request, data, responsible, feeAmount, feeCap){
         if(!responsible || responsible.length === 0) return '0';
+
+        // RETIRED at and above the response-mirror flag day. Nobody broadcasts a
+        // mirror-era response, so there is no miner fee to reimburse and the carve-out
+        // would pay back a cost no validator ever paid. Returning '0' retires all three
+        // halves of the carve-out in one place: the caller writes no `attest_bcast` row,
+        // leaves `splitPool` as the untouched escrow, and the WHOLE escrow splits among
+        // the signers, so per-signer amounts RISE by exactly the retired carve-out for a
+        // post-activation request. Below the height nothing here is reached differently
+        // and the legacy ledger is byte-identical.
+        //
+        // Judged on the REQUEST's own block through the one era predicate, never on the
+        // settling action's: a request admitted under the legacy rules settles under them
+        // however late its response lands, which is the same plane the gate on the chain
+        // handler and the mirror applier use. The mirror applier settles through this same
+        // routine, so its fee split is retired here too rather than in a second place.
+        if(this.isMirrorEraRequest(request)) return '0';
+
         if(!attestBcastFee.isAttestBroadcastFeeActive(data['BLOCK_INDEX'], this.config['NETWORK']))
             return '0';
 
