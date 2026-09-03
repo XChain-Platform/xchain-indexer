@@ -1632,6 +1632,30 @@ class Actions {
         let chainTime = Number(blockTime);
         let refTime   = Number.isFinite(chainTime) ? chainTime : Math.floor(Date.now() / 1000);
         let prices    = await this.util.getFeeOraclePrices(this.indexerDb, coin, blockIndex, refTime, maxPriceAgeSeconds);
+        // Which database that price read came out of. Resolved exactly the way
+        // util.getFeeOraclePrices resolves it, so the disclosure cannot drift from the
+        // read it describes.
+        //
+        // This exists because the resolution is INVISIBLE from outside the process and is
+        // decided by one env var on the indexer alone. Set HUB_DB_NAME here and every price
+        // lookup moves to the hub DB; anything off-box that seeds prices (the e2e fixtures)
+        // keeps writing wherever ITS own env points, and the only symptom is every priced
+        // action failing `no current oracle price` with both databases looking healthy.
+        // Disclosing the resolved source lets a caller follow the indexer instead of
+        // modelling it.
+        //
+        // The NAME is withheld on mainnet, where this is a public read surface and an
+        // internal database name is not the client's business; the boolean is the part a
+        // client needs (single-host node vs hub-backed one) and is always disclosed.
+        let priceDb = (this.indexerDb && this.indexerDb.indexer && this.indexerDb.indexer.hubDb)
+            ? this.indexerDb.indexer.hubDb
+            : this.indexerDb;
+        let mainnet = String(this.config['NETWORK'] || '').toLowerCase() === 'mainnet';
+        let priceSource = {
+            hubDb:    !!(priceDb && priceDb !== this.indexerDb),
+            database: (!mainnet && priceDb && priceDb.dbName) ? priceDb.dbName : null
+        };
+
         let priceInfo = prices.error
             ? { available: false, error: prices.error }
             : {
@@ -1655,7 +1679,9 @@ class Actions {
             // The instant the price read above was judged against, so a client can tell a stale
             // feed from an indexer whose tip is behind.
             blockTime:          blockTime,
-            prices:             priceInfo
+            prices:             priceInfo,
+            // See above: where price_snapshots / oracle_prices were actually read from.
+            priceSource:        priceSource
         };
     }
 
