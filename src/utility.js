@@ -24,6 +24,10 @@ const protocolChanges = require('./protocol_changes.js');
 const crypto = require('crypto');
 const mathjs = require('mathjs');
 const fs     = require('fs');
+// The ATTEST response-mirror flag day, read from the LOCAL v0 request row. Same
+// module attest.js's isMirrorEraRequest seam reads, so the applier pass and the
+// handler can never disagree about which era a request is in.
+const attestResponseMirror = require('./attest_response_mirror_activation.js');
 
 // Address encoding constants and per-coin network parameters
 // Base58 version bytes and bech32 HRPs mirror the network definitions used by
@@ -2174,6 +2178,134 @@ class Utility {
             data['IS_SYNTHETIC'] = true;
             // Mirror the synthetic-action positional layout: VERSION|REQUEST_ID
             await actions.processAction('ATTEST', [2, info.request_id], data, null);
+        }
+    }
+
+    // §4.1 of the ATTEST response-mirror design, as a pure function: which mirrored
+    // responses BIND at block B, and in what order.
+    //
+    // It is a function rather than SQL because the mirror may be a separate database
+    // connection (db.getMirroredAttestationResponses), so the two halves of the join
+    // cannot meet in one statement, and because this predicate is the consensus rule
+    // the whole design rests on: every node must fire a contract callback at the SAME
+    // block, and the block is
+    //
+    //     R binds at B  <=>  R.effective_time <= t(B)
+    //                        and B <= request.deadline_block
+    //                        and the LOCAL v0 row for R.request_id is 'pending'
+    //                        and that row is mirror-era (activation height)
+    //
+    // and nothing else. There is deliberately no grace term: a grace is a node-local
+    // WAIT (the barrier in XChainIndexer/hub_db_sync), never a term in a hashed
+    // predicate, or a node that waited longer would bind at a different block.
+    // `blockTime` is PROTOCOL time (MTP off mainnet), which every node derives
+    // identically from the chain, and effective_time is inside the SIGNED canonical,
+    // so both sides of the comparison are chain- or signature-derived.
+    //
+    // A row whose first satisfying block is past the deadline never binds (the
+    // `B <= deadline_block` clause), the expiry sweep flips the request to 'expired'
+    // at deadline+1, and the expired callback stands (AT3). A row satisfied exactly AT
+    // the deadline block binds: the sweep's own predicate is deadline_block < B.
+    //
+    // ORDER is the local request row's (block_index, action_index), never the mirror
+    // row's informational copies of them and never a CHAR(64) request_id collation.
+    // Insertion order of the mirror rows is discarded here.
+    selectApplicableAttestationResponses(mirrorRows, requestRows, blockIndex, blockTime, network){
+        let block = Number(blockIndex);
+        let time  = Number(blockTime);
+        // Local request rows, keyed for lookup. Filtered to the ones a mirror row may
+        // bind to at all, which is the same set the SQL bound selects; re-stated here
+        // because THIS is the copy of the rule that is tested and falsified.
+        let byId = new Map();
+        for(let req of (requestRows || [])){
+            if(String(req.request_status) !== 'pending')                    continue;
+            if(!(block <= Number(req.deadline_block)))                      continue;
+            // The flag day is keyed on the REQUEST's own block (§7.1), read from the
+            // local row. attest.js's isMirrorEraRequest is the same module: the applier
+            // re-checks it as its own gate, and row 18's chain-side gate calls it too.
+            if(!attestResponseMirror.isResponseMirrorActive(req.block_index, network)) continue;
+            byId.set(String(req.request_id).toLowerCase(), req);
+        }
+        if(byId.size === 0) return [];
+
+        // One response per request. The mirror's UNIQUE (network, request_id) makes a
+        // second row impossible today, so this is the defence against a double-finalize
+        // consensus should never produce: the smaller effective_time binds, ties broken
+        // by response_hash, both signed fields, so every node picks the same one and the
+        // other is skipped rather than applied second.
+        let chosen = new Map();
+        for(let row of (mirrorRows || [])){
+            let id = String(row.request_id || '').toLowerCase();
+            if(!byId.has(id))                          continue;
+            if(!(Number(row.effective_time) <= time))  continue;
+            let prior = chosen.get(id);
+            if(prior){
+                let a = Number(row.effective_time), b = Number(prior.effective_time);
+                let better = (a < b) || (a === b &&
+                    String(row.response_hash || '') < String(prior.response_hash || ''));
+                if(!better) continue;
+            }
+            chosen.set(id, row);
+        }
+        if(chosen.size === 0) return [];
+
+        let out = [];
+        for(let [id, row] of chosen)
+            out.push({ response: row, request: byId.get(id) });
+        out.sort((x, y) => {
+            let bx = Number(x.request.block_index),  by = Number(y.request.block_index);
+            if(bx !== by) return bx - by;
+            let ax = Number(x.request.action_index), ay = Number(y.request.action_index);
+            return ax - ay;
+        });
+        return out;
+    }
+
+    // Per-block hub-mirror ATTEST response applier pass (the response-mirror design
+    // §4.1/§4.4). Runs at a PINNED pipeline position (immediately after
+    // processCrossChainCalls, before processAttestationExpirations) because the VM's
+    // attestation snapshot is inclusive of the current block: with this position no
+    // EXECUTE inside B sees a response bound at B and every EXECUTE in B+1 does, on
+    // every node. BTC-only, gated by the caller exactly as the barrier is.
+    //
+    // Synthesizes one ATTEST v1 action per binding row, the way the expiry sweep above
+    // synthesizes a v2. The handler verifies the row through the shared verifier and,
+    // only on success, mints the action and runs the v1 effects; a row that fails is
+    // inert, so a synthesized-and-skipped row writes nothing.
+    async processAttestationResponses(actions, db, block_index, block_time){
+        // Local side first: with nothing pending there is nothing a mirror row can bind
+        // to, which is the common case and costs one indexed read.
+        let requests = await db.getAttestationRequestsAwaitingMirrorResponse(block_index);
+        if(requests.length === 0) return;
+        let network  = db.config['NETWORK'];
+        let ids      = requests.map(r => String(r.request_id || '').toLowerCase());
+        let mirrored = await db.getMirroredAttestationResponses(network, ids, block_time);
+        if(mirrored.length === 0) return;
+        let applicable = this.selectApplicableAttestationResponses(mirrored, requests, block_index, block_time, network);
+        for(let item of applicable){
+            let data = {};
+            data['ACTION']       = 'ATTEST';
+            data['FORMAT']       = 1;
+            data['BLOCK_INDEX']  = block_index;
+            // Load-bearing, not decoration: _settleRequestFee reaches the broadcast-fee
+            // reimbursement, which reads BLOCK_TIME for its fee-oracle lookup, and the
+            // injected callback context carries it too.
+            data['BLOCK_TIME']   = block_time;
+            // No transaction is behind a mirror-applied response. That is the entire
+            // point of the design, and it is what AT1 asserts on the resulting action.
+            data['TX_INDEX']     = null;
+            data['TX_VOUT']      = null;
+            data['IS_SYNTHETIC'] = true;
+            // The mirror row plus the LOCAL request row it binds to. Passing the pair is
+            // what keeps the handler from re-reading (and re-ordering) state the binding
+            // rule already decided.
+            data['MIRROR_RESPONSE'] = item.response;
+            data['MIRROR_REQUEST']  = item.request;
+            data['REQUEST_ID']      = item.response.request_id;
+            // Mirror the synthetic-action positional layout: VERSION|REQUEST_ID. The
+            // handler reads the row, not these params; they exist so the action looks
+            // like every other synthesized one.
+            await actions.processAction('ATTEST', [1, item.response.request_id], data, null);
         }
     }
 

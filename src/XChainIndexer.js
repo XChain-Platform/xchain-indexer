@@ -1507,6 +1507,29 @@ class XChainIndexer {
                         // utility.processCrossChainCalls)
                         await this.util.processCrossChainCalls(this.actions, this.indexerDb, blockToParse, blockTime);
 
+                        // Apply any hub-mirrored ATTEST response whose SIGNED effective_time
+                        // this block's protocol time has reached: verify it through the shared
+                        // response verifier, synthesize the v1 action, fire the contract
+                        // callback and settle the request fee (see
+                        // utility.processAttestationResponses).
+                        //
+                        // THE POSITION IS PINNED AND IS NOT A STYLE CHOICE. The VM's
+                        // attestation snapshot is INCLUSIVE of the current block
+                        // (db.getAttestationDataForVM), so a response applied before this
+                        // block's transaction loop would be visible to an EXECUTE inside the
+                        // same block on a node that had the mirror row and invisible on one
+                        // that got it a second later. Here, after the transaction loop and
+                        // before the deadline-expiry sweep, no EXECUTE in B sees a response
+                        // bound at B and every EXECUTE in B+1 does, on every node. Running it
+                        // before the sweep is what makes a response satisfied exactly AT the
+                        // deadline block apply rather than lose to the expiry.
+                        //
+                        // BTC-only, matching the barrier above and for the same reason: all
+                        // attestation capability stake, and therefore every responsible set,
+                        // lives on BTC. Inert below the activation height.
+                        if(this.config['COIN'] === 'BTC')
+                            await this.util.processAttestationResponses(this.actions, this.indexerDb, blockToParse, blockTime);
+
                         // Derive matured anchor/archive publisher rewards from the
                         // hub-mirrored anchor_reward_attestations rows (re-verifying the XANCPUB
                         // quorum against this node's own oracle_publish set, AND re-proving the DOGE

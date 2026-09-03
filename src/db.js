@@ -15675,6 +15675,77 @@ class Database {
         return await this.doQuery(query, [blockIndex, limit]);
     }
 
+    // ATTEST v0 (request) rows that a hub-mirrored response could still bind to at
+    // `blockIndex`: pending, and not past their deadline. This is the LOCAL half of
+    // the mirror applier's applicability read (the response-mirror design §4.1); the
+    // mirror half is getMirroredAttestationResponses below and the predicate that
+    // joins them is utility.selectApplicableAttestationResponses.
+    //
+    // THE SCAN IS DRIVEN FROM THIS SIDE ON PURPOSE. The mirror table grows without
+    // bound and its rows carry hub-authored columns; scanning it by
+    // request_block_index (its natural window) would make the set of rows an indexer
+    // even CONSIDERS depend on a field no signature covers, so two indexers following
+    // two hubs could consider different sets. Every column read here is local chain
+    // state, and a request leaves this set the moment it resolves or its deadline
+    // passes, which is what bounds the scan without a hub-supplied bound.
+    //
+    // `deadline_block >= ?` is the applier's half of §4.1's `B <= deadline_block`: a
+    // row whose first satisfying block is past the deadline is never selected here,
+    // the expiry sweep (deadline_block < B, one step later in the same block) flips
+    // the request to 'expired', and the expired callback stands (AT3). The predicate
+    // is re-stated in the selector, which is where it is tested; this bound only
+    // keeps the read from returning rows the selector must then discard.
+    //
+    // ORDER BY (block_index, action_index) is the §4.1 applier order, read from the
+    // LOCAL request rows and never from the mirror row or from a request_id
+    // collation, so every node applies a block's responses in one order.
+    async getAttestationRequestsAwaitingMirrorResponse(blockIndex){
+        let query = `SELECT ar.*, ia.address AS fee_payer
+                     FROM attests ar
+                     LEFT JOIN index_addresses ia ON ia.id = ar.fee_payer_id
+                     WHERE ar.version = 0
+                       AND ar.request_status = 'pending'
+                       AND ar.deadline_block >= ?
+                     ORDER BY ar.block_index ASC, ar.action_index ASC`;
+        return await this.doQuery(query, [Number(blockIndex)]);
+    }
+
+    // The hub-mirrored finalized responses for a given set of request ids whose SIGNED
+    // effective_time has been reached at `blockTime`. The mirror half of the applier's
+    // applicability read (§4.1).
+    //
+    // Read through _mirrorDb(), which is a SEPARATE connection whenever the indexer
+    // follows a remote hub DB, so this cannot be one SQL join against local `attests`
+    // (the cross_chain_calls readers above have the same split for the same reason).
+    //
+    // Only network and effective_time filter here, and both are safe to filter on:
+    // network scopes the mirror itself, and effective_time is INSIDE the signed
+    // canonical, so no hub can move a row's applying block by editing it without
+    // breaking every signature on it. The informational request_block_index /
+    // request_action_index columns are deliberately not read.
+    //
+    // Chunked because the id list is caller-sized; the chunks are re-joined by the
+    // caller's own deterministic order, so chunk boundaries cannot be observed.
+    async getMirroredAttestationResponses(network, requestIds, blockTime){
+        let ids = (requestIds || []).map(id => String(id || '').toLowerCase()).filter(id => id.length > 0);
+        if(ids.length === 0) return [];
+        let mirror = this._mirrorDb();
+        let out    = [];
+        const CHUNK = 500;
+        for(let i = 0; i < ids.length; i += CHUNK){
+            let chunk        = ids.slice(i, i + CHUNK);
+            let placeholders = chunk.map(() => '?').join(',');
+            let rows = await mirror.doQuery(
+                `SELECT request_id, provider_id, status, response_payload, response_hash, meta,
+                        effective_time, signer_pubkeys, signatures, widen
+                 FROM attestation_responses
+                 WHERE network = ? AND effective_time <= ? AND request_id IN (${placeholders})`,
+                [String(network || ''), Number(blockTime)].concat(chunk));
+            for(let row of rows) out.push(row);
+        }
+        return out;
+    }
+
     // Set callback_execute_action_index on an ATTEST v1 (response) row (after the system EXECUTE is injected)
     async setAttestationResponseCallbackIndex(responseActionIndex, callbackExecuteActionIndex){
         let query = `UPDATE attests

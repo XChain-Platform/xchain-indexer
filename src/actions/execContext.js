@@ -48,6 +48,14 @@ const SYNTH_EXEC_TX_HASH = 'SYNTH_EXEC_TX_HASH';
 // 'XCALLCB' predates this module and MUST stay byte-identical (live consensus).
 const SYNTH_TAGS = {
     ATTEST_EXPIRE_CALLBACK: 'ATTESTEXPCB',
+    // The hub-mirror-applied ATTEST v1 response. It has no transaction of its own
+    // (that is the whole point of the mirror), so both the synthesized v1 action's
+    // TX_HASH and the callback EXECUTE it injects derive from this tag. A tag
+    // distinct from ATTESTEXPCB is load-bearing: one request can only ever take one
+    // of the two paths, but the ids a callback derives must not depend on which,
+    // and a shared tag would make an expiry and a mirror apply for the same
+    // request_id collide on identical ids.
+    ATTEST_MIRROR_RESPONSE: 'ATTESTMIRROR',
     VOTE_CALLBACK:          'VOTECB',
     XCALL_CALLBACK:         'XCALLCB',
 };

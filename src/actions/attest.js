@@ -56,10 +56,13 @@ const srb     = require('../snapshot_reorg_buffer.js');
 // The ONE response verifier: this chain path and the hub-mirror applier call the
 // same module, so an artifact cannot be judged differently by delivery route.
 const avr     = require('../attest_response_verify.js');
+// The response-mirror flag day, keyed on the REQUEST's own block. utility.js reads
+// the same module for the applier pass's selection.
+const arm     = require('../attest_response_mirror_activation.js');
 const ProviderRegistry = require('../attestation/providerRegistry.js');
 const pmsh    = require('../attestation/providerMinStakeHistory.js');
 const { rethrowIfInfraFault } = require('./faultGuard.js');
-const { buildInjectedExecContext, SYNTH_EXEC_TX_HASH, SYNTH_TAGS } = require('./execContext.js');
+const { buildInjectedExecContext, synthesizeTxHash, SYNTH_EXEC_TX_HASH, SYNTH_TAGS } = require('./execContext.js');
 
 // The chain every `attestation` capability stake lives on, and therefore the only
 // chain whose heights can key a responsible set. Relay requests are materialized
@@ -70,6 +73,22 @@ const HOME_CHAIN = 'BTC';
 // coin registry: a chain becomes relay-eligible by protocol decision, not by
 // being configured, and BTC is excluded because it needs no relay.
 const ALLOWED_ORIGIN_CHAINS = ['LTC', 'DOGE'];
+
+// Decoded-body ceiling for a mirror-applied response, the byte-twin of the hub's
+// ATTEST_RESPONSE_BODY_MAX_BYTES (xchain-hub/src/lib/attest_response_body_cap.js),
+// which the leader enforces before proposing and every follower before signing.
+// The applier re-checks it so a DISHONEST quorum cannot push through a body the
+// periodic on-chain batch could never carry: v3/v4 relay legs stay on chain at the
+// encoder's 8189-byte wire ceiling, so a larger body would finalize and then be
+// un-relayable and un-reconstructible. Skipping such a row is deterministic (same
+// row, same arithmetic on every node), so it is inert rather than a fork.
+const ATTEST_RESPONSE_BODY_MAX_BYTES = 8189;
+
+// Terminal response vocabulary the mirror carries. In practice the hub emits only
+// 'ok' ('expired' is an INDEXER verdict from the local deadline sweep, which needs no
+// mirror row), but the column keeps the wider vocabulary so an 'expired' producer
+// could be added without a schema change, and the applier handles both.
+const MIRROR_TERMINAL_STATUSES = ['ok', 'expired'];
 
 // request_id preimage fields, in preimage order. This list is the single in-file
 // source of truth for the ORDER and the COUNT, so a skew against the VM's
@@ -134,6 +153,15 @@ class Attest {
             error = 'invalid: VERSION (unknown)';
 
         if(format === 0) return await this._parseRequest(params, data, error);
+        // A hub-mirror-applied response is a v1 too: same version, same row shape, same
+        // effects, no transaction. It is dispatched apart from the chain path because
+        // there is no wire to parse (the artifact arrives as a mirrored row, already
+        // structured) and because the two must stay distinguishable: the chain path
+        // rejects an on-chain v1 for a mirror-era request, and that gate must not fire
+        // on the applier's own synthesized action. The marker is set only by
+        // utility.processAttestationResponses.
+        if(format === 1 && data['IS_SYNTHETIC'] && data['MIRROR_RESPONSE'])
+            return await this._applyMirroredResponse(data);
         if(format === 1) return await this._parseResponse(params, data, error);
         if(format === 2) return await this._parseExpire(params, data, error);
         if(format === 3) return await this._parseRelayRequest(params, data, error);
@@ -644,6 +672,205 @@ class Attest {
                     console.warn('Attestation callback injection failed:', e);
                 }
             }
+        }
+
+        await this.mapper.createMappings(data);
+    }
+
+    // Is this request's response served by the hub mirror rather than by an on-chain
+    // ATTEST v1? Keyed on the REQUEST's own block (§7.1), read from the LOCAL v0 row
+    // and never from anything a hub states.
+    //
+    // NAMED SEAM, three callers by design: this file's mirror applier (its own gate),
+    // the chain-handler gate that makes an on-chain v1 for such a request `invalid`,
+    // and the broadcast-fee retirement above the height. All three must agree about
+    // which era a request is in, and the only way to guarantee that is one predicate.
+    // For a relayed request the local row IS the BTC v3 materialization, so
+    // request.block_index is already the BTC block the flag day keys on.
+    isMirrorEraRequest(request){
+        if(!request) return false;
+        return arm.isResponseMirrorActive(request.block_index, this.config['NETWORK']);
+    }
+
+    // THE MIRROR APPLIER (response-mirror design §4.1/§4.4). Applies one finalized
+    // response that arrived through the hub mirror instead of on a validator-paid
+    // transaction, at the block the binding rule picked
+    // (utility.selectApplicableAttestationResponses, which is where the rule lives).
+    //
+    // The effects are the v1 chain handler's effects, MINUS A TRANSACTION: the response
+    // row, the request's terminal flip, the fee settle and the contract callback are
+    // written exactly as _parseResponse writes them, hung off a system-synthesized
+    // ATTEST v1 action with NULL TX_INDEX/TX_VOUT and a deterministic TX_HASH. That is
+    // what keeps everything downstream (rollback by action_index, `stream:action`
+    // replication, the VM snapshot, the state hash, the relay's response leg) working
+    // on a row it cannot distinguish from a chain-delivered one.
+    //
+    // AN UNVERIFIABLE ROW IS INERT, NOT INVALID. The chain path records a rejected v1
+    // as an audit row because a transaction was paid for and every node saw it; nothing
+    // was paid for here and a bad row must leave no trace, so this returns having
+    // written NOTHING, not even an action index, and above all never marks the request.
+    // Every skip reason is a deterministic function of the row and of local state, so
+    // every node skips the same row for the same reason; a skip is logged once, and the
+    // row stays in the mirror for audit and for the on-chain batch.
+    async _applyMirroredResponse(data){
+        let row       = data['MIRROR_RESPONSE'];
+        let request   = data['MIRROR_REQUEST'];
+        let requestId = String((row && row.request_id) || '').toLowerCase();
+        let skip = (why) => {
+            console.log("\t ATTEST mirror : id=" + requestId.substring(0,16) + '...' +
+                        ' : block=' + data['BLOCK_INDEX'] + ' : SKIPPED (' + why + ')');
+        };
+
+        // Re-gates rather than trusting the pass that selected this row: the selection
+        // and the apply are separated by a synthesized action, and a guard that only
+        // exists in the selector is one refactor away from being the only guard.
+        if(!request || String(request.request_status) !== 'pending')
+            return skip('local request not pending');
+        if(!this.isMirrorEraRequest(request))
+            return skip('request is legacy-era, response must arrive on chain');
+        if(String(request.provider_id) !== String(row.provider_id))
+            return skip('provider_id does not match the request');
+        if(MIRROR_TERMINAL_STATUSES.indexOf(String(row.status)) === -1)
+            return skip('non-terminal status ' + row.status);
+
+        // Signature list, format-checked and lower-cased exactly as the wire parser does
+        // it, because the shared verifier's contract is that its caller has already done
+        // so. Deliberately NOT deduped here: the verifier dedupes before verifying, and
+        // one implementation of that rule is the point of the module.
+        let declared = null;
+        try { declared = JSON.parse(String(row.signatures == null ? '' : row.signatures)); }
+        catch(_){ declared = null; }
+        if(!Array.isArray(declared) || declared.length === 0)
+            return skip('signatures column is not a non-empty JSON array');
+        let sigs = [];
+        for(let s of declared){
+            let pubkey = String((s && s.pubkey) || '').toLowerCase();
+            let sig    = String((s && s.sig) || '').toLowerCase();
+            if(!/^[0-9a-f]{64}$/.test(pubkey) || !/^[0-9a-f]{128}$/.test(sig))
+                return skip('signature entry format');
+            sigs.push({ pubkey, sig });
+        }
+
+        // The body as bytes. The mirror stores the DECODE of the attested bytes (as
+        // `attests.response_payload` does), so re-encoding is the only bytes available
+        // here; a body that is not UTF-8 round-trippable cannot reproduce the hash the
+        // canonical signs, and the echo check below is what makes that a clean skip
+        // instead of an opaque signature failure.
+        let responseBodyBytes = Buffer.from(String(row.response_payload == null ? '' : row.response_payload), 'utf8');
+        if(responseBodyBytes.length > ATTEST_RESPONSE_BODY_MAX_BYTES)
+            return skip('body ' + responseBodyBytes.length + ' bytes over the ' + ATTEST_RESPONSE_BODY_MAX_BYTES + '-byte cap');
+        let echoHash = crypto.createHash('sha256').update(responseBodyBytes).digest('hex');
+        if(echoHash !== String(row.response_hash || '').toLowerCase())
+            return skip('response_hash does not match the stored body');
+
+        // ONE verifier for both delivery routes (§4.3). Nothing about the height the
+        // signatures are checked at is reachable from here: the module buries the LOCAL
+        // request row's own block itself. `atBlock`/`gateBlock` are the APPLYING block,
+        // which is this synthesized action's own block, so the widening ladder and the
+        // lower-case-id gate are evaluated exactly where the chain path evaluates them
+        // (D57). requestIdRaw equals requestId because a mirror row's id is lower-case
+        // hex by construction: there is no wire case to preserve.
+        //
+        // effectiveTime is passed for the MIRROR-ERA CANONICAL, which appends the signed
+        // effective_time. The shared module still hard-codes `effectiveTime: null` (its
+        // own comment names wiring this through as this row's work, and that file is
+        // outside this row's edit scope), so today it builds the LEGACY canonical and a
+        // real hub-signed mirror row will not verify until that one field is threaded.
+        // Passing it here means the applier side needs no further change when it is.
+        let verdict = await avr.verifyAttestationResponse({
+            request,
+            sigs,
+            requestId,
+            requestIdRaw:    requestId,
+            providerId:      row.provider_id,
+            responseStatus:  row.status,
+            meta:            row.meta,
+            responseBodyBytes,
+            effectiveTime:   Number(row.effective_time),
+            atBlock:         data['BLOCK_INDEX'],
+            gateBlock:       data['BLOCK_INDEX'],
+            error:           null,
+            coin:            this.config['COIN'],
+            network:         this.config['NETWORK'],
+            indexerDb:       this.indexerDb,
+            protocolChanges: this.actions.protocolChanges,
+            computeResponsibleSet: this._computeResponsibleSet.bind(this),
+        });
+        if(verdict.error)
+            return skip(verdict.error);
+
+        // Verified. Only now does the row get an action: minting first would leave a
+        // gap in the action sequence for a row that wrote nothing.
+        data['ACTION_INDEX'] = await this.indexerDb.createActionIndex({
+            ACTION:      'ATTEST',
+            BLOCK_INDEX: data['BLOCK_INDEX'],
+            FORMAT:      1
+        }, true);
+        // Deterministic synthetic TX_HASH: sha256('ATTESTMIRROR:<network>:<chain>:<request_id>')
+        // (execContext.synthesizeTxHash). Namespaced by request_id, which is unique per
+        // request and derived from chain data, so every node derives the same hash and
+        // anything the callback emits (ATTEST/XCALL/emit.execute) gets ids that resolve.
+        data['TX_HASH'] = synthesizeTxHash(
+            SYNTH_TAGS.ATTEST_MIRROR_RESPONSE, this.config['NETWORK'], this.config['CHAIN'], requestId);
+
+        data['REQUEST_ID']       = requestId;
+        data['PROVIDER_ID']      = row.provider_id;
+        data['RESPONSE_PAYLOAD'] = String(row.response_payload == null ? '' : row.response_payload);
+        data['RESPONSE_STATUS']  = String(row.status);
+        data['META']             = row.meta;
+        data['RESPONSE_HASH']    = verdict.responseHash;
+        data['VALID_SIGS']       = verdict.validSigs;
+        data['STATUS']           = 'valid';
+        // Same inlined JSON the chain path stores, so a mirror-fed node's row and a
+        // chain-fed node's row are byte-identical (AT2 asserts exactly that).
+        data['VALIDATOR_SIGNATURES'] = verdict.verifiedSigs.length
+            ? JSON.stringify(verdict.verifiedSigs.map(s => ({ pubkey: s.pubkey, sig: s.sig })))
+            : null;
+
+        console.log("\t ATTEST mirror : id=" + requestId.substring(0,16) + '...' +
+                    ' : status=' + data['RESPONSE_STATUS'] +
+                    ' : sigs=' + verdict.validSigs + '/' + request.redundancy +
+                    ' : effective=' + row.effective_time +
+                    ' : block=' + data['BLOCK_INDEX'] + ' (no transaction)');
+
+        await this.indexerDb.createAttestationResponse(data);
+
+        if(String(data['RESPONSE_STATUS']) === 'ok'){
+            for(let s of verdict.verifiedSigs){
+                await this.indexerDb.incrementAttestationValidatorStat(
+                    s.pubkey, String(row.provider_id), 'fulfilled_count', data['BLOCK_INDEX']
+                );
+            }
+        }
+
+        // Terminal by construction: the mirror carries no retryable status, so there is
+        // no leave-the-request-pending branch here (the chain path's RETRYABLE_STATUSES).
+        let newRequestStatus = (String(data['RESPONSE_STATUS']) === 'ok') ? 'fulfilled' : 'errored';
+        await this.indexerDb.updateAttestationRequestStatus(requestId, newRequestStatus, data['BLOCK_INDEX']);
+
+        // Fee disposition at THIS synthesized action's index, so a reorg of the applying
+        // block removes the settle rows generically while the v0 escrow survives.
+        await this._settleRequestFee(request, data, newRequestStatus);
+
+        // A relay-materialized request's contract lives on the origin chain; the response
+        // goes back as a v4 and the callback fires there (the same guard the chain path
+        // has, for the same reason).
+        if(this._isForeignOrigin(request)){
+            console.log("\t ATTEST mirror : id=" + requestId.substring(0,16) + '...' +
+                        ' : origin=' + request.origin_chain + ', callback deferred to the relay leg');
+            await this.mapper.createMappings(data);
+            return;
+        }
+
+        try {
+            let callbackActionIndex = await this._injectCallbackExecute(request, data);
+            if(callbackActionIndex)
+                await this.indexerDb.setAttestationResponseCallbackIndex(data['ACTION_INDEX'], callbackActionIndex);
+        } catch(e){
+            // Infra faults halt the block rather than commit a locally-dropped callback
+            // that forks contract_hash against healthy peers (faultGuard.js).
+            rethrowIfInfraFault(e);
+            console.warn('Mirror-applied attestation callback injection failed:', e);
         }
 
         await this.mapper.createMappings(data);

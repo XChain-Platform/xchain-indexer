@@ -275,6 +275,7 @@ describe('execContext (injected-execution TX_HASH seam) @regression @tier2', fun
             assert.strictEqual(SYNTH_EXEC_TX_HASH, 'SYNTH_EXEC_TX_HASH');
             assert.deepStrictEqual(SYNTH_TAGS, {
                 ATTEST_EXPIRE_CALLBACK: 'ATTESTEXPCB',
+                ATTEST_MIRROR_RESPONSE: 'ATTESTMIRROR',
                 VOTE_CALLBACK:          'VOTECB',
                 XCALL_CALLBACK:         'XCALLCB',
             });
