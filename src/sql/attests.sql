@@ -58,6 +58,7 @@ CREATE TABLE attests (
     meta                          VARCHAR(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,                    -- opaque provider-defined metadata (e.g. http status, model id)
     validator_signatures          MEDIUMTEXT,                      -- JSON array of verified federation sigs: [{"pubkey","sig"}, ...]
     callback_execute_action_index BIGINT UNSIGNED,                 -- action_index of the system-injected EXECUTE that fired the callback
+    batch_action_index            BIGINT UNSIGNED,                 -- ATTEST v5/v6 batch that carried this response's body on chain; NULL until that batch lands, and NULL forever for a legacy-era response that was itself an on-chain v1
     -- common fields
     status_id                     BIGINT UNSIGNED,                 -- FK to index_statuses (action validation status)
     block_index                   BIGINT UNSIGNED NOT NULL

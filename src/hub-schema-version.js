@@ -46,6 +46,16 @@
 // stream without the column leaves it deriving a COLLECT-spendable reward it cannot
 // bind to any landed anchor. A v3 indexer must reject the v4 stream until it has
 // applied the 2026-08-13-anchor-reward-attestations-doge-anchor-txid migration.
-const HUB_SCHEMA_VERSION = 4;
+//
+// v5: the mirror set gained attestation_responses (HUB_STATE_TABLES in
+// hub_db_sync.js). It carries a finalized ATTEST response, signed by the
+// responsible set over the mirror-era canonical, so the response no longer
+// needs a validator-paid on-chain ATTEST v1 transaction and its Bitcoin fee
+// (the ATTEST response-mirror design). A v4 indexer does not
+// merely miss rows here: without the table it never learns that a response
+// finalized at all, so the request it is waiting on times out instead of
+// resolving. A v4 indexer must reject the v5 stream until it has applied the
+// 2026-09-03-attestation-responses migration.
+const HUB_SCHEMA_VERSION = 5;
 
 module.exports = { HUB_SCHEMA_VERSION };

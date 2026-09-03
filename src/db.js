@@ -15683,6 +15683,27 @@ class Database {
         await this.doQuery(query, [callbackExecuteActionIndex, responseActionIndex]);
     }
 
+    // Stamp the ATTEST v5/v6 batch that carried a mirror-applied response's body onto
+    // the chain, keyed on the REQUEST id rather than on an action_index.
+    //
+    // The request id is the only identifier the two sides share. The batch is parsed on
+    // the DOGE indexer and names the responses it carries by request_id; the v1 row it
+    // links to was minted locally on the BTC indexer at whatever block the mirror row
+    // became applicable, so its action_index means nothing to the publisher and cannot
+    // be on the wire. Scoped to version = 1 because a request also has a v0 row and the
+    // batch describes the response, not the request.
+    //
+    // Idempotent and unordered: a re-delivered or replayed batch restamps the same
+    // value, and a batch that lands before the mirror row was applied simply matches no
+    // row yet. That is why the column is nullable and why the coverage watermark, not
+    // this write, is what proves a window reached the chain.
+    async setAttestationResponseBatchIndex(requestId, batchActionIndex){
+        let query = `UPDATE attests
+                     SET batch_action_index = ?
+                     WHERE request_id = ? AND version = 1`;
+        await this.doQuery(query, [batchActionIndex, String(requestId || '').toLowerCase()]);
+    }
+
     // Resolve an equivocating DELEGATED signing key to the stake source that backs it.
     //
     // A delegated key signs on behalf of a staker but owns no stake itself: the
