@@ -36,6 +36,7 @@ const { decoderQuery, indexerQuery, createDatabases, createDecoderSchema,
 const DecoderSeeder = require('../setup/decoder-seeder');
 const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
 const eq = require('../../../src/equivocation_header.js');
+const srb = require('../../../src/snapshot_reorg_buffer.js');
 
 // The regtest gas funder (configs/BTC.js ADDRESS.GAS) holds the full bootstrap supply,
 // so it can fund a >MIN_STAKE bond (the per-address seedGas MINT caps at 1000).
@@ -43,9 +44,16 @@ const FUNDER = 'mgash6jYSKAR3Q5HPpDgNX2BYr18q9N6GQ';
 const A1     = 'mq7tVfobimRUPxPNnyd5mKn11SVmTiLxtu';
 const T = 1700000000;
 
-const STAKE_BLOCK = 100;
-const SNAP        = 106;     // STAKE_BLOCK + BTC activation delay (6); the bond is active here
-const SLASH_BLOCK = 110;
+const STAKE_BLOCK  = 100;
+const ACTIVE_BLOCK = 106;    // STAKE_BLOCK + BTC activation delay (6); the bond is active here
+// The RAW snapshot_block the proof declares. A verifier resolves the set at
+// buriedSnapshotBlock(SNAP) = SNAP - CANONICAL_REORG_BUFFER, which is where the hub that
+// locked the slot resolved its own signer set, so the declared height a real proof carries
+// sits a buffer ABOVE the height the bond has to be active at. Pinning SNAP to
+// ACTIVE_BLOCK describes a slot no hub could have locked this staker into: buried, it
+// lands on block 100, where the stake is still pending.
+const SNAP        = ACTIVE_BLOCK + srb.CANONICAL_REORG_BUFFER;   // 112
+const SLASH_BLOCK = 115;
 const STAKE_AMT   = '6000';  // > cross_chain MIN_STAKE (5000)
 
 function genKey() {
@@ -138,8 +146,11 @@ describe('Integration: live SLASH equivocation drill + determinism @regression @
 
     after(async function () { await destroyFileIndexers(__filename); await closeAll(); });
 
-    it('the offender qualified for cross_chain before the slash (sanity)', async function () {
+    it('the offender qualified for cross_chain at the RESOLVED snapshot height before the slash (sanity)', async function () {
         // A fresh-DB pre-slash check: stake without the slash block, confirm membership.
+        // Queried at buriedSnapshotBlock(SNAP), the height the verifier actually resolves
+        // the proof's set at, so this sanity check and the SLASH path read one set. Asserting
+        // membership at the RAW declared height would pass while the SLASH path rejects.
         await resetDecoderDb();
         await resetIndexerDb();
         const seeder = new DecoderSeeder(decoderQuery);
@@ -148,9 +159,12 @@ describe('Integration: live SLASH equivocation drill + determinism @regression @
         const indexer = await initIndexer();
         try {
             await processBlocks(indexer);
-            const v = await indexer.indexerDb.getValidatorsByCapability('cross_chain', SNAP);
+            const resolved = srb.buriedSnapshotBlock(SNAP, 'regtest');
+            assert.strictEqual(resolved, ACTIVE_BLOCK,
+                'the fixture must bury onto the activation block, or it is not testing the slot a hub could lock');
+            const v = await indexer.indexerDb.getValidatorsByCapability('cross_chain', resolved);
             assert.ok(v.some(x => String(x.pubkey).toLowerCase() === offender.pubHex.toLowerCase()),
-                'offender must qualify for cross_chain at the snapshot block before being slashed');
+                'offender must qualify for cross_chain at the resolved snapshot block before being slashed');
         } finally {
             await destroyIndexer(indexer);
         }

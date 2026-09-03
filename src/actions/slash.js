@@ -49,7 +49,10 @@
  *   3. BOTH signatures verify against OFFENDER_PUBKEY;
  *   4. OFFENDER_PUBKEY was in the locked capability snapshot for CAPABILITY at the
  *      slot's snapshot_block (recovered deterministically from the proof itself;
- *      see _resolveSlot);
+ *      see _resolveSlot). The proof declares a RAW height; membership, and the
+ *      delegated-owner lookup that names whose bond burns, both resolve at
+ *      snapshot_reorg_buffer.buriedSnapshotBlock() of it, which is where the hub
+ *      that locked the slot resolved its own signer set (flag-day gated);
  *   5. not already slashed for (pubkey, capability): a first proof burns the whole
  *      bond; later proofs are no-ops (idempotent, reorg-safe).
  *
@@ -78,6 +81,7 @@
 
 const ed25519 = require('../ed25519.js');
 const eq      = require('../equivocation_header.js');
+const srb     = require('../snapshot_reorg_buffer.js');
 
 // ENGINE_TAG → the membership label the locked snapshot governs that engine's signer
 // set under. For the five capability-scoped engines this is the staking capability whose
@@ -230,7 +234,20 @@ class Slash {
 
         // (4) Recover the slot's snapshot_block deterministically from the proof and
         // confirm OFFENDER_PUBKEY was in CAPABILITY's locked snapshot at that block.
-        let snapshotBlock = null;
+        //
+        // DECLARED vs RESOLVED. `snapshotBlock` is the RAW height the proof declares, and
+        // it stays raw: it is what the offender's own signed bytes say, so it is what the
+        // reject message names and what any future gate keys on. `resolveBlock` is the
+        // height the set is actually re-derived at. The hub that locked this slot resolved
+        // its membership through CapabilitySnapshot, which subtracts CANONICAL_REORG_BUFFER
+        // first, so re-deriving at the raw height selects a DIFFERENT set than the signer
+        // whenever a validator's stake activated or deactivated inside
+        // (declared - 6, declared]. That gap cuts both ways here: it can leave a genuine
+        // equivocator out of the set (a real proof that burns nothing) and it can put a key
+        // in a set it never signed under. Same fix, same shared constant, same flag day as
+        // the existing consumers (attest.js, recovery.js, sdk light.js); below the gate this
+        // is the declared height unchanged, so pre-flag-day acceptance is byte-identical.
+        let snapshotBlock = null, resolveBlock = null;
         if(!error){
             // SLASH-2: at/after SLASH_ORACLE_ROUND_DISCRIMINATED, an XORACLE pair
             // must agree on the oracle round carried in-content. Gated, not unconditional,
@@ -240,6 +257,7 @@ class Slash {
             if(slot.error) error = slot.error;
             else {
                 snapshotBlock = slot.snapshotBlock;
+                resolveBlock  = srb.buriedSnapshotBlock(snapshotBlock, this.config['NETWORK']);
                 // One engine tag can host content families locked under DIFFERENT
                 // capabilities: XATTEST's relay legs are verified against `cross_chain`
                 // (attest.js _verifyRelayQuorum), not `attestation`. The slot
@@ -254,9 +272,11 @@ class Slash {
         if(!error){
             // XCONFIG is authorized by the WHOLE federation (getActiveValidators), every other
             // engine by its capability-scoped snapshot. Both return [{pubkey,...}] at the block.
+            // Read at the BURIED height (see above); the message still names the declared one,
+            // matching attest.js, so the reject bytes do not move with the buffer.
             let validators = (capability === CONFIG_CAPABILITY)
-                ? await this.indexerDb.getActiveValidators(snapshotBlock)
-                : await this.indexerDb.getValidatorsByCapability(capability, snapshotBlock);
+                ? await this.indexerDb.getActiveValidators(resolveBlock)
+                : await this.indexerDb.getValidatorsByCapability(capability, resolveBlock);
             let inSet = Array.isArray(validators) &&
                 validators.some(v => String(v.pubkey || '').toLowerCase() === offender);
             if(!inSet)
@@ -295,15 +315,23 @@ class Slash {
             // Burning by signing_pubkey_id matched nothing and burned ZERO while still
             // writing a valid slash event, so equivocating through a delegated key cost
             // the staker nothing. Resolve the owner AT THE EQUIVOCATION HEIGHT
-            // (snapshotBlock, recovered from the proof above) rather than at processing
-            // time, so a delegation revoked after the offence cannot orphan the proof and
-            // the target is a pure function of the proof itself.
+            // (recovered from the proof above) rather than at processing time, so a
+            // delegation revoked after the offence cannot orphan the proof and the target
+            // is a pure function of the proof itself.
+            //
+            // The height read is `resolveBlock`, the SAME buried height the membership
+            // check above used, not the raw declared one. The two must agree or the pair
+            // is incoherent: a delegation that activated inside the buried window puts the
+            // key in the raw-height set while the buried-height owner lookup returns null
+            // (burn nothing), and a delegation revoked inside it does the mirror. Deciding
+            // "was this key authorized to sign" and "whose bond does that make it" at two
+            // different heights is what produces a valid slash event that burns zero.
             //
             // A key that stakes in its own name resolves to null and keeps the original
             // targeting. A bond that has since fully unstaked and withdrawn burns zero:
             // that is deliberate, not a rejection, so the outcome never depends on stake
             // motion after the offence.
-            let ownerSourceId = await this.indexerDb.getStakeSourceForDelegatedPubkey(pubkeyId, snapshotBlock);
+            let ownerSourceId = await this.indexerDb.getStakeSourceForDelegatedPubkey(pubkeyId, resolveBlock);
             let burn   = await this.indexerDb.slashCapabilityStake(pubkeyId, data['BLOCK_INDEX'], data['ACTION_INDEX'], burnPending, ownerSourceId);
             let burned = burn.total;
 
