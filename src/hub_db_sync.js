@@ -130,6 +130,18 @@ const HUB_SYNC_WATERMARK_GRACE_S = Object.freeze({
     // federation delay. Changing this NUMBER is a protocol change (it moves which nodes can
     // advance past a maturity boundary), so it moves fleet-wide or not at all.
     anchorAttest: 120,
+    // Finalized ATTEST responses (attestation_responses), the mirror that replaced the
+    // validator-paid on-chain response transaction. Like anchorAttest above, this value only
+    // has to cover ordinary stream lag, because the real forward margin is carried by the
+    // row itself: effective_time is chosen by the round leader as now + ATTEST_RESPONSE_FORWARD_S,
+    // bounded by every follower before it signs, and INSIDE the signed canonical, so the
+    // applying block is a function of signed data rather than of any node's clock or of this
+    // number. What this grace buys is the difference between "the mirror holds no row for this
+    // block" and "the mirror has not been told yet": below it the block loop defers instead of
+    // settling a block that a row already bound. Changing this NUMBER is a protocol change (it
+    // moves which nodes may advance past a block a response binds at), so it moves fleet-wide
+    // or not at all.
+    attestResponse: 120,
 });
 
 // Resolve one grace margin. `frozen` is the pinned protocol constant; `envKey`
@@ -289,7 +301,18 @@ const CROSS_CHAIN_TABLES = ['cross_chain_matches', 'cross_chain_calls', 'capabil
 // pass over the completed re-page (_reconcileRetractedMatches), because the one
 // mutation the hub CANNOT re-serve is a retraction: the snapshot endpoint filters
 // retracted rows out entirely, so there is no row to converge against.
-const FULL_REPAGE_TABLES = ['capability_snapshots', 'price_snapshots', 'cross_chain_calls', 'cross_chain_matches'];
+// attestation_responses is here for capability_snapshots' SECOND reason alone, and it is
+// REQUIRED rather than a precaution: nothing in that table is ever updated in place, but
+// _applyRow strips its hub id (every hub that holds the finalized artifact writes its own
+// row and gossips it, so the ids differ for one logical row), which makes the local ids
+// LOCALLY assigned. A since_id = MAX(local id) cursor is then not a position in the
+// followed hub's id space at all: it can ask for rows past the end of that hub's table and
+// strand the mirror, and a wire id can land on a locally-assigned PK where the INSERT
+// IGNORE drops a real row without an error, leaving a permanent mirror hole (#2270). The
+// natural key (network, request_id) dedupes the re-page, and a missed response here is a
+// permanent fork rather than a lag, so the O(table) re-page per bootstrap is cheap.
+const FULL_REPAGE_TABLES = ['capability_snapshots', 'price_snapshots', 'cross_chain_calls', 'cross_chain_matches',
+                            'attestation_responses'];
 
 // Hub federation state tables. state_checkpoints carries quorum-signed per-chain
 // state-hash commitments (the explorer/SDK verification source). Append-only,
@@ -300,7 +323,16 @@ const FULL_REPAGE_TABLES = ['capability_snapshots', 'price_snapshots', 'cross_ch
 // anchor/archive reward from it (mirror is transport, not trust: it re-verifies the
 // sigs against its own local oracle_publish set). Append-only, id-parity INSERT IGNORE,
 // never retracted (rows are written only post-quorum for a finalized checkpoint).
-const HUB_STATE_TABLES = ['state_checkpoints', 'anchor_reward_attestations'];
+// attestation_responses carries the FINALIZED ATTEST response (one row per terminal round,
+// status 'ok' or 'expired'). The legacy route for it is a validator-paid ATTEST v1
+// transaction; the BTC indexer binds it to a block from its own signed effective_time and
+// synthesizes the v1 action locally. Insert-only: no column is ever updated after insert, so
+// the apply stays a plain INSERT IGNORE and no re-page is needed for content convergence.
+// Never retracted either: the mirror row is inert without a pending local request, so a reorg
+// that removes the request simply leaves nothing for it to bind to (spec §4.5). It is a
+// NATURAL-KEY mirror on (network, request_id) rather than an id-parity one, unlike the two
+// above; see the id strip in _applyRow and the FULL_REPAGE_TABLES entry that follows from it.
+const HUB_STATE_TABLES = ['state_checkpoints', 'anchor_reward_attestations', 'attestation_responses'];
 
 // TTL for the per-table local-column cache. Bounds how long a hub-side column
 // rename can keep silently NULLing the mirror before _localColumns re-reads the
@@ -577,6 +609,11 @@ class HubDbSync {
         this.callWatermarkGraceS   = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.call,   'HUB_SYNC_CALL_GRACE_S',   this.network);
         this.anchorAttestWatermarkGraceS = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.anchorAttest, 'HUB_SYNC_ANCHOR_ATTEST_GRACE_S', this.network);
         this._anchorAttestWaiters  = [];                   // pending waitForAnchorAttestationSync() resolvers
+        // Finalized ATTEST responses. Named for the response mirror, NOT for the anchorAttest
+        // pair above it, which means anchor-reward attestations and is a different barrier over
+        // a different table.
+        this.attestResponseWatermarkGraceS = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.attestResponse, 'HUB_SYNC_ATTEST_RESPONSE_GRACE_S', this.network);
+        this._attestResponseWaiters = [];                  // pending waitForAttestationResponseSync() resolvers
 
         // Named ceiling on a mirror-barrier hold. Held here as well as on the
         // indexer because requestResync() rate-limits itself by the same value: one forced
@@ -2044,7 +2081,19 @@ class HubDbSync {
         // a permanent mirror hole (#2270). Drop the id and let local AUTO_INCREMENT
         // assign; _bootstrapTable pages this table from since_id=0 for the same reason.
         // cross_chain_matches/calls keep hub id parity deliberately (settlement-order key).
-        if (table === 'capability_snapshots') cols = cols.filter(c => c !== 'id');
+        //
+        // attestation_responses strips id for the same reason arrived at by a different route.
+        // Its ids are hub-LOCAL because the artifact is written more than once: the responsible
+        // set reaches quorum on one hub, the result is gossiped to the rest of the federation
+        // (ATTEST_RESULT), and every hub that verifies it inserts its OWN row, so two hubs carry
+        // different ids for one logical row and a hub failover would re-deliver the same response
+        // under a new id. Row identity is the natural key UNIQUE (network, request_id) - which is
+        // also what makes the re-delivery a harmless INSERT IGNORE no-op - and no reader keys on
+        // id. Keeping a wire id would let it collide with a locally-assigned PK and have INSERT
+        // IGNORE silently drop a real response, and a dropped response here is not a stale read:
+        // the applier never binds it, the callback never fires on this node alone, and the node
+        // forks. FULL_REPAGE_TABLES membership follows directly from this strip.
+        if (table === 'capability_snapshots' || table === 'attestation_responses') cols = cols.filter(c => c !== 'id');
         if (cols.length === 0) return;
         let placeholders = cols.map(() => '?').join(', ');
         let args = cols.map(c => coerceMirrorValue(row[c], this._cachedColumnType(table, c)));
