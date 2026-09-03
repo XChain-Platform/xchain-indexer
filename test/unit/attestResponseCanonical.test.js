@@ -69,7 +69,10 @@ describe('attest_response_canonical', function () {
     });
 
     it('rejects a non-canonical integer spelling rather than producing unrebuildable bytes', function () {
-        for (const bad of ['0120', '+1', '-1', '1.0', ' 1', '1 ', '1e3', '', 'abc', '01', true, {}, [], -1, 1.5, NaN]) {
+        // 1e21 is the one that bites: Number.isInteger(1e21) is true and it is
+        // non-negative, but String(1e21) is '1e+21', so a naive number branch would
+        // accept a value the canonical then spells in a form no verifier can rebuild.
+        for (const bad of ['0120', '+1', '-1', '1.0', ' 1', '1 ', '1e3', '', 'abc', '01', true, {}, [], -1, 1.5, NaN, 1e21, Infinity]) {
             assert.throws(
                 () => can.buildResponseCanonicalRaw(Object.assign({}, BASE, { meta: '', effectiveTime: bad })),
                 /canonical integer spelling/,
@@ -93,6 +96,8 @@ describe('attest_response_canonical', function () {
         assert.strictEqual(can.isCanonicalIntSpelling('0120'), false);
         assert.strictEqual(can.isCanonicalIntSpelling('1|2'), false);
         assert.strictEqual(can.isCanonicalIntSpelling(null), false);
+        assert.strictEqual(can.isCanonicalIntSpelling(1e21), false, '1e21 stringifies as 1e+21');
+        assert.strictEqual(can.isCanonicalIntSpelling(1e20), true, '1e20 still stringifies in full');
     });
 });
 
@@ -122,7 +127,7 @@ describe('attest_response_canonical: hub/indexer twin', function () {
     it('rejects the same spellings as the hub copy', function () {
         if (!fs.existsSync(HUB_COPY)) { this.skip(); return; }
         const hub = require(HUB_COPY);
-        for (const v of ['0120', '+1', '1.0', '', 'abc', '0', '7', 7, -1]) {
+        for (const v of ['0120', '+1', '1.0', '', 'abc', '0', '7', 7, -1, 1e21, 1e20, Infinity]) {
             assert.strictEqual(hub.isCanonicalIntSpelling(v), can.isCanonicalIntSpelling(v),
                                'disagreement on ' + JSON.stringify(v));
         }

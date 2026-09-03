@@ -79,9 +79,15 @@ const MIRROR_FIELD_SEPARATOR = '|';
 // coercion that hides the problem: two byte strings that a verifier rebuilding
 // from a row cannot tell apart, one of which no honest signer produced.
 function isCanonicalIntSpelling(v){
-    if(typeof v === 'number') return Number.isInteger(v) && v >= 0;
-    if(typeof v !== 'string') return false;
-    return /^(0|[1-9][0-9]*)$/.test(v);
+    // One test, applied to the STRING the canonical would actually carry. Typing the
+    // number branch separately is the trap: Number.isInteger(1e21) is true and 1e21 >= 0,
+    // but String(1e21) is '1e+21', so a value that passed would then be concatenated in a
+    // spelling no counterpart could rebuild. The hub happens to be protected by the
+    // follower's upper bound; the indexer verifies STORED rows against no such bound, and
+    // the two must not disagree about what is spellable.
+    if(typeof v !== 'number' && typeof v !== 'string') return false;
+    if(typeof v === 'number' && !Number.isInteger(v)) return false;
+    return /^(0|[1-9][0-9]*)$/.test(String(v));
 }
 
 // Build the raw canonical string for an ATTEST response.
