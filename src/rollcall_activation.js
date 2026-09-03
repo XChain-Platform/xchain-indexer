@@ -23,10 +23,24 @@
  *
  * EVERY value here is CONSENSUS. They decide which epochs exist, which
  * signatures count, and at what BTC height an eviction and a COLLECT-spendable
- * reward materialise. None may be read from the coin registry, from env, or
- * from coins.resolveConfirmations() -- the same argument
+ * reward materialise. On a SHARED-LEDGER network -- mainnet and testnet, where
+ * many nodes validate one chain -- none may be read from the coin registry,
+ * from env, or from coins.resolveConfirmations(), the same argument
  * anchor_reward_activation.js makes for its own maturity and burial depths: a
  * ledger input cannot be sourced from a field nothing pins and anyone may tune.
+ *
+ * THAT ARGUMENT IS ABOUT A SHARED LEDGER, so per the 2026-09-01 ruling it is
+ * scoped to the networks that have one. A regtest chain is private: no two
+ * regtest venues validate the same blocks, so a height one venue pins for itself
+ * cannot fork anybody, and refusing it only meant AT1-AT10 had nowhere to run.
+ * Regtest therefore takes its arming height from the environment, documented at
+ * ROLLCALL_REGTEST_ARMED_HEIGHT below. mainnet and testnet stay literal and are
+ * not reachable from env by any path in this file.
+ *
+ * A HALF-ARMED regtest venue is visible rather than silent: ROLLCALL_ACTIVATION
+ * is one of consensus_rules_digest.js's SHARED_GATES, so a hub armed against an
+ * inert indexer reports a rules mismatch instead of quietly disagreeing about
+ * which epochs exist.
  *
  * Canonical map of record is xchain-documentation/protocol/constants.js; the
  * twin lives in xchain-hub/src/rollcall_activation.js and is kept BYTE-IDENTICAL
@@ -41,28 +55,69 @@
  *
  ********************************************************************/
 
+// The documented regtest arming height: genesis. It is a multiple of the
+// 30-block regtest interval, so epoch 0 is a real epoch and the first close is
+// not skipped. This is the height a regtest venue arms AT, not a height it is
+// armed at by default -- see resolveRegtestActivation for why the default is
+// inert and how a venue opts in.
+const ROLLCALL_REGTEST_ARMED_HEIGHT = 0;
+
+// The one environment variable this module reads, and only ever for regtest.
+const ROLLCALL_REGTEST_ENV = 'XC_ROLLCALL_REGTEST_ACTIVATION';
+
+/**
+ * Resolve the regtest arming height from `env`.
+ *
+ * UNSET SHIPS INERT, and that default is not timidity. Arming a network commits
+ * every BTC indexer on it to a wired DOGE peer: the epoch close cannot decide a
+ * non-empty responsible set without one, and it defers the block rather than
+ * reading silence as absence. That is the 2026-08-31 finding, which was that a
+ * hardcoded regtest height wedged every single-coin BTC venue at its first
+ * close. So a two-chain acceptance venue opts IN, and a BTC-only venue that
+ * cannot answer a close is left alone.
+ *
+ * Accepted forms, case-insensitive and trimmed:
+ *   armed | genesis | on | true | yes  -> ROLLCALL_REGTEST_ARMED_HEIGHT
+ *   a non-negative integer             -> that height, for a venue whose epochs
+ *                                         should begin above an indexed prefix
+ *   unset | '' | off | inert | false | no | none -> null (INERT)
+ * Anything else fails CLOSED to null and says so on stderr, because a typo that
+ * silently armed a venue would produce closes nobody meant to drive.
+ *
+ * Read ONCE, at require time, on purpose: an activation height that could change
+ * under a running process is not an activation height.
+ *
+ * @param {object} env the process environment, or a stand-in
+ * @returns {number|null}
+ */
+function resolveRegtestActivation(env){
+    let raw = (env || {})[ROLLCALL_REGTEST_ENV];
+    if(raw === undefined || raw === null) return null;
+    let s = String(raw).trim().toLowerCase();
+    if(s === '' || s === 'off' || s === 'inert' || s === 'false' || s === 'no' || s === 'none') return null;
+    if(s === 'armed' || s === 'genesis' || s === 'on' || s === 'true' || s === 'yes')
+        return ROLLCALL_REGTEST_ARMED_HEIGHT;
+    if(/^\d+$/.test(s)){
+        let h = parseInt(s, 10);
+        if(Number.isFinite(h) && h >= 0) return h;
+    }
+    console.error('ROLLCALL: ignoring ' + ROLLCALL_REGTEST_ENV + '=' + JSON.stringify(String(raw)) +
+                  '; regtest stays INERT. Expected a non-negative height, "armed", or "off".');
+    return null;
+}
+
 // Per-network BTC height at/above which ROLLCALL epochs exist at all.
 // INERT on mainnet (null = never active) until the operator pins a height with
 // the mainnet federation. The null placeholder follows the live precedent of
 // SNAPSHOT_BURIAL_ACTIVATION.mainnet; because null is a legitimate value here,
 // every read MUST go through the Number.isFinite guard below -- a bare
 // `height >= ROLLCALL_ACTIVATION[network]` arms mainnet at height 0, since
-// `0 >= null` is true in JS.
-//
-// REGTEST IS INERT TOO, by operator ruling 2026-08-31. Arming a network commits
-// EVERY BTC indexer on it to a wired DOGE peer, because the epoch close cannot
-// decide a non-empty responsible set without one and correctly halts rather
-// than read silence as absence. A single-coin BTC regtest venue -- the e2e
-// matrix job, any future single-coin job, a developer running BTC alone -- has
-// no DOGE peer and can never have one, so a hardcoded regtest height asserted
-// something false of every such venue and wedged them at their first close. A
-// venue that genuinely runs both chains opts in instead. The cost is accepted
-// and named: the ROLLCALL acceptance suite has no armed venue until an arming
-// mechanism exists that does not read env here (see the CONSENSUS note above).
+// `0 >= null` is true in JS. Regtest is null for the same reason until the venue
+// opts in, so the same guard covers it.
 const ROLLCALL_ACTIVATION = {
     mainnet: null,        // INERT placeholder: the operator owns this height
     testnet: 151200,      // 1008 x 150 = 144 x 1050; tip was 150400 on 2026-08-30, ~5.5 days out
-    regtest: null,      // INERT: a BTC-only regtest venue has no DOGE peer to prove a close
+    regtest: resolveRegtestActivation(process.env),   // ARMS AT 0 when the venue sets XC_ROLLCALL_REGTEST_ACTIVATION
 };
 
 // Epoch cadence in BTC blocks. Weekly on the live networks per the 2026-08-30
@@ -182,6 +237,9 @@ function rollcallEpochClosingAt(height, network){
 
 module.exports = {
     ROLLCALL_ACTIVATION,
+    ROLLCALL_REGTEST_ARMED_HEIGHT,
+    ROLLCALL_REGTEST_ENV,
+    resolveRegtestActivation,
     ROLLCALL_INTERVAL_BLOCKS,
     ROLLCALL_ACCEPT_WINDOW_BLOCKS,
     ROLLCALL_PROOF_DELAY_BLOCKS,
