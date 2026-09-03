@@ -48,8 +48,8 @@ CREATE TABLE IF NOT EXISTS attestation_responses (
 -- practice (it is a sha256 over chain data), but two hubs on different networks can
 -- legitimately both be served through one mirror table during a re-point, and scoping
 -- the key matches how every reader and _purgeForeignNetworkRows scope theirs.
-CREATE UNIQUE INDEX uq_attest_response ON attestation_responses (network, request_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_attest_response ON attestation_responses (network, request_id);
 -- The applicability scan reads rows whose signed effective_time has been reached.
-CREATE        INDEX idx_effective_time ON attestation_responses (network, effective_time);
+CREATE        INDEX IF NOT EXISTS idx_effective_time ON attestation_responses (network, effective_time);
 -- Deterministic applier order within a block, and the batch publisher's window read.
-CREATE        INDEX idx_request_order  ON attestation_responses (network, request_block_index, request_action_index);
+CREATE        INDEX IF NOT EXISTS idx_request_order  ON attestation_responses (network, request_block_index, request_action_index);
