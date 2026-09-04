@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-09-04
+
+### Added
+- Mirrored ATTEST responses are applied at the block their signed effective time predicts, with a per-block cap and a barrier that holds a block until the mirror has caught up; inert until the response-mirror activation height, which is armed on regtest only.
+- ATTEST v5/v6 batch wires are parsed, chunked batches are reassembled per author, and each batch is delivered durably to the hub; an on-chain v1 above the mirror height is invalid.
+- The `attestation_responses` mirror table and the `attests` batch link and chunk columns, with dated migrations.
+- Hub-mirror health is reported on `/status`.
+- A regtest venue can arm its ROLLCALL epoch schedule from the environment.
+- SWEEP and CALLBACK are priced on the unified gas schedule, and a fee quote discloses which database its prices came from.
+
+### Fixed
+- A reorg no longer aborts on the roll-call tables.
+- The price barrier is scoped to consensus, and the `price_snapshots` bootstrap is bounded to the blocks this node will parse and drained in batches.
+- A mirror-barrier hold has a named ceiling that forces a resync and is reported on `/health`.
+- A hub 429 holds the push queue instead of burning attempts.
+- Recovery-restored rewards materialize at their original derive block.
+- The two excluded utf8mb4 column groups widen from one shared definition, and the issue transfer-supply recipient is backfilled.
+- SLASH membership and delegated owner resolve at the buried snapshot height.
+- Finalized price rounds a repointed hub does not hold are cleared.
+- A guard-inert controller refusal inside a probed BATCH is reported as unjudged, naming the controller.
+- The config oracle is read from its own endpoint.
+- An effective time that stringifies in exponent form is rejected, and the `attestation_responses` index creation is idempotent.
+- mariadb moved off the cleartext-credential advisory range with the floor pinned in the dependency gate.
+
 ## [0.12.1] - 2026-08-31
 
 ### Fixed
