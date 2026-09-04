@@ -326,14 +326,79 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
             'the mirrored row still applies there, only the local stamp is skipped');
     });
 
-    it('the other HUB_STATE_TABLES members keep their plain INSERT IGNORE', async function () {
-        for (const table of ['state_checkpoints', 'anchor_reward_attestations']) {
+    it('every other HUB_STATE_TABLES member keeps its plain INSERT IGNORE', async function () {
+        const siblings = HubDbSync.HUB_STATE_TABLES.filter(t => t !== 'attestation_responses');
+        // A shrunk list would make the loop below iterate zero (or one) times and pass
+        // vacuously, hiding the very regression this guard exists to catch.
+        assert.ok(siblings.length >= 2,
+            'HUB_STATE_TABLES must still list attestation_responses siblings to guard, or this loop ' +
+            'silently covers nothing');
+        for (const table of siblings) {
             const { sync, queries } = makeSync({ columns: { [table]: ['id', 'network', 'batch_action_index'] } });
             await sync._applyRow(table, { id: 5, network: 'regtest', batch_action_index: 7 });
             assert.ok(new RegExp('^INSERT IGNORE INTO ' + table + ' ').test(insertFor(queries, table)[0].sql),
                 table + ' is append-only with no column mutated after insert; the upsert is scoped to the ' +
                 'one table whose link the hub stamps later, and a table name is the only thing scoping it');
         }
+    });
+
+    // ── HUB_STATE_TABLES export (row 51) ──
+
+    it('exports HUB_STATE_TABLES as a frozen copy a caller cannot use to corrupt the class', function () {
+        assert.deepStrictEqual(HubDbSync.HUB_STATE_TABLES,
+            ['state_checkpoints', 'anchor_reward_attestations', 'attestation_responses']);
+        assert.ok(Object.isFrozen(HubDbSync.HUB_STATE_TABLES), 'the export must be read-only');
+        assert.throws(() => { HubDbSync.HUB_STATE_TABLES.push('rogue_table'); },
+            'a caller mutating the returned array must not be able to reach the module\'s own membership');
+    });
+
+    // ── mirrorStatus() snapshot (row 48) ──
+
+    it('mirrorStatus reports an honest disabled shape when no hub is configured', function () {
+        const sync = new HubDbSync(null, {});
+        assert.deepStrictEqual(sync.mirrorStatus(),
+            { configured: false, connected: false, bootstrapped: false, streamWatermark: null, tables: {} });
+    });
+
+    it('mirrorStatus reports disconnected while enabled and no socket has opened', function () {
+        const { sync } = makeSync();
+        const status = sync.mirrorStatus();
+        assert.strictEqual(status.configured, true);
+        assert.strictEqual(status.connected, false, 'this.ws is null before a socket connects');
+        assert.strictEqual(status.bootstrapped, false);
+    });
+
+    it('mirrorStatus reports connected once a live socket is assigned', function () {
+        const { sync } = makeSync();
+        sync.ws = { readyState: 1 };
+        assert.strictEqual(sync.mirrorStatus().connected, true);
+    });
+
+    it('mirrorStatus reflects the stream watermark advancing, HUB_STATE_TABLES included', async function () {
+        const { sync } = makeSync();
+        assert.strictEqual(sync.mirrorStatus().streamWatermark, 0);
+        sync._advanceWatermark(1700000000);
+        const status = sync.mirrorStatus();
+        assert.strictEqual(status.streamWatermark, 1700000000);
+        for (const table of HubDbSync.HUB_STATE_TABLES) {
+            assert.strictEqual(status.tables[table], 1700000000,
+                table + ' has no scalar of its own; it rides the global watermark (§4.2)');
+        }
+    });
+
+    it('mirrorStatus reports each per-table scalar the class actually tracks, and null where none exists', function () {
+        const { sync } = makeSync();
+        sync.oracleSyncTimestamp   = 111;
+        sync.matchSyncTimestamp    = 222;
+        sync.callSyncTimestamp     = 333;
+        sync.priceSyncMaxTimestamp = 444;
+        const tables = sync.mirrorStatus().tables;
+        assert.strictEqual(tables.oracle_prices, 111);
+        assert.strictEqual(tables.cross_chain_matches, 222);
+        assert.strictEqual(tables.cross_chain_calls, 333);
+        assert.strictEqual(tables.price_snapshots, 444);
+        assert.strictEqual(tables.capability_snapshots, null,
+            'capability_snapshots satisfaction is a live per-block query, never a cached scalar');
     });
 
     // ── the cursor that follows from the strip (D55) ──

@@ -919,6 +919,34 @@ class HubDbSync {
         }
     }
 
+    // Read-only status snapshot for /status: composed from state already tracked
+    // on the instance, so a caller never reaches into private fields to answer
+    // "is the mirror connected, and how far behind". Disabled reports configured:false
+    // rather than a zeroed shape that would read as a live mirror stalled at genesis.
+    mirrorStatus() {
+        if (!this.enabled) {
+            return { configured: false, connected: false, bootstrapped: false, streamWatermark: null, tables: {} };
+        }
+        let tables = {};
+        // HUB_STATE_TABLES rides the global streamWatermark, not a per-table
+        // scalar: that IS what gates each of them (§4.2).
+        for (let table of HUB_STATE_TABLES) tables[table] = this.streamWatermark;
+        tables.oracle_prices       = this.oracleSyncTimestamp;
+        tables.cross_chain_matches = this.matchSyncTimestamp;
+        tables.cross_chain_calls   = this.callSyncTimestamp;
+        // capability_snapshots satisfaction is a live per-block query, never a
+        // cached scalar (_snapshotSyncSatisfied); nothing in-memory to report.
+        tables.capability_snapshots = null;
+        tables.price_snapshots      = this.priceSyncMaxTimestamp;
+        return {
+            configured: true,
+            connected: !!this.ws,
+            bootstrapped: this._bootstrapDrained,
+            streamWatermark: this.streamWatermark,
+            tables: tables
+        };
+    }
+
     // Bootstrap: fetch a full snapshot of the table from the hub and apply it.
     // If the hub supplied max_ids in the ready message, runs a supplemental
     // catch-up fetch for any IDs between the snapshot ceiling and hub_ready_max_id
@@ -3516,3 +3544,7 @@ module.exports.priceUpsertSql                 = priceUpsertSql;
 module.exports.PRICE_MIRROR_ROUND_MARGIN           = PRICE_MIRROR_ROUND_MARGIN;
 module.exports.PRICE_MIRROR_MIN_PRE_HORIZON_ROUNDS = PRICE_MIRROR_MIN_PRE_HORIZON_ROUNDS;
 module.exports.PRICE_MIRROR_LOOKBACK_S             = PRICE_MIRROR_LOOKBACK_S;
+// A frozen COPY, not the live array: a caller iterating the mirrored-table set
+// (a guard asserting every member keeps some property) must not be able to
+// mutate the module's own membership by mutating what it was handed.
+module.exports.HUB_STATE_TABLES = Object.freeze(HUB_STATE_TABLES.slice());
