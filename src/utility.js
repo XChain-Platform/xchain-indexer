@@ -29,6 +29,14 @@ const fs     = require('fs');
 // handler can never disagree about which era a request is in.
 const attestResponseMirror = require('./attest_response_mirror_activation.js');
 
+// Page size the mirror applier walks its applicability read in. NOT consensus and
+// deliberately not exported: it shapes how many rows a node holds at once, never which
+// rows bind (the read's order is total and the pages are disjoint slices of it), so
+// nodes may disagree on it. Sized above the per-block cap by enough that an ordinary
+// block fills the cap, or exhausts the pending set, in its first page, and matched to
+// getMirroredAttestationResponses' own IN-list chunk so a page is one mirror round trip.
+const ATTEST_MIRROR_APPLICABILITY_PAGE_ROWS = 500;
+
 // Address encoding constants and per-coin network parameters
 // Base58 version bytes and bech32 HRPs mirror the network definitions used by
 // the coin daemons (and the encoder's CryptoNetworks). DOGE has no segwit, so
@@ -2284,15 +2292,44 @@ class Utility {
     // only on success, mints the action and runs the v1 effects; a row that fails is
     // inert, so a synthesized-and-skipped row writes nothing.
     async processAttestationResponses(actions, db, block_index, block_time){
-        // Local side first: with nothing pending there is nothing a mirror row can bind
-        // to, which is the common case and costs one indexed read.
-        let requests = await db.getAttestationRequestsAwaitingMirrorResponse(block_index);
-        if(requests.length === 0) return;
-        let network  = db.config['NETWORK'];
-        let ids      = requests.map(r => String(r.request_id || '').toLowerCase());
-        let mirrored = await db.getMirroredAttestationResponses(network, ids, block_time);
-        if(mirrored.length === 0) return;
-        let applicable = this.selectApplicableAttestationResponses(mirrored, requests, block_index, block_time, network);
+        let network = db.config['NETWORK'];
+        let cap     = require('./actions/attest.js').ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK;
+
+        // BOUNDED READ. The per-block cap bounds the callbacks; this bounds the two reads
+        // that feed them. Both are walked one page at a time in the §4.1 order and the
+        // walk stops as soon as the cap is filled, so a block that binds ten responses
+        // reads about one page instead of every pending request and then every one of
+        // their mirror rows.
+        //
+        // THE SELECTED SET IS UNCHANGED, which is the only thing that matters here: the
+        // read's ORDER BY is already the §4.1 total order, the selector re-sorts on the
+        // same key, and pages are disjoint consecutive slices of that order taken in
+        // order. So the sequence of applicable pairs this builds is the sequence the
+        // unpaged read built, and the first `cap` of it is the same prefix. A node paging
+        // at a different size, or not paging at all, still applies the same rows.
+        //
+        // The double-finalize tie-break is safe under paging for a separate reason: it is
+        // resolved per request_id, and every mirror row for an id is fetched with the page
+        // that carries that id, never split across pages.
+        let applicable = [];
+        let after      = null;
+        while(applicable.length < cap){
+            // Local side first: with nothing pending there is nothing a mirror row can
+            // bind to, which is the common case and costs one indexed read.
+            let page = await db.getAttestationRequestsAwaitingMirrorResponse(
+                block_index, ATTEST_MIRROR_APPLICABILITY_PAGE_ROWS, after);
+            if(page.length === 0) break;
+            let ids      = page.map(r => String(r.request_id || '').toLowerCase());
+            let mirrored = await db.getMirroredAttestationResponses(network, ids, block_time);
+            for(let item of this.selectApplicableAttestationResponses(mirrored, page, block_index, block_time, network)){
+                applicable.push(item);
+                if(applicable.length >= cap) break;
+            }
+            if(page.length < ATTEST_MIRROR_APPLICABILITY_PAGE_ROWS) break;
+            let last = page[page.length - 1];
+            after = { block_index: last.block_index, action_index: last.action_index };
+        }
+
         for(let item of applicable){
             let data = {};
             data['ACTION']       = 'ATTEST';

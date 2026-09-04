@@ -23,6 +23,14 @@
  * vendored into xchain-sync, so the guard is anchored on the canonical constants.js
  * map that IS present. Skips green when the docs sibling is absent, unless
  * XCHAIN_REQUIRE_SIBLINGS=1 (CI) forces a hard failure.
+ *
+ * THE ABSENT-CHECKOUT BRANCH IS ITSELF A TEST CASE. A guard whose only behaviour on a
+ * missing sibling is a bare skip reports a green run over nothing, and this guard is
+ * what arming a network's flag day rests on. So the decision is a pure function asserted
+ * below whatever the checkout state is, the parity cases name the exact path they looked
+ * for in their titles rather than collapsing into a generic pending line, and a coverage
+ * floor case runs unconditionally so a renamed module or export cannot quietly leave the
+ * suite comparing nothing.
  */
 
 'use strict';
@@ -78,20 +86,55 @@ const GATES = [
     ['snapshot_reorg_buffer.js',           'CANONICAL_REORG_BUFFER'],
 ];
 
+// What this suite does about the canonical checkout, isolated from fs and from mocha's
+// own skip machinery so both branches are directly assertable. The suite cannot delete a
+// sibling repo to reach the absent branch, so the branch is tested here instead.
+function resolveCanonSource(canonExists, requireSiblings) {
+    if (canonExists) return { status: 'checked' };
+    if (requireSiblings)
+        throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but canonical constants not found at ' + CONSTANTS_PATH);
+    return { status: 'skipped', reason: 'documentation checkout absent at ' + CONSTANTS_PATH };
+}
+
 describe('activation-gate constant parity to canonical constants.js @regression', function () {
+    const canonExists = fs.existsSync(CONSTANTS_PATH);
+
+    it('reports skipped and names the exact checkout path when the documentation checkout is absent', function () {
+        const result = resolveCanonSource(false, false);
+        assert.strictEqual(result.status, 'skipped');
+        assert.strictEqual(result.reason, 'documentation checkout absent at ' + CONSTANTS_PATH);
+    });
+
+    it('throws rather than skipping on an absent checkout when XCHAIN_REQUIRE_SIBLINGS=1', function () {
+        assert.throws(() => resolveCanonSource(false, true), /XCHAIN_REQUIRE_SIBLINGS=1/);
+        assert.strictEqual(resolveCanonSource(true, true).status, 'checked');
+    });
+
+    // The coverage floor. Every parity case below is skipped without the sibling, and each
+    // one resolves its constant by string, so a renamed module or export would otherwise
+    // surface only as a green run. This case runs either way and fails on both.
+    it('resolves every gated constant from its local module, whatever the checkout state', function () {
+        assert.ok(GATES.length >= 20, 'the gate list has shrunk; a dropped entry is an unpinned flag day');
+        for (const [file, exportName] of GATES) {
+            const local = require('../../src/' + file)[exportName];
+            assert.ok(local !== undefined,
+                file + ' no longer exports ' + exportName + '; the parity case for it would compare ' +
+                'undefined to undefined and pass vacuously');
+        }
+    });
+
     let canon = null;
     before(function () {
-        if (!fs.existsSync(CONSTANTS_PATH)) {
-            if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but canonical constants not found at ' + CONSTANTS_PATH);
-            this.skip();
-            return;
-        }
+        if (resolveCanonSource(canonExists, process.env.XCHAIN_REQUIRE_SIBLINGS === '1').status !== 'checked') return;
         canon = require(CONSTANTS_PATH);
     });
 
     GATES.forEach(function ([file, exportName]) {
-        it(file + ' ' + exportName + ' is value-identical to xchain-documentation/protocol/constants.js', function () {
+        const title = canonExists
+            ? file + ' ' + exportName + ' is value-identical to xchain-documentation/protocol/constants.js'
+            : 'SKIPPED: documentation checkout absent at ' + CONSTANTS_PATH + '; ' + file + ' ' +
+              exportName + ' parity not verified this run';
+        (canonExists ? it : it.skip)(title, function () {
             const local = require('../../src/' + file)[exportName];
             // Presence, not shape: the list carries scalar consensus constants as well as
             // activation maps. The checks stay so a mistyped export name cannot compare

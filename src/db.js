@@ -69,6 +69,21 @@ const { rethrowIfInfraFault } = require('./actions/faultGuard');
 // The ATTEST batch wire versions, taken from the codec rather than written as literals
 // here, so the chunk read and the parser cannot disagree about which versions are chunks.
 const abw = require('./attest_batch_wire.js');
+
+// Row limit on ONE publisher's chunk set for ONE ATTEST batch key, the archive rail's
+// ANCHOR_ROW_LIMIT / ARCHIVE_ANCHOR_ROW_LIMIT applied to the batch rail. Only ever
+// applied to an author-scoped read (getAttestBatchChunks explains why the unscoped one
+// cannot carry a limit at all).
+//
+// DERIVED FROM THE WIRE GEOMETRY, so it cannot truncate a batch the codec would produce:
+// a body is at most ATTEST_BATCH_MAX_INFLATED_BYTES, deflate-raw on incompressible bytes
+// expands by about 0.03%, base64 by a third, and a continuation carries roughly
+// ATTEST_BATCH_WIRE_MAX_BYTES minus a 91-byte prefix, which is under 175 wires for the
+// largest batch ATTEST_BATCH_MAX_ROWS can describe. 256 leaves headroom over that and one
+// publisher can hold no more rows than wires: this read returns only 'valid' rows, and a
+// second head or a refilled slot from the same publisher is stamped invalid at parse.
+const ATTEST_BATCH_CHUNK_ROW_LIMIT = 256;
+
 // The validator_rewards ledger-key qualifier rule, shared with the two JS writers so the
 // SQL predicate here and they cannot disagree about which reward type is qualified.
 const arKey = require('./anchor_reward_key.js');
@@ -15435,9 +15450,22 @@ class Database {
     // `source` is the broadcaster address off actions.source_id, which is the only
     // authenticated identity a chain wire carries and is what binds a slot to a publisher.
     // The key is derived from the window a head declares, so anyone can mint a wire under
-    // it and the set this returns is every publisher's; attest.js partitions it by author
-    // (the ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL rule, applied there because that is where the
-    // rest of the batch's rules live and are driven).
+    // it and the unscoped set this returns is every publisher's; attest.js partitions it
+    // by author (the ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL rule, applied there because that is
+    // where the rest of the batch's rules live and are driven).
+    //
+    // `author`, when supplied, moves that partition INTO the query, exactly as
+    // getAnchorChunks takes the archive rail's, and is the only form that can carry a row
+    // limit. THE LIMIT BELONGS AFTER THE PARTITION, NEVER BEFORE IT: a batch key is
+    // sha256 over the window it names, so anyone can derive it and mint wires under it
+    // ahead of the honest publisher, and the order here is slot-major, so a limit taken
+    // before the partition is emptied by junk filling the low slots and the honest
+    // publisher's own head and chunks fall outside the window. That is the reverse of the
+    // archive rail's content-addressed read, where a copy is made from bytes already
+    // on-chain and so can never sort ahead of the original it copied. After the partition
+    // the bound is free: one publisher's valid rows under one key are their head plus one
+    // row per slot (a second head and a refilled slot are both stamped invalid, and this
+    // query returns only 'valid'), which the wire geometry ceiling already bounds.
     //
     // ORDER BY slot then action_index makes the head pick and the duplicate resolution
     // deterministic across nodes: within a slot the EARLIEST action wins, matching
@@ -15445,8 +15473,11 @@ class Database {
     // never on a local auto-increment.
     //
     // @param {string} batchKey the 64-hex batch key (attests.request_id on a batch row)
+    // @param {string} [author] broadcaster address to scope to; omitted returns every
+    //                          publisher's rows unbounded, the legacy shape
     // @returns {Object[]} rows shaped for attest_batch_wire's coverage and reassembly
-    async getAttestBatchChunks(batchKey){
+    async getAttestBatchChunks(batchKey, author){
+        let scoped = (author !== undefined && author !== null && String(author).length > 0);
         let query = `SELECT c.action_index, c.version, c.request_id,
                             c.batch_window_start     AS window_start,
                             c.batch_window_end       AS window_end,
@@ -15464,9 +15495,13 @@ class Database {
                      WHERE c.request_id = ?
                        AND c.version IN (${abw.ATTEST_BATCH_HEAD_VERSION}, ${abw.ATTEST_BATCH_CONTINUATION_VERSION})
                        AND c.batch_chunk_index IS NOT NULL
-                       AND s.status = 'valid'
-                     ORDER BY c.batch_chunk_index ASC, c.action_index ASC`;
-        return await this.doQuery(query, [String(batchKey || '').toLowerCase()]);
+                       AND s.status = 'valid'` +
+                     (scoped ? ` AND cadr.address = ?` : ``) + `
+                     ORDER BY c.batch_chunk_index ASC, c.action_index ASC` +
+                     (scoped ? ` LIMIT ${ATTEST_BATCH_CHUNK_ROW_LIMIT}` : ``);
+        let params = [String(batchKey || '').toLowerCase()];
+        if(scoped) params.push(String(author));
+        return await this.doQuery(query, params);
     }
 
     // Stamp a verdict on a batch HEAD row after the fact, the ANCHOR archive rule
@@ -15836,15 +15871,40 @@ class Database {
     // ORDER BY (block_index, action_index) is the §4.1 applier order, read from the
     // LOCAL request rows and never from the mirror row or from a request_id
     // collation, so every node applies a block's responses in one order.
-    async getAttestationRequestsAwaitingMirrorResponse(blockIndex){
+    //
+    // PAGED, and the page is NOT consensus. `limit` and `after` walk that same order in
+    // windows so the applier can stop once it has filled its per-block cap instead of
+    // dragging every pending request (and then every one of their mirror rows) into
+    // memory first. Two nodes paging at different sizes still select the same rows: the
+    // order is TOTAL (action_index is unique), the pages are disjoint consecutive slices
+    // of it, and the caller concatenates them in page order, so the sequence it sees is
+    // the same sequence the unpaged read produced. The keyset carry is (block_index,
+    // action_index) rather than an offset because an offset re-reads a shifted window
+    // when a row resolves between pages.
+    //
+    // @param {number} blockIndex the block being processed
+    // @param {number} [limit] page size; omitted reads the whole set, the legacy shape
+    // @param {Object} [after] exclusive keyset cursor {block_index, action_index}
+    async getAttestationRequestsAwaitingMirrorResponse(blockIndex, limit, after){
+        let params = [Number(blockIndex)];
+        let keyset = '';
+        if(after){
+            keyset = ` AND (ar.block_index > ? OR (ar.block_index = ? AND ar.action_index > ?))`;
+            params.push(Number(after.block_index), Number(after.block_index), Number(after.action_index));
+        }
+        let page = '';
+        if(limit !== undefined && limit !== null){
+            page = ` LIMIT ?`;
+            params.push(Number(limit));
+        }
         let query = `SELECT ar.*, ia.address AS fee_payer
                      FROM attests ar
                      LEFT JOIN index_addresses ia ON ia.id = ar.fee_payer_id
                      WHERE ar.version = 0
                        AND ar.request_status = 'pending'
-                       AND ar.deadline_block >= ?
-                     ORDER BY ar.block_index ASC, ar.action_index ASC`;
-        return await this.doQuery(query, [Number(blockIndex)]);
+                       AND ar.deadline_block >= ?` + keyset + `
+                     ORDER BY ar.block_index ASC, ar.action_index ASC` + page;
+        return await this.doQuery(query, params);
     }
 
     // The hub-mirrored finalized responses for a given set of request ids whose SIGNED
