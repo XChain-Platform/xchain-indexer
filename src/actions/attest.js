@@ -1093,7 +1093,11 @@ class Attest {
         let author = String(data['SOURCE'] || '');
         let mine   = [];
         if(!error){
-            mine = this._authoredBy(await this.indexerDb.getAttestBatchChunks(head.batchKey), author);
+            // Scoped in the QUERY, not only here: the row limit inside it is only safe
+            // after the author partition, because a batch key is a hash over the window it
+            // names, so anyone can derive it and file wires under it ahead of the honest
+            // publisher. The JS filter stays as a harmless second pass.
+            mine = this._authoredBy(await this.indexerDb.getAttestBatchChunks(head.batchKey, author), author);
             if(this._canonicalBatchHead(mine))
                 error = 'invalid: BATCH_KEY (this publisher already has a head for the window)';
         }
@@ -1183,8 +1187,9 @@ class Attest {
         // contributes bytes, and the author partition makes the rest this publisher's own.
         let stored = [], headRow = null;
         if(!error){
-            stored  = this._authoredBy(await this.indexerDb.getAttestBatchChunks(chunk.batchKey),
-                                       String(data['SOURCE'] || ''));
+            let chunkAuthor = String(data['SOURCE'] || '');
+            stored  = this._authoredBy(await this.indexerDb.getAttestBatchChunks(chunk.batchKey, chunkAuthor),
+                                       chunkAuthor);
             headRow = this._canonicalBatchHead(stored);
         }
 
