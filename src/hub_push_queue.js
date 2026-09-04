@@ -31,15 +31,15 @@
  * delivered live (push failure, hub outage, or a crash in that window) survives
  * for this poller. It drains that table on a fixed interval,
  * re-sending each row with exponential backoff until the hub accepts it (the
- * hub's pushpriceround / pushoracleprice / pushpricebatch handlers dedupe, so a
- * replay the hub already has returns cleanly). A `price_round` row that keeps
- * failing past the attempt cap is marked `failed`, which stops the retries, and
- * the same drain tick sweeps terminal rows once they pass the retention window
- * so the table stays bounded. `oracle_price`, `price_batch`, and the
- * `*_retraction` rows carry NO cap: none is re-derivable from a later block
- * (a `price_batch` is the SOLE carrier of every round in its window for a
- * chain-only node), so they stay `pending` and retry at the max backoff until
- * the hub takes them (see _attempt).
+ * hub's pushpriceround / pushoracleprice / pushpricebatch / pushattestbatch
+ * handlers dedupe, so a replay the hub already has returns cleanly). A
+ * `price_round` row that keeps failing past the attempt cap is marked `failed`,
+ * which stops the retries, and the same drain tick sweeps terminal rows once they
+ * pass the retention window so the table stays bounded. `oracle_price`,
+ * `price_batch`, `attest_batch` and the `*_retraction` rows carry NO cap: none is
+ * re-derivable from a later block (each batch type is the SOLE carrier of its whole
+ * window for a chain-only node), so they stay `pending` and retry at the max backoff
+ * until the hub takes them (see _attempt).
  *
  ********************************************************************/
 
@@ -248,6 +248,10 @@ class HubPushQueue {
             } else if(row.push_type === 'price_batch'){
                 // PRICE v0: a signed window of rounds, delivered to pushpricebatch.
                 await this.hubClient.pushPriceBatch(payload);
+            } else if(row.push_type === 'attest_batch'){
+                // ATTEST v5: a signed window of finalized attestation responses parsed off
+                // the DOGE rail, delivered to pushattestbatch.
+                await this.hubClient.pushAttestBatch(payload);
             } else if(row.push_type === 'price_retraction'){
                 // Reorg retraction parked by rollback.js when the live RPC failed.
                 // pushpricereorg is idempotent over a replayed range. A deferred drain bounds the
@@ -319,12 +323,19 @@ class HubPushQueue {
             // two push types look like siblings but carry opposite re-derivability, which is exactly
             // why they take opposite cap treatment.
             //
+            // `attest_batch` (ATTEST v5/v6) is durable on that same reasoning, and one degree more
+            // so. It is the SOLE chain carrier of every finalized attestation response in its
+            // window: above the response-mirror activation a response is not its own transaction
+            // any more, so a batch retired to 'failed' strands an hour of responses that no later
+            // block re-emits and no replay recovers. The window is also what a chain-only node
+            // proves its coverage from, so losing one leaves a permanent hole in that proof.
+            //
             // Retrying forever is only bounded because HubClient resolves TERMINAL hub rejections
             // rather than throwing them: a payload the hub can never accept leaves the
             // queue on the delivered path, so nothing immortal accumulates here.
             let isDurable = typeof row.push_type === 'string' &&
                 (row.push_type.endsWith('_retraction') || row.push_type === 'oracle_price' ||
-                 row.push_type === 'price_batch');
+                 row.push_type === 'price_batch' || row.push_type === 'attest_batch');
             let cap = isDurable ? Number.MAX_SAFE_INTEGER : this.maxAttempts;
             await this.indexerDb.recordHubPushAttempt(row.id, msg, cap);
             console.warn('HubPushQueue: push failed for row ' + row.id +

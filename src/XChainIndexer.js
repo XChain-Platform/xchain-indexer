@@ -492,12 +492,6 @@ class XChainIndexer {
                     //   source_chain, network, window_start, window_end, row_count,
                     //   btc_block_height, rows[], sigs[], action_index, block_index,
                     //   block_time, push_generation
-                    //
-                    // Guarded on the method rather than called blind: a node whose
-                    // HubClient predates the endpoint must leave the durable
-                    // pending_hub_pushes row for a later drain instead of throwing a
-                    // TypeError into the block loop and burning an attempt on it.
-                    if(typeof this.hubClient.pushAttestBatch !== 'function') continue;
                     await this.hubClient.pushAttestBatch(entry.payload);
                 } else {
                     // Unknown type: leave the durable row for HubPushQueue rather than guess.

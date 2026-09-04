@@ -66,6 +66,9 @@ const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS,
         ARCHIVE_ANCHOR_BY_CONTENT_SQL, selectArchiveHeadRow,
         dedupeArchiveChunks } = require('./anchor-action-query');
 const { rethrowIfInfraFault } = require('./actions/faultGuard');
+// The ATTEST batch wire versions, taken from the codec rather than written as literals
+// here, so the chunk read and the parser cannot disagree about which versions are chunks.
+const abw = require('./attest_batch_wire.js');
 // The validator_rewards ledger-key qualifier rule, shared with the two JS writers so the
 // SQL predicate here and they cannot disagree about which reward type is qualified.
 const arKey = require('./anchor_reward_key.js');
@@ -15382,18 +15385,88 @@ class Database {
         let batch_key    = String(data['REQUEST_ID'] || '').toLowerCase();
         let block_index  = data['BLOCK_INDEX'];
 
+        // The chunk-table half of the row: this action's slot, its body slice, and (on a
+        // head) the window header the completing action reassembles against. Absent on a
+        // structurally broken wire, where nothing was parsed to store.
+        let num = (v) => (v != null && v !== '') ? Number(v) : null;
+        let str = (v) => (v != null && v !== '') ? String(v)  : null;
+        let window_start     = num(data['WINDOW_START']);
+        let window_end       = num(data['WINDOW_END']);
+        let row_count        = num(data['ROW_COUNT']);
+        let btc_block_height = num(data['BTC_BLOCK_HEIGHT']);
+        let batch_crc32      = str(data['BATCH_CRC32']);
+        let total_chunks     = num(data['TOTAL_CHUNKS']);
+        let chunk_index      = num(data['CHUNK_INDEX']);
+        let chunk_b64        = str(data['CHUNK_B64']);
+
         let results = await this.doQuery("SELECT action_index FROM attests WHERE action_index=? LIMIT 1", [action_index]);
         if(results.length > 0){
             await this.doQuery(`UPDATE attests SET
-                                    version=?, request_id=?, provider_id='', status_id=?, block_index=?
+                                    version=?, request_id=?, provider_id='', status_id=?, block_index=?,
+                                    batch_window_start=?, batch_window_end=?, batch_row_count=?,
+                                    batch_btc_block_height=?, batch_crc32=?, batch_total_chunks=?,
+                                    batch_chunk_index=?, batch_chunk_b64=?
                                 WHERE action_index=?`,
-                [version, batch_key, status_id, block_index, action_index]);
+                [version, batch_key, status_id, block_index,
+                 window_start, window_end, row_count, btc_block_height,
+                 batch_crc32, total_chunks, chunk_index, chunk_b64, action_index]);
         } else {
             await this.doQuery(`INSERT INTO attests
-                                    (action_index, version, request_id, provider_id, status_id, block_index)
-                                VALUES (?, ?, ?, '', ?, ?)`,
-                [action_index, version, batch_key, status_id, block_index]);
+                                    (action_index, version, request_id, provider_id, status_id, block_index,
+                                     batch_window_start, batch_window_end, batch_row_count,
+                                     batch_btc_block_height, batch_crc32, batch_total_chunks,
+                                     batch_chunk_index, batch_chunk_b64)
+                                VALUES (?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [action_index, version, batch_key, status_id, block_index,
+                 window_start, window_end, row_count, btc_block_height,
+                 batch_crc32, total_chunks, chunk_index, chunk_b64]);
         }
+    }
+
+    // The stored chunk table for one ATTEST batch: the v5 head's slot 0 and every v6
+    // continuation slot already on chain, under the batch key both file themselves by.
+    //
+    // Rejected rows are excluded, so a junk wire can neither occupy a slot nor contribute
+    // bytes, and an unstamped row (a structurally broken wire, or a row written before
+    // these columns existed) is excluded too: it carries no slot, so it is not a chunk.
+    // The head row carries the window header as well, which is what lets a continuation
+    // landing afterwards rebuild the head it must verify the reassembled body against.
+    //
+    // ORDER BY slot then action_index makes the head pick and the duplicate resolution
+    // deterministic across nodes: within a slot the EARLIEST action wins, matching
+    // attestChunkCoverage's own tie-break. Ordering is on consensus-visible columns only,
+    // never on a local auto-increment.
+    //
+    // @param {string} batchKey the 64-hex batch key (attests.request_id on a batch row)
+    // @returns {Object[]} rows shaped for attest_batch_wire's coverage and reassembly
+    async getAttestBatchChunks(batchKey){
+        let query = `SELECT c.action_index, c.version, c.request_id,
+                            c.batch_window_start     AS window_start,
+                            c.batch_window_end       AS window_end,
+                            c.batch_row_count        AS row_count,
+                            c.batch_btc_block_height AS btc_block_height,
+                            c.batch_crc32            AS batch_crc32,
+                            c.batch_total_chunks     AS total_chunks,
+                            c.batch_chunk_index      AS chunk_index,
+                            c.batch_chunk_b64        AS chunk_b64
+                     FROM attests c
+                     JOIN index_statuses s ON s.id = c.status_id
+                     WHERE c.request_id = ?
+                       AND c.version IN (${abw.ATTEST_BATCH_HEAD_VERSION}, ${abw.ATTEST_BATCH_CONTINUATION_VERSION})
+                       AND c.batch_chunk_index IS NOT NULL
+                       AND s.status = 'valid'
+                     ORDER BY c.batch_chunk_index ASC, c.action_index ASC`;
+        return await this.doQuery(query, [String(batchKey || '').toLowerCase()]);
+    }
+
+    // Stamp a verdict on a batch HEAD row after the fact, the ANCHOR archive rule
+    // (setAnchorArchiveStatus): when a continuation completes the coverage and the
+    // reassembled body fails, the failure belongs to the batch, and the batch's verdict
+    // lives on its head. The completing chunk's own bytes were well formed and its row
+    // stays valid, so one bad batch never re-judges an honest wire.
+    async setAttestBatchStatus(actionIndex, status){
+        let status_id = await this.createStatus(status);
+        await this.doQuery("UPDATE attests SET status_id = ? WHERE action_index = ?", [status_id, actionIndex]);
     }
 
     // Increment a counter column on attest_validator_stats. Upserts the
@@ -15791,7 +15864,7 @@ class Database {
             let placeholders = chunk.map(() => '?').join(',');
             let rows = await mirror.doQuery(
                 `SELECT request_id, provider_id, status, response_payload, response_hash, meta,
-                        effective_time, signer_pubkeys, signatures, widen
+                        effective_time, signer_pubkeys, signatures, widen, batch_action_index
                  FROM attestation_responses
                  WHERE network = ? AND effective_time <= ? AND request_id IN (${placeholders})`,
                 [String(network || ''), Number(blockTime)].concat(chunk));

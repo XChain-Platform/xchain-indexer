@@ -74,8 +74,9 @@
 -- Forward migration is idempotent and automatic on both sides: the hub and indexer
 -- reconcile column drift from this file at startup (db.alterTableForDrift).
 --
--- Naturally idempotent: a re-delivered, re-gossiped or replayed row is a harmless
--- INSERT IGNORE no-op on the natural key.
+-- Idempotent on the natural key: a re-delivered, re-gossiped or replayed row leaves
+-- every signed column exactly as first inserted; only a null batch_action_index can
+-- be filled, and only once.
 
 CREATE TABLE attestation_responses (
     id                   BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, -- hub-LOCAL paging cursor; stripped on mirror apply, never part of row identity

@@ -2117,6 +2117,8 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             ix.config.NETWORK = 'regtest';
             const db = ix.indexerDb;
             db.createAttestationBatchAction = sinon.stub().resolves();
+            db.getAttestBatchChunks         = sinon.stub().resolves([]);
+            db.setAttestBatchStatus         = sinon.stub().resolves();
             db.getValidatorsByCapability    = sinon.stub().resolves([{ pubkey: PUBKEY_A }]);
             db.getStakeWeightsByCapability  = sinon.stub().resolves([{ pubkey: PUBKEY_A, source: 'SA', weight: '100' }]);
             db.getActiveCapabilityCount     = sinon.stub().resolves(1);
@@ -2314,6 +2316,220 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             await h.parse(wireParams(enc.wires[0]), data, null);
             assert.strictEqual(data['STATUS'], 'valid', 'a hub-less node judges the batch identically');
             assert.strictEqual(db.enqueueHubPushTx.called, false);
+        });
+
+        // --------------------------------------------- multi-chunk: the stored chunk table
+
+        // A window whose encoding lands on exactly `want` wires. The row bodies are
+        // deterministic hash noise, which barely deflates, so each added row grows the
+        // compressed body by far less than one wire and the search below cannot step over
+        // the size it is looking for.
+        function chunkedBatch(want) {
+            for (let n = 1; n <= 200; n++) {
+                const rows = [];
+                for (let i = 0; i < n; i++) {
+                    const r = batchRow(i);
+                    let noise = '';
+                    for (let k = 0; k < 8; k++)
+                        noise += crypto.createHash('sha512').update('n:' + i + ':' + k).digest('base64');
+                    r.response_payload = noise;
+                    r.response_hash = crypto.createHash('sha256').update(noise).digest('hex');
+                    rows.push(r);
+                }
+                const win = {
+                    network: 'regtest', window_start: 1700000000, window_end: 1700003600,
+                    row_count: n, btc_block_height: ANCHOR, rows,
+                    sigs: [{ pubkey: PUBKEY_A, sig: SIG_A }],
+                };
+                const enc = abw.encodeAttestBatch(win);
+                if (enc.totalChunks === want) return { win, enc };
+            }
+            throw new Error('no window of this fixture shape encodes to ' + want + ' chunks');
+        }
+
+        // A stand-in for the attests chunk table: the handler's own stamped columns go in,
+        // and the read serves back exactly what the real query does (valid rows carrying a
+        // slot, ordered by slot then action index).
+        function chunkStore(db) {
+            const rows = [];
+            db.createAttestationBatchAction = sinon.stub().callsFake(async (d) => {
+                rows.push({
+                    action_index: Number(d['ACTION_INDEX']), version: Number(d['VERSION']),
+                    request_id: d['REQUEST_ID'], status: d['STATUS'],
+                    window_start: d['WINDOW_START'], window_end: d['WINDOW_END'],
+                    row_count: d['ROW_COUNT'], btc_block_height: d['BTC_BLOCK_HEIGHT'],
+                    batch_crc32: d['BATCH_CRC32'], total_chunks: d['TOTAL_CHUNKS'],
+                    chunk_index: d['CHUNK_INDEX'], chunk_b64: d['CHUNK_B64'],
+                });
+            });
+            db.getAttestBatchChunks = sinon.stub().callsFake(async (key) => rows
+                .filter(r => r.request_id === key && r.status === 'valid' && r.chunk_index != null)
+                .sort((a, b) => (a.chunk_index - b.chunk_index) || (a.action_index - b.action_index)));
+            db.setAttestBatchStatus = sinon.stub().callsFake(async (actionIndex, status) => {
+                for (const r of rows) if (r.action_index === Number(actionIndex)) r.status = status;
+            });
+            return rows;
+        }
+
+        // Land one wire of `enc` as its own action. Wire 0 is the v5 head, the rest v6.
+        async function land(h, enc, wireIndex, actionIndex) {
+            const data = batchData({
+                FORMAT: wireIndex === 0 ? 5 : 6,
+                ACTION_INDEX: actionIndex,
+                BLOCK_INDEX: 6300000 + wireIndex,
+            });
+            await h.parse(wireParams(enc.wires[wireIndex]), data, null);
+            return data;
+        }
+
+        it('a two-chunk batch absorbs exactly once, on the continuation that completes it', async function () {
+            const { handler: h, db } = batchHandler('DOGE');
+            chunkStore(db);
+            const { win, enc } = chunkedBatch(2);
+
+            const head = await land(h, enc, 0, 71);
+            assert.strictEqual(head['STATUS'], 'valid', 'a head with chunks outstanding is sound, not faulty');
+            assert.strictEqual(db.enqueueHubPushTx.called, false, 'and has delivered nothing yet');
+
+            const cont = await land(h, enc, 1, 72);
+            assert.strictEqual(cont['STATUS'], 'valid');
+            assert.strictEqual(db.enqueueHubPushTx.callCount, 1, 'the completing chunk absorbs, once');
+            assert.strictEqual(db.enqueueHubPushTx.firstCall.args[0], 'attest_batch');
+
+            const payload = db.enqueueHubPushTx.firstCall.args[1];
+            assert.deepStrictEqual(payload.rows, JSON.parse(abw.buildAttestBatchBody(win)).rows,
+                'the reassembled body verbatim, so the hub verifies the bytes the chain carried');
+            assert.strictEqual(payload.row_count, win.row_count);
+            assert.strictEqual(payload.action_index, 72,
+                'the completing action, which is the one whose rollback un-lands the delivery');
+            assert.strictEqual(db.stageHubPush.callCount, 1);
+        });
+
+        it('a three-chunk batch absorbs once when the head lands LAST, out of order', async function () {
+            const { handler: h, db } = batchHandler('DOGE');
+            chunkStore(db);
+            const { win, enc } = chunkedBatch(3);
+
+            // Chunk 2 before chunk 1 before the head: none of the three can absorb until
+            // the set is complete, and only the completing action does.
+            const c2 = await land(h, enc, 2, 71);
+            const c1 = await land(h, enc, 1, 72);
+            assert.strictEqual(c2['STATUS'], 'valid');
+            assert.strictEqual(c1['STATUS'], 'valid');
+            assert.strictEqual(db.enqueueHubPushTx.called, false,
+                'a chunk with no head on chain has nothing to verify against');
+
+            const head = await land(h, enc, 0, 73);
+            assert.strictEqual(head['STATUS'], 'valid');
+            assert.strictEqual(db.enqueueHubPushTx.callCount, 1, 'the head completes the coverage and absorbs');
+            assert.deepStrictEqual(db.enqueueHubPushTx.firstCall.args[1].rows,
+                JSON.parse(abw.buildAttestBatchBody(win)).rows);
+        });
+
+        it('a missing chunk never absorbs', async function () {
+            const { handler: h, db } = batchHandler('DOGE');
+            chunkStore(db);
+            const { enc } = chunkedBatch(3);
+
+            await land(h, enc, 0, 71);
+            const c2 = await land(h, enc, 2, 72);
+
+            assert.strictEqual(c2['STATUS'], 'valid', 'the chunk itself is well formed');
+            assert.strictEqual(db.enqueueHubPushTx.called, false,
+                'coverage is an index SET: two of three slots is not a batch');
+            assert.strictEqual(db.setAttestBatchStatus.called, false,
+                'and an incomplete batch is not a failed one, so the head keeps its verdict');
+        });
+
+        it('a duplicate continuation is inert: refused, and absorbing nothing a second time', async function () {
+            const { handler: h, db } = batchHandler('DOGE');
+            chunkStore(db);
+            const { enc } = chunkedBatch(2);
+
+            await land(h, enc, 0, 71);
+            await land(h, enc, 1, 72);
+            assert.strictEqual(db.enqueueHubPushTx.callCount, 1);
+
+            const replay = await land(h, enc, 1, 73);
+            assert.strictEqual(replay['STATUS'], 'invalid: CHUNK_INDEX (duplicate)');
+            assert.strictEqual(db.enqueueHubPushTx.callCount, 1,
+                'a replayed chunk must not push the same window at the hub twice');
+        });
+
+        it('a corrupted chunk reds the batch on the HEAD, leaving the honest chunk valid', async function () {
+            const { handler: h, db } = batchHandler('DOGE');
+            const stored = chunkStore(db);
+            const { enc } = chunkedBatch(2);
+
+            await land(h, enc, 0, 71);
+
+            // The same slot and the same declared geometry, with the body bytes mangled:
+            // the wire is well formed, the reassembled window is not. Field 0 of a wire is
+            // the action name, so the body sits one past its position in the format string.
+            const wire = enc.wires[1].split('|');
+            const body = wire[6];
+            wire[6] = body.slice(0, body.length - 8) + 'AAAAAAAA';
+            const cont = batchData({ FORMAT: 6, ACTION_INDEX: 72 });
+            await h.parse(wire.slice(1), cont, null);
+
+            assert.strictEqual(cont['STATUS'], 'valid', 'the chunk carried well-formed bytes of its own');
+            assert.strictEqual(db.enqueueHubPushTx.called, false, 'nothing reaches the hub');
+            assert.strictEqual(db.setAttestBatchStatus.callCount, 1, 'the batch verdict lands on the head');
+            assert.strictEqual(db.setAttestBatchStatus.firstCall.args[0], 71);
+            assert.match(db.setAttestBatchStatus.firstCall.args[1], /^invalid: ATTEST_BATCH \(/);
+            assert.strictEqual(stored.find(r => r.action_index === 72).status, 'valid');
+        });
+
+        it('refuses a continuation whose geometry disagrees with its head', async function () {
+            const { handler: h, db } = batchHandler('DOGE');
+            chunkStore(db);
+            const { enc } = chunkedBatch(2);
+            await land(h, enc, 0, 71);
+
+            // A different encoding of the same window: same batch key, another chunk count.
+            const wire = enc.wires[1].split('|');
+            wire[4] = '3';
+            const cont = batchData({ FORMAT: 6, ACTION_INDEX: 72 });
+            await h.parse(wire.slice(1), cont, null);
+            assert.strictEqual(cont['STATUS'], 'invalid: TOTAL_CHUNKS (does not match the batch head)');
+
+            // And one whose CRC names a body this head never declared.
+            const other = enc.wires[1].split('|');
+            other[5] = 'deadbeef';
+            const cont2 = batchData({ FORMAT: 6, ACTION_INDEX: 73 });
+            await h.parse(other.slice(1), cont2, null);
+            assert.strictEqual(cont2['STATUS'], 'invalid: BATCH_CRC32 (does not match the batch head)');
+            assert.strictEqual(db.enqueueHubPushTx.called, false);
+        });
+
+        it('the head stores slot 0 and the window header a later chunk rebuilds it from', async function () {
+            const { handler: h, db } = batchHandler('DOGE');
+            const stored = chunkStore(db);
+            const { win, enc } = chunkedBatch(2);
+            await land(h, enc, 0, 71);
+
+            const row = stored[0];
+            assert.strictEqual(row.chunk_index, 0, 'the head owns slot 0');
+            assert.strictEqual(row.total_chunks, 2);
+            assert.strictEqual(row.batch_crc32, enc.batchCrc32);
+            assert.strictEqual(row.window_start, win.window_start);
+            assert.strictEqual(row.window_end, win.window_end);
+            assert.strictEqual(row.row_count, win.row_count);
+            assert.strictEqual(row.btc_block_height, ANCHOR);
+            assert.ok(row.chunk_b64 && row.chunk_b64.length > 0, 'and its own slice of the body');
+        });
+
+        it('a bad quorum on a completed batch reds the head and pushes nothing', async function () {
+            const { handler: h, db } = batchHandler('DOGE');
+            chunkStore(db);
+            const { enc } = chunkedBatch(2);
+            await land(h, enc, 0, 71);
+
+            ed25519.verify.returns(false);
+            await land(h, enc, 1, 72);
+            assert.strictEqual(db.enqueueHubPushTx.called, false);
+            assert.match(db.setAttestBatchStatus.firstCall.args[1], /^invalid: insufficient PBFT quorum/,
+                'the completing chunk is judged on the same quorum a single-wire head is');
         });
 
         it('the delivery arm knows the attest_batch push type', function () {

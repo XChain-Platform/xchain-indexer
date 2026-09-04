@@ -817,12 +817,12 @@ class Attest {
         // (D57). requestIdRaw equals requestId because a mirror row's id is lower-case
         // hex by construction: there is no wire case to preserve.
         //
-        // effectiveTime is passed for the MIRROR-ERA CANONICAL, which appends the signed
-        // effective_time. The shared module still hard-codes `effectiveTime: null` (its
-        // own comment names wiring this through as this row's work, and that file is
-        // outside this row's edit scope), so today it builds the LEGACY canonical and a
-        // real hub-signed mirror row will not verify until that one field is threaded.
-        // Passing it here means the applier side needs no further change when it is.
+        // effectiveTime is the mirror row's SIGNED effective_time, and it is passed because
+        // the mirror-era canonical appends that field: the validators signed the body plus
+        // the time the response became effective, so a verifier that omitted it would build
+        // the legacy canonical and refuse every honest hub-signed row. The shared module
+        // threads whatever the caller passes into the canonical it verifies against, so the
+        // chain path and this one differ only in where the field comes from.
         let verdict = await avr.verifyAttestationResponse({
             request,
             sigs,
@@ -880,6 +880,13 @@ class Attest {
                     ' : block=' + data['BLOCK_INDEX'] + ' (no transaction)');
 
         await this.indexerDb.createAttestationResponse(data);
+
+        // The v5/v6 batch carrying this body can land BEFORE the row binds (the chain-only
+        // rebuild inserts the mirror row with its link already stamped), in which case the
+        // mirror's own stamp found no v1 row to write it onto. Fires only when the selected
+        // mirror row carries the column, and the link is display only either way.
+        if(row.batch_action_index != null)
+            await this.indexerDb.setAttestationResponseBatchIndex(requestId, row.batch_action_index);
 
         if(String(data['RESPONSE_STATUS']) === 'ok'){
             for(let s of verdict.verifiedSigs){
@@ -1043,12 +1050,20 @@ class Attest {
         // Reassembly, then the quorum. A multi-chunk batch is absorbed only once its
         // continuations are on chain; until then the head is a structurally sound action
         // that has delivered nothing, which is the ANCHOR archive head's behaviour and for
-        // the same reason (a head can legitimately land before its chunks).
+        // the same reason (a head can legitimately land before its chunks). When the head
+        // lands LAST it reassembles here, against the chunks already stored, so the batch
+        // absorbs exactly once whichever order the wires arrive in.
         let batch = null;
-        if(!error && head.totalChunks === 1){
-            let assembled = abw.reassembleAttestBatch(head, []);
-            if(!assembled.ok) error = assembled.status;
-            else              batch = assembled.batch;
+        if(!error){
+            let stored = (head.totalChunks === 1)
+                       ? []
+                       : await this.indexerDb.getAttestBatchChunks(head.batchKey);
+            let assembled = abw.reassembleAttestBatch(head, stored);
+            if(assembled.ok) batch = assembled.batch;
+            // Incomplete coverage is the ONE failure that is not a verdict: the missing
+            // chunks may still be mined. Every other one is the batch's, and is recorded
+            // identically on every node from the same bytes.
+            else if(assembled.reason !== abw.ATTEST_BATCH_FAIL_REASONS.COVERAGE) error = assembled.status;
         }
 
         if(!error && batch){
@@ -1059,6 +1074,7 @@ class Attest {
         data['REQUEST_ID'] = head && head.ok ? head.batchKey : '';
         data['VERSION']    = abw.ATTEST_BATCH_HEAD_VERSION;
         data['STATUS']     = error || 'valid';
+        this._stampBatchColumns(data, head, 0);
 
         console.log("\t ATTEST v5 : batch=" + String(data['REQUEST_ID']).substring(0,16) + '...' +
                     (head && head.ok ? ' : window=' + head.windowStart + '-' + head.windowEnd +
@@ -1087,8 +1103,12 @@ class Attest {
     // ATTEST v6: a batch continuation chunk.
     //
     // Carries one slice of the head's compressed body and nothing else: no window header,
-    // no signatures, no absorption. The head owns the verdict on the batch, so a
-    // continuation's own status only ever reports whether ITS bytes are well formed.
+    // no signatures. The head owns the VERDICT on the batch, so a continuation's own status
+    // only ever reports whether ITS bytes are well formed, and a batch that fails when this
+    // chunk completes it is stamped on the head instead.
+    //
+    // The chunk that completes the coverage DOES absorb, because it is the moment the whole
+    // window is finally on chain, and it is the same moment on every node.
     async _parseBatchContinuation(params, data, error){
 
         if(!error && String(this.config['COIN']) !== BATCH_CHAIN)
@@ -1100,16 +1120,138 @@ class Attest {
             if(!chunk.ok) error = chunk.status;
         }
 
+        // One read serves all three things this handler needs from the batch's stored rows:
+        // the head to verify against, the geometry to agree with, and the slots already
+        // taken. Rejected rows never appear in it, so junk neither occupies a slot nor
+        // contributes bytes.
+        let stored = [], headRow = null;
+        if(!error){
+            stored  = await this.indexerDb.getAttestBatchChunks(chunk.batchKey);
+            headRow = stored.find(r => Number(r.version) === abw.ATTEST_BATCH_HEAD_VERSION &&
+                                       Number(r.chunk_index) === 0) || null;
+        }
+
+        // Geometry must agree with the head that owns the batch. Both fields are signed
+        // into neither wire, so this is not a security check: it stops two DIFFERENT
+        // encodings of one window (a republish at a different chunk size, say) from
+        // interleaving into a body no publisher ever produced.
+        if(!error && headRow && Number(headRow.total_chunks) !== chunk.totalChunks)
+            error = 'invalid: TOTAL_CHUNKS (does not match the batch head)';
+        if(!error && headRow && String(headRow.batch_crc32) !== chunk.batchCrc32)
+            error = 'invalid: BATCH_CRC32 (does not match the batch head)';
+
+        // Duplicate-slot guard, the ANCHOR continuation's: a filled slot cannot be refilled,
+        // which is what makes a replayed chunk inert instead of a second absorption.
+        if(!error && stored.some(r => Number(r.version) === abw.ATTEST_BATCH_CONTINUATION_VERSION &&
+                                      Number(r.chunk_index) === chunk.chunkIndex))
+            error = 'invalid: CHUNK_INDEX (duplicate)';
+
         data['REQUEST_ID'] = chunk && chunk.ok ? chunk.batchKey : '';
         data['VERSION']    = abw.ATTEST_BATCH_CONTINUATION_VERSION;
         data['STATUS']     = error || 'valid';
+        this._stampBatchColumns(data, chunk, chunk && chunk.ok ? chunk.chunkIndex : null);
 
         console.log("\t ATTEST v6 : batch=" + String(data['REQUEST_ID']).substring(0,16) + '...' +
                     (chunk && chunk.ok ? ' : chunk=' + chunk.chunkIndex + '/' + chunk.totalChunks : '') +
                     ' : ' + data['STATUS']);
 
         await this.indexerDb.createAttestationBatchAction(data);
+
+        if(!error && headRow)
+            await this._absorbCompletedBatch(headRow, stored, chunk, data);
+
         await this.mapper.createMappings(data);
+    }
+
+    // Persist the chunk-table half of a batch action: this wire's slot, its body slice and,
+    // on a head, the window header. The header is stored because it is the INPUT to a later
+    // reassembly: a continuation landing after the head has no other way to rebuild the head
+    // it must verify the assembled body against.
+    //
+    // @param {Object} data the landing action
+    // @param {Object} parsed the parsed head or continuation (null/failed leaves every column NULL)
+    // @param {number} chunkIndex this wire's slot: 0 for a head, its own index for a continuation
+    _stampBatchColumns(data, parsed, chunkIndex){
+        if(!parsed || parsed.ok !== true) return;
+        data['BATCH_CRC32']  = parsed.batchCrc32;
+        data['TOTAL_CHUNKS'] = parsed.totalChunks;
+        data['CHUNK_INDEX']  = chunkIndex;
+        data['CHUNK_B64']    = parsed.chunkB64;
+        if(chunkIndex !== 0) return;
+        data['WINDOW_START']     = parsed.windowStart;
+        data['WINDOW_END']       = parsed.windowEnd;
+        data['ROW_COUNT']        = parsed.rowCount;
+        data['BTC_BLOCK_HEIGHT'] = parsed.btcBlockHeight;
+    }
+
+    // Rebuild the parsed head a stored v5 row came from, so a continuation reassembles
+    // through the SAME path the head-side does, byte for byte.
+    //
+    // The network is this node's own rather than a stored column: a head declaring another
+    // network is refused before it is ever recorded valid, and only valid rows reach here,
+    // so the two cannot disagree. One network per database is what makes that hold.
+    _headFromRow(row){
+        return {
+            ok:             true,
+            batchKey:       String(row.request_id),
+            network:        String(this.config['NETWORK']),
+            windowStart:    Number(row.window_start),
+            windowEnd:      Number(row.window_end),
+            rowCount:       Number(row.row_count),
+            btcBlockHeight: Number(row.btc_block_height),
+            batchCrc32:     String(row.batch_crc32),
+            totalChunks:    Number(row.total_chunks),
+            chunkB64:       String(row.chunk_b64)
+        };
+    }
+
+    // Absorb the batch on the continuation that completes its coverage, or do nothing when
+    // slots are still missing.
+    //
+    // The landing chunk is joined to the stored set in memory rather than re-read: it was
+    // written a statement ago, and the two sets are the same one. Coverage is decided by the
+    // INDEX SET, never by a count, so a stray out-of-range row can neither pad an incomplete
+    // set nor let a complete one absorb twice.
+    //
+    // A failure here is the BATCH's, so it lands on the head, exactly as the ANCHOR archive
+    // stamps its own head (actions/anchor.js). This chunk's bytes were well formed and its
+    // row stays valid, which is what keeps one bad batch from re-judging an honest wire.
+    //
+    // The push carries THIS action's index, block and time, not the head's: the completing
+    // action is the one whose rollback un-lands the delivery, and it is the action at which
+    // the window is first fully on chain.
+    async _absorbCompletedBatch(headRow, stored, chunk, data){
+        let head   = this._headFromRow(headRow);
+        let chunks = stored.concat([{
+            chunk_index:  chunk.chunkIndex,
+            chunk_b64:    chunk.chunkB64,
+            action_index: data['ACTION_INDEX']
+        }]);
+        if(abw.attestChunkCoverage(chunks, head.totalChunks) === null) return;
+
+        let assembled = abw.reassembleAttestBatch(head, chunks);
+        let failure   = assembled.ok ? null : assembled.status;
+        let batch     = assembled.ok ? assembled.batch : null;
+        if(batch){
+            let quorum = await this._verifyBatchQuorum(batch);
+            if(!quorum.ok) failure = quorum.error;
+        }
+
+        if(failure){
+            console.warn("\t ATTEST v6 : batch=" + String(head.batchKey).substring(0,16) + '...' +
+                         ' : completed and failed, flagging the head : ' + failure);
+            await this.indexerDb.setAttestBatchStatus(Number(headRow.action_index), failure);
+            return;
+        }
+
+        // Same durable transactional outbox the single-chunk head uses, for the same
+        // reason: this push is the chain-only rebuild road, not an optimisation.
+        if(this.hubClient && this.hubClient.enabled){
+            let pushGeneration = await this.indexerDb.getPushGeneration(data['COIN']);
+            let payload = this._buildBatchHubPush(batch, data, pushGeneration);
+            let pushId  = await this.indexerDb.enqueueHubPushTx('attest_batch', payload);
+            this.indexerDb.stageHubPush({ id: pushId, pushType: 'attest_batch', payload });
+        }
     }
 
     // The hub push payload for a valid batch. The KEY NAMES ARE THE INTERFACE and the

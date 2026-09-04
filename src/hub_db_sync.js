@@ -326,8 +326,12 @@ const FULL_REPAGE_TABLES = ['capability_snapshots', 'price_snapshots', 'cross_ch
 // attestation_responses carries the FINALIZED ATTEST response (one row per terminal round,
 // status 'ok' or 'expired'). The legacy route for it is a validator-paid ATTEST v1
 // transaction; the BTC indexer binds it to a block from its own signed effective_time and
-// synthesizes the v1 action locally. Insert-only: no column is ever updated after insert, so
-// the apply stays a plain INSERT IGNORE and no re-page is needed for content convergence.
+// synthesizes the v1 action locally. Insert-only in every SIGNED column; the one exception is
+// batch_action_index, the display link to the ATTEST v5/v6 batch that later carries the body
+// on chain, which the hub stamps after that batch lands and re-broadcasts, so the apply is a
+// first-stamp-wins upsert of that single column (see _applyRow). No re-page is needed for
+// content convergence: the link is not a consensus input, and the stamp arrives as a
+// broadcast rather than as something a cursor has to re-fetch.
 // Never retracted either: the mirror row is inert without a pending local request, so a reorg
 // that removes the request simply leaves nothing for it to bind to (spec §4.5). It is a
 // NATURAL-KEY mirror on (network, request_id) rather than an id-parity one, unlike the two
@@ -2267,8 +2271,63 @@ class HubDbSync {
             return;
         }
 
+        // attestation_responses is insert-only in every column the responsible set signed,
+        // and upsertable in exactly ONE that it did not: batch_action_index, the link to the
+        // ATTEST v5/v6 batch that carries this response's body on chain. That batch lands on
+        // DOGE long after the row was mirrored, so the hub stamps the column and re-broadcasts
+        // the row; a plain INSERT IGNORE would drop the stamp and leave the link NULL on every
+        // streamed mirror forever while a fresh bootstrap served it, the divergent-mirror shape
+        // the cross_chain_matches anchor_txid path above closes.
+        //
+        // COALESCE, so the FIRST stamp wins and no other column is assignable at all. Row
+        // identity here is the natural key, not the payload, so an assignable signed column
+        // would let a re-delivery of one hub's copy silently replace a body this node already
+        // verified and applied. The link is safe to move because nothing consensus reads it:
+        // no state-hash preimage carries it and the applier never reads it.
+        if (table === 'attestation_responses' && cols.includes('batch_action_index')) {
+            let query = 'INSERT INTO attestation_responses (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
+                      + ' ON DUPLICATE KEY UPDATE batch_action_index = COALESCE(batch_action_index, VALUES(batch_action_index))';
+            await this.hubDb.doQuery(query, args);
+            if (row.batch_action_index != null) await this._linkAppliedResponseToBatch(row);
+            return;
+        }
+
         let query = 'INSERT IGNORE INTO ' + table + ' (' + cols.join(', ') + ') VALUES (' + placeholders + ')';
         await this.hubDb.doQuery(query, args);
+    }
+
+    // Carry a stamped batch link onto the local ATTEST v1 row the applier minted for this
+    // response. Keyed on the request id, which is the only identifier the two sides share:
+    // the batch is parsed on the DOGE indexer and names its responses by request_id, while
+    // the v1 row was minted locally on BTC at whatever block the mirror row bound at.
+    //
+    // The value written is the one now STORED in the mirror rather than the one that just
+    // arrived, so the first-stamp-wins rule above decides both copies at once and a second
+    // batch claiming the same response cannot move them apart.
+    //
+    // Best effort by design. Both columns are display links, never consensus inputs, so a
+    // failure here must not fail the drain (which would defer blocks); and a response whose
+    // v1 has not been applied yet matches no row, which is the case the applier closes by
+    // copying the link off the mirror row when it mints the v1.
+    //
+    // The local indexer connection is reached through the Database back-reference rather than
+    // a constructor option, so this file stays the canonical copy other services vendor: the
+    // explorer runs this same client against a pool that has no indexer and no attests table,
+    // and simply skips the link.
+    async _linkAppliedResponseToBatch(row) {
+        let db = this.hubDb && this.hubDb.indexer && this.hubDb.indexer.indexerDb;
+        if (!db || typeof db.setAttestationResponseBatchIndex !== 'function') return;
+        try {
+            let stored = await this.hubDb.doQuery(
+                'SELECT batch_action_index FROM attestation_responses WHERE network = ? AND request_id = ? LIMIT 1',
+                [String(row.network == null ? '' : row.network), String(row.request_id == null ? '' : row.request_id)]);
+            let linked = (stored && stored[0]) ? stored[0].batch_action_index : null;
+            if (linked == null) return;
+            await db.setAttestationResponseBatchIndex(row.request_id, linked);
+        } catch (e) {
+            console.warn('HubDbSync: could not link attestation response ' +
+                String(row.request_id) + ' to its on-chain batch:', e);
+        }
     }
 
     // Local mirror table columns, cached per table with a short TTL. Table names

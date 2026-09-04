@@ -163,6 +163,22 @@ class HubClient {
         return this._requireHubAccepted('pushpricebatch', await this._call('pushpricebatch', batchData));
     }
 
+    // Push a validated ATTEST batch (a signed window of finalized attestation responses,
+    // parsed off the DOGE rail) to the hub via pushattestbatch. The hub re-verifies the
+    // batch quorum, inserts the carried rows into the response mirror and re-serves them
+    // to every BTC indexer through the ordinary mirror path, which is how a chain-only
+    // node's mirror is rebuilt from chain parse alone.
+    //
+    // batchData is the delivery arm's payload verbatim: source_chain, network,
+    // window_start, window_end, row_count, btc_block_height, rows[], sigs[], action_index,
+    // block_index, block_time, push_generation. The hub destructures exactly those names,
+    // so nothing here reshapes them. rows and sigs are the reassembled body as it came off
+    // the chain, so the hub verifies the same bytes this node verified.
+    async pushAttestBatch(batchData){
+        if(!this.enabled) return;
+        return this._requireHubAccepted('pushattestbatch', await this._call('pushattestbatch', batchData));
+    }
+
     // Notify the hub that a reorg rolled back PRICE actions on this chain so it can
     // retract any price_snapshots / oracle_prices rows seeded from those actions.
     // sourceChain:     the chain this indexer serves (BTC/LTC/DOGE)

@@ -32,6 +32,9 @@
  *      since_id = MAX(local id) cursor is not a position in the followed hub's
  *      id space at all.
  *   4. The frozen watermark grace and its regtest-only env seam.
+ *   5. The one-column batch-link upsert. Every signed column is fixed at first
+ *      insert, and only batch_action_index (the display link to the on-chain
+ *      v5/v6 batch, D78) can be filled later, from NULL, once.
  *
  * These are driven against the real methods, not asserted against the
  * declarations: every test below reads the SQL the mirror would actually issue
@@ -53,7 +56,8 @@ const GRACE_ENV = 'HUB_SYNC_ATTEST_RESPONSE_GRACE_S';
 // Only the subset the tests exercise carries a Type; the rest are irrelevant to the filter.
 const RESPONSE_COLUMNS = ['id', 'network', 'request_id', 'request_action_index', 'request_block_index',
                           'provider_id', 'status', 'response_payload', 'response_hash', 'meta',
-                          'effective_time', 'signer_pubkeys', 'signatures', 'widen', 'finalized_at'];
+                          'effective_time', 'signer_pubkeys', 'signatures', 'widen',
+                          'batch_action_index', 'finalized_at'];
 
 // state_checkpoints is the id-PARITY member of the same HUB_STATE_TABLES class: it is the
 // control for both the id strip and the cursor, so a test that passes for the wrong reason
@@ -102,8 +106,77 @@ function responseRow() {
         signer_pubkeys: '["' + 'c'.repeat(64) + '"]',
         signatures: '[{"pubkey":"' + 'c'.repeat(64) + '","sig":"' + 'd'.repeat(128) + '"}]',
         widen: 0,
+        batch_action_index: null,                    // filled once the v5/v6 batch carrying the body lands
         finalized_at: 1767225480
     };
+}
+
+// ── a MariaDB stand-in that OBEYS the generated statement ────────────────────
+//
+// The behaviour cases below (a signed column cannot be rewritten, a link can be
+// filled once) are properties of the SQL this module emits, so the store executes
+// that SQL rather than re-stating the rule: it reads the column list and the ON
+// DUPLICATE KEY UPDATE clause out of the statement itself and applies them. Widen
+// the ODKU clause and these cases change behaviour, which is what makes them
+// falsifiable rather than decorative.
+// Split an ON DUPLICATE KEY UPDATE body on its top-level commas only, so a comma
+// inside COALESCE(...) does not look like the start of a second assignment.
+function splitAssignments(body) {
+    let out = [], depth = 0, start = 0;
+    for (let i = 0; i < body.length; i++) {
+        if (body[i] === '(') depth++;
+        else if (body[i] === ')') depth--;
+        else if (body[i] === ',' && depth === 0) { out.push(body.slice(start, i)); start = i + 1; }
+    }
+    out.push(body.slice(start));
+    return out.map(s => s.trim()).filter(s => s.length > 0);
+}
+
+function applyStatement(store, sql, args) {
+    let cols = /\(([^)]*)\) VALUES/.exec(sql)[1].split(',').map(s => s.trim().replace(/`/g, ''));
+    let incoming = {};
+    cols.forEach((c, i) => { incoming[c] = args[i]; });
+    let key      = String(incoming.network) + '|' + String(incoming.request_id);
+    let existing = store.get(key);
+    if (!existing) { store.set(key, Object.assign({}, incoming)); return; }
+
+    let odku = /ON DUPLICATE KEY UPDATE (.+)$/.exec(sql);
+    if (!odku) return;                                   // INSERT IGNORE: the duplicate is a no-op
+    for (let assignment of splitAssignments(odku[1])) {
+        let cut    = assignment.indexOf('=');
+        let target = assignment.slice(0, cut).trim().replace(/`/g, '');
+        let expr   = assignment.slice(cut + 1).trim();
+        let coalesce = /^COALESCE\(\s*`?(\w+)`?\s*,\s*VALUES\(\s*`?(\w+)`?\s*\)\s*\)$/.exec(expr);
+        let plain    = /^VALUES\(\s*`?(\w+)`?\s*\)$/.exec(expr);
+        if (coalesce)   existing[target] = (existing[coalesce[1]] == null) ? incoming[coalesce[2]] : existing[coalesce[1]];
+        else if (plain) existing[target] = incoming[plain[1]];
+        else throw new Error('the test store cannot execute the assignment `' + assignment.trim() +
+                             '`; teach it that form before relying on this case');
+    }
+}
+
+// A HubDbSync whose hub DB is the store above and whose Database back-reference
+// exposes the local indexer connection, which is how the module reaches the
+// request-id-keyed setter that carries the link onto the applied ATTEST v1 row.
+function makeStoredSync() {
+    const store  = new Map();
+    const setter = sinon.stub().resolves();
+    const hubDb  = {
+        indexer: { indexerDb: { setAttestationResponseBatchIndex: setter } },
+        doQuery: async (sql, args) => {
+            let show = /^SHOW COLUMNS FROM (\S+)/.exec(sql);
+            if (show) return showColumns(show[1] === 'attestation_responses' ? RESPONSE_COLUMNS : []);
+            if (/^SELECT batch_action_index FROM attestation_responses/.test(sql)) {
+                let row = store.get(String(args[0]) + '|' + String(args[1]));
+                return row ? [{ batch_action_index: row.batch_action_index }] : [];
+            }
+            if (/^INSERT/.test(sql)) { applyStatement(store, sql, args); return {}; }
+            return [];
+        }
+    };
+    const sync = new HubDbSync(hubDb, { hubUrl: 'http://hub.test', network: 'regtest' });
+    const stored = () => store.get('regtest|' + 'a'.repeat(64));
+    return { sync, store, stored, setter };
 }
 
 describe('HubDbSync attestation_responses mirror registration @regression @tier1', function () {
@@ -138,7 +211,7 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
         const sql = inserts[0].sql;
 
         // The column list, read out of the generated SQL rather than assumed.
-        const cols = /\(([^)]*)\) VALUES/.exec(sql)[1].split(',').map(s => s.trim());
+        const cols = /\(([^)]*)\) VALUES/.exec(sql)[1].split(',').map(s => s.trim().replace(/`/g, ''));
         assert.ok(cols.indexOf('id') === -1,
             'the hub id must not be written: hub ids are hub-LOCAL (every hub that verifies the ' +
             'gossiped result inserts its own row), so a wire id can collide with a locally-assigned ' +
@@ -147,9 +220,16 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
             'the natural key (network, request_id) must be written, or the row has no identity');
         assert.strictEqual(inserts[0].args.length, cols.length, 'one bound arg per written column');
         assert.ok(inserts[0].args.indexOf(row.id) === -1, 'the hub id must not be bound as a value either');
-        assert.ok(/^INSERT IGNORE INTO attestation_responses /.test(sql),
-            'insert-only table: a re-delivered, re-gossiped or replayed row is a no-op on the natural ' +
-            'key, so the apply must stay a plain INSERT IGNORE with no in-place upgrade clause');
+    });
+
+    it('_applyRow falls back to a plain INSERT IGNORE for a row that carries no link column', async function () {
+        const { sync, queries } = makeSync();
+        const row = responseRow();
+        delete row.batch_action_index;                   // a hub that does not serve the column yet
+        await sync._applyRow('attestation_responses', row);
+        assert.ok(/^INSERT IGNORE INTO attestation_responses /.test(insertFor(queries, 'attestation_responses')[0].sql),
+            'with no link on the wire there is nothing to upsert, and the plain insert keeps a hub that ' +
+            'predates the column working unchanged');
     });
 
     it('_applyRow KEEPS the id for state_checkpoints, the id-parity control in the same class', async function () {
@@ -161,6 +241,99 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
         assert.ok(cols.indexOf('id') !== -1,
             'state_checkpoints is an id-parity mirror; if the strip reaches it, the strip condition is ' +
             'too broad and this suite would pass for the wrong reason');
+    });
+
+    // ── the one-column batch-link upsert (D78) ──
+
+    it('generates an upsert whose ONLY assignment is a first-stamp-wins batch_action_index', async function () {
+        const { sync, queries } = makeSync();
+        await sync._applyRow('attestation_responses', responseRow());
+        const sql = insertFor(queries, 'attestation_responses')[0].sql;
+
+        assert.ok(/^INSERT INTO attestation_responses /.test(sql),
+            'a plain INSERT IGNORE would drop the batch stamp the hub sends as a re-broadcast of an ' +
+            'already-mirrored row, leaving the link NULL on every streamed mirror while a fresh ' +
+            'bootstrap served it. Generated SQL was: ' + sql);
+        const odku = /ON DUPLICATE KEY UPDATE (.+)$/.exec(sql);
+        assert.ok(odku, 'the upgrade clause must be present. Generated SQL was: ' + sql);
+        assert.deepStrictEqual(splitAssignments(odku[1]),
+            ['batch_action_index = COALESCE(batch_action_index, VALUES(batch_action_index))'],
+            'EXACTLY one assignment, and it fills from NULL only. Every other column is content a ' +
+            'responsible set signed and this node has already verified; making one of them assignable ' +
+            'would let a re-delivery rewrite a verified response under an unchanged natural key');
+    });
+
+    it('a re-delivered row cannot rewrite a signed column', async function () {
+        const { sync, stored } = makeStoredSync();
+        const first = responseRow();
+        await sync._applyRow('attestation_responses', first);
+
+        const forged = responseRow();
+        forged.signatures       = '[{"pubkey":"' + 'e'.repeat(64) + '","sig":"' + 'f'.repeat(128) + '"}]';
+        forged.response_payload = '{"ok":false}';
+        forged.status           = 'expired';
+        await sync._applyRow('attestation_responses', forged);
+
+        assert.strictEqual(stored().signatures, first.signatures,
+            'the stored signature set must survive a re-delivery: the row is transport, the applier ' +
+            'has already verified this copy, and the natural key is the identity rather than the body');
+        assert.strictEqual(stored().response_payload, first.response_payload, 'the attested body is fixed at insert');
+        assert.strictEqual(stored().status, first.status, 'the terminal status is fixed at insert');
+    });
+
+    it('fills a NULL link from a re-delivery and stamps the applied v1 row through the request id', async function () {
+        const { sync, stored, setter } = makeStoredSync();
+        await sync._applyRow('attestation_responses', responseRow());
+        assert.strictEqual(stored().batch_action_index, null, 'the row mirrors before its batch lands');
+        assert.strictEqual(setter.callCount, 0, 'nothing to carry while the link is NULL');
+
+        const linked = responseRow();
+        linked.batch_action_index = 4242;
+        await sync._applyRow('attestation_responses', linked);
+
+        assert.strictEqual(stored().batch_action_index, 4242, 'the stamp must land on the mirrored row');
+        assert.strictEqual(setter.callCount, 1,
+            'the v1 row the applier minted locally also carries the link, and the request id is the only ' +
+            'identifier the two sides share: the batch is parsed on DOGE and names its responses by ' +
+            'request_id, while the v1 action index was assigned on BTC');
+        assert.deepStrictEqual(setter.firstCall.args, ['a'.repeat(64), 4242]);
+    });
+
+    it('a SECOND batch claiming the same response moves neither copy', async function () {
+        const { sync, stored, setter } = makeStoredSync();
+        const first = responseRow();
+        first.batch_action_index = 4242;
+        await sync._applyRow('attestation_responses', first);
+
+        const second = responseRow();
+        second.batch_action_index = 9999;
+        await sync._applyRow('attestation_responses', second);
+
+        assert.strictEqual(stored().batch_action_index, 4242, 'first stamp wins, as COALESCE says');
+        assert.strictEqual(setter.callCount, 2, 'the link is re-asserted, never recomputed');
+        assert.deepStrictEqual(setter.secondCall.args, ['a'.repeat(64), 4242],
+            'the setter must write the value now STORED in the mirror, not the one that just arrived, ' +
+            'or the two copies of a display link disagree after a duplicate batch');
+    });
+
+    it('skips the link entirely when there is no local indexer connection to stamp', async function () {
+        const { sync, queries } = makeSync();
+        const linked = responseRow();
+        linked.batch_action_index = 4242;
+        await sync._applyRow('attestation_responses', linked);
+        assert.strictEqual(queries.filter(q => /^SELECT batch_action_index/.test(q.sql)).length, 0,
+            'the explorer vendors this same client against a pool with no indexer and no attests table; ' +
+            'the mirrored row still applies there, only the local stamp is skipped');
+    });
+
+    it('the other HUB_STATE_TABLES members keep their plain INSERT IGNORE', async function () {
+        for (const table of ['state_checkpoints', 'anchor_reward_attestations']) {
+            const { sync, queries } = makeSync({ columns: { [table]: ['id', 'network', 'batch_action_index'] } });
+            await sync._applyRow(table, { id: 5, network: 'regtest', batch_action_index: 7 });
+            assert.ok(new RegExp('^INSERT IGNORE INTO ' + table + ' ').test(insertFor(queries, table)[0].sql),
+                table + ' is append-only with no column mutated after insert; the upsert is scoped to the ' +
+                'one table whose link the hub stamps later, and a table name is the only thing scoping it');
+        }
     });
 
     // ── the cursor that follows from the strip (D55) ──
