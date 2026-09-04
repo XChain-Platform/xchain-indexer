@@ -2313,6 +2313,9 @@ class Utility {
         // that carries that id, never split across pages.
         let applicable = [];
         let after      = null;
+        // Counted for the diagnostic below, never used to decide anything.
+        let pendingSeen = 0;
+        let mirrorSeen  = 0;
         while(applicable.length < cap){
             // Local side first: with nothing pending there is nothing a mirror row can
             // bind to, which is the common case and costs one indexed read.
@@ -2321,6 +2324,8 @@ class Utility {
             if(page.length === 0) break;
             let ids      = page.map(r => String(r.request_id || '').toLowerCase());
             let mirrored = await db.getMirroredAttestationResponses(network, ids, block_time);
+            pendingSeen += page.length;
+            mirrorSeen  += (mirrored || []).length;
             for(let item of this.selectApplicableAttestationResponses(mirrored, page, block_index, block_time, network)){
                 applicable.push(item);
                 if(applicable.length >= cap) break;
@@ -2328,6 +2333,26 @@ class Utility {
             if(page.length < ATTEST_MIRROR_APPLICABILITY_PAGE_ROWS) break;
             let last = page[page.length - 1];
             after = { block_index: last.block_index, action_index: last.action_index };
+        }
+
+        // WHY THIS BLOCK LOGS AT ALL. Every step above can decline silently: a
+        // request that is not pending, a deadline already passed, a flag day not
+        // yet active, an effective time still in the future, or simply no mirror
+        // row for any pending id. The result of each is the same empty list, and
+        // downstream that is indistinguishable from a mirror that never delivered
+        // a row. Three acceptance runs were spent attributing exactly this to the
+        // mirror, then to the roster, then to node catch-up, because the applier
+        // said nothing whatsoever about what it had considered and declined.
+        //
+        // Logged only when there IS something pending, so a chain with no
+        // attestation traffic stays quiet. Counts only: this runs per block.
+        if(pendingSeen > 0 && applicable.length === 0){
+            console.log('processAttestationResponses: block ' + block_index + ' considered ' +
+                pendingSeen + ' pending request(s) and ' + mirrorSeen + ' mirror row(s), applied 0. ' +
+                'A mirror row binds only when its request is still pending, the deadline has not ' +
+                'passed, the flag day is active at the REQUEST\'s block, and effective_time <= ' +
+                block_time + '. If a row exists and none of those is the reason, the response is ' +
+                'failing verification inside the handler and is inert.');
         }
 
         for(let item of applicable){
