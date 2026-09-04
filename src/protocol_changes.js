@@ -309,16 +309,14 @@ const UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME = 9999999999;
 // activation argument moved; the pin advances only because it must track the
 // package version, which is what keeps a node from applying a rule set it was
 // not built for.
-//
-// 0.12.1 -> 0.14.0 registers nothing HERE either, and that is worth stating
-// because this train IS consensus-breaking. Attestation responsible-set widening
-// is gated by its own block-anchored map (attest_responsible_widening_activation.js),
-// the same shape every other flag day in this repo uses, rather than by a
-// registry entry; this pin advances only to track the package version. 0.13.0 is
-// skipped deliberately at the operator's request, and nothing here resolves
-// versions by contiguity: isEnabled() ranks numerically, so 0.14.0 outranks every
-// registered change exactly as 0.12.1 did.
-const CONSENSUS_VERSION = '0.14.0';
+// 0.12.1 -> 0.15.0 registers nothing new either, and this was checked rather than
+// assumed: every one of the 95 addChange() entries below registers at 0.1.0 or
+// 0.2.0, so nothing sits in the gap that a higher pin would newly enable and the
+// enabled set is identical on both sides of the bump. The train's consensus work
+// (the ATTEST response mirror, ROLLCALL) gates on its OWN per-network activation
+// heights, which are unarmed off regtest, not on this ordinal. So the second line
+// of the deliberate two-line decision is: the rule set does not move here.
+const CONSENSUS_VERSION = '0.15.0';
 
 // Predicate for the NATIVE_FEE_PRICE_TIME_GATE flag-day. Its ONE consumer is
 // utility.getFeeOraclePrices (query selection); nothing else in src/ consults it.
