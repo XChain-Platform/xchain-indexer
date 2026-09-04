@@ -1012,6 +1012,13 @@ class Rollback {
             // rollback: 'special' rather than 'block' because neither has a block_index
             // column, so the generic blockTables loop below would throw 1054 on them and
             // fail the entire rollback transaction on every reorg.
+            // Absences before verdicts, so a partial failure cannot leave an absence row
+            // pointing at an epoch whose verdict is already gone; the catch swallows ONLY
+            // the schema gap on a node that predates the ROLLCALL migration, where the
+            // tables do not exist and there is nothing to unwind. This is the ONLY
+            // roll-call unwind: xchain-sync/src/ClientRollback.js carries the replica's
+            // mirror of it, and a second copy here re-raises 1146 on a pre-migration node
+            // and aborts the reorg this guard exists to keep alive.
             try {
                 await this.indexerDb.doQuery(`DELETE FROM rollcall_absences WHERE close_block >= ?`, [block_index]);
                 await this.indexerDb.doQuery(`DELETE FROM rollcalls WHERE close_block >= ?`, [block_index]);
@@ -1025,23 +1032,6 @@ class Rollback {
                 args  = [block_index];
                 await this.indexerDb.doQuery(query, args);
             }
-
-            // The two BTC-side ROLLCALL tables scope their block by close_block and carry
-            // no block_index column at all, so they cannot ride the generic loop above and
-            // need their own delete. Their registry entries say `special` for this reason;
-            // xchain-sync/src/ClientRollback.js carries the mirror of this delete so a
-            // replica unwinds them the same way.
-            //
-            // Leaving them classified `block` was not a silent skip here, the way it is on
-            // the replica: the loop above runs inside the reorg transaction, where doQuery
-            // re-throws rather than swallowing, so `DELETE FROM rollcalls WHERE block_index
-            // >= ?` raised errno 1054 and aborted the whole rollback. Measured against the
-            // real DDL: "Unknown column 'block_index' in 'WHERE'" for both tables.
-            //
-            // Absences before verdicts, so a partial failure can never leave an absence row
-            // pointing at an epoch whose verdict is already gone.
-            await this.indexerDb.doQuery("DELETE FROM rollcall_absences WHERE close_block >= ?", [block_index]);
-            await this.indexerDb.doQuery("DELETE FROM rollcalls WHERE close_block >= ?", [block_index]);
 
             // Second scoping key for validator_rewards: the MATERIALIZATION block. The
             // loop above deletes on block_index, which for a reward is its EARN block.

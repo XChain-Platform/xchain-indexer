@@ -449,9 +449,9 @@ function buildAnchorActionResponse(config, latest, row, extra) {
 // returned publisher / snapshot_block / seq against the tuple it is about to pay, and a
 // txid that anchored something else fails that comparison instead of passing a weaker test.
 //
-// Every attestation-bearing version is served ({4,5,6}) plus their unattested siblings, so
-// the caller can positively DETECT a version mismatch rather than see an empty answer for
-// one and have to guess.
+// Every ANCHOR version is served: the SQL below filters none, so the caller can
+// positively DETECT a version mismatch rather than see an empty answer for one and
+// have to guess. The attestation-bearing versions are v0 and v1.
 //
 // BOUNDED AND PAGED, not merely bounded. The cap on the checkpoint-identity read above is
 // justified by "the caller filters those by txid/version, so fetch the (tiny) candidate

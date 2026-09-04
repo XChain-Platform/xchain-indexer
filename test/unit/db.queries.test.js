@@ -777,6 +777,116 @@ describe('Database.getTokenSupplyToken() @regression @tier1', function () {
     });
 });
 
+// getTokenSupplyBalance / getTokenSupplyEscrow
+describe('Database.getTokenSupplyBalance()/getTokenSupplyEscrow() @regression @tier1', function () {
+    // Casting EACH row to the tick's own decimals before summing is the
+    // pre-flag-day shape ledger_amount_precision_activation.js exists to replace. Against a
+    // ledger stored at 18 dp that is round(A)+round(B), which disagrees with sanityCheck's
+    // round(A+B) by up to a unit per row.
+    for (const [method, table] of [['getTokenSupplyBalance', 'balances'], ['getTokenSupplyEscrow', 'escrows']]) {
+        it(method + ' sums at the exact ledger scale, not per-row at the tick scale', async function () {
+            const db = makeDb();
+            sinon.stub(db, 'createTicker').resolves(3);
+            sinon.stub(db, 'getTokenDecimalPrecision').resolves(0);
+            const q = sinon.stub(db, 'doQuery').resolves([{ supply: '3.000000000000000000' }]);
+            await db[method]('PEPE');
+            const sql = q.firstCall.args[0];
+            assert.ok(/DECIMAL\(60,\s*18\)/.test(sql), 'expected an 18 dp sum, got: ' + sql);
+            assert.ok(new RegExp('FROM ' + table + ' ').test(sql), 'expected a sum over ' + table);
+        });
+
+        it(method + ' rounds ONCE, so three 0.4 rows are 1 and not 0', async function () {
+            const db = makeDb();
+            sinon.stub(db, 'createTicker').resolves(3);
+            sinon.stub(db, 'getTokenDecimalPrecision').resolves(0);
+            // 0.4 + 0.4 + 0.4 summed exactly is 1.2, which rounds to 1 at a 0-decimal tick.
+            // The old per-row cast rounded each 0.4 to 0 and returned 0.
+            sinon.stub(db, 'doQuery').resolves([{ supply: '1.200000000000000000' }]);
+            assert.strictEqual(await db[method]('PEPE'), '1');
+        });
+
+        it(method + ' returns a plain decimal string, never exponential notation', async function () {
+            const db = makeDb();
+            sinon.stub(db, 'createTicker').resolves(3);
+            sinon.stub(db, 'getTokenDecimalPrecision').resolves(8);
+            // A bare bignumber stringifies as '1e-8' here, which is not an amount.
+            sinon.stub(db, 'doQuery').resolves([{ supply: '0.000000010000000000' }]);
+            assert.strictEqual(await db[method]('PEPE'), '0.00000001');
+        });
+
+        it(method + ' still returns 0 when the table holds no rows', async function () {
+            const db = makeDb();
+            sinon.stub(db, 'createTicker').resolves(3);
+            sinon.stub(db, 'getTokenDecimalPrecision').resolves(8);
+            sinon.stub(db, 'doQuery').resolves([{ supply: null }]);
+            assert.strictEqual(await db[method]('PEPE'), 0);
+        });
+    }
+});
+
+// getMarketInfo
+describe('Database.getMarketInfo() @regression @tier1', function () {
+    // getMarketInfo issues six queries in order: market lookup, last trade, 24h-ago trade,
+    // bid orders, ask orders, 24h matches. Feed each one by call index.
+    function marketDb(bids, asks, matches) {
+        const db = makeDb();
+        const q  = sinon.stub(db, 'doQuery');
+        q.onCall(0).resolves([{ market_id: 1, tick1: 'AAA', tick1_id: 10, tick1_decimals: 8,
+                                tick2: 'BBB', tick2_id: 20, tick2_decimals: 8 }]);
+        q.onCall(1).resolves([]);   // last trade price
+        q.onCall(2).resolves([]);   // 24h-ago trade price
+        q.onCall(3).resolves(bids);
+        q.onCall(4).resolves(asks);
+        q.onCall(5).resolves(matches);
+        return db;
+    }
+    // give_tick_id 10 == tick1, so price1 = get_amount / give_amount.
+    const leg = (give, get) => ({ give_tick_id: 10, give_amount: give, get_tick_id: 20, get_amount: get });
+    const getMarketInfoOn = (db) => db.getMarketInfo(1, 1000000);
+
+    it('ranks bid/ask numerically, not as lexicographic strings', async function () {
+        // getPrice returns a decimal.js bignumber; `price > best` coerces BOTH sides to
+        // strings, and '10' ranks BELOW '9' as text. Best bid of a 9-then-10 book came back
+        // as 9, and best ask of a 10-then-9 book came back as 10.
+        const data = await getMarketInfoOn(marketDb(
+            [leg('1', '9'), leg('1', '10')],
+            [leg('1', '10'), leg('1', '9')],
+            []));
+        assert.strictEqual(String(data.tick1_bid), '10', 'best bid must be the numeric max');
+        assert.strictEqual(String(data.tick1_ask), '9',  'best ask must be the numeric min');
+    });
+
+    it('ranks 24h high/low numerically', async function () {
+        const data = await getMarketInfoOn(marketDb([], [],
+            [leg('0.5', '4.5'), leg('0.4', '4'), leg('0.25', '2')]));   // prices 9, 10, 8
+        assert.strictEqual(String(data.tick1_24hr_high), '10');
+        assert.strictEqual(String(data.tick1_24hr_low),  '8');
+    });
+
+    it('sums 24h volume at the tick scale instead of quantizing to whole units', async function () {
+        // bcadd with no decimals argument formats at precision 0, so each partial sum was
+        // rounded half-up: 0.5 + 0.4 + 0.25 accumulated to 1 rather than 1.15.
+        const data = await getMarketInfoOn(marketDb([], [],
+            [leg('0.5', '4.5'), leg('0.4', '4'), leg('0.25', '2')]));
+        assert.strictEqual(String(data.tick1_24hr_volume), '1.15');
+        assert.strictEqual(String(data.tick2_24hr_volume), '10.5');
+    });
+
+    it('sums 24h volume at a 0-decimal tick without inventing units', async function () {
+        const db = makeDb();
+        const q  = sinon.stub(db, 'doQuery');
+        q.onCall(0).resolves([{ market_id: 1, tick1: 'AAA', tick1_id: 10, tick1_decimals: 0,
+                                tick2: 'BBB', tick2_id: 20, tick2_decimals: 0 }]);
+        q.onCall(1).resolves([]);
+        q.onCall(2).resolves([]);
+        q.onCall(3).resolves([]);
+        q.onCall(4).resolves([]);
+        q.onCall(5).resolves([leg('3', '6'), leg('4', '8')]);
+        const data = await getMarketInfoOn(db);
+        assert.strictEqual(String(data.tick1_24hr_volume), '7');
+    });
+});
+
 // getAddressTableBalances
 describe('Database.getAddressTableBalances() @regression @tier1', function () {
     it('returns empty object when no balances', async function () {

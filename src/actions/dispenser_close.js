@@ -41,8 +41,10 @@ class Dispenser_Close {
         // bcgt(block_time, edit.block_time + DISPENSER_LIST_DELAY). Omitted, it coerced
         // to 0 (bcnum) and that compare silently read false, so this path alone held a
         // dispenser object with the list overlay never applied. Behavior-neutral today
-        // (nothing below reads ALLOW_LIST or BLOCK_LIST, and EXPIRATION / give_escrow
-        // overlay unconditionally); passed so the object matches what dispense.js and
+        // (nothing below reads ALLOW_LIST or BLOCK_LIST, and EXPIRATION overlays
+        // unconditionally; GIVE_ESCROW never overlays and stays the create-time value,
+        // with refills counted by getDispenserAmountRemaining/GIVE_REMAINING instead);
+        // passed so the object matches what dispense.js and
         // dispenser.js get, and so a future reader of the list fields here is not handed
         // a stale view by a NaN-as-zero compare. Every dispatch path sets BLOCK_TIME
         // (utility.js processCancellations, both dispense.js auto-closes).

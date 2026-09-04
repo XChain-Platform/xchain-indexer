@@ -11,7 +11,7 @@
   },
   "categories": {
     "wire-user": "user-encodable on-chain action: decoded + indexed + SDK-encodable",
-    "validator": "validator-broadcast on-chain action: decoded + indexed but NOT user-encodable (ANCHOR/ATTEST/NODEPROOF/SLASH)",
+    "validator": "validator-broadcast on-chain action: decoded + indexed but NOT user-encodable (ANCHOR/ATTEST/NODEPROOF/ROLLCALL/SLASH)",
     "mirror-injected": "indexer-injected from the hub mirror, NOT chain-decoded (XCALL/XEXEC/CROSS_SETTLE)",
     "lifecycle": "system-generated sub-action, never a decoded wire tx (matches/expiries/dispense)",
     "explorer-legacy-render": "render-only in the explorer (legacy order/dispenser cancel+edit views); no decoder/indexer twin"

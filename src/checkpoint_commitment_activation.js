@@ -25,8 +25,21 @@
  * UNLIKE the Phase 1 state_commitment_activation (which gates on each chain's OWN
  * local block_index), this gates on the BTC-anchored `snapshot_block` carried by
  * every checkpoint canonical, exactly like stake_weighted_quorum / equivocation_
- * header, so the hub and the BTC/LTC/DOGE indexers all flip the SIGNED shape on the
- * same anchor.
+ * header, so every peer that evaluates it (the hub signer, the SDK/explorer/sync
+ * verifiers) flips the SIGNED shape on the same anchor.
+ *
+ * WHY THIS MODULE HAS NO CALL SITE IN THE INDEXER. Nothing under xchain-indexer/src
+ * calls isCheckpointCommitmentActive, because the indexer's own checkpoint-section
+ * canonical (src/actions/anchor.js, FORMAT 0) appends the root suffix
+ * UNCONDITIONALLY, alone among the four builders, so there is no height for this side
+ * to test. Parity rests instead on the producer-side invariant recorded at that call
+ * site (no bundle carries a section whose own snapshot block is below this height),
+ * which is a deployment fact rather than a code property and is fail-closed when it
+ * breaks: a section the hub signed rootless fails every section signature and the
+ * whole bundle is refused. The file stays here as the indexer's REGISTRATION of the
+ * consensus parameter, pinned to the canonical map by
+ * test/unit/activationConstantsParity.test.js and inventoried by
+ * src/consensus_rules_digest.js.
  *
  * LOCAL COPY of the canonical map in xchain-documentation/protocol/constants.js,
  * kept byte-equal by the cross-service regression suite (a divergence forks the

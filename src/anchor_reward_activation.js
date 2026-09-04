@@ -185,6 +185,16 @@ function isArchiveRewardActive(snapshotBlock, network){
 // height is ratified. xchain-sync reads and writes the same replicated table,
 // so its build has to be qualifier-aware in the same deploy.
 //
+// THE HUB'S OWN LEDGER now carries the same qualifier, which it did not when the
+// paragraph above was written. src/anchor_reward_key.js is the vendored twin of the
+// indexer rule (byte-checked by test/unit/anchorRewardKeyTwinParity.test.js), the
+// hub-local validator_rewards.uq_reward includes round_qualifier, and the three sites
+// that key on the reduced identity read it: the cross-pubkey dedup guard, the follower
+// co-sign cross-check and the archive batch_seq stamp. The hub table is hub-local
+// (xchain-sync's replicated validator_rewards is indexer-owned), so this half needs no
+// fleet coordination, but an AGED hub still needs runMigrations to widen the key and
+// backfill the pre-column archive rows before its verdicts can be trusted.
+//
 // PRE-ARMING DEPLOY STEP (already fixed in code): a derived reward earns at
 // the checkpoint's snapshot_block but materializes at a later BTC block, and
 // a reorg delete scoped only on the earn-block leaves a COLLECT-spendable

@@ -1603,7 +1603,9 @@ class ProtocolChanges {
         // of blocks, so no single height names one cutover across all three but a
         // single timestamp does.
         //
-        // MAINNET IS UNARMED and TESTNET IS ARMED at 2026-08-24T00:00:00Z - the
+        // MAINNET IS UNARMED and TESTNET IS ARMED at ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME
+        // (1787961600 = 2026-08-29T00:00:00Z, re-pinned forward from the lapsed
+        // 2026-08-24 instant on 2026-08-25) - the
         // first nonzero testnet threshold in this registry; the constants above
         // (ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME / _TESTNET_TIME) carry the
         // reasoning, including why testnet cannot be genesis-active here. Regtest
@@ -1774,8 +1776,8 @@ module.exports.CROSS_SETTLE_CAP_MAINNET_TIME = CROSS_SETTLE_CAP_MAINNET_TIME;
 module.exports.BATCH_ROOT_SUB_INDEX_MAINNET_TIME = BATCH_ROOT_SUB_INDEX_MAINNET_TIME;
 // UNARMED mainnet sentinel + ARMED testnet instant for the ISSUE mint-window
 // re-parameterization fix, exported so the suite can assert mainnet is still waiting on
-// the operator's flag day and that the testnet arm is the ratified 2026-08-24T00:00:00Z
-// instant rather than a retroactive or drifted value.
+// the operator's flag day and that the testnet arm is the ratified 1787961600
+// (2026-08-29T00:00:00Z) instant rather than a retroactive or drifted value.
 module.exports.ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME = ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME;
 module.exports.ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME = ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME;
 // ARMED mainnet instant for the BATCH issuance-limits rework (1786838400, 2026-08-16T00:00Z,

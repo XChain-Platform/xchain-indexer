@@ -61,6 +61,15 @@
  *                                  carried by xchain-sync in any channel
  *                 'local'          never leaves the node (OPERATOR_LOCAL)
  *                 'follower-derived' recomputed by the follower, not carried
+ *   blockKey    the column a 'stream:block' entry is really scoped by; absent
+ *               means 'block_index'. Declared because the class name is not the
+ *               column name (rollcalls/rollcall_absences key on close_block) and
+ *               a reader assuming the default raises errno 1054, which every
+ *               forward channel swallows as an older source schema: silent
+ *               non-delivery, never an error.
+ *               xchain-sync test/unit/streamScopeColumns.test.js binds this
+ *               field to the owning DDL, so a scope column the schema does not
+ *               have fails the build instead of shipping un-replicated.
  *   rollback    source-indexer reorg handling (src/rollback.js):
  *                 'action'      generic DELETE by action_index (dataTables)
  *                 'block'       generic DELETE by block_index (blockTables)
@@ -278,12 +287,12 @@ const TABLES = [
       hashed: { classes: [],
                 note: 'Oracle/attest rewards derive deterministically during block processing; anchor_* rounds arrive via hub push but are quorum-verified before persistence. Reward credits they mint are ledger-hashed.' },
       note: 'TWO block-scoped rollback keys, not one. block_index is the EARN block; derive_block_index is the MATERIALIZATION block, non-NULL only for the BTC-side anchor/archive derivation, which earns at the checkpoint SNAPSHOT_BLOCK but writes the row while processing a later BTC block. rollback() deletes on BOTH, or a reorg into the gap between them leaves a COLLECT-spendable reward a from-genesis replay has not derived yet.' },
-    { table: 'rollcalls', owner: 'indexer', replication: 'stream:block', rollback: 'special', replicaRollback: 'special',
+    { table: 'rollcalls', owner: 'indexer', replication: 'stream:block', blockKey: 'close_block', rollback: 'special', replicaRollback: 'special',
       hashed: DERIVED,
-      note: 'One row per epoch that reached its close block, INCLUDING unrolled ones. An unrolled epoch counts for nobody, but the K-streak must know which epochs to SKIP, and a missing row is indistinguishable from an epoch that has not closed yet. SPECIAL, not "block": the block-scoped key is close_block and there is no block_index column, so the generic DELETE ... WHERE block_index >= ? would throw 1054 and fail the whole rollback transaction. Carries the pinned responsible set, without which the K-streak cannot tell "present" from "was not in R".' },
-    { table: 'rollcall_absences', owner: 'indexer', replication: 'stream:block', rollback: 'special', replicaRollback: 'special',
+      note: 'One row per epoch that reached its close block, INCLUDING unrolled ones. An unrolled epoch counts for nobody, but the K-streak must know which epochs to SKIP, and a missing row is indistinguishable from an epoch that has not closed yet. blockKey is close_block on BOTH dimensions: there is no block_index column, so rollback is SPECIAL (the generic DELETE ... WHERE block_index >= ? would throw 1054 and fail the whole rollback transaction) and the forward readers scope by the declared key (they used to assume block_index, raise 1054, and have it swallowed as an older source schema, so the table never replicated on any forward channel while the reorg delete still removed it). Carries the pinned responsible set, without which the K-streak cannot tell "present" from "was not in R".' },
+    { table: 'rollcall_absences', owner: 'indexer', replication: 'stream:block', blockKey: 'close_block', rollback: 'special', replicaRollback: 'special',
       hashed: DERIVED,
-      note: 'One row per responsible SOURCE that did not sign at a rolled epoch, pinned at close and never re-derived (SLASH rewrites stakes.amount in place, so a later re-derivation can differ from the set the verdict was taken over). evicted = 1 is the rollback key the delegations repair clause keys on, because the eviction writes no DELEGATE-revoke row for the generic self-join repair to find. SPECIAL for the same reason as rollcalls: the block-scoped key is close_block, not block_index.' },
+      note: 'One row per responsible SOURCE that did not sign at a rolled epoch, pinned at close and never re-derived (SLASH rewrites stakes.amount in place, so a later re-derivation can differ from the set the verdict was taken over). evicted = 1 is the rollback key the delegations repair clause keys on, because the eviction writes no DELEGATE-revoke row for the generic self-join repair to find. Same close_block blockKey and same SPECIAL rollback as rollcalls, for the same reason.' },
     { table: 'contract_state', owner: 'indexer', replication: 'stream:block', rollback: 'block', replicaRollback: 'mirror',
       hashed: { classes: ['contracts'], note: 'Latest value per state key written in the block.' } },
     { table: 'escrow_leaf_journal', owner: 'indexer', replication: 'stream:block', rollback: 'block', replicaRollback: 'mirror',
@@ -573,6 +582,16 @@ function streamTopology(){
     };
 }
 
+// The column a block-scoped table is really scoped by: the live per-block
+// payload, the incremental catch-up range and the content-parity window all
+// read it. Defaults to 'block_index', so it is a no-op for every table the
+// class name describes correctly. Declared because the wrong answer is SILENT
+// (errno 1054, which every forward channel swallows as an older source schema).
+function blockKey(table){
+    let e = entry(table);
+    return (e && e.blockKey) ? e.blockKey : 'block_index';
+}
+
 // Source-side coverage buckets for the rollback-coverage guard.
 function rollbackBuckets(){
     let sweepTables = [...new Set(ORPHAN_SWEEPS.map(s => s.table))];
@@ -641,7 +660,7 @@ module.exports = {
     TABLES, ORPHAN_SWEEPS,
     CONTENT_PARITY_CARVE_OUTS, CONTENT_PARITY_EXCLUDED_COLUMNS,
     allTables, entry, tablesWhere,
-    rollbackTables, replicaRollbackTables, streamTopology,
+    rollbackTables, replicaRollbackTables, streamTopology, blockKey,
     rollbackBuckets, replicaRollbackBuckets, hashClassTables,
     contentParityCarveOut, contentParityMutableTables,
     contentParityExcludedColumns, contentParityLookupBound,

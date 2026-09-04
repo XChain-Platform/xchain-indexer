@@ -92,6 +92,27 @@ describe('rollback block-key coverage @regression', function () {
             'absence row pointing at an epoch whose verdict is already gone');
     });
 
+    // ONE unwind, and it must sit inside the schema-gap guard. The bespoke delete was
+    // added twice: 1bdc67ed82 landed the guarded pair and 7efa7e742a added an unguarded
+    // duplicate after the block loop, which re-raised errno 1146 on a node that predates
+    // the ROLLCALL migration and aborted the very reorg the guard keeps alive. A second
+    // copy is a no-op on a migrated database, so nothing behavioural catches it.
+    it('the roll-call unwind exists exactly once, inside the schema-gap guard', function () {
+        const src = fs.readFileSync(ROLLBACK_SRC, 'utf8');
+        for(const stmt of ['DELETE FROM rollcall_absences WHERE close_block >= ?',
+                           'DELETE FROM rollcalls WHERE close_block >= ?']){
+            assert.strictEqual(src.split(stmt).length - 1, 1,
+                stmt + ' must appear exactly once in rollback.js: a duplicate outside the ' +
+                'errno 1054/1146 guard aborts the whole reorg on a pre-migration database');
+        }
+        const at = src.indexOf('DELETE FROM rollcall_absences WHERE close_block >= ?');
+        assert.ok(src.slice(Math.max(0, at - 400), at).includes('try {'),
+            'the roll-call unwind must open a try block, so a missing table degrades');
+        assert.ok(src.slice(at, at + 600).includes('errno === 1146'),
+            'the roll-call unwind must swallow errno 1146 (table absent on a node that ' +
+            'never ran the ROLLCALL migration) and re-throw everything else');
+    });
+
     // close_block is what the bespoke delete keys on, so it has to exist for the same
     // reason block_index has to exist for the generic loop. Same class of fault, one
     // level down.

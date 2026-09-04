@@ -4044,10 +4044,16 @@ class Database {
         let supply   = 0;
         let tick_id  = await this.createTicker(tick);
         let decimals = await this.getTokenDecimalPrecision(tick_id);
-        let query = `SELECT SUM(CAST(amount AS DECIMAL(60, ` + decimals + `))) as supply FROM balances WHERE tick_id=? LIMIT 1`;
+        // Sum at the EXACT ledger scale (18 dp) and round ONCE at the tick's own scale,
+        // the shape sanityCheck's balances projection uses. A per-row cast to the tick's
+        // decimals is round(A)+round(B), which is not round(A+B) once the ledger carries
+        // amounts finer than the tick (ledger_amount_precision_activation.js).
+        let query = `SELECT ` + ledgerPrecision.exactSumSql('amount') + ` as supply FROM balances WHERE tick_id=? LIMIT 1`;
         let results = await this.doQuery(query, [tick_id]);
+        // bcstr keeps the STRING contract this helper always had: a bare bignumber
+        // stringifies below 1e-7 as '1e-8', which no consumer of an amount wants.
         if(results.length > 0 && !this.util.isNull(results[0].supply))
-            supply = results[0].supply;
+            supply = this.util.bcstr(this.util.bcadd(results[0].supply, 0, decimals));
         return supply;
     }
 
@@ -4056,10 +4062,14 @@ class Database {
         let supply   = 0;
         let tick_id  = await this.createTicker(tick);
         let decimals = await this.getTokenDecimalPrecision(tick_id);
-        let query = `SELECT SUM(CAST(amount AS DECIMAL(60, ` + decimals + `))) as supply FROM escrows WHERE tick_id=? LIMIT 1`;
+        // Exact-scale sum, rounded once at the tick's scale; same reason as
+        // getTokenSupplyBalance above, and the same shape sanityCheck's escrow-total
+        // projection uses.
+        let query = `SELECT ` + ledgerPrecision.exactSumSql('amount') + ` as supply FROM escrows WHERE tick_id=? LIMIT 1`;
         let results = await this.doQuery(query, [tick_id]);
+        // bcstr for the same reason as getTokenSupplyBalance above.
         if(results.length > 0 && !this.util.isNull(results[0].supply))
-            supply = results[0].supply;
+            supply = this.util.bcstr(this.util.bcadd(results[0].supply, 0, decimals));
         return supply;
     }
 
@@ -10769,8 +10779,12 @@ class Database {
                     continue;
                 if(tick1_bid==0) tick1_bid = price1;
                 if(tick2_bid==0) tick2_bid = price2;
-                if(price1 > tick1_bid) tick1_bid = price1;
-                if(price2 > tick2_bid) tick2_bid = price2;
+                // bcgt, not `>`: getPrice returns a decimal.js bignumber, and a native
+                // relational compare between two of them coerces both to strings and ranks
+                // them LEXICOGRAPHICALLY, so '10' sorts below '9'. Same disagreement the SQL
+                // side flag-dayed in dispenser_send_amount_compare_activation.js.
+                if(this.util.bcgt(price1, tick1_bid)) tick1_bid = price1;
+                if(this.util.bcgt(price2, tick2_bid)) tick2_bid = price2;
             }
             data.tick1_bid  = tick1_bid;
             data.tick2_bid  = tick2_bid;
@@ -10814,8 +10828,10 @@ class Database {
                     continue;
                 if(tick1_ask==0) tick1_ask = price1;
                 if(tick2_ask==0) tick2_ask = price2;
-                if(price1 < tick1_ask) tick1_ask = price1;
-                if(price2 < tick2_ask) tick2_ask = price2;
+                // bclt for the same reason as the bid block above: a lexicographic rank picks
+                // the wrong extreme here, which publishes an understated ask.
+                if(this.util.bclt(price1, tick1_ask)) tick1_ask = price1;
+                if(this.util.bclt(price2, tick2_ask)) tick2_ask = price2;
             }
             data.tick1_ask = tick1_ask;
             data.tick2_ask = tick2_ask;
@@ -10846,6 +10862,11 @@ class Database {
                 tick2_high   = 0,
                 tick2_low    = 0,
                 tick2_volume = 0;
+            // Scale each volume accumulator sums at, from the decimals the market lookup
+            // above already selected. Clamped to [0,18] like getTokenDecimalPrecision, so a
+            // missing or junk column value can never widen or negate the precision.
+            let tick1_decimals = Math.max(0, Math.min(18, parseInt(data.tick1_decimals) || 0));
+            let tick2_decimals = Math.max(0, Math.min(18, parseInt(data.tick2_decimals) || 0));
             for(let row of results){
                 let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
                 let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount : row.give_amount;
@@ -10860,15 +10881,17 @@ class Database {
                     tick2_high = price2;
                     tick2_low  = price2;
                 }
-                // 24-hour high
-                if(price1 > tick1_high) tick1_high = price1;
-                if(price2 > tick2_high) tick2_high = price2;
+                // 24-hour high (bcgt/bclt: these are bignumbers, see the bid block above)
+                if(this.util.bcgt(price1, tick1_high)) tick1_high = price1;
+                if(this.util.bcgt(price2, tick2_high)) tick2_high = price2;
                 // 24-hour low
-                if(price1 < tick1_low) tick1_low = price1;
-                if(price2 < tick2_low) tick2_low = price2;
-                // 24-hour volumes
-                tick1_volume = this.util.bcadd(tick1_volume, give_amount);
-                tick2_volume = this.util.bcadd(tick2_volume, get_amount);
+                if(this.util.bclt(price1, tick1_low)) tick1_low = price1;
+                if(this.util.bclt(price2, tick2_low)) tick2_low = price2;
+                // 24-hour volumes, summed at each tick's own scale. bcadd with the decimals
+                // argument omitted formats at precision 0, which quantizes every partial sum
+                // to a whole unit: a market of sub-unit fills accumulated to 0.
+                tick1_volume = this.util.bcadd(tick1_volume, give_amount, tick1_decimals);
+                tick2_volume = this.util.bcadd(tick2_volume, get_amount, tick2_decimals);
             }
             data.tick1_24hr_high   = tick1_high;
             data.tick1_24hr_low    = tick1_low;
@@ -11193,7 +11216,11 @@ class Database {
         }
         // Get additional information on this order
         if(dispenser){
-            // Get updated dispenser properties from the dispenser_edits table
+            // Get updated dispenser properties from the dispenser_edits table.
+            // EXPIRATION and the two lists overlay; GIVE_ESCROW deliberately does NOT and
+            // stays the create-time value, because refills are counted by
+            // getDispenserAmountRemaining (64dp) and GIVE_REMAINING below is the number
+            // any caller wanting post-refill escrow should read.
             let edit = await this.getDispenserEdits(action_index, block_time);
             if(edit.expiration)
                 dispenser['EXPIRATION'] = edit.expiration;
@@ -11291,17 +11318,20 @@ class Database {
         results = await this.doQuery(query, args);
     }
 
-    // Return dispenser edit information for given action_index
+    // Return dispenser edit information for given action_index.
+    //
+    // Escrow totals are deliberately NOT returned here: getDispenserAmountRemaining
+    // sums the same refill rows itself at 64dp and is the single source for them. This
+    // must not accumulate a give_escrow its only caller then drops, at 0dp, which would be a
+    // lossy dead compute that a later refactor would have wired up as an accounting bug.
     async getDispenserEdits(action_index, block_time){
         // Define empty edit object
         let edit  = {
-            give_escrow: 0,
             expiration: false,
             allow_list: false,
             block_list: false
         };
-        let query  = `SELECT 
-                        e1.give_escrow,
+        let query  = `SELECT
                         e1.expiration,
                         e1.allow_list,
                         e1.block_list,
@@ -11320,10 +11350,8 @@ class Database {
         let results = await this.doQuery(query, args);
         if(results.length > 0){
             for(let row of results){
-                // refilling dispensers and updating expiration are immediately active
-                if(!this.util.isNull(row.give_escrow)) 
-                    edit.give_escrow = this.util.bcadd(edit.give_escrow, row.give_escrow);
-                if(!this.util.isNull(row.expiration) && this.util.isNumeric(row.expiration))   
+                // updating expiration is immediately active
+                if(!this.util.isNull(row.expiration) && this.util.isNumeric(row.expiration))
                     edit.expiration  = Number(row.expiration);
                 // Determine if the list edits are active or not
                 let active = this.util.bcgt(block_time, this.util.bcadd(row.block_time, this.config['DISPENSER_LIST_DELAY']));
@@ -13628,8 +13656,21 @@ class Database {
             query += ' AND s.activation_block <= ?';
             args.push(blockIndex);
         }
-        query += ' GROUP BY s.signing_pubkey_id, ip.pubkey';
+        // Pin the row order on the natural key: the sole caller mints one action_index per
+        // returned row, so this ORDER is consensus (never signing_pubkey_id, a local surrogate).
+        //
+        // Collate utf8_bin because index_pubkeys.pubkey is declared utf8_general_ci, a folding
+        // collation that can tie two keys the order must separate (charset held at boot).
+        query += ' GROUP BY s.signing_pubkey_id, ip.pubkey ORDER BY ip.pubkey COLLATE utf8_bin ASC';
         let rows = await this.doQuery(query, args);
+        // Fail closed on a dangling signing_pubkey: LEFT JOIN nulls tie under any order, and
+        // the caller would mint an UNSTAKE against an index_pubkeys row createUnstake invents.
+        for(const r of rows){
+            if(r.signing_pubkey === null || r.signing_pubkey === undefined || String(r.signing_pubkey) === '')
+                throw new Error('getSweepableStakeBySource: source ' + String(source) +
+                                ' has a stake row whose signing_pubkey_id ' + String(r.signing_pubkey_id) +
+                                ' has no index_pubkeys row');
+        }
         return rows.map((r) => ({
             signing_pubkey_id: r.signing_pubkey_id,
             signing_pubkey:    r.signing_pubkey,
@@ -13851,7 +13892,7 @@ class Database {
         let action_index = data['ACTION_INDEX'];
         let section_index = (data['SECTION_INDEX'] != null) ? Number(data['SECTION_INDEX']) : 0;
         let version      = Number(data['FORMAT']);
-        // Publisher tail (#2486): v4/v5/v6 only; NULL otherwise. Mirrors validator_signatures
+        // Publisher tail (#2486): carried by v0 and v1, NULL on v2. Mirrors validator_signatures
         // exactly: anchor.js pre-serializes the XANCPUB sig list to a JSON string (as it does
         // VALIDATOR_SIGNATURES = JSON.stringify(sigs)) before dispatch, so both are stored as-is.
         let publisher = data['PUBLISHER'] || null;
@@ -13879,7 +13920,7 @@ class Database {
             (data['CHUNK_INDEX'] != null) ? Number(data['CHUNK_INDEX']) : null,
             data['ARCHIVE_B64'] || null,
             data['VALIDATOR_SIGNATURES'] || null,
-            // v4/v5/v6 publisher-attestation tail (#2486). Both NULL for v0-v3. anchor.js must set
+            // Publisher-attestation tail (#2486), written on v0 and v1. Both NULL on v2. anchor.js must set
             // data['PUBLISHER_ATTESTATIONS'] = JSON.stringify(publisherSigs) for the attestations
             // to flow (that one-line hand-off is owned in anchor.js).
             publisher,
@@ -13933,10 +13974,10 @@ class Database {
 
     // Look up the on-chain ANCHOR checkpoint record for one checkpoint identity
     // (chain, network, block_index, checkpoint_seq), joined to its status. Only
-    // checkpoint-bearing versions (1/6/7, per the ANCHOR_CHECKPOINT_VERSIONS
-    // constant below; version 2 is an archive continuation chunk with no checkpoint
-    // identity of its own, v6 is the publisher-bearing archive anchor that DOES carry
-    // one, and a v7 row is one bundle SECTION, which carries its own). A bundle
+    // checkpoint-bearing versions (0/1, per the ANCHOR_CHECKPOINT_VERSIONS constant
+    // below; a v0 row is one bundle SECTION and carries its own checkpoint identity,
+    // v1 is the archive head and carries its wrapper checkpoint's, and v2 is an
+    // archive continuation chunk with no checkpoint identity at all). A bundle
     // therefore answers this read per section, with no bundle-level RPC of its own.
     // Returns the highest action_index
     // match (a reorg-replayed re-anchor supersedes an earlier one) or null. Read path

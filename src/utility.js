@@ -1921,8 +1921,8 @@ class Utility {
             case 'SWAP_CREATE':
             case 'DISPENSER_CREATE': return 'trade';
             case 'DESTROY':          return 'burn';
-            // Stubs: the class is reserved + routable, but no handler invokes the guard for these
-            // yet (MINT supply creation / STAKE locking gating land in a later phase).
+            // Both are wired and gating today: mint.js runs the guard on supply creation, stake.js
+            // on the v3 contract-targeted path only (v1/v2 capability stakes are never gated).
             case 'MINT':             return 'mint';
             case 'STAKE':            return 'stake';
             default:                 return null;

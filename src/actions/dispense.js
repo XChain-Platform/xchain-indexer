@@ -20,6 +20,7 @@
 
 const divergenceMetrics = require('../dispenserDivergenceMetrics.js');
 const dispenserCaps = require('../dispenser_caps_activation.js');
+const dispenserAmountPositivity = require('../dispenser_amount_positivity_activation.js');
 
 class Dispense {
 
@@ -311,10 +312,24 @@ class Dispense {
                     // inputs that do is "no node commits this block at all", so no committed
                     // history can contain one. The GIVE_REMAINING clamp below bounds the
                     // saturated count to the dispenser's real capacity.
-                    multiplier = this.util.bcfloorSaturating(this.util.bcdiv(available, dispenser['GET_AMOUNT'], 64));
-                    // Non-FIAT prices a fill directly in coin: GET_AMOUNT per fill.
-                    if(ledger)
-                        unitCoinCost = dispenser['GET_AMOUNT'];
+                    // Reject a GET_AMOUNT bcdiv cannot divide by, which a native-coin create
+                    // accepted unchecked (dispenser_amount_positivity_activation.js).
+                    // Catch, not pre-screen: throw-exact by construction, so it changes only
+                    // the inputs that wedge the block loop, and ungated for the same reason
+                    // as bcfloorSaturating above. An isNumeric() screen is NOT equivalent (it
+                    // rejects 'Infinity'/'NaN', which divide to 0 and settle today).
+                    let priced = null;
+                    try {
+                        priced = this.util.bcdiv(available, dispenser['GET_AMOUNT'], 64);
+                    } catch(e){
+                        error = 'invalid: GET_AMOUNT (format)';
+                    }
+                    if(!error){
+                        multiplier = this.util.bcfloorSaturating(priced);
+                        // Non-FIAT prices a fill directly in coin: GET_AMOUNT per fill.
+                        if(ledger)
+                            unitCoinCost = dispenser['GET_AMOUNT'];
+                    }
                 }
             }
 
@@ -369,8 +384,13 @@ class Dispense {
                 give_amount = this.util.bcmul(multiplier, dispenser['GIVE_AMOUNT'], 64);
             }
 
-            // Verify at least one unit can be dispensed (multiplier > 0)
-            if(!error && multiplier == 0)
+            // Verify at least one unit can be dispensed (multiplier > 0). The legacy
+            // reading tests equality, so a NEGATIVE count settles valid having skipped every
+            // downstream guard, and the GIVE_REMAINING recompute then subtracts a negative
+            // (dispenser_amount_positivity_activation.js carries the chain and the gating
+            // argument). Guard the fill COUNT, not a price field: three producers feed it.
+            let rejectNonPositiveFill = dispenserAmountPositivity.isDispenserAmountPositivityActive(block_time, this.config['NETWORK']);
+            if(!error && (rejectNonPositiveFill ? !this.util.bcgt(multiplier, '0') : multiplier == 0))
                 error = 'invalid: insufficient funds ';
 
             // Only create dispensee if we are able to dispense at least 1 GIVE_AMOUNT
