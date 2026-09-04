@@ -790,15 +790,25 @@ describe('Attest (ATTEST) @regression @tier3', function () {
 
             it('reads eligibility from the weighted query, at the BURIED height', async function () {
                 swq.isStakeWeightedQuorumActive.returns(true);
-                stakeSplitSource();
+                indexer.indexerDb.getValidatorsByCapability.resolves([]);
+                indexer.indexerDb.hasCapability.resolves(false);
+                // Height-sensitive stub: only the once-buried height (90 buried once)
+                // resolves the responsible signer. Both the eligibility read and
+                // computeResponsibleSet's own internal read land here, so an
+                // unburied or double-buried height on EITHER one drops the signer
+                // and reds the quorum, rather than a `calledWith` check that a
+                // second, independently-correct read could satisfy on its own.
+                const buriedOnce = srb.buriedSnapshotBlock(90, 'regtest');
+                indexer.indexerDb.getStakeWeightsByCapability = sinon.stub().callsFake(
+                    async (capability, height) => (capability === 'attestation' && height === buriedOnce)
+                        ? [{ pubkey: PUBKEY_A, source: 'S1', weight: '50000' }]
+                        : []);
                 indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1, block_index: 90 }));
-                await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }]), v1Data({ BLOCK_INDEX: 100 }), null);
-                // Declared 90 buried once (snapshotBlock is already buried; burying it a
-                // second time here would resolve a different set than the hub signed).
-                assert.ok(indexer.indexerDb.getStakeWeightsByCapability.calledWith(
-                    'attestation', srb.buriedSnapshotBlock(90, 'regtest')));
-                assert.ok(indexer.indexerDb.getStakeWeightsByCapability.neverCalledWith('attestation', 90),
-                    'the declared height is the flag-day plane only, never the resolve height');
+                const data = v1Data({ BLOCK_INDEX: 100 });
+                await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+                assert.strictEqual(data['VALID_SIGS'], 1,
+                    'eligibility and the responsible set must both resolve at the request height buried once (90 buried), got: ' + data['STATUS']);
+                assert.strictEqual(data['STATUS'], 'valid');
                 assert.ok(indexer.indexerDb.getValidatorsByCapability.notCalled,
                     'the pubkey-aggregate query must not gate eligibility above the flag-day');
             });
@@ -2131,10 +2141,12 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             });
             return { handler: h, db, ix };
         }
+        // SOURCE is the broadcaster address, and a batch's slots are bound to it, so every
+        // fixture wire is one publisher's unless a case deliberately names another.
         function batchData(overrides = {}) {
             return createBaseData({
                 ACTION: 'ATTEST', FORMAT: 5, BLOCK_INDEX: 6300000, ACTION_INDEX: 71,
-                BLOCK_TIME: 1700004000, COIN: 'DOGE', ...overrides,
+                BLOCK_TIME: 1700004000, COIN: 'DOGE', SOURCE: PUB_A, ...overrides,
             });
         }
 
@@ -2349,13 +2361,16 @@ describe('Attest (ATTEST) @regression @tier3', function () {
 
         // A stand-in for the attests chunk table: the handler's own stamped columns go in,
         // and the read serves back exactly what the real query does (valid rows carrying a
-        // slot, ordered by slot then action index).
+        // slot, EVERY publisher's, ordered by slot then action index, each carrying the
+        // broadcaster address). The read is deliberately not author-scoped, because the
+        // author partition is the handler's rule and a store that pre-filtered would pass
+        // whether the handler applied it or not.
         function chunkStore(db) {
             const rows = [];
             db.createAttestationBatchAction = sinon.stub().callsFake(async (d) => {
                 rows.push({
                     action_index: Number(d['ACTION_INDEX']), version: Number(d['VERSION']),
-                    request_id: d['REQUEST_ID'], status: d['STATUS'],
+                    request_id: d['REQUEST_ID'], status: d['STATUS'], source: d['SOURCE'],
                     window_start: d['WINDOW_START'], window_end: d['WINDOW_END'],
                     row_count: d['ROW_COUNT'], btc_block_height: d['BTC_BLOCK_HEIGHT'],
                     batch_crc32: d['BATCH_CRC32'], total_chunks: d['TOTAL_CHUNKS'],
@@ -2371,12 +2386,17 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             return rows;
         }
 
+        // The publisher every batch fixture broadcasts from unless a case names another.
+        const PUB_A = 'DPubAxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+        const PUB_B = 'DPubBxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+
         // Land one wire of `enc` as its own action. Wire 0 is the v5 head, the rest v6.
-        async function land(h, enc, wireIndex, actionIndex) {
+        async function land(h, enc, wireIndex, actionIndex, source = PUB_A) {
             const data = batchData({
                 FORMAT: wireIndex === 0 ? 5 : 6,
                 ACTION_INDEX: actionIndex,
                 BLOCK_INDEX: 6300000 + wireIndex,
+                SOURCE: source,
             });
             await h.parse(wireParams(enc.wires[wireIndex]), data, null);
             return data;
@@ -2400,8 +2420,11 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.deepStrictEqual(payload.rows, JSON.parse(abw.buildAttestBatchBody(win)).rows,
                 'the reassembled body verbatim, so the hub verifies the bytes the chain carried');
             assert.strictEqual(payload.row_count, win.row_count);
-            assert.strictEqual(payload.action_index, 72,
-                'the completing action, which is the one whose rollback un-lands the delivery');
+            assert.strictEqual(payload.action_index, 71,
+                'the HEAD names the batch: the hub stamps this index onto every carried ' +
+                'response, and a batch link must open the head, not the chunk that closed it');
+            assert.strictEqual(payload.block_index, 6300001,
+                'while the block stays the completing action\'s, whose rollback un-lands the delivery');
             assert.strictEqual(db.stageHubPush.callCount, 1);
         });
 
@@ -2530,6 +2553,125 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.strictEqual(db.enqueueHubPushTx.called, false);
             assert.match(db.setAttestBatchStatus.firstCall.args[1], /^invalid: insufficient PBFT quorum/,
                 'the completing chunk is judged on the same quorum a single-wire head is');
+        });
+
+        // ------------------------------------------- a batch belongs to ONE publisher
+
+        it('a foreign continuation cannot squat a slot, and the honest set still completes', async function () {
+            const { handler: h, db } = batchHandler('DOGE');
+            const stored = chunkStore(db);
+            const { win, enc } = chunkedBatch(2);
+
+            await land(h, enc, 0, 71, PUB_A);
+
+            // Another publisher lands the same slot FIRST, carrying the real bytes. Under a
+            // key-wide chunk set it would occupy slot 1 and get the honest chunk refused as
+            // a duplicate, denying the window outright.
+            const squat = await land(h, enc, 1, 72, PUB_B);
+            assert.strictEqual(squat['STATUS'], 'valid', 'its own wire is well formed, so it is its own batch');
+            assert.strictEqual(db.enqueueHubPushTx.called, false,
+                'but it belongs to a batch with no head, so it absorbs nothing');
+
+            const honest = await land(h, enc, 1, 73, PUB_A);
+            assert.strictEqual(honest['STATUS'], 'valid', 'the publisher\'s own slot was never taken');
+            assert.strictEqual(db.enqueueHubPushTx.callCount, 1, 'and the batch completes');
+            assert.deepStrictEqual(db.enqueueHubPushTx.firstCall.args[1].rows,
+                JSON.parse(abw.buildAttestBatchBody(win)).rows);
+            assert.strictEqual(db.setAttestBatchStatus.called, false,
+                'no foreign bytes ever joined the reassembly, so the head keeps its verdict');
+            assert.strictEqual(stored.find(r => r.action_index === 72).status, 'valid',
+                'and the foreign wire is judged on its own bytes, not on someone else\'s batch');
+        });
+
+        it('a continuation of a head belonging to another publisher absorbs nothing', async function () {
+            const { handler: h, db } = batchHandler('DOGE');
+            chunkStore(db);
+            const { enc } = chunkedBatch(2);
+
+            await land(h, enc, 0, 71, PUB_A);
+            const foreign = await land(h, enc, 1, 72, PUB_B);
+            assert.strictEqual(foreign['STATUS'], 'valid');
+            assert.strictEqual(db.enqueueHubPushTx.called, false,
+                'a chunk completes only its OWN publisher\'s coverage; anyone could otherwise ' +
+                'close a window at a moment of their choosing');
+        });
+
+        // -------------------------------------------------- ONE canonical head per window
+
+        it('a second head for the window from the same publisher neither absorbs nor pushes', async function () {
+            const { handler: h, db } = batchHandler('DOGE');
+            const stored = chunkStore(db);
+            const enc = abw.encodeAttestBatch(batchWindow(2));
+
+            const first = await land(h, enc, 0, 71, PUB_A);
+            assert.strictEqual(first['STATUS'], 'valid');
+            assert.strictEqual(db.enqueueHubPushTx.callCount, 1);
+
+            const dup = await land(h, enc, 0, 72, PUB_A);
+            assert.strictEqual(dup['STATUS'], 'invalid: BATCH_KEY (this publisher already has a head for the window)');
+            assert.strictEqual(db.enqueueHubPushTx.callCount, 1,
+                'one window, one delivery: a republish must not push the same rows twice');
+            assert.strictEqual(stored.find(r => r.action_index === 71).status, 'valid',
+                'and the canonical head keeps its verdict');
+        });
+
+        it('the canonical head is the earliest action, whatever order the two arrive in', async function () {
+            // Same two heads, landed the other way round: the pick follows action_index,
+            // which is a total order, so every node names the same canonical head.
+            for (const [firstIdx, secondIdx] of [[71, 72], [72, 71]]) {
+                const { handler: h, db } = batchHandler('DOGE');
+                const stored = chunkStore(db);
+                const enc = abw.encodeAttestBatch(batchWindow(2));
+                await land(h, enc, 0, firstIdx, PUB_A);
+                await land(h, enc, 0, secondIdx, PUB_A);
+                const valid = stored.filter(r => r.status === 'valid').map(r => r.action_index);
+                assert.deepStrictEqual(valid, [firstIdx],
+                    'the head that landed first is canonical; the later one is the duplicate');
+                assert.strictEqual(db.enqueueHubPushTx.callCount, 1);
+            }
+        });
+
+        it('another publisher\'s head for the same window is its own batch, not a duplicate', async function () {
+            // The key is derived from the window, so anyone can mint a wire under it. A
+            // key-wide canonical pick would let a junk head squatting a window deny the
+            // honest publisher; the pick is therefore per publisher.
+            const { handler: h, db } = batchHandler('DOGE');
+            chunkStore(db);
+            const enc = abw.encodeAttestBatch(batchWindow(2));
+
+            await land(h, enc, 0, 71, PUB_B);
+            const honest = await land(h, enc, 0, 72, PUB_A);
+            assert.strictEqual(honest['STATUS'], 'valid',
+                'a squatted window must not be deniable by landing a head under its key');
+            assert.strictEqual(db.enqueueHubPushTx.callCount, 2);
+        });
+
+        // ------------------------------------------------------ the batch link names the head
+
+        it('a three-chunk batch pushes the HEAD\'s action index, not the completing chunk\'s', async function () {
+            const { handler: h, db } = batchHandler('DOGE');
+            chunkStore(db);
+            const { enc } = chunkedBatch(3);
+
+            await land(h, enc, 0, 71);
+            await land(h, enc, 1, 72);
+            await land(h, enc, 2, 73);
+
+            assert.strictEqual(db.enqueueHubPushTx.callCount, 1);
+            const payload = db.enqueueHubPushTx.firstCall.args[1];
+            assert.strictEqual(payload.action_index, 71,
+                'the hub stamps this onto every carried response as its batch link, so it ' +
+                'must name the head that declares the window');
+            assert.strictEqual(payload.block_index, 6300002,
+                'the block stays the completing action\'s, whose rollback un-lands the delivery');
+        });
+
+        it('a single-wire head pushes its own index, which is the head\'s', async function () {
+            const { handler: h, db } = batchHandler('DOGE');
+            chunkStore(db);
+            const enc = abw.encodeAttestBatch(batchWindow(2));
+            await land(h, enc, 0, 71);
+            assert.strictEqual(db.enqueueHubPushTx.firstCall.args[1].action_index, 71);
         });
 
         it('the delivery arm knows the attest_batch push type', function () {

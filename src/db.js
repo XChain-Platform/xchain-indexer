@@ -15432,6 +15432,13 @@ class Database {
     // The head row carries the window header as well, which is what lets a continuation
     // landing afterwards rebuild the head it must verify the reassembled body against.
     //
+    // `source` is the broadcaster address off actions.source_id, which is the only
+    // authenticated identity a chain wire carries and is what binds a slot to a publisher.
+    // The key is derived from the window a head declares, so anyone can mint a wire under
+    // it and the set this returns is every publisher's; attest.js partitions it by author
+    // (the ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL rule, applied there because that is where the
+    // rest of the batch's rules live and are driven).
+    //
     // ORDER BY slot then action_index makes the head pick and the duplicate resolution
     // deterministic across nodes: within a slot the EARLIEST action wins, matching
     // attestChunkCoverage's own tie-break. Ordering is on consensus-visible columns only,
@@ -15448,9 +15455,12 @@ class Database {
                             c.batch_crc32            AS batch_crc32,
                             c.batch_total_chunks     AS total_chunks,
                             c.batch_chunk_index      AS chunk_index,
-                            c.batch_chunk_b64        AS chunk_b64
+                            c.batch_chunk_b64        AS chunk_b64,
+                            cadr.address             AS source
                      FROM attests c
                      JOIN index_statuses s ON s.id = c.status_id
+                     LEFT JOIN actions         cact ON cact.action_index = c.action_index
+                     LEFT JOIN index_addresses cadr ON cadr.id           = cact.source_id
                      WHERE c.request_id = ?
                        AND c.version IN (${abw.ATTEST_BATCH_HEAD_VERSION}, ${abw.ATTEST_BATCH_CONTINUATION_VERSION})
                        AND c.batch_chunk_index IS NOT NULL

@@ -106,6 +106,37 @@ const BATCH_CHAIN = 'DOGE';
 // row, same arithmetic on every node), so it is inert rather than a fork.
 const ATTEST_RESPONSE_BODY_MAX_BYTES = 8189;
 
+// Deterministic per-block ceiling on the hub-mirror response applier, the sibling of
+// ATTEST_MAX_EXPIRIES_PER_BLOCK and XCALL_MAX_CALLS_PER_BLOCK and hashed state for the
+// same reason they are: each apply synthesizes an ATTEST v1 action and injects a contract
+// callback, so an uncapped pass makes a block's processing time and its action rows a
+// function of how many responses happened to become effective at once. That number is not
+// hypothetical here: effective_time is the round leader's `now + ATTEST_RESPONSE_FORWARD_S`,
+// so requests finalized in the same span align on a handful of blocks by construction.
+//
+// TEN, which is the admission cap's own perBlock figure (attest_request_cap_activation.js):
+// the chain admits at most ten requests per block, so a steady state cannot produce more
+// than ten responses per block either, and a ceiling at that number bounds the callback
+// cost of a block without ever throttling the rate the protocol itself allows. A burst that
+// aligned several blocks' worth of requests on one effective time drains at the admission
+// rate instead of firing in one block transaction.
+//
+// CARRY-FORWARD, and why it stores nothing: a deferred row is simply still applicable at
+// B+1. Its effective_time is already passed, the deadline test is re-evaluated there, and
+// its request is still pending, so the next block's pass selects it again in the same total
+// order and takes the next prefix. A row whose deadline passes while it waits is never
+// applied at all: the expiry sweep at deadline+1 flips the request and the expired callback
+// stands, which is the binding rule's existing verdict rather than a new one.
+//
+// UNGATED, deliberately: below the response-mirror activation height nothing reaches this
+// path at all (the applier gates on the request's own era), so there is no pre-activation
+// history for a flag day to preserve and a gate would only be a second thing to arm.
+//
+// The cap is APPLIED in utility.selectApplicableAttestationResponses, where the total order
+// it takes a prefix of is built; it lives here, with the rest of the ATTEST protocol
+// constants, exactly as xcall.js holds the cap utility applies to its own pass.
+const ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK = 10;
+
 // Terminal response vocabulary the mirror carries. In practice the hub emits only
 // 'ok' ('expired' is an INDEXER verdict from the local deadline sweep, which needs no
 // mirror row), but the column keeps the wider vocabulary so an 'expired' producer
@@ -1027,6 +1058,15 @@ class Attest {
     // A failing batch is `invalid` identically on every node, with NO partial absorb: the
     // one signature set covers the whole window, so dropping a row changes the signed bytes
     // and fails every signature. A signed batch is atomic exactly as a signed round is.
+    //
+    // ONE CANONICAL HEAD PER PUBLISHER AND WINDOW. The batch key is derived from the
+    // window, so one publisher republishing it (a failover rank, a retry after a stuck
+    // broadcast) would otherwise absorb the same window twice and enqueue two hub pushes.
+    // The earliest valid head for (batch key, author) is the canonical one and a later one
+    // from the same publisher is refused; the pick is by action_index, a total order, so
+    // every node picks the same head whatever order the wires arrived in. The scope is the
+    // AUTHOR's, never the key's alone, because a key-wide pick would let a junk head
+    // squatting a window deny the honest publisher outright.
     async _parseBatchHead(params, data, error){
 
         // DOGE-plane guard. Stored as a verdict rather than hard-returned like the relay
@@ -1047,6 +1087,17 @@ class Attest {
         if(!error && head.network !== String(this.config['NETWORK']))
             error = 'invalid: NETWORK (batch declares ' + head.network + ')';
 
+        // Everything already on chain under this key, and the slice of it that is this
+        // publisher's. The read happens even for a single-wire batch, because the
+        // duplicate-head test below needs it whatever the geometry says.
+        let author = String(data['SOURCE'] || '');
+        let mine   = [];
+        if(!error){
+            mine = this._authoredBy(await this.indexerDb.getAttestBatchChunks(head.batchKey), author);
+            if(this._canonicalBatchHead(mine))
+                error = 'invalid: BATCH_KEY (this publisher already has a head for the window)';
+        }
+
         // Reassembly, then the quorum. A multi-chunk batch is absorbed only once its
         // continuations are on chain; until then the head is a structurally sound action
         // that has delivered nothing, which is the ANCHOR archive head's behaviour and for
@@ -1055,9 +1106,7 @@ class Attest {
         // absorbs exactly once whichever order the wires arrive in.
         let batch = null;
         if(!error){
-            let stored = (head.totalChunks === 1)
-                       ? []
-                       : await this.indexerDb.getAttestBatchChunks(head.batchKey);
+            let stored = (head.totalChunks === 1) ? [] : mine;
             let assembled = abw.reassembleAttestBatch(head, stored);
             if(assembled.ok) batch = assembled.batch;
             // Incomplete coverage is the ONE failure that is not a verdict: the missing
@@ -1092,7 +1141,7 @@ class Attest {
         // itself, so this push is the chain-only rebuild road and not an optimisation.
         if(!error && batch && this.hubClient && this.hubClient.enabled){
             let pushGeneration = await this.indexerDb.getPushGeneration(data['COIN']);
-            let payload = this._buildBatchHubPush(batch, data, pushGeneration);
+            let payload = this._buildBatchHubPush(batch, data, pushGeneration, data['ACTION_INDEX']);
             let pushId  = await this.indexerDb.enqueueHubPushTx('attest_batch', payload);
             this.indexerDb.stageHubPush({ id: pushId, pushType: 'attest_batch', payload });
         }
@@ -1109,6 +1158,14 @@ class Attest {
     //
     // The chunk that completes the coverage DOES absorb, because it is the moment the whole
     // window is finally on chain, and it is the same moment on every node.
+    //
+    // A SLOT BELONGS TO THE PUBLISHER WHOSE BATCH IT IS. Every read here is scoped to this
+    // wire's own author, so a continuation joins its own publisher's head and no other, and
+    // the duplicate-slot guard counts only that publisher's slots. A chunk broadcast by
+    // anyone else is the chunk of its own batch: it can neither occupy a slot in this one
+    // nor contribute bytes to its reassembly. Without that scope the first wire into a slot
+    // owned it, so a junk chunk denied the window and a well-formed one for another
+    // encoding forced the honest head `invalid`.
     async _parseBatchContinuation(params, data, error){
 
         if(!error && String(this.config['COIN']) !== BATCH_CHAIN)
@@ -1123,12 +1180,12 @@ class Attest {
         // One read serves all three things this handler needs from the batch's stored rows:
         // the head to verify against, the geometry to agree with, and the slots already
         // taken. Rejected rows never appear in it, so junk neither occupies a slot nor
-        // contributes bytes.
+        // contributes bytes, and the author partition makes the rest this publisher's own.
         let stored = [], headRow = null;
         if(!error){
-            stored  = await this.indexerDb.getAttestBatchChunks(chunk.batchKey);
-            headRow = stored.find(r => Number(r.version) === abw.ATTEST_BATCH_HEAD_VERSION &&
-                                       Number(r.chunk_index) === 0) || null;
+            stored  = this._authoredBy(await this.indexerDb.getAttestBatchChunks(chunk.batchKey),
+                                       String(data['SOURCE'] || ''));
+            headRow = this._canonicalBatchHead(stored);
         }
 
         // Geometry must agree with the head that owns the batch. Both fields are signed
@@ -1184,6 +1241,41 @@ class Attest {
         data['BTC_BLOCK_HEIGHT'] = parsed.btcBlockHeight;
     }
 
+    // One publisher's slice of everything filed under a batch key.
+    //
+    // A BATCH'S IDENTITY IS (KEY, AUTHOR), NEVER THE KEY ALONE. The key is derived from
+    // the window a head declares, so anyone can mint a wire under it. Without this
+    // partition whoever lands a slot first owns it: a junk chunk broadcast ahead of the
+    // honest one takes the slot, the duplicate guard then refuses the real chunk and the
+    // window is denied outright, and a well-formed chunk of a different encoding joins the
+    // reassembly and forces the head `invalid`. With it, a foreign wire is a chunk of its
+    // own batch and governs nobody else's slots. It is the anchor archive rail's rule
+    // (ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL), applied to the same failure.
+    //
+    // `source` comes from actions.source_id, the only authenticated identity a chain wire
+    // carries. An unresolvable author scopes to NOTHING rather than to everything, which
+    // fails closed: such a publisher's multi-chunk batch simply never assembles.
+    _authoredBy(rows, author){
+        let scope = String(author || '');
+        if(scope.length === 0) return [];
+        return (rows || []).filter(r => String(r.source || '') === scope);
+    }
+
+    // The canonical head of one publisher's batch: the earliest valid v5 slot 0 in an
+    // already author-partitioned set, or null when that publisher has none on chain.
+    //
+    // Earliest by action_index, which is a total order, so every node names the same head
+    // whatever order the wires arrived in and the pick is independent of the read's own
+    // ordering. It is what makes a publisher's second head for a window a duplicate that
+    // absorbs nothing rather than a second delivery of one window, and it is the row a
+    // continuation authenticates its geometry against.
+    _canonicalBatchHead(rows){
+        let heads = (rows || []).filter(r => Number(r.version) === abw.ATTEST_BATCH_HEAD_VERSION &&
+                                             Number(r.chunk_index) === 0);
+        if(heads.length === 0) return null;
+        return heads.reduce((best, r) => (Number(r.action_index) < Number(best.action_index)) ? r : best);
+    }
+
     // Rebuild the parsed head a stored v5 row came from, so a continuation reassembles
     // through the SAME path the head-side does, byte for byte.
     //
@@ -1217,9 +1309,13 @@ class Attest {
     // stamps its own head (actions/anchor.js). This chunk's bytes were well formed and its
     // row stays valid, which is what keeps one bad batch from re-judging an honest wire.
     //
-    // The push carries THIS action's index, block and time, not the head's: the completing
-    // action is the one whose rollback un-lands the delivery, and it is the action at which
-    // the window is first fully on chain.
+    // The push carries the HEAD's action index and THIS action's block and time. They are
+    // different things: the index NAMES THE BATCH (the hub stamps it onto every carried
+    // response as batch_action_index, and that is the link an explorer opens, which must
+    // land on the head that declares the window rather than on whichever continuation
+    // happened to close it), while the block and time are the completing action's because
+    // that is the action whose rollback un-lands the delivery and the stamp any hub keying
+    // on time needs.
     async _absorbCompletedBatch(headRow, stored, chunk, data){
         let head   = this._headFromRow(headRow);
         let chunks = stored.concat([{
@@ -1248,7 +1344,7 @@ class Attest {
         // reason: this push is the chain-only rebuild road, not an optimisation.
         if(this.hubClient && this.hubClient.enabled){
             let pushGeneration = await this.indexerDb.getPushGeneration(data['COIN']);
-            let payload = this._buildBatchHubPush(batch, data, pushGeneration);
+            let payload = this._buildBatchHubPush(batch, data, pushGeneration, Number(headRow.action_index));
             let pushId  = await this.indexerDb.enqueueHubPushTx('attest_batch', payload);
             this.indexerDb.stageHubPush({ id: pushId, pushType: 'attest_batch', payload });
         }
@@ -1264,11 +1360,16 @@ class Attest {
     // along for the same reason the PRICE batch carries it: batching widens the hub/chain
     // skew, and a hub keying anything on time needs the LANDING action's own stamp.
     //
+    // `action_index` is the batch HEAD's, which is why it is a parameter rather than read
+    // off `data`: on a multi-chunk batch the landing action is the completing continuation,
+    // and naming that one would point every carried response's batch link at a chunk.
+    //
     // @param {Object} batch the reassembled batch body
-    // @param {Object} data the landing v5 action
+    // @param {Object} data the landing v5/v6 action
     // @param {number} pushGeneration the source-chain reorg fence
+    // @param {number} headActionIndex the batch head's action index
     // @returns {Object} the pushattestbatch payload
-    _buildBatchHubPush(batch, data, pushGeneration){
+    _buildBatchHubPush(batch, data, pushGeneration, headActionIndex){
         return {
             source_chain:     data['COIN'],
             network:          batch.network,
@@ -1278,7 +1379,7 @@ class Attest {
             btc_block_height: batch.btc_block_height,
             rows:             batch.rows,
             sigs:             batch.sigs,
-            action_index:     data['ACTION_INDEX'],
+            action_index:     headActionIndex,
             block_index:      data['BLOCK_INDEX'],
             block_time:       data['BLOCK_TIME'],
             push_generation:  pushGeneration
@@ -2286,3 +2387,4 @@ class Attest {
 
 module.exports = Attest;
 module.exports.REQUEST_ID_PREIMAGE_FIELDS = REQUEST_ID_PREIMAGE_FIELDS;
+module.exports.ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK = ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK;

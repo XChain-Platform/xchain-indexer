@@ -2210,6 +2210,14 @@ class Utility {
     // ORDER is the local request row's (block_index, action_index), never the mirror
     // row's informational copies of them and never a CHAR(64) request_id collation.
     // Insertion order of the mirror rows is discarded here.
+    //
+    // CAPPED at ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK, taken as a PREFIX of that order, so a
+    // block's callback cost is bounded and every node defers the same rows. The order is
+    // TOTAL (action_index is unique), which is the whole reason a prefix is safe: over a
+    // partial or planner-dependent order two nodes would take different subsets and fork.
+    // A deferred row needs no bookkeeping, because it is still applicable at the next
+    // block and this same call selects it there; the constant's own comment carries the
+    // carry-forward rule in full.
     selectApplicableAttestationResponses(mirrorRows, requestRows, blockIndex, blockTime, network){
         let block = Number(blockIndex);
         let time  = Number(blockTime);
@@ -2258,7 +2266,10 @@ class Utility {
             let ax = Number(x.request.action_index), ay = Number(y.request.action_index);
             return ax - ay;
         });
-        return out;
+        // Required here rather than at the top of the file, the way the XCALL pass below
+        // resolves its own per-block cap: the action modules are constructed from this one.
+        let cap = require('./actions/attest.js').ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK;
+        return out.slice(0, cap);
     }
 
     // Per-block hub-mirror ATTEST response applier pass (the response-mirror design
