@@ -288,4 +288,30 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
         assert.ok(/module\.exports\.resolveWatermarkGrace\s*=/.test(SYNC_SRC),
             'hub_db_sync must export resolveWatermarkGrace for the direct barrier to share it');
     });
+
+    // Curated, not derived from every `_release*Waiters` definition:
+    // _releaseSnapshotWaiters is deliberately driven off the CROSS_CHAIN_TABLES
+    // content refresh instead of the watermark, so a blanket "every waiter
+    // method fires here" rule would be wrong on its face. A barrier missing
+    // from _advanceWatermark blocks its waiters for the full poll timeout on
+    // every advance.
+    const REQUIRED_WATERMARK_RELEASES = [
+        '_releasePriceWaiters',
+        '_releasePriceTimeWaiters',
+        '_releaseOracleWaiters',
+        '_releaseMatchWaiters',
+        '_releaseCallWaiters',
+        '_releaseAnchorAttestWaiters',
+        '_releaseAttestResponseWaiters',
+    ];
+
+    it('every curated barrier registers its release call inside _advanceWatermark', function () {
+        const m = /_advanceWatermark\([^)]*\)\s*\{([\s\S]*?)\n    \}/.exec(SYNC_SRC);
+        assert.ok(m, '_advanceWatermark method not found in hub_db_sync.js');
+        const body = m[1];
+        for (const call of REQUIRED_WATERMARK_RELEASES) {
+            assert.ok(body.includes(call + '('),
+                call + '() is missing from _advanceWatermark; its waiters would block for the full poll timeout on every advance');
+        }
+    });
 });
