@@ -50,7 +50,11 @@ CREATE TABLE IF NOT EXISTS attestation_responses (
 -- legitimately both be served through one mirror table during a re-point, and scoping
 -- the key matches how every reader and _purgeForeignNetworkRows scope theirs.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_attest_response ON attestation_responses (network, request_id);
--- The applicability scan reads rows whose signed effective_time has been reached.
+-- Two range reads over the one column both sides agree on: the indexer's applicability
+-- scan takes rows whose signed effective_time has been reached, and the hub's batch
+-- publisher takes one window as [window_start, window_end). Keying the window on the
+-- signed column rather than on per-hub finalized_at is what makes two hubs partition a
+-- boundary row the same way, and this index is what keeps that read off a full scan.
 CREATE        INDEX IF NOT EXISTS idx_effective_time ON attestation_responses (network, effective_time);
--- Deterministic applier order within a block, and the batch publisher's window read.
+-- Deterministic applier order within a block.
 CREATE        INDEX IF NOT EXISTS idx_request_order  ON attestation_responses (network, request_block_index, request_action_index);
