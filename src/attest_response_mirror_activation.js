@@ -69,6 +69,10 @@ const ATTEST_RESPONSE_MIRROR_ACTIVATION = {
     regtest: 0,           // ARMED at genesis so the e2e mirror venue exercises the mirror path
 };
 
+// Networks already reported by the guard in isResponseMirrorActive, so a per-request
+// per-block path says it once rather than once per row.
+const warnedUnknownNetworks = new Set();
+
 // True when the response to a request admitted at `requestBlock` is served by the
 // mirror rather than by an on-chain ATTEST v1.
 //
@@ -77,8 +81,26 @@ const ATTEST_RESPONSE_MIRROR_ACTIVATION = {
 // as "off": without the explicit null test `req >= null` coerces to `req >= 0` and
 // arms the mirror on every block of an unratified network, the inverse of what the
 // sentinel means (the same trap ATTEST_RESPONSIBLE_WIDENING_ACTIVATION documents).
+//
+// A network with NO ENTRY AT ALL is a different thing from an unratified one, and the
+// two must not be conflated even though both return false. `null` is a posture the
+// operator chose. `undefined` is a misconfiguration, and it disables the mirror
+// totally and silently: every request is answered on the legacy path, and every
+// mirror row that IS delivered is declined here with no log line anywhere, which
+// downstream is indistinguishable from a mirror that never delivered at all. It is
+// reachable because the two sides of the applier's join read the network string from
+// different places (the hub signs its rows under HUB_NETWORK, the indexer both
+// queries the mirror and gates here on its own INDEXER_NETWORK), so nothing in the
+// code forces the two to agree. Whichever side is wrong, the symptom is silence.
 function isResponseMirrorActive(requestBlock, network){
     let threshold = ATTEST_RESPONSE_MIRROR_ACTIVATION[network];
+    if(threshold === undefined && !warnedUnknownNetworks.has(String(network))){
+        warnedUnknownNetworks.add(String(network));
+        console.warn('ATTEST response mirror: no activation entry for network ' +
+            JSON.stringify(String(network)) + ', so the mirror is OFF for every request ' +
+            'and every delivered mirror row is declined. Known networks: ' +
+            Object.keys(ATTEST_RESPONSE_MIRROR_ACTIVATION).join(', ') + '.');
+    }
     if(threshold === null || threshold === undefined) return false;
     let req = parseInt(requestBlock);
     if(!Number.isFinite(req)) return false;
