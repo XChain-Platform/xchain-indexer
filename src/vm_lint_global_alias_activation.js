@@ -12,25 +12,34 @@
  *
  **********************************************************************
  *
- * Deploy-lint global-alias flag-day (banned-async + banned-wasm refinement).
+ * Deploy-lint global-alias flag-day (banned-async + banned-wasm + banned-math
+ * refinement).
  *
- * The banned-async and banned-wasm deploy rules are identifier-precise: they flag
- * the bare `Promise` / `WebAssembly` identifier and the single-hop `globalThis.X`
- * spelling, and that precision is what lets them be error-severity CONSENSUS_RULES
- * the deploy validator blocks on. Two other spellings read the SAME global binding
- * and walked straight past both rules:
+ * The banned-async, banned-wasm and banned-math deploy rules are identifier-precise:
+ * they flag the bare `Promise` / `WebAssembly` / `Math` identifier and the single-hop
+ * `globalThis.X` spelling, and that precision is what lets them be error-severity
+ * CONSENSUS_RULES the deploy validator blocks on. Two other spellings read the SAME
+ * global binding and walked straight past all three rules:
  *   - sloppy-mode `this`. Contract code is evaluated by the saved Function
  *     constructor in global scope as sloppy-mode script, so top-level `this` IS
  *     globalThis and a plain `f()` call hands a sloppy function body the same
- *     receiver. `this.WebAssembly` / `this.Promise` was never matched.
+ *     receiver. `this.WebAssembly` / `this.Promise` / `this.Math.pow` was never
+ *     matched.
  *   - the global object's own `globalThis` self-reference, at any depth:
  *     `globalThis.globalThis.Promise`, `globalThis['globalThis'].WebAssembly`,
- *     `this.globalThis.Promise`. The rule compared node.object.name directly, so a
- *     single extra hop defeated it.
+ *     `globalThis.globalThis.Math.log`, `this.globalThis.Promise`. The rule compared
+ *     node.object.name directly, so a single extra hop defeated it.
  *
- * Closing both changes which contracts the chain accepts, so it MUST be
+ * banned-math is in scope for the same reason and on the same bit, which is easy to
+ * miss because it reads the global object through its OWN single-hop matcher rather
+ * than the shared one: xchain-vm/src/lint-core.js isMathObjectRef resolves its
+ * qualifying-object leg through isGlobalObjectRef under this epoch, and
+ * findBannedMathCalls is handed the same flag (lint-core.js validateSyntax, the
+ * `globalAlias` argument syntax.js maps enforceLintGlobalAlias onto).
+ *
+ * Closing all three changes which contracts the chain accepts, so it MUST be
  * height-gated: below the activation the refinement is off and validateSyntax
- * resolves both rules exactly as it historically did, so a from-genesis replay
+ * resolves all three rules exactly as it historically did, so a from-genesis replay
  * reproduces the accepted verdict byte for byte; at/after it the wider spellings
  * block. deploy.js threads the resolved activation as
  * vm.validateSyntax(code, {enforceLintGlobalAlias}).
@@ -61,9 +70,9 @@
  ********************************************************************/
 
 // Per-chain activation height, interpreted as the processing chain's OWN block_index.
-// At/after the height the deploy-lint banned-async / banned-wasm rules also match
-// sloppy-mode `this` and the globalThis self-reference chain; below it they resolve as
-// they historically did (byte-identical replay).
+// At/after the height the deploy-lint banned-async / banned-wasm / banned-math rules
+// also match sloppy-mode `this` and the globalThis self-reference chain; below it they
+// resolve as they historically did (byte-identical replay).
 // MUST equal xchain-vm/src/index.js LINT_GLOBAL_ALIAS_ACTIVATION.
 // null = UNARMED, awaiting the operator's ratified per-coin train heights.
 const VM_LINT_GLOBAL_ALIAS_ACTIVATION = {

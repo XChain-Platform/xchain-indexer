@@ -381,9 +381,12 @@ class Deploy {
             let enforcePkg3DeployLint = vmDeployLintPkg3.isVmDeployLintPkg3Active(data['BLOCK_INDEX'], this.config['NETWORK'], this.config['COIN']);
             let enforceBannedGenerator = enforcePkg3DeployLint;
             let enforceBannedWasm = enforcePkg3DeployLint;
-            // The global-alias refinement of banned-async + banned-wasm (sloppy-mode
-            // `this` and the globalThis self-reference chain both read the global
-            // binding) rides a THIRD, per-coin height gate of its own. It cannot ride
+            // The global-alias refinement of banned-async + banned-wasm + banned-math
+            // (sloppy-mode `this` and the globalThis self-reference chain both read the
+            // global binding) rides a THIRD, per-coin height gate of its own. The one
+            // resolved boolean below widens all three rules: banned-math reaches the same
+            // global object through its own matcher (xchain-vm isMathObjectRef), whose
+            // object leg resolves through isGlobalObjectRef under this epoch. It cannot ride
             // either gate above: VM_LINT_HARDENING is already open on every network and
             // the Pkg 3 heights are in the past, so reusing either would retroactively
             // reject contracts the chain already accepted. Mainnet is still unarmed, so

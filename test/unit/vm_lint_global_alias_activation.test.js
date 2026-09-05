@@ -15,8 +15,8 @@
  *
  * Deploy-lint global-alias flag-day predicate.
  *
- * The epoch widens the banned-async and banned-wasm deploy rules to match the
- * global reads they used to walk past (sloppy-mode `this`, and the global
+ * The epoch widens the banned-async, banned-wasm and banned-math deploy rules to
+ * match the global reads they used to walk past (sloppy-mode `this`, and the global
  * object's own `globalThis` self-reference at any depth). That changes which
  * contracts the chain accepts, so it must be height-gated, and it cannot ride
  * either existing gate: VM_LINT_HARDENING is already open on every network and

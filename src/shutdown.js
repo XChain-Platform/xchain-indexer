@@ -183,7 +183,6 @@ module.exports = {
     DEFAULT_SHUTDOWN_TIMEOUT_MS,
     resolveTimeoutMs,
     closeServer,
-    closeDatabases,
     createShutdown,
     createIndexerDrain
 };
