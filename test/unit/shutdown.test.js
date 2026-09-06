@@ -16,6 +16,12 @@
 const assert = require('assert');
 const { createShutdown, createIndexerDrain, closeServer, resolveTimeoutMs, DEFAULT_SHUTDOWN_TIMEOUT_MS } = require('../../src/shutdown');
 
+// Shared poll-until / fixed-settle helpers. waitUntil() is for a case that
+// asserts an event DID happen; a case asserting an event did NOT happen, or one
+// that must outlive a timer to prove the timer was cleared, has nothing to poll
+// and keeps its fixed sleep() settle.
+const { sleep, waitUntil } = require('../helpers/wait.js');
+
 const silentLog = { log(){}, warn(){}, error(){} };
 
 // Minimal XChainIndexer stand-in: records call ORDER, because the ordering is the
@@ -61,7 +67,8 @@ describe('graceful shutdown', function(){
                 log: silentLog
             });
             shutdown('SIGTERM');
-            await new Promise((r) => setTimeout(r, 10));
+            assert.ok(await waitUntil(() => codes.length > 0),
+                'timed out waiting for the clean drain to reach exit()');
             assert.strictEqual(drained, true);
             assert.deepStrictEqual(codes, [0]);
         });
@@ -70,14 +77,17 @@ describe('graceful shutdown', function(){
             const codes = [];
             let calls = 0;
             const shutdown = createShutdown({
-                drain: async () => { calls++; await new Promise((r) => setTimeout(r, 20)); },
+                // Not a settle: this 20ms IS the in-flight window the later two
+                // signals have to land inside, so it stays a fixed delay.
+                drain: async () => { calls++; await sleep(20); },
                 exit: (c) => codes.push(c),
                 log: silentLog
             });
             shutdown('SIGTERM');
             shutdown('SIGTERM');
             shutdown('SIGINT');
-            await new Promise((r) => setTimeout(r, 60));
+            assert.ok(await waitUntil(() => codes.length > 0),
+                'timed out waiting for the single in-flight drain to reach exit()');
             assert.strictEqual(calls, 1, 'drain must run exactly once');
             assert.deepStrictEqual(codes, [0]);
         });
@@ -94,7 +104,8 @@ describe('graceful shutdown', function(){
                 log: silentLog
             });
             shutdown('SIGTERM');
-            await new Promise((r) => setTimeout(r, 80));
+            assert.ok(await waitUntil(() => codes.length > 0),
+                'timed out waiting for the hard-exit timer to fire');
             assert.deepStrictEqual(codes, [1]);
         });
 
@@ -107,7 +118,11 @@ describe('graceful shutdown', function(){
                 log: silentLog
             });
             shutdown('SIGTERM');
-            await new Promise((r) => setTimeout(r, 120));
+            // Deliberate delay, not a settle: the throw exits at once, and the point
+            // of the wait is to OUTLIVE the 50ms hard-exit timer and prove it was
+            // cleared. Polling for the first exit would return before the timer could
+            // fire and the "only once" claim would stop being tested.
+            await sleep(120);
             assert.deepStrictEqual(codes, [1]);
         });
 
@@ -120,7 +135,10 @@ describe('graceful shutdown', function(){
                 log: silentLog
             });
             shutdown('SIGTERM');
-            await new Promise((r) => setTimeout(r, 80));
+            // Deliberate delay, not a settle: the clean drain exits at once, and the
+            // wait exists to outlive the 20ms hard-exit timer so a leaked timer would
+            // append a second code. There is no predicate for "nothing else happened".
+            await sleep(80);
             assert.deepStrictEqual(codes, [0], 'a cleared timer must not add a second exit');
         });
     });
@@ -201,7 +219,10 @@ describe('graceful shutdown', function(){
             let settled = false;
             const running = drain().then(() => { settled = true; });
 
-            await new Promise((r) => setTimeout(r, 30));
+            // Deliberate delay, not a settle: the claim is that the drain does NOT
+            // progress while the loop promise is unresolved, so the window itself is
+            // the test and there is nothing to poll for.
+            await sleep(30);
             assert.strictEqual(settled, false, 'the drain must not finish while the block loop is mid-block');
             assert.strictEqual(indexer.indexerDb.closed, false,
                 'closing a pool under an open block transaction is the exact abort this fix removes');

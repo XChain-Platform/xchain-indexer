@@ -50,6 +50,11 @@ function startHub(handler){
 
 // Resolve to 'pending' when the call has not settled inside ms. Distinguishes the
 // defect (never settles) from every ordinary rejection.
+//
+// The timer here is a bound, not a settle: it loses the race on every green run,
+// and its expiry is the failure the assertions below reject. Do not sweep it into
+// waitUntil() - the race returns the rejection VALUE that those assertions match
+// on, which a boolean poll cannot carry.
 function settledWithin(promise, ms){
     let outcome = promise.then(() => 'resolved', (e) => e);
     return Promise.race([outcome, new Promise((r) => setTimeout(() => r('pending'), ms))]);
@@ -72,6 +77,8 @@ describe('HubClient response-lifecycle settling', function(){
             // Content-Length promises 500 bytes; the socket dies after ~36 of them.
             res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': '500' });
             res.write('{"jsonrpc":"2.0","result":{"partial":');
+            // Deliberate delay: holds the socket open long enough for the client to
+            // reach the mid-BODY state, which is the state under test.
             setTimeout(() => res.socket.destroy(), 20);
         });
         let c = new HubClient(hub.url, '');
@@ -113,6 +120,7 @@ describe('HubClient response-lifecycle settling', function(){
         hub = await startHub((req, res) => {
             res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': '500' });
             res.write('{"jsonrpc":"2.0","result":{"partial":');
+            // Deliberate delay, same reason as the truncation case above.
             setTimeout(() => res.socket.destroy(), 20);
         });
         let hubClient = new HubClient(hub.url, '');

@@ -39,12 +39,22 @@ function startHub(handler){
 
 // Resolve to 'pending' when the call has not settled inside ms. Distinguishes the
 // defect (never settles) from every ordinary rejection.
+//
+// The timer here is a bound, not a settle: it loses the race on every green run,
+// and its expiry is the failure the assertions below reject. Do not sweep it into
+// waitUntil() - the race returns the rejection VALUE that those assertions match
+// on, which a boolean poll cannot carry.
 function settledWithin(promise, ms){
     let outcome = promise.then(() => 'resolved', (e) => e);
     return Promise.race([outcome, new Promise((r) => setTimeout(() => r('pending'), ms))]);
 }
 
 // A hub that sends headers promising a body, part of it, then drops the socket.
+//
+// The 20ms is a deliberate delay, not a settle: it holds the socket open long
+// enough for the client to reach the mid-BODY state, which is the state under
+// test. Killing at flush time instead races the client into the request-error
+// branch, and the disjunctive assertion below would swallow the difference.
 function truncatingHub(req, res){
     res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': '9000' });
     res.write('{"rows":[{"id":1,');
