@@ -564,6 +564,79 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
             assert.strictEqual(await c.proveMined(bundleReward()), 'verified');
             assert.strictEqual(calls, 1);
         });
+
+        // A DOGE transaction is not limited to one anchor action: BATCH gives each command its
+        // own action_index, so anyone can ride a second ANCHOR on the transaction that carries
+        // the hub's, and even a bundle too malformed to yield a section still writes a row
+        // carrying its header snapshot block. Reconstructing the header as a maximum over the
+        // whole TRANSACTION let such a row raise it above the real bundle's, so no genuine
+        // section equalled it and _judge fell through to a permanent, memoized 'rejected':
+        // a legitimate COLLECT-spendable reward destroyed by a third-party write.
+        describe('an unrelated anchor on the same transaction cannot suppress the reward', function () {
+            // The reward's own bundle, with the row identity a current DOGE indexer serves.
+            function ownBundle() {
+                return bundle().map((s, i) => Object.assign(s, { action_index: 41, section_index: i }));
+            }
+            // Someone else's bundle on the same transaction, at a HIGHER snapshot block.
+            function sibling(overrides) {
+                return section(Object.assign({
+                    action_index: 42, section_index: 0, snapshot_block: SNAP + 6,
+                    checkpoint_seq: SNAP + 6
+                }, overrides || {}));
+            }
+
+            it('judges each bundle against its own header when the rows carry action identity', function () {
+                const rows = ownBundle().concat([sibling({ status: 'invalid: bad sigs' })]);
+                assert.strictEqual(client()._judge(rows, bundleReward()), 'verified');
+            });
+
+            it('is not suppressed by a sibling whose invalidity is a NODE-CLASS verdict', function () {
+                // These stay candidates on purpose (two nodes reading different DOGE indexers
+                // must not decide a reward oppositely), so filtering cannot save this case and
+                // only the per-action grouping can. A forged sibling naming the real publisher
+                // is cheap, which is why the identity is the fix rather than the filter.
+                const rows = ownBundle().concat([sibling({ status: 'invalid: SECTION 1 insufficient' })]);
+                assert.strictEqual(client()._judge(rows, bundleReward()), 'verified');
+            });
+
+            it('judges two VALID bundles on one transaction against their own headers', function () {
+                const other = section({ action_index: 42, section_index: 0,
+                                        snapshot_block: SNAP + 6, checkpoint_seq: SNAP + 6 });
+                const rows  = ownBundle().concat([other]);
+                assert.strictEqual(client()._judge(rows, bundleReward()), 'verified',
+                    'the lower bundle still proves its own reward');
+                assert.strictEqual(client()._judge(rows, bundleReward({
+                    roundReference: SNAP + 6, snapshotBlock: SNAP + 6
+                })), 'verified', 'and so does the higher one');
+            });
+
+            // Old peers serve no action_index. Answering 'unknown' there would halt block
+            // processing fleet-wide, so the fallback keeps one maximum but narrows it to rows
+            // that pass the same predicates the evidence loop applies; a deterministically
+            // invalid or wrong-publisher sibling can no longer raise it.
+            it('falls back to a FILTERED maximum against a peer serving no row identity', function () {
+                for (const bad of [{ status: 'invalid: bad sigs' },
+                                   { publisher: 'bb'.repeat(32) },
+                                   { checkpoint_network: 'testnet' }]) {
+                    const rows = bundle().concat([section(Object.assign(
+                        { snapshot_block: SNAP + 6, checkpoint_seq: SNAP + 6 }, bad))]);
+                    assert.strictEqual(client()._judge(rows, bundleReward()), 'verified',
+                        JSON.stringify(bad));
+                }
+            });
+
+            // The header binding itself must not loosen: a LAGGING section of the reward's OWN
+            // bundle still rides at its own older block and still cannot prove a reward there.
+            it('still refuses a lagging section of its own bundle as proof at that older block', function () {
+                const rows = ownBundle().concat([section({
+                    action_index: 41, section_index: 3,
+                    snapshot_block: SNAP - 40, checkpoint_seq: SNAP - 40
+                })]);
+                assert.strictEqual(client()._judge(rows, bundleReward({
+                    roundReference: SNAP - 40, snapshotBlock: SNAP - 40
+                })), 'rejected');
+            });
+        });
     });
 
     // The per-chain leg is RETIRED with its wires. Its already-attested rewards stay

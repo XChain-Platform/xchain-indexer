@@ -335,6 +335,62 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
             assert.strictEqual(abw.ATTEST_BATCH_MAX_INFLATED_BYTES, 1048576);
             assert.strictEqual(abw.ATTEST_BATCH_MAX_ROWS, 256);
             assert.strictEqual(abw.ATTEST_BATCH_WIRE_MAX_BYTES, 8189);
+            assert.strictEqual(abw.ATTEST_BATCH_MAX_CHUNKS, 256);
+        });
+
+        it('refuses a TOTAL_CHUNKS that cannot fit the column it is written to @regression', function () {
+            // batch_total_chunks / batch_chunk_index are INT UNSIGNED (max 4294967295), and
+            // actions/attest.js stamps the parsed count straight through, so an unbounded
+            // count is a halt on any node running the MariaDB default sql_mode rather than
+            // a refused wire.
+            const win = window_(1);
+            const p   = toParams(abw.encodeAttestBatch(win).wires[0]);
+            p[8] = '4294967296';
+            assert.strictEqual(abw.parseAttestBatchHead(p).reason,
+                abw.ATTEST_BATCH_FAIL_REASONS.TOTAL_CHUNKS);
+
+            const key = abw.computeBatchKey(win);
+            assert.strictEqual(
+                abw.parseAttestBatchContinuation(['6', key, '4294967296', '4294967297', 'deadbeef', 'QUJD']).reason,
+                abw.ATTEST_BATCH_FAIL_REASONS.TOTAL_CHUNKS,
+                'and the continuation bounds CHUNK_INDEX transitively, through the same ceiling');
+        });
+
+        it('bounds TOTAL_CHUNKS at the ceiling on both wires, and accepts the ceiling itself', function () {
+            const win = window_(1);
+            const key = abw.computeBatchKey(win);
+            const p   = toParams(abw.encodeAttestBatch(win).wires[0]);
+
+            p[8] = String(abw.ATTEST_BATCH_MAX_CHUNKS + 1);
+            assert.strictEqual(abw.parseAttestBatchHead(p).reason,
+                abw.ATTEST_BATCH_FAIL_REASONS.TOTAL_CHUNKS);
+            p[8] = String(abw.ATTEST_BATCH_MAX_CHUNKS);
+            assert.strictEqual(abw.parseAttestBatchHead(p).ok, true, 'the ceiling itself is legal');
+
+            assert.strictEqual(
+                abw.parseAttestBatchContinuation(['6', key, '1', String(abw.ATTEST_BATCH_MAX_CHUNKS + 1),
+                                                  'deadbeef', 'QUJD']).reason,
+                abw.ATTEST_BATCH_FAIL_REASONS.TOTAL_CHUNKS);
+            assert.strictEqual(
+                abw.parseAttestBatchContinuation(['6', key, '1', String(abw.ATTEST_BATCH_MAX_CHUNKS),
+                                                  'deadbeef', 'QUJD']).ok,
+                true, 'and so is a continuation inside it');
+        });
+
+        it('cannot refuse a batch this codebase can build: the encoder tops out under the ceiling', function () {
+            // The bound is only safe if it sits above what encodeAttestBatch will EMIT, so
+            // measure that rather than assert the comment. The worst case is the inflated
+            // cap of incompressible bytes: deflate-raw barely shrinks it and base64 grows it
+            // by a third, and one continuation carries ATTEST_BATCH_WIRE_MAX_BYTES minus its
+            // prefix. If either constant moves so the encoder can outrun the parser, this
+            // goes red instead of a real batch silently failing coverage in production.
+            const b64  = zlib.deflateRawSync(crypto.randomBytes(abw.ATTEST_BATCH_MAX_INFLATED_BYTES),
+                { level: zlib.constants.Z_BEST_COMPRESSION }).toString('base64');
+            const contPrefix = 'ATTEST|6|' + 'a'.repeat(64) + '|999|999|deadbeef|';
+            const ceiling = Math.ceil(b64.length / (abw.ATTEST_BATCH_WIRE_MAX_BYTES - contPrefix.length)) + 1;
+            assert.ok(ceiling <= abw.ATTEST_BATCH_MAX_CHUNKS,
+                'the encoder can need ' + ceiling + ' chunks, above the ' +
+                abw.ATTEST_BATCH_MAX_CHUNKS + '-chunk parser ceiling');
         });
 
         it('refuses to encode more than 256 rows', function () {

@@ -14,7 +14,7 @@
 
 -- Gated FILE v1 metadata. One row per FILE v1 action with a non-empty
 -- GATE_TICKER. Files sharing (gate_ticker, key_hash) form a "pack" that
--- unlocks atomically. See xchain-documentation/protocol/TOKEN_GATED_CONTENT.md.
+-- unlocks atomically. See xchain-documentation/protocol/token-gated-content.md.
 DROP TABLE IF EXISTS gated_files;
 CREATE TABLE gated_files (
     action_index        BIGINT UNSIGNED NOT NULL, -- ACTION_INDEX of the gated FILE action

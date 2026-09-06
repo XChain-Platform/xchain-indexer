@@ -1350,7 +1350,15 @@ class Attest {
         if(this.hubClient && this.hubClient.enabled){
             let pushGeneration = await this.indexerDb.getPushGeneration(data['COIN']);
             let payload = this._buildBatchHubPush(batch, data, pushGeneration, Number(headRow.action_index));
-            let pushId  = await this.indexerDb.enqueueHubPushTx('attest_batch', payload);
+            // The QUEUE ROW is keyed on THIS action, never on the head the payload names.
+            // pending_hub_pushes.action_index is the reorg purge key (rollback deletes every
+            // row at or above the orphaned range) and the action that lands this delivery is
+            // the completing continuation. Keyed at the head instead, a rollback of the very
+            // chunk that completed the batch leaves the queued delivery alive, and attest_batch
+            // is an uncapped durable push type, so it would retry until the hub published a
+            // completion for chunks no longer on chain. Every other wire of the batch landed at
+            // or below this action, so keying here purges on a rollback of any of them too.
+            let pushId  = await this.indexerDb.enqueueHubPushTx('attest_batch', payload, Number(data['ACTION_INDEX']));
             this.indexerDb.stageHubPush({ id: pushId, pushType: 'attest_batch', payload });
         }
     }

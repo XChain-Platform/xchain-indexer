@@ -480,6 +480,13 @@ class HubDbSync {
         this.apiKey    = options.apiKey   || process.env.HUB_API_KEY || '';
         this.enabled   = !!this.hubUrl && !!this.hubDb;
         this.pollIntervalMs = parseInt(options.pollInterval || process.env.HUB_DB_SYNC_POLL_INTERVAL || '30000');
+        // Total wall-clock budget for one snapshot GET. The `timeout: 30000` request
+        // option in _httpGet is an IDLE-socket timer that resets on every byte received,
+        // so a hub drip-feeding a body holds the request (and, through _bootstrapAll's
+        // guard, the whole mirror bootstrap) open indefinitely inside it. Four times the
+        // idle timer, so a 10k-row snapshot page has room to stream and only a wedged
+        // request can reach the ceiling.
+        this.httpDeadlineMs = parseInt(options.httpDeadline || process.env.HUB_DB_SYNC_HTTP_DEADLINE || '120000');
         this.ws        = null;
         this.running   = false;
         // True when the WebSocket path is unavailable and this mirror falls back to
@@ -1086,6 +1093,19 @@ class HubDbSync {
         let preHorizonServed   = (priceHorizon > 0) ? new Set() : null;
         let preHorizonRetained = (priceHorizon > 0) ? new Set() : null;
         let priceSkipped       = 0;
+        // Per-PAIR predecessor retention. The two sets above are keyed on round_number with
+        // every coin_pair pooled, which is the right shape for getPriceAtRound's round window
+        // and the wrong one for getPrice: db.getOracleDataForVM builds `prices` from a per-pair
+        // MAX(round_number) join with NO time filter, so a pair whose newest finalized row sits
+        // below the floor is present on a full mirror and absent from a bounded one, for the
+        // same block. At/after the stale-round visibility height that difference is VM-visible
+        // (full mirror: {price:null, roundNumber, timestamp, stale:true}; bounded mirror: no
+        // entry at all, so getPrice answers null), and a contract branching on it commits
+        // divergent state. So hold each pair's newest bound-out FINALIZED row and apply it
+        // after the drain when that pair kept nothing else - the pair's latest-price answer
+        // then matches a full mirror's, which is the reference behavior here.
+        let pricePairHeld    = (priceHorizon > 0) ? new Map() : null;
+        let pricePairCovered = (priceHorizon > 0) ? new Set() : null;
 
         // Progress counter. `fetched` counts every row the hub served this drain, which is
         // the number that has to be seen moving on a cold start even where `applied` lags
@@ -1138,6 +1158,21 @@ class HubDbSync {
                         if (finalizedRound) preHorizonServed.add(String(row.round_number));
                         if (rowTs < priceFloor) boundOut = true;
                         else if (finalizedRound) preHorizonRetained.add(String(row.round_number));
+                    }
+                    // Per-pair latest-price coverage, decided on the same pass. A finalized
+                    // row this drain APPLIES covers its pair whichever side of the horizon it
+                    // sits on; a finalized row the bound DECLINES becomes that pair's held
+                    // predecessor candidate, newest round winning, for the pass after the
+                    // drain to apply when the pair ends up covered by nothing else.
+                    if (String(row.status) === 'finalized') {
+                        let pair = String(row.coin_pair);
+                        if (!boundOut) pricePairCovered.add(pair);
+                        else {
+                            let rn   = Number(row.round_number);
+                            let held = pricePairHeld.get(pair);
+                            if (Number.isFinite(rn) && (!held || rn > Number(held.round_number)))
+                                pricePairHeld.set(pair, row);
+                        }
                     }
                 }
                 try {
@@ -1293,6 +1328,33 @@ class HubDbSync {
 
         // Fully drained only if the final page wasn't full and everything applied.
         let fullyDrained = lastPageCount < PAGE_LIMIT && applyErrors === 0;
+
+        // Apply the per-pair predecessors the bound declined, for the pairs this drain kept
+        // no finalized row for at all (see pricePairHeld above). CONDITIONAL on purpose: a
+        // pair with a retained finalized row already answers getPrice exactly as a full
+        // mirror does, and applying more than the gap needs would give the bound away. Only
+        // on a complete re-page, because only then has every row the hub holds been weighed,
+        // and a failure here fails the drain closed the same way a page apply does. Applying
+        // out of page order leaves no cursor hole: price_snapshots is a FULL_REPAGE table,
+        // so the cursor restarts at 0 on the next drain and carries nothing forward.
+        // priceSkipped is deliberately NOT decremented - it is the count of rows the bound
+        // declined at decision time, and it drives the floor the barriers police, which must
+        // keep claiming the mirror may lack rounds below priceFloor.
+        if (fullyDrained && priceHorizon > 0 && pricePairHeld && pricePairHeld.size > 0) {
+            for (let [pair, row] of pricePairHeld) {
+                if (pricePairCovered.has(pair)) continue;
+                try {
+                    await this._applyRow(table, row);
+                    applied++;
+                } catch (err) {
+                    applyErrors++;
+                    fullyDrained = false;
+                    console.warn('HubDbSync: failed to apply the held predecessor row for ' +
+                        pair + ' in ' + table + ':', err);
+                    break;
+                }
+            }
+        }
 
         // Mirror-bound acceptance check. The lookback is a SPAN IN SECONDS but the constraint it
         // has to satisfy is a COUNT OF ROUNDS (getOracleDataForVM's window), and only the
@@ -2161,12 +2223,33 @@ class HubDbSync {
         // a plain INSERT IGNORE here would drop the upgrade and strand the replica on the
         // stale row. Because effective_time is in the signed canonical and
         // gates the injection block, a divergent copy would inject at a different block.
-        // Upgrade only when the INCOMING row is finalized (keyed on VALUES(status),
-        // stable regardless of ODKU assignment order), so an already-finalized local
-        // row is never clobbered and re-delivery stays idempotent.
+        // Upgrade only when the INCOMING row is finalized AND carries a generation at or
+        // above the local row's (keyed on VALUES(status) / VALUES(push_generation), both
+        // read from the delivered row, so the verdict is stable regardless of ODKU
+        // assignment order), so an already-finalized local row is never clobbered and
+        // re-delivery stays idempotent.
+        //
+        // The generation half of that gate is what keeps content and fence moving TOGETHER.
+        // A status-only gate let a STALE finalized page (lower push_generation, fetched
+        // before a re-publish and landing after the live re-published row) overwrite
+        // effective_time, parameters, snapshot and signatures while GREATEST held the newer
+        // fence in place. A later fenced retraction naming the OLD generation then could not
+        // match the row and the stale terms stuck: effective_time gates the injection block,
+        // so the mirror dispatches different terms, or at a different block, from its peers
+        // and from archive recovery. The gate is the same shape oracle_prices uses, `>=` for
+        // the same reason (re-delivery of one generation stays idempotent). It is applied
+        // only when the delivered row actually carries push_generation; a pre-migration
+        // mirror or an older hub keeps the status-only behaviour rather than having every
+        // content upgrade compared against a column that is not on the wire.
+        //
+        // The gate deliberately stops at the generation and does NOT tiebreak on
+        // effective_time within one generation: nothing in this repo pins the hub to a
+        // non-decreasing effective_time across re-finalizations at a fixed generation, and a
+        // gate resting on that would silently refuse legitimate content forever.
+        //
         // push_generation is the item-5308 reorg FENCE, not ordinary content, so it is held
         // OUT of the status gate and only ever moves UP, the same rule cross_chain_matches
-        // applies to a_/b_push_generation. Inside the gate a finalized row carrying a LOWER
+        // applies to a_/b_push_generation. Assigned inside the gate a finalized row carrying a LOWER
         // generation lowered it, and the fenced retraction (DELETE ... WHERE push_generation
         // <= gen) then matched a row re-published ABOVE that fence and blew a permanent hole
         // in the mirror. The lowering is reachable because cross_chain_calls live rows apply
@@ -2176,8 +2259,14 @@ class HubDbSync {
             let fence     = cols.includes('push_generation');
             let updatable = cols.filter(c => c !== 'id' && c !== 'call_id' && c !== 'phase' && c !== 'status'
                                              && c !== 'push_generation');
-            let sets = updatable.map(c => '`' + c + "` = IF(VALUES(status) = 'finalized', VALUES(`" + c + '`), `' + c + '`)');
-            sets.push("status = IF(VALUES(status) = 'finalized', 'finalized', status)");
+            // Both halves read VALUES(...) or the row's ORIGINAL push_generation, and the
+            // fence is assigned LAST, so every content column and `status` is judged against
+            // the local row's pre-update generation (the #3211 ODKU ordering trap).
+            let gate = fence
+                     ? "VALUES(status) = 'finalized' AND COALESCE(VALUES(`push_generation`), 0) >= COALESCE(`push_generation`, 0)"
+                     : "VALUES(status) = 'finalized'";
+            let sets = updatable.map(c => '`' + c + '` = IF(' + gate + ', VALUES(`' + c + '`), `' + c + '`)');
+            sets.push('status = IF(' + gate + ", 'finalized', status)");
             if (fence)
                 sets.push('`push_generation` = GREATEST(COALESCE(`push_generation`, 0), COALESCE(VALUES(`push_generation`), 0))');
             let query = 'INSERT INTO cross_chain_calls (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
@@ -3368,9 +3457,16 @@ class HubDbSync {
         setTimeout(poll, this.pollIntervalMs);
     }
 
-    // Make a JSON GET request to the hub
+    // Make a JSON GET request to the hub.
+    //
+    // Every exit runs through one settle latch, because a hub that dies mid-body can
+    // fire several terminal events and the deadline below races them all. The local
+    // `resolve`/`reject` ARE that latch.
     _httpGet(path) {
-        return new Promise((resolve, reject) => {
+        return new Promise((settleResolve, settleReject) => {
+            let settled = false;
+            let resolve = (v) => { if (!settled) { settled = true; settleResolve(v); } };
+            let reject  = (e) => { if (!settled) { settled = true; settleReject(e); } };
             let parsed = url.parse(this.hubUrl);
             let isHttps = parsed.protocol === 'https:';
             let lib = isHttps ? https : http;
@@ -3397,9 +3493,31 @@ class HubDbSync {
                         reject(new Error('invalid JSON: ' + e.message));
                     }
                 });
+                // A hub restarting mid-snapshot aborts the RESPONSE: 'end' never fires,
+                // and req 'error' never fires either because the request itself completed.
+                // Without these three the promise stays pending forever, _bootstrapAll
+                // never reaches the `finally` that clears `_bootstrapping`, and every
+                // later reconnect and poll returns at that guard - the mirror bootstrap
+                // and the settlement barriers it feeds stall until the process restarts.
+                res.on('error',   (err) => { req.destroy(); reject(new Error('hub response error: ' + ((err && err.message) || err))); });
+                res.on('aborted', ()    => { req.destroy(); reject(new Error('hub aborted the response before the body was complete')); });
+                res.on('close',   ()    => {
+                    if (res.complete) return;
+                    req.destroy();
+                    reject(new Error('hub closed the connection before the response body was complete'));
+                });
             });
             req.on('error', reject);
             req.on('timeout', () => { req.destroy(new Error('Request timeout')); });
+            // The idle-socket timer cannot bound a drip-fed body; see httpDeadlineMs.
+            // Unref'd so it never holds the process open, cleared on the request's own
+            // teardown so a settled call drops it.
+            let deadlineTimer = setTimeout(() => {
+                req.destroy();
+                reject(new Error('hub request exceeded its ' + this.httpDeadlineMs + 'ms deadline'));
+            }, this.httpDeadlineMs);
+            if (deadlineTimer.unref) deadlineTimer.unref();
+            req.once('close', () => clearTimeout(deadlineTimer));
             req.end();
         });
     }

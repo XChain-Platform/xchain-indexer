@@ -49,6 +49,13 @@ const TERMINAL_HUB_REJECTIONS = [
 // because a fronting proxy can rewrite the status while the envelope survives.
 const HUB_RATE_LIMIT_RPC_CODE = -32029;
 
+// Total wall-clock budget for one hub call, overridable with HUB_CALL_DEADLINE_MS.
+// The `timeout` request option below is an IDLE-socket timer that resets on every byte
+// received, so it bounds a silent socket and nothing else: a hub drip-feeding a body
+// holds the call open forever inside it. Set far above any healthy push so the ceiling
+// can only fire on a wedged request, never on a slow-but-live hub.
+const HUB_CALL_DEADLINE_MS = 60000;
+
 // Turn the hub's RateLimit-* / Retry-After headers into the facts a backoff needs.
 // Present on BOTH the JSON 429 this client's own hub now sends and the plain-text
 // 429 express-rate-limit sends by default, so an indexer talking to an older hub
@@ -110,6 +117,9 @@ class HubClient {
         // Tracked separately from `enabled`: a deployment may carry a config oracle
         // without a push endpoint, and the config poll must not be gated on the feed.
         this.configEnabled = !!this.configUrl;
+        // Wall-clock ceiling for a single _call; see HUB_CALL_DEADLINE_MS.
+        let deadline = Number(process.env.HUB_CALL_DEADLINE_MS);
+        this.callDeadlineMs = Number.isFinite(deadline) && deadline > 0 ? deadline : HUB_CALL_DEADLINE_MS;
     }
 
     // Read the hub's operational params. The one method here that is NOT on the hub's
@@ -258,7 +268,15 @@ class HubClient {
     }
 
     _call(method, params, apiKeyOverride, urlOverride){
-        return new Promise((resolve, reject) => {
+        return new Promise((settleResolve, settleReject) => {
+            // Every exit runs through one latch, and the local `resolve`/`reject` below
+            // ARE that latch: a hub that dies mid-body can fire several of the terminal
+            // events, and a deadline abort races them all, so a direct settle would be a
+            // double-settle. Shadowing the executor's own names keeps the classification
+            // logic in the 'end' handler unchanged rather than restating it.
+            let settled = false;
+            let resolve = (v) => { if(!settled){ settled = true; settleResolve(v); } };
+            let reject  = (e) => { if(!settled){ settled = true; settleReject(e); } };
             let parsed = url.parse(urlOverride || this.hubUrl);
             let isHttps = parsed.protocol === 'https:';
             let lib = isHttps ? https : http;
@@ -337,9 +355,31 @@ class HubClient {
                     }
                     resolve(parsed.result);
                 });
+                // A hub that disconnects after its headers and a partial body aborts the
+                // RESPONSE: 'end' never fires, and req 'error' never fires either because
+                // the request itself completed. Without these three the promise stays
+                // pending forever, HubPushQueue.drain() keeps `draining` latched across
+                // its awaited _attempt, and every later tick returns at the overlap guard,
+                // so the push queue stops for good with the rows neither acked nor retried.
+                res.on('error',   (err) => { req.destroy(); reject(new Error('hub response error: ' + ((err && err.message) || err))); });
+                res.on('aborted', ()    => { req.destroy(); reject(new Error('hub aborted the response before the body was complete')); });
+                res.on('close',   ()    => {
+                    if(res.complete) return;
+                    req.destroy();
+                    reject(new Error('hub closed the connection before the response body was complete'));
+                });
             });
             req.on('error', (err) => reject(err));
             req.on('timeout', () => { req.destroy(new Error('Request timeout')); });
+            // The idle-socket timer above cannot bound a drip-fed body, so arm the
+            // wall-clock ceiling beside it. Unref'd so it never holds the process open,
+            // and cleared on the request's own teardown so a settled call drops it.
+            let deadlineTimer = setTimeout(() => {
+                req.destroy();
+                reject(new Error('hub call exceeded its ' + this.callDeadlineMs + 'ms deadline'));
+            }, this.callDeadlineMs);
+            if(deadlineTimer.unref) deadlineTimer.unref();
+            req.once('close', () => clearTimeout(deadlineTimer));
             req.write(body);
             req.end();
         });

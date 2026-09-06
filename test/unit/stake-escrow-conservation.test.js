@@ -160,7 +160,13 @@ describe('a contract stake locks tokens rather than destroying them', function()
     it('the contract slash releases the escrow it burns, keyed to the staker', function(){
         const i = executeSrc.indexOf('_processSlashEmission');
         const fn = executeSrc.slice(i, executeSrc.indexOf('createSlashEvent', i));
-        assert.ok(/createEscrow\(data\['ACTION_INDEX'\], token, this\.util\.bcsub\(0, r\.amount, 64\), r\.address\)/.test(fn),
+        // The negated per-release amount and the escrow write are bound through ONE
+        // identifier, so neither half can be dropped or swapped without failing here. The
+        // amount is no longer inlined into the call because a second same-token slash in the
+        // same EXECUTE overwrites the first row rather than accumulating, so the write now
+        // carries the execution's running total (slash_ledger_consolidation_activation.js);
+        // what must not change is that the value entering it is bcsub(0, r.amount, 64).
+        assert.ok(/let release = this\.util\.bcsub\(0, r\.amount, 64\);[\s\S]{0,400}createEscrow\(data\['ACTION_INDEX'\], token, release, r\.address\)/.test(fn),
             'the VM slash credits the destination without releasing the staker escrow: a mint');
         // Ordering matters for readability only, but the release must be inside the same
         // guarded path as the credit - i.e. after the zero-slashed early return.

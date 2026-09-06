@@ -91,6 +91,31 @@ const ATTEST_BATCH_MAX_INFLATED_BYTES = 1048576;
 const ATTEST_BATCH_MAX_ROWS = 256;
 
 /**
+ * Consensus ceiling on chunks per batch, bounding TOTAL_CHUNKS on both wires.
+ *
+ * TOTAL_CHUNKS is attacker-supplied and lands in an INT UNSIGNED column
+ * (`attests.batch_total_chunks`), so unbounded it wedges the node rather than
+ * failing the wire: a head declaring 4294967296 parses, actions/attest.js stamps
+ * it through unchanged, and the INSERT throws inside the block transaction under
+ * the MariaDB default sql_mode. That is a halt any sender can arm for the price
+ * of one transaction.
+ *
+ * The bound also has to be one the READER can serve, because a chunk set the
+ * reader cannot return whole is a batch that never absorbs: db.getAttestBatchChunks
+ * bounds its author-scoped read at this same number, and one publisher's valid rows
+ * under one key are their head plus at most one row per slot.
+ *
+ * 256 is the DEPLOY chunked-wire rule (MAX_DEPLOY_CHUNKS) applied here, and it is
+ * sized off the ENCODER rather than guessed: the largest body encodeAttestBatch
+ * will emit is ATTEST_BATCH_MAX_INFLATED_BYTES of incompressible bytes, which
+ * deflate-raw plus base64 turns into 1398536 characters, and a continuation carries
+ * 8098 of them, so the encoder cannot exceed 174 chunks. Nothing this codebase can
+ * build is refused here.
+ * @type {number}
+ */
+const ATTEST_BATCH_MAX_CHUNKS = 256;
+
+/**
  * Consensus inflate-ratio cap, matching the platform's other compressed wires so
  * there is one number for "this is a bomb, not a payload". deflate-raw tops out
  * near 1032:1, so 150 leaves honest JSON far more headroom than it needs.
@@ -405,7 +430,10 @@ function parseAttestBatchHead(params){
 
     if(!UINT.test(String(params[8] == null ? '' : params[8]))) return fail(FAIL.TOTAL_CHUNKS, params[8]);
     const totalChunks = Number(params[8]);
-    if(totalChunks < 1) return fail(FAIL.TOTAL_CHUNKS, totalChunks);
+    // Bounded on BOTH sides, like ROW_COUNT above and for the same two reasons: the
+    // count is attacker-supplied, and an unbounded one reaches an INT UNSIGNED column
+    // and a reader that cannot return the set whole.
+    if(totalChunks < 1 || totalChunks > ATTEST_BATCH_MAX_CHUNKS) return fail(FAIL.TOTAL_CHUNKS, totalChunks);
 
     const chunkB64 = String(params[9] == null ? '' : params[9]);
     if(chunkB64.length === 0 || !CANONICAL_BASE64.test(chunkB64)) return fail(FAIL.BASE64, 'head chunk');
@@ -441,8 +469,10 @@ function parseAttestBatchContinuation(params){
     const chunkIndex  = Number(params[2]);
     const totalChunks = Number(params[3]);
     // Index 0 is the head's own slot, so a continuation claiming it is refused
-    // rather than allowed to displace the head in the coverage set.
-    if(totalChunks < 2) return fail(FAIL.TOTAL_CHUNKS, totalChunks);
+    // rather than allowed to displace the head in the coverage set. The upper bound is
+    // the head's, so the two wires of one batch cannot disagree about the geometry the
+    // reader and the chunk columns have to hold; CHUNK_INDEX is then bounded by it.
+    if(totalChunks < 2 || totalChunks > ATTEST_BATCH_MAX_CHUNKS) return fail(FAIL.TOTAL_CHUNKS, totalChunks);
     if(chunkIndex < 1 || chunkIndex >= totalChunks) return fail(FAIL.CHUNK_INDEX, chunkIndex);
 
     const crc = String(params[4] == null ? '' : params[4]).toLowerCase();
@@ -584,6 +614,7 @@ module.exports = {
     ATTEST_BATCH_WIRE_MAX_BYTES,
     ATTEST_BATCH_MAX_INFLATED_BYTES,
     ATTEST_BATCH_MAX_ROWS,
+    ATTEST_BATCH_MAX_CHUNKS,
     ATTEST_BATCH_MAX_INFLATE_RATIO,
     ATTEST_BATCH_ROW_FIELDS,
     ATTEST_BATCH_FAIL_REASONS: FAIL,

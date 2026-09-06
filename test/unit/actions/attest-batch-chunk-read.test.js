@@ -147,6 +147,23 @@ describe('ATTEST batch chunk read: the publisher partition and its row limit (ro
             'and its window denied');
     });
 
+    it('is bounded at the PARSER ceiling, not at the encoder\'s habits @regression', function () {
+        // The case above measures the bound against what the CODEC emits. That is the
+        // weaker of the two claims: the chunk split carries no consensus weight, so a
+        // publisher may file a valid batch of smaller slices, and a bound derived from the
+        // encoder truncated it (258 accepted chunks read back as 256, coverage failed, and
+        // a complete on-chain batch never absorbed). The reader must therefore serve every
+        // geometry the WIRE CONTRACT accepts, and one publisher's valid rows under one key
+        // are their head plus at most one per slot, so that count is the parser ceiling.
+        const db = readerFor([]);
+        return db.getAttestBatchChunks('b'.repeat(64), AUTHOR).then(() => {
+            const value = Number(db.doQuery.firstCall.args[0].match(/LIMIT (\d+)/)[1]);
+            assert.strictEqual(value, abw.ATTEST_BATCH_MAX_CHUNKS,
+                'the read bound and the parser ceiling are one number; drift between them is ' +
+                'a batch the chain accepts and this node can never assemble');
+        });
+    });
+
     it('reassembles a real multi-chunk batch read back through the bounded query', async function () {
         const encoded = encodeBatch(20, 6000);
         assert.ok(encoded.totalChunks > 2, 'fixture assumption: the batch spans several wires');

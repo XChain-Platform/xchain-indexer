@@ -946,7 +946,7 @@ class Batch {
 
             // Pre-parse all sibling commands so child handlers can inspect them
             // (e.g. SEND verifying a paired MESSAGE for gated token transfers).
-            // See xchain-documentation/protocol/TOKEN_GATED_CONTENT.md.
+            // See xchain-documentation/protocol/token-gated-content.md.
             let siblings = [];
             for(let command of commands){
                 let parts  = String(command).split('|');

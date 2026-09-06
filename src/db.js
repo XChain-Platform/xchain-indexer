@@ -54,6 +54,7 @@ const caretRefStrict = require('./caret_ref_strict_activation');
 const ledgerPrecision = require('./ledger_amount_precision_activation');
 const dispenserSendCompare = require('./dispenser_send_amount_compare_activation');
 const stakeWeightCollation = require('./stake_weight_collation_activation');
+const slashGrid = require('./slash_grid_activation');
 // Per-block cap on the ATTEST deadline-expiry sweep. Vendored
 // byte-identical from xchain-documentation/protocol/constants.js, same convention
 // as the XCALL_MAX_CALLS_PER_BLOCK sibling it mirrors.
@@ -75,14 +76,20 @@ const abw = require('./attest_batch_wire.js');
 // applied to an author-scoped read (getAttestBatchChunks explains why the unscoped one
 // cannot carry a limit at all).
 //
-// DERIVED FROM THE WIRE GEOMETRY, so it cannot truncate a batch the codec would produce:
-// a body is at most ATTEST_BATCH_MAX_INFLATED_BYTES, deflate-raw on incompressible bytes
-// expands by about 0.03%, base64 by a third, and a continuation carries roughly
-// ATTEST_BATCH_WIRE_MAX_BYTES minus a 91-byte prefix, which is under 175 wires for the
-// largest batch ATTEST_BATCH_MAX_ROWS can describe. 256 leaves headroom over that and one
-// publisher can hold no more rows than wires: this read returns only 'valid' rows, and a
-// second head or a refilled slot from the same publisher is stamped invalid at parse.
-const ATTEST_BATCH_CHUNK_ROW_LIMIT = 256;
+// DERIVED FROM THE PARSER'S OWN CEILING, not from the encoder's habits, so it cannot
+// truncate a batch the WIRE CONTRACT accepts. It once read a bare 256 justified by what
+// the codec would produce (about 175 wires for the largest body), but the split a
+// publisher chooses carries no consensus weight, so a batch of smaller slices was
+// accepted by the parser and then truncated here: the coverage check saw 256 of 258 rows,
+// returned `chunk-coverage`, and a complete on-chain batch never absorbed.
+// ATTEST_BATCH_MAX_CHUNKS is now the one number both sides read, so the two cannot drift.
+//
+// The bound is safe AFTER the author partition and only there (getAttestBatchChunks
+// explains why the unscoped read cannot carry a limit at all): one publisher's valid rows
+// under one key are their head plus at most one row per slot, because this read returns
+// only 'valid' rows and a second head or a refilled slot is stamped invalid at parse. So
+// the row count cannot exceed the declared chunk count, which the parser now bounds.
+const ATTEST_BATCH_CHUNK_ROW_LIMIT = abw.ATTEST_BATCH_MAX_CHUNKS;
 
 // The validator_rewards ledger-key qualifier rule, shared with the two JS writers so the
 // SQL predicate here and they cannot disagree about which reward type is qualified.
@@ -6121,7 +6128,7 @@ class Database {
     // Called by the FILE handler when GATE_TICKER is non-empty.
     // Mirrors the ciphertext bytes (data['RAW_DATA']) so the explorer can
     // serve them via /api/file/{action_index}/raw without reaching across
-    // databases. See xchain-documentation/protocol/TOKEN_GATED_CONTENT.md.
+    // databases. See xchain-documentation/protocol/token-gated-content.md.
     async createGatedFile(data){
         data              = this.normalizeDataValues(data);
         let action_index  = data['ACTION_INDEX'];
@@ -6994,6 +7001,7 @@ class Database {
     // from-genesis replay of a pre-flag block identical on every node.
     async getPollResultsForVM(block_index, includeTick=false){
         let polls = {};
+        let bound = Number(block_index) || 0;
         let rows = await this.doQuery(
             `SELECT p.action_index, p.poll_status, p.winning_option, p.total_weight,
                     p.total_voters, p.decided_early, t.tick
@@ -7001,16 +7009,45 @@ class Database {
                LEFT JOIN index_tickers t ON (t.id = p.tick_id)
               WHERE p.poll_status IN ('finalized','failed_quorum')
                 AND p.resolved_block IS NOT NULL AND p.resolved_block < ?`,
-            [Number(block_index) || 0]);
-        for(let r of rows){
-            let resultRows = await this.doQuery(
-                `SELECT option_index, total_weight, voter_count FROM poll_results
-                  WHERE poll_index=? ORDER BY option_index ASC`, [r.action_index]);
-            let options = resultRows.map(o => ({
+            [bound]);
+        if(rows.length === 0)
+            return { polls: polls };
+        // Options for the WHOLE finalized set in ONE ordered read, grouped in JS.
+        // This replaces a per-poll query inside the loop below, which cost one round
+        // trip per historical poll on EVERY execution and deployment (finding #7080).
+        // The predicate is character-for-character the poll query's, so the grouped
+        // rows are exactly the union of what the per-poll reads returned; polls
+        // (action_index) is UNIQUE, so the join cannot duplicate an option row.
+        // The snapshot is consensus-visible, so the entries below are still built
+        // from the POLLS rows in their existing order: a finalized poll with no
+        // poll_results rows must keep yielding `options: []`, and key insertion
+        // order must not shift.
+        let optionRows = await this.doQuery(
+            `SELECT pr.poll_index, pr.option_index, pr.total_weight, pr.voter_count
+               FROM poll_results pr
+               JOIN polls p ON (p.action_index = pr.poll_index)
+              WHERE p.poll_status IN ('finalized','failed_quorum')
+                AND p.resolved_block IS NOT NULL AND p.resolved_block < ?
+              ORDER BY pr.poll_index ASC, pr.option_index ASC`,
+            [bound]);
+        // String keys on both sides: the pool runs bigIntAsNumber, so both BIGINT
+        // columns arrive as Numbers, and String() of each is the same decimal.
+        let optionsByPoll = new Map();
+        for(let o of optionRows){
+            let key  = String(o.poll_index);
+            let list = optionsByPoll.get(key);
+            if(!list){
+                list = [];
+                optionsByPoll.set(key, list);
+            }
+            list.push({
                 index: Number(o.option_index),
                 weight: String(o.total_weight),
                 voters: Number(o.voter_count)
-            }));
+            });
+        }
+        for(let r of rows){
+            let options = optionsByPoll.get(String(r.action_index)) || [];
             let entry = {
                 status:         r.poll_status,
                 winning_option: this.util.isNull(r.winning_option) ? null : Number(r.winning_option),
@@ -12597,8 +12634,23 @@ class Database {
     // object the HubClient method expects; it is serialized to JSON. The source
     // action_index is lifted out into its own column so a reorg can purge queued
     // pushes for orphaned actions via the rollback dataTables loop.
-    async enqueueHubPush(pushType, payload){
-        let actionIndex = (payload && payload.action_index != null) ? payload.action_index : 0;
+    //
+    // THE COLUMN IS THE ROLLBACK KEY, NOT THE PAYLOAD'S DISPLAY INDEX. For every push
+    // whose payload names the action that landed it the two are the same value, which is
+    // why the default reads `payload.action_index`. The ATTEST v6 batch is the one caller
+    // where they differ: its payload names the batch HEAD, because the hub stamps that
+    // index onto every carried response as the batch link, while the delivery is landed by
+    // the completing continuation. Keying that row on the payload leaves the queued
+    // delivery alive through a rollback of the very chunk that completed the batch, so it
+    // passes the completing action explicitly as `rollbackActionIndex`.
+    //
+    // @param {string} pushType the pending_hub_pushes.push_type tag
+    // @param {Object} payload the HubClient argument object, serialized to JSON
+    // @param {number} [rollbackActionIndex] the action whose rollback must un-land this
+    //                 push; omitted means the payload's own action_index
+    async enqueueHubPush(pushType, payload, rollbackActionIndex){
+        let actionIndex = (rollbackActionIndex != null) ? rollbackActionIndex
+                        : ((payload && payload.action_index != null) ? payload.action_index : 0);
         let query = `INSERT INTO pending_hub_pushes (push_type, action_index, payload, status, attempts, created_at)
                      VALUES (?, ?, ?, 'pending', 0, NOW())`;
         await this._poolQuery(query, [pushType, actionIndex, JSON.stringify(payload)]);
@@ -12611,8 +12663,13 @@ class Database {
     // lets the caller markHubPushDelivered() on a successful immediate delivery. MUST be called with a
     // transaction open (getConnection() then returns transactionConnection); otherwise it would land
     // on a pooled connection and not be atomic with the rollback.
-    async enqueueHubPushTx(pushType, payload){
-        let actionIndex = (payload && payload.action_index != null) ? payload.action_index : 0;
+    //
+    // `rollbackActionIndex` carries the same meaning it carries on enqueueHubPush: the
+    // action whose rollback must un-land this push, which is the payload's own
+    // action_index for every caller but the ATTEST v6 batch absorb.
+    async enqueueHubPushTx(pushType, payload, rollbackActionIndex){
+        let actionIndex = (rollbackActionIndex != null) ? rollbackActionIndex
+                        : ((payload && payload.action_index != null) ? payload.action_index : 0);
         let query = `INSERT INTO pending_hub_pushes (push_type, action_index, payload, status, attempts, created_at)
                      VALUES (?, ?, ?, 'pending', 0, NOW())`;
         let res = await this.doQuery(query, [pushType, actionIndex, JSON.stringify(payload)]);
@@ -14799,6 +14856,20 @@ class Database {
         // precision so an >8-dp token isn't truncated mid-deduction (which would leave dust unslashed
         // or corrupt the residual stake). XCHAIN(8) math is unchanged (item 5303).
         let dec = await this.getTokenDecimalPrecision(tickId);
+        // Conserve value across the deduction (flag-day, slash_grid_activation.js). Rounding
+        // the row write and the credit SEPARATELY at `dec` lets them disagree: HALF-UP at
+        // decimals=0 turns a '0.5' slash of a '1' row into an unchanged row and a full-unit
+        // credit. Floor the request onto the tick's grid ONCE (a punishment may not grow on
+        // the way in), then run the per-row deduction at exact precision so every derived
+        // figure below is the reduction the row actually took.
+        let gridOn = slashGrid.isSlashGridActive(blockIndex, this.config['NETWORK'], this.config['COIN']);
+        let deductDec = gridOn ? slashGrid.SLASH_DEDUCTION_PRECISION : dec;
+        if(gridOn){
+            remaining = this.util.bcstr(this.util.bcmulfloor(remaining, '1', dec));
+            // An off-grid request that floors away is a no-op, not a free credit; the caller's
+            // zero-slashed branch already logs it as an attempted punishment that took nothing.
+            if(!this.util.bcgt(remaining, '0')) return { total: '0', releases: [] };
+        }
         // Escrow release breakdown, accumulated as the rows are debited. Insertion order is
         // the deterministic LIFO scan order, so every node writes its escrow rows alike.
         let releases = new Map();
@@ -14808,7 +14879,7 @@ class Database {
             if(address === null || address === undefined)
                 throw new Error('slashContractStake: stake row has no source address; its escrow is not releasable');
             let cur = releases.get(address);
-            releases.set(address, this.util.bcstr(this.util.bcadd(cur === undefined ? '0' : cur, take, dec)));
+            releases.set(address, this.util.bcstr(this.util.bcadd(cur === undefined ? '0' : cur, take, deductDec)));
         };
         let asReleases = () => Array.from(releases, ([address, amt]) => ({ address, amount: amt }));
         // Pass 1: deduct from ACTIVE (never-unstaked) contract_stakes rows (LIFO - highest
@@ -14836,13 +14907,17 @@ class Database {
             if(!this.util.bcgt(remaining, '0')) break;
             let rowAmt = String(row.amount);
             let take = this.util.bcgte(rowAmt, remaining) ? remaining : rowAmt;
-            let newAmt = this.util.bcsub(rowAmt, take, dec);
+            let newAmt = this.util.bcsub(rowAmt, take, deductDec);
+            // Re-derive the take from what was WRITTEN, not from what was asked for. Deriving it
+            // at `dec` instead would round an off-grid stored row's delta back up and credit a
+            // unit the row never held; at exact precision the identity is unconditional.
+            if(gridOn) take = this.util.bcstr(this.util.bcsub(rowAmt, newAmt, deductDec));
             await this.doQuery('UPDATE contract_stakes SET amount=? WHERE action_index=?', [newAmt, row.action_index]);
             // Record the in-place debit so a reorg can restore rowAmt verbatim (see rollback.js).
             await this.createContractSlashDebit(executionIndex, slashPosition, 'contract_stakes', row.action_index, rowAmt, take, blockIndex);
             addRelease(row.source_address, take);
-            remaining = this.util.bcsub(remaining, take, dec);
-            totalSlashed = this.util.bcadd(totalSlashed, take, dec);
+            remaining = this.util.bcsub(remaining, take, deductDec);
+            totalSlashed = this.util.bcadd(totalSlashed, take, deductDec);
         }
         if(!this.util.bcgt(remaining, '0')) return { total: this.util.bcstr(totalSlashed), releases: asReleases() };
         // Pass 2: deduct from contract_unstakes rows (cooldown-locked but still slashable)
@@ -14862,13 +14937,16 @@ class Database {
             if(!this.util.bcgt(remaining, '0')) break;
             let rowAmt = String(row.amount);
             let take = this.util.bcgte(rowAmt, remaining) ? remaining : rowAmt;
-            let newAmt = this.util.bcsub(rowAmt, take, dec);
+            let newAmt = this.util.bcsub(rowAmt, take, deductDec);
+            // Same re-derivation as Pass 1: the cooldown rows are debited by the identical
+            // arithmetic, so they carry the identical conservation hole without it.
+            if(gridOn) take = this.util.bcstr(this.util.bcsub(rowAmt, newAmt, deductDec));
             await this.doQuery('UPDATE contract_unstakes SET amount=? WHERE action_index=?', [newAmt, row.action_index]);
             // Record the in-place debit so a reorg can restore rowAmt verbatim (see rollback.js).
             await this.createContractSlashDebit(executionIndex, slashPosition, 'contract_unstakes', row.action_index, rowAmt, take, blockIndex);
             addRelease(row.source_address, take);
-            remaining = this.util.bcsub(remaining, take, dec);
-            totalSlashed = this.util.bcadd(totalSlashed, take, dec);
+            remaining = this.util.bcsub(remaining, take, deductDec);
+            totalSlashed = this.util.bcadd(totalSlashed, take, deductDec);
         }
         return { total: this.util.bcstr(totalSlashed), releases: asReleases() };
     }
@@ -16573,7 +16651,14 @@ class Database {
             blockIndex, this.config['NETWORK'], this.config['COIN']);
         let ageQuery = "SELECT MAX(reference_block) AS latest_block FROM price_snapshots WHERE status = 'finalized'"
                      + (ageCausal ? " AND reference_block <= ?" : "");
-        let ageRows = await this.doQuery(ageQuery, ageCausal ? [blockCap] : undefined);
+        // Strict reads throughout this preload (M-17, same rationale as getLatestPrice):
+        // the oracle reads run on the hub-DB instance, which never opens a transaction,
+        // so doQuery would collapse a driver error into [] - indistinguishable from
+        // "the oracle has no rows". That empty result becomes an absent price map and a
+        // MAX_SAFE_INTEGER snapshotAge which the VM hashes into block state, so one
+        // node's transient DB fault forks it from the fleet. Throwing lets block
+        // processing roll back and retry the block instead.
+        let ageRows = await this.doQueryStrict(ageQuery, ageCausal ? [blockCap] : undefined);
         let latestBlock = (ageRows.length > 0 && ageRows[0].latest_block !== null) ? ageRows[0].latest_block : 0;
         let snapshotAge = (blockIndex && latestBlock > 0) ? Math.max(0, blockIndex - latestBlock) : Number.MAX_SAFE_INTEGER;
 
@@ -16607,7 +16692,7 @@ class Database {
                                GROUP BY coin_pair
                            ) m ON t.coin_pair = m.coin_pair AND t.round_number = m.mr
                            WHERE t.status = 'finalized' AND t.price IS NOT NULL`;
-        let latestRows = await this.doQuery(latestQuery, [blockCap]);
+        let latestRows = await this.doQueryStrict(latestQuery, [blockCap]);
         // Stale-round visibility gate (oracle_stale_round_visibility_activation.js).
         // Below the height a stale tip is dropped from `prices` entirely, so
         // getPrice() returns null while getPriceAtRound() still carries the very
@@ -16675,7 +16760,7 @@ class Database {
         // the floor stays 0: on a young chain (regtest, a fresh testnet) every round
         // that ever existed is loaded, and a floor above 0 there would report rounds
         // as "hidden" that simply never happened.
-        let windowRows = await this.doQuery(
+        let windowRows = await this.doQueryStrict(
             `SELECT DISTINCT round_number
              FROM price_snapshots
              WHERE status = 'finalized' AND price IS NOT NULL AND reference_block <= ?
@@ -16692,7 +16777,7 @@ class Database {
                             AND round_number >= ?
                           ORDER BY round_number DESC
                           LIMIT ${ORACLE_VM_MAX_ROWS}`;
-        let roundRows = await this.doQuery(roundQuery, [blockCap, roundFloor]);
+        let roundRows = await this.doQueryStrict(roundQuery, [blockCap, roundFloor]);
 
         // The ceiling truncates newest-first, so the OLDEST loaded round is the one
         // that may be missing pairs. Claiming it is covered would hand a contract the
@@ -16810,7 +16895,10 @@ class Database {
         // unique key) not id (local AUTO_INCREMENT, differs per mirror by arrival order),
         // so an effective_at tie resolves to the same row on every node.
         query += ' ORDER BY effective_at DESC, action_index DESC LIMIT 1';
-        let rows = await this.doQuery(query, args);
+        // Strict read (M-17): the same swallow that forks the VM preload decides
+        // whether a Mode B dispenser is valid at all, and on the hub instance an
+        // errored read is indistinguishable from "no effective oracle price".
+        let rows = await this.doQueryStrict(query, args);
         if(rows.length === 0) return null;
         return {
             sourceAddress: rows[0].source_address,
@@ -16836,7 +16924,10 @@ class Database {
                      WHERE source_address = ? AND coin = ? AND tick = ? AND fiat = ?
                        AND effective_at BETWEEN ? AND ?
                      ORDER BY effective_at DESC, action_index DESC`;
-        let rows = await this.doQuery(query, [sourceAddress, coin, tick, fiat, startTime, endTime]);
+        // Strict read (M-17): FIAT settlement input; an errored read here would look
+        // like "no oracle price in the window" and settle the dispense differently
+        // on this node alone.
+        let rows = await this.doQueryStrict(query, [sourceAddress, coin, tick, fiat, startTime, endTime]);
         return rows.map(row => ({
             price:        row.value,
             blockTime:    Number(row.block_time),
@@ -16853,7 +16944,10 @@ class Database {
                      WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL
                        AND block_timestamp BETWEEN ? AND ?
                      ORDER BY block_timestamp DESC, round_number DESC`;
-        let rows = await this.doQuery(query, [coinPair, startTime, endTime]);
+        // Strict read (M-17): the validator price that values the oracle fee and
+        // settles a FIAT dispense; [] from a driver error is read as "no validator
+        // price" and rejects or re-prices the action on this node only.
+        let rows = await this.doQueryStrict(query, [coinPair, startTime, endTime]);
         return rows.map(row => ({
             price:       row.price,
             roundNumber: Number(row.round_number),

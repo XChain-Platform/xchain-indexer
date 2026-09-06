@@ -2425,6 +2425,12 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 'response, and a batch link must open the head, not the chunk that closed it');
             assert.strictEqual(payload.block_index, 6300001,
                 'while the block stays the completing action\'s, whose rollback un-lands the delivery');
+            assert.strictEqual(db.enqueueHubPushTx.firstCall.args[2], 72,
+                'and the QUEUE ROW is keyed on the completing chunk, not on the head the ' +
+                'payload names @regression: pending_hub_pushes.action_index is the reorg purge ' +
+                'key (rollback deletes every row at or above the orphaned range), so keyed at ' +
+                'the head (71) this delivery survives a rollback that removed the chunk that ' +
+                'completed the batch and publishes a completion for chunks off chain');
             assert.strictEqual(db.stageHubPush.callCount, 1);
         });
 
@@ -2447,6 +2453,11 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.strictEqual(db.enqueueHubPushTx.callCount, 1, 'the head completes the coverage and absorbs');
             assert.deepStrictEqual(db.enqueueHubPushTx.firstCall.args[1].rows,
                 JSON.parse(abw.buildAttestBatchBody(win)).rows);
+            assert.strictEqual(db.enqueueHubPushTx.firstCall.args[1].action_index, 73,
+                'the head names the batch, and here the head IS the completing action');
+            const rollbackKey = db.enqueueHubPushTx.firstCall.args[2];
+            assert.ok(rollbackKey === undefined || rollbackKey === 73,
+                'so the display index and the purge key coincide, whichever path enqueued it');
         });
 
         it('a missing chunk never absorbs', async function () {

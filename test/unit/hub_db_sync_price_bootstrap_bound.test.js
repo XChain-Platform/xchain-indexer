@@ -257,6 +257,83 @@ describe('HubDbSync price bootstrap bound @regression @tier2', function () {
             'a drain that bound nothing IS the full mirror the re-floor was waiting for');
     });
 
+    // A pair the oracle stopped finalizing before the lookback opens. Every row above is
+    // XCHAIN/USD, so nothing in the suite so far could see the per-PAIR hole: the retention
+    // sets the drain certifies itself against are keyed on round_number with all pairs
+    // pooled, and the active pair's rounds satisfy the count on their own.
+    function idleRound(id, roundNumber, secondsBeforeHorizon) {
+        return { id: id, round_number: roundNumber, coin_pair: 'DOGE/USD', price: '0.10',
+                 reference_block: 100000 - Math.floor(secondsBeforeHorizon / 600),
+                 block_timestamp: HORIZON - secondsBeforeHorizon, status: 'finalized' };
+    }
+
+    // The active table plus an idle pair whose only finalized rows sit below the floor.
+    // The idle rows reuse the three oldest round numbers, the way a real round carries every
+    // pair at once, so the pooled round counts the acceptance check reads do not move.
+    function hubTableWithIdlePair() {
+        const base = hubTable(400, 1400, 5);
+        const idle = [1, 2, 3].map((rn, i) =>
+            idleRound(100000 + i, rn, LOOKBACK + ((400 - rn + 1) * 600)));
+        return base.concat(idle);
+    }
+
+    // Per-pair latest finalized round: exactly what db.getOracleDataForVM's `prices` join
+    // computes, and the quantity a bounded and a full mirror have to agree on.
+    function latestByPair(rows) {
+        const out = {};
+        for (const r of rows) {
+            if (String(r.status) !== 'finalized') continue;
+            const p = String(r.coin_pair);
+            if (out[p] === undefined || Number(r.round_number) > out[p]) out[p] = Number(r.round_number);
+        }
+        return out;
+    }
+
+    it('keeps a pair whose newest finalized round is below the floor', async function () {
+        // getOracleDataForVM builds `prices` from a per-pair MAX(round_number) join with NO
+        // time filter, so this pair's tip is what a full mirror answers getPrice() with. Drop
+        // it and the bounded node answers null where its peers answer a row - VM-visible at
+        // and after the stale-round visibility height, and enough for a contract branching on
+        // it to commit divergent state.
+        const { sync, rows } = makeSync([]);
+        stubHub(sync, hubTableWithIdlePair());
+
+        assert.strictEqual(await sync._bootstrapTable('price_snapshots'), 5000, 'drain should complete');
+
+        const idle = rows.filter(r => String(r.coin_pair) === 'DOGE/USD');
+        assert.strictEqual(idle.length, 1,
+            'the uncovered pair keeps its newest finalized row, and only that one');
+        assert.strictEqual(Number(idle[0].round_number), 3,
+            'and it is the newest of the rows the bound declined, not an arbitrary one');
+
+        // The covered pair is untouched: retention is conditional, so the bound still holds
+        // everywhere it is not closing a per-pair hole.
+        const activeBelowFloor = rows.filter(r => String(r.coin_pair) === 'XCHAIN/USD' &&
+                                                  Number(r.block_timestamp) < HORIZON - LOOKBACK);
+        assert.strictEqual(activeBelowFloor.length, 0,
+            'a pair already covered above the floor must not drag its history back in');
+    });
+
+    it('answers every latest-price read the way a full mirror does', async function () {
+        // The consensus statement, rather than a row count: for the same hub table, the
+        // per-pair MAX(round_number) set a bounded mirror serves must equal the unbounded
+        // one. That set IS the oracle preload's `prices` view.
+        const hubRows = hubTableWithIdlePair();
+
+        const bounded = makeSync([]);
+        stubHub(bounded.sync, hubRows);
+        assert.strictEqual(await bounded.sync._bootstrapTable('price_snapshots'), 5000);
+
+        const full = makeSync([], { getPriceMirrorHorizon: undefined });
+        stubHub(full.sync, hubRows);
+        assert.strictEqual(await full.sync._bootstrapTable('price_snapshots'), 5000);
+
+        assert.deepStrictEqual(latestByPair(bounded.rows), latestByPair(full.rows),
+            'a bounded mirror and a full mirror must name the same latest round for every pair');
+        assert.ok(bounded.rows.length < full.rows.length,
+            'and the bound must still be doing its job, not quietly mirroring everything');
+    });
+
     it('bounds nothing on any other mirrored table', async function () {
         const { sync } = makeSync([]);
         stubHub(sync, [{ id: 1, status: 'finalized', block_timestamp: 1 }]);

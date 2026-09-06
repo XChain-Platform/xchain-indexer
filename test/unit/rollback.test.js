@@ -172,6 +172,39 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(restoreIdx >= 0 && deleteIdx >= 0 && restoreIdx < deleteIdx, 'reconcile restore must run before the validator_rewards delete');
     });
 
+    it('restores reconcile-deleted anchor rewards when the orphaned range holds NO actions row (RB-ANCHOR-NULL)', async function () {
+        // The BTC-side derive path calls reconcileAnchorRewardWinner with a NULL anchor action
+        // index (the attested rows arrive over the mirror, not as a wire action), so a reorg
+        // over a range whose only reward work was a derive-side reconcile leaves
+        // firstActionIndex null. The generic block deletes still drop the reconcile log and the
+        // replacement winner, so gating the restore on firstActionIndex deletes the earlier
+        // winner and never restores it: a permanent SUM(validator_rewards) divergence from a
+        // from-genesis replay. No onFirstCall stub here, so the actions probe returns [] and
+        // firstActionIndex is null.
+        indexer.indexerDb.doQuery.resolves([]);
+        await rollback.rollback(100);
+        const calls = indexer.indexerDb.doQuery.getCalls();
+        const restore = calls.find(c =>
+            /INSERT IGNORE INTO validator_rewards/.test(c.args[0]) &&
+            c.args[0].includes('anchor_reward_reconcile_log'));
+        assert.ok(restore, 'the RB-ANCHOR restore must run with no actions in the orphaned range');
+        assert.deepStrictEqual(restore.args[1], [100, 100, 100]);
+        // Both surviving-height predicates must outlive the hoist, or the restore would mint
+        // rows a from-genesis replay never has.
+        assert.ok(/d\.reward_block_index\s*<\s*\?/.test(restore.args[0]),
+            'earn-block survival predicate must be retained');
+        assert.ok(/d\.reward_derive_block_index\s*<\s*\?/.test(restore.args[0]),
+            'materialization-block survival predicate must be retained');
+        // Still ordered before every delete that destroys its inputs or its output.
+        const restoreIdx   = calls.indexOf(restore);
+        const blockDelIdx  = calls.findIndex(c => /DELETE FROM validator_rewards WHERE block_index/.test(c.args[0]));
+        const deriveDelIdx = calls.findIndex(c => /DELETE FROM validator_rewards WHERE derive_block_index/.test(c.args[0]));
+        const logDelIdx    = calls.findIndex(c => /DELETE FROM anchor_reward_reconcile_log WHERE block_index/.test(c.args[0]));
+        assert.ok(blockDelIdx >= 0 && restoreIdx < blockDelIdx, 'restore must precede the earn-block delete');
+        assert.ok(deriveDelIdx >= 0 && restoreIdx < deriveDelIdx, 'restore must precede the derive-block delete');
+        assert.ok(logDelIdx >= 0 && restoreIdx < logDelIdx, 'restore must precede the reconcile-log delete');
+    });
+
     // ─── / materialization-block scoping ───────────
     //
     // An derived anchor reward is EARNED at the checkpoint's snapshot_block S but

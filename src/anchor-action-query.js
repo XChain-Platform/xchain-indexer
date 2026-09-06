@@ -461,10 +461,21 @@ function buildAnchorActionResponse(config, latest, row, extra) {
 // that into a permanent 'rejected' - a legitimate COLLECT-spendable reward forfeited
 // forever. So the row cap keeps a hard bound on any single response, ONE row past it is
 // fetched purely as a truncation probe, and the response says both that it was cut off and
-// where to resume. `after` is exclusive on action_index, which is unique and totally
-// ordered under the ASC sort, so the pages partition the set with no gap and no overlap.
+// where to resume.
+//
+// `after` is exclusive on action_index, which is NOT the row identity: anchor_actions keys on
+// (action_index, section_index) and a v0 bundle writes one row per chain section under a
+// single shared action_index (actions/anchor.js), so a page cut landing INSIDE a bundle would
+// resume strictly past that action_index and drop the bundle's remaining sections forever -
+// the same silent omission the cap exists to make visible, wearing the cursor's clothes. What
+// makes the action_index cursor sound is therefore a boundary rule, not a uniqueness claim:
+// buildAnchorConfirmationsResponse below never ends a truncated page inside an action, so
+// every cut falls BETWEEN actions and the exclusive cursor still partitions the set with no
+// gap and no overlap. section_index is selected and ordered so the within-action order is
+// deterministic rather than whatever the engine returns, and so the caller can tell two
+// anchors riding one transaction apart.
 const ANCHOR_BY_TXID_COLUMNS =
-    `SELECT a.action_index, a.version, a.chain, a.network, a.block_index,
+    `SELECT a.action_index, a.section_index, a.version, a.chain, a.network, a.block_index,
             a.checkpoint_seq, a.snapshot_block, a.publisher, a.match_batch_seq,
             a.block_index_doge, s.status, it.hash AS txid
      FROM index_transactions it
@@ -476,14 +487,14 @@ const ANCHOR_BY_TXID_COLUMNS =
 const ANCHOR_BY_TXID_SQL =
     `${ANCHOR_BY_TXID_COLUMNS}
      WHERE it.hash = ?
-     ORDER BY a.action_index ASC
+     ORDER BY a.action_index ASC, a.section_index ASC
      LIMIT ${ANCHOR_ROW_LIMIT + 1}`;
 
 // The same read resumed after a page boundary. Params: [txid, after_action_index].
 const ANCHOR_BY_TXID_AFTER_SQL =
     `${ANCHOR_BY_TXID_COLUMNS}
      WHERE it.hash = ? AND a.action_index > ?
-     ORDER BY a.action_index ASC
+     ORDER BY a.action_index ASC, a.section_index ASC
      LIMIT ${ANCHOR_ROW_LIMIT + 1}`;
 
 // Validate a getanchorconfirmations request: a single 64-hex txid, plus an optional
@@ -534,6 +545,35 @@ function buildAnchorConfirmationsResponse(config, latest, rows) {
     let all       = Array.isArray(rows) ? rows : [];
     let truncated = all.length > ANCHOR_ROW_LIMIT;
     let kept      = truncated ? all.slice(0, ANCHOR_ROW_LIMIT) : all;
+    // NEVER END A TRUNCATED PAGE INSIDE AN ACTION. The cursor is exclusive on action_index,
+    // but a row is (action_index, section_index): a v0 bundle carries one row per chain
+    // section under one action_index, so a cut between two of those sections would hand back
+    // a cursor the next page resumes strictly PAST, dropping the rest of that bundle from the
+    // walk permanently. The caller cannot see the loss - a bundle missing its header-block
+    // section reads as a complete non-matching set - and turns it into a memoized 'rejected',
+    // forfeiting a COLLECT-spendable reward. So drop the trailing rows that share the probe
+    // row's action_index and let the page end on the previous action. Pages become variable
+    // length (<= ANCHOR_ROW_LIMIT, never more), which is why a caller must read `truncated`
+    // and never infer completeness from the row count.
+    if (truncated) {
+        let probeAction = all[ANCHOR_ROW_LIMIT].action_index;
+        if (probeAction != null) {
+            let cut = kept.length;
+            while (cut > 0 && String(kept[cut - 1].action_index) === String(probeAction)) cut--;
+            // cut === 0 means one action holds more than ANCHOR_ROW_LIMIT section rows, so
+            // trimming would emit an empty page whose cursor never advances - a walk that
+            // never terminates is worse than the section loss it would be avoiding. Keep the
+            // page as-is (today's behavior) and say so loudly: unreachable while a bundle
+            // carries at most one section per ALLOWED_CHAINS, so reaching it means a limit or
+            // a section-count assumption changed and this rule needs revisiting.
+            if (cut === 0)
+                console.error('anchor confirmations: action_index ' + probeAction + ' spans more than ' +
+                              ANCHOR_ROW_LIMIT + ' rows; cannot cut the page on an action boundary, ' +
+                              'so its later sections are omitted from the walk');
+            else
+                kept = kept.slice(0, cut);
+        }
+    }
     let lastKept  = kept.length > 0 ? kept[kept.length - 1] : null;
     let nextAfter = (truncated && lastKept && lastKept.action_index != null)
                   ? Number(lastKept.action_index) : null;
@@ -542,6 +582,11 @@ function buildAnchorConfirmationsResponse(config, latest, rows) {
         let confirmations = (Number.isFinite(latestNum) && Number.isFinite(dogeBlock) && latestNum >= dogeBlock)
             ? (latestNum - dogeBlock + 1) : 0;
         return {
+            // Row identity, served so the caller can group a transaction's rows by the ACTION
+            // they belong to. Without it two anchors riding one transaction are one flat list
+            // and any per-bundle reconstruction the caller does silently spans both.
+            action_index:       (row.action_index != null) ? Number(row.action_index) : null,
+            section_index:      (row.section_index != null) ? Number(row.section_index) : null,
             status:             row.status,
             version:            normalizeVersion(row.version),
             checkpoint_chain:   row.chain,

@@ -201,7 +201,9 @@ describe('Programmable policy layer : Phase B enforcement @regression', function
             assert.strictEqual(calls.length, 0);
         });
 
-        it('cross-token guard emission IS still guarded (emitter != controller)', async function () {
+        // Named for what it varies: the EMITTING CONTRACT, not the token. The old name claimed
+        // cross-TOKEN coverage this body never had, which is the coverage the next test pins.
+        it('guard emission from a DIFFERENT controller IS still guarded (emitter != controller)', async function () {
             const calls = [];
             const data = Object.assign({}, BASE, { IS_GUARD_EMISSION: true, EMITTER: 7 }); // different controller (9)
             await util.maybeRunControllerGuard(
@@ -210,6 +212,23 @@ describe('Programmable policy layer : Phase B enforcement @regression', function
                 { actionType: 'SEND', tick: 'AAA', data, gasInfo: null, gasBalances: [] }
             );
             assert.strictEqual(calls.length, 1);
+        });
+
+        // The exemption compares the emitting contract against the controller that would run, never
+        // the subject, so one controller bound to a SECOND token skips that token's guard too. Pins
+        // shipped behaviour: re-keying the predicate on token identity turns this red.
+        it('same-controller guard emission of a DIFFERENT token is NOT guarded (predicate keys on controller, not token)', async function () {
+            const calls = [];
+            // One controller (index 9) governs both tokens: the emission moves 'BBB' while the guard
+            // that emitted it ran for 'AAA', and both resolve to contract_index 9.
+            const data = Object.assign({}, BASE, { IS_GUARD_EMISSION: true, EMITTER: 9 });
+            const res = await util.maybeRunControllerGuard(
+                mkActions({ allow: false, reason: 'must-not-run', gasBilled: 0 }, calls),
+                mkDb({ contract_index: 9, is_unbind: 0 }),
+                { actionType: 'SEND', tick: 'BBB', data, gasInfo: null, gasBalances: [] }
+            );
+            assert.deepStrictEqual(res, { error: null, guardFee: 0, payoutLegs: null });
+            assert.strictEqual(calls.length, 0);
         });
 
         it('records the consulted tick on data._GUARDED_TICKS (completeness-assertion signal)', async function () {

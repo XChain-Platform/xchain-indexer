@@ -1937,6 +1937,20 @@ describe('Database hub push queue methods @regression @tier1', function () {
         assert.strictEqual(JSON.parse(args[2]).action_index, 42);
     });
 
+    it('enqueueHubPush keys the row on an explicit rollback index when one is given', async function () {
+        const db   = makeDb();
+        const conn = { query: sinon.stub().resolves([]), release: sinon.stub().resolves() };
+        db.pool.getConnection.resolves(conn);
+        // The ATTEST batch shape: the payload names the head (100) for the explorer link,
+        // while the action that LANDS the delivery is the completing chunk (200). The
+        // column is the reorg purge key, so it must carry 200 and the payload must not
+        // be rewritten.
+        await db.enqueueHubPush('attest_batch', { action_index: 100, rows: [] }, 200);
+        const args = conn.query.firstCall.args[1];
+        assert.strictEqual(args[1], 200, 'the column takes the rollback key');
+        assert.strictEqual(JSON.parse(args[2]).action_index, 100, 'the payload keeps the head');
+    });
+
     it('markHubPushDelivered deletes the row', async function () {
         const db   = makeDb();
         const conn = { query: sinon.stub().resolves([]), release: sinon.stub().resolves() };

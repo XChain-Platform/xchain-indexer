@@ -2046,8 +2046,11 @@ class Utility {
         // the string never enters a decoded action's status and carries no consensus weight.
         if(data['GUARD_INERT'])
             return { error: this.guardInertError(controllerIndex, binding), guardFee: 0, payoutLegs: null };
-        // No guard-of-guard: a controller's own emission of the gated subject is not re-guarded;
-        // cross-token / different-controller moves still guard, bounded by VM_MAX_CALL_DEPTH.
+        // No guard-of-guard, keyed on the CONTROLLER rather than on the subject: an emission from
+        // this same controller is never re-guarded, INCLUDING when it moves a different token or
+        // address the same controller also governs (one controller bound to two tokens sees its
+        // guard run once). Only a subject resolving to a DIFFERENT controller re-enters a guard,
+        // bounded by VM_MAX_CALL_DEPTH.
         if(data['IS_GUARD_EMISSION'] && Number(data['EMITTER']) === Number(controllerIndex))
             return { error: null, guardFee: 0, payoutLegs: null };
         // Reserve the guard gas ceiling against SOURCE's GAS balance (caller-pays-for-attempt) so a
