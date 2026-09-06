@@ -21,6 +21,7 @@
 const divergenceMetrics = require('../dispenserDivergenceMetrics.js');
 const dispenserCaps = require('../dispenser_caps_activation.js');
 const dispenserAmountPositivity = require('../dispenser_amount_positivity_activation.js');
+const tallyScaleActivation = require('../dispense_payment_tally_scale_activation.js');
 
 class Dispense {
 
@@ -124,6 +125,20 @@ class Dispense {
                 ledger = { coinAmountConsumed: '0' };
         }
 
+        // Scale every tally read, charge and accumulation below runs at.
+        //
+        // 8 dp holds a native-coin payment exactly and ROUNDS a token one: a SEND
+        // trigger carries the sent tick's own amount, and a tick may be issued with up
+        // to MAX_TOKEN_DECIMALS. Gated, because it changes the fill count a payment buys
+        // (dispense_payment_tally_scale_activation.js carries the two rounding failures
+        // and the unarmed-mainnet argument). The batch pool is excluded there: it counts
+        // the transaction's coin settlement value and coinpay.js formats it at 8 dp.
+        let tallyScale = tallyScaleActivation.dispenseTallyScale(
+            block_time,
+            this.config['NETWORK'],
+            data['DISPENSE_TYPE'] === 'SEND',
+            Object.prototype.hasOwnProperty.call(data, 'BATCH_VALUE_LEDGER'));
+
         // Loop through dispensers and generate a list of valid DISPENSE actions
         // Note: Dispense transactions which do not match an valid dispenser are ignored
         for(let action_index of action_indexes){
@@ -149,7 +164,7 @@ class Dispense {
             // an earlier dispenser in this same loop (several dispensers can sit behind
             // one paid address) sees its spend reflected too. Every pricing path below
             // reads `available`, never the raw payment.
-            let available = ledger ? this.util.bcsub(data['COIN_AMOUNT'], ledger['coinAmountConsumed'], 8) : data['COIN_AMOUNT'];
+            let available = ledger ? this.util.bcsub(data['COIN_AMOUNT'], ledger['coinAmountConsumed'], tallyScale) : data['COIN_AMOUNT'];
 
             // Coin cost of ONE fill on whichever pricing path runs, filled in by that path
             // and used only to drain the pool at the end of this iteration. Left null when
@@ -475,8 +490,8 @@ class Dispense {
             //
             // Draining per fill (not the whole payment) is what makes N fills' worth of
             // payment cover exactly N fills, whichever pricing path priced them. The clamp
-            // to `available` is a rounding guard only: bcmul rounds at 8dp, and the pool
-            // must never go negative. Ledger values stay decimal STRINGS at 8dp.
+            // to `available` is a rounding guard only: bcmul rounds at tallyScale, and the
+            // pool must never go negative. Ledger values stay decimal STRINGS.
             //
             // isNull rather than !== null on unitCoinCost: an undefined price would
             // multiply out to a silent zero, which now also lands in the row's GET_AMOUNT
@@ -484,7 +499,7 @@ class Dispense {
             // three pricing paths set it before a dispense can be valid); the strict form
             // keeps it that way.
             if(ledger && !error && !this.util.isNull(unitCoinCost) && multiplier > 0){
-                let cost = this.util.bcmul(multiplier, unitCoinCost, 8);
+                let cost = this.util.bcmul(multiplier, unitCoinCost, tallyScale);
                 if(this.util.bclt(available, cost))
                     cost = available;
                 // Row 18: the row records what this dispense was CHARGED, not the whole
@@ -493,9 +508,17 @@ class Dispense {
                 // disagree. Under the old shape three batched sub-commands each wrote the
                 // full payment into their own row while consuming a third of it, and the
                 // multi-dispenser loop did the same outside a batch.
-                attributedCost = this.util.bcformat(cost, 8);
+                //
+                // Rendered at the legacy 8 dp whenever that width is EXACT, so every
+                // dispense the wide tally does not reprice keeps its byte-identical row,
+                // and at full precision only where 8 dp would write a false zero for a
+                // sub-satoshi charge. Same value either way, so record and accounting
+                // still cannot disagree.
+                let legacyRender = this.util.bcformat(cost, tallyScaleActivation.DISPENSE_TALLY_LEGACY_SCALE);
+                let legacyIsExact = !this.util.bclt(legacyRender, cost) && !this.util.bcgt(legacyRender, cost);
+                attributedCost = legacyIsExact ? legacyRender : this.util.bcstr(cost);
                 ledger['coinAmountConsumed'] = this.util.bcformat(
-                    this.util.bcadd(ledger['coinAmountConsumed'], cost, 8), 8);
+                    this.util.bcadd(ledger['coinAmountConsumed'], cost, tallyScale), tallyScale);
             }
 
             // Add the dispense info to the dispenses array;
