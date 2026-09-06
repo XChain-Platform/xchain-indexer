@@ -60,6 +60,9 @@ const swq     = require('../stake_weighted_quorum.js');
 const attestAdmission = require('../attest_admission_activation.js');
 const attestRequestCap = require('../attest_request_cap_activation.js');
 const attestRelay     = require('../attest_relay_activation.js');
+// Whether a refused v3 withholds its row so the id it named stays free for the
+// honest relay. Landing-block plane, unarmed on mainnet.
+const relayRejectSlot = require('../attest_relay_reject_slot_activation.js');
 const attestBcastFee  = require('../attest_broadcast_fee_activation.js');
 const wid     = require('../attest_responsible_widening_activation.js');
 const eq      = require('../equivocation_header.js');
@@ -1885,7 +1888,17 @@ class Attest {
             data['RESPONSIBLE_SET_JSON'] = JSON.stringify(responsibleSet);
         }
 
-        await this.indexerDb.createAttestationRequest(data);
+        // Withhold the row of a REFUSED v3, so the id it named stays free. The single-v0
+        // guard in db.createAttestationRequest counts every stored v0 row, and a relay
+        // id rides the wire, so a stored refusal answers that guard for the federation's
+        // real relay and drops it silently and permanently. Same shape as the two other
+        // ways a v3 fails to be a relay (wrong chain, below activation): nothing
+        // persisted, nothing hashed, the verdict still on the action row. Flag-day
+        // gated, plane and arming state in attest_relay_reject_slot_activation.js.
+        let withholdRefusal = (data['REQUEST_STATUS'] === 'rejected') &&
+            relayRejectSlot.isAttestRelayRejectSlotActive(data['BLOCK_TIME'], this.config['NETWORK']);
+        if(!withholdRefusal)
+            await this.indexerDb.createAttestationRequest(data);
         await this.mapper.createMappings(data);
     }
 
