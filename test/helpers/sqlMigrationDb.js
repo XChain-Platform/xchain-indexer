@@ -19,10 +19,12 @@
  * these run for real, against the project's OWN src/sql DDL, on node:sqlite
  * (built into Node 22, the version every package here pins).
  *
- * Reuses sqlAnchorDb's MySQL->sqlite DDL translation and adds the two things a
+ * Reuses sqlAnchorDb's MySQL->sqlite DDL translation and adds what a
  * multi-table load needs:
  *   - CHARACTER SET / COLLATE decorations are dropped (sqlite rejects an
  *     unknown collating sequence outright).
+ *   - ENUM(...) becomes TEXT. sqlite holds the member as text and compares it
+ *     the same way, which is all a predicate on the column can observe.
  *   - CREATE INDEX statements are dropped. Index names are per-table in MySQL
  *     but global in sqlite, and the schema reuses `action_index` / `tick_id` as
  *     an index name on nearly every table, so loading two tables collides.
@@ -47,6 +49,7 @@ function toSqlite(ddl){
     return mysqlDdlToSqlite(ddl)
         .replace(/\bCHARACTER\s+SET\s+\w+\s*/gi, '')
         .replace(/\bCOLLATE\s+\w+\s*/gi, '')
+        .replace(/\bENUM\s*\([^)]*\)/gi, 'TEXT')
         .replace(/^\s*CREATE\s+(UNIQUE\s+)?INDEX[^;]*;\s*$/gim, '');
 }
 

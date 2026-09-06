@@ -139,6 +139,12 @@ describe('Rollback @regression @tier3', function () {
         assert.strictEqual(restores.length, 2, 'expected contract_stakes + contract_unstakes slash restores');
         for (const r of restores) {
             const sql = r.args[0];
+            // The pick follows the debit chain's own values (highest orphaned prev_amount =
+            // the amount before the first orphaned debit). The position columns invert under
+            // a re-entrant nested EXECUTE and serve only as the tiebreak for equal amounts;
+            // rollback-slash-restore-order.test.js executes both cases against a real engine.
+            assert.ok(/CAST\(e\.prev_amount AS DECIMAL\(60,18\)\)\s*>\s*CAST\(d\.prev_amount AS DECIMAL\(60,18\)\)/.test(sql),
+                'restore must pick the highest orphaned prev_amount, not the lowest position key');
             assert.ok(/e\.execution_index\s*<\s*d\.execution_index/.test(sql),
                 'restore must order by execution_index for a deterministic, replay-stable tiebreak');
             assert.ok(/e\.slash_position\s*<\s*d\.slash_position/.test(sql),

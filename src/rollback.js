@@ -672,18 +672,25 @@ class Rollback {
                 // a surviving row keeps its slashed amount while a from-genesis replay (slash
                 // never re-mined) keeps the original, a consensus-affecting divergence (active
                 // stake drives VM staker weighting, quorum eligibility, and cooldown refunds on
-                // all chains). We copy back the EARLIEST orphaned debit's `prev_amount` per row
-                // (min block_index, then (execution_index, slash_position) tiebreak, the same
-                // deterministic total order the block-hash preimage uses for contract_emissions,
-                // so it is replay-stable and identical across the source indexer and every
-                // replica; the AUTO_INCREMENT `id` is NOT, and would let two nodes restore a
-                // divergent amount on a reorg that retracts a block with ≥2 slashes against one
-                // stake row). This is a pure string copy, so the restored value is
-                // byte-identical to the surviving chain's pre-orphaned-slash state and to a fresh
-                // replay (no arithmetic / decimal-format drift). Earlier SURVIVING debits
-                // (block_index < block_index) are intentionally left applied. Runs BEFORE the
-                // deletes so the debit rows and target rows still exist.
+                // all chains). We copy back the HIGHEST orphaned `prev_amount` per row: the
+                // debits on one stake row form a strictly decreasing chain (every debit takes a
+                // positive amount and nothing else raises the column), and the orphaned range is
+                // a suffix of that chain, so the maximum IS the value the row held before the
+                // first orphaned debit. The position columns alone cannot express that order,
+                // because a re-entrant nested EXECUTE slashes FIRST under a HIGHER action_index
+                // than its parent frame: ordering on (block_index, execution_index,
+                // slash_position) then reads the parent's later debit as the earliest and
+                // restores a value one slash short. Those columns stay as the tiebreak for
+                // numerically equal amounts, a replay-stable total order the block-hash preimage
+                // also uses for contract_emissions; the AUTO_INCREMENT `id` is NOT, and would
+                // let two nodes restore a divergent amount. The restore itself is a pure string
+                // copy, so the value is byte-identical to the surviving chain's
+                // pre-orphaned-slash state and to a fresh replay (no arithmetic / decimal-format
+                // drift). Earlier SURVIVING debits (block_index < block_index) are intentionally
+                // left applied. Runs BEFORE the deletes so the debit rows and target rows still
+                // exist. Byte-identical (whitespace aside) to the xchain-sync replica twin.
                 for(let slashTbl of ['contract_stakes', 'contract_unstakes']){
+                    //<CONTRACT-SLASH-RESTORE-SQL>
                     query = `UPDATE ` + slashTbl + ` t
                                 JOIN contract_slash_debits d ON d.stake_action_index = t.action_index
                                 SET t.amount = d.prev_amount
@@ -694,11 +701,14 @@ class Rollback {
                                       WHERE e.target_table      = d.target_table
                                         AND e.stake_action_index = d.stake_action_index
                                         AND e.block_index >= ?
-                                        AND (e.block_index < d.block_index
-                                             OR (e.block_index = d.block_index
-                                                 AND (e.execution_index < d.execution_index
-                                                      OR (e.execution_index = d.execution_index
-                                                          AND e.slash_position < d.slash_position)))))`;
+                                        AND (CAST(e.prev_amount AS DECIMAL(60,18)) > CAST(d.prev_amount AS DECIMAL(60,18))
+                                             OR (CAST(e.prev_amount AS DECIMAL(60,18)) = CAST(d.prev_amount AS DECIMAL(60,18))
+                                                 AND (e.block_index < d.block_index
+                                                      OR (e.block_index = d.block_index
+                                                          AND (e.execution_index < d.execution_index
+                                                               OR (e.execution_index = d.execution_index
+                                                                   AND e.slash_position < d.slash_position)))))))`;
+                    //</CONTRACT-SLASH-RESTORE-SQL>
                     args = [slashTbl, block_index, block_index];
                     await this.indexerDb.doQuery(query, args);
                 }
