@@ -708,4 +708,78 @@ describe('XChainIndexer hub config overlay', function () {
             assert.strictEqual(loadWith({ BLOCK_CHECK_INTERVAL: undefined }).BLOCK_CHECK_INTERVAL, 5000);
         });
     });
+
+    // COINPAY_EXPIRATION is a consensus input: it is added to a match's BLOCK_TIME
+    // and stored as the obligation deadline, so a per-node value expires the same
+    // escrow at a different block and forks the ledger. The override is therefore
+    // one-sided (regtest honours it, everywhere else ignores it loudly), and it is
+    // strict on regtest because a NaN deadline compares false against every block
+    // time and would leave every obligation pending forever.
+    describe('resolveCoinpayExpiration (COINPAY_EXPIRATION)', function () {
+
+        const KEY = 'XCHAIN_COINPAY_EXPIRATION_S';
+        const FROZEN = 7200;
+
+        function loadOn(network, value) {
+            process.env.INDEXER_COIN = 'BTC';
+            process.env.INDEXER_NETWORK = network;
+            if(value === undefined) delete process.env[KEY]; else process.env[KEY] = value;
+            delete require.cache[require.resolve('../../src/config.js')];
+            return require('../../src/config.js').getConfig();
+        }
+
+        // Capture the one-sided warning without letting it clutter the run.
+        function loadCapturingWarning(network, value) {
+            const real = console.log;
+            let warned = false;
+            console.log = (...args) => { if(String(args[0]).includes('IGNORED')) warned = true; };
+            try { return { config: loadOn(network, value), warned }; }
+            finally { console.log = real; }
+        }
+
+        // These cases are the only ones in this file that load config for a network
+        // OTHER than regtest, so they restore INDEXER_NETWORK as well as the key.
+        // Leaving 'mainnet' behind would silently re-point every later loader.
+        let savedNetwork;
+        beforeEach(function () { savedNetwork = process.env.INDEXER_NETWORK; });
+        afterEach(function () {
+            delete process.env[KEY];
+            if(savedNetwork === undefined) delete process.env.INDEXER_NETWORK;
+            else process.env.INDEXER_NETWORK = savedNetwork;
+        });
+
+        it('uses the frozen protocol constant when unset', function () {
+            assert.strictEqual(loadOn('regtest', undefined).COINPAY_EXPIRATION, FROZEN);
+            assert.strictEqual(loadOn('mainnet', undefined).COINPAY_EXPIRATION, FROZEN);
+        });
+
+        it('treats an empty value as unset rather than as a parse failure', function () {
+            assert.strictEqual(loadOn('regtest', '').COINPAY_EXPIRATION, FROZEN);
+        });
+
+        it('honours a positive integer on regtest', function () {
+            assert.strictEqual(loadOn('regtest', '300').COINPAY_EXPIRATION, 300);
+        });
+
+        it('IGNORES the override on mainnet and on testnet, and says so', function () {
+            for(const network of ['mainnet', 'testnet']){
+                const { config, warned } = loadCapturingWarning(network, '300');
+                assert.strictEqual(config.COINPAY_EXPIRATION, FROZEN, network + ' must keep the frozen window');
+                assert.ok(warned, network + ' must warn that a set override was ignored');
+            }
+        });
+
+        it('stays quiet off regtest when the override merely restates the frozen value', function () {
+            const { config, warned } = loadCapturingWarning('mainnet', String(FROZEN));
+            assert.strictEqual(config.COINPAY_EXPIRATION, FROZEN);
+            assert.strictEqual(warned, false, 'a matching override is not a misconfiguration');
+        });
+
+        it('THROWS on regtest for a value that is not a positive integer', function () {
+            for(const bad of ['0', '-5', '3.5', 'abc', ' ']){
+                assert.throws(() => loadOn('regtest', bad), /COINPay expiration must be/,
+                    'expected "' + bad + '" to be refused at startup');
+            }
+        });
+    });
 });

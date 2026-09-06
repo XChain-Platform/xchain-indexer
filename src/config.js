@@ -32,6 +32,50 @@ const parseIntMin0 = (val, defaultVal) => {
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : defaultVal;
 };
 
+// Resolve the COINPay obligation expiration window. `frozen` is the pinned
+// protocol constant; `envKey` an operator override honored ONLY on regtest.
+//
+// CONSENSUS INPUT. The window is added to a match's BLOCK_TIME and STORED as the
+// obligation's deadline, and the per-block expiry pass emits COINPAY_EXPIRE from
+// that stored value, so two nodes running different windows release the same
+// escrow at different blocks and fork the ledger. Off regtest a differing
+// override is therefore IGNORED with a loud startup warning and the frozen value
+// wins, the same one-sided gating as resolveWatermarkGrace (src/hub_db_sync.js)
+// and resolveFeeDestination (src/coins/index.js). On regtest a SET override that
+// is not a positive integer THROWS at startup rather than being stamped as a
+// silent NaN deadline, which would compare false against every block time and
+// leave every obligation pending forever. Zero is refused for the mirror-image
+// reason: it expires an obligation in the block that creates it.
+//
+// WHY A REGTEST VENUE NEEDS THIS. An e2e suite cannot wait out a two-hour
+// deadline, so it freezes the node clock past the deadline and mines. That
+// stamps the mined blocks two hours into the future, and any barrier comparing a
+// block's own timestamp against a wall-clock watermark then stalls the indexer
+// for the whole window in REAL time. The anchor-reward attestation barrier does
+// exactly that (`streamWatermark >= blockTime + grace`, src/hub_db_sync.js), and
+// on the 2026-09-06 release matrix it held one BTC regtest block for 2h08m50s,
+// all 119 deferrals naming that single block. A short regtest window removes the
+// need for the clock jump entirely, which is cheaper and safer than teaching
+// every block-loop barrier to special-case a future-stamped block.
+function resolveCoinpayExpiration(frozen, envKey, network){
+    const override = process.env[envKey];
+    if(override === undefined || override === '') return frozen;
+    if(network !== 'regtest'){
+        if(String(override) !== String(frozen))
+            console.log('WARNING: ' + envKey + ' is set but IGNORED on ' + String(network) +
+                '; using the frozen protocol constant ' + frozen + 's. The COINPay expiration ' +
+                'window is a consensus input (a per-node value forks settlement) and is not ' +
+                'operator-tunable off regtest.');
+        return frozen;
+    }
+    const raw = String(override).trim();
+    const parsed = /^\d+$/.test(raw) ? parseInt(raw, 10) : NaN;
+    if(!Number.isFinite(parsed) || parsed <= 0)
+        throw new Error('Invalid ' + envKey + '="' + override + '": the COINPay expiration must be ' +
+            'a positive integer number of seconds (frozen protocol default ' + frozen + ').');
+    return parsed;
+}
+
 // TICK of the protocol gas token (config['GAS']). This value is consensus: it
 // names the token debited for capability STAKE, VOTE deposits/escrows, and
 // contract gas billing. Vendored single source of truth: ./protocol/constants.js
@@ -105,7 +149,10 @@ module.exports = {
         config['NATIVE_TICK']          = coin;
         config['NATIVE_TICK_DECIMALS'] = 8;
         config['COIN_DECIMALS']        = 8;     // Native coin decimal places (BTC/LTC/DOGE all use 8)
-        config['COINPAY_EXPIRATION']   = 7200;  // COINPay obligation expiration in seconds (2 hours)
+        // COINPay obligation expiration in seconds (2 hours). Consensus: added to a
+        // match's BLOCK_TIME and stored as the obligation deadline. Regtest-only
+        // override, ignored with a warning elsewhere; see resolveCoinpayExpiration.
+        config['COINPAY_EXPIRATION']   = resolveCoinpayExpiration(7200, 'XCHAIN_COINPAY_EXPIRATION_S', network);
 
         // TICK Length
         config['MIN_TICK_LENGTH'] = 1;
