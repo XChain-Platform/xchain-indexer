@@ -32,6 +32,7 @@
  ********************************************************************/
 
 const consolidationLegAmount = require('../consolidation_leg_amount_activation.js');
+const gatedHandoffRef        = require('../gated_handoff_ref_activation.js');
 
 class Send {
 
@@ -317,13 +318,34 @@ class Send {
                     if(required){
                         let siblings = data['SIBLING_ACTIONS'] || [];
                         let foundHandoff = false;
+
+                        // Siblings hold WIRE parameters (batch.js splits the raw command and
+                        // resolves no address references), while the SDK compacts a MESSAGE
+                        // DESTINATION to `^<id>` for any already-indexed recipient, so a byte
+                        // compare misses the ordinary wallet-composed handoff. Above the flag
+                        // day a caret spelling is resolved first; plane and arming state in
+                        // gated_handoff_ref_activation.js.
+                        let refRule = gatedHandoffRef.isGatedHandoffRefActive(data['BLOCK_TIME'], this.config['NETWORK']);
+
                         for(let s of siblings){
                             if(s.action !== 'MESSAGE') continue;
                             // MESSAGE v2 fields: VERSION|COIN|DESTINATION|ENCRYPTED_MESSAGE
                             // (s.params[0]=VERSION, [1]=COIN, [2]=DESTINATION, [3]=ENCRYPTED_MESSAGE)
                             let ver  = String(s.params[0] || '');
                             let dest = String(s.params[2] || '');
-                            if(ver === '2' && dest === send['DESTINATION']){
+                            if(ver !== '2') continue;
+
+                            // Caret-only, so a full-address handoff costs no extra read, and
+                            // fail-closed on both edges: a rejected reference and a value still
+                            // caret-prefixed after resolution match nothing.
+                            if(refRule && dest.substring(0,1) === '^'){
+                                let destRef = await this.indexerDb.resolveAddressRefChecked(dest, data['BLOCK_INDEX']);
+                                if(destRef.rejected) continue;
+                                dest = String(destRef.value || '');
+                                if(dest.substring(0,1) === '^') continue;
+                            }
+
+                            if(dest === send['DESTINATION']){
                                 foundHandoff = true;
                                 break;
                             }
