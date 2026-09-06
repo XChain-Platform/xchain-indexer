@@ -160,20 +160,34 @@ function normalizeCreateBody(sql) {
         .toUpperCase();
 }
 
-// Apply later dated ADD COLUMN migrations onto a migration-created table's column list,
-// at each one's AFTER/FIRST anchor, so the result is the shape a replica that replayed the
-// whole ledger actually holds. Already-present names are skipped: an idempotent
-// `ADD COLUMN IF NOT EXISTS` re-declaring an existing column adds nothing.
-function composeLedgerColumns(created, laterAdds) {
+const byFile = (x, y) => (x.file < y.file ? -1 : x.file > y.file ? 1 : 0);
+
+// Apply the later dated ALTERs onto a migration-created table's column list, so the result
+// is the shape a replica that replayed the whole ledger actually holds.
+//
+// ADD COLUMN lands at its AFTER/FIRST anchor. An already-present name is skipped: an
+// idempotent `ADD COLUMN IF NOT EXISTS` re-declaring an existing column adds nothing.
+//
+// MODIFY then restates a column in place, last file wins, which is the ONLY legal way to
+// evolve a column of a migration-created table: the CREATE is checksum-immutable once
+// applied (db.js runMigrations refuses a file whose content changed) and the boot-time
+// drift reconciler adds a missing column without ever retyping an existing one. Composing
+// the MODIFY here is what lets the definition move with a dated migration behind it; a
+// definition edited alone still fails, because the composed shape no longer matches.
+function composeLedgerColumns(created, laterAdds, laterMods) {
     const cols = created.columns.map(c => ({ name: c.name, spec: c.spec }));
     const at = (name) => cols.findIndex(c => c.name.toLowerCase() === String(name || '').toLowerCase());
-    for (const a of laterAdds.slice().sort((x, y) => (x.file < y.file ? -1 : x.file > y.file ? 1 : 0))) {
+    for (const a of (laterAdds || []).slice().sort(byFile)) {
         if (at(a.name) >= 0) continue;
         const entry = { name: a.name, spec: a.spec };
         if (a.first) { cols.unshift(entry); continue; }
         const anchor = a.after ? at(a.after) : -1;
         if (anchor >= 0) cols.splice(anchor + 1, 0, entry);
         else cols.push(entry);
+    }
+    for (const m of (laterMods || []).slice().sort(byFile)) {
+        const i = at(m.name);
+        if (i >= 0) cols[i] = { name: cols[i].name, spec: m.spec };
     }
     return cols;
 }
@@ -673,21 +687,24 @@ describe('SQL schema column parity (definition path vs ledger path) @regression'
         const bodies     = collectDefinitionBodies();
         const defCols    = collectDefinitionColumns();
         const adds       = collectMigrationColumns();
+        const mods       = collectMigrationModifies();
         const mismatches = [];
         for (const t of collectMigrationCreatedTables()) {
             if (!bodies[t.table]) { mismatches.push({ table: t.table, file: t.file, reason: 'no src/sql/' + t.table + '.sql definition declares this table' }); continue; }
             // A migration-created table is not frozen at its CREATE. When it later gains a
-            // column the CREATE cannot be edited (db.js enforces migration immutability by
-            // checksum), so the shape a replaying replica converges to is CREATE + every
-            // LATER dated ALTER, and THAT is what must equal the definition. Compare that
-            // composed shape: columns (name + normalized spec, in position) plus the
-            // non-column tail (keys + ENGINE), which no ADD COLUMN can change.
-            const later = adds.filter(a => a.table === t.table && a.file > t.file);
-            if (later.length === 0) {
+            // column, or one of its columns is retyped, the CREATE cannot be edited (db.js
+            // enforces migration immutability by checksum), so the shape a replaying replica
+            // converges to is CREATE + every LATER dated ALTER, and THAT is what must equal
+            // the definition. Compare that composed shape: columns (name + normalized spec,
+            // in position) plus the non-column tail (keys + ENGINE), which neither an ADD
+            // COLUMN nor a MODIFY can change.
+            const laterAdds = adds.filter(a => a.table === t.table && a.file > t.file);
+            const laterMods = mods.filter(m => m.table === t.table && m.file > t.file);
+            if (laterAdds.length === 0 && laterMods.length === 0) {
                 if (bodies[t.table] !== t.body) mismatches.push({ table: t.table, file: t.file, reason: 'CREATE TABLE differs from the definition', definition: bodies[t.table], migration: t.body });
                 continue;
             }
-            const composed = composeLedgerColumns(t, later);
+            const composed = composeLedgerColumns(t, laterAdds, laterMods);
             const want     = defCols[t.table] || [];
             if (JSON.stringify(composed) !== JSON.stringify(want))
                 mismatches.push({ table: t.table, file: t.file,
@@ -703,6 +720,29 @@ describe('SQL schema column parity (definition path vs ledger path) @regression'
             'DB converged by replaying migrations must end up with the IDENTICAL table. They do not:\n' +
             mismatches.map(m => `  ${m.table} (${m.file}): ${m.reason}` +
                 (m.definition ? `\n    definition: ${m.definition}\n    migration:  ${m.migration}` : '')).join('\n'));
+    });
+
+    // The MODIFY leg of the composition above is only worth what it changes. A composition
+    // that stopped applying MODIFYs would compare the CREATE's original spec against a
+    // definition a dated migration has legitimately moved, so pin the live instance by name:
+    // the leg must still turn one column's spec into the one the migration states.
+    it('sanity: the migration-created-table composition applies a later MODIFY', function () {
+        const created = collectMigrationCreatedTables().find(t => t.table === 'attestation_responses');
+        assert.ok(created, 'the attestation_responses CREATE TABLE migration is no longer parsed');
+        const mods = collectMigrationModifies()
+            .filter(m => m.table === 'attestation_responses' && m.file > created.file);
+        assert.ok(mods.length > 0,
+            'no dated migration retypes a column of a migration-created table any more, so the MODIFY leg of ' +
+            'composeLedgerColumns is passing over an empty set and proves nothing');
+
+        const composed = composeLedgerColumns(created, [], mods);
+        const before   = created.columns.find(c => c.name.toLowerCase() === 'response_payload');
+        const after    = composed.find(c => c.name.toLowerCase() === 'response_payload');
+        assert.ok(before && after, 'attestation_responses.response_payload is no longer parsed on both sides');
+        assert.notStrictEqual(after.spec, before.spec,
+            'the composition left the CREATE\'s spec in place, so a dated MODIFY no longer reaches the comparison');
+        assert.ok(/CHARACTER SET UTF8MB4\b/.test(after.spec),
+            'the composed spec is not the widened one the dated migration states: ' + after.spec);
     });
 
     it('a migration-created table is NOT parked in the pre-ledger baseline', function () {

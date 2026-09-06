@@ -71,8 +71,16 @@
 -- across hubs. `widen` is likewise informational - the verifier recomputes the
 -- widening step itself.
 --
--- Forward migration is idempotent and automatic on both sides: the hub and indexer
--- reconcile column drift from this file at startup (db.alterTableForDrift).
+-- A COLUMN added to this file arrives on both sides at startup (db.alterTableForDrift).
+-- A column RETYPED here does not: that reconciler adds a missing column and never
+-- restates an existing one, so a type or charset change needs a dated migration on the
+-- indexer and a runMigrations step on the hub.
+--
+-- CHARSET: `response_payload` and `meta` hold PROVIDER bytes, and their on-chain twins
+-- (attests.response_payload, attests.meta) are utf8mb4, so both are utf8mb4 here as well.
+-- On utf8mb3 a 4-byte character the v1 path accepts fails this INSERT with errno 1366
+-- under STRICT_TRANS_TABLES, and the mirror re-delivers that row forever without applying
+-- it. The table tail stays the fleet default; only the columns holding wire bytes widen.
 --
 -- Idempotent on the natural key: a re-delivered, re-gossiped or replayed row leaves
 -- every signed column exactly as first inserted; only a null batch_action_index can
@@ -86,9 +94,9 @@ CREATE TABLE attestation_responses (
     request_block_index  BIGINT UNSIGNED DEFAULT NULL,             -- the v0 row's BTC block; same status: informational, re-derived locally
     provider_id          VARCHAR(64)  NOT NULL,                    -- as in the on-chain v1
     status               VARCHAR(20)  NOT NULL,                    -- TERMINAL vocabulary only: 'ok' or 'expired'
-    response_payload     MEDIUMTEXT,                               -- the agreed body, stored decoded as UTF-8 exactly as attests.response_payload is
+    response_payload     MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci, -- the agreed body, stored decoded as UTF-8 exactly as attests.response_payload is, and utf8mb4 exactly as that twin is
     response_hash        CHAR(64)     NOT NULL,                    -- sha256 of the body bytes; the field the canonical already signs
-    meta                 TEXT,                                     -- as in the on-chain v1
+    meta                 TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci, -- as in the on-chain v1 (attests.meta): opaque provider bytes, so utf8mb4 for the same reason
     effective_time       BIGINT UNSIGNED NOT NULL,                 -- unix seconds, leader-chosen, INSIDE the signed canonical: the applying block is a pure function of it
     signer_pubkeys       TEXT         NOT NULL,                    -- JSON array, ordered responsible-set pubkeys that signed
     signatures           TEXT         NOT NULL,                    -- JSON [{pubkey,sig}], Ed25519 over the mirror-era canonical
