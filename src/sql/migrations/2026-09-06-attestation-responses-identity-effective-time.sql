@@ -1,0 +1,51 @@
+--********************************************************************
+--
+-- Copyright © 2025-2026 Dankest, LLC
+-- Based on XChain Platform by Dankest, LLC - https://dankest.llc
+--
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+--
+-- This file is part of XChain Platform. Licensed under the GNU Affero
+-- General Public License v3.0 or later; see LICENSE.md. A commercial
+-- license (without AGPL source-disclosure terms) is available -
+-- contact legal@dankest.llc.
+--
+--********************************************************************
+
+-- xchain:migration mode=auto
+--
+-- Migration: attestation_responses row identity gains the signed effective_time.
+--
+-- WHY
+-- ---
+-- The mirror's UNIQUE key was (network, request_id): one row per request. That assumed
+-- one request finalizes once, and it does not. Every responsible hub runs its own
+-- agreement, and the leader slot it runs under is derived from the chain tip that hub
+-- polled when it proposed. Two hubs polling different tips finalize under different
+-- leaders, and each leader stamps its own clock plus the forward margin into the signed
+-- canonical, so the federation ends up holding two honestly quorum-signed rows for one
+-- request that differ only in effective_time. Under the old key the second row was
+-- absorbed as a duplicate on the hubs that held the first and kept on the hubs that
+-- held it first, so the batch co-sign, which compares windows field for field, refused
+-- every window carrying such a request (`differs on effective_time`, regtest ladder
+-- AT5 pass 19, 2026-09-05).
+--
+-- Converging the hubs in place was measured and rejected: this mirror is insert-only in
+-- every signed column (hub_db_sync), so an indexer keeps whatever value it received
+-- first, and a hub-side rewrite would trade a liveness stall for a permanent
+-- action-index fork between indexers following different hubs. Keeping every honest
+-- variant is what the applier was already written for: selectApplicableAttestationResponses
+-- binds the smaller effective_time, ties by response_hash, both signed, so every node
+-- makes the same choice and the other variant is skipped rather than applied second.
+--
+-- WHAT
+-- ----
+-- Rebuild uq_attest_response as (network, request_id, effective_time). A wider UNIQUE
+-- key is a strict superset constraint, so no existing row can collide on it and no
+-- dedupe is needed. reconcileTableIndexes never drops a same-named index whose column
+-- set changed (it warns and leaves it), which is why this is a migration and not a
+-- self-heal from the table's SQL file. Idempotent: DROP IF EXISTS then CREATE IF NOT
+-- EXISTS, so a database already on the new key is a no-op.
+
+DROP INDEX IF EXISTS uq_attest_response ON attestation_responses;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_attest_response ON attestation_responses (network, request_id, effective_time);

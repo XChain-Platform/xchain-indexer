@@ -45,11 +45,16 @@ CREATE TABLE IF NOT EXISTS attestation_responses (
     finalized_at         BIGINT UNSIGNED DEFAULT NULL              -- hub wall clock at quorum; AUDIT ONLY, never a consensus input, never compared across hubs
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
--- Row identity within a network. request_id alone is already collision-free in
--- practice (it is a sha256 over chain data), but two hubs on different networks can
--- legitimately both be served through one mirror table during a re-point, and scoping
--- the key matches how every reader and _purgeForeignNetworkRows scope theirs.
-CREATE UNIQUE INDEX IF NOT EXISTS uq_attest_response ON attestation_responses (network, request_id);
+-- Row identity within a network is the request PLUS the signed effective_time: one
+-- request can finalize under two leader slots and yield two honestly signed rows that
+-- differ only in the stamp, and the indexer binds the smaller one (the table's SQL
+-- carries the full argument). Widened in place on 2026-09-06 while the schema was
+-- unshipped, so a fresh replay builds the final key directly; the dated migration of
+-- that day rebuilds it on a database that already ran this file with the old key.
+-- The network prefix stays for the re-point case: two hubs on different networks can
+-- legitimately both be served through one mirror table, and scoping the key matches
+-- how every reader and _purgeForeignNetworkRows scope theirs.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_attest_response ON attestation_responses (network, request_id, effective_time);
 -- Two range reads over the one column both sides agree on: the indexer's applicability
 -- scan takes rows whose signed effective_time has been reached, and the hub's batch
 -- publisher takes one window as [window_start, window_end). Keying the window on the

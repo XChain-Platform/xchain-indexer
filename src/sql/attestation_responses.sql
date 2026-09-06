@@ -109,11 +109,19 @@ CREATE TABLE attestation_responses (
 -- reconcileTableIndexes self-heals only standalone statements, so an aged database
 -- can back-fill a missing index instead of silently serving full scans.
 --
--- Row identity within a network. request_id alone is already collision-free in
--- practice (it is a sha256 over chain data), but two hubs on different networks can
--- legitimately both be served through one mirror table during a re-point, and scoping
+-- Row identity within a network is the request PLUS the signed effective_time. One
+-- request can legitimately finalize more than once: every responsible hub runs its own
+-- agreement, the leader slot is derived from the chain tip each hub polled, and two hubs
+-- polling different tips finalize under different leaders whose stamps differ. Each of
+-- those rows carries an honest quorum over its own canonical, so both are kept, both are
+-- gossiped, both ride the batch, and the indexer binds the smaller effective_time
+-- (ties by response_hash), which is the same choice on every node. Keying on request_id
+-- alone made the SECOND honest row a silent duplicate on some hubs and the first on
+-- others, so no window carrying such a request could ever reach batch quorum
+-- (regtest ladder, AT5 pass 19). The network prefix stays for the re-point case: two
+-- hubs on different networks can both be served through one mirror table, and scoping
 -- the key matches how every reader and _purgeForeignNetworkRows scope theirs.
-CREATE UNIQUE INDEX uq_attest_response ON attestation_responses (network, request_id);
+CREATE UNIQUE INDEX uq_attest_response ON attestation_responses (network, request_id, effective_time);
 -- Two range reads over the one column both sides agree on: the indexer's applicability
 -- scan takes rows whose signed effective_time has been reached, and the hub's batch
 -- publisher takes one window as [window_start, window_end). Keying the window on the

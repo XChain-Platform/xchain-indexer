@@ -2247,11 +2247,13 @@ class Utility {
         }
         if(byId.size === 0) return [];
 
-        // One response per request. The mirror's UNIQUE (network, request_id) makes a
-        // second row impossible today, so this is the defence against a double-finalize
-        // consensus should never produce: the smaller effective_time binds, ties broken
-        // by response_hash, both signed fields, so every node picks the same one and the
-        // other is skipped rather than applied second.
+        // One response per request, chosen from however many honest rows the mirror
+        // holds for it. The mirror's key is (network, request_id, effective_time) because
+        // a round that finalized under two leader slots (the slot follows the chain tip
+        // each hub polled) yields two quorum-signed rows differing only in the stamp,
+        // and every hub ends up holding both. The smaller effective_time binds, ties
+        // broken by response_hash, both signed fields, so every node picks the same one
+        // and the other is skipped rather than applied second.
         let chosen = new Map();
         for(let row of (mirrorRows || [])){
             let id = String(row.request_id || '').toLowerCase();

@@ -2435,9 +2435,13 @@ class HubDbSync {
         let db = this.hubDb && this.hubDb.indexer && this.hubDb.indexer.indexerDb;
         if (!db || typeof db.setAttestationResponseBatchIndex !== 'function') return;
         try {
+            // The request may hold two honest rows (a round finalized under two leader
+            // slots differs only in the signed effective_time), so read the one this
+            // delivery just stamped rather than whichever the planner returns first.
             let stored = await this.hubDb.doQuery(
-                'SELECT batch_action_index FROM attestation_responses WHERE network = ? AND request_id = ? LIMIT 1',
-                [String(row.network == null ? '' : row.network), String(row.request_id == null ? '' : row.request_id)]);
+                'SELECT batch_action_index FROM attestation_responses WHERE network = ? AND request_id = ? AND effective_time = ? LIMIT 1',
+                [String(row.network == null ? '' : row.network), String(row.request_id == null ? '' : row.request_id),
+                 Number(row.effective_time)]);
             let linked = (stored && stored[0]) ? stored[0].batch_action_index : null;
             if (linked == null) return;
             await db.setAttestationResponseBatchIndex(row.request_id, linked);
