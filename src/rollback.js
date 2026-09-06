@@ -26,6 +26,7 @@ const ProviderRegistry = require('./attestation/providerRegistry.js');
 const lifecycle = require('./tableLifecycle.js');
 const ar        = require('./anchor_reward_activation.js');
 const { ARCHIVE_HEAD_VERSIONS_SQL } = require('./stateHash.js');
+const { archiveAuthorScopeJoin } = require('./archive_rollback_author_scope_activation.js');
 
 class Rollback {
 
@@ -847,7 +848,13 @@ class Rollback {
                     // hash preimage (the GATED anchor_invalid state-hash class covers the stamp
                     // itself), so no flag-day applies here. ClientRollback.js mirrors this;
                     // the drift guard pins the widened predicate on both sides.
+                    //
+                    // Author scope, flag-day gated and INERT on every network today: the seq is
+                    // not a batch key once archive batches are publisher-scoped, so a second
+                    // publisher's orphaned chunk resets a head whose own batch survives intact.
+                    // Rationale + arming precondition: archive_rollback_author_scope_activation.js.
                     await this.indexerDb.createStatus('unverified');
+                    let authorScope = archiveAuthorScopeJoin(block_index, String(this.config['NETWORK'] || ''));
                     query = `UPDATE anchor_actions p
                                 JOIN index_statuses ps ON ps.id = p.status_id AND ps.status = 'invalid_archive'
                                 JOIN anchor_actions c
@@ -855,6 +862,7 @@ class Rollback {
                                  AND c.match_batch_seq = p.match_batch_seq
                                  AND c.action_index >= ?
                                 JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid'
+                                ${authorScope}
                                 JOIN index_statuses us ON us.status = 'unverified'
                                 SET p.status_id = us.id
                                 WHERE p.version ${ARCHIVE_HEAD_VERSIONS_SQL}
