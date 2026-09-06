@@ -39,6 +39,7 @@
 const ed25519   = require('../ed25519.js');
 const swq       = require('../stake_weighted_quorum.js');
 const pricePair = require('../price_pair_activation.js');
+const priceScale    = require('../price_scale_activation.js');
 const priceSigTally = require('../price_sig_tally_activation.js');
 const priceV2       = require('../price_batch_compression.js');
 
@@ -171,6 +172,11 @@ class Price {
                 // any of BTC/LTC/DOGE and their heights diverge.
                 let pairPattern = pricePair.pricePairPattern(data['BLOCK_TIME'], this.config['NETWORK']);
 
+                // Price-value bound, resolved on the same key for the same reason. At/above its
+                // gate a price is canonical (no leading zeros, at most 8 decimals), which is the
+                // scale every producer already emits and bounds the string to 19 characters.
+                let pricePattern = priceScale.priceValuePattern(data['BLOCK_TIME'], this.config['NETWORK']);
+
                 // ROUND_COUNT equalling the number of round blocks actually present is enforced by
                 // CONSUMPTION, not by a trailing tally: a short count leaves the next round block's
                 // ROUND field to be read as SIG_COUNT and its TIMESTAMP as a pubkey (not 64-hex, so
@@ -207,7 +213,7 @@ class Price {
                         let price = fields[idx++];
                         if(!pair || !price) throw new Error('missing pair data at round ' + i + ' pair ' + j);
                         if(!pairPattern.test(pair)) throw new Error('invalid pair format: ' + pair);
-                        if(!/^[0-9]+(\.[0-9]+)?$/.test(price)) throw new Error('invalid price format: ' + price);
+                        if(!pricePattern.test(price)) throw new Error('invalid price format: ' + price);
                         pairs.push({ pair: pair, price: price });
                     }
                     // btcBlockHeight (camel) is the shape buildPriceBatchPayload reads; the snake

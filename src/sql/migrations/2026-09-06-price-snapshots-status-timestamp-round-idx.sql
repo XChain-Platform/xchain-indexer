@@ -1,0 +1,30 @@
+-- xchain:migration mode=auto
+-- Migration: index price_snapshots (status, block_timestamp, round_number).
+--
+-- WHY
+-- ---
+-- The VM oracle preload (db.getOracleDataForVM) gains a consensus-time bound on
+-- non-reference chains: see src/oracle_preload_causality_activation.js. Its four reads
+-- then carry `status = 'finalized' AND ... AND block_timestamp <= ?` with
+-- `ORDER BY round_number DESC LIMIT n`. The existing idx_status_block_round leads on
+-- reference_block, which is a BTC height on every row, so off the reference chain its
+-- range matches every finalized row and the time bound degrades to a filter plus a
+-- filesort over the whole set. This index puts the bounded column second so the same
+-- read is a range scan with the ordering already satisfied.
+--
+-- Non-unique: many pairs share one round and one consensus timestamp.
+--
+-- NOT consensus-visible. Index-only DDL on a mirrored projection table. It enters no
+-- block-hash preimage; which rows the preload admits is decided by the SQL predicate and
+-- its activation height, never by which index serves the read.
+--
+-- Additive + idempotent: CREATE INDEX IF NOT EXISTS, so it is a no-op on any install
+-- whose boot-time reconcileTableIndexes has already healed the index in from
+-- src/sql/price_snapshots.sql, and it back-fills a DB converged by replaying the dated
+-- migrations alone. The name and column list are byte-equal to the definition, which
+-- sql-schema-index-parity asserts in both directions.
+--
+-- HOW TO RUN
+--   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-09-06-price-snapshots-status-timestamp-round-idx.sql
+
+CREATE INDEX IF NOT EXISTS idx_status_timestamp_round ON price_snapshots (status, block_timestamp, round_number);

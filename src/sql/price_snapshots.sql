@@ -34,5 +34,11 @@ CREATE TABLE price_snapshots (
     KEY idx_status (status),
     KEY idx_source_chain (source_chain),
     -- Oracle snapshot preload: WHERE status + reference_block range, ORDER BY round_number DESC.
-    KEY idx_status_block_round (status, reference_block, round_number)
+    KEY idx_status_block_round (status, reference_block, round_number),
+    -- The same preload once its consensus-time bound is active (see
+    -- src/oracle_preload_causality_activation.js). Off the reference chain the
+    -- reference_block range matches every row, so the time column has to lead the
+    -- index for that bound to be a range scan instead of a filter over every
+    -- finalized row.
+    KEY idx_status_timestamp_round (status, block_timestamp, round_number)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
