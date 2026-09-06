@@ -49,6 +49,7 @@ const dispenseCancellingMatch = require('./dispense_cancelling_match_activation'
 const stateKeyCollation = require('./state_key_collation_activation');
 const snapshotAgeCausality = require('./oracle_snapshot_age_causality_activation');
 const staleRoundVisibility = require('./oracle_stale_round_visibility_activation');
+const preloadCausality = require('./oracle_preload_causality_activation');
 const listEditResolution = require('./list_edit_resolution_activation');
 const caretRefStrict = require('./caret_ref_strict_activation');
 const ledgerPrecision = require('./ledger_amount_precision_activation');
@@ -16637,6 +16638,25 @@ class Database {
         // matching the sibling queries' idiom.
         let blockCap = blockIndex || 999999999;
 
+        // Preload causality gate (oracle_preload_causality_activation.js). The cap
+        // above compares the PROCESSING chain's height against a BTC-anchored
+        // reference_block, so on LTC and DOGE it matches every row and admits
+        // rounds the hub finalized after this block; which of them a node holds
+        // depends on its mirror depth, and the preload is VM-visible, so the
+        // contract hash forks. At/after the height each of the four reads below
+        // carries an ADDITIONAL `block_timestamp <= ?` bound against this block's
+        // consensus time, the axis getLatestPrice's H-3 branch already selects on
+        // and the one the fleet-wide waitForPriceSyncTime barrier makes provable
+        // off BTC. The bound is added, never swapped, so the admitted row set can
+        // only shrink. The reference chain is carved out inside the module: its
+        // height cap is exact, and a time bound there would admit rounds anchored
+        // after a forward-skewed block. Execution-path gate, indexer-only.
+        let timeCausal = preloadCausality.isOraclePreloadCausalityActive(
+            blockIndex, this.config['NETWORK'], this.config['COIN']) && Number.isFinite(refTime);
+        // Empty below the height, so every query string and argument list stays
+        // byte-identical to the pre-gate one and historical replay is unchanged.
+        let timeBound = timeCausal ? ' AND block_timestamp <= ?' : '';
+
         // Pre-load the latest finalized snapshot age (blocks since last snapshot).
         // Snapshot-age causality gate (oracle_snapshot_age_causality_activation.js):
         // the legacy age query has NO block cap, unlike every sibling below, so a
@@ -16650,7 +16670,14 @@ class Database {
         let ageCausal = snapshotAgeCausality.isOracleSnapshotAgeCausalityActive(
             blockIndex, this.config['NETWORK'], this.config['COIN']);
         let ageQuery = "SELECT MAX(reference_block) AS latest_block FROM price_snapshots WHERE status = 'finalized'"
-                     + (ageCausal ? " AND reference_block <= ?" : "");
+                     + (ageCausal ? " AND reference_block <= ?" : "")
+                     + timeBound;
+        // Both gates stack: the height cap stays on where it is armed and the time
+        // bound layers over it. No args at all when neither is on, which is the
+        // pre-gate call.
+        let ageArgs = [];
+        if(ageCausal)  ageArgs.push(blockCap);
+        if(timeCausal) ageArgs.push(refTime);
         // Strict reads throughout this preload (M-17, same rationale as getLatestPrice):
         // the oracle reads run on the hub-DB instance, which never opens a transaction,
         // so doQuery would collapse a driver error into [] - indistinguishable from
@@ -16658,12 +16685,15 @@ class Database {
         // MAX_SAFE_INTEGER snapshotAge which the VM hashes into block state, so one
         // node's transient DB fault forks it from the fleet. Throwing lets block
         // processing roll back and retry the block instead.
-        let ageRows = await this.doQueryStrict(ageQuery, ageCausal ? [blockCap] : undefined);
+        let ageRows = await this.doQueryStrict(ageQuery, ageArgs.length > 0 ? ageArgs : undefined);
         let latestBlock = (ageRows.length > 0 && ageRows[0].latest_block !== null) ? ageRows[0].latest_block : 0;
         let snapshotAge = (blockIndex && latestBlock > 0) ? Math.max(0, blockIndex - latestBlock) : Number.MAX_SAFE_INTEGER;
 
         // True when a snapshot is older than the configured max age relative to the
-        // block being processed (stale ⇒ treated as no price).
+        // block being processed (stale ⇒ treated as no price). A future-stamped row
+        // gives a negative age here and reads as fresh; the preload causality bound
+        // closes that by excluding the row, so no clamp belongs in this comparison
+        // (one would change the legacy path below the activation height).
         let isStale = (snapshotTimestamp) => {
             if(!(maxAge > 0) || !Number.isFinite(refTime)) return false;
             if(!(snapshotTimestamp > 0)) return false;
@@ -16688,11 +16718,14 @@ class Database {
                            INNER JOIN (
                                SELECT coin_pair, MAX(round_number) AS mr
                                FROM price_snapshots
-                               WHERE status = 'finalized' AND price IS NOT NULL AND reference_block <= ?
+                               WHERE status = 'finalized' AND price IS NOT NULL AND reference_block <= ?${timeBound}
                                GROUP BY coin_pair
                            ) m ON t.coin_pair = m.coin_pair AND t.round_number = m.mr
                            WHERE t.status = 'finalized' AND t.price IS NOT NULL`;
-        let latestRows = await this.doQueryStrict(latestQuery, [blockCap]);
+        // The bound belongs in the subquery that picks the round: the outer join
+        // resolves to that same row through the (round_number, coin_pair) unique
+        // key, so bounding it twice would filter nothing further.
+        let latestRows = await this.doQueryStrict(latestQuery, timeCausal ? [blockCap, refTime] : [blockCap]);
         // Stale-round visibility gate (oracle_stale_round_visibility_activation.js).
         // Below the height a stale tip is dropped from `prices` entirely, so
         // getPrice() returns null while getPriceAtRound() still carries the very
@@ -16763,9 +16796,9 @@ class Database {
         let windowRows = await this.doQueryStrict(
             `SELECT DISTINCT round_number
              FROM price_snapshots
-             WHERE status = 'finalized' AND price IS NOT NULL AND reference_block <= ?
+             WHERE status = 'finalized' AND price IS NOT NULL AND reference_block <= ?${timeBound}
              ORDER BY round_number DESC
-             LIMIT ${ORACLE_VM_ROUND_WINDOW}`, [blockCap]);
+             LIMIT ${ORACLE_VM_ROUND_WINDOW}`, timeCausal ? [blockCap, refTime] : [blockCap]);
         let roundFloor = (windowRows.length >= ORACLE_VM_ROUND_WINDOW)
             ? Number(windowRows[windowRows.length - 1].round_number)
             : 0;
@@ -16773,11 +16806,12 @@ class Database {
         // Step two: every row at or above the floor, under a hard payload ceiling.
         let roundQuery = `SELECT coin_pair, price, round_number, block_timestamp
                           FROM price_snapshots
-                          WHERE status = 'finalized' AND price IS NOT NULL AND reference_block <= ?
+                          WHERE status = 'finalized' AND price IS NOT NULL AND reference_block <= ?${timeBound}
                             AND round_number >= ?
                           ORDER BY round_number DESC
                           LIMIT ${ORACLE_VM_MAX_ROWS}`;
-        let roundRows = await this.doQueryStrict(roundQuery, [blockCap, roundFloor]);
+        let roundRows = await this.doQueryStrict(roundQuery,
+            timeCausal ? [blockCap, refTime, roundFloor] : [blockCap, roundFloor]);
 
         // The ceiling truncates newest-first, so the OLDEST loaded round is the one
         // that may be missing pairs. Claiming it is covered would hand a contract the

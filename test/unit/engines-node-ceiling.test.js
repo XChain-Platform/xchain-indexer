@@ -13,13 +13,14 @@
 // engines.node must keep an upper bound below Node 23.
 //
 // The indexer installs xchain-vm through `file:./xchain-vm`, and that package
-// depends on isolated-vm 5.0.4, whose native binding node-gyp cannot build on
-// Node 24 (it uses `T::IsStackAllocatedTypeMarker`, a V8 API that major
-// removed). A clean build probe compiles and loads on 22.22.3 and fails on
-// 24.15.0, so the bound is measured rather than stylistic.
+// carries the consensus runtime, which pins process.versions.modules to 127
+// (Node 22) alongside v8/icu/unicode/cldr. src/actions.js fails closed on
+// checkConsensusRuntime(), so an indexer on Node 24 (ABI 137) starts and then
+// refuses to validate. isolated-vm 6.2.0 installs on either major from per-ABI
+// prebuilt bindings, so the dependency does not supply the bound.
 //
-// A range of ">=22.0.0" ADMITS 24: `npm install` proceeds normally right up
-// to the compile failure. The cross-repo sweep lives in the platform gate
+// A range of ">=22.0.0" ADMITS 24: `npm install` proceeds normally onto an
+// engine the fleet does not run. The cross-repo sweep lives in the platform gate
 // (bin/check-node-engine-ceiling.js), which per-repo GitHub CI never runs;
 // this guard is what covers THIS package.json in THIS repo's own suite.
 

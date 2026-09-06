@@ -68,10 +68,10 @@ describe('Regression: mariadb ESM runtime floor @regression', function () {
             '(unflagged require(esm) landed in 22.12; the mariadb 3.5.x pin is ESM-only)');
     });
 
-    it('engines.node keeps the Node 24 ceiling isolated-vm 5.0.4 needs', function () {
-        // Raising the floor must not quietly drop the upper bound: isolated-vm 5.0.4
-        // fails node-gyp on Node 24, so a floor-only edit trades a clear boot error
-        // for a build failure and admits a runtime the VM cannot be built for.
+    it('engines.node keeps the Node 24 ceiling the consensus runtime needs', function () {
+        // Raising the floor must not quietly drop the upper bound: the VM pins the
+        // Node ABI to 127, so a floor-only edit trades a clear boot error for a
+        // validator that starts and then refuses to agree with the fleet.
         const spec = String(require(pkgPath).engines.node);
         assert.ok(/<\s*23/.test(spec), 'engines.node "' + spec + '" lost the "<23" ceiling');
     });
