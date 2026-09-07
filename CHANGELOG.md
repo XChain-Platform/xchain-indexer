@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Above a new zero-confirmation activation height the responsible set carries one headroom slot from the request block, the mirror applier falls through an inert response row to the next valid one, and a fulfilled request's fee splits among the validators that actually signed the accepted response.
+- ROLLCALL v1 is parsed and verified with its gates list, the epoch close records each verified signer's list in a new `rollcall_gates` table, and the attestation capability set drops a validator whose recorded list lacks a rule active at the request block; a request that then falls under its redundancy is refused with a distinct reason.
 - A chunked contract deploys exactly once in the block where its last piece confirms, whatever order the pieces arrived in; an assembling DEPLOY that lands early is held pending with its base fee paid instead of failing. Activation is at genesis on mainnet and regtest and unarmed on testnet until the shipping release pins the instant.
 
 ## [0.15.0] - 2026-09-07

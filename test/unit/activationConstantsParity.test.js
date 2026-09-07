@@ -65,6 +65,15 @@ const GATES = [
     // ATTEST v1 or through the hub mirror. It also selects which CANONICAL the responsible set
     // signs, so a one-sided edit forks attestation settlement AND signature admission at once.
     ['attest_response_mirror_activation.js',           'ATTEST_RESPONSE_MIRROR_ACTIVATION'],
+    // The zero-confirmation flip's ONE height (spec attest-zero-confirmation-flip.md §8, D9,
+    // D19): a one-sided edit forks confirmationsFor's leader/model index, the V2 ladder
+    // selector and the applier fall-through all at once, on whichever side reads the stale copy.
+    ['attest_zero_conf_activation.js',                  'ATTEST_ZERO_CONF_ACTIVATION'],
+    // Not an activation MAP but the stage-2 ladder constants the same height selects (D30):
+    // headroom, startOffset and maxSlots decide WHO MAY SIGN above the flag-day exactly as
+    // ATTEST_RESPONSIBLE_WIDENING does below it, so a one-sided edit forks v1 signature
+    // admission the same way a one-sided height edit would.
+    ['attest_responsible_widening_activation.js',       'ATTEST_RESPONSIBLE_WIDENING_V2'],
     ['anchor_reward_activation.js',         'ANCHOR_REWARD_DERIVE_ACTIVATION'],
     ['anchor_activation.js',                'ANCHOR_ACTIVATION'],
     // constants.js claims the whole anchor/archive reward block is "kept byte-identical to
@@ -114,12 +123,35 @@ describe('activation-gate constant parity to canonical constants.js @regression'
     // one resolves its constant by string, so a renamed module or export would otherwise
     // surface only as a green run. This case runs either way and fails on both.
     it('resolves every gated constant from its local module, whatever the checkout state', function () {
-        assert.ok(GATES.length >= 20, 'the gate list has shrunk; a dropped entry is an unpinned flag day');
+        assert.ok(GATES.length >= 25, 'the gate list has shrunk; a dropped entry is an unpinned flag day');
         for (const [file, exportName] of GATES) {
             const local = require('../../src/' + file)[exportName];
             assert.ok(local !== undefined,
                 file + ' no longer exports ' + exportName + '; the parity case for it would compare ' +
                 'undefined to undefined and pass vacuously');
+        }
+    });
+
+    // §3.2 b, D9: the indexer half of the height-ordering invariant the hub asserts at boot
+    // (attest_zero_conf_activation.assertZeroConfOrdering). Read straight off the canon, not
+    // off the local copies, so this case would catch a canon that itself violated the rule.
+    // Runs over EVERY network the canon declares, never a hardcoded list, so a network added
+    // later is covered automatically; the not-vacuous check pins today's live case (regtest).
+    it('holds the zero-conf >= max(mirror, widening) ordering over the canonical constants.js', function () {
+        if (!canonExists) { this.skip(); return; }
+        const zc       = canon.ATTEST_ZERO_CONF_ACTIVATION;
+        const mirror    = canon.ATTEST_RESPONSE_MIRROR_ACTIVATION;
+        const widening  = canon.ATTEST_RESPONSIBLE_WIDENING_ACTIVATION;
+        const armedNets = Object.keys(zc).filter(net => zc[net] !== null && zc[net] !== undefined);
+        assert.ok(armedNets.includes('regtest'), 'not vacuous: regtest must be armed at this milestone');
+        for (const net of armedNets) {
+            assert.ok(mirror[net] !== null && mirror[net] !== undefined,
+                'ATTEST_ZERO_CONF_ACTIVATION.' + net + ' is armed but ATTEST_RESPONSE_MIRROR_ACTIVATION.' + net + ' is not');
+            assert.ok(widening[net] !== null && widening[net] !== undefined,
+                'ATTEST_ZERO_CONF_ACTIVATION.' + net + ' is armed but ATTEST_RESPONSIBLE_WIDENING_ACTIVATION.' + net + ' is not');
+            assert.ok(zc[net] >= Math.max(mirror[net], widening[net]),
+                'ATTEST_ZERO_CONF_ACTIVATION.' + net + ' (' + zc[net] + ') is below max(mirror ' +
+                mirror[net] + ', widening ' + widening[net] + ')');
         }
     });
 

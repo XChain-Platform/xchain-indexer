@@ -78,8 +78,21 @@ const SHARED_GATES = [
     // Unratified on mainnet and testnet (both null): this row moves the digest for a
     // gate that decides nothing yet, so an upgraded hub reports a rules mismatch
     // against un-upgraded peers during the deploy wave, not a divergent ledger.
-    ['attest_response_mirror_activation',       ['ATTEST_RESPONSE_MIRROR_ACTIVATION']]
+    ['attest_response_mirror_activation',       ['ATTEST_RESPONSE_MIRROR_ACTIVATION']],
+    // The zero-confirmation flip (one height for serve-at-tip, the stage-2 ladder and the
+    // applier fall-through) and the stage-2 ladder constants it selects. The V2 constants
+    // are a second entry for the widening module rather than an edit of its entry above,
+    // because an insertion mid-list would reorder the preimage of everything after it.
+    ['attest_zero_conf_activation',             ['ATTEST_ZERO_CONF_ACTIVATION']],
+    ['attest_responsible_widening_activation',  ['ATTEST_RESPONSIBLE_WIDENING_V2']],
+    // Epoch-keyed: ROLLCALL v1 with the GATES field, and the rules-aware capability set.
+    ['rollcall_gates_activation',               ['ROLLCALL_GATES_ACTIVATION']]
 ];
+
+// A per-network height at or above this value is a far-future placeholder, not an
+// activation (PRICE_PAIR_WIDEN_ACTIVATION.mainnet is the live example), and activeGatesAt
+// must never report such a gate as active however high the chain climbs.
+const FAR_FUTURE_HEIGHT_SENTINEL = 9999999999;
 
 const ABSENT = '<absent>';
 
@@ -97,25 +110,69 @@ function canonical(value){
 }
 
 let cached = null;
+let cachedValues = null;
+
+// The RAW export of every shared gate, keyed '<module>.<EXPORT>', ABSENT where this
+// build lacks it. Read once: the digest and the active-set derivation below must see
+// the same values, and a gate module is never re-required after boot.
+function loadGateValues(){
+    if (cachedValues) return cachedValues;
+    const values = {};
+    for (const [mod, names] of SHARED_GATES) {
+        let m = null;
+        try { m = require('./' + mod + '.js'); } catch (e) { m = null; }
+        for (const name of names) {
+            const key = mod + '.' + name;
+            values[key] = (m && Object.prototype.hasOwnProperty.call(m, name)) ? m[name] : ABSENT;
+        }
+    }
+    cachedValues = values;
+    return cachedValues;
+}
 
 // { digest, gates: { '<module>.<EXPORT>': '<canonical value>' } }.
 // `gates` is returned so a mismatch can be explained gate by gate instead of as
 // two opaque hashes; nothing about a bare digest tells an operator what to fix.
 function computeConsensusRulesDigest(){
     if (cached) return cached;
+    const values = loadGateValues();
     const gates = {};
-    for (const [mod, names] of SHARED_GATES) {
-        let m = null;
-        try { m = require('./' + mod + '.js'); } catch (e) { m = null; }
-        for (const name of names) {
-            const key = mod + '.' + name;
-            gates[key] = (m && Object.prototype.hasOwnProperty.call(m, name))
-                ? canonical(m[name]) : ABSENT;
-        }
+    for (const key of Object.keys(values)) {
+        gates[key] = values[key] === ABSENT ? ABSENT : canonical(values[key]);
     }
     const preimage = Object.keys(gates).map(k => k + '=' + gates[k]).join('\n');
     cached = { digest: crypto.createHash('sha256').update(preimage).digest('hex'), gates: gates };
     return cached;
+}
+
+// Every shared gate this build knows, '<module>.<EXPORT>', sorted. This is the list a
+// ROLLCALL v1 publisher puts on the wire (the GATES field): what the build KNOWS, active
+// or not, so a subset comparison against activeGatesAt at any later height stays true.
+function knownGateKeys(){
+    return Object.keys(loadGateValues()).sort();
+}
+
+// The shared gates ACTIVE at `height` on `network`, '<module>.<EXPORT>', sorted: every
+// per-network activation MAP whose entry for the network is a finite height, below the
+// far-future sentinel, and <= height. Non-map exports (frozen ladder constants such as
+// ATTEST_RESPONSIBLE_WIDENING) are never active in this sense and are never listed; a
+// null entry is the unratified sentinel and reads as inactive. This is the comparand the
+// rules-aware capability set filters on: a validator whose last rolled call did not name
+// every key returned here is dropped for a request at this height.
+function activeGatesAt(height, network){
+    let h = Number(height);
+    if (!Number.isFinite(h)) return [];
+    const values = loadGateValues();
+    const out = [];
+    for (const key of Object.keys(values)) {
+        const v = values[key];
+        if (v === ABSENT || v === null || typeof v !== 'object' || Array.isArray(v)) continue;
+        if (!Object.prototype.hasOwnProperty.call(v, network)) continue;
+        const at = v[network];
+        if (!Number.isFinite(at) || at >= FAR_FUTURE_HEIGHT_SENTINEL) continue;
+        if (at <= h) out.push(key);
+    }
+    return out.sort();
 }
 
 // The gate names whose values differ between two `gates` maps, sorted. A gate
@@ -134,7 +191,10 @@ function diffGates(a, b){
 module.exports = {
     SHARED_GATES,
     ABSENT,
+    FAR_FUTURE_HEIGHT_SENTINEL,
     canonical,
     computeConsensusRulesDigest,
+    knownGateKeys,
+    activeGatesAt,
     diffGates
 };

@@ -22,6 +22,10 @@ const crypto    = require('crypto');
 const swq       = require('./stake_weighted_quorum.js');
 const srb       = require('./snapshot_reorg_buffer.js');
 const pmsh      = require('./attestation/providerMinStakeHistory.js');
+// The rules-aware capability filter the live attest.js path applies. The reorg
+// recompute must subtract the SAME keys or it charges missed_count to validators
+// the live expiry never held responsible.
+const rgf       = require('./rollcall_gates_filter.js');
 const ProviderRegistry = require('./attestation/providerRegistry.js');
 const lifecycle = require('./tableLifecycle.js');
 const ar        = require('./anchor_reward_activation.js');
@@ -1067,6 +1071,9 @@ class Rollback {
             // mirror of it, and a second copy here re-raises 1146 on a pre-migration node
             // and aborts the reorg this guard exists to keep alive.
             try {
+                // Gates before verdicts for the same reason absences are: a gates row is
+                // derived at the close it names.
+                await this.indexerDb.doQuery(`DELETE FROM rollcall_gates WHERE close_block >= ?`, [block_index]);
                 await this.indexerDb.doQuery(`DELETE FROM rollcall_absences WHERE close_block >= ?`, [block_index]);
                 await this.indexerDb.doQuery(`DELETE FROM rollcalls WHERE close_block >= ?`, [block_index]);
             } catch(e){
@@ -1784,6 +1791,17 @@ class Rollback {
                         vs = cached_weighted
                             ? await this.indexerDb.getStakeWeightsByCapability('attestation', resolveBlock)
                             : await this.indexerDb.getValidatorsByCapability('attestation', resolveBlock);
+                        // RULES-AWARE FILTER (spec §7.4, D59), applied at the same point
+                        // the live path applies it: on the raw capability snapshot,
+                        // before _responsibleSet ranks or floors anything. It is a pure
+                        // function of (reqBlock, network), never of the provider, so it
+                        // rides this per-block cache exactly as the snapshot read does,
+                        // and _responsibleSet stays the byte-for-byte ranking twin of
+                        // attest.js._computeResponsibleSet with no filter of its own.
+                        vs = await rgf.filterByRolledGates({
+                            db: this.indexerDb, validators: vs || [], requestBlock: reqBlock,
+                            network: this.config['NETWORK']
+                        });
                     }
                     cached = { weighted: cached_weighted, validators: vs || [] };
                     validatorsByBlock.set(reqBlock, cached);

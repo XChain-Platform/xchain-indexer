@@ -105,6 +105,9 @@ class RollcallProofClient {
      * @param {string[]} q.publishers  the elected leader (for the publish reward)
      * @returns {Promise<{decided: boolean, reason?: string, hcut?: number,
      *                    signers?: object, publishers?: object}>}
+     *   `signers` maps each asked key to null (no in-window row) or to the row as
+     *   the peer sent it, with `gates` normalized to the carried ROLLCALL v1 GATES
+     *   string or null on a v0 row.
      */
     async fetchSigners({epochHeight, maxBlockTime, pubkeys, publishers}){
         let network = String(this.config['NETWORK']);
@@ -162,10 +165,26 @@ class RollcallProofClient {
         if(!Number.isFinite(tipIndex) || tipIndex < hcut + maturity)
             return { decided: false, reason: 'DOGE cut not buried yet (tip ' + tipIndex + ' < ' + (hcut + maturity) + ')' };
 
+        // The signer map, normalized on one field only: ROLLCALL v1's GATES, as
+        // carried. A peer that predates v1 answers rows without the key at all, and
+        // the close reads the difference between "no gates" and "these gates" to
+        // choose which canonical it verifies against, so absence is spelled here as
+        // an explicit null rather than left as undefined for the close to guess. A
+        // row that is not an object cannot be a signature and reads as absent, which
+        // the close already treats as one; every other field is passed through.
+        let signers = {};
+        for(let k of Object.keys(result.signers)){
+            let row = result.signers[k];
+            if(!row || typeof row !== 'object'){ signers[k] = null; continue; }
+            signers[k] = Object.assign({}, row, {
+                gates: (row.gates === undefined || row.gates === null) ? null : String(row.gates)
+            });
+        }
+
         let decided = {
             decided:    true,
             hcut:       hcut,
-            signers:    result.signers,
+            signers:    signers,
             publishers: (result.publishers && typeof result.publishers === 'object') ? result.publishers : {}
         };
         this._memo.set(epochHeight, decided);

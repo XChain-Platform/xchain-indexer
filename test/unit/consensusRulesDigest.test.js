@@ -75,3 +75,53 @@ describe('consensus_rules_digest (indexer copy)', function () {
         assert.notStrictEqual(a, crd.canonical({ mainnet: null, testnet: 151201, regtest: 0 }));
     });
 });
+
+// The zero-confirmation flip's three appended SHARED_GATES rows (§8), plus the two
+// helpers a ROLLCALL v1 publisher and the rules-aware capability set filter both read.
+// The hub copy carries the load-bearing knownGateKeys()/activeGatesAt() cases; this is
+// the indexer's own instance of the same guard, so a one-sided edit here cannot pass by
+// running only on the other repo.
+describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', function () {
+
+    it('is sorted, has 19 entries, and contains the three gates this train appends', function () {
+        const keys = crd.knownGateKeys();
+        assert.strictEqual(keys.length, 19, 'SHARED_GATES total entry count moved; re-derive this floor before changing it');
+        assert.deepStrictEqual(keys, [...keys].sort());
+        for (const k of [
+            'attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION',
+            'attest_responsible_widening_activation.ATTEST_RESPONSIBLE_WIDENING_V2',
+            'rollcall_gates_activation.ROLLCALL_GATES_ACTIVATION'
+        ]) assert.ok(keys.includes(k), 'missing ' + k);
+    });
+
+    it('excludes a far-future sentinel height, however high the chain climbs', function () {
+        const at = crd.activeGatesAt(crd.FAR_FUTURE_HEIGHT_SENTINEL, 'mainnet');
+        assert.ok(!at.includes('price_pair_activation.PRICE_PAIR_WIDEN_ACTIVATION'));
+    });
+
+    it('excludes a null (unratified) entry at any height', function () {
+        for (const h of [0, 1000000, crd.FAR_FUTURE_HEIGHT_SENTINEL - 1]) {
+            assert.ok(!crd.activeGatesAt(h, 'mainnet').includes('attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION'));
+        }
+    });
+
+    it('excludes non-map exports (frozen ladder constants), never active in this sense', function () {
+        for (const h of [0, 150780, 999999999]) {
+            for (const net of ['mainnet', 'testnet', 'regtest']) {
+                const at = crd.activeGatesAt(h, net);
+                assert.ok(!at.includes('attest_responsible_widening_activation.ATTEST_RESPONSIBLE_WIDENING'));
+                assert.ok(!at.includes('attest_responsible_widening_activation.ATTEST_RESPONSIBLE_WIDENING_V2'));
+            }
+        }
+    });
+
+    it('includes a gate exactly at its own activation height (<=, not <)', function () {
+        assert.ok(crd.activeGatesAt(0, 'regtest').includes('attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION'));
+    });
+
+    it('returns [] for a non-finite height', function () {
+        assert.deepStrictEqual(crd.activeGatesAt(NaN, 'regtest'), []);
+        assert.deepStrictEqual(crd.activeGatesAt(undefined, 'regtest'), []);
+        assert.deepStrictEqual(crd.activeGatesAt(Infinity, 'regtest'), []);
+    });
+});

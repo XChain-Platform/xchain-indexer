@@ -22,6 +22,11 @@
 --
 -- Raw hex, never ids (the anchor_actions model): a federation read must answer
 -- from this table without joining a mapper the caller cannot reproduce.
+--
+-- `gates` is the ROLLCALL v1 GATES field AS CARRIED (the publisher's
+-- comma-joined gate list), NULL on every v0 row. Stored raw for the same reason
+-- ledger_hash is: the BTC close rebuilds the v1 canonical, which appends
+-- sha256(GATES), from the carried fields and re-verifies the signature itself.
 
 CREATE TABLE IF NOT EXISTS rollcall_signers (
     epoch_height  BIGINT UNSIGNED NOT NULL,        -- BTC height of the roll-call epoch (a multiple of ROLLCALL_INTERVAL_BLOCKS)
@@ -31,6 +36,7 @@ CREATE TABLE IF NOT EXISTS rollcall_signers (
     publisher     CHAR(64)        NOT NULL,        -- publishing validator's signing key; what the publish reward attaches to
     action_index  BIGINT UNSIGNED NOT NULL,        -- the ROLLCALL action this signature landed in
     block_index   BIGINT UNSIGNED NOT NULL,        -- DOGE block the action landed in (window cut + rollback anchor)
+    gates         TEXT            DEFAULT NULL,    -- ROLLCALL v1 GATES field as carried; NULL for v0 (2026-09-07-rollcall-gates migration)
     PRIMARY KEY (epoch_height, pubkey),
     KEY idx_rollcall_signers_action (action_index),
     KEY idx_rollcall_signers_block (block_index),

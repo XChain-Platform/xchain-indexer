@@ -13,9 +13,9 @@
 -- fee spike, a dead federation or a truncated validator read can never evict
 -- anyone -- so it must be recorded as "happened, decided nothing".
 --
--- rollback: 'block'. These rows are derived at the close block and delete with
--- it, so a reorg past C removes the epoch's verdict along with the synthetic
--- UNSTAKE actions and the reward row it produced.
+-- rollback: 'special' on close_block (tableLifecycle.js). These rows are derived
+-- at the close block and delete with it, so a reorg past C removes the epoch's
+-- verdict along with the synthetic UNSTAKE actions and the reward row it produced.
 
 -- responsible_set_json PINS MEMBERSHIP, and the K-streak is unimplementable
 -- without it. Step 7 skips epochs at which a source was not in R -- that is what

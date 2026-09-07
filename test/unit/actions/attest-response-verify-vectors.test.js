@@ -344,9 +344,12 @@ describe('ATTEST v1 response verification: captured byte vectors @regression @ti
         });
 
         it('a capable, correctly-signing NON-responsible signer is filtered out: 0/1', async function () {
-            // Both keys hold the capability; only the top-ranked one is responsible.
-            seatUnweighted([RANK3[0], RANK3[1]]);
-            const r = await driveSigned([RANK3[1]]);
+            // All three keys hold the capability. Regtest is above ATTEST_ZERO_CONF_ACTIVATION
+            // (armed at 0), so the stage-2 ladder admits redundancy + 1 (headroom) inside the
+            // first segment: ranks 0 and 1. Rank 2 is capable and signs correctly, and is
+            // still outside the set.
+            seatUnweighted([RANK3[0], RANK3[1], RANK3[2]]);
+            const r = await driveSigned([RANK3[2]]);
             assert.strictEqual(r.status, 'invalid: insufficient valid signatures (0/1)');
             assert.strictEqual(r.validSigs, 0);
         });
@@ -468,9 +471,18 @@ describe('ATTEST v1 response verification: captured byte vectors @regression @ti
 
     describe('the widening step is evaluated at the RESPONSE block', function () {
 
-        it('unwidened at block 100: the rank-2 validator is not responsible, 0/1', async function () {
+        it('headroom at block 100: the rank-2 validator is admitted before any ladder step, 1/1', async function () {
+            // Stage 2 (regtest is above the zero-conf height): headroom 1 from the request
+            // block itself, so the second-ranked key may sign inside the first segment.
             seatUnweighted([RANK3[0], RANK3[1], RANK3[2]]);
             const r = await driveSigned([RANK3[1]], { dataOverrides: { BLOCK_INDEX: 100 } });
+            assert.strictEqual(r.status, 'valid');
+            assert.strictEqual(r.validSigs, 1);
+        });
+
+        it('headroom at block 100 does not reach rank 3, 0/1', async function () {
+            seatUnweighted([RANK3[0], RANK3[1], RANK3[2]]);
+            const r = await driveSigned([RANK3[2]], { dataOverrides: { BLOCK_INDEX: 100 } });
             assert.strictEqual(r.status, 'invalid: insufficient valid signatures (0/1)');
         });
 
@@ -481,10 +493,13 @@ describe('ATTEST v1 response verification: captured byte vectors @regression @ti
             assert.strictEqual(r.validSigs, 1);
         });
 
-        it('the widening ladder never reaches rank 3 inside this window', async function () {
+        it('widened at block 150: headroom plus one ladder step reaches rank 3, 1/1', async function () {
+            // Span 110 from the request block, segment 36.67: block 150 is one step in, so
+            // the set is redundancy + headroom + 1 and the third-ranked key may sign.
             seatUnweighted([RANK3[0], RANK3[1], RANK3[2]]);
             const r = await driveSigned([RANK3[2]], { dataOverrides: { BLOCK_INDEX: 150 } });
-            assert.strictEqual(r.status, 'invalid: insufficient valid signatures (0/1)');
+            assert.strictEqual(r.status, 'valid');
+            assert.strictEqual(r.validSigs, 1);
         });
     });
 
