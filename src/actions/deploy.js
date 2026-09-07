@@ -329,10 +329,73 @@ class Deploy {
             }
         }
 
+        // Everything from here on is the deployment itself, shared with the deferred
+        // assembly path: the wire parameters travel explicitly so a caller that did NOT
+        // parse them off this transaction (a chunk carrier completing a group, which reads
+        // them from the assembler's stored rows) can hand over the identical set while
+        // `data` stays its OWN transaction context.
+        return await this.runDeployment(data, {
+            code:              code,
+            isChunked:         isChunked,
+            gasLimit:          data['GAS_LIMIT'],
+            constructorParams: data['CONSTRUCTOR_PARAMS'],
+            cooldownBlocks:    data['COOLDOWN_BLOCKS'],
+            slashDestination:  data['SLASH_DESTINATION']
+        }, error);
+    }
+
+    /**
+     * The deployment: every step after the contract source exists, from the size check
+     * through the syntax/lint gates, the permissions manifest, the gas fee, the derived
+     * address, the constructor and its state/emissions, to the contracts /
+     * contract_permissions / contract_executions rows, the ledger debit and the mappings.
+     *
+     * Split out of parse() because a DEPLOY is not always deployed by the action that
+     * carried its parameters: a chunked group whose pieces confirm out of order is deployed
+     * by the action that completes it, which owns a different transaction. Hence the two
+     * distinct inputs.
+     *
+     * @param {object} data  The DEPLOYING action's own transaction context, and the only
+     *                       source of everything transaction-derived: ACTION_INDEX (which is
+     *                       the contract's index and its permanent C:<CHAIN>:<index> address),
+     *                       SOURCE, BLOCK_INDEX, BLOCK_TIME, TX_HASH, TX_INDEX, TX_VOUT,
+     *                       BATCH_POSITION, TX_OUTPUTS and ISSUANCE_LIMIT_LEDGER. Mutated:
+     *                       STATUS is written here, and the native-fee fields when that
+     *                       validation runs. Every row this method writes is keyed at
+     *                       data['ACTION_INDEX'], which is what keeps rollback generic.
+     * @param {object} wire  The DEPLOY's own parameters, which may come from another
+     *                       action's stored rows: {code, isChunked, gasLimit,
+     *                       constructorParams, cooldownBlocks, slashDestination}.
+     *                       `slashDestination` must already be resolved to an address
+     *                       (carets and the BURN sentinel resolve per block, at the action
+     *                       that parsed them). `isChunked` selects the gas schedule row:
+     *                       a chunked deploy is not charged per byte again, its carriers
+     *                       already paid that.
+     * @param {?string} error  A verdict already reached by the caller, or null. Non-null
+     *                       short-circuits every check below exactly as an inline reject does.
+     * @param {object} [options]  Deferred-assembly seams, all defaulting to the inline
+     *                       behaviour:
+     *                       - skipBaseFee: the base fee was already validated and charged at
+     *                         another action, so neither validate nor re-derive the mode here.
+     *                       - feePaymentMode: the mode that other action actually paid in
+     *                         (1 native, 2 XCHAIN); it decides whether the constructor gas is
+     *                         debited at all, so it cannot be re-detected from this
+     *                         transaction's outputs.
+     *                       - skipSleeping: the source's sleeping check already ran at this
+     *                         same block for this same action's transaction.
+     *                       - assemblerActionIndex: the assembler this deployment consumes,
+     *                         recorded on the execution row (that row IS the consumption
+     *                         marker, so it must be written whatever the constructor does).
+     */
+    async runDeployment(data, wire, error = null, options = {}){
+
+        let { code, isChunked, gasLimit, constructorParams, cooldownBlocks, slashDestination } = wire;
+        let { skipBaseFee = false, skipSleeping = false, assemblerActionIndex = null, feePaymentMode: paidFeePaymentMode = null } = options;
+
         if(!error && Buffer.byteLength(code, 'utf8') > this.MAX_CODE_SIZE)
             error = 'invalid: CODE_ENCODING (exceeds max size)';
 
-        if(!error && (this.util.isNull(data['GAS_LIMIT']) || !this.util.isNumeric(data['GAS_LIMIT'])))
+        if(!error && (this.util.isNull(gasLimit) || !this.util.isNumeric(gasLimit)))
             error = 'invalid: GAS_LIMIT (required)';
 
         /*****************************************************************
@@ -481,9 +544,11 @@ class Deploy {
         let tokenInfo = await this.indexerDb.getTokenInfo(gas, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
-        // Native coin or XCHAIN balance
-        let feePaymentMode = 2; // default: xchain balance
-        if(!error && tokenInfo && this.util.bcgt(fee, 0)){
+        // Native coin or XCHAIN balance. A deferred deployment does not re-detect the mode:
+        // the base fee was validated and paid at the assembler, in the mode THAT transaction's
+        // outputs decided, and the mode governs whether constructor gas is debited below.
+        let feePaymentMode = paidFeePaymentMode === null ? 2 : Number(paidFeePaymentMode); // default: xchain balance
+        if(!error && !skipBaseFee && tokenInfo && this.util.bcgt(fee, 0)){
             let pmMode = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']);
             if(pmMode === 'native'){
                 let tempFees = { AMOUNT: fee };
@@ -508,7 +573,10 @@ class Deploy {
         if(!error && tokenInfo && feePaymentMode === 2)
             balances = this.util.debitBalances(balances, tokenInfo['TICK_ID'], fee);
 
-        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
+        // Skipped only for a deferred deployment: the action that carries this deployment ran
+        // the identical check for the identical source in the identical block before reaching
+        // here, so re-running it would be a second read of the same answer.
+        if(!error && !skipSleeping && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
         let codeHash = crypto.createHash('sha256').update(code).digest('hex');
@@ -543,7 +611,7 @@ class Deploy {
         // timestamp 1786060800 in protocol_changes.js); below it the trigger is byte-identical
         // to today.
         let initStrict = await this.actions.protocolChanges.isEnabled('DEPLOY_INIT_STRICT', data['BLOCK_INDEX']);
-        let runConstructor = initStrict ? (hasInitialize || !!data['CONSTRUCTOR_PARAMS']) : !!data['CONSTRUCTOR_PARAMS'];
+        let runConstructor = initStrict ? (hasInitialize || !!constructorParams) : !!constructorParams;
 
         // Per-root discriminator for the constructor's subtree: a DEPLOY inside a BATCH
         // shares the transaction's single TX_VOUT with every sibling subcommand, so it
@@ -577,7 +645,7 @@ class Deploy {
                 // Empty CONSTRUCTOR_PARAMS => zero args ([]), not ['']. ''.split('|')
                 // would pass a single empty-string arg; under DEPLOY_INIT_STRICT a
                 // params-less constructor must receive no args.
-                params:           data['CONSTRUCTOR_PARAMS'] ? data['CONSTRUCTOR_PARAMS'].split('|') : [],
+                params:           constructorParams ? constructorParams.split('|') : [],
                 caller:           data['SOURCE'],
                 contractAddress:  contractAddress,
                 contractIndex:    data['ACTION_INDEX'],
@@ -666,8 +734,8 @@ class Deploy {
             API_VERSION       : 1,
             STATUS            : status,
             BLOCK_INDEX       : data['BLOCK_INDEX'],
-            COOLDOWN_BLOCKS   : data['COOLDOWN_BLOCKS'],
-            SLASH_DESTINATION : data['SLASH_DESTINATION']
+            COOLDOWN_BLOCKS   : cooldownBlocks,
+            SLASH_DESTINATION : slashDestination
         });
 
         if(constructorError)
@@ -795,18 +863,29 @@ class Deploy {
             fee = this.util.bcmul(totalGas, this.config['GAS_PRICE'], 8);
         }
 
+        // The fee mode is persisted only from the DEPLOY_DEFERRED_ASSEMBLY flag-day, because
+        // that is the first block at which anything reads it: a deployment deferred to a later
+        // action must charge constructor gas in the mode its assembler already paid the base
+        // fee in, and cannot re-derive that from its own transaction. Below the flag-day the
+        // column stays NULL so a from-genesis replay writes exactly the row it wrote before.
+        let recordFeePaymentMode = await this.actions.protocolChanges.isEnabled('DEPLOY_DEFERRED_ASSEMBLY', data['BLOCK_INDEX']);
+
         await this.indexerDb.createContractExecution({
             ACTION_INDEX    : data['ACTION_INDEX'],
             CONTRACT_INDEX  : data['ACTION_INDEX'], // contract_index = its own action_index
             CALLER          : data['SOURCE'],
             METHOD_NAME     : 'constructor',
-            INPUT_PARAMS    : data['CONSTRUCTOR_PARAMS'] || '',
+            INPUT_PARAMS    : constructorParams || '',
             GAS_USED        : totalGas,
-            GAS_LIMIT       : data['GAS_LIMIT'] || totalGas,
+            GAS_LIMIT       : gasLimit || totalGas,
             STATUS          : status,
             ERROR_MESSAGE   : error || null,
             EMITTED_COUNT   : constructorResult ? constructorResult.emittedActions.length : 0,
-            BLOCK_INDEX     : data['BLOCK_INDEX']
+            BLOCK_INDEX     : data['BLOCK_INDEX'],
+            // Consumption marker for a deferred assembly: NULL whenever this action carried its
+            // own parameters (an inline deploy, or an assembler whose group was already complete).
+            ASSEMBLER_ACTION_INDEX : assemblerActionIndex,
+            FEE_PAYMENT_MODE       : recordFeePaymentMode ? feePaymentMode : null
         });
 
         this.util.addAddressTicker(data['SOURCE'], gas);
