@@ -65,7 +65,7 @@
 // the ATTEST v0 request's own BTC block_index (the v3's, for a relayed request).
 const ATTEST_RESPONSE_MIRROR_ACTIVATION = {
     mainnet: null,        // INERT: operator-owned height, unratified. The legacy on-chain response path runs byte for byte.
-    testnet: null,        // UNARMED: operator-armed after the regtest milestone is REACHED and the synchronized schema-5 fleet window closes.
+    testnet: 151324,      // ARMED 2026-09-07 at the chain tip on the operator ruling: exercising the mirror on testnet is the point of this train, so it activates on deploy rather than waiting on a future height.
     regtest: 0,           // ARMED at genesis so the e2e mirror venue exercises the mirror path
 };
 

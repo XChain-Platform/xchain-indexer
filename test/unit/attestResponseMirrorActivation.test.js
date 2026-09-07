@@ -26,8 +26,12 @@ describe('attest_response_mirror_activation', function () {
         assert.strictEqual(mir.ATTEST_RESPONSE_MIRROR_ACTIVATION.mainnet, null);
         assert.strictEqual(mir.isResponseMirrorActive(0, 'mainnet'), false);
         assert.strictEqual(mir.isResponseMirrorActive(999999999, 'mainnet'), false);
+        // testnet is RATIFIED as of the v0.15.0 cut, so it is no longer an example of
+        // an unratified network. Below its height the legacy path still runs, which is
+        // the half of the old assertion that still holds and still guards the coercion.
+        assert.ok(Number.isFinite(mir.ATTEST_RESPONSE_MIRROR_ACTIVATION.testnet));
         assert.strictEqual(mir.isResponseMirrorActive(0, 'testnet'), false);
-        assert.strictEqual(mir.isResponseMirrorActive(999999999, 'testnet'), false);
+        assert.strictEqual(mir.isResponseMirrorActive(999999999, 'testnet'), true);
     });
 
     it('is armed from genesis on regtest', function () {
