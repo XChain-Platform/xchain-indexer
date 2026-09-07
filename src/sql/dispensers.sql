@@ -17,15 +17,15 @@ CREATE TABLE dispensers (
     action_index       BIGINT UNSIGNED NOT NULL, -- Unique action index
     give_coin_id       BIGINT UNSIGNED,          -- id of record in index_coins table
     give_tick_id       BIGINT UNSIGNED,          -- id of record in index_tickers table
-    give_amount        VARCHAR(250),             -- Amount of GIVE_TICK to dispense when triggered (empty when give_ownership=1)
-    give_escrow        VARCHAR(250),             -- Amount of GIVE_TICK to escrow in dispenser (empty when give_ownership=1)
+    give_amount        VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,             -- Amount of GIVE_TICK to dispense when triggered (empty when give_ownership=1)
+    give_escrow        VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,             -- Amount of GIVE_TICK to escrow in dispenser (empty when give_ownership=1)
     give_ownership     TINYINT(1) NOT NULL DEFAULT 0, -- 1 = dispenser sells GIVE_TICK ownership (single-shot, GIVE_AMOUNT / GIVE_ESCROW must be empty)
     get_coin_id        BIGINT UNSIGNED,          -- id of record in index_coins table
     get_tick_id        BIGINT UNSIGNED,          -- id of record in index_tickers table
-    get_amount         VARCHAR(250),             -- Amount required to trigger dispenser
+    get_amount         VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,             -- Amount required to trigger dispenser
     get_address_id     BIGINT UNSIGNED,          -- id of record in index_addresses table (dispenser address)
     fiat_id            BIGINT UNSIGNED,          -- id of record in index_fiats table
-    fiat_amount        VARCHAR(250),             -- amount of FIAT required to trigger a dispense (ignored when oracle_address_id is set)
+    fiat_amount        VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,             -- amount of FIAT required to trigger a dispense (ignored when oracle_address_id is set)
     oracle_address_id  BIGINT UNSIGNED,          -- id of record in index_addresses (user oracle SOURCE address - PRICE v1)
     expiration         BIGINT UNSIGNED,          -- unix timestamp of dispenser expiration date/time
     allow_list         BIGINT UNSIGNED,          -- action_index of a list from the lists table

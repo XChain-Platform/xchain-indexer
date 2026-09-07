@@ -209,6 +209,53 @@ const BATCH_COST_WEIGHTING_MAINNET_TIME = 9999999999;
 // across all three but a single timestamp does.
 const EMISSION_ISSUANCE_LIMITS_MAINNET_TIME = 9999999999;
 
+// Arms for UNIFIED_FEES_SWEEP_CALLBACK: SWEEP and CALLBACK priced on the unified gas
+// schedule instead of the legacy flat per-DB-hit fee.
+//
+// BOTH UNARMED, on the house sentinel (9999999999, year 2286). Regtest is genesis-active
+// (0) so the suites and every regtest venue exercise the unified price from block 0.
+//
+// WHAT IT GATES. Below the flag both actions keep the legacy model exactly: db_hits counted
+// as they always were (itself still gated by LEGACY_FEE_NUMERIC_DBHITS above) and priced at
+// getTransactionFee's flat 1000 satoshis of XCHAIN per hit. At or above it SWEEP costs
+// GAS_SCHEDULE.SWEEP_BASE + items * SWEEP_PER_ITEM (an item is one swept balance, one closed
+// order/swap/dispenser escrow, or one transferred ownership) and CALLBACK costs
+// CALLBACK_BASE + recipients * CALLBACK_PER_RECIPIENT, both priced at GAS_PRICE. That is the
+// same shape DIVIDEND and AIRDROP have taken since UNIFIED_FEES, which is genesis-active
+// everywhere; sweep.js and callback.js were the only two handlers never given a unified
+// branch.
+//
+// WHY IT EXISTS. The legacy price is a pure per-DB-hit charge with no floor, so the smallest
+// SWEEP or CALLBACK costs almost nothing - and on LTC and DOGE the protocol fee MUST be paid
+// as a native-coin output (detectFeePaymentMode returns 'rejected' when it is missing; only
+// BTC keeps an XCHAIN-balance lane). "Almost nothing" there is an output below the chain's
+// dust threshold, which cannot be created, so the action cannot be submitted AT ALL. Measured
+// on Litecoin: a SWEEP quoted 600 litoshi against a 5460-satoshi dust floor, and needed ~273
+// DB hits before it became submittable at LTC $100 / XCHAIN $2. This reproduces on mainnet
+// Litecoin and is not a regtest artifact. The unified BASE terms put a floor under the fee,
+// which is what makes a small SWEEP payable.
+//
+// WHY IT IS A FLAG DAY AT ALL. fees.AMOUNT is a consensus-visible ledger amount (the fee
+// DEBIT, hashed into balances_root and ledger_hash), so flipping the price ungated forks a
+// skewed fleet on the first fee-bearing SWEEP or CALLBACK and diverges a from-genesis replay
+// from the committed ledger. Same reasoning, and the same block_TIME keying, as
+// LEGACY_FEE_NUMERIC_DBHITS below: these actions run on BTC, LTC and DOGE, whose heights
+// diverge by millions of blocks, so no single shared height names one cutover across all
+// three but a single timestamp does.
+//
+// WHY TESTNET IS UNARMED TOO, unlike every other time-keyed gate in this file. Those were
+// registered while testnet was a scratch venue that carried no history the new rule would
+// reinterpret. Testnet went PUBLIC on 2026-09-01 with third-party validators, wallets and
+// explorers reading it, so its ledgers are now live: a genesis-active testnet arm would
+// re-price every SWEEP and CALLBACK already committed there and fork every synced testnet
+// node against a fresh reindex. Arming is an operator act on both networks, and the instant
+// must be in the FUTURE when it ships and must leave every indexer time to deploy this code
+// first (testnet4 tips can run ~2h ahead of wall clock, so budget that margin). An activation
+// already past is not a flag day: the fleet applies the legacy price beyond it while a
+// from-genesis replay applies the new one, and the two diverge at the first comparison.
+const UNIFIED_FEES_SWEEP_CALLBACK_MAINNET_TIME = 9999999999;
+const UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME = 9999999999;
+
 // Consensus protocol version, COMPILED IN.
 //
 // isEnabled() compares this against the version registered on every protocol
@@ -262,16 +309,14 @@ const EMISSION_ISSUANCE_LIMITS_MAINNET_TIME = 9999999999;
 // activation argument moved; the pin advances only because it must track the
 // package version, which is what keeps a node from applying a rule set it was
 // not built for.
-//
-// 0.12.1 -> 0.14.0 registers nothing HERE either, and that is worth stating
-// because this train IS consensus-breaking. Attestation responsible-set widening
-// is gated by its own block-anchored map (attest_responsible_widening_activation.js),
-// the same shape every other flag day in this repo uses, rather than by a
-// registry entry; this pin advances only to track the package version. 0.13.0 is
-// skipped deliberately at the operator's request, and nothing here resolves
-// versions by contiguity: isEnabled() ranks numerically, so 0.14.0 outranks every
-// registered change exactly as 0.12.1 did.
-const CONSENSUS_VERSION = '0.14.0';
+// 0.12.1 -> 0.15.0 registers nothing new either, and this was checked rather than
+// assumed: every one of the 95 addChange() entries below registers at 0.1.0 or
+// 0.2.0, so nothing sits in the gap that a higher pin would newly enable and the
+// enabled set is identical on both sides of the bump. The train's consensus work
+// (the ATTEST response mirror, ROLLCALL) gates on its OWN per-network activation
+// heights, which are unarmed off regtest, not on this ordinal. So the second line
+// of the deliberate two-line decision is: the rule set does not move here.
+const CONSENSUS_VERSION = '0.15.0';
 
 // Predicate for the NATIVE_FEE_PRICE_TIME_GATE flag-day. Its ONE consumer is
 // utility.getFeeOraclePrices (query selection); nothing else in src/ consults it.
@@ -1388,6 +1433,15 @@ class ProtocolChanges {
         // no pre-activation fee-bearing blocks remain to replay).
         this.addChange('LEGACY_FEE_NUMERIC_DBHITS', '0.2.0',1786060800,0,0,0,0,0);
 
+        // SWEEP and CALLBACK priced on the unified gas schedule (a BASE cost plus a
+        // per-item cost) instead of the legacy flat per-DB-hit fee, so a small one clears
+        // the dust threshold on the chains where the protocol fee must be a native-coin
+        // output. MAINNET AND TESTNET ARE BOTH UNARMED on the house sentinel; regtest
+        // activates at genesis (0). The full rationale, and why testnet does not get the
+        // usual genesis arm, is at UNIFIED_FEES_SWEEP_CALLBACK_MAINNET_TIME above.
+        this.addChange('UNIFIED_FEES_SWEEP_CALLBACK', '0.2.0',
+            UNIFIED_FEES_SWEEP_CALLBACK_MAINNET_TIME, UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME, 0, 0, 0, 0);
+
         // Partial claim + partial unstake. UNSTAKE v0/v1 and COLLECT v0 gain a
         // trailing OPTIONAL AMOUNT field (no new action versions):
         //   UNSTAKE v0: VERSION|SIGNING_PUBKEY[|AMOUNT]
@@ -1556,7 +1610,9 @@ class ProtocolChanges {
         // of blocks, so no single height names one cutover across all three but a
         // single timestamp does.
         //
-        // MAINNET IS UNARMED and TESTNET IS ARMED at 2026-08-24T00:00:00Z - the
+        // MAINNET IS UNARMED and TESTNET IS ARMED at ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME
+        // (1787961600 = 2026-08-29T00:00:00Z, re-pinned forward from the lapsed
+        // 2026-08-24 instant on 2026-08-25) - the
         // first nonzero testnet threshold in this registry; the constants above
         // (ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME / _TESTNET_TIME) carry the
         // reasoning, including why testnet cannot be genesis-active here. Regtest
@@ -1727,8 +1783,8 @@ module.exports.CROSS_SETTLE_CAP_MAINNET_TIME = CROSS_SETTLE_CAP_MAINNET_TIME;
 module.exports.BATCH_ROOT_SUB_INDEX_MAINNET_TIME = BATCH_ROOT_SUB_INDEX_MAINNET_TIME;
 // UNARMED mainnet sentinel + ARMED testnet instant for the ISSUE mint-window
 // re-parameterization fix, exported so the suite can assert mainnet is still waiting on
-// the operator's flag day and that the testnet arm is the ratified 2026-08-24T00:00:00Z
-// instant rather than a retroactive or drifted value.
+// the operator's flag day and that the testnet arm is the ratified 1787961600
+// (2026-08-29T00:00:00Z) instant rather than a retroactive or drifted value.
 module.exports.ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME = ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME;
 module.exports.ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME = ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME;
 // ARMED mainnet instant for the BATCH issuance-limits rework (1786838400, 2026-08-16T00:00Z,
@@ -1738,3 +1794,9 @@ module.exports.ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME = ISSUE_INHERITED_MINT_W
 module.exports.BATCH_ISSUANCE_LIMITS_MAINNET_TIME = BATCH_ISSUANCE_LIMITS_MAINNET_TIME;
 module.exports.BATCH_COST_WEIGHTING_MAINNET_TIME = BATCH_COST_WEIGHTING_MAINNET_TIME;
 module.exports.EMISSION_ISSUANCE_LIMITS_MAINNET_TIME = EMISSION_ISSUANCE_LIMITS_MAINNET_TIME;
+// UNARMED mainnet AND testnet sentinels for UNIFIED_FEES_SWEEP_CALLBACK, exported so the
+// suite can assert both stay unarmed until an operator arms them, and that neither is ever
+// backdated. Testnet carries its own sentinel because testnet is a live public ledger; see
+// the constants' comment.
+module.exports.UNIFIED_FEES_SWEEP_CALLBACK_MAINNET_TIME = UNIFIED_FEES_SWEEP_CALLBACK_MAINNET_TIME;
+module.exports.UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME = UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME;

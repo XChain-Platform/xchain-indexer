@@ -34,10 +34,10 @@ CREATE TABLE polls (
     max_selections          SMALLINT UNSIGNED,          -- max distinct options one ballot may list (1 = single-choice)
     tally_mode              ENUM('approval','split'),   -- approval = full weight per option; split = weight divided by per-option shares
     weight_mode             ENUM('balance','stake','flat','quadratic','time_weighted'), -- balance = close holdings; flat = one-address-one-vote; quadratic = sqrt(close); time_weighted = windowed avg; stake reserved
-    quorum                  VARCHAR(60),                -- optional weight gate: min (counted weight / close supply) fraction, e.g. '0.2'
+    quorum                  VARCHAR(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,                -- optional weight gate: min (counted weight / close supply) fraction, e.g. '0.2'
     min_voters              BIGINT UNSIGNED,            -- optional participation gate: min distinct qualifying voters
-    min_vote_balance        VARCHAR(60),                -- dust floor: a voter counts toward min_voters only if close balance >= this
-    decide_threshold        VARCHAR(60),                -- optional early-decide arm: fraction of supply an option must reach (Phase 2)
+    min_vote_balance        VARCHAR(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,                -- dust floor: a voter counts toward min_voters only if close balance >= this
+    decide_threshold        VARCHAR(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,                -- optional early-decide arm: fraction of supply an option must reach (Phase 2)
     -- utf8mb4: inline question text is free-form user content (see options above).
     question                MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci, -- inline question text or a FILE reference
     -- lifecycle
@@ -55,17 +55,17 @@ CREATE TABLE polls (
     resolved_block          BIGINT UNSIGNED,            -- block finalization went terminal; reorg-rollback reset key
     -- creation deposit (anti-spam): XCHAIN escrowed at v0, refunded to the creator
     -- on 'finalized' or forfeited to the DONATE1 treasury on 'failed_quorum' by v2
-    deposit_amount          VARCHAR(60),                -- XCHAIN amount escrowed at creation (null/0 = none)
+    deposit_amount          VARCHAR(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,                -- XCHAIN amount escrowed at creation (null/0 = none)
     deposit_address_id      BIGINT UNSIGNED,            -- FK to index_addresses: the creator who paid the deposit (refund target)
     deposit_resolved        ENUM('refunded','forfeited'), -- set by v2 finalization once the deposit is released
     -- binding poll / callback-on-finalize (optional; null = a signaling poll):
     -- v2 finalization fires CALLBACK_METHOD on CALLBACK_CONTRACT with the result,
     -- turning a decided poll into an on-chain effect (mirrors ATTEST's callback)
     callback_contract_index BIGINT UNSIGNED,            -- FK to contracts: the contract v2 invokes on finalization
-    callback_method         VARCHAR(64),                -- method name on that contract
+    callback_method         VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,                -- method name on that contract
     callback_params         MEDIUMTEXT,                 -- JSON array of developer params echoed to the callback
     callback_on             ENUM('pass','always'),      -- pass = only on a finalized win; always = every finalization
-    gas_escrow              VARCHAR(60),                -- XCHAIN escrowed at v0 to back the callback EXECUTE (refunded at finalize)
+    gas_escrow              VARCHAR(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,                -- XCHAIN escrowed at v0 to back the callback EXECUTE (refunded at finalize)
     callback_execute_action_index BIGINT UNSIGNED,      -- action_index of the EXECUTE v2 injected (set when fired)
     callback_delay_blocks   BIGINT UNSIGNED,            -- v0 CALLBACK_DELAY_BLOCKS timelock (honored at/after the VOTE_CALLBACK_TIMELOCK flag-day; null/0 = fire at finalize)
     callback_due_block      BIGINT UNSIGNED,            -- block the deferred callback fires (resolved_block + delay; stamped by v2, null = immediate)

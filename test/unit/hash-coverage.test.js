@@ -109,6 +109,34 @@ describe('Hash coverage guard @regression', function () {
         );
     });
 
+    it('every db.js method that UPDATEs attests in place is named in the attests registry note', function () {
+        // The registry note is the one place that states, per writer, whether an
+        // in-place attests mutation is hashed, forwarded and reset. A writer that
+        // lands without a sentence there is a coverage gap nobody declared, so
+        // bind the note to the set of db.js methods that issue `UPDATE attests`
+        // outside the action's own upsert (the create* methods key on the row's
+        // own action_index and are action-derived, not in-place mutations).
+        const db      = read('src/db.js');
+        const methods = new Set();
+        const methodRe = /^\s{4}async ([A-Za-z_]+)\(/gm;
+        let m, starts = [];
+        while ((m = methodRe.exec(db)) !== null) starts.push({ name: m[1], at: m.index });
+        const updateRe = /UPDATE attests\b/g;
+        while ((m = updateRe.exec(db)) !== null) {
+            let owner = null;
+            for (const s of starts) { if (s.at < m.index) owner = s.name; else break; }
+            if (owner && !/^create/.test(owner)) methods.add(owner);
+        }
+        assert.ok(methods.has('setAttestBatchStatus') && methods.has('setAttestationResponseBatchIndex'),
+            'expected the two batch-era in-place attests writers to be found in db.js; the scan is broken');
+        const note = lifecycle.entry('attests').hashed.note;
+        for (const name of methods) {
+            assert.ok(note.includes(name),
+                `db.js ${name} mutates attests in place but the attests registry note in src/tableLifecycle.js ` +
+                `does not name it; state its hash / updated_rows / rollback coverage there (and copy to the sync twin)`);
+        }
+    });
+
     it('index_map class declarations match the id-map delta tables stateHash.js gathers', function () {
         assert.deepStrictEqual(lifecycle.hashClassTables('index_map').sort(),
             ['index_addresses', 'index_tickers'],

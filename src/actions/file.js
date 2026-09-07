@@ -18,7 +18,7 @@
  * token-gated cryptographic publishing (encrypted file bytes readable only
  * by holders of GATE_TICKER) via the optional gating fields appended to
  * format 0. See
- *   xchain-documentation/protocol/TOKEN_GATED_CONTENT.md
+ *   xchain-documentation/protocol/token-gated-content.md
  *
  * PARAMS:
  * - VERSION           - Format Version (always 0; new fields are appended)
@@ -125,7 +125,10 @@ class File {
             if(Number(data['ENCRYPTION_METHOD']) !== 1)
                 error = 'invalid: ENCRYPTION_METHOD (must be 1)';
 
-            // KEY_HASH must be 64-char hex
+            // KEY_HASH must be 64-char hex. The /i is consensus as shipped: this
+            // clause has always taken either case, and db.js records the lowercase
+            // form, so tightening it would retroactively invalidate FILEs the live
+            // chain accepted. It moves only behind a flag day.
             if(!error && !/^[0-9a-f]{64}$/i.test(String(data['KEY_HASH'] || '')))
                 error = 'invalid: KEY_HASH (format)';
 

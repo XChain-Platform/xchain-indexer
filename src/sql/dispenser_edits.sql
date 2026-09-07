@@ -16,7 +16,7 @@ DROP TABLE IF EXISTS dispenser_edits;
 CREATE TABLE dispenser_edits (
     action_index       BIGINT UNSIGNED NOT NULL,     -- Unique action index
     dispenser_action_index BIGINT UNSIGNED NOT NULL, -- Unique action index from dispensers table
-    give_escrow        VARCHAR(250),                 -- Amount of GIVE_TICK to add to escrow
+    give_escrow        VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,                 -- Amount of GIVE_TICK to add to escrow
     expiration         BIGINT UNSIGNED,              -- unix timestamp of dispenser expiration date/time
     allow_list         BIGINT UNSIGNED,              -- action_index of a list from the lists table
     block_list         BIGINT UNSIGNED,              -- action_index of a list from the lists table

@@ -48,7 +48,12 @@ function dbFor(network, coin) {
     sinon.stub(util, 'logError');
     const db = new Database('127.0.0.1', 3306, 'xchain_btc_regtest', 'u', 'p', { config, util });
     const calls = [];
-    sinon.stub(db, 'doQuery').callsFake((query, args) => { calls.push({ query, args }); return Promise.resolve([]); });
+    // The preload reads run through the STRICT helper (M-17: on the hub instance a
+    // swallowed driver error would become VM oracle data). Both are stubbed with the
+    // same fake so the call record is complete whichever helper a read uses.
+    const answer = (query, args) => { calls.push({ query, args }); return Promise.resolve([]); };
+    sinon.stub(db, 'doQuery').callsFake(answer);
+    sinon.stub(db, 'doQueryStrict').callsFake(answer);
     db._calls = calls;
     return db;
 }

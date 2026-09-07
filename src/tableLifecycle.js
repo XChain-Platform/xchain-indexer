@@ -61,6 +61,15 @@
  *                                  carried by xchain-sync in any channel
  *                 'local'          never leaves the node (OPERATOR_LOCAL)
  *                 'follower-derived' recomputed by the follower, not carried
+ *   blockKey    the column a 'stream:block' entry is really scoped by; absent
+ *               means 'block_index'. Declared because the class name is not the
+ *               column name (rollcalls/rollcall_absences key on close_block) and
+ *               a reader assuming the default raises errno 1054, which every
+ *               forward channel swallows as an older source schema: silent
+ *               non-delivery, never an error.
+ *               xchain-sync test/unit/streamScopeColumns.test.js binds this
+ *               field to the owning DDL, so a scope column the schema does not
+ *               have fails the build instead of shipping un-replicated.
  *   rollback    source-indexer reorg handling (src/rollback.js):
  *                 'action'      generic DELETE by action_index (dataTables)
  *                 'block'       generic DELETE by block_index (blockTables)
@@ -228,7 +237,7 @@ const TABLES = [
                 note: 'The in-place invalid_archive stamp on a surviving v1 parent is covered by the state_hash anchor_invalid class. New rows are otherwise action-derived; status_id is deliberately in no block-hash projection.' } },
     { table: 'attests', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror',
       hashed: { classes: ['state_hash'],
-                note: 'The v0 request_status terminal flip is an in-place mutation on a surviving row; the state_hash request_status class covers it. New rows are otherwise action-derived.' } },
+                note: 'The v0 request_status terminal flip (updateAttestationRequestStatus) is an in-place mutation on a surviving row; the state_hash request_status class covers it. Three more in-place writers exist. setAttestationResponseCallbackIndex and setAttestationResponseBatchIndex stamp action_index links (callback_execute_action_index, batch_action_index) on a surviving v1 row; both are display-only and deliberately in no hash projection (state_hash reads attests at version 0 only). setAttestBatchStatus re-stamps status_id on a surviving v5 batch head when the completing v6 continuation fails reassembly or quorum, and that stamp is a KNOWN GAP: it is in no state_hash class, not carried by the updated_rows forward channel, and not reset by either rollback. Closing it needs a flag-day-gated class in the anchor_invalid shape plus the forward carry and both reorg resets.' } },
     { table: 'prices', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'pending_hub_pushes', owner: 'indexer', replication: 'local', rollback: 'action', replicaRollback: 'local',
       hashed: { classes: [], note: 'Indexer-local outbound hub-push queue; never replicated (OPERATOR_LOCAL) and meaningless on a replica.' } },
@@ -278,12 +287,12 @@ const TABLES = [
       hashed: { classes: [],
                 note: 'Oracle/attest rewards derive deterministically during block processing; anchor_* rounds arrive via hub push but are quorum-verified before persistence. Reward credits they mint are ledger-hashed.' },
       note: 'TWO block-scoped rollback keys, not one. block_index is the EARN block; derive_block_index is the MATERIALIZATION block, non-NULL only for the BTC-side anchor/archive derivation, which earns at the checkpoint SNAPSHOT_BLOCK but writes the row while processing a later BTC block. rollback() deletes on BOTH, or a reorg into the gap between them leaves a COLLECT-spendable reward a from-genesis replay has not derived yet.' },
-    { table: 'rollcalls', owner: 'indexer', replication: 'stream:block', rollback: 'special', replicaRollback: 'special',
+    { table: 'rollcalls', owner: 'indexer', replication: 'stream:block', blockKey: 'close_block', rollback: 'special', replicaRollback: 'special',
       hashed: DERIVED,
-      note: 'One row per epoch that reached its close block, INCLUDING unrolled ones. An unrolled epoch counts for nobody, but the K-streak must know which epochs to SKIP, and a missing row is indistinguishable from an epoch that has not closed yet. SPECIAL, not "block": the block-scoped key is close_block and there is no block_index column, so the generic DELETE ... WHERE block_index >= ? would throw 1054 and fail the whole rollback transaction. Carries the pinned responsible set, without which the K-streak cannot tell "present" from "was not in R".' },
-    { table: 'rollcall_absences', owner: 'indexer', replication: 'stream:block', rollback: 'special', replicaRollback: 'special',
+      note: 'One row per epoch that reached its close block, INCLUDING unrolled ones. An unrolled epoch counts for nobody, but the K-streak must know which epochs to SKIP, and a missing row is indistinguishable from an epoch that has not closed yet. blockKey is close_block on BOTH dimensions: there is no block_index column, so rollback is SPECIAL (the generic DELETE ... WHERE block_index >= ? would throw 1054 and fail the whole rollback transaction) and the forward readers scope by the declared key (they used to assume block_index, raise 1054, and have it swallowed as an older source schema, so the table never replicated on any forward channel while the reorg delete still removed it). Carries the pinned responsible set, without which the K-streak cannot tell "present" from "was not in R".' },
+    { table: 'rollcall_absences', owner: 'indexer', replication: 'stream:block', blockKey: 'close_block', rollback: 'special', replicaRollback: 'special',
       hashed: DERIVED,
-      note: 'One row per responsible SOURCE that did not sign at a rolled epoch, pinned at close and never re-derived (SLASH rewrites stakes.amount in place, so a later re-derivation can differ from the set the verdict was taken over). evicted = 1 is the rollback key the delegations repair clause keys on, because the eviction writes no DELEGATE-revoke row for the generic self-join repair to find. SPECIAL for the same reason as rollcalls: the block-scoped key is close_block, not block_index.' },
+      note: 'One row per responsible SOURCE that did not sign at a rolled epoch, pinned at close and never re-derived (SLASH rewrites stakes.amount in place, so a later re-derivation can differ from the set the verdict was taken over). evicted = 1 is the rollback key the delegations repair clause keys on, because the eviction writes no DELEGATE-revoke row for the generic self-join repair to find. Same close_block blockKey and same SPECIAL rollback as rollcalls, for the same reason.' },
     { table: 'contract_state', owner: 'indexer', replication: 'stream:block', rollback: 'block', replicaRollback: 'mirror',
       hashed: { classes: ['contracts'], note: 'Latest value per state key written in the block.' } },
     { table: 'escrow_leaf_journal', owner: 'indexer', replication: 'stream:block', rollback: 'block', replicaRollback: 'mirror',
@@ -372,6 +381,9 @@ const TABLES = [
     { table: 'anchor_reward_attestations', owner: 'indexer', replication: 'hub-mirror', rollback: 'exempt', replicaRollback: 'exempt',
       hashed: { classes: [], note: 'Not hashed: transport for the XANCPUB quorum. The BTC indexer re-verifies the sigs and derives validator_rewards, which itself is not in the state-hash preimage (COLLECT-mediated only).' },
       note: 'Hub-mirrored, append-only, never retracted: written only after the XANCPUB quorum resolves for a FINALIZED checkpoint, so there is no un-finalize to retract. The derived validator_rewards row (block_index = snapshot_block) rolls back normally as a dataTable and re-derives idempotently on replay; a DOGE reorg cannot un-quorum an already-attested publish.' },
+    { table: 'attestation_responses', owner: 'indexer', replication: 'hub-mirror', rollback: 'exempt', replicaRollback: 'exempt',
+      hashed: { classes: [], note: 'Not hashed: transport for the finalized ATTEST response. The applier re-verifies the signatures against the responsible set resolved from its OWN request row and synthesizes an ATTEST v1 action; the APPLIED state lives in attests, and the v0 status flip it drives is covered through resolved_block.' },
+      note: 'Hub-mirrored, insert-only (no column is ever updated after insert) and never retracted: the mirror row is INERT without a pending local request, so a reorg that removes the request removes every applied row with it (they sit at blocks above the request) and the re-parse finds no request to re-bind to, while a reorg that keeps the request re-binds at the same block on every node. Deleting the mirror row on a local reorg would instead lose a response no chain replay can regenerate. Natural-key mirror on (network, request_id) with the hub id stripped on apply, so it also re-pages from since_id 0 (hub_db_sync FULL_REPAGE_TABLES).' },
     { table: 'state_tree_nodes', owner: 'indexer', replication: 'snapshot', rollback: 'exempt', replicaRollback: 'exempt',
       hashed: { classes: ['state_commitment'], note: 'Content-addressed SMT node store; nodes are keyed by their own hash.' },
       note: 'Copy-on-write: a node surviving a reorg is harmless (re-apply INSERT-IGNOREs the same hashes) and the surviving fork-point root in state_tree_roots anchors the correct tree. Orphans are reclaimed by the indexer\'s opt-in mark-and-sweep pruner (retention.js computeReachable/reclaimOrphanNodes, off unless STATE_ROOT_RETENTION_BLOCKS is positive AND STATE_NODE_RECLAIM is set, and serialized against block processing via runExclusive so a forward insert cannot re-reference a node between the mark and the delete); per-block deletion is impossible (no block_index, nodes shared across blocks).' },
@@ -570,6 +582,16 @@ function streamTopology(){
     };
 }
 
+// The column a block-scoped table is really scoped by: the live per-block
+// payload, the incremental catch-up range and the content-parity window all
+// read it. Defaults to 'block_index', so it is a no-op for every table the
+// class name describes correctly. Declared because the wrong answer is SILENT
+// (errno 1054, which every forward channel swallows as an older source schema).
+function blockKey(table){
+    let e = entry(table);
+    return (e && e.blockKey) ? e.blockKey : 'block_index';
+}
+
 // Source-side coverage buckets for the rollback-coverage guard.
 function rollbackBuckets(){
     let sweepTables = [...new Set(ORPHAN_SWEEPS.map(s => s.table))];
@@ -638,7 +660,7 @@ module.exports = {
     TABLES, ORPHAN_SWEEPS,
     CONTENT_PARITY_CARVE_OUTS, CONTENT_PARITY_EXCLUDED_COLUMNS,
     allTables, entry, tablesWhere,
-    rollbackTables, replicaRollbackTables, streamTopology,
+    rollbackTables, replicaRollbackTables, streamTopology, blockKey,
     rollbackBuckets, replicaRollbackBuckets, hashClassTables,
     contentParityCarveOut, contentParityMutableTables,
     contentParityExcludedColumns, contentParityLookupBound,

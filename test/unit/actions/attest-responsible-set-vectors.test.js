@@ -25,9 +25,9 @@
 // ever compared by hand. This is that mirror. It runs the SAME
 // xchain-documentation/protocol/test-vectors/responsible_set.json the hub runs.
 //
-// Sibling policy matches ConsensusPrimitiveConformance: a missing
-// xchain-documentation checkout skips (standalone clones), and hard-fails under
-// XCHAIN_REQUIRE_SIBLINGS=1 so bin/ci-all.sh cannot pass this green-by-skip.
+// A missing or empty vector set is a hard failure, not a skip: silently
+// reporting 0 passing / 0 failing is a green gate over a consensus suite that
+// never ran.
 // ---------------------------------------------------------------------------
 
 process.env.INDEXER_COIN = 'BTC';
@@ -55,12 +55,17 @@ const BLOCK = 100;
 
 describe('ATTEST responsible-set canonical-vector conformance @regression @tier1', function () {
 
-    before(function () {
-        if (vec) return;
-        if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-            throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but the responsible-set canonical vectors are unloadable at '
-                + VEC_PATH + ' (' + (vecErr && vecErr.message) + ')');
-        this.skip();
+    // A standalone `it`, not one of the vector-driven cases below: mocha skips a
+    // suite's before/after hooks entirely when the suite has zero `it`s in it, so a
+    // hook alone cannot turn a missing vector file into a failure when the file's
+    // absence is also what empties the vector-driven cases below. This case always
+    // exists, so it always runs.
+    it('loads the canonical vector file', function () {
+        if (vec && Array.isArray(vec.computeResponsibleSet) && vec.computeResponsibleSet.length > 0) return;
+        const reason = vec
+            ? 'the file loaded but computeResponsibleSet is empty'
+            : ((vecErr && vecErr.message) || 'unknown error');
+        throw new Error('responsible-set canonical vectors are unavailable at ' + VEC_PATH + ' (' + reason + ')');
     });
 
     afterEach(() => sinon.restore());

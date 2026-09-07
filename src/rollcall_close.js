@@ -179,7 +179,10 @@ async function closeRollcallEpochs(indexerDb, config, blockIndex, proof, util){
     // evict anyone.
     let rolled = swq.meetsStakeThreshold(responsible, presentKeys);
 
-    let sortedSources = Array.from(allSources).sort();
+    // Order by UTF-8 bytes, the house comparator, not a bare .sort(): this sequence pins
+    // responsible_set_json, the absence row order and the eviction order, so it is consensus.
+    let sortedSources = Array.from(allSources).sort(
+        (a, b) => Buffer.compare(Buffer.from(String(a), 'utf8'), Buffer.from(String(b), 'utf8')));
     await indexerDb.insertRollcall(epochHeight, snapshotBlock, closeBlock, rolled ? 1 : 0,
                                   rolled ? sortedSources : null);
 

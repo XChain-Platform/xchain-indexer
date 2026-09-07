@@ -31,6 +31,9 @@
  *
  ********************************************************************/
 
+const consolidationLegAmount = require('../consolidation_leg_amount_activation.js');
+const gatedHandoffRef        = require('../gated_handoff_ref_activation.js');
+
 class Send {
 
     constructor(action){
@@ -117,11 +120,27 @@ class Send {
                 gatedPacks[tick] = await this.indexerDb.getGatedPackThresholds(tick);
         }
 
-        // Consolidate sends by DESTINATION and TICK
+        // Consolidate sends by DESTINATION and TICK.
+        //
+        // A leg whose RAW amount fails its tick's format is held OUT of the merge, on its own key,
+        // so it reaches the per-leg format check below instead of being summed into a total that
+        // passes. bcadd formats to the tick's DECIMALS, so two 0.5 legs of a 0-decimals token
+        // merged to '1' and settled while either leg alone was rejected. Gated per chain
+        // (consolidation_leg_amount_activation.js): below the threshold the legacy key and merge
+        // run unchanged and historical replay stays byte-identical.
+        //
+        // Above the threshold BOTH key shapes are prefixed ('k' merge key, 'i' held-out leg), so a
+        // DESTINATION chosen to spell a held-out leg's key cannot collide with one. Prefixing every
+        // key uniformly leaves insertion order (and so the emitted record order) unchanged.
+        let legAmountRule = consolidationLegAmount.isConsolidationLegAmountActive(data['BLOCK_TIME'], this.config['NETWORK']);
         let keys = {};
-        for(let info of sends){
-            let [tick, amount, destination, memo] = info;
+        for(let idx in sends){
+            let [tick, amount, destination, memo] = sends[idx];
             let key = destination + '|' + tick;
+            if(legAmountRule)
+                key = (ticks[tick] && !this.util.isValidAmountFormat(ticks[tick]['DECIMALS'], amount))
+                    ? 'i|' + idx
+                    : 'k|' + key;
             if(!this.util.isNull(keys[key]))
                 amount = this.util.bcadd(amount, keys[key][1], ticks[tick] && ticks[tick]['DECIMALS']);
             keys[key] = [tick, amount, destination, memo];
@@ -266,7 +285,7 @@ class Send {
             // DESTINATION carrying the key handoff payload. The indexer only
             // checks structural presence; the wallet verifies cryptographic
             // correctness at unlock time.
-            // See xchain-documentation/protocol/TOKEN_GATED_CONTENT.md.
+            // See xchain-documentation/protocol/token-gated-content.md.
             if(!error){
                 let packs = gatedPacks[send['TICK']] || [];
                 if(packs.length > 0){
@@ -299,13 +318,34 @@ class Send {
                     if(required){
                         let siblings = data['SIBLING_ACTIONS'] || [];
                         let foundHandoff = false;
+
+                        // Siblings hold WIRE parameters (batch.js splits the raw command and
+                        // resolves no address references), while the SDK compacts a MESSAGE
+                        // DESTINATION to `^<id>` for any already-indexed recipient, so a byte
+                        // compare misses the ordinary wallet-composed handoff. Above the flag
+                        // day a caret spelling is resolved first; plane and arming state in
+                        // gated_handoff_ref_activation.js.
+                        let refRule = gatedHandoffRef.isGatedHandoffRefActive(data['BLOCK_TIME'], this.config['NETWORK']);
+
                         for(let s of siblings){
                             if(s.action !== 'MESSAGE') continue;
                             // MESSAGE v2 fields: VERSION|COIN|DESTINATION|ENCRYPTED_MESSAGE
                             // (s.params[0]=VERSION, [1]=COIN, [2]=DESTINATION, [3]=ENCRYPTED_MESSAGE)
                             let ver  = String(s.params[0] || '');
                             let dest = String(s.params[2] || '');
-                            if(ver === '2' && dest === send['DESTINATION']){
+                            if(ver !== '2') continue;
+
+                            // Caret-only, so a full-address handoff costs no extra read, and
+                            // fail-closed on both edges: a rejected reference and a value still
+                            // caret-prefixed after resolution match nothing.
+                            if(refRule && dest.substring(0,1) === '^'){
+                                let destRef = await this.indexerDb.resolveAddressRefChecked(dest, data['BLOCK_INDEX']);
+                                if(destRef.rejected) continue;
+                                dest = String(destRef.value || '');
+                                if(dest.substring(0,1) === '^') continue;
+                            }
+
+                            if(dest === send['DESTINATION']){
                                 foundHandoff = true;
                                 break;
                             }

@@ -20,7 +20,7 @@ CREATE TABLE contract_unstakes (
     target_contract_index  BIGINT UNSIGNED,                 -- FK to contracts.action_index; NULL on invalid junk-index actions
     tick_id                BIGINT UNSIGNED,                 -- FK to index_tickers (which token); NULL on invalid actions with an unresolvable TICK
     cooldown_end_block     BIGINT UNSIGNED NOT NULL,        -- block when funds release (block_index + contracts.cooldown_blocks)
-    amount                 VARCHAR(250) NOT NULL,           -- Total amount being unstaked (sum of active contract_stakes rows for this (target, pubkey, tick))
+    amount                 VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,           -- Total amount being unstaked (sum of active contract_stakes rows for this (target, pubkey, tick))
     status_id              BIGINT UNSIGNED,                 -- pending/completed/cancelled
     block_index            BIGINT UNSIGNED NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;

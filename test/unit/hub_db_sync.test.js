@@ -313,7 +313,7 @@ describe('HubDbSync stream-position watermark @regression @tier3', function () {
 
     it('_bootstrapAll opens the heartbeat gate and adopts the OLDEST per-table watermark only when every table drains', async function () {
         const sync = makeWatermarkSync();
-        const marks = { price_snapshots: 900, oracle_prices: 880, cross_chain_matches: 910, cross_chain_calls: 915, capability_snapshots: 905, state_checkpoints: 920, anchor_reward_attestations: 925 };
+        const marks = { price_snapshots: 900, oracle_prices: 880, cross_chain_matches: 910, cross_chain_calls: 915, capability_snapshots: 905, state_checkpoints: 920, anchor_reward_attestations: 925, attestation_responses: 930 };
         sinon.stub(sync, '_bootstrapTable').callsFake(async (table) => marks[table]);
         await sync._bootstrapAll();
         assert.strictEqual(sync._bootstrapDrained, true);
@@ -544,7 +544,7 @@ describe('HubDbSync bootstrap pagination + retry @regression @tier2', function (
             const bootstrapTable = sinon.stub(sync, '_bootstrapTable').resolves(null);
             await sync._bootstrapAll();
             await clock.tickAsync(sync.pollIntervalMs * 3);
-            assert.strictEqual(bootstrapTable.callCount, 7, 'one pass over the 7 mirrored tables, no retries');
+            assert.strictEqual(bootstrapTable.callCount, 8, 'one pass over the 8 mirrored tables, no retries');
         } finally {
             clock.restore();
         }
@@ -791,11 +791,49 @@ describe('HubDbSync _applyRow cross_chain_calls generation fence @regression @ti
         const { sync, doQuery } = makeApplySync(CC_COLS);
         await sync._applyRow('cross_chain_calls', callRow(7));
         const clause = updateClause(doQuery);
-        assert.ok(/`effective_time` = IF\(VALUES\(status\) = 'finalized', VALUES\(`effective_time`\), `effective_time`\)/.test(clause));
-        assert.ok(/status = IF\(VALUES\(status\) = 'finalized', 'finalized', status\)/.test(clause));
+        assert.ok(/`effective_time` = IF\(VALUES\(status\) = 'finalized'.*?, VALUES\(`effective_time`\), `effective_time`\)/.test(clause), clause);
+        assert.ok(/status = IF\(VALUES\(status\) = 'finalized'.*?, 'finalized', status\)/.test(clause), clause);
         assert.ok(!/`call_id` =/.test(clause));
         assert.ok(!/`phase` =/.test(clause));
         assert.ok(!/`id` =/.test(clause));
+    });
+
+    // The fence and the content it arrived with must move TOGETHER. With a status-only
+    // content gate a STALE finalized page (lower push_generation, fetched before a
+    // re-publish and landing after the live re-published row) overwrote effective_time,
+    // parameters, snapshot and signatures while GREATEST kept the NEWER fence on the row.
+    // A fenced retraction naming the old generation then could not match it, so the stale
+    // terms stuck; effective_time gates the injection block, so the mirror dispatches
+    // different terms, or at a different block, from its peers and archive recovery.
+    it('gates content on the incoming generation too, so a stale finalized page cannot overwrite newer terms', async function () {
+        const { sync, doQuery } = makeApplySync(CC_COLS);
+        await sync._applyRow('cross_chain_calls', callRow(7));
+        const clause = updateClause(doQuery);
+        const gate = "VALUES\\(status\\) = 'finalized' AND COALESCE\\(VALUES\\(`push_generation`\\), 0\\) >= COALESCE\\(`push_generation`, 0\\)";
+        for (const col of ['effective_time', 'validator_signatures', 'snapshot_block', 'target_chain']) {
+            assert.ok(new RegExp('`' + col + '` = IF\\(' + gate + ', VALUES\\(`' + col + '`\\), `' + col + '`\\)').test(clause),
+                col + ' must be generation-gated: ' + clause);
+        }
+        assert.ok(new RegExp('status = IF\\(' + gate + ", 'finalized', status\\)").test(clause),
+            'status must carry the same gate as the content it describes: ' + clause);
+    });
+
+    it('assigns the fence LAST, so every gated column is judged against the ORIGINAL generation', async function () {
+        // MariaDB evaluates ODKU assignments left to right and later expressions read the
+        // ALREADY-UPDATED value (the #3211 ordering trap). push_generation is both a gate
+        // input and an assignment target, so lifting it first would make every following
+        // column compare the incoming generation against itself and the gate would never
+        // refuse anything.
+        const { sync, doQuery } = makeApplySync(CC_COLS);
+        await sync._applyRow('cross_chain_calls', callRow(7));
+        const clause = updateClause(doQuery);
+        const fenceAt = clause.indexOf('`push_generation` = GREATEST');
+        assert.ok(fenceAt > 0, 'fence assignment present: ' + clause);
+        assert.strictEqual(clause.indexOf('`push_generation` = GREATEST', fenceAt + 1), -1, 'assigned once');
+        const gated = [...clause.matchAll(/COALESCE\(VALUES\(`push_generation`\), 0\) >= COALESCE\(`push_generation`, 0\)/g)]
+                        .map(m => m.index);
+        assert.ok(gated.length > 0, 'the gate is used at all');
+        assert.ok(gated.every(i => i < fenceAt), 'every gated assignment must precede the fence assignment');
     });
 
     it('omits the fence assignment when the mirror table carries no push_generation column', async function () {
@@ -804,6 +842,9 @@ describe('HubDbSync _applyRow cross_chain_calls generation fence @regression @ti
             { call_id: 'C1', phase: 'dispatch', status: 'finalized', effective_time: 1000 });
         const clause = updateClause(doQuery);
         assert.ok(!/push_generation/.test(clause), 'a pre-migration mirror must not be handed a column it lacks');
+        // ...and the gate degrades to the status-only form rather than comparing against a
+        // column that is not on the wire, which would be ER_BAD_FIELD_ERROR on every apply.
+        assert.ok(/`effective_time` = IF\(VALUES\(status\) = 'finalized', VALUES\(`effective_time`\), `effective_time`\)/.test(clause), clause);
     });
 });
 

@@ -34,18 +34,18 @@ CREATE TABLE attests (
     action_index                  BIGINT UNSIGNED NOT NULL,        -- FK to actions (the ATTEST action that wrote this row)
     version                       TINYINT UNSIGNED NOT NULL,       -- 0=request, 1=response (matches actions.action_format)
     request_id                    CHAR(64) NOT NULL,               -- correlation key across v0/v1 (SHA256(tx_hash:root_action_index:call_path:contract_index:emission_index))
-    provider_id                   VARCHAR(32) NOT NULL,            -- e.g. 'http_get' (governance-registered)
+    provider_id                   VARCHAR(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,            -- e.g. 'http_get' (governance-registered)
     -- request (version 0) fields
     contract_index                BIGINT UNSIGNED,                 -- FK to contracts (which contract emitted the request)
     fee_payer_id                  BIGINT UNSIGNED,                 -- FK to index_addresses (original EXECUTE caller, billed for callback gas)
-    payload                       MEDIUMTEXT,                      -- inlined request payload (URL for http_get, JSON envelope for llm)
-    callback_method               VARCHAR(64),                     -- method on the contract to invoke on response
-    callback_params_json          TEXT,                            -- developer-supplied params, echoed back to callback
+    payload                       MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,                      -- inlined request payload (URL for http_get, JSON envelope for llm)
+    callback_method               VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,                     -- method on the contract to invoke on response
+    callback_params_json          TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,                            -- developer-supplied params, echoed back to callback
     redundancy                    TINYINT UNSIGNED,                -- number of validator sigs required (1, 3, 5)
     deadline_block                BIGINT UNSIGNED,                 -- block beyond which the request times out
-    gas_escrow                    VARCHAR(60),                     -- XCHAIN reserved for the callback EXECUTE
+    gas_escrow                    VARCHAR(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,                     -- XCHAIN reserved for the callback EXECUTE
     fee_tick_id                   BIGINT UNSIGNED,                 -- FK to index_tickers (NULL = feeless; always the GAS tick in v1)
-    fee_amount                    VARCHAR(60),                     -- request fee escrowed from fee_payer (NULL/0 = feeless)
+    fee_amount                    VARCHAR(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,                     -- request fee escrowed from fee_payer (NULL/0 = feeless)
     request_status                ENUM('pending','fulfilled','expired','errored','rejected'), -- lifecycle of the request (v0 rows only; 'rejected' = failed structural validation, never serviceable)
     resolved_block                BIGINT UNSIGNED,                 -- block at which request_status went terminal; the reorg-rollback reset key (v0 rows only)
     responsible_set_json          MEDIUMTEXT,                      -- v0: ordered responsible-set pubkeys (JSON array) pinned AS-OF block_index at request time (ATT-RECOMP-1); the reorg missed_count recompute reads this verbatim instead of re-deriving via getStakeWeightsByCapability (which sums the CURRENT mutable stakes.amount, corrupted by a surviving slash). NULL on legacy/rejected rows -> recompute falls back to the live re-derive.
@@ -53,11 +53,29 @@ CREATE TABLE attests (
     origin_action_index           BIGINT UNSIGNED,                 -- cross-chain relay: the origin chain's v0 action_index; the correlation key the response leg (ATTEST v4) relays back on
     -- response (version 1) fields
     response_hash                 CHAR(64),                        -- SHA256 of the canonical response body
-    response_payload              MEDIUMTEXT,                      -- inlined response body
+    response_payload              MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,                      -- inlined response body
     response_status               ENUM('ok','timeout','no_quorum','provider_error','expired'),
-    meta                          VARCHAR(256),                    -- opaque provider-defined metadata (e.g. http status, model id)
+    meta                          VARCHAR(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,                    -- opaque provider-defined metadata (e.g. http status, model id)
     validator_signatures          MEDIUMTEXT,                      -- JSON array of verified federation sigs: [{"pubkey","sig"}, ...]
     callback_execute_action_index BIGINT UNSIGNED,                 -- action_index of the system-injected EXECUTE that fired the callback
+    batch_action_index            BIGINT UNSIGNED,                 -- ATTEST v5/v6 batch that carried this response's body on chain; NULL until that batch lands, and NULL forever for a legacy-era response that was itself an on-chain v1
+    -- batch (version 5 head / version 6 continuation) fields
+    -- A batch action row is a CHUNK TABLE entry, on the ANCHOR archive precedent
+    -- (anchor_actions.total_chunks/chunk_index/archive_b64): the head holds slot 0 plus the
+    -- window header its quorum signed over, each continuation holds one later slot, and the
+    -- action that completes the index coverage reassembles the whole window from these rows.
+    -- The header is stored because it is the input to that reassembly: a continuation
+    -- landing after the head has no other way to rebuild the head it must verify against.
+    -- The network is NOT stored: this database is one network, and a head declaring another
+    -- is refused before it is ever recorded valid.
+    batch_window_start            BIGINT UNSIGNED,                 -- v5: unix start of the published window (batch identity, hashed into request_id)
+    batch_window_end              BIGINT UNSIGNED,                 -- v5: unix end of the window
+    batch_row_count               INT UNSIGNED,                    -- v5: responses carried (cap ATTEST_BATCH_MAX_ROWS)
+    batch_btc_block_height        BIGINT UNSIGNED,                 -- v5: BTC height selecting the attestation capability snapshot the batch quorum is judged against
+    batch_crc32                   VARCHAR(8),                      -- CRC32 of the INFLATED body (v5 declares it, v6 repeats it so a chunk of another encoding cannot join)
+    batch_total_chunks            INT UNSIGNED,                    -- chunks in the batch (v5/v6)
+    batch_chunk_index             INT UNSIGNED,                    -- 0 on the v5 head, 1-based on each v6 continuation
+    batch_chunk_b64               MEDIUMTEXT,                      -- this row's slice of the deflated base64 body (v5 slot 0 / v6 continuation)
     -- common fields
     status_id                     BIGINT UNSIGNED,                 -- FK to index_statuses (action validation status)
     block_index                   BIGINT UNSIGNED NOT NULL

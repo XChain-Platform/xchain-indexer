@@ -153,14 +153,14 @@ describe('Unstake cooldown completion: GAS supply conservation (real DB + real V
         // ...and the FULL three-way supply invariant holds: tokens.supply == ledger
         // (credits-debits+escrows) == balances. The synthetic UNSTAKE completion is a
         // NET-MINT credit on a tx_index=NULL action, so getTokenSupply must count
-        // synthetic-action credits (it previously INNER JOINed transactions and dropped
+        // synthetic-action credits (an INNER JOIN on transactions drops
         // them, leaving balances 500 higher than the ledger and wedging sanityCheck at
         // the next real-tx block). Comparing balance to ledger here is the check that a
         // ledger-vs-token-only assertion missed (both were computed the same buggy way).
-        // bcnum-normalize like the production consumer (sanityCheck): getTokenSupply
-        // returns a bcmath-normalized string ("10000") while the Token/Balance getters
-        // return the raw SQL DECIMAL string ("10000.00000000"); the invariant is about
-        // value, not formatting.
+        // bcnum-normalize like the production consumer (sanityCheck): getTokenSupply and
+        // getTokenSupplyBalance return bcmath-normalized values ("10000") while
+        // getTokenSupplyToken returns the raw SQL string ("10000.00000000"); the invariant
+        // is about value, not formatting.
         const bc      = (v) => String(indexer.indexerDb.util.bcnum(v));
         const ledger  = bc(await indexer.indexerDb.getTokenSupply(GAS));
         const token   = bc(await indexer.indexerDb.getTokenSupplyToken(GAS));

@@ -16,6 +16,7 @@ const sinon = require('sinon');
 const { createMockIndexer } = require('../fixtures/mocks');
 
 const Rollback = require('../../src/rollback.js');
+const ar = require('../../src/anchor_reward_activation.js');
 
 describe('Rollback @regression @tier3', function () {
     let indexer, rollback;
@@ -138,6 +139,12 @@ describe('Rollback @regression @tier3', function () {
         assert.strictEqual(restores.length, 2, 'expected contract_stakes + contract_unstakes slash restores');
         for (const r of restores) {
             const sql = r.args[0];
+            // The pick follows the debit chain's own values (highest orphaned prev_amount =
+            // the amount before the first orphaned debit). The position columns invert under
+            // a re-entrant nested EXECUTE and serve only as the tiebreak for equal amounts;
+            // rollback-slash-restore-order.test.js executes both cases against a real engine.
+            assert.ok(/CAST\(e\.prev_amount AS DECIMAL\(60,18\)\)\s*>\s*CAST\(d\.prev_amount AS DECIMAL\(60,18\)\)/.test(sql),
+                'restore must pick the highest orphaned prev_amount, not the lowest position key');
             assert.ok(/e\.execution_index\s*<\s*d\.execution_index/.test(sql),
                 'restore must order by execution_index for a deterministic, replay-stable tiebreak');
             assert.ok(/e\.slash_position\s*<\s*d\.slash_position/.test(sql),
@@ -171,6 +178,39 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(restoreIdx >= 0 && deleteIdx >= 0 && restoreIdx < deleteIdx, 'reconcile restore must run before the validator_rewards delete');
     });
 
+    it('restores reconcile-deleted anchor rewards when the orphaned range holds NO actions row (RB-ANCHOR-NULL)', async function () {
+        // The BTC-side derive path calls reconcileAnchorRewardWinner with a NULL anchor action
+        // index (the attested rows arrive over the mirror, not as a wire action), so a reorg
+        // over a range whose only reward work was a derive-side reconcile leaves
+        // firstActionIndex null. The generic block deletes still drop the reconcile log and the
+        // replacement winner, so gating the restore on firstActionIndex deletes the earlier
+        // winner and never restores it: a permanent SUM(validator_rewards) divergence from a
+        // from-genesis replay. No onFirstCall stub here, so the actions probe returns [] and
+        // firstActionIndex is null.
+        indexer.indexerDb.doQuery.resolves([]);
+        await rollback.rollback(100);
+        const calls = indexer.indexerDb.doQuery.getCalls();
+        const restore = calls.find(c =>
+            /INSERT IGNORE INTO validator_rewards/.test(c.args[0]) &&
+            c.args[0].includes('anchor_reward_reconcile_log'));
+        assert.ok(restore, 'the RB-ANCHOR restore must run with no actions in the orphaned range');
+        assert.deepStrictEqual(restore.args[1], [100, 100, 100]);
+        // Both surviving-height predicates must outlive the hoist, or the restore would mint
+        // rows a from-genesis replay never has.
+        assert.ok(/d\.reward_block_index\s*<\s*\?/.test(restore.args[0]),
+            'earn-block survival predicate must be retained');
+        assert.ok(/d\.reward_derive_block_index\s*<\s*\?/.test(restore.args[0]),
+            'materialization-block survival predicate must be retained');
+        // Still ordered before every delete that destroys its inputs or its output.
+        const restoreIdx   = calls.indexOf(restore);
+        const blockDelIdx  = calls.findIndex(c => /DELETE FROM validator_rewards WHERE block_index/.test(c.args[0]));
+        const deriveDelIdx = calls.findIndex(c => /DELETE FROM validator_rewards WHERE derive_block_index/.test(c.args[0]));
+        const logDelIdx    = calls.findIndex(c => /DELETE FROM anchor_reward_reconcile_log WHERE block_index/.test(c.args[0]));
+        assert.ok(blockDelIdx >= 0 && restoreIdx < blockDelIdx, 'restore must precede the earn-block delete');
+        assert.ok(deriveDelIdx >= 0 && restoreIdx < deriveDelIdx, 'restore must precede the derive-block delete');
+        assert.ok(logDelIdx >= 0 && restoreIdx < logDelIdx, 'restore must precede the reconcile-log delete');
+    });
+
     // ─── / materialization-block scoping ───────────
     //
     // An derived anchor reward is EARNED at the checkpoint's snapshot_block S but
@@ -192,6 +232,31 @@ describe('Rollback @regression @tier3', function () {
         const indexIdx = calls.findIndex(c => /DELETE FROM index_addresses WHERE block_index/.test(c.args[0]));
         assert.ok(indexIdx >= 0, 'expected the index_addresses rollback delete');
         assert.ok(delIdx < indexIdx, 'the derive-block delete must precede the index-lookup deletes');
+    });
+
+    it('re-arms recovery-staged rewards from the DERIVE floor, not the reorg height alone', async function () {
+        // A recovery-restored reward carries the materialization block it was first
+        // derived at (earn + the frozen mirror maturity), so the derive-scoped delete above
+        // takes rows whose EARN block sits a whole maturity window below the reorg point.
+        // Re-arming only from the reorg height would leave those staging rows applied=1 with
+        // no validator_rewards row behind them: lost on this node, while the live fleet
+        // re-derives them from its mirror when the canonical chain reaches the height again.
+        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]); // firstActionIndex
+        indexer.indexerDb.doQuery.resolves([]);
+        await rollback.rollback(100);
+        const rearm = indexer.indexerDb.doQuery.getCalls().find(c =>
+            /UPDATE recovery_pending_rewards/.test(c.args[0]));
+        assert.ok(rearm, 'expected the recovery-reward re-arm');
+        assert.deepStrictEqual(rearm.args[1], [ar.restoredRewardRearmFloor(100, 'regtest')]);
+        assert.strictEqual(rearm.args[1][0], 0, 'a reorg to 100 on regtest floors at 0 (100 - maturity, clamped)');
+        // Deep enough that the floor is a real subtraction rather than the clamp.
+        indexer.indexerDb.doQuery.resetHistory();
+        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
+        indexer.indexerDb.doQuery.resolves([]);
+        await rollback.rollback(800000);
+        const deep = indexer.indexerDb.doQuery.getCalls().find(c =>
+            /UPDATE recovery_pending_rewards/.test(c.args[0]));
+        assert.deepStrictEqual(deep.args[1], [800000 - ar.ANCHOR_REWARD_MIRROR_MATURITY]);
     });
 
     it('does NOT restore a reconcile loser that was itself materialized inside the orphaned range', async function () {

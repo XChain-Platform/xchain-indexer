@@ -18,7 +18,7 @@ CREATE TABLE unstakes (
     source_id           BIGINT UNSIGNED NOT NULL,
     signing_pubkey_id   BIGINT UNSIGNED NOT NULL,        -- FK to index_pubkeys (which stake is being unstaked)
     cooldown_end_block  BIGINT UNSIGNED NOT NULL,        -- block when funds release
-    amount              VARCHAR(250) NOT NULL,           -- Total amount being unstaked (sum of all active stake rows for this pubkey at time of unstake)
+    amount              VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,           -- Total amount being unstaked (sum of all active stake rows for this pubkey at time of unstake)
     status_id           BIGINT UNSIGNED,                 -- pending/completed/cancelled
     block_index         BIGINT UNSIGNED NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;

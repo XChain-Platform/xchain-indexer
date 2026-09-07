@@ -450,7 +450,8 @@ describe('anchor-action-query: getanchorconfirmations', function () {
 
     function txidRow(overrides) {
         return Object.assign({
-            action_index: 9, version: 0, chain: 'BTC', network: 'regtest', block_index: 850000,
+            action_index: 9, section_index: 0, version: 0, chain: 'BTC', network: 'regtest',
+            block_index: 850000,
             checkpoint_seq: 7, snapshot_block: 950000, publisher: 'AA'.repeat(32),
             match_batch_seq: null, block_index_doge: 100, status: 'valid'
         }, overrides || {});
@@ -543,6 +544,70 @@ describe('anchor-action-query: getanchorconfirmations', function () {
             assert.strictEqual(r.next_after_action_index, null);
             assert.strictEqual(r.anchors.length, ANCHOR_ROW_LIMIT);
         });
+
+        // A row is (action_index, section_index): a v0 bundle writes one row per chain
+        // section under ONE action_index. The cursor is exclusive on action_index alone, so a
+        // page that ends between two sections of the same bundle resumes strictly past it and
+        // loses the rest of that bundle for good - and a bundle missing its header-block
+        // section reads to the caller as a complete non-matching set, i.e. a memoized
+        // 'rejected' and a forfeited reward. So a truncated page is cut on an ACTION boundary.
+        it('never ends a truncated page inside a multi-section bundle', function () {
+            let rows = [];
+            for (let i = 0; i < ANCHOR_ROW_LIMIT - 1; i++) rows.push(txidRow({ action_index: 100 + i }));
+            // The bundle straddles the cut: section 0 is the 20th row, section 1 the probe.
+            rows.push(txidRow({ action_index: 200, section_index: 0, snapshot_block: 894 }));
+            rows.push(txidRow({ action_index: 200, section_index: 1, snapshot_block: 900 }));
+            assert.strictEqual(rows.length, ANCHOR_ROW_LIMIT + 1);
+
+            let page1 = buildAnchorConfirmationsResponse(CONFIG, 200, rows);
+            assert.strictEqual(page1.truncated, true);
+            assert.ok(page1.anchors.every(a => a.action_index !== 200),
+                'no partial bundle may be served: the split action is trimmed off the page');
+            assert.strictEqual(page1.anchors.length, ANCHOR_ROW_LIMIT - 1,
+                'a truncated page is variable-length, never longer than the cap');
+            assert.strictEqual(page1.next_after_action_index, 100 + ANCHOR_ROW_LIMIT - 2,
+                'the cursor is the last WHOLE action on the page');
+
+            // Resuming on that cursor returns the bundle entire, so the concatenated walk
+            // loses no section and repeats none.
+            let page2 = buildAnchorConfirmationsResponse(CONFIG, 200, rows.filter(
+                row => row.action_index > page1.next_after_action_index));
+            assert.strictEqual(page2.truncated, false);
+            assert.deepStrictEqual(page2.anchors.map(a => a.section_index), [0, 1]);
+            let walked = page1.anchors.concat(page2.anchors)
+                .map(a => a.action_index + ':' + a.section_index);
+            assert.strictEqual(new Set(walked).size, walked.length, 'no row may repeat across pages');
+            assert.strictEqual(walked.length, ANCHOR_ROW_LIMIT + 1, 'no row may be lost across pages');
+        });
+
+        // Trimming to an action boundary must never produce an empty page: its cursor would
+        // not advance and the walk would never terminate. Unreachable while a bundle carries
+        // at most one section per allowed chain, so it is a loud guard, not a code path.
+        it('keeps the page rather than emitting an empty one when a single action overflows the cap', function () {
+            let rows = [];
+            for (let i = 0; i < ANCHOR_ROW_LIMIT + 1; i++)
+                rows.push(txidRow({ action_index: 7, section_index: i }));
+            let errs = [];
+            let realError = console.error;
+            console.error = (...a) => errs.push(a.join(' '));
+            let r;
+            try { r = buildAnchorConfirmationsResponse(CONFIG, 200, rows); }
+            finally { console.error = realError; }
+            assert.strictEqual(r.anchors.length, ANCHOR_ROW_LIMIT, 'the page is kept, not emptied');
+            assert.strictEqual(r.next_after_action_index, 7);
+            assert.strictEqual(errs.length, 1, 'the unreachable case must be reported, not swallowed');
+            assert.match(errs[0], /action_index 7 spans more than/);
+        });
+
+        it('serves the row identity so a caller can tell two anchors on one transaction apart', function () {
+            let r = buildAnchorConfirmationsResponse(CONFIG, 200, [
+                txidRow({ action_index: 11, section_index: 0 }),
+                txidRow({ action_index: 11, section_index: 1 }),
+                txidRow({ action_index: 12, section_index: 0 })
+            ]);
+            assert.deepStrictEqual(r.anchors.map(a => a.action_index), [11, 11, 12]);
+            assert.deepStrictEqual(r.anchors.map(a => a.section_index), [0, 1, 0]);
+        });
     });
 
     describe('ANCHOR_BY_TXID_SQL', function () {
@@ -566,6 +631,16 @@ describe('anchor-action-query: getanchorconfirmations', function () {
             assert.match(ANCHOR_BY_TXID_AFTER_SQL, /WHERE it\.hash = \? AND a\.action_index > \?/);
             assert.match(ANCHOR_BY_TXID_AFTER_SQL, /ORDER BY a\.action_index ASC/);
             assert.ok(ANCHOR_BY_TXID_AFTER_SQL.includes('LIMIT ' + (ANCHOR_ROW_LIMIT + 1)));
+        });
+
+        // The row identity is (action_index, section_index). Without the section tiebreak the
+        // within-bundle order is whatever the engine returns, so which section a page cut
+        // lands on could differ between two nodes reading the same rows.
+        it('selects and orders the section index, the other half of the row identity', function () {
+            for (const sql of [ANCHOR_BY_TXID_SQL, ANCHOR_BY_TXID_AFTER_SQL]) {
+                assert.ok(sql.includes('a.section_index'), 'section_index must be projected');
+                assert.match(sql, /ORDER BY a\.action_index ASC, a\.section_index ASC/);
+            }
         });
     });
 

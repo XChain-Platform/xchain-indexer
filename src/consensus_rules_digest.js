@@ -74,7 +74,11 @@ const SHARED_GATES = [
     ['rollcall_activation',                     ['ROLLCALL_ACTIVATION']],
     ['snapshot_reorg_buffer',                   ['SNAPSHOT_BURIAL_ACTIVATION']],
     ['stake_weighted_quorum',                   ['STAKE_WEIGHTED_QUORUM_ACTIVATION']],
-    ['attest_responsible_widening_activation',  ['ATTEST_RESPONSIBLE_WIDENING_ACTIVATION', 'ATTEST_RESPONSIBLE_WIDENING']]
+    ['attest_responsible_widening_activation',  ['ATTEST_RESPONSIBLE_WIDENING_ACTIVATION', 'ATTEST_RESPONSIBLE_WIDENING']],
+    // Unratified on mainnet and testnet (both null): this row moves the digest for a
+    // gate that decides nothing yet, so an upgraded hub reports a rules mismatch
+    // against un-upgraded peers during the deploy wave, not a divergent ledger.
+    ['attest_response_mirror_activation',       ['ATTEST_RESPONSE_MIRROR_ACTIVATION']]
 ];
 
 const ABSENT = '<absent>';

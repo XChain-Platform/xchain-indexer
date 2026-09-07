@@ -17,7 +17,7 @@ CREATE TABLE sleeps (
     action_index     BIGINT UNSIGNED NOT NULL, -- Unique action index
     type             BIGINT UNSIGNED,          -- 1=Address, 2=Ticker
     tick_id          BIGINT UNSIGNED,          -- id of record in index_tickers table
-    resume_block     VARCHAR(25),              -- Block index of the resume block
+    resume_block     VARCHAR(25) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,              -- Block index of the resume block
     memo_id          BIGINT UNSIGNED,          -- id of record in index_memos table 
     status_id        BIGINT UNSIGNED           -- id of record in index_statuses table
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;

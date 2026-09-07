@@ -235,6 +235,47 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
         assert.strictEqual(result[`${pkA}|${PROV}`].missed_count, 1, 'miss still attributed via the fallback');
     });
 
+    // The fallback re-derive must resolve the capability set at the DECLARED height
+    // BURIED by CANONICAL_REORG_BUFFER, exactly as actions/attest.js
+    // _computeResponsibleSet does, while the STAKE_WEIGHTED_QUORUM flag-day stays on
+    // the raw declared height. Resolving the SET at the raw height selects a different
+    // responsible set whenever a validator's capability stake activates or deactivates
+    // inside (declared - 6, declared], so the recompute charges missed_count to a
+    // validator the live expiry path never held responsible - the byte-for-byte
+    // agreement this recompute's header demands, broken in the one direction no
+    // existing case looked at (they assert THAT the lookup ran, never at what height).
+    it('resolves the fallback capability set at the buried height, not the raw request block', async function () {
+        const srb      = require('../../src/snapshot_reorg_buffer.js');
+        const reqBlock = Number(expiredReqs[0].block_index);
+        const buried   = srb.buriedSnapshotBlock(reqBlock, 'regtest');
+        assert.strictEqual(buried, reqBlock - srb.CANONICAL_REORG_BUFFER,
+            'regtest arms burial at genesis, so this fixture must really differ from the raw height');
+
+        // pkB's capability stake activated INSIDE the buffer window: the live path,
+        // which resolves at `buried`, never saw it; anything resolving at the raw
+        // height sees it instead of pkA.
+        indexer.indexerDb.getStakeWeightsByCapability = sinon.stub().callsFake(async (cap, height) =>
+            (Number(height) <= buried)
+                ? [{ pubkey: pkA, source: 'srcA', weight: '50000' }]
+                : [{ pubkey: pkB, source: 'srcB', weight: '50000' }]);
+        indexer.indexerDb.getValidatorsByCapability = sinon.stub().callsFake(async (cap, height) =>
+            (Number(height) <= buried) ? [{ pubkey: pkA }] : [{ pubkey: pkB }]);
+
+        await rollback._recomputeAttestationValidatorStats(N);
+        const result = dump();
+
+        const call = indexer.indexerDb.getStakeWeightsByCapability.getCall(0)
+                  || indexer.indexerDb.getValidatorsByCapability.getCall(0);
+        assert.ok(call, 'the fallback must re-derive through one of the capability lookups');
+        assert.strictEqual(Number(call.args[1]), buried,
+            'the capability set must be resolved at the buried height, not the raw request block');
+
+        assert.strictEqual(result[`${pkA}|${PROV}`].missed_count, 1,
+            'the miss belongs to the validator the buried snapshot held responsible');
+        assert.strictEqual(result[`${pkB}|${PROV}`].missed_count, 0,
+            'a validator that only joined inside the reorg buffer must not be charged');
+    });
+
     it('is a no-op when no row was touched in the orphaned range', async function () {
         // Push every row's last touch below the rollback target.
         for (const r of statsStore.values()) r.last_updated_block = N - 5;

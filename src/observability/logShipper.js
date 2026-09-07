@@ -187,6 +187,15 @@ function readLogEnv(env = process.env) {
     };
 }
 
+// fetch() settles on the response HEADERS, so the body is still an open stream
+// holding its socket while the abort timer is cleared. Release it inside that
+// window by cancel, not read; a cancel on an errored body is not a ship failure.
+function releaseBody(res) {
+    const stream = res && res.body;
+    if (!stream || typeof stream.cancel !== 'function') return Promise.resolve();
+    return Promise.resolve(stream.cancel()).catch(() => {});
+}
+
 class LogShipper {
     /**
      * @param {object}   opts
@@ -331,9 +340,9 @@ class LogShipper {
         const headers = { 'Content-Type': 'application/x-ndjson' };
         if (token) headers.Authorization = `Bearer ${token}`;
         return fetch(url, { method: 'POST', headers, body, signal: controller.signal })
-            .then((res) => {
+            .then((res) => releaseBody(res).then(() => {
                 if (!res.ok) throw new Error(`collector responded ${res.status}`);
-            })
+            }))
             .finally(() => clearTimeout(timer));
     }
 

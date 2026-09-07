@@ -21,12 +21,41 @@
  * flagdayPlaceholderGuard.test.js, which asserts over hard-coded cohorts and
  * cannot take a null map.
  *
+ * REGTEST ARMING (operator ruling 2026-09-01). Regtest is the one
+ * network whose height a venue may pin for itself, because a regtest chain is
+ * private and cannot fork anybody. The arming is exercised two ways: the pure
+ * resolver is driven over every accepted and rejected form, and the module is
+ * re-required under an armed environment to prove the whole gate chain
+ * (isRollcallActive -> rollcallEpochClosingAt) turns on with it. The default
+ * stays INERT, and that assertion is load-bearing: a hardcoded regtest height
+ * wedged every single-coin BTC venue at its first close on 2026-08-31.
+ *
  ********************************************************************/
 const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 
 const act = require('../../src/rollcall_activation.js');
+
+const ACT_PATH = require.resolve('../../src/rollcall_activation.js');
+
+// Re-require the module with ROLLCALL_ACTIVATION resolved against `env`. The
+// map is built at require time on purpose (an activation height that can change
+// under a running process is not an activation height), so the only honest way
+// to test the armed venue is to load a fresh copy.
+function loadWithEnv(env){
+    const saved = process.env[act.ROLLCALL_REGTEST_ENV];
+    if(env === undefined) delete process.env[act.ROLLCALL_REGTEST_ENV];
+    else process.env[act.ROLLCALL_REGTEST_ENV] = env;
+    delete require.cache[ACT_PATH];
+    try { return require(ACT_PATH); }
+    finally {
+        delete require.cache[ACT_PATH];
+        if(saved === undefined) delete process.env[act.ROLLCALL_REGTEST_ENV];
+        else process.env[act.ROLLCALL_REGTEST_ENV] = saved;
+        require(ACT_PATH);   // restore the shared instance every other suite holds
+    }
+}
 
 const NETWORKS = ['mainnet', 'testnet', 'regtest'];
 const MAPS = [
@@ -122,6 +151,88 @@ describe('rollcall_activation', function () {
             assert.strictEqual(act.ROLLCALL_ACTIVATION.testnet % act.ROLLCALL_INTERVAL_BLOCKS.testnet, 0,
                 'an activation height that is not an epoch boundary would skip the first epoch');
         });
+
+        it('the documented regtest arming height is a real epoch boundary', function () {
+            assert.strictEqual(act.ROLLCALL_REGTEST_ARMED_HEIGHT % act.ROLLCALL_INTERVAL_BLOCKS.regtest, 0,
+                'an arming height that is not an epoch boundary would skip the venue\'s first epoch');
+        });
+    });
+
+    // The 2026-09-01 ruling scopes the no-tunable-input rule to
+    // shared-ledger networks and gives regtest a documented arming height.
+    describe('the regtest arming opt-in', function () {
+
+        it('REGTEST SHIPS INERT: an unset environment arms nothing', function () {
+            const m = loadWithEnv(undefined);
+            assert.strictEqual(m.ROLLCALL_ACTIVATION.regtest, null,
+                'arming by default re-wedges every single-coin BTC regtest venue at its first close, ' +
+                'which is the 2026-08-31 finding');
+            assert.strictEqual(m.isRollcallActive(0, 'regtest'), false);
+            assert.strictEqual(m.isRollcallActive(99999, 'regtest'), false);
+        });
+
+        it('arms at the documented height 0 on every accepted opt-in word', function () {
+            for (const word of ['armed', 'genesis', 'on', 'true', 'yes', 'ARMED', ' Genesis '])
+                assert.strictEqual(act.resolveRegtestActivation({ [act.ROLLCALL_REGTEST_ENV]: word }),
+                    act.ROLLCALL_REGTEST_ARMED_HEIGHT, word + ' must arm at the documented height');
+        });
+
+        it('takes a bare non-negative height, for a venue with an indexed prefix', function () {
+            assert.strictEqual(act.resolveRegtestActivation({ [act.ROLLCALL_REGTEST_ENV]: '0' }), 0);
+            assert.strictEqual(act.resolveRegtestActivation({ [act.ROLLCALL_REGTEST_ENV]: '30' }), 30);
+            assert.strictEqual(act.resolveRegtestActivation({ [act.ROLLCALL_REGTEST_ENV]: ' 600 ' }), 600);
+        });
+
+        it('stays inert on every off word, an empty value and a missing env', function () {
+            for (const word of ['', '   ', 'off', 'inert', 'false', 'no', 'none', 'OFF'])
+                assert.strictEqual(act.resolveRegtestActivation({ [act.ROLLCALL_REGTEST_ENV]: word }), null,
+                    JSON.stringify(word) + ' must leave regtest inert');
+            assert.strictEqual(act.resolveRegtestActivation({}), null);
+            assert.strictEqual(act.resolveRegtestActivation(null), null);
+        });
+
+        it('FAILS CLOSED on garbage rather than arming a venue nobody meant to arm', function () {
+            const saved = console.error;
+            const said = [];
+            console.error = (m) => said.push(String(m));
+            try {
+                for (const junk of ['-1', '1e3', '0x0', 'maybe', '30.5'])
+                    assert.strictEqual(act.resolveRegtestActivation({ [act.ROLLCALL_REGTEST_ENV]: junk }), null,
+                        JSON.stringify(junk) + ' must not arm');
+            } finally { console.error = saved; }
+            assert.strictEqual(said.length, 5, 'every ignored value must say so on stderr');
+            assert.ok(said[0].indexOf(act.ROLLCALL_REGTEST_ENV) !== -1,
+                'the warning must name the variable the operator has to fix');
+        });
+
+        it('an ARMED venue turns the whole gate chain on, not just the map', function () {
+            const m = loadWithEnv('armed');
+            assert.strictEqual(m.ROLLCALL_ACTIVATION.regtest, 0);
+            assert.strictEqual(m.isRollcallActive(0, 'regtest'), true, 'epoch 0 is a real epoch on an armed venue');
+            assert.strictEqual(m.isRollcallActive(30, 'regtest'), true);
+            const C = m.rollcallCloseHeight(30, 'regtest');
+            assert.strictEqual(C, 44, 'E + window 12 + proof delay 2');
+            assert.strictEqual(m.rollcallEpochClosingAt(C, 'regtest'), 30,
+                'the close block must resolve back to its epoch once the venue is armed');
+        });
+
+        it('an arming height above genesis leaves the epochs below it inert', function () {
+            const m = loadWithEnv('60');
+            assert.strictEqual(m.isRollcallActive(30, 'regtest'), false);
+            assert.strictEqual(m.isRollcallActive(60, 'regtest'), true);
+            assert.strictEqual(m.rollcallEpochClosingAt(m.rollcallCloseHeight(30, 'regtest'), 'regtest'), null);
+            assert.strictEqual(m.rollcallEpochClosingAt(m.rollcallCloseHeight(60, 'regtest'), 'regtest'), 60);
+        });
+
+        it('NEITHER shared-ledger network is reachable from the environment', function () {
+            const m = loadWithEnv('armed');
+            assert.strictEqual(m.ROLLCALL_ACTIVATION.mainnet, null, 'mainnet must never be env-tunable');
+            assert.strictEqual(m.ROLLCALL_ACTIVATION.testnet, 151200, 'testnet must never be env-tunable');
+            const src = fs.readFileSync(ACT_PATH, 'utf8');
+            const envReads = src.match(/process\.env/g) || [];
+            assert.strictEqual(envReads.length, 1,
+                'exactly one env read may exist in this file, and it is the regtest opt-in');
+        });
     });
 
     describe('isRollcallActive', function () {
@@ -147,6 +258,10 @@ describe('rollcall_activation', function () {
             assert.strictEqual(0 >= act.ROLLCALL_ACTIVATION.regtest, true, 'the JS trap this guard exists for');
             for (const h of [0, 30, 60, 99999999])
                 assert.strictEqual(act.isRollcallActive(h, 'regtest'), false, 'regtest armed at ' + h);
+        });
+
+        it('is active from genesis on an ARMED regtest venue, epoch 0 included', function () {
+            assert.strictEqual(loadWithEnv('armed').isRollcallActive(0, 'regtest'), true);
         });
 
         it('fails closed on an unknown network or unparseable height', function () {
@@ -192,19 +307,17 @@ describe('rollcall_activation', function () {
         // differs (30/12/2 against 1008/144/36), so dropping it would stop testing
         // the short-interval case entirely.
         it('round-trips a close block back to its epoch on an ARMED network', function () {
-            const saved = act.ROLLCALL_ACTIVATION.regtest;
-            act.ROLLCALL_ACTIVATION.regtest = 0;
-            try {
-                for (const [E, net] of [[30, 'regtest'], [60, 'regtest'], [151200, 'testnet']]) {
-                    const C = act.rollcallCloseHeight(E, net);
-                    assert.strictEqual(act.rollcallEpochClosingAt(C, net), E, net + ' close ' + C);
-                }
-            } finally { act.ROLLCALL_ACTIVATION.regtest = saved; }
+            const armed = loadWithEnv('armed');
+            for (const [E, net] of [[30, 'regtest'], [60, 'regtest'], [151200, 'testnet']]) {
+                const C = armed.rollcallCloseHeight(E, net);
+                assert.strictEqual(armed.rollcallEpochClosingAt(C, net), E, net + ' close ' + C);
+            }
         });
 
         it('returns null for a block where no epoch closes', function () {
-            assert.strictEqual(act.rollcallEpochClosingAt(43, 'regtest'), null);
-            assert.strictEqual(act.rollcallEpochClosingAt(12345, 'regtest'), null);
+            const armed = loadWithEnv('armed');
+            assert.strictEqual(armed.rollcallEpochClosingAt(43, 'regtest'), null);
+            assert.strictEqual(armed.rollcallEpochClosingAt(12345, 'regtest'), null);
         });
 
         it('never closes an epoch on an inert mainnet', function () {

@@ -44,6 +44,7 @@ const mariadb = require('mariadb');
 const { getTestConfig } = require('../fixtures/config');
 const Utility  = require('../../src/utility');
 const Database = require('../../src/db');
+const ar       = require('../../src/anchor_reward_activation.js');
 
 const DB_HOST = process.env.TEST_DB_HOST || '127.0.0.1';
 const DB_PORT = parseInt(process.env.TEST_DB_PORT) || 3306;
@@ -121,8 +122,14 @@ async function legacyPreseedMap() {
     } finally { await db.pool.end(); }
 }
 
+// The block the staged reward was FIRST derived at, and therefore the only block it may
+// materialize in: the fleet-agreed watermark above its archived earn-block. The reindex drives
+// _applyPendingRewardsDueAtBlock once per block; this fixture drives just that one.
+const DUE_BLOCK = STAGED_REWARD.block_index + ar.ANCHOR_REWARD_MIRROR_MATURITY;
+
 // The F1a recovery path: stage the archived reward by raw string (what recovery.js now does),
-// then run the identical in-block reindex sequence. Returns { map, rewards }.
+// then run the identical in-block reindex sequence, then let the reindex reach the reward's
+// original derive height. Returns { map, rewards, staged, earlyRewards }.
 async function recoveryMap() {
     await freshSchema();
     const db = makeDb();
@@ -134,12 +141,21 @@ async function recoveryMap() {
              VALUES (?, ?, ?, ?, ?, ?)`,
             [STAGED_REWARD.source_address, STAGED_REWARD.validator_pubkey, STAGED_REWARD.reward_type,
              STAGED_REWARD.round_reference, STAGED_REWARD.amount, STAGED_REWARD.block_index]);
-        const map = await inBlockSequence(db, SEQ, 1);   // apply hook fires when Alice gets her id
+        const map = await inBlockSequence(db, SEQ, 1);   // Alice gets her deterministic id here
+        // Nothing may be credited yet: the source address is interned a whole maturity window
+        // below the height the fleet derived this reward at.
+        const early = await db.doQuery("SELECT COUNT(*) AS c FROM validator_rewards");
+        // The reindex reaches the reward's original derive height.
+        await db.beginTransaction();
+        db.blockIndex = DUE_BLOCK;
+        await db._applyPendingRewardsDueAtBlock(DUE_BLOCK);
+        await db.commitTransaction();
         const rewards = await db.doQuery(
-            "SELECT vr.source_id, vr.reward_type, vr.round_reference, vr.amount, vr.block_index, pk.pubkey " +
+            "SELECT vr.source_id, vr.reward_type, vr.round_reference, vr.amount, vr.block_index, " +
+            "vr.derive_block_index, pk.pubkey " +
             "FROM validator_rewards vr JOIN index_pubkeys pk ON pk.id = vr.signing_pubkey_id");
-        const staged = await db.doQuery("SELECT applied, source_id FROM recovery_pending_rewards");
-        return { map, rewards, staged };
+        const staged = await db.doQuery("SELECT applied, source_id, applied_block FROM recovery_pending_rewards");
+        return { map, rewards, staged, earlyRewards: Number(early[0].c) };
     } finally { await db.pool.end(); }
 }
 
@@ -180,13 +196,18 @@ describe('Recovery id-determinism (consensus) @integration', function () {
     // source_id when the source address first gets its in-block id.
     it('F1a acceptance: staged-recovery id map is IDENTICAL to from-genesis', async function () {
         const genesis = await genesisMap();
-        const { map, rewards, staged } = await recoveryMap();
+        const { map, rewards, staged, earlyRewards } = await recoveryMap();
 
         // (1) The counter was never perturbed -> identical id map.
         assert.deepStrictEqual(map, genesis,
             'after F1a, staged recovery must reproduce the from-genesis deterministic id map exactly');
 
-        // (2) The staged reward materialized under Alice's deterministic source_id.
+        // (2) Nothing was credited before the reward's original derive height: a restored row
+        // must not be COLLECT-spendable in a window where no live node holds it.
+        assert.strictEqual(earlyRewards, 0,
+            'the staged reward must not materialize when its source address takes its id');
+
+        // (3) The staged reward materialized under Alice's deterministic source_id.
         assert.strictEqual(rewards.length, 1, 'exactly one reward materialized');
         assert.strictEqual(Number(rewards[0].source_id), genesis['bc1qAlice'],
             'reward source_id equals the deterministic in-block id for the source address');
@@ -196,11 +217,15 @@ describe('Recovery id-determinism (consensus) @integration', function () {
         assert.strictEqual(Number(rewards[0].block_index), STAGED_REWARD.block_index,
             'archived earn-block carried verbatim onto validator_rewards');
         assert.strictEqual(rewards[0].pubkey, STAGED_REWARD.validator_pubkey);
+        assert.strictEqual(Number(rewards[0].derive_block_index), DUE_BLOCK,
+            'the restored row claims the block it was ORIGINALLY derived at, so the reorg-scoping ' +
+            'delete treats it exactly as it treats a live-derived row');
 
-        // (3) The staging row is marked applied with the resolved source_id (for reorg re-arm).
+        // (4) The staging row is marked applied with the resolved source_id (for reorg re-arm).
         assert.strictEqual(staged.length, 1);
         assert.strictEqual(Number(staged[0].applied), 1);
         assert.strictEqual(Number(staged[0].source_id), genesis['bc1qAlice']);
+        assert.strictEqual(Number(staged[0].applied_block), DUE_BLOCK);
     });
 
     // Defense-in-depth: a NULL-block (out-of-band) id is NOT resolvable as a wire ^id (F2

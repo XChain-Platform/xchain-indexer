@@ -79,7 +79,10 @@ function dbFor({ distinctRounds, history }) {
     sinon.stub(util, 'logError');
     const db = new Database('127.0.0.1', 3306, 'xchain_btc_regtest', 'u', 'p', { config, util });
     const calls = [];
-    sinon.stub(db, 'doQuery').callsFake((query, args) => {
+    // The preload reads run through the STRICT helper (M-17: on the hub instance a
+    // swallowed driver error would become VM oracle data). Both are stubbed with the
+    // same fake so the call record stays complete whichever helper a read uses.
+    const answer = (query, args) => {
         calls.push({ query, args });
         if (/MAX\(reference_block\)/i.test(query))      return Promise.resolve([]);
         if (/INNER JOIN/i.test(query))                  return Promise.resolve([]);
@@ -89,7 +92,9 @@ function dbFor({ distinctRounds, history }) {
         // the way the engine would rather than handing back everything.
         const floor = Number(args[1]);
         return Promise.resolve(history.filter(r => Number(r.round_number) >= floor));
-    });
+    };
+    sinon.stub(db, 'doQuery').callsFake(answer);
+    sinon.stub(db, 'doQueryStrict').callsFake(answer);
     db._oracleCalls = calls;
     return db;
 }

@@ -44,6 +44,46 @@ const TERMINAL_HUB_REJECTIONS = [
 // accepted. Covers BOTH shapes the hub uses: a check on `accepted` alone misses the
 // api.js { error } path, and that path carries the transient failures (a hub still
 // booting its aggregator, an unexpected exception inside a handler).
+// The hub's own JSON-RPC code for "you are being rate limited"
+// (xchain-hub/src/lib/rate_limit_policy.js). Keyed on rather than the HTTP status
+// because a fronting proxy can rewrite the status while the envelope survives.
+const HUB_RATE_LIMIT_RPC_CODE = -32029;
+
+// Total wall-clock budget for one hub call, overridable with HUB_CALL_DEADLINE_MS.
+// The `timeout` request option below is an IDLE-socket timer that resets on every byte
+// received, so it bounds a silent socket and nothing else: a hub drip-feeding a body
+// holds the call open forever inside it. Set far above any healthy push so the ceiling
+// can only fire on a wedged request, never on a slow-but-live hub.
+const HUB_CALL_DEADLINE_MS = 60000;
+
+// Turn the hub's RateLimit-* / Retry-After headers into the facts a backoff needs.
+// Present on BOTH the JSON 429 this client's own hub now sends and the plain-text
+// 429 express-rate-limit sends by default, so an indexer talking to an older hub
+// still learns the limit and the wait rather than reporting an unexplained parse
+// error.
+function readRateLimitHeaders(headers){
+    headers = headers || {};
+    let limit  = parseInt(headers['ratelimit-limit'] || headers['x-ratelimit-limit'], 10);
+    let retry  = parseInt(headers['retry-after'], 10);
+    if(!Number.isFinite(retry)) retry = parseInt(headers['ratelimit-reset'] || headers['x-ratelimit-reset'], 10);
+    return {
+        limit:        Number.isFinite(limit) ? limit : null,
+        retryAfterMs: Number.isFinite(retry) && retry >= 0 ? retry * 1000 : null
+    };
+}
+
+// Stamp an error as a throttle so callers can hold off instead of burning a
+// delivery attempt on a row the hub never even looked at. See HubPushQueue._attempt.
+function markRateLimited(err, facts){
+    err.rateLimited = true;
+    err.httpStatus  = facts.httpStatus || 429;
+    err.hubRateLimit    = facts.limit != null ? facts.limit : null;
+    // Default to one full minute: the hub's window is 60s, and waiting too long
+    // costs a retry tick while waiting too little re-trips the same guard.
+    err.retryAfterMs = facts.retryAfterMs != null ? facts.retryAfterMs : 60000;
+    return err;
+}
+
 function hubRejectionReason(result){
     if(!result || typeof result !== 'object') return null;
     if(result.error) return String((result.error && result.error.message) || result.error);
@@ -54,15 +94,41 @@ function hubRejectionReason(result){
 
 class HubClient {
 
-    constructor(hubUrl, apiKey){
+    constructor(hubUrl, apiKey, configUrl, configApiKey){
         this.hubUrl = hubUrl || process.env.HUB_API_URL || '';
         this.apiKey = apiKey || process.env.HUB_API_KEY || '';
+        // The config oracle is not reachable over the mirror feed. getallconfigs returns
+        // every service's connection parameters, DB user and password included, so the hub
+        // keeps it off the public feed port: api.js admits only FEED_RPC_METHODS there and
+        // answers everything else with -32601 'Method not available on this port'. Every
+        // push method this client sends IS on that allowlist, so an indexer pointed at a
+        // validator's feed port pushes and mirrors correctly and then fails its config poll
+        // once a minute forever, silently freezing the hub-supplied params at their startup
+        // values. Point HUB_CONFIG_URL at a private hub API port to separate the two roles.
+        // Unset, both fall back to the feed values, so a single-hub deployment is unchanged.
+        this.configUrl    = configUrl    || process.env.HUB_CONFIG_URL     || this.hubUrl;
+        this.configApiKey = configApiKey || process.env.HUB_CONFIG_API_KEY || this.apiKey;
         // Interim credential scoping: when the hub gates its retraction rails
         // (push*reorg) behind a dedicated HUB_REORG_API_KEY, the reorg pushes
         // must carry that key; everything else keeps the bulk key.
         // Unset = legacy single-key behavior.
         this.reorgApiKey = process.env.HUB_REORG_API_KEY || this.apiKey;
         this.enabled = !!this.hubUrl;
+        // Tracked separately from `enabled`: a deployment may carry a config oracle
+        // without a push endpoint, and the config poll must not be gated on the feed.
+        this.configEnabled = !!this.configUrl;
+        // Wall-clock ceiling for a single _call; see HUB_CALL_DEADLINE_MS.
+        let deadline = Number(process.env.HUB_CALL_DEADLINE_MS);
+        this.callDeadlineMs = Number.isFinite(deadline) && deadline > 0 ? deadline : HUB_CALL_DEADLINE_MS;
+    }
+
+    // Read the hub's operational params. The one method here that is NOT on the hub's
+    // feed-port allowlist, so it goes to configUrl (a private hub API port) rather than
+    // hubUrl; see the constructor. Left as a thin wrapper over _call so callers never
+    // have to know which endpoint a method belongs to.
+    async getAllConfigs(){
+        if(!this.configEnabled) return null;
+        return this._call('getallconfigs', {}, this.configApiKey, this.configUrl);
     }
 
     // Push a chain tip update to the hub (fire-and-forget). Network is
@@ -105,6 +171,22 @@ class HubClient {
     async pushPriceBatch(batchData){
         if(!this.enabled) return;
         return this._requireHubAccepted('pushpricebatch', await this._call('pushpricebatch', batchData));
+    }
+
+    // Push a validated ATTEST batch (a signed window of finalized attestation responses,
+    // parsed off the DOGE rail) to the hub via pushattestbatch. The hub re-verifies the
+    // batch quorum, inserts the carried rows into the response mirror and re-serves them
+    // to every BTC indexer through the ordinary mirror path, which is how a chain-only
+    // node's mirror is rebuilt from chain parse alone.
+    //
+    // batchData is the delivery arm's payload verbatim: source_chain, network,
+    // window_start, window_end, row_count, btc_block_height, rows[], sigs[], action_index,
+    // block_index, block_time, push_generation. The hub destructures exactly those names,
+    // so nothing here reshapes them. rows and sigs are the reassembled body as it came off
+    // the chain, so the hub verifies the same bytes this node verified.
+    async pushAttestBatch(batchData){
+        if(!this.enabled) return;
+        return this._requireHubAccepted('pushattestbatch', await this._call('pushattestbatch', batchData));
     }
 
     // Notify the hub that a reorg rolled back PRICE actions on this chain so it can
@@ -185,9 +267,17 @@ class HubClient {
         throw err;
     }
 
-    _call(method, params, apiKeyOverride){
-        return new Promise((resolve, reject) => {
-            let parsed = url.parse(this.hubUrl);
+    _call(method, params, apiKeyOverride, urlOverride){
+        return new Promise((settleResolve, settleReject) => {
+            // Every exit runs through one latch, and the local `resolve`/`reject` below
+            // ARE that latch: a hub that dies mid-body can fire several of the terminal
+            // events, and a deadline abort races them all, so a direct settle would be a
+            // double-settle. Shadowing the executor's own names keeps the classification
+            // logic in the 'end' handler unchanged rather than restating it.
+            let settled = false;
+            let resolve = (v) => { if(!settled){ settled = true; settleResolve(v); } };
+            let reject  = (e) => { if(!settled){ settled = true; settleReject(e); } };
+            let parsed = url.parse(urlOverride || this.hubUrl);
             let isHttps = parsed.protocol === 'https:';
             let lib = isHttps ? https : http;
 
@@ -218,17 +308,78 @@ class HubClient {
                 let data = '';
                 res.on('data', (chunk) => { data += chunk; });
                 res.on('end', () => {
+                    let status = res.statusCode || 0;
+                    let rl     = readRateLimitHeaders(res.headers);
+                    let parsed;
                     try {
-                        let parsed = JSON.parse(data);
-                        if(parsed.error) return reject(new Error(parsed.error.message || JSON.stringify(parsed.error)));
-                        resolve(parsed.result);
+                        parsed = JSON.parse(data);
                     } catch (e) {
-                        reject(new Error('Invalid JSON response: ' + e.message));
+                        // A non-2xx with an unparseable body is a TRANSPORT verdict, not a
+                        // malformed reply, and reporting it as "Invalid JSON response" hid the
+                        // single most common one for a whole drill: express-rate-limit answers
+                        // 429 with the text/html string "Too many requests, please try again
+                        // later.", which surfaced downstream as `Unexpected token 'T'` and named
+                        // neither the throttle nor the limit. Name the status, and
+                        // for a 429 name the limit and the wait from the RateLimit-* headers.
+                        if(status === 429){
+                            let limitText = rl.limit != null ? rl.limit + ' req/min' : 'limit not advertised';
+                            let waitText  = rl.retryAfterMs != null ? Math.round(rl.retryAfterMs / 1000) + 's' : 'unknown';
+                            return reject(markRateLimited(new Error(
+                                'hub rate limit exceeded (' + limitText + '); retry after ' + waitText +
+                                ' [HTTP 429, non-JSON body]'), { limit: rl.limit, retryAfterMs: rl.retryAfterMs, httpStatus: status }));
+                        }
+                        if(status && (status < 200 || status >= 300))
+                            return reject(Object.assign(
+                                new Error('hub returned HTTP ' + status + ' with a non-JSON body: ' +
+                                    String(data).slice(0, 200)),
+                                { httpStatus: status }));
+                        return reject(new Error('Invalid JSON response: ' + e.message));
                     }
+                    if(parsed.error){
+                        let err = new Error(parsed.error.message || JSON.stringify(parsed.error));
+                        if(parsed.error.code !== undefined) err.rpcCode = parsed.error.code;
+                        if(status) err.httpStatus = status;
+                        // The hub's own JSON 429: the envelope already names the limit and the
+                        // window, so the message needs no rewriting; it only needs classifying
+                        // so HubPushQueue holds off instead of retrying into the same guard.
+                        if(status === 429 || parsed.error.code === HUB_RATE_LIMIT_RPC_CODE){
+                            let errData = parsed.error.data || {};
+                            markRateLimited(err, {
+                                limit:        Number.isFinite(errData.limit) ? errData.limit : rl.limit,
+                                retryAfterMs: Number.isFinite(errData.retryAfterSeconds)
+                                    ? errData.retryAfterSeconds * 1000 : rl.retryAfterMs,
+                                httpStatus:   status || 429
+                            });
+                        }
+                        return reject(err);
+                    }
+                    resolve(parsed.result);
+                });
+                // A hub that disconnects after its headers and a partial body aborts the
+                // RESPONSE: 'end' never fires, and req 'error' never fires either because
+                // the request itself completed. Without these three the promise stays
+                // pending forever, HubPushQueue.drain() keeps `draining` latched across
+                // its awaited _attempt, and every later tick returns at the overlap guard,
+                // so the push queue stops for good with the rows neither acked nor retried.
+                res.on('error',   (err) => { req.destroy(); reject(new Error('hub response error: ' + ((err && err.message) || err))); });
+                res.on('aborted', ()    => { req.destroy(); reject(new Error('hub aborted the response before the body was complete')); });
+                res.on('close',   ()    => {
+                    if(res.complete) return;
+                    req.destroy();
+                    reject(new Error('hub closed the connection before the response body was complete'));
                 });
             });
             req.on('error', (err) => reject(err));
             req.on('timeout', () => { req.destroy(new Error('Request timeout')); });
+            // The idle-socket timer above cannot bound a drip-fed body, so arm the
+            // wall-clock ceiling beside it. Unref'd so it never holds the process open,
+            // and cleared on the request's own teardown so a settled call drops it.
+            let deadlineTimer = setTimeout(() => {
+                req.destroy();
+                reject(new Error('hub call exceeded its ' + this.callDeadlineMs + 'ms deadline'));
+            }, this.callDeadlineMs);
+            if(deadlineTimer.unref) deadlineTimer.unref();
+            req.once('close', () => clearTimeout(deadlineTimer));
             req.write(body);
             req.end();
         });
@@ -236,3 +387,5 @@ class HubClient {
 }
 
 module.exports = HubClient;
+module.exports.HUB_RATE_LIMIT_RPC_CODE = HUB_RATE_LIMIT_RPC_CODE;
+module.exports.readRateLimitHeaders    = readRateLimitHeaders;

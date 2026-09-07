@@ -24,8 +24,9 @@
  *   - Node B (recovered): the REAL AnchorRecovery.run() restores a signed archive
  *     carrying the same reward (stages it by raw source-address string into
  *     recovery_pending_rewards), THEN the BTC reindex replays the identical chain
- *     and createAddress's F1a apply hook materializes the reward under the
- *     deterministic source_id.
+ *     (createAddress assigning the deterministic ids) and materializes the reward
+ *     under that deterministic source_id when it reaches the block the reward was
+ *     originally derived at.
  *
  * Asserts the three P3 invariants:
  *   (1) computeIndexMapChecksum(A) == computeIndexMapChecksum(B)   (the id map)
@@ -96,6 +97,9 @@ const REWARD_AMOUNT = ar.ANCHOR_REWARD_AMOUNT;
 const FORGED_ARCHIVE_AMOUNT = '5.00000000';
 const REWARD_ROUND  = 1;
 const REWARD_TYPE   = 'anchor_BTC';
+// The block the restored reward claims as its materialization block, and the only block it
+// may land in: the fleet-agreed watermark above its archived earn-block.
+const REWARD_DERIVE_BLOCK = ar.anchorRewardDeriveHeight(EARN_BLOCK);
 
 const VALIDATOR = makeKeypair();   // the reward's signing validator (independent of federation signers)
 
@@ -252,8 +256,9 @@ async function freshDb(name) {
 
 // Replay the chain in-block on a BTC indexer DB: deterministic createAddress per block,
 // plus the STAKE row binding the validator pubkey to the stake source (so node A's
-// createValidatorReward resolves the source on-chain). On node B, createAddress's apply
-// hook materializes the staged reward when STAKE_SOURCE first gets its id.
+// createValidatorReward resolves the source on-chain). On node B this assigns the ids the
+// staged reward will later be materialized under; the reward itself lands at its original
+// derive height, well above this toy chain's tip.
 async function replayChain(db) {
     for (const b of CHAIN) {
         await db.beginTransaction();
@@ -379,6 +384,16 @@ describe('Recovery-determinism e2e (consensus) @integration', function () {
         assert.strictEqual(report.failed.length, 0, 'recovery batch must verify: ' + JSON.stringify(report.failed));
         assert.strictEqual(report.rewards, 1, 'recovery must stage exactly 1 reward');
         await replayChain(Bbtc);
+        // The reindex then reaches the height the reward was FIRST derived at (its
+        // archived earn-block + the frozen mirror maturity). That, not the block its source
+        // address happened to be interned in, is where a restored reward lands, so it carries
+        // the same derive_block_index a live-derived row does and the reorg-scoping delete
+        // cannot tell the two apart. Driven directly here; the indexer drives it per block,
+        // beside deriveAnchorRewards.
+        await Bbtc.beginTransaction();
+        Bbtc.blockIndex = REWARD_DERIVE_BLOCK;
+        await Bbtc._applyPendingRewardsDueAtBlock(REWARD_DERIVE_BLOCK);
+        await Bbtc.commitTransaction();
 
         // Contract-heavy leg: deploy the SAME chunked contract on both nodes, across
         // the recovery boundary. Node A (from-genesis) records carriers in position order; node B

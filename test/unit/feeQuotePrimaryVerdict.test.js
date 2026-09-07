@@ -57,8 +57,13 @@ function makeDryRunCtx({ contaminate = true, feeAmount = '1.00000000' } = {}){
             getBlockTime:        async () => 1000,
             beginTransaction:    async () => {},
             rollbackTransaction: async () => {},
+            // Watchdog-fence surface (M-16). _dryRunAction runs under runInDryRunEpoch
+            // (the no-consensus-authority variant), so that one is the stub the
+            // engine actually calls; runInTxEpoch stays because it is the real Database's
+            // default and a future caller that takes it must not lose its stub.
             currentTxEpoch:      () => 0,
             runInTxEpoch:        (epoch, fn) => fn(),
+            runInDryRunEpoch:    (epoch, fn) => fn(),
             getFeeRecord:        async (ai) => {
                 calls.feeRecordFor = ai;
                 // Only the ORDER staged a fee; the match has no fee row, which is

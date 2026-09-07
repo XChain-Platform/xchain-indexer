@@ -104,6 +104,17 @@ function buildApp(indexer) {
         let stalled   = !!indexer.stallReason;
         let wedged    = stallWedged(indexer.stallReason, indexer.lastBlockCommittedAt,
                                     indexer.healthStallGraceMs, now, indexer.stallClearsAt);
+        // Hub mirror connectivity (row 48, attest-response-mirror spec), mirroring api.js:
+        // absent hubDbSync (single-host deployment) or a throwing snapshot both degrade to
+        // the same honest disabled shape rather than fail the whole probe or claim connected.
+        let hubMirror;
+        try {
+            hubMirror = indexer.hubDbSync
+                ? indexer.hubDbSync.mirrorStatus()
+                : { configured: false, connected: false, bootstrapped: false, streamWatermark: null, tables: {} };
+        } catch (err) {
+            hubMirror = { configured: false, connected: false, bootstrapped: false, streamWatermark: null, tables: {} };
+        }
         let unhealthy = indexerDbUnreachable || wedged;
         res.status(unhealthy ? 503 : 200).json({
             indexerBlock: indexerBlock,
@@ -120,7 +131,8 @@ function buildApp(indexer) {
             waitingOnFutureBlock: waitingOnFutureBlock(indexer.stallReason, indexer.stallClearsAt, now),
             stallClass:   stallClassOf(indexer.stallReason, indexer.lastBlockCommittedAt,
                                        indexer.healthStallGraceMs, now, indexer.stallClearsAt),
-            lastBlockCommittedAt: indexer.lastBlockCommittedAt || null
+            lastBlockCommittedAt: indexer.lastBlockCommittedAt || null,
+            hubMirror:    hubMirror
         });
     });
     return app;
@@ -318,6 +330,80 @@ describe('Smoke: REST /status', function () {
             const { status, body } = await getJson(port, '/status');
             assert.strictEqual(status, 200, `Expected HTTP 200 during catch-up but got ${status}`);
             assert.strictEqual(body.degraded, false, 'a plain catch-up is not degraded');
+        } finally {
+            server.close();
+        }
+    });
+
+    // -------------------------------------------------------------------------
+    // Hub mirror connectivity (row 48). connected/disconnected snapshots, the
+    // unconfigured (no hubDbSync at all) case, and a throwing snapshot: none of
+    // these may claim connected or fail the whole probe.
+    // -------------------------------------------------------------------------
+    it('SM-05i: GET /status surfaces hubMirror connected from a live mirror snapshot', async function () {
+        const snapshot = { configured: true, connected: true, bootstrapped: true,
+                            streamWatermark: 1700000000, tables: { attestation_responses: 1700000000 } };
+        const { server, port } = await listen({
+            indexerDb: { async getLatestBlockIndex() { return 100; } },
+            lastDecoderBlock: 100,
+            isSynced() { return true; },
+            hubDbSync: { mirrorStatus() { return snapshot; } },
+        });
+        try {
+            const { status, body } = await getJson(port, '/status');
+            assert.strictEqual(status, 200);
+            assert.deepStrictEqual(body.hubMirror, snapshot);
+        } finally {
+            server.close();
+        }
+    });
+
+    it('SM-05j: GET /status surfaces hubMirror disconnected without claiming connected', async function () {
+        const { server, port } = await listen({
+            indexerDb: { async getLatestBlockIndex() { return 100; } },
+            lastDecoderBlock: 100,
+            isSynced() { return true; },
+            hubDbSync: { mirrorStatus() { return { configured: true, connected: false, bootstrapped: false,
+                                                    streamWatermark: 0, tables: {} }; } },
+        });
+        try {
+            const { body } = await getJson(port, '/status');
+            assert.strictEqual(body.hubMirror.configured, true);
+            assert.strictEqual(body.hubMirror.connected, false);
+        } finally {
+            server.close();
+        }
+    });
+
+    it('SM-05k: GET /status reports hubMirror as unconfigured, never throwing, when the mirror is absent', async function () {
+        const { server, port } = await listen({
+            indexerDb: { async getLatestBlockIndex() { return 100; } },
+            lastDecoderBlock: 100,
+            isSynced() { return true; },
+            // no hubDbSync at all: single-host deployment, HUB_DB_SYNC_ENABLED unset
+        });
+        try {
+            const { status, body } = await getJson(port, '/status');
+            assert.strictEqual(status, 200);
+            assert.deepStrictEqual(body.hubMirror,
+                { configured: false, connected: false, bootstrapped: false, streamWatermark: null, tables: {} });
+        } finally {
+            server.close();
+        }
+    });
+
+    it('SM-05l: GET /status degrades to the disabled hubMirror shape when the snapshot call throws', async function () {
+        const { server, port } = await listen({
+            indexerDb: { async getLatestBlockIndex() { return 100; } },
+            lastDecoderBlock: 100,
+            isSynced() { return true; },
+            hubDbSync: { mirrorStatus() { throw new Error('boom'); } },
+        });
+        try {
+            const { status, body } = await getJson(port, '/status');
+            assert.strictEqual(status, 200, 'a mirror snapshot failure must not fail the whole probe');
+            assert.strictEqual(body.hubMirror.connected, false, 'a throw must never read as connected');
+            assert.strictEqual(body.hubMirror.configured, false);
         } finally {
             server.close();
         }

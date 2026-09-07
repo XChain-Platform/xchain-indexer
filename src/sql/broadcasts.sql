@@ -17,8 +17,8 @@ CREATE TABLE broadcasts (
     action_index           BIGINT UNSIGNED NOT NULL, -- Unique action index
     -- utf8mb4: BROADCAST text is free-form user content, so a 4-byte character is legal.
     message                VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci, -- Message, oracle info, or feed info
-    `value`                VARCHAR(25),              -- Numerical value of the broadcast
-    fee                    VARCHAR(11),              -- Oracle / Feed usage  fee
+    `value`                VARCHAR(25) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,              -- Numerical value of the broadcast
+    fee                    VARCHAR(11) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,              -- Oracle / Feed usage  fee
     memo_id                BIGINT UNSIGNED,          -- id of record in index_memos table 
     broadcast_action_index BIGINT UNSIGNED,          -- broadcast action_index
     status_id              BIGINT UNSIGNED           -- id of record in index_statuses table

@@ -54,6 +54,7 @@ const MIRROR_TWINS = [
     'capability_snapshots',
     'state_checkpoints',
     'anchor_reward_attestations',
+    'attestation_responses',
 ];
 
 // Mirror tables that are NOT declared in a hub_db_sync.js registry array. Empty

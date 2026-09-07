@@ -73,11 +73,16 @@ function dbFor(network, coin, tipTs) {
     sinon.stub(util, 'logError');
     const db   = new Database('127.0.0.1', 3306, 'xchain_btc_regtest', 'u', 'p', { config, util });
     const rows = rowsFor(tipTs);
-    sinon.stub(db, 'doQuery').callsFake((query) => {
+    // The preload reads run through the STRICT helper (M-17: on the hub instance a
+    // swallowed driver error would become VM oracle data). Both helpers answer from
+    // the same canned set so this harness does not depend on which one a read picks.
+    const answer = (query) => {
         if (/MAX\(reference_block\)/i.test(query))  return Promise.resolve([]);
         if (/INNER JOIN/i.test(query))              return Promise.resolve(rows.tip);
         return Promise.resolve(rows.history);
-    });
+    };
+    sinon.stub(db, 'doQuery').callsFake(answer);
+    sinon.stub(db, 'doQueryStrict').callsFake(answer);
     return db;
 }
 

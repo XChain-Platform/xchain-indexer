@@ -128,13 +128,25 @@ class Anchor {
                     d['BATCH_CRC32'] + '|' + String(d['TOTAL_CHUNKS']);
             roundId += '|' + d['MATCH_BATCH_SEQ'];
         } else if(Number(d['FORMAT']) === 0){
-            // A v0 SECTION is root-bearing by construction (the bundle is only ever cut from
-            // rows that carry both light-client roots), so its canonical always appends the
-            // root suffix. Byte-matches the hub's post-flag-day canonicalCheckpoint suffix +
-            // the SDK/explorer reconstructions. `d` here is ONE section, already rebuilt with
-            // the header NETWORK and with SNAPSHOT_BLOCK = that section's own
-            // SECTION_SNAPSHOT_BLOCK: the signatures were produced over the section's block,
-            // never over the bundle's MAX.
+            // Append the root suffix UNCONDITIONALLY, alone among the four canonical
+            // builders: hub (_checkpointRootSuffix), SDK and explorer all gate it on
+            // isCheckpointCommitmentActive. Deliberate, recorded as decision D41 in
+            // the anchor-bundle-per-network spec.
+            //
+            // Parity therefore rests on a PRODUCER-side invariant, not on a shared gate:
+            // no bundle may carry a section whose OWN snapshot block is below
+            // CHECKPOINT_COMMITMENT_ACTIVATION. Nothing enforces that here or in the hub's
+            // D8 skip, which drops a row on root ABSENCE only, and roots appear at the
+            // EARLIER per-chain STATE_COMMITMENT gate. So the invariant is a deployment
+            // fact (every checkpoint the live federations cut is far past the height),
+            // not a code property.
+            //
+            // Fail-closed if it ever breaks: the hub signed such a row rootless, so every
+            // section signature fails and D15 takes the whole bundle down. It never
+            // adopts unsigned roots.
+            //
+            // `d` is ONE section, rebuilt with the header NETWORK and with SNAPSHOT_BLOCK =
+            // its own SECTION_SNAPSHOT_BLOCK, the block its signatures were produced over.
             base += '|' + [String(d['STATE_ROOT'] || '').toLowerCase(), String(d['STATE_ROOT_VERSION']),
                            String(d['BLOCK_MERKLE_ROOT'] || '').toLowerCase(), String(d['BLOCK_MERKLE_VERSION'])].join('|');
         }

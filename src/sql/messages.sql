@@ -16,9 +16,9 @@ DROP TABLE IF EXISTS messages;
 -- TODO : Convert encryption_method field to INTEGER UNSIGNED and force value to 0-9 (0=null)
 CREATE TABLE messages (
     action_index        BIGINT UNSIGNED NOT NULL, -- Unique action index
-    coin                VARCHAR(4),               -- Destination coin network (BTC, LTC, DOGE)
+    coin                VARCHAR(4) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,               -- Destination coin network (BTC, LTC, DOGE)
     destination_id      BIGINT UNSIGNED,          -- id of record in index_addresses table
-    encryption_method   VARCHAR(1),               -- Encryption Method (1=ECIES, 2=ECDH, 3=AES)
+    encryption_method   VARCHAR(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,               -- Encryption Method (1=ECIES, 2=ECDH, 3=AES)
     -- utf8mb4: all three land on the wire verbatim and are only length-checked, so a
     -- 4-byte character reaches the column whether or not the MESSAGE validates.
     encryption_key      MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci, -- Public key to be used to exchange messages

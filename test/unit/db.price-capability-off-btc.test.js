@@ -195,10 +195,22 @@ describe('price capability resolution off BTC @regression', function () {
 
         it('leaves every other unscoped capability on the local path', async function () {
             const { db, mirror } = dbFor('DOGE', 'regtest');
-            assert.deepStrictEqual(await db.getValidatorsByCapability('attestation', SNAP_BLOCK), []);
             assert.deepStrictEqual(await db.getValidatorsByCapability('full_node', SNAP_BLOCK), []);
-            assert.strictEqual(await db.getActiveCapabilityCount('attestation', SNAP_BLOCK), 0);
-            assert.strictEqual(mirror.callCount, 0);
+            assert.strictEqual(await db.getActiveCapabilityCount('full_node', SNAP_BLOCK), 0);
+            assert.strictEqual(mirror.callCount, 0,
+                'the redirect is a NAMED list, not "everything off BTC"');
+        });
+
+        it('attestation redirects too, for the ATTEST response batch on the DOGE rail', async function () {
+            // A v5 batch resolves its quorum against the attestation snapshot at the
+            // signed BTC anchor. Without the redirect that quorum sums to zero stake on
+            // every DOGE node, the identical shape PRICE batching already hit. It widens
+            // only who is CAPABLE: the per-row responsible set is still resolved on BTC,
+            // because actions/attest.js returns [] off BTC before reading anything.
+            const { db, mirror } = dbFor('DOGE', 'regtest');
+            const rows = await db.getValidatorsByCapability('attestation', SNAP_BLOCK);
+            assert.strictEqual(rows.length, 4);
+            assert.strictEqual(mirror.callCount, 1);
         });
 
         it('leaves cross_chain and oracle_publish redirecting, as they always did', async function () {

@@ -1729,6 +1729,18 @@ async function startApi(){
         let futureWait  = XChainIndexer.waitingOnFutureBlock(indexer.stallReason, indexer.stallClearsAt, now);
         let stallClass  = XChainIndexer.stallClassOf(indexer.stallReason, indexer.lastBlockCommittedAt,
                                                      indexer.healthStallGraceMs, now, indexer.stallClearsAt);
+        // Hub mirror connectivity (row 48, attest-response-mirror spec). Absent
+        // entirely on a single-host deployment (HUB_DB_SYNC_ENABLED unset), so an
+        // honest verdict starts from whether the instance exists at all; a snapshot
+        // failure must not fail the whole probe, so it degrades to the same shape.
+        let hubMirror;
+        try {
+            hubMirror = indexer.hubDbSync
+                ? indexer.hubDbSync.mirrorStatus()
+                : { configured: false, connected: false, bootstrapped: false, streamWatermark: null, tables: {} };
+        } catch (err) {
+            hubMirror = { configured: false, connected: false, bootstrapped: false, streamWatermark: null, tables: {} };
+        }
         let unhealthy = indexerDbUnreachable || wedged;
         res.status(unhealthy ? 503 : 200).json({
             indexerBlock: indexerBlock,
@@ -1779,7 +1791,8 @@ async function startApi(){
             lastBlockCommittedAt: indexer.lastBlockCommittedAt || null,
             lastHubConfigFetchAt: lastHubConfigFetchAt,
             hubConfigAgeSeconds:  hubConfigAgeSeconds,
-            hubConfigStale:       hubConfigStale
+            hubConfigStale:       hubConfigStale,
+            hubMirror:            hubMirror
         });
     });
 

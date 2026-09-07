@@ -279,5 +279,36 @@ describe('Rollback coverage guard @regression', function () {
                     twin + ' drifted between xchain-indexer and xchain-sync; keep the twin byte-identical');
             });
         }
+
+        // rollback.js and ClientRollback.js are not whole-file twins, but the contract
+        // slash reorg-restore inside them is: a predicate that picks a different debit on
+        // one side restores a different active stake there, and active stake drives staker
+        // weighting and quorum eligibility, so the two nodes fork. Both files carry the
+        // statement between //<CONTRACT-SLASH-RESTORE-SQL> markers; concatenating its string
+        // literals (template literals here, double-quoted concatenation on the replica, the
+        // interpolated table name dropping out of both) and normalising whitespace yields
+        // the same SQL on both sides.
+        it('the contract slash-restore SQL is identical across xchain-indexer and xchain-sync (cross-repo twin)', function(){
+            const syncPath = path.join(SYNC_ROOT, 'src', 'ClientRollback.js');
+            if(!fs.existsSync(syncPath)){
+                if(REQUIRE_SIBLINGS)
+                    throw new Error('consensus drift guard cannot run: sibling missing at ' + syncPath +
+                        ' (check out xchain-sync or set XCHAIN_SYNC_PATH)');
+                this.skip();
+                return;
+            }
+            function slashRestoreSql(p){
+                const src = fs.readFileSync(p, 'utf8');
+                const m = src.match(/\/\/<CONTRACT-SLASH-RESTORE-SQL>([\s\S]*?)\/\/<\/CONTRACT-SLASH-RESTORE-SQL>/);
+                assert.ok(m, 'CONTRACT-SLASH-RESTORE-SQL markers not found in ' + p);
+                const lits = m[1].match(/`[^`]*`|"(?:[^"\\]|\\.)*"/g) || [];
+                assert.ok(lits.length >= 2, 'expected >=2 SQL literals in the marked block of ' + p + ', got ' + lits.length);
+                return lits.map(l => l.slice(1, -1)).join('').replace(/\s+/g, ' ').trim();
+            }
+            assert.strictEqual(
+                slashRestoreSql(path.join(__dirname, '../../src/rollback.js')),
+                slashRestoreSql(syncPath),
+                'the contract slash-restore SQL drifted between xchain-indexer and xchain-sync; keep it identical');
+        });
     });
 });

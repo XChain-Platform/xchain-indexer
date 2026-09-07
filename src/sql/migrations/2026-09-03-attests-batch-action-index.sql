@@ -1,0 +1,36 @@
+-- xchain:migration mode=auto
+-- Migration: attests.batch_action_index.
+--
+-- WHY
+-- ---
+-- Above ATTEST_RESPONSE_MIRROR_ACTIVATION a finalized attestation response no
+-- longer arrives as its own on-chain transaction. It reaches every indexer
+-- through the hub mirror, and the body reaches the CHAIN later, in a periodic
+-- ATTEST v5 head plus v6 continuation batch on the DOGE rail, which is what keeps
+-- the full history reconstructible from chain parse.
+--
+-- That splits one link the legacy era never had to name. A legacy response IS its
+-- own action, so "which transaction carried this body" was answered by the row's
+-- own action_index. A mirror-applied response is an action minted locally at the
+-- applying block, and the transaction that carried its body is a different action
+-- on a different chain, landing at a different time. This column names it, so the
+-- explorer can link a response to the batch that published it and an operator can
+-- ask the inverse question: which responses has the chain actually got yet.
+--
+-- NULL is meaningful in two distinct ways and both are correct:
+--   * NULL on a legacy-era row, forever. There was never a batch; the response was
+--     the transaction.
+--   * NULL on a mirror-era row whose window has not been published yet. The v5
+--     handler stamps it when the batch lands, so a persistent NULL on an old
+--     mirror-era row is a real coverage gap worth alerting on, not a schema quirk.
+--
+-- Purely additive and nullable, so alterTableForDrift reconciles it automatically
+-- at startup and an indexer that has not upgraded simply lacks the column. It
+-- hashes nothing: the state hash covers the request's status flip through
+-- resolved_block, never this link.
+--
+-- Apply by hand on a replica converged from migrations alone:
+--   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-09-03-attests-batch-action-index.sql
+
+ALTER TABLE attests
+  ADD COLUMN IF NOT EXISTS batch_action_index BIGINT UNSIGNED AFTER callback_execute_action_index;

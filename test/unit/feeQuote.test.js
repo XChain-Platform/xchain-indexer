@@ -320,6 +320,70 @@ describe('native coin fee quote @regression @tier1', function () {
             assert.strictEqual(s.prices.oracleRound, 9);
         });
 
+        // Which database the prices came out of is invisible from outside the process and is
+        // decided by one env var (HUB_DB_NAME) on the indexer alone. Anything off-box that
+        // SEEDS prices has to write into that same database, and when it guesses wrong the
+        // only symptom is every priced action failing `no current oracle price` with both
+        // databases healthy. These pin the disclosure to the read it describes.
+        describe('getFeeSchedule() discloses where it read the prices', function () {
+            function hubBacked(){
+                let util = makeUtil('BTC', FEE_DEST);
+                util.config['NETWORK'] = 'regtest';
+                let tip = 1900000000;
+                // Two stores holding DIFFERENT prices, so the assertion below proves which one
+                // was actually read rather than merely that a number came back.
+                let local = makePriceDb([
+                    { pair: 'BTC/USD',    price: '11111.00000000', round: 4, ts: tip, refBlock: 100 },
+                    { pair: 'XCHAIN/USD', price: '1.00000000',     round: 4, ts: tip, refBlock: 100 }
+                ], { blockTime: tip });
+                let hub = makePriceDb([
+                    { pair: 'BTC/USD',    price: '50000.00000000', round: 4, ts: tip, refBlock: 100 },
+                    { pair: 'XCHAIN/USD', price: '2.00000000',     round: 4, ts: tip, refBlock: 100 }
+                ], { blockTime: tip });
+                hub.db.dbName   = 'XChain_Hub';
+                local.db.dbName = 'XChain_BTC_Regtest_Indexer';
+                local.db.indexer = { hubDb: hub.db };
+                let ctx = ctxFor(util, local.db);
+                ctx.getFeeSchedule = Actions.prototype.getFeeSchedule;
+                return { ctx, util };
+            }
+
+            it('names the indexer\'s own database on a single-host node', async function () {
+                let util = makeUtil('BTC', FEE_DEST);
+                util.config['NETWORK'] = 'regtest';
+                let tip = 1900000000;
+                let { db } = makePriceDb([
+                    { pair: 'BTC/USD',    price: '50000.00000000', round: 4, ts: tip, refBlock: 100 },
+                    { pair: 'XCHAIN/USD', price: '1.00000000',     round: 4, ts: tip, refBlock: 100 }
+                ], { blockTime: tip });
+                db.dbName = 'XChain_BTC_Regtest_Indexer';
+                let ctx = ctxFor(util, db);
+                ctx.getFeeSchedule = Actions.prototype.getFeeSchedule;
+                let s = await ctx.getFeeSchedule.call(ctx);
+                assert.strictEqual(s.priceSource.hubDb, false);
+                assert.strictEqual(s.priceSource.database, 'XChain_BTC_Regtest_Indexer');
+            });
+
+            it('names the hub database, and it is the one the price actually came from', async function () {
+                let { ctx } = hubBacked();
+                let s = await ctx.getFeeSchedule.call(ctx);
+                assert.strictEqual(s.priceSource.hubDb, true);
+                assert.strictEqual(s.priceSource.database, 'XChain_Hub');
+                assert.strictEqual(s.prices.available, true, s.prices.error);
+                assert.strictEqual(s.prices.coinUsd, '50000.00000000', 'read the hub store, not the local one');
+            });
+
+            // Public read surface: the boolean is the client's business, the internal
+            // database name is not.
+            it('withholds the database name on mainnet but still reports the boolean', async function () {
+                let { ctx, util } = hubBacked();
+                util.config['NETWORK'] = 'mainnet';
+                let s = await ctx.getFeeSchedule.call(ctx);
+                assert.strictEqual(s.priceSource.hubDb, true);
+                assert.strictEqual(s.priceSource.database, null);
+            });
+        });
+
         // Minimal Actions-like context for the pricing methods (no dry-run engine involved).
         function ctxFor(util, db){
             return {

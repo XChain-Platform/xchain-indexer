@@ -147,6 +147,12 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
         indexer.util.resetLists();
 
         sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+        // The response-mirror flag day, which regtest arms at genesis: at and above it an
+        // on-chain ATTEST v1 is refused outright, and two cases here fulfil a relayed
+        // request with exactly that wire. The relay legs themselves are untouched by that
+        // era, so these fixtures run below it (attest.test.js owns the gate's own cases).
+        sinon.stub(require('../../../src/attest_response_mirror_activation.js'),
+                   'isResponseMirrorActive').returns(false);
         // Signature verification is stubbed: these tests are about the relay's
         // structure and gating, not about ed25519 itself.
         sinon.stub(ed25519, 'verify').returns(true);

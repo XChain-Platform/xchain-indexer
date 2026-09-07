@@ -29,6 +29,8 @@
  * 
  ********************************************************************/
 
+const consolidationLegAmount = require('../consolidation_leg_amount_activation.js');
+
 class Destroy {
 
     constructor(action){
@@ -95,11 +97,21 @@ class Destroy {
                 ticks[tick] = await this.indexerDb.getTokenInfo(tick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         }
 
-        // Consolidate destroys by TICK and MEMO
+        // Consolidate destroys by TICK and MEMO.
+        //
+        // Same rule and same gate as the SEND leg merge: a leg whose RAW amount fails its tick's
+        // format is held out of the merge on its own key, so it reaches the per-leg format check
+        // below rather than being summed into a passing total. Below the threshold the legacy key
+        // and merge run unchanged (consolidation_leg_amount_activation.js carries the rationale).
+        let legAmountRule = consolidationLegAmount.isConsolidationLegAmountActive(data['BLOCK_TIME'], this.config['NETWORK']);
         let keys = {};
-        for(let info of destroys){
-            let [tick, amount, memo] = info;
+        for(let idx in destroys){
+            let [tick, amount, memo] = destroys[idx];
             let key = tick + '|' + memo;
+            if(legAmountRule)
+                key = (ticks[tick] && !this.util.isValidAmountFormat(ticks[tick]['DECIMALS'], amount))
+                    ? 'i|' + idx
+                    : 'k|' + key;
             if(!this.util.isNull(keys[key]))
                 amount = this.util.bcadd(amount, keys[key][1], ticks[tick] && ticks[tick]['DECIMALS']);
             keys[key] = [tick, amount, memo];

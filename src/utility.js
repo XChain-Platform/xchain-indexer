@@ -24,6 +24,18 @@ const protocolChanges = require('./protocol_changes.js');
 const crypto = require('crypto');
 const mathjs = require('mathjs');
 const fs     = require('fs');
+// The ATTEST response-mirror flag day, read from the LOCAL v0 request row. Same
+// module attest.js's isMirrorEraRequest seam reads, so the applier pass and the
+// handler can never disagree about which era a request is in.
+const attestResponseMirror = require('./attest_response_mirror_activation.js');
+
+// Page size the mirror applier walks its applicability read in. NOT consensus and
+// deliberately not exported: it shapes how many rows a node holds at once, never which
+// rows bind (the read's order is total and the pages are disjoint slices of it), so
+// nodes may disagree on it. Sized above the per-block cap by enough that an ordinary
+// block fills the cap, or exhausts the pending set, in its first page, and matched to
+// getMirroredAttestationResponses' own IN-list chunk so a page is one mirror round trip.
+const ATTEST_MIRROR_APPLICABILITY_PAGE_ROWS = 500;
 
 // Address encoding constants and per-coin network parameters
 // Base58 version bytes and bech32 HRPs mirror the network definitions used by
@@ -51,6 +63,12 @@ const ADDRESS_PARAMS  = {
         regtest: { p2pkh: 0x6f, p2sh: 0xc4, hrp: null }
     }
 };
+// The status a handler records when a bound controller's guard cannot run: the read-only
+// pre-flight surfaces (feequote / preflight, and a BATCH's per-sub-command verdicts) refuse to
+// enter a controller VM, so the action is UNJUDGED rather than rejected. Matched as a substring
+// everywhere, because a handler wraps it ('invalid: ' + error) and the refusal appends the
+// controller detail after it. See Utility.guardInertError / isGuardInertError.
+const GUARD_INERT_SENTINEL = 'FEE_QUOTE_CONTROLLER_UNSUPPORTED';
 
 
 class Utility {
@@ -1148,6 +1166,50 @@ class Utility {
         return { gasCost: gasCost, fee: fee };
     }
 
+    // Resolve one consensus-critical GAS_SCHEDULE cost, strictly.
+    //
+    // getUnifiedTransactionFee above silently substitutes 100 for a key its schedule does
+    // not carry. That is survivable for a key every shipped bundle has held since the
+    // unified schedule existed, but it is the wrong shape for a key added later: a node
+    // whose GAS_SCHEDULE omits or mistypes it would price the action at a phantom default,
+    // commit a different fee DEBIT than a correctly configured node, and fork on the first
+    // fee-bearing action of that kind. Same rule and same reasoning as
+    // resolveGuardGasCeiling: validate (integer, non-negative, no trailing garbage) and
+    // throw loudly rather than mint a default. CONSENSUS_CONFIG_PIN already fails a node
+    // closed at boot when its bundle's GAS_SCHEDULE differs from the pinned one, so this is
+    // the second line, reached only by a bundle that somehow got past it.
+    resolveGasScheduleCost(key){
+        let schedule = this.config['GAS_SCHEDULE'] || {};
+        let raw = schedule[key];
+        let val = parseInt(raw, 10);
+        if(raw === undefined || raw === null || !Number.isInteger(val) || val < 0 || String(raw).trim() !== String(val)){
+            throw new Error('GAS_SCHEDULE.' + key + ' missing or invalid (expected a non-negative integer, got ' + JSON.stringify(raw) + ')');
+        }
+        return val;
+    }
+
+    // Calculate a transaction fee on the unified gas schedule as a flat BASE cost plus a
+    // per-item cost: fee = (base + items * perItem) * GAS_PRICE.
+    //
+    // The base term is the point. A purely per-item price (what getUnifiedTransactionFee
+    // computes, and what the legacy per-DB-hit model computed) makes the smallest instance
+    // of an action arbitrarily cheap, and on a chain where the protocol fee MUST be paid as
+    // a native-coin output (LTC/DOGE: see detectFeePaymentMode, which rejects rather than
+    // falling back to an XCHAIN balance debit) an arbitrarily cheap fee is an output below
+    // the chain's dust threshold, which cannot be created at all. The action is then not
+    // expensive, it is unsubmittable. A base cost puts a floor under the output. See the
+    // SWEEP_BASE / CALLBACK_BASE comment in the coin bundles for how the values are sized.
+    //
+    // Returns { gasCost, fee }, the same shape getUnifiedTransactionFee returns, so both
+    // feed fees['GAS_COST'] / fees['AMOUNT'] identically.
+    getUnifiedBaseItemFee(items, baseKey, perItemKey){
+        let base    = this.resolveGasScheduleCost(baseKey);
+        let perItem = this.resolveGasScheduleCost(perItemKey);
+        let gasCost = this.bcadd(base, this.bcmul(items, perItem, 0), 0);
+        let fee     = this.bcmul(gasCost, this.config['GAS_PRICE'], 8);
+        return { gasCost: gasCost, fee: fee };
+    }
+
     // Flat premium charged when an ORDER/SWAP/DISPENSER create escrows ownership of a tick.
     // Added on top of the expiration fee in the UNIFIED_FEES path; legacy fees do not charge it.
     getOwnershipEscrowFee(){
@@ -1859,12 +1921,47 @@ class Utility {
             case 'SWAP_CREATE':
             case 'DISPENSER_CREATE': return 'trade';
             case 'DESTROY':          return 'burn';
-            // Stubs: the class is reserved + routable, but no handler invokes the guard for these
-            // yet (MINT supply creation / STAKE locking gating land in a later phase).
+            // Both are wired and gating today: mint.js runs the guard on supply creation, stake.js
+            // on the v3 contract-targeted path only (v1/v2 capability stakes are never gated).
             case 'MINT':             return 'mint';
             case 'STAKE':            return 'stake';
             default:                 return null;
         }
+    }
+
+    // ─── guard-inert refusals (the public probe declining to enter a controller VM) ──────────
+    //
+    // One sentinel, three surfaces (feequote, preflight, and a BATCH's per-sub-command verdict),
+    // so the recognizer and the message live here rather than being re-spelled at each of them.
+
+    // Is this status/error string a guard-inert refusal rather than a real rejection?
+    isGuardInertError(status){
+        return (typeof status === 'string') && status.indexOf(GUARD_INERT_SENTINEL) !== -1;
+    }
+
+    // The refusal itself, naming the controller that caused it (contract index + what bound it).
+    guardInertError(controllerIndex, binding){
+        let detail = 'contract ' + Number(controllerIndex);
+        if(binding && binding.actionClass) detail += ' controls ' + String(binding.actionClass);
+        if(binding && binding.subject)     detail += ' for ' + String(binding.subject);
+        return GUARD_INERT_SENTINEL + ' (' + detail + ')';
+    }
+
+    // Just the controller detail out of a guard-inert status string. The parenthetical is
+    // OPTIONAL by design: a bare sentinel with no parenthetical (e.g. one relayed by an
+    // older node) still yields a usable phrase rather than an empty parenthesis or a crash.
+    guardInertDetail(status){
+        if(!this.isGuardInertError(status)) return null;
+        let m = String(status).match(new RegExp(GUARD_INERT_SENTINEL + '\\s*\\(([^)]*)\\)'));
+        return (m && m[1].trim() !== '') ? m[1].trim() : 'controller not named by this node';
+    }
+
+    // The same refusal as a sentence a client can show. Returns null when `status` is not one.
+    describeGuardInert(status){
+        if(!this.isGuardInertError(status)) return null;
+        return 'a bound controller (' + this.guardInertDetail(status) + ') gates this action, and '
+             + 'the read-only pre-flight never enters a controller VM; use the authenticated '
+             + 'dry-run for a verdict';
     }
 
     // Run the bound controller's `guard` for one native action when the token has an effective
@@ -1889,7 +1986,8 @@ class Utility {
         // Record that this tick's controller was consulted this action (PTLC completeness assertion).
         if(!data['_GUARDED_TICKS']) data['_GUARDED_TICKS'] = {};
         data['_GUARDED_TICKS'][String(opts.tick)] = true;
-        return this._invokeController(actions, db, Number(effective.contract_index), opts);
+        return this._invokeController(actions, db, Number(effective.contract_index), opts,
+            { actionClass: actionClass, subject: 'token ' + String(opts.tick) });
     }
 
     // Recipient/account-side enforcement: run the SUBJECT address's controller for the given class
@@ -1904,12 +2002,15 @@ class Utility {
         // Most-specific-wins: a class-specific binding overrides the catch-all 'all' binding.
         let effective = await db.getEffectiveAddressControllerForGuard(addressId, opts.actionClass, opts.data['BLOCK_INDEX'], opts.data['ACTION_INDEX']);
         if(!effective) return none;
-        return this._invokeController(actions, db, Number(effective.contract_index), opts);
+        return this._invokeController(actions, db, Number(effective.contract_index), opts,
+            { actionClass: opts.actionClass, subject: 'address ' + String(opts.address) });
     }
 
     // Shared tail for both controller kinds: the guard-of-guard skip, the gas-ceiling reservation
     // against SOURCE, the VM guard run (fail-closed in runControllerGuard), and the fee derivation.
-    async _invokeController(actions, db, controllerIndex, opts){
+    // `binding` describes what bound the controller (class + subject) and is used ONLY to name the
+    // cause in the guard-inert refusal below; it never influences enforcement.
+    async _invokeController(actions, db, controllerIndex, opts, binding){
         let data = opts.data;
         // Activation gate (single shared chokepoint for both token- and address-controller
         // guards). Until the CONTROLLER_GUARD flag-day the guard is a strict no-op on every
@@ -1934,10 +2035,22 @@ class Utility {
         // inherits the refusal for free. GUARD_INERT is set only on computeFeeQuote's synthetic tx
         // (never a decoded block tx, never the API-key-gated feequotedryrun), so this branch is dead
         // on block processing and cannot skip a guard on a real transaction.
+        //
+        // The sentinel NAMES its cause. A caller that gets back a bare
+        // FEE_QUOTE_CONTROLLER_UNSUPPORTED cannot tell which of an action's several possible
+        // guards declined - a SEND consults up to three (the token's, the sender's, the
+        // recipient's) - so a wallet could only say "something about this is controlled". The
+        // detail is appended, never substituted, so every existing consumer (which matches the
+        // sentinel as a SUBSTRING: actions.js, sdk preflight/tier1.js) is unaffected. Safe to
+        // change freely: this branch is reachable only on the synthetic GUARD_INERT probe tx, so
+        // the string never enters a decoded action's status and carries no consensus weight.
         if(data['GUARD_INERT'])
-            return { error: 'FEE_QUOTE_CONTROLLER_UNSUPPORTED', guardFee: 0, payoutLegs: null };
-        // No guard-of-guard: a controller's own emission of the gated subject is not re-guarded;
-        // cross-token / different-controller moves still guard, bounded by VM_MAX_CALL_DEPTH.
+            return { error: this.guardInertError(controllerIndex, binding), guardFee: 0, payoutLegs: null };
+        // No guard-of-guard, keyed on the CONTROLLER rather than on the subject: an emission from
+        // this same controller is never re-guarded, INCLUDING when it moves a different token or
+        // address the same controller also governs (one controller bound to two tokens sees its
+        // guard run once). Only a subject resolving to a DIFFERENT controller re-enters a guard,
+        // bounded by VM_MAX_CALL_DEPTH.
         if(data['IS_GUARD_EMISSION'] && Number(data['EMITTER']) === Number(controllerIndex))
             return { error: null, guardFee: 0, payoutLegs: null };
         // Reserve the guard gas ceiling against SOURCE's GAS balance (caller-pays-for-attempt) so a
@@ -2076,6 +2189,201 @@ class Utility {
             data['IS_SYNTHETIC'] = true;
             // Mirror the synthetic-action positional layout: VERSION|REQUEST_ID
             await actions.processAction('ATTEST', [2, info.request_id], data, null);
+        }
+    }
+
+    // §4.1 of the ATTEST response-mirror design, as a pure function: which mirrored
+    // responses BIND at block B, and in what order.
+    //
+    // It is a function rather than SQL because the mirror may be a separate database
+    // connection (db.getMirroredAttestationResponses), so the two halves of the join
+    // cannot meet in one statement, and because this predicate is the consensus rule
+    // the whole design rests on: every node must fire a contract callback at the SAME
+    // block, and the block is
+    //
+    //     R binds at B  <=>  R.effective_time <= t(B)
+    //                        and B <= request.deadline_block
+    //                        and the LOCAL v0 row for R.request_id is 'pending'
+    //                        and that row is mirror-era (activation height)
+    //
+    // and nothing else. There is deliberately no grace term: a grace is a node-local
+    // WAIT (the barrier in XChainIndexer/hub_db_sync), never a term in a hashed
+    // predicate, or a node that waited longer would bind at a different block.
+    // `blockTime` is PROTOCOL time (MTP off mainnet), which every node derives
+    // identically from the chain, and effective_time is inside the SIGNED canonical,
+    // so both sides of the comparison are chain- or signature-derived.
+    //
+    // A row whose first satisfying block is past the deadline never binds (the
+    // `B <= deadline_block` clause), the expiry sweep flips the request to 'expired'
+    // at deadline+1, and the expired callback stands (AT3). A row satisfied exactly AT
+    // the deadline block binds: the sweep's own predicate is deadline_block < B.
+    //
+    // ORDER is the local request row's (block_index, action_index), never the mirror
+    // row's informational copies of them and never a CHAR(64) request_id collation.
+    // Insertion order of the mirror rows is discarded here.
+    //
+    // CAPPED at ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK, taken as a PREFIX of that order, so a
+    // block's callback cost is bounded and every node defers the same rows. The order is
+    // TOTAL (action_index is unique), which is the whole reason a prefix is safe: over a
+    // partial or planner-dependent order two nodes would take different subsets and fork.
+    // A deferred row needs no bookkeeping, because it is still applicable at the next
+    // block and this same call selects it there; the constant's own comment carries the
+    // carry-forward rule in full.
+    selectApplicableAttestationResponses(mirrorRows, requestRows, blockIndex, blockTime, network){
+        let block = Number(blockIndex);
+        let time  = Number(blockTime);
+        // Local request rows, keyed for lookup. Filtered to the ones a mirror row may
+        // bind to at all, which is the same set the SQL bound selects; re-stated here
+        // because THIS is the copy of the rule that is tested and falsified.
+        let byId = new Map();
+        for(let req of (requestRows || [])){
+            if(String(req.request_status) !== 'pending')                    continue;
+            if(!(block <= Number(req.deadline_block)))                      continue;
+            // The flag day is keyed on the REQUEST's own block (§7.1), read from the
+            // local row. attest.js's isMirrorEraRequest is the same module: the applier
+            // re-checks it as its own gate, and row 18's chain-side gate calls it too.
+            if(!attestResponseMirror.isResponseMirrorActive(req.block_index, network)) continue;
+            byId.set(String(req.request_id).toLowerCase(), req);
+        }
+        if(byId.size === 0) return [];
+
+        // One response per request, chosen from however many honest rows the mirror
+        // holds for it. The mirror's key is (network, request_id, effective_time) because
+        // a round that finalized under two leader slots (the slot follows the chain tip
+        // each hub polled) yields two quorum-signed rows differing only in the stamp,
+        // and every hub ends up holding both. The smaller effective_time binds, ties
+        // broken by response_hash, both signed fields, so every node picks the same one
+        // and the other is skipped rather than applied second.
+        let chosen = new Map();
+        for(let row of (mirrorRows || [])){
+            let id = String(row.request_id || '').toLowerCase();
+            if(!byId.has(id))                          continue;
+            if(!(Number(row.effective_time) <= time))  continue;
+            let prior = chosen.get(id);
+            if(prior){
+                let a = Number(row.effective_time), b = Number(prior.effective_time);
+                let better = (a < b) || (a === b &&
+                    String(row.response_hash || '') < String(prior.response_hash || ''));
+                if(!better) continue;
+            }
+            chosen.set(id, row);
+        }
+        if(chosen.size === 0) return [];
+
+        let out = [];
+        for(let [id, row] of chosen)
+            out.push({ response: row, request: byId.get(id) });
+        out.sort((x, y) => {
+            let bx = Number(x.request.block_index),  by = Number(y.request.block_index);
+            if(bx !== by) return bx - by;
+            let ax = Number(x.request.action_index), ay = Number(y.request.action_index);
+            return ax - ay;
+        });
+        // Required here rather than at the top of the file, the way the XCALL pass below
+        // resolves its own per-block cap: the action modules are constructed from this one.
+        let cap = require('./actions/attest.js').ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK;
+        return out.slice(0, cap);
+    }
+
+    // Per-block hub-mirror ATTEST response applier pass (the response-mirror design
+    // §4.1/§4.4). Runs at a PINNED pipeline position (immediately after
+    // processCrossChainCalls, before processAttestationExpirations) because the VM's
+    // attestation snapshot is inclusive of the current block: with this position no
+    // EXECUTE inside B sees a response bound at B and every EXECUTE in B+1 does, on
+    // every node. BTC-only, gated by the caller exactly as the barrier is.
+    //
+    // Synthesizes one ATTEST v1 action per binding row, the way the expiry sweep above
+    // synthesizes a v2. The handler verifies the row through the shared verifier and,
+    // only on success, mints the action and runs the v1 effects; a row that fails is
+    // inert, so a synthesized-and-skipped row writes nothing.
+    async processAttestationResponses(actions, db, block_index, block_time){
+        let network = db.config['NETWORK'];
+        let cap     = require('./actions/attest.js').ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK;
+
+        // BOUNDED READ. The per-block cap bounds the callbacks; this bounds the two reads
+        // that feed them. Both are walked one page at a time in the §4.1 order and the
+        // walk stops as soon as the cap is filled, so a block that binds ten responses
+        // reads about one page instead of every pending request and then every one of
+        // their mirror rows.
+        //
+        // THE SELECTED SET IS UNCHANGED, which is the only thing that matters here: the
+        // read's ORDER BY is already the §4.1 total order, the selector re-sorts on the
+        // same key, and pages are disjoint consecutive slices of that order taken in
+        // order. So the sequence of applicable pairs this builds is the sequence the
+        // unpaged read built, and the first `cap` of it is the same prefix. A node paging
+        // at a different size, or not paging at all, still applies the same rows.
+        //
+        // The double-finalize tie-break is safe under paging for a separate reason: it is
+        // resolved per request_id, and every mirror row for an id is fetched with the page
+        // that carries that id, never split across pages.
+        let applicable = [];
+        let after      = null;
+        // Counted for the diagnostic below, never used to decide anything.
+        let pendingSeen = 0;
+        let mirrorSeen  = 0;
+        while(applicable.length < cap){
+            // Local side first: with nothing pending there is nothing a mirror row can
+            // bind to, which is the common case and costs one indexed read.
+            let page = await db.getAttestationRequestsAwaitingMirrorResponse(
+                block_index, ATTEST_MIRROR_APPLICABILITY_PAGE_ROWS, after);
+            if(page.length === 0) break;
+            let ids      = page.map(r => String(r.request_id || '').toLowerCase());
+            let mirrored = await db.getMirroredAttestationResponses(network, ids, block_time);
+            pendingSeen += page.length;
+            mirrorSeen  += (mirrored || []).length;
+            for(let item of this.selectApplicableAttestationResponses(mirrored, page, block_index, block_time, network)){
+                applicable.push(item);
+                if(applicable.length >= cap) break;
+            }
+            if(page.length < ATTEST_MIRROR_APPLICABILITY_PAGE_ROWS) break;
+            let last = page[page.length - 1];
+            after = { block_index: last.block_index, action_index: last.action_index };
+        }
+
+        // WHY THIS BLOCK LOGS AT ALL. Every step above can decline silently: a
+        // request that is not pending, a deadline already passed, a flag day not
+        // yet active, an effective time still in the future, or simply no mirror
+        // row for any pending id. The result of each is the same empty list, and
+        // downstream that is indistinguishable from a mirror that never delivered
+        // a row. Three acceptance runs were spent attributing exactly this to the
+        // mirror, then to the roster, then to node catch-up, because the applier
+        // said nothing whatsoever about what it had considered and declined.
+        //
+        // Logged only when there IS something pending, so a chain with no
+        // attestation traffic stays quiet. Counts only: this runs per block.
+        if(pendingSeen > 0 && applicable.length === 0){
+            console.log('processAttestationResponses: block ' + block_index + ' considered ' +
+                pendingSeen + ' pending request(s) and ' + mirrorSeen + ' mirror row(s), applied 0. ' +
+                'A mirror row binds only when its request is still pending, the deadline has not ' +
+                'passed, the flag day is active at the REQUEST\'s block, and effective_time <= ' +
+                block_time + '. If a row exists and none of those is the reason, the response is ' +
+                'failing verification inside the handler and is inert.');
+        }
+
+        for(let item of applicable){
+            let data = {};
+            data['ACTION']       = 'ATTEST';
+            data['FORMAT']       = 1;
+            data['BLOCK_INDEX']  = block_index;
+            // Load-bearing, not decoration: _settleRequestFee reaches the broadcast-fee
+            // reimbursement, which reads BLOCK_TIME for its fee-oracle lookup, and the
+            // injected callback context carries it too.
+            data['BLOCK_TIME']   = block_time;
+            // No transaction is behind a mirror-applied response. That is the entire
+            // point of the design, and it is what AT1 asserts on the resulting action.
+            data['TX_INDEX']     = null;
+            data['TX_VOUT']      = null;
+            data['IS_SYNTHETIC'] = true;
+            // The mirror row plus the LOCAL request row it binds to. Passing the pair is
+            // what keeps the handler from re-reading (and re-ordering) state the binding
+            // rule already decided.
+            data['MIRROR_RESPONSE'] = item.response;
+            data['MIRROR_REQUEST']  = item.request;
+            data['REQUEST_ID']      = item.response.request_id;
+            // Mirror the synthetic-action positional layout: VERSION|REQUEST_ID. The
+            // handler reads the row, not these params; they exist so the action looks
+            // like every other synthesized one.
+            await actions.processAction('ATTEST', [1, item.response.request_id], data, null);
         }
     }
 

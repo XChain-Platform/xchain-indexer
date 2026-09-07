@@ -48,6 +48,7 @@ const dispenserFreshness = require('../dispenser_freshness_activation.js');
 const dispenserCaps = require('../dispenser_caps_activation.js');
 const dispenserGiveAmount = require('../dispenser_give_amount_activation.js');
 const dispenserOraclePrice = require('../dispenser_oracle_price_activation.js');
+const dispenserAmountPositivity = require('../dispenser_amount_positivity_activation.js');
 
 class Dispenser {
 
@@ -271,6 +272,25 @@ class Dispenser {
         // Verify GET_AMOUNT format
         if(!error && format==0 && !this.util.isNull(data['GET_AMOUNT']) && getTokenInfo && !this.util.isValidAmountFormat(getTokenInfo['DECIMALS'], data['GET_AMOUNT']))
             error = "invalid: GET_AMOUNT (format)";
+
+        // Verify a NATIVE-COIN-priced GET_AMOUNT against COIN_DECIMALS, as order.js resolves
+        // its native side. The rule above is a conjunct on getTokenInfo, which an empty
+        // GET_TICK never loads, so that shape reached storage with no sign or precision
+        // check. Gated (dispenser_amount_positivity_activation.js): it rejects creates the
+        // ungated engine accepts, so replay below the threshold stays byte-identical.
+        let getAmountPositivity = dispenserAmountPositivity.isDispenserAmountPositivityActive(data['BLOCK_TIME'], this.config['NETWORK']);
+        if(!error && format==0 && getAmountPositivity && this.util.isNull(data['GET_TICK']) &&
+           !this.util.isNull(data['GET_AMOUNT']) && !this.util.isValidAmountFormat(this.config['COIN_DECIMALS'], data['GET_AMOUNT']))
+            error = "invalid: GET_AMOUNT (format)";
+
+        // Require a strictly-positive GET_AMOUNT on a dispenser that names its own price,
+        // mirroring the ORDER-AMT-1 rule at order.js. Skipped for FIAT and oracle
+        // dispensers, where the price comes from FIAT_AMOUNT or the oracle round and an
+        // empty GET_AMOUNT is legitimate. Gated for the same reason as the rule above.
+        if(!error && format==0 && getAmountPositivity &&
+           this.util.isNull(data['FIAT_CODE']) && this.util.isNull(data['ORACLE_ADDRESS']) &&
+           !this.util.bcgt(data['GET_AMOUNT'], '0'))
+            error = "invalid: GET_AMOUNT (must be positive)";
 
         // Verify GET_ADDRESS is given if COIN network differs from GET_COIN network
         if(!error && format==0 && this.config['COIN']!=data['GET_COIN'] && this.util.isNull(data['GET_ADDRESS']))

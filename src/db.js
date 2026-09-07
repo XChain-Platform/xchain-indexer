@@ -49,11 +49,13 @@ const dispenseCancellingMatch = require('./dispense_cancelling_match_activation'
 const stateKeyCollation = require('./state_key_collation_activation');
 const snapshotAgeCausality = require('./oracle_snapshot_age_causality_activation');
 const staleRoundVisibility = require('./oracle_stale_round_visibility_activation');
+const preloadCausality = require('./oracle_preload_causality_activation');
 const listEditResolution = require('./list_edit_resolution_activation');
 const caretRefStrict = require('./caret_ref_strict_activation');
 const ledgerPrecision = require('./ledger_amount_precision_activation');
 const dispenserSendCompare = require('./dispenser_send_amount_compare_activation');
 const stakeWeightCollation = require('./stake_weight_collation_activation');
+const slashGrid = require('./slash_grid_activation');
 // Per-block cap on the ATTEST deadline-expiry sweep. Vendored
 // byte-identical from xchain-documentation/protocol/constants.js, same convention
 // as the XCALL_MAX_CALLS_PER_BLOCK sibling it mirrors.
@@ -66,9 +68,37 @@ const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS,
         ARCHIVE_ANCHOR_BY_CONTENT_SQL, selectArchiveHeadRow,
         dedupeArchiveChunks } = require('./anchor-action-query');
 const { rethrowIfInfraFault } = require('./actions/faultGuard');
+// The ATTEST batch wire versions, taken from the codec rather than written as literals
+// here, so the chunk read and the parser cannot disagree about which versions are chunks.
+const abw = require('./attest_batch_wire.js');
+
+// Row limit on ONE publisher's chunk set for ONE ATTEST batch key, the archive rail's
+// ANCHOR_ROW_LIMIT / ARCHIVE_ANCHOR_ROW_LIMIT applied to the batch rail. Only ever
+// applied to an author-scoped read (getAttestBatchChunks explains why the unscoped one
+// cannot carry a limit at all).
+//
+// DERIVED FROM THE PARSER'S OWN CEILING, not from the encoder's habits, so it cannot
+// truncate a batch the WIRE CONTRACT accepts. It once read a bare 256 justified by what
+// the codec would produce (about 175 wires for the largest body), but the split a
+// publisher chooses carries no consensus weight, so a batch of smaller slices was
+// accepted by the parser and then truncated here: the coverage check saw 256 of 258 rows,
+// returned `chunk-coverage`, and a complete on-chain batch never absorbed.
+// ATTEST_BATCH_MAX_CHUNKS is now the one number both sides read, so the two cannot drift.
+//
+// The bound is safe AFTER the author partition and only there (getAttestBatchChunks
+// explains why the unscoped read cannot carry a limit at all): one publisher's valid rows
+// under one key are their head plus at most one row per slot, because this read returns
+// only 'valid' rows and a second head or a refilled slot is stamped invalid at parse. So
+// the row count cannot exceed the declared chunk count, which the parser now bounds.
+const ATTEST_BATCH_CHUNK_ROW_LIMIT = abw.ATTEST_BATCH_MAX_CHUNKS;
+
 // The validator_rewards ledger-key qualifier rule, shared with the two JS writers so the
 // SQL predicate here and they cannot disagree about which reward type is qualified.
 const arKey = require('./anchor_reward_key.js');
+// The frozen anchor/archive reward heights: the derive flag-day and the fleet-agreed
+// mirror-completeness watermark. Recovery-restored rewards claim their ORIGINAL derive
+// height from here, so a restored row and a live-derived one carry the same stamp.
+const ar = require('./anchor_reward_activation.js');
 const diag = require('./diagnosticEvents.js');
 
 // A stake weight, as stake_weighted_quorum.bcnum accepts one (plain decimal string).
@@ -166,13 +196,26 @@ const CANONICAL_CARET_ID = /^[1-9][0-9]*$/;
 // round on LTC/DOGE sums to zero stake and records 'invalid: insufficient signer stake'
 // with signatures that all verify.
 //
+// `attestation` joins them for the ATTEST v5/v6 response batch, which rides the DOGE rail
+// and must resolve its BATCH quorum against the capability snapshot at the signed BTC
+// anchor. Without the redirect that quorum sums to zero stake on every DOGE node, which is
+// the identical shape PRICE batching already hit.
+//
+// It widens ONLY who is capable, never who is responsible. The per-row responsible set is
+// resolved by actions/attest.js _computeResponsibleSet, which returns [] off BTC before it
+// reads anything, and that filter stays the binding gate on the on-chain v1 path: an ATTEST
+// v1 landing off BTC is refused for the same reason after this change as before it. That is
+// deliberate, and it is why per-row responsible-set verification happens on the BTC indexer
+// after the hub re-serves the row, never on the batch's landing chain.
+//
 // ONE predicate for ALL FOUR capability reads (validator set, stake weights, active count,
 // per-pubkey membership). If any one of them consulted a different source, a node would
 // tally signatures against one validator set and divide by a quorum denominator computed
 // from another, reaching a verdict no other node reaches.
 function usesCapabilitySnapshot(config, capability){
     if(!config || config['COIN'] === 'BTC') return false;
-    return capability === 'cross_chain' || capability === 'oracle_publish' || capability === 'price';
+    return capability === 'cross_chain' || capability === 'oracle_publish' ||
+           capability === 'price' || capability === 'attestation';
 }
 
 // True when str[i] opens a backslash escape inside the currently open quoted span.
@@ -1695,7 +1738,7 @@ class Database {
 
     // Run fn with `epoch` installed as the watchdog-fence context for every DB call fn makes
     // (transitively, across awaits). Returns fn's return value (the block-processing promise).
-    // Used only by the block loop; behavior on the non-timeout path is unchanged because the
+    // Used by the BLOCK LOOP; behavior on the non-timeout path is unchanged because the
     // installed epoch always equals the current _txEpoch until the transaction is torn down.
     // The context records WHICH Database instance owns the guarded transaction: the indexer
     // process holds several instances of this class (indexer DB, decoder DB, hub-DB mirror),
@@ -1704,8 +1747,26 @@ class Database {
     // fee validation) draws from that instance's own pool and can never land in the guarded
     // transaction, so it must not be fenced (its epoch counter never advances, so comparing
     // across instances fences every such read; caught live on regtest 2026-07-08).
+    // `consensus: true` marks this context as real block processing, which is what
+    // _assertPriceBarrierNotSkipped keys on; see runInDryRunEpoch below for why the flag
+    // exists and why THIS is the defaulted side.
     runInTxEpoch(epoch, fn){
-        return txEpochStore.run({ owner: this, epoch: epoch }, fn);
+        return txEpochStore.run({ owner: this, epoch: epoch, consensus: true }, fn);
+    }
+
+    // Same M-16 fence, no consensus authority. The fee-quote dry run needs the
+    // zombie-write protection above - it holds the shared transaction and can be abandoned by
+    // its watchdog exactly as a block can - but it is NOT block processing and it commits
+    // nothing. _assertPriceBarrierNotSkipped used "a txEpochStore context exists" as its proof
+    // that a caller is the block loop, and this call site made that proof false: a public
+    // /feequote whose dry run read the price mirror during a barrier-skipped block answered
+    // `handler threw: ... PRICE_BARRIER_DEFERRED` and, worse, set priceBarrierForceBlock, so an
+    // unauthenticated read wrote block-loop state. Splitting the two kinds is the whole fix.
+    // The DEFAULT is deliberately on runInTxEpoch: an unlabelled future caller is then treated
+    // as consensus and trips the barrier as before, which is over-firing rather than silently
+    // escaping a consensus guard. Opting OUT has to be a visible act, and this is it.
+    runInDryRunEpoch(epoch, fn){
+        return txEpochStore.run({ owner: this, epoch: epoch, consensus: false }, fn);
     }
 
     // Watchdog fence (M-16). Reject a write whose issuing epoch no longer matches the current
@@ -1737,11 +1798,16 @@ class Database {
     // mirror. The block rolls back, priceBarrierForceBlock makes the retry take the barrier,
     // and it commits on the second attempt. Same machinery the watchdog path already uses.
     //
-    // Scoped to block processing by the txEpochStore context, which only the block loop
-    // installs and which propagates across awaits into sibling Database instances (the hub
-    // mirror reads run on this exact path). No stored context = an API / healthcheck read,
-    // which is free to read whatever the mirror currently holds and is never fenced. That
-    // scoping is what stops a concurrent api.js fee quote from tripping a consensus guard.
+    // Scoped to block processing by the txEpochStore context's `consensus` flag, which only
+    // runInTxEpoch sets and which propagates across awaits into sibling Database instances (the
+    // hub mirror reads run on this exact path). Two ways out, and BOTH are needed: no stored
+    // context = an API / healthcheck read, and a stored context with consensus false = the
+    // fee-quote dry run, which installs a context of its own for the M-16 fence.
+    // Either is free to read whatever the mirror currently holds, because neither commits
+    // anything - only a block can carry an uncovered mirror read into consensus state. Testing
+    // for the flag rather than for the context's mere existence is what actually stops a
+    // concurrent api.js fee quote from tripping a consensus guard; testing for existence alone
+    // did not, and cost three sweep drives and a wrong "fee price unavailable" on screen.
     // The deferral is thrown as a typed Error carrying PRICE_BARRIER_DEFERRED, because the
     // readers this backstop fires on sit INSIDE action catches that swallow deterministic
     // contract failures (xexec's execution catch, the XCALL/ATTEST callback catches). A bare
@@ -1750,7 +1816,8 @@ class Database {
     // (every injected XEXEC on a transaction-less block recorded result_status='error'
     // while healthy peers recorded 'ok'). The code is what makes rethrowIfInfraFault propagate.
     _assertPriceBarrierNotSkipped(site){
-        if(txEpochStore.getStore() === undefined) return;
+        const ctx = txEpochStore.getStore();
+        if(ctx === undefined || ctx.consensus !== true) return;
         const ix = this.indexer;
         if(!ix || !ix.priceBarrierSkipped) return;
         // Escalate THIS block: the retry must not skip again, or it loops forever.
@@ -3084,18 +3151,7 @@ class Database {
     async _maybeApplyPendingRewards(address, source_id, materializedBlock){
         if(source_id === null || source_id === undefined)
             return;
-        if(!this._recoveryPendingChecked){
-            // One-time probe. The table is auto-created by verifyTables, so it always exists;
-            // guard anyway so a partially-migrated DB degrades to "no pending" instead of throwing.
-            try {
-                let probe = await this.doQuery("SELECT COUNT(*) AS c FROM recovery_pending_rewards WHERE applied=0");
-                this._recoveryPendingRemaining = (probe.length > 0) ? Number(probe[0].c) : 0;
-            } catch(e){
-                this._recoveryPendingRemaining = 0;
-            }
-            this._recoveryPendingChecked = true;
-        }
-        if(this._recoveryPendingRemaining <= 0)
+        if(!await this._probeRecoveryPending())
             return;
         // Stamp applied_block = the block this address was first seen at (createAddress
         // passes its block context). It is the forward-window key xchain-sync streams
@@ -3104,6 +3160,91 @@ class Database {
         // case, but a recovery-then-incremental-catch-up has the same gap).
         let applied = await this._applyPendingRewardsForAddress(address, source_id, materializedBlock);
         this._recoveryPendingRemaining -= applied;
+    }
+
+    // The cheap gate shared by both recovery-reward triggers (the createAddress hook above and
+    // the per-block due sweep below). One-time probe of the unapplied staged count, so normal
+    // indexing (no recovery in progress) pays a single COUNT(*) and then short-circuits on
+    // every later call. The table is auto-created by verifyTables, so it always exists; the
+    // guard keeps a partially-migrated DB degrading to "no pending" instead of throwing.
+    // Returns true iff staged rows remain. The rollback re-arm clears _recoveryPendingChecked
+    // to force a re-probe when it re-arms rows.
+    async _probeRecoveryPending(){
+        if(!this._recoveryPendingChecked){
+            try {
+                let probe = await this.doQuery("SELECT COUNT(*) AS c FROM recovery_pending_rewards WHERE applied=0");
+                this._recoveryPendingRemaining = (probe.length > 0) ? Number(probe[0].c) : 0;
+            } catch(e){
+                this._recoveryPendingRemaining = 0;
+            }
+            this._recoveryPendingChecked = true;
+        }
+        return this._recoveryPendingRemaining > 0;
+    }
+
+    // The block a recovery-restored reward claims as its MATERIALIZATION block, from the
+    // earn-block the ANCHOR archive carries. Thin wrapper so both the apply path and the
+    // due sweep read the one rule (anchor_reward_activation.restoredRewardDeriveHeight):
+    // the restored row claims the height the LIVE fleet derived it at
+    // (earn + ANCHOR_REWARD_MIRROR_MATURITY), never the height recovery re-applied it at.
+    // null below the derive flag-day / on an inert network, where the legacy NULL stamp stands.
+    _restoredRewardDeriveBlock(earnBlock){
+        let network = String((this.config && this.config['NETWORK']) || '');
+        return ar.restoredRewardDeriveHeight(earnBlock, network);
+    }
+
+    // Per-block recovery-reward due sweep. Materializes every staged reward whose ORIGINAL
+    // derive height has been reached by the block now being processed and whose source address
+    // already holds its deterministic in-block id.
+    //
+    // This, not the createAddress hook, is what lands a derive-era restored reward: the source
+    // address is always interned at or before the reward's earn block, which is
+    // ANCHOR_REWARD_MIRROR_MATURITY blocks BELOW the height the fleet minted the reward at, so
+    // the hook always sees the row as not-yet-due and leaves it staged. Landing it here instead
+    // is what makes the recovered node hold the identical reward set as a live node at every
+    // height: materializing at the address's first-seen block credited a COLLECT-spendable
+    // reward for the whole window between that block and the real derive height, a window in
+    // which no live node had it (a larger SUM(validator_rewards), which is a ledger fork at the
+    // next COLLECT). Runs at the same point in the block as deriveAnchorRewards, so a restored
+    // reward becomes claimable in exactly the block a live-derived one does.
+    //
+    // No-op outside an in-progress recovery (the shared cheap gate), and on a chain whose
+    // staging table is empty - which is every chain but BTC, since validator_rewards only ever
+    // resolves a source there. Returns the number of rows materialized.
+    async _applyPendingRewardsDueAtBlock(blockIndex){
+        if(!await this._probeRecoveryPending())
+            return 0;
+        let bi = Number(blockIndex);
+        if(!Number.isFinite(bi))
+            return 0;
+        // The highest earn-block whose derive height has been reached at this block. Rows above
+        // it are still maturing and stay staged. Never negative, so an early chain cannot
+        // sweep everything in at genesis.
+        let dueEarnBlock = bi - ar.ANCHOR_REWARD_MIRROR_MATURITY;
+        if(dueEarnBlock < 0)
+            return 0;
+        let rows = [];
+        try {
+            // Only addresses holding a DETERMINISTIC (block-stamped) id: an out-of-band id is
+            // not reproducible across nodes, so materializing under one would fork the source.
+            rows = await this.doQuery(
+                `SELECT DISTINCT rpr.source_address AS source_address, ia.id AS source_id
+                   FROM recovery_pending_rewards rpr
+                   JOIN index_addresses ia ON ia.address = rpr.source_address
+                  WHERE rpr.applied=0 AND rpr.block_index <= ? AND ia.block_index IS NOT NULL`,
+                [dueEarnBlock]);
+        } catch(e){
+            // Schema gap only (table/column absent on a non-recovery stack, where nothing was
+            // staged). Every other fault propagates so the block transaction aborts rather
+            // than committing a block that silently skipped a due reward.
+            if(!(e && (e.errno === 1146 || e.errno === 1054))) throw e;
+            return 0;
+        }
+        let count = 0;
+        for(let s of (rows || []))
+            count += await this._applyPendingRewardsForAddress(s.source_address, s.source_id, bi);
+        this._recoveryPendingRemaining -= count;
+        return count;
     }
 
     // Materialize every unapplied staged reward for this source address into validator_rewards
@@ -3119,6 +3260,13 @@ class Database {
     // on the staging row as applied_block, the forward-window key xchain-sync streams the
     // row by when its validator_rewards block_index (earn-block) sits below the replication
     // window. Left NULL when not supplied (legacy callers); the collector skips NULL rows.
+    //
+    // DUE-GATED: a derive-era staged row is materialized only once materializedBlock has
+    // reached the height the live fleet derived it at (_restoredRewardDeriveBlock). A row that
+    // is not yet due is left staged for the per-block due sweep above, so no caller (the
+    // createAddress hook, the rollback re-drain) can put a restored reward on the books at a
+    // height where a live node does not hold it. A caller that names no block (legacy/test
+    // paths) cannot judge dueness, so it applies as before.
     async _applyPendingRewardsForAddress(source_address, source_id, materializedBlock){
         let rows = await this.doQuery(
             "SELECT id, validator_pubkey, reward_type, round_reference, amount, block_index FROM recovery_pending_rewards WHERE source_address=? AND applied=0",
@@ -3127,6 +3275,20 @@ class Database {
             ? null : Number(materializedBlock);
         let count = 0;
         for(let r of rows){
+            // The block this reward was FIRST derived at (operator ruling (a),
+            // 2026-08-29). Two things ride on it, and both are the reason a restored row may
+            // not claim the restoring height instead:
+            //   1. the reorg-scoping delete. rollback.js drops validator_rewards on
+            //      derive_block_index >= reorg as well as on the earn-block, because a reward
+            //      whose CREATING block is orphaned is one a from-genesis replay to that height
+            //      has not derived yet. A restored row left NULL here was invisible to that
+            //      delete and survived as a COLLECT-spendable credit no live node still held.
+            //   2. the height it may first appear at (the due gate below).
+            // NULL below the derive flag-day: no BTC-side row was minted by the derive path
+            // there, so the legacy stamp stays byte-identical.
+            let deriveBlock = this._restoredRewardDeriveBlock(r.block_index);
+            if(deriveBlock !== null && appliedBlock !== null && appliedBlock < deriveBlock)
+                continue;   // still maturing; the per-block due sweep lands it at deriveBlock
             let pubkey_id = await this.getOrCreatePubkeyId(String(r.validator_pubkey).toLowerCase());
             if(pubkey_id === null)
                 continue;   // leave unapplied; surfaces as a parity gap rather than a bad FK
@@ -3142,11 +3304,11 @@ class Database {
             // sit one archive reward below a from-genesis replay's.
             await this.doQuery(
                 `INSERT IGNORE INTO validator_rewards
-                    (source_id, signing_pubkey_id, reward_type, round_reference, round_qualifier, amount, block_index)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    (source_id, signing_pubkey_id, reward_type, round_reference, round_qualifier, amount, block_index, derive_block_index)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
                 [source_id, pubkey_id, String(r.reward_type), r.round_reference,
                  arKey.rewardRoundQualifier(r.reward_type, r.block_index),
-                 String(r.amount), Number(r.block_index)]);
+                 String(r.amount), Number(r.block_index), deriveBlock]);
             await this.doQuery("UPDATE recovery_pending_rewards SET applied=1, source_id=?, applied_block=? WHERE id=?",
                 [source_id, appliedBlock, r.id]);
             count++;
@@ -3890,10 +4052,16 @@ class Database {
         let supply   = 0;
         let tick_id  = await this.createTicker(tick);
         let decimals = await this.getTokenDecimalPrecision(tick_id);
-        let query = `SELECT SUM(CAST(amount AS DECIMAL(60, ` + decimals + `))) as supply FROM balances WHERE tick_id=? LIMIT 1`;
+        // Sum at the EXACT ledger scale (18 dp) and round ONCE at the tick's own scale,
+        // the shape sanityCheck's balances projection uses. A per-row cast to the tick's
+        // decimals is round(A)+round(B), which is not round(A+B) once the ledger carries
+        // amounts finer than the tick (ledger_amount_precision_activation.js).
+        let query = `SELECT ` + ledgerPrecision.exactSumSql('amount') + ` as supply FROM balances WHERE tick_id=? LIMIT 1`;
         let results = await this.doQuery(query, [tick_id]);
+        // bcstr keeps the STRING contract this helper always had: a bare bignumber
+        // stringifies below 1e-7 as '1e-8', which no consumer of an amount wants.
         if(results.length > 0 && !this.util.isNull(results[0].supply))
-            supply = results[0].supply;
+            supply = this.util.bcstr(this.util.bcadd(results[0].supply, 0, decimals));
         return supply;
     }
 
@@ -3902,10 +4070,14 @@ class Database {
         let supply   = 0;
         let tick_id  = await this.createTicker(tick);
         let decimals = await this.getTokenDecimalPrecision(tick_id);
-        let query = `SELECT SUM(CAST(amount AS DECIMAL(60, ` + decimals + `))) as supply FROM escrows WHERE tick_id=? LIMIT 1`;
+        // Exact-scale sum, rounded once at the tick's scale; same reason as
+        // getTokenSupplyBalance above, and the same shape sanityCheck's escrow-total
+        // projection uses.
+        let query = `SELECT ` + ledgerPrecision.exactSumSql('amount') + ` as supply FROM escrows WHERE tick_id=? LIMIT 1`;
         let results = await this.doQuery(query, [tick_id]);
+        // bcstr for the same reason as getTokenSupplyBalance above.
         if(results.length > 0 && !this.util.isNull(results[0].supply))
-            supply = results[0].supply;
+            supply = this.util.bcstr(this.util.bcadd(results[0].supply, 0, decimals));
         return supply;
     }
 
@@ -5957,7 +6129,7 @@ class Database {
     // Called by the FILE handler when GATE_TICKER is non-empty.
     // Mirrors the ciphertext bytes (data['RAW_DATA']) so the explorer can
     // serve them via /api/file/{action_index}/raw without reaching across
-    // databases. See xchain-documentation/protocol/TOKEN_GATED_CONTENT.md.
+    // databases. See xchain-documentation/protocol/token-gated-content.md.
     async createGatedFile(data){
         data              = this.normalizeDataValues(data);
         let action_index  = data['ACTION_INDEX'];
@@ -6830,6 +7002,7 @@ class Database {
     // from-genesis replay of a pre-flag block identical on every node.
     async getPollResultsForVM(block_index, includeTick=false){
         let polls = {};
+        let bound = Number(block_index) || 0;
         let rows = await this.doQuery(
             `SELECT p.action_index, p.poll_status, p.winning_option, p.total_weight,
                     p.total_voters, p.decided_early, t.tick
@@ -6837,16 +7010,45 @@ class Database {
                LEFT JOIN index_tickers t ON (t.id = p.tick_id)
               WHERE p.poll_status IN ('finalized','failed_quorum')
                 AND p.resolved_block IS NOT NULL AND p.resolved_block < ?`,
-            [Number(block_index) || 0]);
-        for(let r of rows){
-            let resultRows = await this.doQuery(
-                `SELECT option_index, total_weight, voter_count FROM poll_results
-                  WHERE poll_index=? ORDER BY option_index ASC`, [r.action_index]);
-            let options = resultRows.map(o => ({
+            [bound]);
+        if(rows.length === 0)
+            return { polls: polls };
+        // Options for the WHOLE finalized set in ONE ordered read, grouped in JS.
+        // This replaces a per-poll query inside the loop below, which cost one round
+        // trip per historical poll on EVERY execution and deployment (finding #7080).
+        // The predicate is character-for-character the poll query's, so the grouped
+        // rows are exactly the union of what the per-poll reads returned; polls
+        // (action_index) is UNIQUE, so the join cannot duplicate an option row.
+        // The snapshot is consensus-visible, so the entries below are still built
+        // from the POLLS rows in their existing order: a finalized poll with no
+        // poll_results rows must keep yielding `options: []`, and key insertion
+        // order must not shift.
+        let optionRows = await this.doQuery(
+            `SELECT pr.poll_index, pr.option_index, pr.total_weight, pr.voter_count
+               FROM poll_results pr
+               JOIN polls p ON (p.action_index = pr.poll_index)
+              WHERE p.poll_status IN ('finalized','failed_quorum')
+                AND p.resolved_block IS NOT NULL AND p.resolved_block < ?
+              ORDER BY pr.poll_index ASC, pr.option_index ASC`,
+            [bound]);
+        // String keys on both sides: the pool runs bigIntAsNumber, so both BIGINT
+        // columns arrive as Numbers, and String() of each is the same decimal.
+        let optionsByPoll = new Map();
+        for(let o of optionRows){
+            let key  = String(o.poll_index);
+            let list = optionsByPoll.get(key);
+            if(!list){
+                list = [];
+                optionsByPoll.set(key, list);
+            }
+            list.push({
                 index: Number(o.option_index),
                 weight: String(o.total_weight),
                 voters: Number(o.voter_count)
-            }));
+            });
+        }
+        for(let r of rows){
+            let options = optionsByPoll.get(String(r.action_index)) || [];
             let entry = {
                 status:         r.poll_status,
                 winning_option: this.util.isNull(r.winning_option) ? null : Number(r.winning_option),
@@ -10615,8 +10817,12 @@ class Database {
                     continue;
                 if(tick1_bid==0) tick1_bid = price1;
                 if(tick2_bid==0) tick2_bid = price2;
-                if(price1 > tick1_bid) tick1_bid = price1;
-                if(price2 > tick2_bid) tick2_bid = price2;
+                // bcgt, not `>`: getPrice returns a decimal.js bignumber, and a native
+                // relational compare between two of them coerces both to strings and ranks
+                // them LEXICOGRAPHICALLY, so '10' sorts below '9'. Same disagreement the SQL
+                // side flag-dayed in dispenser_send_amount_compare_activation.js.
+                if(this.util.bcgt(price1, tick1_bid)) tick1_bid = price1;
+                if(this.util.bcgt(price2, tick2_bid)) tick2_bid = price2;
             }
             data.tick1_bid  = tick1_bid;
             data.tick2_bid  = tick2_bid;
@@ -10660,8 +10866,10 @@ class Database {
                     continue;
                 if(tick1_ask==0) tick1_ask = price1;
                 if(tick2_ask==0) tick2_ask = price2;
-                if(price1 < tick1_ask) tick1_ask = price1;
-                if(price2 < tick2_ask) tick2_ask = price2;
+                // bclt for the same reason as the bid block above: a lexicographic rank picks
+                // the wrong extreme here, which publishes an understated ask.
+                if(this.util.bclt(price1, tick1_ask)) tick1_ask = price1;
+                if(this.util.bclt(price2, tick2_ask)) tick2_ask = price2;
             }
             data.tick1_ask = tick1_ask;
             data.tick2_ask = tick2_ask;
@@ -10692,6 +10900,11 @@ class Database {
                 tick2_high   = 0,
                 tick2_low    = 0,
                 tick2_volume = 0;
+            // Scale each volume accumulator sums at, from the decimals the market lookup
+            // above already selected. Clamped to [0,18] like getTokenDecimalPrecision, so a
+            // missing or junk column value can never widen or negate the precision.
+            let tick1_decimals = Math.max(0, Math.min(18, parseInt(data.tick1_decimals) || 0));
+            let tick2_decimals = Math.max(0, Math.min(18, parseInt(data.tick2_decimals) || 0));
             for(let row of results){
                 let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
                 let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount : row.give_amount;
@@ -10706,15 +10919,17 @@ class Database {
                     tick2_high = price2;
                     tick2_low  = price2;
                 }
-                // 24-hour high
-                if(price1 > tick1_high) tick1_high = price1;
-                if(price2 > tick2_high) tick2_high = price2;
+                // 24-hour high (bcgt/bclt: these are bignumbers, see the bid block above)
+                if(this.util.bcgt(price1, tick1_high)) tick1_high = price1;
+                if(this.util.bcgt(price2, tick2_high)) tick2_high = price2;
                 // 24-hour low
-                if(price1 < tick1_low) tick1_low = price1;
-                if(price2 < tick2_low) tick2_low = price2;
-                // 24-hour volumes
-                tick1_volume = this.util.bcadd(tick1_volume, give_amount);
-                tick2_volume = this.util.bcadd(tick2_volume, get_amount);
+                if(this.util.bclt(price1, tick1_low)) tick1_low = price1;
+                if(this.util.bclt(price2, tick2_low)) tick2_low = price2;
+                // 24-hour volumes, summed at each tick's own scale. bcadd with the decimals
+                // argument omitted formats at precision 0, which quantizes every partial sum
+                // to a whole unit: a market of sub-unit fills accumulated to 0.
+                tick1_volume = this.util.bcadd(tick1_volume, give_amount, tick1_decimals);
+                tick2_volume = this.util.bcadd(tick2_volume, get_amount, tick2_decimals);
             }
             data.tick1_24hr_high   = tick1_high;
             data.tick1_24hr_low    = tick1_low;
@@ -11039,7 +11254,11 @@ class Database {
         }
         // Get additional information on this order
         if(dispenser){
-            // Get updated dispenser properties from the dispenser_edits table
+            // Get updated dispenser properties from the dispenser_edits table.
+            // EXPIRATION and the two lists overlay; GIVE_ESCROW deliberately does NOT and
+            // stays the create-time value, because refills are counted by
+            // getDispenserAmountRemaining (64dp) and GIVE_REMAINING below is the number
+            // any caller wanting post-refill escrow should read.
             let edit = await this.getDispenserEdits(action_index, block_time);
             if(edit.expiration)
                 dispenser['EXPIRATION'] = edit.expiration;
@@ -11137,17 +11356,20 @@ class Database {
         results = await this.doQuery(query, args);
     }
 
-    // Return dispenser edit information for given action_index
+    // Return dispenser edit information for given action_index.
+    //
+    // Escrow totals are deliberately NOT returned here: getDispenserAmountRemaining
+    // sums the same refill rows itself at 64dp and is the single source for them. This
+    // must not accumulate a give_escrow its only caller then drops, at 0dp, which would be a
+    // lossy dead compute that a later refactor would have wired up as an accounting bug.
     async getDispenserEdits(action_index, block_time){
         // Define empty edit object
         let edit  = {
-            give_escrow: 0,
             expiration: false,
             allow_list: false,
             block_list: false
         };
-        let query  = `SELECT 
-                        e1.give_escrow,
+        let query  = `SELECT
                         e1.expiration,
                         e1.allow_list,
                         e1.block_list,
@@ -11166,10 +11388,8 @@ class Database {
         let results = await this.doQuery(query, args);
         if(results.length > 0){
             for(let row of results){
-                // refilling dispensers and updating expiration are immediately active
-                if(!this.util.isNull(row.give_escrow)) 
-                    edit.give_escrow = this.util.bcadd(edit.give_escrow, row.give_escrow);
-                if(!this.util.isNull(row.expiration) && this.util.isNumeric(row.expiration))   
+                // updating expiration is immediately active
+                if(!this.util.isNull(row.expiration) && this.util.isNumeric(row.expiration))
                     edit.expiration  = Number(row.expiration);
                 // Determine if the list edits are active or not
                 let active = this.util.bcgt(block_time, this.util.bcadd(row.block_time, this.config['DISPENSER_LIST_DELAY']));
@@ -12415,8 +12635,23 @@ class Database {
     // object the HubClient method expects; it is serialized to JSON. The source
     // action_index is lifted out into its own column so a reorg can purge queued
     // pushes for orphaned actions via the rollback dataTables loop.
-    async enqueueHubPush(pushType, payload){
-        let actionIndex = (payload && payload.action_index != null) ? payload.action_index : 0;
+    //
+    // THE COLUMN IS THE ROLLBACK KEY, NOT THE PAYLOAD'S DISPLAY INDEX. For every push
+    // whose payload names the action that landed it the two are the same value, which is
+    // why the default reads `payload.action_index`. The ATTEST v6 batch is the one caller
+    // where they differ: its payload names the batch HEAD, because the hub stamps that
+    // index onto every carried response as the batch link, while the delivery is landed by
+    // the completing continuation. Keying that row on the payload leaves the queued
+    // delivery alive through a rollback of the very chunk that completed the batch, so it
+    // passes the completing action explicitly as `rollbackActionIndex`.
+    //
+    // @param {string} pushType the pending_hub_pushes.push_type tag
+    // @param {Object} payload the HubClient argument object, serialized to JSON
+    // @param {number} [rollbackActionIndex] the action whose rollback must un-land this
+    //                 push; omitted means the payload's own action_index
+    async enqueueHubPush(pushType, payload, rollbackActionIndex){
+        let actionIndex = (rollbackActionIndex != null) ? rollbackActionIndex
+                        : ((payload && payload.action_index != null) ? payload.action_index : 0);
         let query = `INSERT INTO pending_hub_pushes (push_type, action_index, payload, status, attempts, created_at)
                      VALUES (?, ?, ?, 'pending', 0, NOW())`;
         await this._poolQuery(query, [pushType, actionIndex, JSON.stringify(payload)]);
@@ -12429,8 +12664,13 @@ class Database {
     // lets the caller markHubPushDelivered() on a successful immediate delivery. MUST be called with a
     // transaction open (getConnection() then returns transactionConnection); otherwise it would land
     // on a pooled connection and not be atomic with the rollback.
-    async enqueueHubPushTx(pushType, payload){
-        let actionIndex = (payload && payload.action_index != null) ? payload.action_index : 0;
+    //
+    // `rollbackActionIndex` carries the same meaning it carries on enqueueHubPush: the
+    // action whose rollback must un-land this push, which is the payload's own
+    // action_index for every caller but the ATTEST v6 batch absorb.
+    async enqueueHubPushTx(pushType, payload, rollbackActionIndex){
+        let actionIndex = (rollbackActionIndex != null) ? rollbackActionIndex
+                        : ((payload && payload.action_index != null) ? payload.action_index : 0);
         let query = `INSERT INTO pending_hub_pushes (push_type, action_index, payload, status, attempts, created_at)
                      VALUES (?, ?, ?, 'pending', 0, NOW())`;
         let res = await this.doQuery(query, [pushType, actionIndex, JSON.stringify(payload)]);
@@ -13474,8 +13714,21 @@ class Database {
             query += ' AND s.activation_block <= ?';
             args.push(blockIndex);
         }
-        query += ' GROUP BY s.signing_pubkey_id, ip.pubkey';
+        // Pin the row order on the natural key: the sole caller mints one action_index per
+        // returned row, so this ORDER is consensus (never signing_pubkey_id, a local surrogate).
+        //
+        // Collate utf8_bin because index_pubkeys.pubkey is declared utf8_general_ci, a folding
+        // collation that can tie two keys the order must separate (charset held at boot).
+        query += ' GROUP BY s.signing_pubkey_id, ip.pubkey ORDER BY ip.pubkey COLLATE utf8_bin ASC';
         let rows = await this.doQuery(query, args);
+        // Fail closed on a dangling signing_pubkey: LEFT JOIN nulls tie under any order, and
+        // the caller would mint an UNSTAKE against an index_pubkeys row createUnstake invents.
+        for(const r of rows){
+            if(r.signing_pubkey === null || r.signing_pubkey === undefined || String(r.signing_pubkey) === '')
+                throw new Error('getSweepableStakeBySource: source ' + String(source) +
+                                ' has a stake row whose signing_pubkey_id ' + String(r.signing_pubkey_id) +
+                                ' has no index_pubkeys row');
+        }
         return rows.map((r) => ({
             signing_pubkey_id: r.signing_pubkey_id,
             signing_pubkey:    r.signing_pubkey,
@@ -13697,7 +13950,7 @@ class Database {
         let action_index = data['ACTION_INDEX'];
         let section_index = (data['SECTION_INDEX'] != null) ? Number(data['SECTION_INDEX']) : 0;
         let version      = Number(data['FORMAT']);
-        // Publisher tail (#2486): v4/v5/v6 only; NULL otherwise. Mirrors validator_signatures
+        // Publisher tail (#2486): carried by v0 and v1, NULL on v2. Mirrors validator_signatures
         // exactly: anchor.js pre-serializes the XANCPUB sig list to a JSON string (as it does
         // VALIDATOR_SIGNATURES = JSON.stringify(sigs)) before dispatch, so both are stored as-is.
         let publisher = data['PUBLISHER'] || null;
@@ -13725,7 +13978,7 @@ class Database {
             (data['CHUNK_INDEX'] != null) ? Number(data['CHUNK_INDEX']) : null,
             data['ARCHIVE_B64'] || null,
             data['VALIDATOR_SIGNATURES'] || null,
-            // v4/v5/v6 publisher-attestation tail (#2486). Both NULL for v0-v3. anchor.js must set
+            // Publisher-attestation tail (#2486), written on v0 and v1. Both NULL on v2. anchor.js must set
             // data['PUBLISHER_ATTESTATIONS'] = JSON.stringify(publisherSigs) for the attestations
             // to flow (that one-line hand-off is owned in anchor.js).
             publisher,
@@ -13779,10 +14032,10 @@ class Database {
 
     // Look up the on-chain ANCHOR checkpoint record for one checkpoint identity
     // (chain, network, block_index, checkpoint_seq), joined to its status. Only
-    // checkpoint-bearing versions (1/6/7, per the ANCHOR_CHECKPOINT_VERSIONS
-    // constant below; version 2 is an archive continuation chunk with no checkpoint
-    // identity of its own, v6 is the publisher-bearing archive anchor that DOES carry
-    // one, and a v7 row is one bundle SECTION, which carries its own). A bundle
+    // checkpoint-bearing versions (0/1, per the ANCHOR_CHECKPOINT_VERSIONS constant
+    // below; a v0 row is one bundle SECTION and carries its own checkpoint identity,
+    // v1 is the archive head and carries its wrapper checkpoint's, and v2 is an
+    // archive continuation chunk with no checkpoint identity at all). A bundle
     // therefore answers this read per section, with no bundle-level RPC of its own.
     // Returns the highest action_index
     // match (a reorg-replayed re-anchor supersedes an earlier one) or null. Read path
@@ -14604,6 +14857,20 @@ class Database {
         // precision so an >8-dp token isn't truncated mid-deduction (which would leave dust unslashed
         // or corrupt the residual stake). XCHAIN(8) math is unchanged (item 5303).
         let dec = await this.getTokenDecimalPrecision(tickId);
+        // Conserve value across the deduction (flag-day, slash_grid_activation.js). Rounding
+        // the row write and the credit SEPARATELY at `dec` lets them disagree: HALF-UP at
+        // decimals=0 turns a '0.5' slash of a '1' row into an unchanged row and a full-unit
+        // credit. Floor the request onto the tick's grid ONCE (a punishment may not grow on
+        // the way in), then run the per-row deduction at exact precision so every derived
+        // figure below is the reduction the row actually took.
+        let gridOn = slashGrid.isSlashGridActive(blockIndex, this.config['NETWORK'], this.config['COIN']);
+        let deductDec = gridOn ? slashGrid.SLASH_DEDUCTION_PRECISION : dec;
+        if(gridOn){
+            remaining = this.util.bcstr(this.util.bcmulfloor(remaining, '1', dec));
+            // An off-grid request that floors away is a no-op, not a free credit; the caller's
+            // zero-slashed branch already logs it as an attempted punishment that took nothing.
+            if(!this.util.bcgt(remaining, '0')) return { total: '0', releases: [] };
+        }
         // Escrow release breakdown, accumulated as the rows are debited. Insertion order is
         // the deterministic LIFO scan order, so every node writes its escrow rows alike.
         let releases = new Map();
@@ -14613,7 +14880,7 @@ class Database {
             if(address === null || address === undefined)
                 throw new Error('slashContractStake: stake row has no source address; its escrow is not releasable');
             let cur = releases.get(address);
-            releases.set(address, this.util.bcstr(this.util.bcadd(cur === undefined ? '0' : cur, take, dec)));
+            releases.set(address, this.util.bcstr(this.util.bcadd(cur === undefined ? '0' : cur, take, deductDec)));
         };
         let asReleases = () => Array.from(releases, ([address, amt]) => ({ address, amount: amt }));
         // Pass 1: deduct from ACTIVE (never-unstaked) contract_stakes rows (LIFO - highest
@@ -14641,13 +14908,17 @@ class Database {
             if(!this.util.bcgt(remaining, '0')) break;
             let rowAmt = String(row.amount);
             let take = this.util.bcgte(rowAmt, remaining) ? remaining : rowAmt;
-            let newAmt = this.util.bcsub(rowAmt, take, dec);
+            let newAmt = this.util.bcsub(rowAmt, take, deductDec);
+            // Re-derive the take from what was WRITTEN, not from what was asked for. Deriving it
+            // at `dec` instead would round an off-grid stored row's delta back up and credit a
+            // unit the row never held; at exact precision the identity is unconditional.
+            if(gridOn) take = this.util.bcstr(this.util.bcsub(rowAmt, newAmt, deductDec));
             await this.doQuery('UPDATE contract_stakes SET amount=? WHERE action_index=?', [newAmt, row.action_index]);
             // Record the in-place debit so a reorg can restore rowAmt verbatim (see rollback.js).
             await this.createContractSlashDebit(executionIndex, slashPosition, 'contract_stakes', row.action_index, rowAmt, take, blockIndex);
             addRelease(row.source_address, take);
-            remaining = this.util.bcsub(remaining, take, dec);
-            totalSlashed = this.util.bcadd(totalSlashed, take, dec);
+            remaining = this.util.bcsub(remaining, take, deductDec);
+            totalSlashed = this.util.bcadd(totalSlashed, take, deductDec);
         }
         if(!this.util.bcgt(remaining, '0')) return { total: this.util.bcstr(totalSlashed), releases: asReleases() };
         // Pass 2: deduct from contract_unstakes rows (cooldown-locked but still slashable)
@@ -14667,13 +14938,16 @@ class Database {
             if(!this.util.bcgt(remaining, '0')) break;
             let rowAmt = String(row.amount);
             let take = this.util.bcgte(rowAmt, remaining) ? remaining : rowAmt;
-            let newAmt = this.util.bcsub(rowAmt, take, dec);
+            let newAmt = this.util.bcsub(rowAmt, take, deductDec);
+            // Same re-derivation as Pass 1: the cooldown rows are debited by the identical
+            // arithmetic, so they carry the identical conservation hole without it.
+            if(gridOn) take = this.util.bcstr(this.util.bcsub(rowAmt, newAmt, deductDec));
             await this.doQuery('UPDATE contract_unstakes SET amount=? WHERE action_index=?', [newAmt, row.action_index]);
             // Record the in-place debit so a reorg can restore rowAmt verbatim (see rollback.js).
             await this.createContractSlashDebit(executionIndex, slashPosition, 'contract_unstakes', row.action_index, rowAmt, take, blockIndex);
             addRelease(row.source_address, take);
-            remaining = this.util.bcsub(remaining, take, dec);
-            totalSlashed = this.util.bcadd(totalSlashed, take, dec);
+            remaining = this.util.bcsub(remaining, take, deductDec);
+            totalSlashed = this.util.bcadd(totalSlashed, take, deductDec);
         }
         return { total: this.util.bcstr(totalSlashed), releases: asReleases() };
     }
@@ -15219,6 +15493,147 @@ class Database {
         }
     }
 
+    // Create the audit row for an ATTEST v5/v6 batch action in the consolidated `attests`
+    // table. Keyed on action_index like every other row there.
+    //
+    // A batch action carries no request, no provider and no response body, so this writes
+    // only the four columns that mean something for it:
+    //   version      5 (head) or 6 (continuation)
+    //   request_id   THE BATCH KEY. The column's role is "correlation key across versions",
+    //                and for the batch pair that is exactly what this is: a continuation
+    //                names its head by this value and nothing else. Empty on a wire so
+    //                malformed that no key could be derived from it.
+    //   provider_id  '' - NOT NULL with no provider to name, the same reason a rejected
+    //                ATTEST v4 with no matching request stores the empty string.
+    //   status_id    the batch verdict, which is what a replay re-derives.
+    //
+    // The wire BODY is deliberately not stored: absorption happens at parse time from the
+    // action's own params, so persisting the compressed bytes would duplicate chain data
+    // this table has no reader for. A cross-action chunk store, which head-side reassembly
+    // of a MULTI-chunk batch needs, is separate work: it wants its own columns on this
+    // table rather than a reinterpretation of these.
+    async createAttestationBatchAction(data){
+        data             = this.normalizeDataValues(data);
+        let status_id    = await this.createStatus(data['STATUS']);
+        let action_index = data['ACTION_INDEX'];
+        let version      = Number(data['VERSION']);
+        let batch_key    = String(data['REQUEST_ID'] || '').toLowerCase();
+        let block_index  = data['BLOCK_INDEX'];
+
+        // The chunk-table half of the row: this action's slot, its body slice, and (on a
+        // head) the window header the completing action reassembles against. Absent on a
+        // structurally broken wire, where nothing was parsed to store.
+        let num = (v) => (v != null && v !== '') ? Number(v) : null;
+        let str = (v) => (v != null && v !== '') ? String(v)  : null;
+        let window_start     = num(data['WINDOW_START']);
+        let window_end       = num(data['WINDOW_END']);
+        let row_count        = num(data['ROW_COUNT']);
+        let btc_block_height = num(data['BTC_BLOCK_HEIGHT']);
+        let batch_crc32      = str(data['BATCH_CRC32']);
+        let total_chunks     = num(data['TOTAL_CHUNKS']);
+        let chunk_index      = num(data['CHUNK_INDEX']);
+        let chunk_b64        = str(data['CHUNK_B64']);
+
+        let results = await this.doQuery("SELECT action_index FROM attests WHERE action_index=? LIMIT 1", [action_index]);
+        if(results.length > 0){
+            await this.doQuery(`UPDATE attests SET
+                                    version=?, request_id=?, provider_id='', status_id=?, block_index=?,
+                                    batch_window_start=?, batch_window_end=?, batch_row_count=?,
+                                    batch_btc_block_height=?, batch_crc32=?, batch_total_chunks=?,
+                                    batch_chunk_index=?, batch_chunk_b64=?
+                                WHERE action_index=?`,
+                [version, batch_key, status_id, block_index,
+                 window_start, window_end, row_count, btc_block_height,
+                 batch_crc32, total_chunks, chunk_index, chunk_b64, action_index]);
+        } else {
+            await this.doQuery(`INSERT INTO attests
+                                    (action_index, version, request_id, provider_id, status_id, block_index,
+                                     batch_window_start, batch_window_end, batch_row_count,
+                                     batch_btc_block_height, batch_crc32, batch_total_chunks,
+                                     batch_chunk_index, batch_chunk_b64)
+                                VALUES (?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [action_index, version, batch_key, status_id, block_index,
+                 window_start, window_end, row_count, btc_block_height,
+                 batch_crc32, total_chunks, chunk_index, chunk_b64]);
+        }
+    }
+
+    // The stored chunk table for one ATTEST batch: the v5 head's slot 0 and every v6
+    // continuation slot already on chain, under the batch key both file themselves by.
+    //
+    // Rejected rows are excluded, so a junk wire can neither occupy a slot nor contribute
+    // bytes, and an unstamped row (a structurally broken wire, or a row written before
+    // these columns existed) is excluded too: it carries no slot, so it is not a chunk.
+    // The head row carries the window header as well, which is what lets a continuation
+    // landing afterwards rebuild the head it must verify the reassembled body against.
+    //
+    // `source` is the broadcaster address off actions.source_id, which is the only
+    // authenticated identity a chain wire carries and is what binds a slot to a publisher.
+    // The key is derived from the window a head declares, so anyone can mint a wire under
+    // it and the unscoped set this returns is every publisher's; attest.js partitions it
+    // by author (the ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL rule, applied there because that is
+    // where the rest of the batch's rules live and are driven).
+    //
+    // `author`, when supplied, moves that partition INTO the query, exactly as
+    // getAnchorChunks takes the archive rail's, and is the only form that can carry a row
+    // limit. THE LIMIT BELONGS AFTER THE PARTITION, NEVER BEFORE IT: a batch key is
+    // sha256 over the window it names, so anyone can derive it and mint wires under it
+    // ahead of the honest publisher, and the order here is slot-major, so a limit taken
+    // before the partition is emptied by junk filling the low slots and the honest
+    // publisher's own head and chunks fall outside the window. That is the reverse of the
+    // archive rail's content-addressed read, where a copy is made from bytes already
+    // on-chain and so can never sort ahead of the original it copied. After the partition
+    // the bound is free: one publisher's valid rows under one key are their head plus one
+    // row per slot (a second head and a refilled slot are both stamped invalid, and this
+    // query returns only 'valid'), which the wire geometry ceiling already bounds.
+    //
+    // ORDER BY slot then action_index makes the head pick and the duplicate resolution
+    // deterministic across nodes: within a slot the EARLIEST action wins, matching
+    // attestChunkCoverage's own tie-break. Ordering is on consensus-visible columns only,
+    // never on a local auto-increment.
+    //
+    // @param {string} batchKey the 64-hex batch key (attests.request_id on a batch row)
+    // @param {string} [author] broadcaster address to scope to; omitted returns every
+    //                          publisher's rows unbounded, the legacy shape
+    // @returns {Object[]} rows shaped for attest_batch_wire's coverage and reassembly
+    async getAttestBatchChunks(batchKey, author){
+        let scoped = (author !== undefined && author !== null && String(author).length > 0);
+        let query = `SELECT c.action_index, c.version, c.request_id,
+                            c.batch_window_start     AS window_start,
+                            c.batch_window_end       AS window_end,
+                            c.batch_row_count        AS row_count,
+                            c.batch_btc_block_height AS btc_block_height,
+                            c.batch_crc32            AS batch_crc32,
+                            c.batch_total_chunks     AS total_chunks,
+                            c.batch_chunk_index      AS chunk_index,
+                            c.batch_chunk_b64        AS chunk_b64,
+                            cadr.address             AS source
+                     FROM attests c
+                     JOIN index_statuses s ON s.id = c.status_id
+                     LEFT JOIN actions         cact ON cact.action_index = c.action_index
+                     LEFT JOIN index_addresses cadr ON cadr.id           = cact.source_id
+                     WHERE c.request_id = ?
+                       AND c.version IN (${abw.ATTEST_BATCH_HEAD_VERSION}, ${abw.ATTEST_BATCH_CONTINUATION_VERSION})
+                       AND c.batch_chunk_index IS NOT NULL
+                       AND s.status = 'valid'` +
+                     (scoped ? ` AND cadr.address = ?` : ``) + `
+                     ORDER BY c.batch_chunk_index ASC, c.action_index ASC` +
+                     (scoped ? ` LIMIT ${ATTEST_BATCH_CHUNK_ROW_LIMIT}` : ``);
+        let params = [String(batchKey || '').toLowerCase()];
+        if(scoped) params.push(String(author));
+        return await this.doQuery(query, params);
+    }
+
+    // Stamp a verdict on a batch HEAD row after the fact, the ANCHOR archive rule
+    // (setAnchorArchiveStatus): when a continuation completes the coverage and the
+    // reassembled body fails, the failure belongs to the batch, and the batch's verdict
+    // lives on its head. The completing chunk's own bytes were well formed and its row
+    // stays valid, so one bad batch never re-judges an honest wire.
+    async setAttestBatchStatus(actionIndex, status){
+        let status_id = await this.createStatus(status);
+        await this.doQuery("UPDATE attests SET status_id = ? WHERE action_index = ?", [status_id, actionIndex]);
+    }
+
     // Increment a counter column on attest_validator_stats. Upserts the
     // (validator_pubkey, provider_id) row on first sight. `field` is whitelisted
     // to the counter columns so callers can't inject arbitrary SQL.
@@ -15552,12 +15967,129 @@ class Database {
         return await this.doQuery(query, [blockIndex, limit]);
     }
 
+    // ATTEST v0 (request) rows that a hub-mirrored response could still bind to at
+    // `blockIndex`: pending, and not past their deadline. This is the LOCAL half of
+    // the mirror applier's applicability read (the response-mirror design §4.1); the
+    // mirror half is getMirroredAttestationResponses below and the predicate that
+    // joins them is utility.selectApplicableAttestationResponses.
+    //
+    // THE SCAN IS DRIVEN FROM THIS SIDE ON PURPOSE. The mirror table grows without
+    // bound and its rows carry hub-authored columns; scanning it by
+    // request_block_index (its natural window) would make the set of rows an indexer
+    // even CONSIDERS depend on a field no signature covers, so two indexers following
+    // two hubs could consider different sets. Every column read here is local chain
+    // state, and a request leaves this set the moment it resolves or its deadline
+    // passes, which is what bounds the scan without a hub-supplied bound.
+    //
+    // `deadline_block >= ?` is the applier's half of §4.1's `B <= deadline_block`: a
+    // row whose first satisfying block is past the deadline is never selected here,
+    // the expiry sweep (deadline_block < B, one step later in the same block) flips
+    // the request to 'expired', and the expired callback stands (AT3). The predicate
+    // is re-stated in the selector, which is where it is tested; this bound only
+    // keeps the read from returning rows the selector must then discard.
+    //
+    // ORDER BY (block_index, action_index) is the §4.1 applier order, read from the
+    // LOCAL request rows and never from the mirror row or from a request_id
+    // collation, so every node applies a block's responses in one order.
+    //
+    // PAGED, and the page is NOT consensus. `limit` and `after` walk that same order in
+    // windows so the applier can stop once it has filled its per-block cap instead of
+    // dragging every pending request (and then every one of their mirror rows) into
+    // memory first. Two nodes paging at different sizes still select the same rows: the
+    // order is TOTAL (action_index is unique), the pages are disjoint consecutive slices
+    // of it, and the caller concatenates them in page order, so the sequence it sees is
+    // the same sequence the unpaged read produced. The keyset carry is (block_index,
+    // action_index) rather than an offset because an offset re-reads a shifted window
+    // when a row resolves between pages.
+    //
+    // @param {number} blockIndex the block being processed
+    // @param {number} [limit] page size; omitted reads the whole set, the legacy shape
+    // @param {Object} [after] exclusive keyset cursor {block_index, action_index}
+    async getAttestationRequestsAwaitingMirrorResponse(blockIndex, limit, after){
+        let params = [Number(blockIndex)];
+        let keyset = '';
+        if(after){
+            keyset = ` AND (ar.block_index > ? OR (ar.block_index = ? AND ar.action_index > ?))`;
+            params.push(Number(after.block_index), Number(after.block_index), Number(after.action_index));
+        }
+        let page = '';
+        if(limit !== undefined && limit !== null){
+            page = ` LIMIT ?`;
+            params.push(Number(limit));
+        }
+        let query = `SELECT ar.*, ia.address AS fee_payer
+                     FROM attests ar
+                     LEFT JOIN index_addresses ia ON ia.id = ar.fee_payer_id
+                     WHERE ar.version = 0
+                       AND ar.request_status = 'pending'
+                       AND ar.deadline_block >= ?` + keyset + `
+                     ORDER BY ar.block_index ASC, ar.action_index ASC` + page;
+        return await this.doQuery(query, params);
+    }
+
+    // The hub-mirrored finalized responses for a given set of request ids whose SIGNED
+    // effective_time has been reached at `blockTime`. The mirror half of the applier's
+    // applicability read (§4.1).
+    //
+    // Read through _mirrorDb(), which is a SEPARATE connection whenever the indexer
+    // follows a remote hub DB, so this cannot be one SQL join against local `attests`
+    // (the cross_chain_calls readers above have the same split for the same reason).
+    //
+    // Only network and effective_time filter here, and both are safe to filter on:
+    // network scopes the mirror itself, and effective_time is INSIDE the signed
+    // canonical, so no hub can move a row's applying block by editing it without
+    // breaking every signature on it. The informational request_block_index /
+    // request_action_index columns are deliberately not read.
+    //
+    // Chunked because the id list is caller-sized; the chunks are re-joined by the
+    // caller's own deterministic order, so chunk boundaries cannot be observed.
+    async getMirroredAttestationResponses(network, requestIds, blockTime){
+        let ids = (requestIds || []).map(id => String(id || '').toLowerCase()).filter(id => id.length > 0);
+        if(ids.length === 0) return [];
+        let mirror = this._mirrorDb();
+        let out    = [];
+        const CHUNK = 500;
+        for(let i = 0; i < ids.length; i += CHUNK){
+            let chunk        = ids.slice(i, i + CHUNK);
+            let placeholders = chunk.map(() => '?').join(',');
+            let rows = await mirror.doQuery(
+                `SELECT request_id, provider_id, status, response_payload, response_hash, meta,
+                        effective_time, signer_pubkeys, signatures, widen, batch_action_index
+                 FROM attestation_responses
+                 WHERE network = ? AND effective_time <= ? AND request_id IN (${placeholders})`,
+                [String(network || ''), Number(blockTime)].concat(chunk));
+            for(let row of rows) out.push(row);
+        }
+        return out;
+    }
+
     // Set callback_execute_action_index on an ATTEST v1 (response) row (after the system EXECUTE is injected)
     async setAttestationResponseCallbackIndex(responseActionIndex, callbackExecuteActionIndex){
         let query = `UPDATE attests
                      SET callback_execute_action_index = ?
                      WHERE action_index = ? AND version = 1`;
         await this.doQuery(query, [callbackExecuteActionIndex, responseActionIndex]);
+    }
+
+    // Stamp the ATTEST v5/v6 batch that carried a mirror-applied response's body onto
+    // the chain, keyed on the REQUEST id rather than on an action_index.
+    //
+    // The request id is the only identifier the two sides share. The batch is parsed on
+    // the DOGE indexer and names the responses it carries by request_id; the v1 row it
+    // links to was minted locally on the BTC indexer at whatever block the mirror row
+    // became applicable, so its action_index means nothing to the publisher and cannot
+    // be on the wire. Scoped to version = 1 because a request also has a v0 row and the
+    // batch describes the response, not the request.
+    //
+    // Idempotent and unordered: a re-delivered or replayed batch restamps the same
+    // value, and a batch that lands before the mirror row was applied simply matches no
+    // row yet. That is why the column is nullable and why the coverage watermark, not
+    // this write, is what proves a window reached the chain.
+    async setAttestationResponseBatchIndex(requestId, batchActionIndex){
+        let query = `UPDATE attests
+                     SET batch_action_index = ?
+                     WHERE request_id = ? AND version = 1`;
+        await this.doQuery(query, [batchActionIndex, String(requestId || '').toLowerCase()]);
     }
 
     // Resolve an equivocating DELEGATED signing key to the stake source that backs it.
@@ -16106,6 +16638,25 @@ class Database {
         // matching the sibling queries' idiom.
         let blockCap = blockIndex || 999999999;
 
+        // Preload causality gate (oracle_preload_causality_activation.js). The cap
+        // above compares the PROCESSING chain's height against a BTC-anchored
+        // reference_block, so on LTC and DOGE it matches every row and admits
+        // rounds the hub finalized after this block; which of them a node holds
+        // depends on its mirror depth, and the preload is VM-visible, so the
+        // contract hash forks. At/after the height each of the four reads below
+        // carries an ADDITIONAL `block_timestamp <= ?` bound against this block's
+        // consensus time, the axis getLatestPrice's H-3 branch already selects on
+        // and the one the fleet-wide waitForPriceSyncTime barrier makes provable
+        // off BTC. The bound is added, never swapped, so the admitted row set can
+        // only shrink. The reference chain is carved out inside the module: its
+        // height cap is exact, and a time bound there would admit rounds anchored
+        // after a forward-skewed block. Execution-path gate, indexer-only.
+        let timeCausal = preloadCausality.isOraclePreloadCausalityActive(
+            blockIndex, this.config['NETWORK'], this.config['COIN']) && Number.isFinite(refTime);
+        // Empty below the height, so every query string and argument list stays
+        // byte-identical to the pre-gate one and historical replay is unchanged.
+        let timeBound = timeCausal ? ' AND block_timestamp <= ?' : '';
+
         // Pre-load the latest finalized snapshot age (blocks since last snapshot).
         // Snapshot-age causality gate (oracle_snapshot_age_causality_activation.js):
         // the legacy age query has NO block cap, unlike every sibling below, so a
@@ -16119,13 +16670,30 @@ class Database {
         let ageCausal = snapshotAgeCausality.isOracleSnapshotAgeCausalityActive(
             blockIndex, this.config['NETWORK'], this.config['COIN']);
         let ageQuery = "SELECT MAX(reference_block) AS latest_block FROM price_snapshots WHERE status = 'finalized'"
-                     + (ageCausal ? " AND reference_block <= ?" : "");
-        let ageRows = await this.doQuery(ageQuery, ageCausal ? [blockCap] : undefined);
+                     + (ageCausal ? " AND reference_block <= ?" : "")
+                     + timeBound;
+        // Both gates stack: the height cap stays on where it is armed and the time
+        // bound layers over it. No args at all when neither is on, which is the
+        // pre-gate call.
+        let ageArgs = [];
+        if(ageCausal)  ageArgs.push(blockCap);
+        if(timeCausal) ageArgs.push(refTime);
+        // Strict reads throughout this preload (M-17, same rationale as getLatestPrice):
+        // the oracle reads run on the hub-DB instance, which never opens a transaction,
+        // so doQuery would collapse a driver error into [] - indistinguishable from
+        // "the oracle has no rows". That empty result becomes an absent price map and a
+        // MAX_SAFE_INTEGER snapshotAge which the VM hashes into block state, so one
+        // node's transient DB fault forks it from the fleet. Throwing lets block
+        // processing roll back and retry the block instead.
+        let ageRows = await this.doQueryStrict(ageQuery, ageArgs.length > 0 ? ageArgs : undefined);
         let latestBlock = (ageRows.length > 0 && ageRows[0].latest_block !== null) ? ageRows[0].latest_block : 0;
         let snapshotAge = (blockIndex && latestBlock > 0) ? Math.max(0, blockIndex - latestBlock) : Number.MAX_SAFE_INTEGER;
 
         // True when a snapshot is older than the configured max age relative to the
-        // block being processed (stale ⇒ treated as no price).
+        // block being processed (stale ⇒ treated as no price). A future-stamped row
+        // gives a negative age here and reads as fresh; the preload causality bound
+        // closes that by excluding the row, so no clamp belongs in this comparison
+        // (one would change the legacy path below the activation height).
         let isStale = (snapshotTimestamp) => {
             if(!(maxAge > 0) || !Number.isFinite(refTime)) return false;
             if(!(snapshotTimestamp > 0)) return false;
@@ -16150,11 +16718,14 @@ class Database {
                            INNER JOIN (
                                SELECT coin_pair, MAX(round_number) AS mr
                                FROM price_snapshots
-                               WHERE status = 'finalized' AND price IS NOT NULL AND reference_block <= ?
+                               WHERE status = 'finalized' AND price IS NOT NULL AND reference_block <= ?${timeBound}
                                GROUP BY coin_pair
                            ) m ON t.coin_pair = m.coin_pair AND t.round_number = m.mr
                            WHERE t.status = 'finalized' AND t.price IS NOT NULL`;
-        let latestRows = await this.doQuery(latestQuery, [blockCap]);
+        // The bound belongs in the subquery that picks the round: the outer join
+        // resolves to that same row through the (round_number, coin_pair) unique
+        // key, so bounding it twice would filter nothing further.
+        let latestRows = await this.doQueryStrict(latestQuery, timeCausal ? [blockCap, refTime] : [blockCap]);
         // Stale-round visibility gate (oracle_stale_round_visibility_activation.js).
         // Below the height a stale tip is dropped from `prices` entirely, so
         // getPrice() returns null while getPriceAtRound() still carries the very
@@ -16222,12 +16793,12 @@ class Database {
         // the floor stays 0: on a young chain (regtest, a fresh testnet) every round
         // that ever existed is loaded, and a floor above 0 there would report rounds
         // as "hidden" that simply never happened.
-        let windowRows = await this.doQuery(
+        let windowRows = await this.doQueryStrict(
             `SELECT DISTINCT round_number
              FROM price_snapshots
-             WHERE status = 'finalized' AND price IS NOT NULL AND reference_block <= ?
+             WHERE status = 'finalized' AND price IS NOT NULL AND reference_block <= ?${timeBound}
              ORDER BY round_number DESC
-             LIMIT ${ORACLE_VM_ROUND_WINDOW}`, [blockCap]);
+             LIMIT ${ORACLE_VM_ROUND_WINDOW}`, timeCausal ? [blockCap, refTime] : [blockCap]);
         let roundFloor = (windowRows.length >= ORACLE_VM_ROUND_WINDOW)
             ? Number(windowRows[windowRows.length - 1].round_number)
             : 0;
@@ -16235,11 +16806,12 @@ class Database {
         // Step two: every row at or above the floor, under a hard payload ceiling.
         let roundQuery = `SELECT coin_pair, price, round_number, block_timestamp
                           FROM price_snapshots
-                          WHERE status = 'finalized' AND price IS NOT NULL AND reference_block <= ?
+                          WHERE status = 'finalized' AND price IS NOT NULL AND reference_block <= ?${timeBound}
                             AND round_number >= ?
                           ORDER BY round_number DESC
                           LIMIT ${ORACLE_VM_MAX_ROWS}`;
-        let roundRows = await this.doQuery(roundQuery, [blockCap, roundFloor]);
+        let roundRows = await this.doQueryStrict(roundQuery,
+            timeCausal ? [blockCap, refTime, roundFloor] : [blockCap, roundFloor]);
 
         // The ceiling truncates newest-first, so the OLDEST loaded round is the one
         // that may be missing pairs. Claiming it is covered would hand a contract the
@@ -16357,7 +16929,10 @@ class Database {
         // unique key) not id (local AUTO_INCREMENT, differs per mirror by arrival order),
         // so an effective_at tie resolves to the same row on every node.
         query += ' ORDER BY effective_at DESC, action_index DESC LIMIT 1';
-        let rows = await this.doQuery(query, args);
+        // Strict read (M-17): the same swallow that forks the VM preload decides
+        // whether a Mode B dispenser is valid at all, and on the hub instance an
+        // errored read is indistinguishable from "no effective oracle price".
+        let rows = await this.doQueryStrict(query, args);
         if(rows.length === 0) return null;
         return {
             sourceAddress: rows[0].source_address,
@@ -16383,7 +16958,10 @@ class Database {
                      WHERE source_address = ? AND coin = ? AND tick = ? AND fiat = ?
                        AND effective_at BETWEEN ? AND ?
                      ORDER BY effective_at DESC, action_index DESC`;
-        let rows = await this.doQuery(query, [sourceAddress, coin, tick, fiat, startTime, endTime]);
+        // Strict read (M-17): FIAT settlement input; an errored read here would look
+        // like "no oracle price in the window" and settle the dispense differently
+        // on this node alone.
+        let rows = await this.doQueryStrict(query, [sourceAddress, coin, tick, fiat, startTime, endTime]);
         return rows.map(row => ({
             price:        row.value,
             blockTime:    Number(row.block_time),
@@ -16400,7 +16978,10 @@ class Database {
                      WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL
                        AND block_timestamp BETWEEN ? AND ?
                      ORDER BY block_timestamp DESC, round_number DESC`;
-        let rows = await this.doQuery(query, [coinPair, startTime, endTime]);
+        // Strict read (M-17): the validator price that values the oracle fee and
+        // settles a FIAT dispense; [] from a driver error is read as "no validator
+        // price" and rejects or re-prices the action on this node only.
+        let rows = await this.doQueryStrict(query, [coinPair, startTime, endTime]);
         return rows.map(row => ({
             price:       row.price,
             roundNumber: Number(row.round_number),

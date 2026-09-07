@@ -867,13 +867,16 @@ class AnchorRecovery {
             // Instead stage each archived reward keyed by the RAW source-address string + the
             // signing pubkey, assigning no id. The earn-time source is still pinned by the
             // archive (no restore-time drift if the pubkey was later re-staked elsewhere).
-            // During the BTC reindex, when the source address first receives its deterministic
-            // in-block id, db.createAddress's apply hook materializes the staged rewards into
-            // validator_rewards under that deterministic source_id. The source's STAKE precedes
-            // its COLLECT in chain order, so the id (and therefore the reward) exists before the
-            // COLLECT replays, preserving the "rewards present before the reindex's first COLLECT"
-            // ordering invariant without ever perturbing the counter. recovery_pending_rewards is
-            // recovery-local: not consensus-hashed, not replicated by xchain-sync.
+            // During the BTC reindex the staged row materializes into validator_rewards under
+            // the deterministic source_id the source address takes in-block, at the height the
+            // LIVE fleet derived the reward at (earn-block + the frozen mirror maturity;
+            // db._applyPendingRewardsDueAtBlock, driven per block beside deriveAnchorRewards).
+            // The source's STAKE precedes its COLLECT in chain order, and the derive height
+            // precedes any COLLECT that could have claimed the reward on the canonical chain,
+            // so the reward is on the books before the COLLECT that spends it replays, without
+            // ever perturbing the id counter and without crediting it in a window where no live
+            // node holds it. recovery_pending_rewards is recovery-local: not consensus-hashed,
+            // not replicated by xchain-sync.
             for(let r of rewards){
                 // Pin the per-chain anchor-publish reward amount to the FROZEN consensus
                 // constant at/above the anchor-reward flag-day, EXACTLY as the live indexer

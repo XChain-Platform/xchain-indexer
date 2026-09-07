@@ -33,6 +33,10 @@ const retention         = require('./retention.js');
 const stateCommitAct    = require('./state_commitment_activation.js');
 const HubClient    = require('./hub_client.js');
 const HubDbSync    = require('./hub_db_sync.js');
+// The frozen call-barrier grace and its resolver, shared with the direct-hub-DB
+// (no-mirror) call-presence barrier so both paths open on the SAME constant.
+const { HUB_SYNC_WATERMARK_GRACE_S, resolveWatermarkGrace,
+        HUB_SYNC_BARRIER_HOLD_CEILING_S, resolveBarrierHoldCeilingMs } = require('./hub_db_sync.js');
 const anchorRewardDerive = require('./anchor_reward_derive.js');
 const AnchorProofClient  = require('./anchor_proof_client.js');
 const rollcallClose      = require('./rollcall_close.js');
@@ -172,6 +176,62 @@ function atProcessableTip(isSynced, stallReason, stallClearsAtMs, now){
     return !!isSynced || waitingOnFutureBlock(stallReason, stallClearsAtMs, now);
 }
 
+// ── Mirror-barrier hold: how long ONE block has been stuck behind the hub-mirror
+// barriers, and whether that has passed the named ceiling.
+//
+// Every hub-mirror barrier bounds a single ATTEMPT (HUB_PRICE_SYNC_TIMEOUT_MS) and then
+// defers, and the block loop retries the same block with an identical fresh wait. Those
+// per-attempt bounds compose into no bound at all: a mirror whose stream watermark has
+// stopped advancing holds a block forever while each individual log line reads like an
+// ordinary, self-clearing defer. What that looks like from outside is a metronome, a few
+// blocks released whenever the watermark happens to jump, and a throughput ceiling below
+// chain pace. So the hold is measured across retries, keyed on the BLOCK rather than the
+// reason (a block that cycles between two barriers is still one stuck block), and it has
+// a named ceiling.
+//
+// nextBarrierHold folds one poll-loop observation into the hold record and is pure, so
+// the whole rule is testable without a block loop. It returns the new record, or null
+// when there is no hold to carry.
+//
+// Three things reset it, and each is a case where the wait is NOT open-ended:
+//   - no stall reason at all (the loop is advancing),
+//   - a different block at the head of the queue (the previous one committed),
+//   - a future-stamped block (waitingOnFutureBlock). That wait already has its own named
+//     bound, the block's own timestamp, it is consensus working as designed, and no
+//     mirror action can shorten it by one second. Accumulating it here would fire the
+//     ceiling on the healthiest case there is.
+function nextBarrierHold(prev, block, stallReason, stallClearsAtMs, now){
+    if(!stallReason || block == null) return null;
+    if(waitingOnFutureBlock(stallReason, stallClearsAtMs, now)) return null;
+    if(prev && prev.block === block)
+        return { block: block, reason: stallReason, since: prev.since, notified: prev.notified };
+    return { block: block, reason: stallReason, since: now, notified: false };
+}
+
+// True for the stall reasons a hub-mirror resubscribe could actually clear. Every mirror
+// barrier's reason ends in '_barrier' (price/oracle/match/call/call_presence/anchor_attest/
+// snapshot); the host faults deliberately do not (vm_executor_unavailable,
+// anchor_reward_proof_unavailable, rollcall_proof_unavailable). A suffix rule rather than
+// a list, so a barrier added later is covered by naming it the way every existing one is
+// named.
+function isMirrorBarrierReason(stallReason){
+    return typeof stallReason === 'string' && /_barrier$/.test(stallReason);
+}
+
+// Milliseconds the current hold has lasted, or 0 when nothing is held.
+function barrierHoldMs(hold, now){
+    if(!hold || !Number.isFinite(hold.since)) return 0;
+    return Math.max(0, now - hold.since);
+}
+
+// True once a hold has reached the named ceiling. A ceiling of 0 (or an unusable value)
+// disables the check, which is the documented off switch: the barrier still defers
+// exactly as before, it simply is not reported or re-driven under this name.
+function barrierCeilingExceeded(hold, ceilingMs, now){
+    if(!Number.isFinite(ceilingMs) || ceilingMs <= 0) return false;
+    return barrierHoldMs(hold, now) >= ceilingMs;
+}
+
 class XChainIndexer {
 
     constructor(decoderDbHost, decoderDbPort, decoderDbName, decoderDbUser, decoderDbPass, indexerDbHost, indexerDbPort, indexerDbName, indexerDbUser, indexerDbPass, hubDbHost, hubDbPort, hubDbName, hubDbUser, hubDbPass, utxoTrackerUrl, utxoTrackerPort){
@@ -282,6 +342,20 @@ class XChainIndexer {
         // retried rather than validated against a stale price copy.
         this.priceSyncTimeoutMs = parseInt(process.env.HUB_PRICE_SYNC_TIMEOUT_MS || '60000');
 
+        // Mirror-barrier hold ceiling. priceSyncTimeoutMs above bounds ONE barrier attempt;
+        // this bounds the whole hold across retries, a quantity nothing else here bounds at
+        // all. Read from the same named constant HubDbSync throttles its forced resync on,
+        // so the crossing and the remedy cannot disagree. Purely operational: it opens no
+        // barrier and commits no block (see nextBarrierHold).
+        this.barrierHoldCeilingMs = resolveBarrierHoldCeilingMs();
+        // { block, reason, since, notified } for the block currently held behind a mirror
+        // barrier, or null when nothing is held. Folded by nextBarrierHold() once per
+        // poll-loop pass and cleared on every successful commit.
+        this.barrierHold = null;
+        // Count of ceiling crossings since boot, surfaced on /health so a fleet sweep can
+        // see that a mirror needed re-driving without reading container logs.
+        this.barrierCeilingHits = 0;
+
         // Action-scoped barrier state, all node-local and never hashed.
         // priceBarrierBlock      - the block the two flags below describe.
         // priceBarrierSkipped    - the price/oracle barriers were skipped for it because
@@ -323,6 +397,14 @@ class XChainIndexer {
         // inject at the same block. The hub-side relay margin is the primary guarantee; this
         // is defense-in-depth. See _waitForDirectCallPresence.
         this.callPresenceTimeoutMs = parseInt(process.env.XCALL_DIRECT_PRESENCE_TIMEOUT_MS || '10000');
+
+        // Grace (seconds) for the direct-hub-DB barrier's hub-clock escape hatch. Resolved in
+        // start() from the SAME frozen constant the HubDbSync call barrier uses
+        // (HUB_SYNC_WATERMARK_GRACE_S.call / HUB_SYNC_CALL_GRACE_S), because the two barriers
+        // decide the same question and a per-node value forks settlement. Resolution happens at
+        // startup, never inside the block loop, so an invalid regtest override throws at boot
+        // (resolveWatermarkGrace's contract) instead of wedging the tip mid-run.
+        this.directCallGraceS = null;
     }
 
     // Handle indicating if indexer is synced
@@ -358,22 +440,30 @@ class XChainIndexer {
     //   * Coverage condition (proceed): the local hub mirror covers this block once
     //     MAX(effective_time) over finalized rows >= block_time. Nothing later than block_time can
     //     change the effective-at/before set, so reading now matches a node that saw every row on
-    //     time. This is the SOLE proceed condition; the prior wall-clock gate is removed.
+    //     time.
     //   * Empty-table fast path (proceed): no finalized rows means there is nothing to wait on.
+    //   * Hub-clock escape hatch (proceed): the hub's OWN clock, read as UNIX_TIMESTAMP() on the
+    //     same connection in the same query, has passed block_time + directCallGraceS. See the
+    //     long note at the escape in the loop body; this is the ruled fix for the forever-defer
+    //     wedge, and is the direct-mode twin of _callSyncSatisfied's streamWatermark
+    //     escape in hub_db_sync.js.
     //   * Mirror-lags (defer): if the highest finalized effective_time is still BELOW block_time
-    //     the mirror is genuinely behind, so this block's call set would be incomplete. We do NOT
-    //     proceed with that partial set. Instead we poll the mirror with a bounded sleep loop
-    //     (mirroring the indexer's other sync barriers) and, if it has not caught up within
-    //     callPresenceTimeoutMs, THROW so the caller defers the block and retries it from the top
-    //     of the loop (lastIndexerBlock is not advanced). This is wait-then-retry, not
-    //     throw-and-halt: a behind mirror blocks block PROCESSING (the consensus-correct outcome)
-    //     until it catches up, rather than committing a divergent, partial-set block.
+    //     and the hub clock has not yet cleared the grace, the mirror may genuinely be behind, so
+    //     this block's call set could be incomplete. We do NOT proceed with that partial set.
+    //     Instead we poll the mirror with a bounded sleep loop (mirroring the indexer's other sync
+    //     barriers) and, if neither condition is met within callPresenceTimeoutMs, THROW so the
+    //     caller defers the block and retries it from the top of the loop (lastIndexerBlock is not
+    //     advanced). This is wait-then-retry, not throw-and-halt: a behind mirror blocks block
+    //     PROCESSING (the consensus-correct outcome) until it catches up or the grace clears,
+    //     rather than committing a divergent, partial-set block.
     //
     // CRITICAL fast path: the common cases (regtest single shared hub DB already current, or no
     // pending lag) hit the coverage / empty-table condition on the very first query and return
     // with zero added latency. Only a genuinely-lagging distributed mirror enters the poll loop.
-    // A wall-clock proceed (Date.now) is deliberately NOT used: it let a lagging node proceed with
-    // fewer cross-chain calls than canonical and diverge the actions hash (the bug this fixes).
+    // An UNGRACED wall-clock proceed (Date.now >= block_time) is still deliberately NOT used: it
+    // let a lagging node proceed with fewer cross-chain calls than canonical and diverge the
+    // actions hash. The escape hatch is not that gate: it is keyed on the HUB's clock, not the
+    // node's, and only opens a full call grace past block_time.
     // Deliver the hub pushes staged (and durably written via enqueueHubPushTx) during the block
     // transaction that just committed. Each push_type maps to the same HubClient method the
     // HubPushQueue drain uses; on success the durable pending_hub_pushes row is dropped, on any
@@ -390,6 +480,19 @@ class XChainIndexer {
                 } else if(entry.pushType === 'price_batch'){
                     // PRICE v0: a signed window of rounds, delivered to pushpricebatch.
                     await this.hubClient.pushPriceBatch(entry.payload);
+                } else if(entry.pushType === 'attest_batch'){
+                    // ATTEST v5: a signed window of finalized attestation responses parsed
+                    // off the DOGE rail, delivered to the hub's `pushattestbatch`, which
+                    // re-verifies the batch quorum, inserts the carried rows into
+                    // attestation_responses and broadcasts them. That road is how a
+                    // chain-only node's mirror gets rebuilt from chain parse alone, which
+                    // is why the row stays durable rather than best-effort.
+                    //
+                    // Payload shape (the hub destructures exactly these names):
+                    //   source_chain, network, window_start, window_end, row_count,
+                    //   btc_block_height, rows[], sigs[], action_index, block_index,
+                    //   block_time, push_generation
+                    await this.hubClient.pushAttestBatch(entry.payload);
                 } else {
                     // Unknown type: leave the durable row for HubPushQueue rather than guess.
                     continue;
@@ -399,6 +502,14 @@ class XChainIndexer {
                 // Live delivery failed; the durable row stays for HubPushQueue's backoff retry.
                 console.warn('Staged hub push ' + entry.pushType + ' row ' + entry.id +
                     ' live delivery failed; HubPushQueue will retry:', err && err.message);
+                // A 429 says the hub is refusing this IP for the rest of its window, so the
+                // remaining staged entries would each buy one more rejection and one more
+                // log line. Stop here: every one of them is already durable in
+                // pending_hub_pushes, and HubPushQueue holds off until the window clears.
+                // This is the shape a chain-only node replaying a
+                // batch-bearing chain against a REMOTE hub takes, where the block loop
+                // outruns any per-IP cap by orders of magnitude.
+                if(err && err.rateLimited) break;
             }
         }
     }
@@ -434,6 +545,55 @@ class XChainIndexer {
         return (blockTime + graceS) * 1000;
     }
 
+    // Fold one poll-loop pass into the mirror-barrier hold, and act when it crosses the
+    // named ceiling. Called once per pass, right after the catch-up loop exits,
+    // where `this.stallReason` and `this.stallClearsAt` already carry whatever the defer
+    // sites set. Reading them here rather than instrumenting each of the nine defer sites
+    // keeps one rule in one place, and a barrier added later is covered for free.
+    //
+    // What crossing the ceiling does, and what it deliberately does NOT do. It logs under
+    // a distinct name, counts the crossing for /health, and asks the mirror to reconnect
+    // and re-bootstrap. It does not open the barrier, shorten a grace, skip a block or
+    // change a single hashed value: the block keeps deferring, fail-closed, until its
+    // barrier is genuinely satisfied. So the ceiling can never fork settlement, and a node
+    // whose mirror really is missing rows is no more permissive after it fires than before.
+    //
+    // Returns the hold in ms (0 when nothing is held), for the caller and for tests.
+    _noteBarrierHold(blockToParse, now = Date.now()){
+        let prev = this.barrierHold;
+        this.barrierHold = nextBarrierHold(prev, blockToParse, this.stallReason, this.stallClearsAt, now);
+        let hold = this.barrierHold;
+        if(!hold) return 0;
+        if(!barrierCeilingExceeded(hold, this.barrierHoldCeilingMs, now)) return barrierHoldMs(hold, now);
+
+        // The remedy fits the MIRROR barriers only. A host fault (vm_executor_unavailable,
+        // anchor_reward_proof_unavailable) is held by something a hub resubscribe cannot
+        // touch, and re-driving the mirror for it would be a misleading log line attached to
+        // a pointless reconnect. The hold and its ceiling still apply to those: naming how
+        // long a block has been stuck is worth having whatever is holding it.
+        let mirrorBarrier = isMirrorBarrierReason(hold.reason);
+
+        // Announce the crossing ONCE per held block, then keep re-driving the mirror on the
+        // ceiling cadence: requestResync() throttles itself on the same value, so calling it
+        // every pass costs nothing and a mirror that recovers and re-stalls is re-driven again.
+        if(!hold.notified){
+            hold.notified = true;
+            this.barrierCeilingHits++;
+            console.error('Mirror-barrier hold ceiling reached: block ' + blockToParse + ' has been held at ' +
+                hold.reason + ' for ' + Math.round(barrierHoldMs(hold, now) / 1000) + 's, past the ' +
+                Math.round(this.barrierHoldCeilingMs / 1000) + 's ceiling (HUB_SYNC_BARRIER_HOLD_CEILING_S, default ' +
+                HUB_SYNC_BARRIER_HOLD_CEILING_S + 's). The block is still deferring, which is correct. ' +
+                (mirrorBarrier
+                    ? 'Forcing a hub-mirror resync: a stream watermark that stops advancing holds every ' +
+                      'one of these barriers open-endedly, and only a fresh subscribe-then-bootstrap re-arms it.'
+                    : 'Not a hub-mirror barrier, so no resync is forced; this is a host fault to investigate.'));
+        }
+        if(mirrorBarrier && this.hubDbSync && typeof this.hubDbSync.requestResync === 'function')
+            this.hubDbSync.requestResync('block ' + blockToParse + ' held at ' + hold.reason +
+                                         ' past the ' + Math.round(this.barrierHoldCeilingMs / 1000) + 's ceiling');
+        return barrierHoldMs(hold, now);
+    }
+
     _evaluatePriceBarrier(blockToParse, blockTransactions){
         let mayReadPrice = blockMayReadPrice(blockTransactions)
                            || this.priceBarrierForceBlock === blockToParse;
@@ -442,14 +602,33 @@ class XChainIndexer {
         return mayReadPrice;
     }
 
+    // Wall-clock instant (epoch ms) the DIRECT call-presence barrier's hub-clock escape can
+    // FIRST open for a block, or null when that cannot be determined. The mirrored twin of
+    // _barrierClearsAt, which cannot serve this path because it returns null without a
+    // HubDbSync. Health verdict only: it gates no wait, no read and no write.
+    _directCallBarrierClearsAt(blockTime){
+        blockTime = Number(blockTime);
+        if(!this.hubDb || !Number.isFinite(blockTime)) return null;
+        let graceS = Number(this.directCallGraceS);
+        if(!Number.isFinite(graceS)) graceS = HUB_SYNC_WATERMARK_GRACE_S.call;
+        return (blockTime + graceS) * 1000;
+    }
+
     async _waitForDirectCallPresence(blockTime){
         blockTime = Number(blockTime);
         if(!this.hubDb || !Number.isFinite(blockTime)) return;
         let timeoutMs = Number(this.callPresenceTimeoutMs);
         if(!Number.isFinite(timeoutMs) || timeoutMs <= 0) timeoutMs = 10000;
+        // Grace for the hub-clock escape below. Resolved at startup (start()); the frozen
+        // constant is the fallback so a hand-built caller (unit tests) and any future path
+        // that skips start() still gets the protocol value rather than NaN, which would make
+        // every `hubNow >= blockTime + grace` comparison false and restore the wedge.
+        let graceS = Number(this.directCallGraceS);
+        if(!Number.isFinite(graceS)) graceS = HUB_SYNC_WATERMARK_GRACE_S.call;
         let deadline = Date.now() + timeoutMs;
         let pollMs = 250;
-        let lastTs = null;          // last observed mirror watermark, for the timeout diagnostic
+        let lastTs  = null;         // last observed mirror watermark, for the timeout diagnostic
+        let lastNow = null;         // last observed HUB clock, same
         while(true){
             // Coverage check: proceed the instant the local hub mirror covers block_time, i.e.
             // the highest finalized effective_time is at/after it, or there is nothing to wait on.
@@ -457,13 +636,55 @@ class XChainIndexer {
             // barrier waits (it never proceeds against an unread table).
             let covered = false;
             try {
+                // UNIX_TIMESTAMP() rides along on the SAME query and the SAME connection as the
+                // watermark, so the escape below compares two readings taken at one instant from
+                // one clock. Reading the hub's clock separately (or substituting this node's)
+                // would let skew between them decide a consensus barrier.
                 let rows = await this.hubDb.doQuery(
-                    "SELECT MAX(effective_time) AS ts FROM cross_chain_calls WHERE status = 'finalized'");
+                    "SELECT MAX(effective_time) AS ts, UNIX_TIMESTAMP() AS hub_now " +
+                    "FROM cross_chain_calls WHERE status = 'finalized'");
                 if(rows.length === 0 || rows[0].ts === null){
                     covered = true;                         // no finalized rows: nothing to wait on
                 } else {
                     lastTs = Number(rows[0].ts);
-                    if(lastTs >= blockTime) covered = true; // mirror covers this block
+                    if(lastTs >= blockTime){
+                        covered = true;                     // mirror covers this block
+                    } else {
+                        // Hub-clock escape hatch. Without it this barrier keys liveness
+                        // on CALL TRAFFIC: the only proceed condition was a finalized row at/after
+                        // block_time, so the moment XCALL traffic goes idle, chain time walks past
+                        // the newest finalized effective_time and NOTHING can ever satisfy the
+                        // barrier again. Every block defers, forever, on a chain that is perfectly
+                        // healthy. The hub_db_sync path never had this failure mode because
+                        // _callSyncSatisfied also opens on `streamWatermark >= blockTime + grace`.
+                        //
+                        // This is that same escape, keyed on the same frozen grace, with the hub's
+                        // clock standing in for the stream watermark. The two are the same reading:
+                        // streamWatermark is literally the hub's Math.floor(Date.now()/1000),
+                        // broadcast on a heartbeat (HubDbBroadcaster.broadcastWatermark); in direct
+                        // mode there is no stream to carry it, so we ask the hub's database for it.
+                        //
+                        // Why it is safe to proceed: the hub stamps a call row's effective_time
+                        // FORWARD of the instant it writes it (CrossChainCallEngine adds the relay
+                        // margin), so a row effective at or before block_time was already committed
+                        // before block_time on the hub's clock. Once that same clock reads a full
+                        // call grace past block_time, any such row is present in the table we just
+                        // read, and the set we are about to inject is the canonical one. This is
+                        // NOT the removed ungraced `Date.now() >= block_time` gate: that one used
+                        // the NODE's clock, allowed zero margin, and did let a lagging reader
+                        // proceed with a partial set.
+                        // NULL/absent must not coerce to 0 (Number(null) === 0 is finite, and a
+                        // 0 that compared true would open the escape on a hub that answered
+                        // nothing). Normalize the missing reading to null, which is not finite.
+                        let hubNow = rows[0].hub_now;
+                        lastNow = (hubNow === null || hubNow === undefined) ? null : Number(hubNow);
+                        if(Number.isFinite(lastNow) && lastNow >= blockTime + graceS){
+                            covered = true;
+                            console.log('Direct call-presence barrier: hub clock ' + lastNow +
+                                ' is past block_time ' + blockTime + ' + ' + graceS + 's grace ' +
+                                '(call mirror at ' + lastTs + '); proceeding.');
+                        }
+                    }
                 }
             } catch(e){
                 // Table not ready / transient error: treat as not covered and keep waiting.
@@ -480,10 +701,12 @@ class XChainIndexer {
             // bound is exhausted, throw so the caller retries this block from the top of the loop.
             if(Date.now() >= deadline)
                 this.util.throwError('direct call-presence barrier timed out after ' + timeoutMs +
-                    'ms waiting for block_time ' + blockTime + ' (call mirror at ' + lastTs + ')' +
+                    'ms waiting for block_time ' + blockTime + ' (call mirror at ' + lastTs +
+                    ', hub clock at ' + lastNow + ', escape at ' + (blockTime + graceS) + ')' +
                     (this._callPresenceLastErr ? ' [last query error: ' + this._callPresenceLastErr + ']' : ''));
             console.log('Waiting on hub call mirror: block_time ' + blockTime +
-                ' not yet covered (mirror at ' + lastTs + '); retrying...');
+                ' not yet covered (mirror at ' + lastTs + ', hub clock at ' + lastNow +
+                ', escape at ' + (blockTime + graceS) + '); retrying...');
             await this.util.sleep(Math.min(pollMs, Math.max(1, deadline - Date.now())));
         }
     }
@@ -493,6 +716,11 @@ class XChainIndexer {
         console.log('Starting up ' + this.name + ' v' + this.version + '...');
 
         this.config = config.getConfig();
+
+        // Resolve the direct-hub-DB call barrier's grace now that NETWORK is known. Same
+        // constant, same env override, same regtest-only rules as the mirrored path.
+        this.directCallGraceS = resolveWatermarkGrace(
+            HUB_SYNC_WATERMARK_GRACE_S.call, 'HUB_SYNC_CALL_GRACE_S', this.config['NETWORK']);
 
         // Create instance of the utility class, sharing the indexer's single
         // config object (NOT a fresh getConfig()) so a later hub overlay can't
@@ -562,7 +790,12 @@ class XChainIndexer {
                     // the mirror refuses hub-broadcast reorg retractions of THIS
                     // chain's rows unless their generation fence is below our own
                     // push_generations value, i.e. a rollback we actually performed.
-                    getOwnRollbackGeneration: () => this.indexerDb.getPushGeneration(this.config['COIN'])
+                    getOwnRollbackGeneration: () => this.indexerDb.getPushGeneration(this.config['COIN']),
+                    // Bound the price_snapshots bootstrap: the mirror needs the
+                    // rounds the blocks THIS node will parse can read, not the oracle's whole
+                    // history. Re-evaluated on every (re-)bootstrap, and null-safe - an
+                    // unresolvable horizon mirrors the table in full, as before.
+                    getPriceMirrorHorizon: () => this._priceMirrorHorizon()
                 });
                 // NOTE: do NOT start() here. The hub-mirror tables (price_snapshots,
                 // oracle_prices, cross_chain_*, capability_snapshots, state_checkpoints)
@@ -1138,7 +1371,14 @@ class XChainIndexer {
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (direct call-presence barrier): ', err);
                         this.stallReason = 'call_presence_barrier';
-                        this.stallClearsAt = null;          // no watermark fallback to key on
+                        // The barrier now HAS a time-keyed escape (hub clock >= block_time +
+                        // call grace), so this stall does have a first-clearable instant and
+                        // /status can say so instead of reporting an open-ended stall on a
+                        // future-stamped block. Keyed on this node's wall clock while the
+                        // barrier itself reads the hub's: the two are the same host in the
+                        // single-host topology this barrier serves, and this value gates no
+                        // wait, no read and no write (health verdict only, see _barrierClearsAt).
+                        this.stallClearsAt = this._directCallBarrierClearsAt(blockTime);
                         break;
                     }
                 }
@@ -1159,6 +1399,28 @@ class XChainIndexer {
                         console.warn('Deferring block ' + blockToParse + ' (anchor-reward attestation mirror): ', err);
                         this.stallReason = 'anchor_attest_barrier';
                         this.stallClearsAt = this._barrierClearsAt(blockTime, 'anchorAttestWatermarkGraceS');
+                        break;
+                    }
+                }
+
+                // Finalized ATTEST response mirror barrier. A mirrored attestation_responses
+                // row binds at the first block whose protocol time reaches its signed
+                // effective_time, and that block fires the contract callback, mints the
+                // synthetic v1 action and settles the request fee. A node that has not
+                // received the row by then does not lag, it forks: it commits that block with
+                // the callback un-fired while its peers commit it fired, and nothing later
+                // re-binds. So it defers, with no chain-only escape (see hub_db_sync.js).
+                // Armed on EVERY BTC block with no transaction predicate: the binding
+                // condition is a time, so a row can bind at a block carrying no ATTEST
+                // transaction at all, and there is nothing to scope the wait to. BTC-only,
+                // because all attestation stake and every request lives on BTC.
+                if(this.hubDbSync && this.config['COIN'] === 'BTC'){
+                    try {
+                        await this.hubDbSync.waitForAttestationResponseSync(blockTime, this.priceSyncTimeoutMs);
+                    } catch(err){
+                        console.warn('Deferring block ' + blockToParse + ' (attestation response mirror): ', err);
+                        this.stallReason = 'attest_response_sync_barrier';
+                        this.stallClearsAt = this._barrierClearsAt(blockTime, 'attestResponseWatermarkGraceS');
                         break;
                     }
                 }
@@ -1258,6 +1520,29 @@ class XChainIndexer {
                         // utility.processCrossChainCalls)
                         await this.util.processCrossChainCalls(this.actions, this.indexerDb, blockToParse, blockTime);
 
+                        // Apply any hub-mirrored ATTEST response whose SIGNED effective_time
+                        // this block's protocol time has reached: verify it through the shared
+                        // response verifier, synthesize the v1 action, fire the contract
+                        // callback and settle the request fee (see
+                        // utility.processAttestationResponses).
+                        //
+                        // THE POSITION IS PINNED AND IS NOT A STYLE CHOICE. The VM's
+                        // attestation snapshot is INCLUSIVE of the current block
+                        // (db.getAttestationDataForVM), so a response applied before this
+                        // block's transaction loop would be visible to an EXECUTE inside the
+                        // same block on a node that had the mirror row and invisible on one
+                        // that got it a second later. Here, after the transaction loop and
+                        // before the deadline-expiry sweep, no EXECUTE in B sees a response
+                        // bound at B and every EXECUTE in B+1 does, on every node. Running it
+                        // before the sweep is what makes a response satisfied exactly AT the
+                        // deadline block apply rather than lose to the expiry.
+                        //
+                        // BTC-only, matching the barrier above and for the same reason: all
+                        // attestation capability stake, and therefore every responsible set,
+                        // lives on BTC. Inert below the activation height.
+                        if(this.config['COIN'] === 'BTC')
+                            await this.util.processAttestationResponses(this.actions, this.indexerDb, blockToParse, blockTime);
+
                         // Derive matured anchor/archive publisher rewards from the
                         // hub-mirrored anchor_reward_attestations rows (re-verifying the XANCPUB
                         // quorum against this node's own oracle_publish set, AND re-proving the DOGE
@@ -1280,6 +1565,17 @@ class XChainIndexer {
                         // here, which defers the block rather than reading a silent DOGE peer as
                         // a federation-wide absence.
                         await rollcallClose.closeRollcallEpochs(this.indexerDb, this.config, blockToParse, this.rollcallProof, this.util);
+
+                        // Land any RECOVERY-restored anchor/archive reward whose original derive
+                        // height this block has reached. A node rebuilt from an ANCHOR archive
+                        // cannot re-derive these (its attestation mirror is exactly what was
+                        // lost), so recovery stages them and they materialize here, at the same
+                        // point in the block and at the same height the derivation above would
+                        // have minted them: earn-block + the fleet-agreed mirror maturity. Same
+                        // cheap gate as the createAddress hook, so a node with nothing staged
+                        // (every node not mid-recovery, and every chain but BTC) pays one COUNT(*)
+                        // for the process lifetime.
+                        await this.indexerDb._applyPendingRewardsDueAtBlock(blockToParse);
 
                         // Check for any cancelled items (dispensers)
                         await this.util.processCancellations(this.actions, this.indexerDb, blockToParse, blockTime);
@@ -1365,6 +1661,10 @@ class XChainIndexer {
                     this.stallReason = null;
                     this.stallClearsAt = null;              // the stall is over, so is its deadline
                     this.lastBlockCommittedAt = Date.now();
+                    // Whatever this block was held behind, it is not held any more. Cleared here
+                    // as well as by nextBarrierHold's block-changed reset so a commit ends the
+                    // hold immediately, rather than at the next pass through the poll loop.
+                    this.barrierHold = null;
 
                     // The block is committed, so nothing else may attribute a price
                     // read to it. Clearing priceBarrierSkipped keeps the choke-point
@@ -1475,6 +1775,13 @@ class XChainIndexer {
 
             }
 
+            // The catch-up loop has stopped, either caught up or because a barrier deferred
+            // the block at the head of the queue. Fold that into the mirror-barrier hold so a
+            // block that keeps being deferred across passes is measured against the named
+            // ceiling instead of retrying forever behind identically-healthy-looking log
+            // lines. A no-op when nothing is stalled; see _noteBarrierHold.
+            this._noteBarrierHold(this.util.isNull(lastIndexerBlock) ? null : Number(lastIndexerBlock) + 1);
+
             if(!this.synced && !this.util.bclt(lastIndexerBlock, lastDecoderBlock)){
                 this.synced = true;
                 console.log('Listening for blocks...');
@@ -1489,9 +1796,9 @@ class XChainIndexer {
     // Called once at startup. Best-effort: logs a warning and returns without modifying config
     // if the hub is unreachable or returns an unexpected response.
     async _applyHubConfigOverlay(){
-        if(!this.hubClient || !this.hubClient.enabled) return;
+        if(!this.hubClient || !this.hubClient.configEnabled) return;
         try {
-            let { ok, configs, seq, watermark, coinConsensusHashes } = this._unwrapHubConfigResponse(await this.hubClient._call('getallconfigs', {}));
+            let { ok, configs, seq, watermark, coinConsensusHashes } = this._unwrapHubConfigResponse(await this.hubClient.getAllConfigs());
             if(!ok){
                 console.warn('XChainIndexer: hub config overlay skipped, hub returned no usable config (using local defaults)');
                 return;
@@ -1657,8 +1964,62 @@ class XChainIndexer {
         return halted;
     }
 
+    // Horizon for the hub price-mirror bound: the unix second below which no block
+    // this indexer will process can read a price round. HubDbSync bootstraps price_snapshots
+    // from here up, plus its own margin of pre-horizon rounds, instead of replaying the
+    // oracle's entire history (411,609 rows / ~13 min on a testnet BTC reparse, growing by
+    // ~5,184 rows a day forever) before the price barrier can arm.
+    //
+    // Derivation, and why each term is here:
+    //   - the oldest block this node will process from here. Resuming, that is the tip it
+    //     stopped at; with nothing indexed it is the decoder's FIRST block, which on a clean
+    //     reindex sits at genesis and correctly yields a horizon so old that nothing is bound
+    //     out at all. So a full replay still mirrors the full history, by construction.
+    //   - two FIAT_DISPENSER_PRICE_WINDOWs, because reverseOraclePriceMatch's batched read
+    //     reaches (blockTime - window) - window behind the block it settles.
+    //   - one day of slop for block-time non-monotonicity (MTP, the 2h future-time allowance)
+    //     and for a reorg rolling this node back below the resume point without a restart.
+    // HubDbSync adds the round-count margin its own consensus reads need on top of this, and
+    // polices the result: a block that turns up below the floor abandons the bound and
+    // re-mirrors in full rather than settling short.
+    //
+    // Returns null - meaning "mirror everything", the unbounded behavior - whenever the
+    // horizon cannot be established: no blocks anywhere yet, an unresolvable block time, or
+    // any read fault. Never throws.
+    async _priceMirrorHorizon(){
+        const SLOP_SECONDS = 86400;
+        // Local null test rather than this.util.isNull: util is wired in start(), and a
+        // horizon that silently answered "mirror everything" because a helper was missing
+        // would be indistinguishable from a horizon that could not be established.
+        const absent = (v) => (v === null || v === undefined);
+        try {
+            let lastIndexed = await this.indexerDb.getBlockIndex('indexer', 'last');
+            // Anchor on a block that EXISTS. Resuming, that is the last block parsed rather
+            // than the next one: the next block is often not decoded yet (a caught-up node
+            // restarting), and one block earlier is the conservative direction anyway. Its
+            // time is read from this node's own blocks table, which is guaranteed to hold it.
+            let anchorDb    = absent(lastIndexed) ? this.decoderDb : this.indexerDb;
+            let anchorBlock = absent(lastIndexed)
+                                 ? await this.decoderDb.getBlockIndex('decoder', 'first')
+                                 : Number(lastIndexed);
+            if(absent(anchorBlock)) return null;
+            // Raw stamp, not protocol time: this is a retention boundary compared against
+            // hub round timestamps, not a consensus gate, and getRawBlockTime is the reader
+            // that does not depend on the previous-block window existing yet.
+            let blockTime = await anchorDb.getRawBlockTime(anchorBlock);
+            if(blockTime === false || !Number.isFinite(Number(blockTime)) || Number(blockTime) <= 0)
+                return null;
+            let fiatWindow = parseInt((this.config || {})['FIAT_DISPENSER_PRICE_WINDOW']) || 86400;
+            return Number(blockTime) - (2 * fiatWindow) - SLOP_SECONDS;
+        } catch(e){
+            console.warn('XChainIndexer: price mirror horizon unavailable (' + (e && e.message) +
+                '); the hub price mirror will bootstrap in full');
+            return null;
+        }
+    }
+
     _startHubConfigPolling(){
-        if(!this.hubClient || !this.hubClient.enabled) return;
+        if(!this.hubClient || !this.hubClient.configEnabled) return;
         if(this._hubConfigPollTimer) return;
         // Same reader the staleness boundary is derived from, so the reported boundary is
         // always three of THESE intervals.
@@ -1671,7 +2032,7 @@ class XChainIndexer {
             if(this._hubConfigPollRunning) return;   // a prior slow poll is still in flight
             this._hubConfigPollRunning = true;
             try {
-                let { ok, configs, seq, watermark, coinConsensusHashes } = this._unwrapHubConfigResponse(await this.hubClient._call('getallconfigs', {}));
+                let { ok, configs, seq, watermark, coinConsensusHashes } = this._unwrapHubConfigResponse(await this.hubClient.getAllConfigs());
                 // A usable envelope (not a { error: ... } failure result) means the hub
                 // actually answered with config. A failed fetch must NOT refresh the freshness
                 // signal, or a persistently config-DB-failing hub reports healthy while the
@@ -1849,4 +2210,8 @@ module.exports.stallWedged                           = stallWedged;
 module.exports.waitingOnFutureBlock                  = waitingOnFutureBlock;
 module.exports.stallClassOf                          = stallClassOf;
 module.exports.atProcessableTip                      = atProcessableTip;
+module.exports.nextBarrierHold                       = nextBarrierHold;
+module.exports.barrierHoldMs                         = barrierHoldMs;
+module.exports.barrierCeilingExceeded                = barrierCeilingExceeded;
+module.exports.isMirrorBarrierReason                 = isMirrorBarrierReason;
 module.exports.hubConfigCoinKey                      = hubConfigCoinKey;

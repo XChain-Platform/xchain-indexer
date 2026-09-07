@@ -265,9 +265,9 @@ const price              = require('./actions/price.js');
 // External attestation framework (single action; v0=request, v1=response, v2=expire)
 const attest             = require('./actions/attest.js');
 
-// ANCHOR: DOGE-only on-chain state commitments (v0=checkpoint, v1=+archive,
-// v2=continuation, v3=+SPV roots, v4/v5=+publisher anchor-reward attestation,
-// v6=+publisher archive-reward attestation). Authoritative list: anchor.js FORMATS.
+// ANCHOR: DOGE-only on-chain state commitments (v0=checkpoint bundle, v1=archive head,
+// v2=archive continuation chunk; the pre-restart v3-v7 set no longer parses).
+// Authoritative list: anchor.js FORMATS.
 const anchor             = require('./actions/anchor.js');
 
 // Cross-chain contract calls: XCALL (source-chain request/expiry) + XEXEC
@@ -396,7 +396,7 @@ class Actions {
         // Attestation framework action instance (single handler dispatches v0/v1/v2 internally)
         this.actionAttest           = new attest(this);
 
-        // ANCHOR action instance (single handler dispatches v0-v6 internally)
+        // ANCHOR action instance (single handler dispatches v0/v1/v2 internally)
         this.actionAnchor           = new anchor(this);
 
         // NODEPROOF: full-node possession-proof verdict handler
@@ -648,8 +648,8 @@ class Actions {
         if(action=='ATTEST')             await this.actionAttest.parse(params, data, error);
 
         // ANCHOR: DOGE-only on-chain state commitments (handler dispatches on VERSION:
-        // v0=checkpoint, v1=+archive, v2=continuation, v3=+SPV roots,
-        // v4/v5=+publisher anchor reward, v6=+publisher archive reward)
+        // v0=checkpoint bundle, v1=archive head, v2=archive continuation chunk; the
+        // pre-restart v3-v7 set no longer parses)
         if(action=='ANCHOR')             await this.actionAnchor.parse(params, data, error);
 
         // Cross-chain contract calls: XCALL (VM-emitted request / synthetic expiry),
@@ -893,6 +893,9 @@ class Actions {
         // abandoned processTransaction can still resume and try to write on the shared
         // connection, which by then may belong to a REAL block's transaction. The stale epoch
         // rejects those zombie writes inside the db layer before they reach the driver.
+        // runInDryRunEpoch, never runInTxEpoch: the fence is wanted here, consensus authority
+        // is not. This IS a public unauthenticated path, and a barrier that keys on the
+        // mere presence of a context reads this one as proof of a running block loop.
         let dryRunEpoch = this.indexerDb.currentTxEpoch();
         try {
             // The payer's fee-token balance at PRE-action state, read inside this
@@ -903,7 +906,7 @@ class Actions {
             // handler's verdict stands untouched.
             if(feeBalanceTick && !this.util.isNull(source)){
                 try {
-                    sourceFeeBalance = await this.indexerDb.runInTxEpoch(dryRunEpoch, async () => {
+                    sourceFeeBalance = await this.indexerDb.runInDryRunEpoch(dryRunEpoch, async () => {
                         let addressId = await this.indexerDb.getAddressId(source);
                         if(addressId === null || addressId === undefined) return '0';
                         let tickId = await this.indexerDb.getTickerId(feeBalanceTick);
@@ -921,7 +924,7 @@ class Actions {
             // handler, so a stuck handler would otherwise wedge block advancement for the full
             // hang; on timeout the catch+finally roll back and release the lock within the
             // caller's bounded window instead.
-            let dryRunProcessing = this.indexerDb.runInTxEpoch(dryRunEpoch,
+            let dryRunProcessing = this.indexerDb.runInDryRunEpoch(dryRunEpoch,
                 () => this.processTransaction(syntheticTx));
             // Keep the abandoned promise's late settlement (typically the epoch fence firing)
             // from surfacing as an unhandledRejection; the fence, not this handler, is what
@@ -1293,10 +1296,16 @@ class Actions {
         // A controlled token whose guard the feequote path refused (never entered the VM,
         // see _invokeController): the native-fee verdict genuinely depends on a controller
         // guard we do not run on this public surface, so report it as not natively quotable
-        // rather than surfacing the sentinel as a spurious class-B invalidity.
-        if(typeof run.status === 'string' && run.status.indexOf('FEE_QUOTE_CONTROLLER_UNSUPPORTED') !== -1)
+        // rather than surfacing the sentinel as a spurious class-B invalidity. The sentinel
+        // carries WHICH controller declined, so quote that too: an action can consult several
+        // guards (a SEND consults the token's, the sender's and the recipient's), and "something
+        // here is controlled" is not an answer a wallet can act on.
+        if(this.util.isGuardInertError(run.status))
             return Object.assign(base, { supported: false, valid: false,
-                error: 'native fee pre-flight not supported for a controller-bound ' + action + ' (pay the fee in XCHAIN)' });
+                guardInert: true,
+                guardInertReason: this.util.describeGuardInert(run.status),
+                error: 'native fee pre-flight not supported for a controller-bound ' + action + ' ('
+                     + this.util.guardInertDetail(run.status) + '; pay the fee in XCHAIN)' });
 
         // The handler's verdict is authoritative; its reason (class-A or class-B) verbatim.
         if(run.status !== 'valid')
@@ -1537,7 +1546,9 @@ class Actions {
         // verdict genuinely depends on a guard we do not enter here. Surface it as a boolean
         // so the client falls through to its authenticated/certified tier rather than trusting
         // a guard-less verdict.
-        let guardInert = (typeof run.status === 'string' && run.status.indexOf('FEE_QUOTE_CONTROLLER_UNSUPPORTED') !== -1);
+        // The boolean says THAT the guard was skipped; guardInertReason says WHICH controller
+        // skipped it, so a client can name the cause instead of relaying a bare sentinel.
+        let guardInert = this.util.isGuardInertError(run.status);
         let valid      = (run.status === 'valid');
 
         // The dry-run already staged the handler's fee record, so echoing it costs nothing and
@@ -1571,6 +1582,7 @@ class Actions {
             status:     run.status,
             error:      valid ? null : (run.error || run.status || 'dry-run produced no status'),
             guardInert: guardInert,
+            guardInertReason: guardInert ? this.util.describeGuardInert(run.status) : null,
             feeExempt:  false,
             xchainFee:  xchainFee,
             feeMode:    resolvedMode,
@@ -1620,6 +1632,30 @@ class Actions {
         let chainTime = Number(blockTime);
         let refTime   = Number.isFinite(chainTime) ? chainTime : Math.floor(Date.now() / 1000);
         let prices    = await this.util.getFeeOraclePrices(this.indexerDb, coin, blockIndex, refTime, maxPriceAgeSeconds);
+        // Which database that price read came out of. Resolved exactly the way
+        // util.getFeeOraclePrices resolves it, so the disclosure cannot drift from the
+        // read it describes.
+        //
+        // This exists because the resolution is INVISIBLE from outside the process and is
+        // decided by one env var on the indexer alone. Set HUB_DB_NAME here and every price
+        // lookup moves to the hub DB; anything off-box that seeds prices (the e2e fixtures)
+        // keeps writing wherever ITS own env points, and the only symptom is every priced
+        // action failing `no current oracle price` with both databases looking healthy.
+        // Disclosing the resolved source lets a caller follow the indexer instead of
+        // modelling it.
+        //
+        // The NAME is withheld on mainnet, where this is a public read surface and an
+        // internal database name is not the client's business; the boolean is the part a
+        // client needs (single-host node vs hub-backed one) and is always disclosed.
+        let priceDb = (this.indexerDb && this.indexerDb.indexer && this.indexerDb.indexer.hubDb)
+            ? this.indexerDb.indexer.hubDb
+            : this.indexerDb;
+        let mainnet = String(this.config['NETWORK'] || '').toLowerCase() === 'mainnet';
+        let priceSource = {
+            hubDb:    !!(priceDb && priceDb !== this.indexerDb),
+            database: (!mainnet && priceDb && priceDb.dbName) ? priceDb.dbName : null
+        };
+
         let priceInfo = prices.error
             ? { available: false, error: prices.error }
             : {
@@ -1643,7 +1679,9 @@ class Actions {
             // The instant the price read above was judged against, so a client can tell a stale
             // feed from an indexer whose tip is behind.
             blockTime:          blockTime,
-            prices:             priceInfo
+            prices:             priceInfo,
+            // See above: where price_snapshots / oracle_prices were actually read from.
+            priceSource:        priceSource
         };
     }
 

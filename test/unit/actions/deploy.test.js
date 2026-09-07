@@ -238,9 +238,10 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             assert.ok('enforceBannedGenerator' in opts && 'enforceBannedWasm' in opts, 'new flags must be threaded');
         });
 
-        // The global-alias refinement of banned-async + banned-wasm (sloppy-mode `this` and
-        // the globalThis self-reference chain both read the global binding) rides a THIRD,
-        // separate per-coin height gate. It cannot ride either gate above: VM_LINT_HARDENING
+        // The global-alias refinement of banned-async + banned-wasm + banned-math (sloppy-mode
+        // `this` and the globalThis self-reference chain both read the global binding) rides a
+        // THIRD, separate per-coin height gate, one boolean for all three rules. It cannot ride
+        // either gate above: VM_LINT_HARDENING
         // is already open on every network and the Pkg 3 heights are in the past, so reusing
         // either would retroactively reject contracts the chain already accepted. Mainnet is
         // still unarmed, which is what these assertions pin.

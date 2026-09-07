@@ -44,6 +44,8 @@ describe('HubClient', function(){
         sinon.restore();
         delete process.env.HUB_API_URL;
         delete process.env.HUB_API_KEY;
+        delete process.env.HUB_CONFIG_URL;
+        delete process.env.HUB_CONFIG_API_KEY;
     });
 
     describe('constructor', function(){
@@ -72,6 +74,89 @@ describe('HubClient', function(){
             process.env.HUB_API_URL = '';
             let c = new HubClient();
             assert.strictEqual(c.enabled, false);
+        });
+
+        it('defaults the config endpoint to the feed endpoint when unset', function(){
+            let c = new HubClient('http://hub.example.com', 'key1');
+            assert.strictEqual(c.configUrl, 'http://hub.example.com');
+            assert.strictEqual(c.configApiKey, 'key1');
+            assert.strictEqual(c.configEnabled, true);
+        });
+
+        it('separates the config endpoint from the feed endpoint via env', function(){
+            process.env.HUB_CONFIG_URL     = 'http://private-hub.example.com:10000';
+            process.env.HUB_CONFIG_API_KEY = 'privatekey';
+            let c = new HubClient('http://validator01.example.com:10002', 'feedkey');
+            assert.strictEqual(c.hubUrl, 'http://validator01.example.com:10002');
+            assert.strictEqual(c.apiKey, 'feedkey');
+            assert.strictEqual(c.configUrl, 'http://private-hub.example.com:10000');
+            assert.strictEqual(c.configApiKey, 'privatekey');
+        });
+
+        it('marks configEnabled=false when neither a config nor a feed url exists', function(){
+            let c = new HubClient('', '');
+            assert.strictEqual(c.configEnabled, false);
+        });
+
+        it('marks configEnabled=true from HUB_CONFIG_URL alone, with no feed url', function(){
+            process.env.HUB_CONFIG_URL = 'http://private-hub.example.com:10000';
+            let c = new HubClient('', '');
+            assert.strictEqual(c.enabled, false);
+            assert.strictEqual(c.configEnabled, true);
+        });
+    });
+
+    describe('getAllConfigs()', function(){
+        it('sends getallconfigs to the CONFIG endpoint, not the feed endpoint', async function(){
+            let c = new HubClient('http://validator01.example.com:10002', 'feedkey',
+                                  'http://private-hub.example.com:10000', 'privatekey');
+            let { stub } = buildHttpStub(JSON.stringify({
+                jsonrpc: '2.0', id: 1, result: { configs: { BTC: {} }, seq: 4, watermark: 9 }
+            }));
+            sinon.stub(http, 'request').callsFake(stub);
+
+            let result = await c.getAllConfigs();
+            let opts = stub.firstCall.args[0];
+            // The whole point of the split: this method must never reach the public feed
+            // port, which answers it with -32601 'Method not available on this port'.
+            assert.strictEqual(opts.hostname, 'private-hub.example.com');
+            assert.strictEqual(opts.port, '10000');
+            assert.strictEqual(opts.headers['x-api-key'], 'privatekey');
+            assert.deepStrictEqual(result, { configs: { BTC: {} }, seq: 4, watermark: 9 });
+        });
+
+        it('still reaches the feed endpoint when no config endpoint is configured', async function(){
+            let c = new HubClient('http://hub.example.com:3003', 'feedkey');
+            let { stub } = buildHttpStub(JSON.stringify({
+                jsonrpc: '2.0', id: 1, result: { configs: {}, seq: 0 }
+            }));
+            sinon.stub(http, 'request').callsFake(stub);
+
+            await c.getAllConfigs();
+            let opts = stub.firstCall.args[0];
+            assert.strictEqual(opts.hostname, 'hub.example.com');
+            assert.strictEqual(opts.headers['x-api-key'], 'feedkey');
+        });
+
+        it('resolves null without any request when no endpoint is configured', async function(){
+            let c = new HubClient('', '');
+            let httpStub = sinon.stub(http, 'request');
+            assert.strictEqual(await c.getAllConfigs(), null);
+            assert.strictEqual(httpStub.called, false);
+        });
+
+        it('leaves push traffic on the feed endpoint when a config endpoint is set', async function(){
+            let c = new HubClient('http://validator01.example.com:10002', 'feedkey',
+                                  'http://private-hub.example.com:10000', 'privatekey');
+            let { stub } = buildHttpStub(JSON.stringify({
+                jsonrpc: '2.0', id: 1, result: { accepted: true }
+            }));
+            sinon.stub(http, 'request').callsFake(stub);
+
+            await c.pushChainTip('BTC', 'testnet', 100, 1788202505);
+            let opts = stub.firstCall.args[0];
+            assert.strictEqual(opts.hostname, 'validator01.example.com');
+            assert.strictEqual(opts.headers['x-api-key'], 'feedkey');
         });
     });
 

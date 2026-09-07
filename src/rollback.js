@@ -20,10 +20,13 @@
 
 const crypto    = require('crypto');
 const swq       = require('./stake_weighted_quorum.js');
+const srb       = require('./snapshot_reorg_buffer.js');
 const pmsh      = require('./attestation/providerMinStakeHistory.js');
 const ProviderRegistry = require('./attestation/providerRegistry.js');
 const lifecycle = require('./tableLifecycle.js');
+const ar        = require('./anchor_reward_activation.js');
 const { ARCHIVE_HEAD_VERSIONS_SQL } = require('./stateHash.js');
+const { archiveAuthorScopeJoin } = require('./archive_rollback_author_scope_activation.js');
 
 class Rollback {
 
@@ -601,12 +604,12 @@ class Rollback {
                 // earlierBlock + activationDelay, which can itself land at/after block_index, so
                 // a blanket `deactivation_block >= block_index` would wrongly clear legitimately-
                 // earned deactivations. We instead match the EXACT value an orphaned action
-                // wrote. For the three tables that record a child action row (stakes↔unstakes,
-                // delegations↔revoke-rows, contract_stakes↔contract_unstakes) we JOIN the
-                // surviving parent to its orphaned action row on the same keys the forward
-                // handler used and require deactivation_block = orphanBlock + activationDelay.
-                // The DELEGATE v3 contract-revoke records NO child row (a pure in-place UPDATE),
-                // so contract_delegations is keyed on the value threshold block_index +
+                // wrote. For the two tables that still record a child action row
+                // (stakes↔unstakes, contract_stakes↔contract_unstakes) we JOIN the surviving
+                // parent to its orphaned action row on the same keys the forward handler used
+                // and require deactivation_block = orphanBlock + activationDelay.
+                // `delegations` and `contract_delegations` record NO child row (both revokes are
+                // a pure in-place UPDATE), so both are keyed on the value threshold block_index +
                 // activationDelay (equivalently precise, because any surviving revoke stamps a
                 // strictly smaller value, i.e. survivingBlock < block_index).
                 let staking         = this.config['STAKING'];
@@ -622,18 +625,21 @@ class Rollback {
                 args = [block_index, activationDelay];
                 await this.indexerDb.doQuery(query, args);
 
-                // delegations ← orphaned DELEGATE-revoke rows. A revoke is itself a delegations
-                // row keyed by its own action_index; the parent it stamped is an earlier
-                // delegations row for the same source + signing pubkey (self-join).
-                query = `UPDATE delegations p
-                            JOIN delegations r
-                              ON r.source_id = p.source_id
-                             AND r.signing_pubkey_id = p.signing_pubkey_id
-                            SET p.deactivation_block = NULL
-                            WHERE r.block_index >= ?
-                              AND p.deactivation_block IS NOT NULL
-                              AND p.deactivation_block = r.block_index + ?`;
-                args = [block_index, activationDelay];
+                // delegations ← orphaned DELEGATE-revoke and ROLLCALL-eviction stamps. The revoke
+                // stopped writing a child delegations row at the DELEGATE_REVOKE_NO_REINSERT
+                // flag-day (actions/delegate.js), so the old self-join on that row matched nothing
+                // for any post-flag-day revoke and the surviving parent kept its stamp. Key on the
+                // value threshold instead, exactly as contract_delegations does below.
+                // INVARIANT: every writer of delegations.deactivation_block stamps
+                // actionBlock + ACTIVATION_DELAY_BLOCKS (setDelegationDeactivation from
+                // actions/delegate.js, setAllDelegationDeactivationsBySource from
+                // rollcall_close.js), so a SURVIVING stamper wrote a strictly smaller value. A new
+                // writer using a different offset MUST update this query.
+                query = `UPDATE delegations
+                            SET deactivation_block = NULL
+                            WHERE deactivation_block IS NOT NULL
+                              AND deactivation_block >= ?`;
+                args = [Number(block_index) + activationDelay];
                 await this.indexerDb.doQuery(query, args);
 
                 // contract_stakes ← orphaned contract_unstakes (contract staking, all chains)
@@ -667,18 +673,25 @@ class Rollback {
                 // a surviving row keeps its slashed amount while a from-genesis replay (slash
                 // never re-mined) keeps the original, a consensus-affecting divergence (active
                 // stake drives VM staker weighting, quorum eligibility, and cooldown refunds on
-                // all chains). We copy back the EARLIEST orphaned debit's `prev_amount` per row
-                // (min block_index, then (execution_index, slash_position) tiebreak, the same
-                // deterministic total order the block-hash preimage uses for contract_emissions,
-                // so it is replay-stable and identical across the source indexer and every
-                // replica; the AUTO_INCREMENT `id` is NOT, and would let two nodes restore a
-                // divergent amount on a reorg that retracts a block with ≥2 slashes against one
-                // stake row). This is a pure string copy, so the restored value is
-                // byte-identical to the surviving chain's pre-orphaned-slash state and to a fresh
-                // replay (no arithmetic / decimal-format drift). Earlier SURVIVING debits
-                // (block_index < block_index) are intentionally left applied. Runs BEFORE the
-                // deletes so the debit rows and target rows still exist.
+                // all chains). We copy back the HIGHEST orphaned `prev_amount` per row: the
+                // debits on one stake row form a strictly decreasing chain (every debit takes a
+                // positive amount and nothing else raises the column), and the orphaned range is
+                // a suffix of that chain, so the maximum IS the value the row held before the
+                // first orphaned debit. The position columns alone cannot express that order,
+                // because a re-entrant nested EXECUTE slashes FIRST under a HIGHER action_index
+                // than its parent frame: ordering on (block_index, execution_index,
+                // slash_position) then reads the parent's later debit as the earliest and
+                // restores a value one slash short. Those columns stay as the tiebreak for
+                // numerically equal amounts, a replay-stable total order the block-hash preimage
+                // also uses for contract_emissions; the AUTO_INCREMENT `id` is NOT, and would
+                // let two nodes restore a divergent amount. The restore itself is a pure string
+                // copy, so the value is byte-identical to the surviving chain's
+                // pre-orphaned-slash state and to a fresh replay (no arithmetic / decimal-format
+                // drift). Earlier SURVIVING debits (block_index < block_index) are intentionally
+                // left applied. Runs BEFORE the deletes so the debit rows and target rows still
+                // exist. Byte-identical (whitespace aside) to the xchain-sync replica twin.
                 for(let slashTbl of ['contract_stakes', 'contract_unstakes']){
+                    //<CONTRACT-SLASH-RESTORE-SQL>
                     query = `UPDATE ` + slashTbl + ` t
                                 JOIN contract_slash_debits d ON d.stake_action_index = t.action_index
                                 SET t.amount = d.prev_amount
@@ -689,11 +702,14 @@ class Rollback {
                                       WHERE e.target_table      = d.target_table
                                         AND e.stake_action_index = d.stake_action_index
                                         AND e.block_index >= ?
-                                        AND (e.block_index < d.block_index
-                                             OR (e.block_index = d.block_index
-                                                 AND (e.execution_index < d.execution_index
-                                                      OR (e.execution_index = d.execution_index
-                                                          AND e.slash_position < d.slash_position)))))`;
+                                        AND (CAST(e.prev_amount AS DECIMAL(60,18)) > CAST(d.prev_amount AS DECIMAL(60,18))
+                                             OR (CAST(e.prev_amount AS DECIMAL(60,18)) = CAST(d.prev_amount AS DECIMAL(60,18))
+                                                 AND (e.block_index < d.block_index
+                                                      OR (e.block_index = d.block_index
+                                                          AND (e.execution_index < d.execution_index
+                                                               OR (e.execution_index = d.execution_index
+                                                                   AND e.slash_position < d.slash_position)))))))`;
+                    //</CONTRACT-SLASH-RESTORE-SQL>
                     args = [slashTbl, block_index, block_index];
                     await this.indexerDb.doQuery(query, args);
                 }
@@ -770,55 +786,12 @@ class Rollback {
                     await this.indexerDb.doQuery(query, args);
                 }
 
-                // Restore anchor validator_rewards rows an orphaned reconcile DELETEd IN PLACE
-                // from earlier SURVIVING blocks (RB-ANCHOR). reconcileAnchorRewardWinner keeps
-                // only the smallest-pubkey winner per (reward_type, round_reference); on a
-                // failover double-publish it deletes loser rows that were created at the
-                // checkpoint's SNAPSHOT_BLOCK (earlier than the ANCHOR that runs the reconcile),
-                // logging each pre-image in anchor_reward_reconcile_log keyed to the reconcile's
-                // (ANCHOR) block. If that ANCHOR is in the orphaned range, the generic block
-                // delete below drops the log rows and the ANCHOR but cannot re-create the deleted
-                // losers, leaving the reorged node with a collapsed reward set while a from-genesis
-                // replay to reorg_block-1 (reconcile never re-ran) keeps every loser. That lowers
-                // a later COLLECT's SUM(validator_rewards) → a ledger-hashed fork. Re-INSERT only
-                // losers whose ORIGINAL earn-block (reward_block_index) SURVIVES the reorg
-                // (< block_index): a loser earned inside the orphaned range is correctly absent
-                // (replay never mints it, and the generic delete already removed any copy). The
-                // restored row carries its original earn-block, so the generic block delete (which
-                // scopes on block_index >= reorg) leaves it in place. Runs BEFORE that delete so
-                // the log rows still exist. amount is the frozen consensus reward constant per
-                // round, so duplicate log rows carry an identical value and INSERT IGNORE is
-                // value-stable + idempotent (no earliest-debit tiebreak needed, unlike the slash
-                // restores above where prev_amount can differ across repeated slashes of one row).
-                //
-                // The surviving-earn-block test alone is NOT sufficient once a reward can be
-                // MATERIALIZED later than it is earned. An derived anchor reward
-                // carries block_index = the checkpoint's SNAPSHOT_BLOCK but is written while the
-                // BTC indexer processes a much later block, recorded here as
-                // reward_derive_block_index. A loser materialized INSIDE the orphaned range has a
-                // surviving earn-block yet must NOT be restored: the replay to reorg_block-1 never
-                // ran the derivation, so restoring it would mint an orphan the replay does not have
-                // and fork SUM(validator_rewards) in the other direction. Require BOTH heights to
-                // survive; NULL (every same-block writer, and every row pre-dating the column)
-                // keeps the original earn-block-only behavior.
-                // round_qualifier rides the pre-image like every other key column: it is part
-                // of the reward's UNIQUE identity (snapshot_block for the archive leg, whose
-                // round_reference is a reissuable hub counter), so restoring without it would
-                // re-INSERT the loser under qualifier 0 - a DIFFERENT row from the one the
-                // reconcile deleted, colliding with whatever legacy row already holds that key
-                // and leaving the real loser unrestored.
-                query = `INSERT IGNORE INTO validator_rewards
-                            (source_id, signing_pubkey_id, reward_type, round_reference, round_qualifier,
-                             amount, block_index, derive_block_index)
-                         SELECT d.source_id, d.signing_pubkey_id, d.reward_type, d.round_reference,
-                                d.round_qualifier,
-                                d.amount, d.reward_block_index, d.reward_derive_block_index
-                           FROM anchor_reward_reconcile_log d
-                          WHERE d.block_index >= ?
-                            AND d.reward_block_index < ?
-                            AND (d.reward_derive_block_index IS NULL OR d.reward_derive_block_index < ?)`;
-                args = [block_index, block_index, block_index];
-                await this.indexerDb.doQuery(query, args);
+                // Anchor reward reconcile-restore (RB-ANCHOR) was here; it now runs
+                // UNCONDITIONALLY just past this guard, for the same reason the cooldown reversal
+                // below left it: the BTC-side derive path calls reconcileAnchorRewardWinner with a
+                // NULL anchor action index (anchor_reward_derive.js, the rows arrive over the
+                // mirror), so it mints no actions row and an orphaned range carrying only a
+                // derive-side reconcile leaves firstActionIndex null.
 
                 // Cooldown-maturity reversal was here; it is now in _reverseCooldownMaturities,
                 // called UNCONDITIONALLY at the top of the transaction (before this guard). It had
@@ -875,7 +848,13 @@ class Rollback {
                     // hash preimage (the GATED anchor_invalid state-hash class covers the stamp
                     // itself), so no flag-day applies here. ClientRollback.js mirrors this;
                     // the drift guard pins the widened predicate on both sides.
+                    //
+                    // Author scope, flag-day gated and INERT on every network today: the seq is
+                    // not a batch key once archive batches are publisher-scoped, so a second
+                    // publisher's orphaned chunk resets a head whose own batch survives intact.
+                    // Rationale + arming precondition: archive_rollback_author_scope_activation.js.
                     await this.indexerDb.createStatus('unverified');
+                    let authorScope = archiveAuthorScopeJoin(block_index, String(this.config['NETWORK'] || ''));
                     query = `UPDATE anchor_actions p
                                 JOIN index_statuses ps ON ps.id = p.status_id AND ps.status = 'invalid_archive'
                                 JOIN anchor_actions c
@@ -883,6 +862,7 @@ class Rollback {
                                  AND c.match_batch_seq = p.match_batch_seq
                                  AND c.action_index >= ?
                                 JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid'
+                                ${authorScope}
                                 JOIN index_statuses us ON us.status = 'unverified'
                                 SET p.status_id = us.id
                                 WHERE p.version ${ARCHIVE_HEAD_VERSIONS_SQL}
@@ -977,14 +957,82 @@ class Rollback {
                 }
             }
 
+            // Restore anchor validator_rewards rows an orphaned reconcile DELETEd IN PLACE
+            // from earlier SURVIVING blocks (RB-ANCHOR). reconcileAnchorRewardWinner keeps
+            // only the smallest-pubkey winner per (reward_type, round_reference); on a
+            // failover double-publish it deletes loser rows that were created at the
+            // checkpoint's SNAPSHOT_BLOCK (earlier than the ANCHOR that runs the reconcile),
+            // logging each pre-image in anchor_reward_reconcile_log keyed to the reconcile's
+            // (ANCHOR) block. If that ANCHOR is in the orphaned range, the generic block
+            // delete below drops the log rows and the ANCHOR but cannot re-create the deleted
+            // losers, leaving the reorged node with a collapsed reward set while a from-genesis
+            // replay to reorg_block-1 (reconcile never re-ran) keeps every loser. That lowers
+            // a later COLLECT's SUM(validator_rewards) → a ledger-hashed fork. Re-INSERT only
+            // losers whose ORIGINAL earn-block (reward_block_index) SURVIVES the reorg
+            // (< block_index): a loser earned inside the orphaned range is correctly absent
+            // (replay never mints it, and the generic delete already removed any copy). The
+            // restored row carries its original earn-block, so the generic block delete (which
+            // scopes on block_index >= reorg) leaves it in place. Runs BEFORE that delete so
+            // the log rows still exist. amount is the frozen consensus reward constant per
+            // round, so duplicate log rows carry an identical value and INSERT IGNORE is
+            // value-stable + idempotent (no earliest-debit tiebreak needed, unlike the slash
+            // restores above where prev_amount can differ across repeated slashes of one row).
+            //
+            // Runs UNCONDITIONALLY, OUTSIDE the firstActionIndex guard above (RB-ANCHOR-NULL).
+            // The reconcile has two callers and only one of them mints an actions row: the DOGE
+            // ANCHOR handler (actions/anchor.js) passes its own action_index, but the BTC-side
+            // derive (anchor_reward_derive.js) passes NULL because the attested rows arrive over
+            // the mirror, not as a wire action. So a BTC reorg over a range whose only reward
+            // work was a derive-side reconcile leaves firstActionIndex null, while the generic
+            // blockTables loop below still drops anchor_reward_reconcile_log and the
+            // derive_block_index delete below still drops the replacement winner: gated here,
+            // the earlier winner would be deleted and never restored, which is exactly the
+            // SUM(validator_rewards) divergence this statement exists to prevent. Keyed entirely
+            // on block heights (no action-index term), and a no-op when the log holds nothing in
+            // range, so running it on every reorg costs one query. Placed immediately past the
+            // guard rather than at the top of the transaction so its order relative to every
+            // other statement is unchanged; nothing between the guard and the deletes below
+            // touches validator_rewards or anchor_reward_reconcile_log.
+            //
+            // The surviving-earn-block test alone is NOT sufficient once a reward can be
+            // MATERIALIZED later than it is earned. An derived anchor reward
+            // carries block_index = the checkpoint's SNAPSHOT_BLOCK but is written while the
+            // BTC indexer processes a much later block, recorded here as
+            // reward_derive_block_index. A loser materialized INSIDE the orphaned range has a
+            // surviving earn-block yet must NOT be restored: the replay to reorg_block-1 never
+            // ran the derivation, so restoring it would mint an orphan the replay does not have
+            // and fork SUM(validator_rewards) in the other direction. Require BOTH heights to
+            // survive; NULL (every same-block writer, and every row pre-dating the column)
+            // keeps the original earn-block-only behavior.
+            // round_qualifier rides the pre-image like every other key column: it is part
+            // of the reward's UNIQUE identity (snapshot_block for the archive leg, whose
+            // round_reference is a reissuable hub counter), so restoring without it would
+            // re-INSERT the loser under qualifier 0 - a DIFFERENT row from the one the
+            // reconcile deleted, colliding with whatever legacy row already holds that key
+            // and leaving the real loser unrestored.
+            query = `INSERT IGNORE INTO validator_rewards
+                        (source_id, signing_pubkey_id, reward_type, round_reference, round_qualifier,
+                         amount, block_index, derive_block_index)
+                     SELECT d.source_id, d.signing_pubkey_id, d.reward_type, d.round_reference,
+                            d.round_qualifier,
+                            d.amount, d.reward_block_index, d.reward_derive_block_index
+                       FROM anchor_reward_reconcile_log d
+                      WHERE d.block_index >= ?
+                        AND d.reward_block_index < ?
+                        AND (d.reward_derive_block_index IS NULL OR d.reward_derive_block_index < ?)`;
+            args = [block_index, block_index, block_index];
+            await this.indexerDb.doQuery(query, args);
+
             // ROLLCALL eviction repair, and it MUST run before the block-table loop below
             // deletes the rollcall_absences rows it reads.
             //
-            // The generic delegations repair above cannot cover an eviction. That repair is a
-            // self-join on an orphaned DELEGATE-revoke row, and an eviction writes no revoke
-            // row: it stamps every delegation of the source directly. So the only record of
-            // which sources were stamped is `evicted = 1` in rollcall_absences, which is
-            // exactly why that column exists. The stakes side needs nothing here -- the
+            // The generic delegations repair above now uses a value threshold and so already
+            // covers an eviction stamp (same actionBlock + activationDelay formula), which the
+            // earlier self-join on an orphaned DELEGATE-revoke row could not: an eviction writes
+            // no revoke row, it stamps every delegation of the source directly, and `evicted = 1`
+            // in rollcall_absences is the only record of which sources were stamped, which is
+            // exactly why that column exists. This sweep is kept as an idempotent narrower
+            // repair, not because the generic one misses it. The stakes side needs nothing here -- the
             // eviction wrote real `unstakes` rows at the close block, so the orphaned-unstake
             // join above already re-NULLs those stamps.
             try {
@@ -1011,6 +1059,13 @@ class Rollback {
             // rollback: 'special' rather than 'block' because neither has a block_index
             // column, so the generic blockTables loop below would throw 1054 on them and
             // fail the entire rollback transaction on every reorg.
+            // Absences before verdicts, so a partial failure cannot leave an absence row
+            // pointing at an epoch whose verdict is already gone; the catch swallows ONLY
+            // the schema gap on a node that predates the ROLLCALL migration, where the
+            // tables do not exist and there is nothing to unwind. This is the ONLY
+            // roll-call unwind: xchain-sync/src/ClientRollback.js carries the replica's
+            // mirror of it, and a second copy here re-raises 1146 on a pre-migration node
+            // and aborts the reorg this guard exists to keep alive.
             try {
                 await this.indexerDb.doQuery(`DELETE FROM rollcall_absences WHERE close_block >= ?`, [block_index]);
                 await this.indexerDb.doQuery(`DELETE FROM rollcalls WHERE close_block >= ?`, [block_index]);
@@ -1083,17 +1138,30 @@ class Rollback {
             // those same earn-blocks so the reward can be re-materialized on the canonical chain.
             // Key on the reward's earn-block (block_index), NOT on whether the source address
             // rolled out: a reward row is dropped iff its earn-block is in the orphaned range,
-            // independent of its source address. The common (and previously-missed) case is an
+            // independent of its source address. The common (and easily missed) case is an
             // address first seen BEFORE the range that earns a reward INSIDE it: the reward row
             // is deleted but the address survives, so the old "source_id NOT IN index_addresses"
             // predicate never fired and the reward was silently lost forever. MUST run AFTER the
             // validator_rewards/index_addresses deletes above. No-op (and the table may be absent
             // on a non-recovery stack) outside an in-progress recovery, so it is wrapped cheaply.
+            //
+            // The floor is NOT the reorg height alone. A restored row carries the
+            // MATERIALIZATION block it was first derived at (earn + the frozen mirror
+            // maturity), so the derive-scoped delete above takes it whenever that height is
+            // orphaned - which happens for earn-blocks a whole maturity window BELOW the reorg
+            // point. Re-arming only from the reorg height would leave those rows applied=1 with
+            // no validator_rewards row behind them: the reward would be gone from this node for
+            // good while the live fleet re-derives it from its mirror when the canonical chain
+            // reaches the same height again. restoredRewardRearmFloor drops the floor by exactly
+            // the maturity window on a network where derivation is armed, and stays at the reorg
+            // height everywhere else (nothing below it can carry a derive stamp).
+            let rearmFloor = ar.restoredRewardRearmFloor(block_index, String(this.config['NETWORK'] || ''));
+            if(rearmFloor === null) rearmFloor = block_index;
             try {
                 let rearm = await this.indexerDb.doQuery(
                     `UPDATE recovery_pending_rewards
                         SET applied=0, source_id=NULL, applied_block=NULL
-                      WHERE applied=1 AND block_index >= ?`, [block_index]);
+                      WHERE applied=1 AND block_index >= ?`, [rearmFloor]);
                 if(rearm && rearm.affectedRows)
                     this.indexerDb._recoveryPendingChecked = false;
                 let survivors = await this.indexerDb.doQuery(
@@ -1104,6 +1172,9 @@ class Rollback {
                 // Re-materialize at the reorg point B (block_index): the survivor's reward
                 // earn-block may be < B, so stamp applied_block = B as the forward-window key
                 // xchain-sync streams it by (its earn-block sits below the post-reorg window).
+                // A row whose ORIGINAL derive height is still ahead of B is left staged by the
+                // apply path's due gate and lands again when the replay reaches that height,
+                // which is the same block a live node re-derives it at.
                 for(let s of (survivors || []))
                     await this.indexerDb._applyPendingRewardsForAddress(s.source_address, s.source_id, block_index);
             } catch(e){
@@ -1691,13 +1762,28 @@ class Rollback {
                     // short-circuit on the SAME condition, not just reach the same empty
                     // answer by different routes. Capability staking is BTC-only, so a
                     // non-BTC indexer has no responsible set to recompute.
+                    //
+                    // Two DIFFERENT heights come off `reqBlock`, exactly as in attest.js
+                    // _computeResponsibleSet: the SWQ flag-day is evaluated on the DECLARED
+                    // height verbatim (moving a cutover block by the reorg buffer is its own
+                    // fork), while the capability SET is resolved at the declared height
+                    // BURIED by CANONICAL_REORG_BUFFER, which is where the hub's
+                    // CapabilitySnapshot resolved it. Resolving here at the raw height picks a
+                    // different responsible set than the live expiry path whenever a
+                    // validator's capability stake activates or deactivates inside
+                    // (declared - 6, declared], which is precisely the byte-for-byte
+                    // agreement this function's header demands; the recompute then charges
+                    // missed_count to a validator the live path never held responsible.
+                    // Below the burial flag-day buriedSnapshotBlock returns the declared
+                    // height unchanged, so mainnet replay is byte-identical.
                     let cached_weighted = false;
                     let vs = [];
                     if(this.config['COIN'] === 'BTC'){
                         cached_weighted = swq.isStakeWeightedQuorumActive(reqBlock, this.config['NETWORK']);
+                        let resolveBlock = srb.buriedSnapshotBlock(reqBlock, this.config['NETWORK']);
                         vs = cached_weighted
-                            ? await this.indexerDb.getStakeWeightsByCapability('attestation', reqBlock)
-                            : await this.indexerDb.getValidatorsByCapability('attestation', reqBlock);
+                            ? await this.indexerDb.getStakeWeightsByCapability('attestation', resolveBlock)
+                            : await this.indexerDb.getValidatorsByCapability('attestation', resolveBlock);
                     }
                     cached = { weighted: cached_weighted, validators: vs || [] };
                     validatorsByBlock.set(reqBlock, cached);

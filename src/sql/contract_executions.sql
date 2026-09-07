@@ -17,12 +17,12 @@ CREATE TABLE contract_executions (
     action_index        BIGINT UNSIGNED NOT NULL,
     contract_index      BIGINT UNSIGNED,                -- NULL when the action is invalid with a non-numeric wire value (storage normalization)
     caller_id           BIGINT UNSIGNED NOT NULL,
-    method_name         VARCHAR(250),
-    input_params        TEXT,
+    method_name         VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+    input_params        TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
     gas_used            BIGINT UNSIGNED NOT NULL,
     gas_limit           BIGINT UNSIGNED NOT NULL,
     status_id           BIGINT UNSIGNED NOT NULL,
-    error_message       TEXT,
+    error_message       TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
     emitted_count       INT UNSIGNED NOT NULL DEFAULT 0,
     block_index         BIGINT UNSIGNED NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;

@@ -144,17 +144,35 @@ function isAttestBroadcastFeeActive(blockIndex, network){
     return b >= threshold;
 }
 
-// Parse a cap value to a finite non-negative Number of whole native coin, or null when it
-// is not usable. Deliberately strict: an overlay carrying a non-numeric, negative or
+// Satoshi grid every cap is parsed onto: native-coin amounts are satoshi-precision
+// everywhere else in this codebase, so a cap is an integer count of satoshis end to end
+// and never a double.
+const _CAP_SATS_PER_COIN = 100000000n;
+
+// Parse a cap value to a non-negative BigInt count of SATOSHIS, or null when it is not
+// usable. Deliberately strict: an overlay carrying a non-numeric, negative or
 // non-finite value resolves to null and the caller falls back to the shipped default
-// rather than reimbursing an amount no other node would compute.
+// rather than reimbursing an amount no other node would compute. Only a plain unsigned
+// decimal is accepted; sign, exponent and hex forms are exactly what an IEEE-754 parse
+// swallows and silently re-renders.
+//
+// Digits finer than a satoshi are FLOORED, never rounded. The cap bounds what is carved
+// out of the AUTHOR's escrow and paid to the leader, so rounding a ninth decimal up
+// over-pays out of someone else's escrow. Same reason bcmulfloor / bcmuldivfloor in
+// utility.js floor rather than round.
 function _parseCap(value){
     if(value === null || value === undefined) return null;
     let s = String(value).trim();
-    if(s === '') return null;
-    let n = Number(s);
-    if(!Number.isFinite(n) || n < 0) return null;
-    return n;
+    let m = /^(\d+)(?:\.(\d*))?$/.exec(s);
+    if(m === null) return null;
+    let frac = (m[2] || '').slice(0, 8).padEnd(8, '0');
+    return BigInt(m[1]) * _CAP_SATS_PER_COIN + BigInt(frac);
+}
+
+// Render a satoshi count as the fixed 8dp decimal string nodes compare byte-for-byte.
+function _renderCap(sats){
+    return (sats / _CAP_SATS_PER_COIN).toString()
+         + '.' + (sats % _CAP_SATS_PER_COIN).toString().padStart(8, '0');
 }
 
 // The effective native-coin broadcast-fee allowance for `providerId`, as a decimal STRING.
@@ -174,10 +192,10 @@ function broadcastFeeCapNative(providerId, providerDef){
     let resolved = overlay !== null ? overlay
                  : (shipped !== null ? shipped : _parseCap(ATTEST_BROADCAST_FEE_CAP.DEFAULT));
     if(resolved === null) return '0';
+    // BigInt compare: the clamp decides how much escrow the leader may take, so it is
+    // exact rather than an IEEE-754 near-miss around HARD_MAX.
     if(hardMax !== null && resolved > hardMax) resolved = hardMax;
-    // Fixed 8dp: native-coin amounts are satoshi-precision everywhere else in the
-    // codebase, and a fixed rendering keeps the string a node compares byte-stable.
-    return resolved.toFixed(8);
+    return _renderCap(resolved);
 }
 
 module.exports = {

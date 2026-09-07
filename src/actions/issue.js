@@ -42,7 +42,10 @@
  * - MINT_STOP_BLOCK` - `BLOCK_INDEX` when `MINT` transactions are NOT allowed (end mint)
  * - CONTROLLER       - (format 6 only) `ACTION_INDEX` of a deployed contract whose `guard`
  *                      method gates one ACTION_CLASS of this token (programmable policy layer)
- * - ACTION_CLASS     - (format 6 only) which class to gate: transfer|trade|burn|mint|stake|ownership
+ * - ACTION_CLASS     - (format 6 only) which class to gate, validated against config
+ *                      CONTROLLER_BINDABLE_CLASSES:
+ *                      transfer|trade|burn|mint|stake|ownership|all
+ *                      ('all' is the catch-all: bindable, never routable, gates every class)
  * - COOLDOWN_BLOCKS  - (format 6 only) drop-cooldown committed at bind; the friction on a later unbind
  * - UNBIND           - (format 6 only) 1 = drop the live binding for ACTION_CLASS
  *

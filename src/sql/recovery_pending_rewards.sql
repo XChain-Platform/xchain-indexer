@@ -23,11 +23,17 @@ DROP TABLE IF EXISTS recovery_pending_rewards;
 -- validator_rewards parity across the recovery boundary).
 --
 -- Instead recovery now stages each archived reward here keyed by the RAW source address
--- string + signing pubkey, assigning NO index id. During the reindex, when an address
--- first receives its deterministic in-block id (db.js createAddress), the apply hook
--- materializes that address's staged rewards into validator_rewards under the just-assigned
--- deterministic source_id. The counter is never perturbed out-of-band, so a recovered node
--- reproduces the exact from-genesis id map.
+-- string + signing pubkey, assigning NO index id. During the reindex the row materializes
+-- into validator_rewards under the deterministic in-block source_id its address takes
+-- (db.js createAddress assigns the id; _applyPendingRewardsDueAtBlock lands the reward).
+-- The counter is never perturbed out-of-band, so a recovered node reproduces the exact
+-- from-genesis id map.
+--
+-- The landing HEIGHT is the block the reward was originally derived at (its archived
+-- block_index + the frozen ANCHOR_REWARD_MIRROR_MATURITY), not the height recovery reached
+-- the row at, and that height is stamped on validator_rewards.derive_block_index exactly as
+-- a live derivation stamps it. A restored row is therefore indistinguishable from a
+-- live-derived one to the reorg-scoping delete and to a COLLECT at any height.
 --
 -- This is a restore-time scratch artifact: recovery-local, NOT consensus-hashed and NOT
 -- replicated by xchain-sync (excluded from replicatedTables.js and from

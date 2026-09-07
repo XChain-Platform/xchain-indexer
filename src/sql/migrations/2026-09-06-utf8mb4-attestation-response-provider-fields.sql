@@ -1,0 +1,61 @@
+--********************************************************************
+--
+-- Copyright © 2025-2026 Dankest, LLC
+-- Based on XChain Platform by Dankest, LLC - https://dankest.llc
+--
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+--
+-- This file is part of XChain Platform. Licensed under the GNU Affero
+-- General Public License v3.0 or later; see LICENSE.md. A commercial
+-- license (without AGPL source-disclosure terms) is available -
+-- contact legal@dankest.llc.
+--
+--********************************************************************
+
+-- xchain:migration mode=auto
+--
+-- Migration: widen the attestation_responses provider-byte columns to utf8mb4.
+--
+-- WHY
+-- ---
+-- attestation_responses is the mirror that carries a finalized ATTEST response in place of
+-- a validator-paid on-chain ATTEST v1 transaction, so the two paths must accept the same
+-- bodies. They do not. attests.response_payload and attests.meta are utf8mb4 (the raw-wire
+-- field widen); the mirror's twins inherit the table's utf8mb3 tail and hold at most three
+-- bytes per character. A provider body carrying one 4-byte character is therefore accepted
+-- by the on-chain path and refused by the mirror with errno 1366
+-- (ER_TRUNCATED_WRONG_VALUE_FOR_FIELD) under STRICT_TRANS_TABLES.
+--
+-- The hub writes the body decoded as UTF-8 and response_hash over the BYTES the responsible
+-- set signed, so a server that truncates instead of refusing is no better: the stored body
+-- no longer hashes to response_hash and the row verifies nowhere. Either way the response is
+-- unreachable, and because the mirror re-pages attestation_responses from cursor 0
+-- (hub_db_sync FULL_REPAGE_TABLES) the same row is re-delivered and re-refused on every
+-- drain while the request it answers waits out its expiry.
+--
+-- SCOPE. Only the two columns that hold provider bytes. provider_id stays as declared: a
+-- mirror row exists only for a round that reached quorum, which requires a
+-- governance-registered provider, so no wire-chosen identifier reaches it (and it is
+-- NOT NULL, which a mode=auto file may not restate).
+--
+-- NOT CONSENSUS-VISIBLE, and not a mirror-contract change. No state-hash preimage selects
+-- either column, the applier verifies signatures over response_hash rather than over the
+-- stored string, and the wire row shape is untouched, so HUB_SCHEMA_VERSION does not move
+-- (bumping it would fail-closed every indexer for a change that adds no column).
+--
+-- Widening rewrites no stored value: utf8mb3 is a strict subset of utf8mb4, and
+-- utf8mb4_general_ci orders BMP characters exactly as utf8_general_ci does. Neither column
+-- is indexed, so no key length changes. Idempotent: a MODIFY to the type and charset a
+-- column already has is a no-op, and schema_migrations records this file once per DB.
+--
+-- The definition twin is src/sql/attestation_responses.sql, byte-identical to the hub's
+-- authoring copy and to the explorer's vendored mirror copy; the hub converges an aged
+-- database through its own runMigrations charset step and the explorer through its
+-- hub-mirror reconciler, neither of which replays this file.
+--
+-- HOW TO RUN (it also applies unattended at startup)
+--   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-09-06-utf8mb4-attestation-response-provider-fields.sql
+
+ALTER TABLE `attestation_responses`
+  MODIFY `response_payload` MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+  MODIFY `meta` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;

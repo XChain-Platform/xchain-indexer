@@ -201,6 +201,11 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
             // Legacy count path: the source-deduped weighted resolver has its own
             // coverage; this test is about WHICH HEIGHT, not which resolver.
             sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+            // And the response-mirror flag day, armed on regtest at genesis: above it the
+            // chain handler refuses an on-chain v1 before any height is resolved, so these
+            // burial vectors are the legacy era's (matches attest.test.js default).
+            sinon.stub(require('../../src/attest_response_mirror_activation.js'),
+                       'isResponseMirrorActive').returns(false);
             sinon.stub(ed25519, 'verify').returns(true);
         });
 
@@ -373,8 +378,12 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
     });
 
     // ── The comment the ledger asked to be true or gone ──────────────────────
-    it('actions/attest.js no longer claims the verifier "byte-matches the hub" for the snapshot height', function () {
-        const src = fs.readFileSync(path.join(__dirname, '../../src/actions/attest.js'), 'utf8');
+    // The declared/resolved split moved out of actions/attest.js into the shared
+    // response verifier when the chain path and the hub-mirror path were merged onto
+    // one implementation (attest-response-mirror.md §4.3). The guard follows the code:
+    // it is the comment ABOVE that height that the ledger asked to be true or gone.
+    it('the response verifier no longer claims it "byte-matches the hub" for the snapshot height', function () {
+        const src = fs.readFileSync(path.join(__dirname, '../../src/attest_response_verify.js'), 'utf8');
         const declLine = src.split('\n').findIndex(l => l.includes('let declaredBlock ='));
         assert.ok(declLine > 0, 'the declared/resolved split must exist');
         // The false claim sat in the three comment lines immediately above the height.

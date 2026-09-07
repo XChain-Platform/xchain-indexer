@@ -29,6 +29,7 @@ function makeIndexer(hubClientOpts){
         pushPriceRound: sinon.stub().resolves(),
         pushOraclePrice: sinon.stub().resolves(),
         pushPriceBatch: sinon.stub().resolves(),
+        pushAttestBatch: sinon.stub().resolves(),
         retractPriceRange: sinon.stub().resolves(),
         retractXcallRange: sinon.stub().resolves(),
         retractMatchRange: sinon.stub().resolves()
@@ -418,6 +419,35 @@ describe('HubPushQueue', function(){
                 'a price_batch must be recorded with an unbounded cap so it never flips to failed');
             assert.strictEqual(indexer.indexerDb.markHubPushDelivered.callCount, 0,
                 'a failed price_batch row must stay queued, never be dropped');
+        });
+
+        // ─── attest_batch (ATTEST v5/v6 response batch) ─────
+        it('calls pushAttestBatch for attest_batch rows and marks delivered', async function(){
+            let indexer = makeIndexer();
+            let q = new HubPushQueue(indexer);
+            let payload = { source_chain: 'DOGE', network: 'regtest', window_start: 1700000000,
+                            window_end: 1700003600, row_count: 2, btc_block_height: 900000,
+                            rows: [], sigs: [], action_index: 71, block_index: 6300000,
+                            block_time: 1700004000, push_generation: 0 };
+            let row = makeRow({ id: 30, push_type: 'attest_batch', payload: JSON.stringify(payload) });
+            await q._attempt(row);
+            assert.strictEqual(indexer.hubClient.pushAttestBatch.calledOnce, true);
+            assert.deepStrictEqual(indexer.hubClient.pushAttestBatch.firstCall.args[0], payload);
+            assert.strictEqual(indexer.indexerDb.markHubPushDelivered.calledWith(30), true);
+        });
+
+        it('does NOT retire an attest_batch after maxAttempts failures (the sole chain carrier of its window)', async function(){
+            let indexer = makeIndexer();
+            indexer.hubClient.pushAttestBatch = sinon.stub().rejects(new Error('hub down'));
+            let q = new HubPushQueue(indexer, { maxAttempts: 3 });
+            let row = makeRow({ id: 31, push_type: 'attest_batch', attempts: 3 });
+            await q._attempt(row);
+            let cap = indexer.indexerDb.recordHubPushAttempt.firstCall.args[2];
+            assert.strictEqual(cap, Number.MAX_SAFE_INTEGER,
+                'above the response-mirror activation a response is not its own transaction, so a ' +
+                'retired batch strands a window of responses no later block re-emits');
+            assert.strictEqual(indexer.indexerDb.markHubPushDelivered.callCount, 0,
+                'a failed attest_batch row must stay queued, never be dropped');
         });
 
         it('calls retractPriceRange for price_retraction rows and marks delivered (open-ended when no ceiling)', async function(){

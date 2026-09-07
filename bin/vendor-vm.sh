@@ -31,7 +31,18 @@
 # Usage:
 #   bin/vendor-vm.sh           # refresh ./xchain-vm from the sibling, then verify
 #   bin/vendor-vm.sh fix       # same as above (explicit)
-#   bin/vendor-vm.sh check     # verify version + src/ content match; non-zero exit on drift (no writes)
+#   bin/vendor-vm.sh check     # verify version + src/ content match; non-zero exit on drift
+#
+# `check` writes in exactly one case: no vendored SRC tree exists, which every
+# isolated checkout hits by construction (the copy is gitignored). It never
+# overwrites a populated src/, because overwriting is how a drifted tree gets
+# reported as in sync.
+#
+# Stated as src/ and not as "a tree that IS there" on purpose, because the guard
+# below is `[ ! -d "$DEST/src" ]`: a DEST that exists with a drifted
+# package.json but NO src/ is still staged over and then reported in sync,
+# exit 0. That residual is narrow (it needs a half-populated vendored copy) but
+# it is real, and the wider sentence this replaces claimed it away.
 #
 # Requires Node 22 for the isolated-vm native build (see the Dockerfile note).
 
@@ -46,9 +57,11 @@ MODE="${1:-fix}"
 # for the HOST platform, so a Mac-side run poisons the vendored tree with Mach-O
 # binaries the Linux runtime cannot load. Run that on a Linux host instead.
 #
-# `check` is exempt, and the distinction matters more than it looks. It writes
-# nothing: it greps CONSENSUS_VERSION out of the frozen export and sha1s src/**,
-# never loading isolated-vm, and the hashing helper below already falls back to
+# `check` is exempt, and the distinction matters more than it looks. It runs no
+# npm install and never loads isolated-vm: it greps CONSENSUS_VERSION out of the
+# frozen export and sha1s src/**, so nothing host-specific can enter the tree even
+# on the one path where it stages an ABSENT copy (source files only, node_modules
+# excluded). The hashing helper below already falls back to
 # `shasum -a 1` precisely because sha1sum is absent on macOS. So the guard was
 # built to be portable and this gate, sitting above the mode parsing rather than
 # below it, was blocking it anyway.
@@ -104,14 +117,21 @@ DEST_VER="$(vm_version "$DEST")"
 
 if [ "$MODE" = "check" ]; then
     echo "vendor-vm: canonical=${SRC_VER:-<none>} vendored=${DEST_VER:-<none>}"
-    if [ -z "$DEST_VER" ]; then
-        # No vendored copy at all. The copy is gitignored, so every isolated
-        # checkout (the pre-push CI gate clones the bare commit) lands here by
-        # construction; with the canonical sibling present, stage the SOURCE
-        # files (no npm install: the gate's unit suite needs the files, not a
-        # built isolated-vm) and continue instead of failing a state no commit
-        # can ever satisfy. Drift detection is unaffected: whenever a vendored
-        # copy EXISTS (every dev tree), version + manifest still verify below.
+    # No vendored copy at all. The copy is gitignored, so every isolated
+    # checkout (the pre-push CI gate clones the bare commit) lands here by
+    # construction; with the canonical sibling present, stage the SOURCE
+    # files (no npm install: the gate's unit suite needs the files, not a
+    # built isolated-vm) and continue instead of failing a state no commit
+    # can ever satisfy. Drift detection is unaffected: whenever a vendored
+    # copy EXISTS (every dev tree), version + manifest still verify below.
+    #
+    # Keyed on the TREE, not on the version string. An empty $DEST_VER means three
+    # different things (no tree, no consensus-runtime.js, no parseable const), and
+    # spending the staging rsync on the latter two is what made this guard fail
+    # OPEN: the rsync has no --delete, so it overwrote a drifted tree's files with
+    # canonical ones and then reported the freshly-repaired tree as in sync,
+    # concealing exactly the drift the guard exists to name.
+    if [ ! -d "$DEST/src" ]; then
         echo "vendor-vm: no vendored copy at $DEST; staging src from canonical sibling."
         rsync -a \
             --exclude 'node_modules' \
@@ -121,6 +141,14 @@ if [ "$MODE" = "check" ]; then
             --exclude 'reports' \
             "$SRC/" "$DEST/"
         DEST_VER="$(vm_version "$DEST")"
+    fi
+    # A tree that is present but whose version cannot be read is DRIFT, not a
+    # blank slate: check mode refuses to touch it and says so, so the operator
+    # decides between refreshing it and inspecting what is in there.
+    if [ -z "$DEST_VER" ]; then
+        echo "vendor-vm: DRIFT - vendored tree at $DEST exists but its CONSENSUS_VERSION is unreadable." >&2
+        echo "vendor-vm: check mode will not overwrite it; run 'npm run vendor:vm' to refresh, or remove $DEST." >&2
+        exit 1
     fi
     if [ "$SRC_VER" != "$DEST_VER" ]; then
         echo "vendor-vm: DRIFT - vendored CONSENSUS_VERSION ($DEST_VER) != canonical ($SRC_VER)." >&2

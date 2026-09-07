@@ -46,15 +46,21 @@ const { decoderQuery, indexerQuery, createDatabases, createDecoderSchema,
 const DecoderSeeder = require('../setup/decoder-seeder');
 const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
 const eq = require('../../../src/equivocation_header.js');
+const srb = require('../../../src/snapshot_reorg_buffer.js');
 
 const FUNDER = 'mgash6jYSKAR3Q5HPpDgNX2BYr18q9N6GQ'; // configs/BTC.js ADDRESS.GAS (fee-exempt gas funder)
 const A1     = 'mq7tVfobimRUPxPNnyd5mKn11SVmTiLxtu'; // valid regtest P2PKH (the staker)
 const T = 1700000000;
 
 const STAKE_BLOCK   = 100;
-const SNAP          = 106;   // STAKE_BLOCK + BTC activation delay (6): the bond is active here
-const UNSTAKE_BLOCK = 107;   // unstake after activation => deactivation_block = 113
-const SLASH_BLOCK   = 110;   // inside [107, 113): the slash lands mid-cooldown (the bug window)
+const ACTIVE_BLOCK  = 106;   // STAKE_BLOCK + BTC activation delay (6): the bond is active here
+// The RAW snapshot_block the proof declares. The verifier resolves the set at
+// buriedSnapshotBlock(SNAP) = ACTIVE_BLOCK, which is where the hub that locked the slot
+// resolved its own signer set, so a declared height a real proof could carry sits a
+// CANONICAL_REORG_BUFFER above the block the bond has to be active at.
+const SNAP          = ACTIVE_BLOCK + srb.CANONICAL_REORG_BUFFER;   // 112
+const UNSTAKE_BLOCK = 113;   // unstake after activation => deactivation_block = 119
+const SLASH_BLOCK   = 115;   // inside [113, 119): the slash lands mid-cooldown (the bug window)
 const STAKE_AMT     = '6000'; // > cross_chain MIN_STAKE (5000)
 
 function genKey() {
@@ -145,6 +151,14 @@ describe('Integration: SLASH mid-cooldown must burn the bond once (real DB + rea
     after(async function () { await destroyFileIndexers(__filename); await closeAll(); });
 
     it('the slash landed inside the post-unstake activation-delay window (setup sanity)', function () {
+        // The proof's set resolves at the buried height, which must land on the activation
+        // block and inside the bond's active window, or the SLASH never reaches the burn
+        // this scenario is about and the whole file passes vacuously.
+        const resolved = srb.buriedSnapshotBlock(SNAP, 'regtest');
+        assert.strictEqual(resolved, ACTIVE_BLOCK,
+            'the declared snapshot_block must bury onto the activation block');
+        assert.ok(resolved < UNSTAKE_BLOCK,
+            'the offender must still be in the set at the resolved height, or nothing is burned');
         // Exactly one stakes row, carrying a FUTURE deactivation_block > SLASH_BLOCK: this is the
         // condition that made the old `deactivation_block > ?` Pass-1 filter wrongly include it.
         assert.strictEqual(run.deactivation.length, 1, 'one stakes row for the offender');

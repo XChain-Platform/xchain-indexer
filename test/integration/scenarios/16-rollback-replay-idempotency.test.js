@@ -144,8 +144,14 @@ describe('16 – Rollback replay idempotency @regression @tier3', function () {
         for (const b of replayedBlocks()) await seeder.seedBlock(b.block, b.time, b.txs);
 
         nodeA = await initIndexer();
-        await processBlocks(nodeA);
+        const replayedA = await processBlocks(nodeA);
         await destroyIndexer(nodeA);
+        // Bind the replay count: equivalence alone also holds when NO reorg is
+        // processed, since a chain that was never rolled back still matches a
+        // fresh resync of the same decoder rows.
+        assert.strictEqual(replayedA, replayedBlocks().length,
+            'expected the reorg to roll back and re-apply ' + replayedBlocks().length +
+            ' block(s); ' + replayedA + ' were re-applied');
 
         // Node B fresh-parses the identical final chain from genesis (a resync).
         const chainB = await runNodeB();

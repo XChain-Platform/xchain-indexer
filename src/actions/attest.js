@@ -14,12 +14,21 @@
  *
  * XChain Platform Action - ATTEST
  *
- * External-data attestation lifecycle with five version-discriminated phases:
+ * External-data attestation lifecycle with seven version-discriminated phases:
  *   v0: Request (VM emission only; originated by xchain.attestation.request())
  *   v1: Response (validator-broadcast PBFT bundle with signatures)
  *   v2: Expire (system-synthesized; never user-broadcast)
  *   v3: Relay request  (cross_chain-federation-broadcast, BTC only)
  *   v4: Relay response (cross_chain-federation-broadcast, origin chain only)
+ *   v5: Response BATCH head         (publisher-broadcast, DOGE only)
+ *   v6: Response BATCH continuation (publisher-broadcast, DOGE only)
+ *
+ * v5/v6 are the periodic on-chain carrier for responses that reached indexers
+ * through the hub mirror instead of on a per-response transaction. They exist so
+ * full history stays reconstructible from chain parse: a node replaying the chain
+ * rebuilds the mirror table from the batches and re-derives every callback. The
+ * wire layout, its chunking and its caps live in ../attest_batch_wire.js, which
+ * xchain-hub carries a byte-identical twin of.
  *
  * v3/v4 are the cross-chain delivery legs (spec §12, framework Phase 5). All
  * `attestation` capability stake lives on BTC, so an ATTEST emitted by an LTC or
@@ -40,6 +49,8 @@
  *   v2 - VERSION|REQUEST_ID         (synthesized only; REQUEST_ID is sufficient, handler looks up the row)
  *   v3 - VERSION|REQUEST_ID|ORIGIN_CHAIN|ORIGIN_ACTION_INDEX|PROVIDER_ID|REQUEST_PAYLOAD|REDUNDANCY|DEADLINE_BLOCKS|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...
  *   v4 - VERSION|REQUEST_ID|HOME_RESPONSE_ACTION_INDEX|RESPONSE_PAYLOAD|STATUS|META|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...
+ *   v5 - VERSION|BATCH_KEY|NETWORK|WINDOW_START|WINDOW_END|ROW_COUNT|BTC_BLOCK_HEIGHT|BATCH_CRC32|TOTAL_CHUNKS|BODY_B64
+ *   v6 - VERSION|BATCH_KEY|CHUNK_INDEX|TOTAL_CHUNKS|BATCH_CRC32|BODY_B64_CHUNK
  *
  ********************************************************************/
 
@@ -49,14 +60,27 @@ const swq     = require('../stake_weighted_quorum.js');
 const attestAdmission = require('../attest_admission_activation.js');
 const attestRequestCap = require('../attest_request_cap_activation.js');
 const attestRelay     = require('../attest_relay_activation.js');
+// Whether a refused v3 withholds its row so the id it named stays free for the
+// honest relay. Landing-block plane, unarmed on mainnet.
+const relayRejectSlot = require('../attest_relay_reject_slot_activation.js');
 const attestBcastFee  = require('../attest_broadcast_fee_activation.js');
 const wid     = require('../attest_responsible_widening_activation.js');
 const eq      = require('../equivocation_header.js');
 const srb     = require('../snapshot_reorg_buffer.js');
+// The ONE response verifier: this chain path and the hub-mirror applier call the
+// same module, so an artifact cannot be judged differently by delivery route.
+const avr     = require('../attest_response_verify.js');
+// The response-mirror flag day, keyed on the REQUEST's own block. utility.js reads
+// the same module for the applier pass's selection.
+const arm     = require('../attest_response_mirror_activation.js');
+// The v5/v6 wire: layout, chunking, caps and reassembly. Pure, and byte-twinned
+// into xchain-hub so the publisher that BUILDS a batch and this parser cannot
+// disagree about its bytes.
+const abw     = require('../attest_batch_wire.js');
 const ProviderRegistry = require('../attestation/providerRegistry.js');
 const pmsh    = require('../attestation/providerMinStakeHistory.js');
 const { rethrowIfInfraFault } = require('./faultGuard.js');
-const { buildInjectedExecContext, SYNTH_EXEC_TX_HASH, SYNTH_TAGS } = require('./execContext.js');
+const { buildInjectedExecContext, synthesizeTxHash, SYNTH_EXEC_TX_HASH, SYNTH_TAGS } = require('./execContext.js');
 
 // The chain every `attestation` capability stake lives on, and therefore the only
 // chain whose heights can key a responsible set. Relay requests are materialized
@@ -67,6 +91,60 @@ const HOME_CHAIN = 'BTC';
 // coin registry: a chain becomes relay-eligible by protocol decision, not by
 // being configured, and BTC is excluded because it needs no relay.
 const ALLOWED_ORIGIN_CHAINS = ['LTC', 'DOGE'];
+
+// The rail the periodic response batch (v5/v6) rides. DOGE, for the reason every
+// other bulk publish rail is DOGE: it is the cheap chain, and one batch per window
+// costs a transaction whether or not the window carried rows. This is a chain
+// DECISION, not a derivation from configuration, so it is written out here the way
+// ALLOWED_ORIGIN_CHAINS is. A batch on any other chain is invalid.
+const BATCH_CHAIN = 'DOGE';
+
+// Decoded-body ceiling for a mirror-applied response, the byte-twin of the hub's
+// ATTEST_RESPONSE_BODY_MAX_BYTES (xchain-hub/src/lib/attest_response_body_cap.js),
+// which the leader enforces before proposing and every follower before signing.
+// The applier re-checks it so a DISHONEST quorum cannot push through a body the
+// periodic on-chain batch could never carry: v3/v4 relay legs stay on chain at the
+// encoder's 8189-byte wire ceiling, so a larger body would finalize and then be
+// un-relayable and un-reconstructible. Skipping such a row is deterministic (same
+// row, same arithmetic on every node), so it is inert rather than a fork.
+const ATTEST_RESPONSE_BODY_MAX_BYTES = 8189;
+
+// Deterministic per-block ceiling on the hub-mirror response applier, the sibling of
+// ATTEST_MAX_EXPIRIES_PER_BLOCK and XCALL_MAX_CALLS_PER_BLOCK and hashed state for the
+// same reason they are: each apply synthesizes an ATTEST v1 action and injects a contract
+// callback, so an uncapped pass makes a block's processing time and its action rows a
+// function of how many responses happened to become effective at once. That number is not
+// hypothetical here: effective_time is the round leader's `now + ATTEST_RESPONSE_FORWARD_S`,
+// so requests finalized in the same span align on a handful of blocks by construction.
+//
+// TEN, which is the admission cap's own perBlock figure (attest_request_cap_activation.js):
+// the chain admits at most ten requests per block, so a steady state cannot produce more
+// than ten responses per block either, and a ceiling at that number bounds the callback
+// cost of a block without ever throttling the rate the protocol itself allows. A burst that
+// aligned several blocks' worth of requests on one effective time drains at the admission
+// rate instead of firing in one block transaction.
+//
+// CARRY-FORWARD, and why it stores nothing: a deferred row is simply still applicable at
+// B+1. Its effective_time is already passed, the deadline test is re-evaluated there, and
+// its request is still pending, so the next block's pass selects it again in the same total
+// order and takes the next prefix. A row whose deadline passes while it waits is never
+// applied at all: the expiry sweep at deadline+1 flips the request and the expired callback
+// stands, which is the binding rule's existing verdict rather than a new one.
+//
+// UNGATED, deliberately: below the response-mirror activation height nothing reaches this
+// path at all (the applier gates on the request's own era), so there is no pre-activation
+// history for a flag day to preserve and a gate would only be a second thing to arm.
+//
+// The cap is APPLIED in utility.selectApplicableAttestationResponses, where the total order
+// it takes a prefix of is built; it lives here, with the rest of the ATTEST protocol
+// constants, exactly as xcall.js holds the cap utility applies to its own pass.
+const ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK = 10;
+
+// Terminal response vocabulary the mirror carries. In practice the hub emits only
+// 'ok' ('expired' is an INDEXER verdict from the local deadline sweep, which needs no
+// mirror row), but the column keeps the wider vocabulary so an 'expired' producer
+// could be added without a schema change, and the applier handles both.
+const MIRROR_TERMINAL_STATUSES = ['ok', 'expired'];
 
 // request_id preimage fields, in preimage order. This list is the single in-file
 // source of truth for the ORDER and the COUNT, so a skew against the VM's
@@ -89,6 +167,10 @@ class Attest {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
+        // Hub client for the v5 batch's durable push. Absent on a hub-less node, which
+        // parses and judges batches exactly the same and simply pushes nothing.
+        this.hubClient = action.hubClient || null;
+
         // Providers are the built-in DEFAULTS (http_get, llm) overlaid with any
         // ATTESTATION.PROVIDERS block in the coin config (see providerRegistry.js).
         this.providerRegistry = new ProviderRegistry(this.config);
@@ -110,6 +192,11 @@ class Attest {
         // to how a node without relay support treats an unknown VERSION.
         this.formats[3] = 'VERSION|REQUEST_ID|ORIGIN_CHAIN|ORIGIN_ACTION_INDEX|PROVIDER_ID|REQUEST_PAYLOAD|REDUNDANCY|DEADLINE_BLOCKS|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...';
         this.formats[4] = 'VERSION|REQUEST_ID|HOME_RESPONSE_ACTION_INDEX|RESPONSE_PAYLOAD|STATUS|META|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...';
+        // The batch legs take their format strings from the wire module itself rather
+        // than restating them, so the layout has exactly one definition and the hub twin
+        // and this parser cannot drift by hand-copy.
+        this.formats[abw.ATTEST_BATCH_HEAD_VERSION]         = abw.ATTEST_BATCH_HEAD_FORMAT;
+        this.formats[abw.ATTEST_BATCH_CONTINUATION_VERSION] = abw.ATTEST_BATCH_CONTINUATION_FORMAT;
     }
 
     // Stringified request_id preimage values, in REQUEST_ID_PREIMAGE_FIELDS order.
@@ -131,10 +218,21 @@ class Attest {
             error = 'invalid: VERSION (unknown)';
 
         if(format === 0) return await this._parseRequest(params, data, error);
+        // A hub-mirror-applied response is a v1 too: same version, same row shape, same
+        // effects, no transaction. It is dispatched apart from the chain path because
+        // there is no wire to parse (the artifact arrives as a mirrored row, already
+        // structured) and because the two must stay distinguishable: the chain path
+        // rejects an on-chain v1 for a mirror-era request, and that gate must not fire
+        // on the applier's own synthesized action. The marker is set only by
+        // utility.processAttestationResponses.
+        if(format === 1 && data['IS_SYNTHETIC'] && data['MIRROR_RESPONSE'])
+            return await this._applyMirroredResponse(data);
         if(format === 1) return await this._parseResponse(params, data, error);
         if(format === 2) return await this._parseExpire(params, data, error);
         if(format === 3) return await this._parseRelayRequest(params, data, error);
         if(format === 4) return await this._parseRelayResponse(params, data, error);
+        if(format === abw.ATTEST_BATCH_HEAD_VERSION)         return await this._parseBatchHead(params, data, error);
+        if(format === abw.ATTEST_BATCH_CONTINUATION_VERSION) return await this._parseBatchContinuation(params, data, error);
     }
 
     // ATTEST v0: Request (VM emission only)
@@ -328,9 +426,12 @@ class Attest {
         // `llm` provider is a real invoice on each operator's own vendor account, while
         // the requester pays the same flat VM_ATTEST_REQUEST gas either way. Fees bound
         // that on a fee-bearing network; on testnet nothing is scarce, so the bound has
-        // to be this rule. Rejection rather than deferral, because the action is already
+        // to be this rule. Refusal rather than deferral, because the action is already
         // in this block and there is no later block to carry it to - see the semantics
-        // note in attest_request_cap_activation.js.
+        // note in attest_request_cap_activation.js, which also records what the refusal
+        // costs the author on a live chain: the emitting EXECUTE REVERTS (processEmission
+        // throws on a non-'valid' emission), taking the under-cap siblings and the
+        // execution's state writes with it, and no 'rejected' v0 row survives.
         //
         // Checked LAST among the admission rules, and only for an otherwise-valid
         // request, so a structurally invalid one never consumes a capped slot. Same
@@ -363,6 +464,14 @@ class Attest {
         // reorg-rollback reset, which only re-pends rows that went terminal via a
         // later block's flip (request_status IN ('fulfilled','errored','expired')
         // AND resolved_block >= reorg point), never promotes it back to pending.
+        //
+        // NO AUDIT ROW ACTUALLY SURVIVES, though, and this is a fail-safe rather than
+        // the observable behaviour: a v0 exists only as a VM emission, and
+        // execute.processEmission throws on any emission whose STATUS is not 'valid',
+        // which rolls the emitting EXECUTE's savepoint back over this write. Measured
+        // on BTC regtest 2026-09-02 and on the venue's whole history: not one
+        // 'rejected' v0 row has ever existed. Keep the branch anyway - it is what makes
+        // the write safe if a future emission path ever stops throwing.
         data['REQUEST_STATUS'] = (error) ? 'rejected' : 'pending';
 
         // Stamp the origin chain on an admitted relay-eligible request. This is
@@ -488,6 +597,19 @@ class Attest {
             request = await this.indexerDb.getAttestationRequestById(requestId);
             if(!request){
                 error = 'invalid: REQUEST_ID (no matching request)';
+            } else if(this.isMirrorEraRequest(request)){
+                // THE FLAG-DAY GATE. At or above the response-mirror height a response
+                // reaches every indexer through the hub mirror, so an on-chain v1 for such
+                // a request is refused: without this a stale hub still running the legacy
+                // publisher would DOUBLE-DELIVER, the mirror applier and the chain handler
+                // each firing the callback and each settling the escrow.
+                //
+                // First among the request-derived branches on purpose. Every branch below
+                // also rejects, so an ordering that let one of them answer first could not
+                // admit the action, but it WOULD record a different reason for the same
+                // wire depending on the request's incidental state, and this string is
+                // consensus: it is the stored verdict a replay re-derives.
+                error = 'invalid: ATTEST v1 after mirror activation';
             } else if(request.request_status !== 'pending'){
                 error = 'invalid: REQUEST already ' + request.request_status;
             } else if(request.provider_id !== String(providerId)){
@@ -497,143 +619,49 @@ class Attest {
             }
         }
 
-        // The DECLARED height of this round: the REQUEST's block, deterministic from the
-        // request_id every signer keyed on. Two different things are derived from it and
-        // they must not be conflated.
+        // Verification proper lives in attest_response_verify.js: ONE implementation
+        // that this chain path and the hub-mirror applier both call, so the two
+        // delivery routes can never reach different verdicts on the same artifact
+        // (spec attest-response-mirror.md §4.3). Everything consensus-relevant lives
+        // there, comments included; what stays here is the wire parsing above and the
+        // persistence below.
         //
-        // 1. The flag-day inputs (EQUIV header below) are evaluated on the DECLARED height,
-        //    verbatim. Shifting a flag-day boundary by the reorg buffer would move the
-        //    cutover block itself, which is its own fork.
-        // 2. The height the capability set is RESOLVED at is the declared height BURIED by
-        //    the canonical reorg buffer, because that is what the hub actually resolved at:
-        //    CapabilitySnapshot subtracts CANONICAL_REORG_BUFFER from every height it is
-        //    handed (_buriedBlockIndex) while AttestationRound passes the raw
-        //    request.block_index, so the responsible set the hub signed is the set at
-        //    (declared - 6). Verifying at the raw height resolved a DIFFERENT set whenever a
-        //    validator's stake activated or deactivated inside (declared - 6, declared],
-        //    which rejects a correct deterministic response or stalls the round. Gated:
-        //    below the flag-day this is the declared height unchanged, so pre-flag-day
-        //    acceptance is byte-preserved.
-        let declaredBlock = request ? Number(request.block_index) : Number(data['BLOCK_INDEX']);
-        let snapshotBlock = srb.buriedSnapshotBlock(declaredBlock, this.config['NETWORK']);
-
-        // Build canonical signing message (UTF-8 Buffer). At/above the EQUIV flag-day
-        // (WI-2 bump 2) the raw string is wrapped in the uniform header (TAG=XATTEST,
-        // ROUND_ID=request_id, VIEW=0, no view change), gated on the request's block +
-        // network; below it, the bare bytes. Byte-matches AttestationConsensus._buildCanonical.
-        let responseHash = crypto.createHash('sha256').update(responseBodyBytes).digest('hex');
-        // The id case inside the canonical is gated (see the normalization
-        // note above). Raw wire bytes below the flag-day (byte-identical to legacy
-        // verification), lowercased at/after it.
-        let canonId      = (await this.actions.protocolChanges.isEnabled('ATTEST_CANONICAL_LOWERCASE_ID', data['BLOCK_INDEX']))
-                         ? String(requestId) : String(requestIdRaw);
-        let canonRaw     = canonId + String(providerId) + responseHash + String(responseStatus) + String(meta || '');
-        if(eq.isEquivHeaderActive(declaredBlock, this.config['NETWORK']))
-            canonRaw = eq.buildEquivCanonical(eq.ENGINE_TAGS.ATTEST, canonId, 0, canonRaw);
-        let canonical    = Buffer.from(canonRaw, 'utf8');
-        let validSigs    = 0;
-        let verifiedSigs = [];
-        if(!error){
-            // Resolve the attestation-eligible set ONCE (hasCapability is ~5 sequential
-            // queries per signer), from the SAME derivation the responsible-set filter
-            // below uses. The two MUST agree on eligibility or a responsible signer is
-            // discarded here, before it is ever counted.
-            //
-            // At/above STAKE_WEIGHTED_QUORUM _computeResponsibleSet selects
-            // getStakeWeightsByCapability, whose _stakeWeightsSql qualifies a staking
-            // SOURCE on its aggregate and then emits ALL of that source's effective keys,
-            // while getValidatorsByCapability / hasCapability qualify each PUBKEY on its
-            // own aggregate (_effectiveCapabilitySetSql GROUP BY ip.pubkey HAVING, whose
-            // only widening branch is a `delegations` row). A source clearing MIN_STAKE
-            // only in aggregate across sub-threshold stake keys is therefore IN the
-            // weighted responsible set and OUT of the pubkey-aggregate set, so its valid
-            // signatures were dropped here and validSigs could never reach redundancy:
-            // the responsible set is exactly REDUNDANCY keys, so losing even one made the
-            // request permanently unfulfillable while every retry burned a real fee and
-            // expiry charged missed_count to the whole set, honest signers included.
-            //
-            // Selecting the weighted query here widens eligibility only UP TO the weighted
-            // set, and the responsible filter below is derived from that same query at
-            // this same block, so it still clips acceptance to the deterministic
-            // top-REDUNDANCY selection: no coalition that was not already responsible can
-            // land a response. Gated exactly as _computeResponsibleSet is, and for its
-            // reasons: BTC ONLY, because the SWQ anchor is a BTC height and evaluating it
-            // against an LTC/DOGE local height resolves TRUE out of band; and on the
-            // DECLARED height, because moving a flag-day boundary by the reorg buffer is
-            // its own fork. `snapshotBlock` is ALREADY the buried resolve height (see the
-            // note above), so it must NOT be buried a second time here.
-            let weighted    = (this.config['COIN'] === 'BTC')
-                           && swq.isStakeWeightedQuorumActive(declaredBlock, this.config['NETWORK']);
-            let capableRows = weighted
-                            ? await this.indexerDb.getStakeWeightsByCapability('attestation', snapshotBlock)
-                            : await this.indexerDb.getValidatorsByCapability('attestation', snapshotBlock);
-            // A truncated read has silently-dropped rows. Below the gate, fall back
-            // per-signer to hasCapability rather than drop a capable co-signer: that probe
-            // is the same pubkey aggregate the unweighted set is built from, so the two
-            // still agree. On the weighted branch there is NO per-signer equivalent -
-            // hasCapability sums WHERE s.signing_pubkey_id = ?, the pubkey aggregate
-            // again, so falling back to it would reinstate this exact bug on precisely the
-            // truncated read where the federation is largest. Take the truncated rows as
-            // they stand instead: _computeResponsibleSet resolves the responsible set from
-            // the SAME truncated read at the same block, so eligibility still covers it and
-            // the responsible filter stays the binding gate.
-            let capableSet  = (!weighted && capableRows && capableRows.truncated === true)
-                            ? null
-                            : new Set((capableRows || []).map(v => String(v.pubkey).toLowerCase()));
-            let seenPubkey = new Set();
-            for(let s of sigs){
-                if(seenPubkey.has(s.pubkey)) continue;
-                seenPubkey.add(s.pubkey);
-                if(capableSet
-                    ? !capableSet.has(s.pubkey)
-                    : !await this.indexerDb.hasCapability(s.pubkey, 'attestation', snapshotBlock))
-                    continue;
-                if(!ed25519.verify(canonical, s.sig, s.pubkey))
-                    continue;
-                verifiedSigs.push(s);
-            }
-
-            // Restrict the verified signers to the request's deterministic
-            // responsible set (the top-REDUNDANCY validators ranked by
-            // SHA256(request_id || pubkey), the same set _parseExpire charges
-            // missed_count to. Holding the attestation capability and producing a
-            // valid ed25519 signature is necessary but NOT sufficient: without
-            // this gate any quorum of capable validators could assemble a valid
-            // v1, so two different capable coalitions could each land a response
-            // (first-lands-wins, non-deterministic) and fulfilled_count (credited
-            // to whoever signed) would diverge from missed_count (charged to the
-            // hash-selected set on expiry). Filtering here makes fulfillment
-            // deterministic and keeps the two stat columns symmetric. (request is
-            // guaranteed non-null inside this !error block; a null lookup sets
-            // 'no matching request' above and skips the loop.)
-            // DECLARED, not buried: _computeResponsibleSet takes the declared height and
-            // buries it internally, so every site that computes this request's
-            // responsible set (admission, the persisted RESPONSIBLE_SET_JSON, the expiry
-            // missed_count charge, the fulfilled fee split, and here) resolves ONE set.
-            //
-            // WIDENED at the RESPONSE's own height (spec 8.2 liveness ladder). The set is
-            // still RESOLVED at the declared height, so which validators are ranked is
-            // unchanged; the ladder only decides how far down that ranking a signature is
-            // admitted. Evaluating it here rather than at the declared height is what makes
-            // the two sides agree: the signing hub derived its slots from the indexer tip it
-            // polled, and a response cannot be mined below that tip, so this set is always a
-            // SUPERSET of the one that signed and a signature authorized at proposal time can
-            // never be rejected here. The flag-day itself is gated on the REQUEST's block, so
-            // a request admitted below it never widens.
-            let responseWiden = wid.widenSlots(
-                data['BLOCK_INDEX'], declaredBlock, request.deadline_block, this.config['NETWORK']
-            );
-            let responsible = new Set(await this._computeResponsibleSet(
-                requestId, request.redundancy, declaredBlock, request.provider_id, responseWiden
-            ));
-            verifiedSigs = verifiedSigs.filter(s => responsible.has(s.pubkey));
-            validSigs    = verifiedSigs.length;
-
-            // Quorum: only REDUNDANCY validators are responsible for fetching (spec §8.2)
-            let redundancy = request ? Number(request.redundancy) : 0;
-            if(validSigs < redundancy)
-                error = 'invalid: insufficient valid signatures (' + validSigs + '/' + redundancy + ')';
-        }
+        // Three things are passed rather than read from `data` inside the module, and
+        // each is a deliberate seam for the mirror path:
+        //   atBlock    the block the response is judged AT. It drives the widening
+        //              ladder, which is evaluated at the RESPONSE's own height on
+        //              purpose. On this path that is the v1 action's block.
+        //   gateBlock  where ATTEST_CANONICAL_LOWERCASE_ID is evaluated. Today, and
+        //              here, the v1 ACTION's block (D57); the module must not re-key it.
+        //   computeResponsibleSet  injected, because it is a method over this.config,
+        //              this.providerRegistry and this.indexerDb, and every site that
+        //              computes a request's responsible set has to use the one derivation.
+        //
+        // The snapshot height is deliberately NOT passed: the module buries the local
+        // request row's own block itself, so no caller can name the height its
+        // signatures are checked at.
+        let verdict = await avr.verifyAttestationResponse({
+            request,
+            sigs,
+            requestId,
+            requestIdRaw,
+            providerId,
+            responseStatus,
+            meta,
+            responseBodyBytes,
+            atBlock:         data['BLOCK_INDEX'],
+            gateBlock:       data['BLOCK_INDEX'],
+            error,
+            coin:            this.config['COIN'],
+            network:         this.config['NETWORK'],
+            indexerDb:       this.indexerDb,
+            protocolChanges: this.actions.protocolChanges,
+            computeResponsibleSet: this._computeResponsibleSet.bind(this),
+        });
+        error            = verdict.error;
+        let validSigs    = verdict.validSigs;
+        let verifiedSigs = verdict.verifiedSigs;
+        let responseHash = verdict.responseHash;
 
         // Stash for DB write
         data['REQUEST_ID']       = requestId;
@@ -729,6 +757,212 @@ class Attest {
         await this.mapper.createMappings(data);
     }
 
+    // Is this request's response served by the hub mirror rather than by an on-chain
+    // ATTEST v1? Keyed on the REQUEST's own block (§7.1), read from the LOCAL v0 row
+    // and never from anything a hub states.
+    //
+    // NAMED SEAM, three callers by design: this file's mirror applier (its own gate),
+    // the chain-handler gate that makes an on-chain v1 for such a request `invalid`,
+    // and the broadcast-fee retirement above the height. All three must agree about
+    // which era a request is in, and the only way to guarantee that is one predicate.
+    // For a relayed request the local row IS the BTC v3 materialization, so
+    // request.block_index is already the BTC block the flag day keys on.
+    isMirrorEraRequest(request){
+        if(!request) return false;
+        return arm.isResponseMirrorActive(request.block_index, this.config['NETWORK']);
+    }
+
+    // THE MIRROR APPLIER (response-mirror design §4.1/§4.4). Applies one finalized
+    // response that arrived through the hub mirror instead of on a validator-paid
+    // transaction, at the block the binding rule picked
+    // (utility.selectApplicableAttestationResponses, which is where the rule lives).
+    //
+    // The effects are the v1 chain handler's effects, MINUS A TRANSACTION: the response
+    // row, the request's terminal flip, the fee settle and the contract callback are
+    // written exactly as _parseResponse writes them, hung off a system-synthesized
+    // ATTEST v1 action with NULL TX_INDEX/TX_VOUT and a deterministic TX_HASH. That is
+    // what keeps everything downstream (rollback by action_index, `stream:action`
+    // replication, the VM snapshot, the state hash, the relay's response leg) working
+    // on a row it cannot distinguish from a chain-delivered one.
+    //
+    // AN UNVERIFIABLE ROW IS INERT, NOT INVALID. The chain path records a rejected v1
+    // as an audit row because a transaction was paid for and every node saw it; nothing
+    // was paid for here and a bad row must leave no trace, so this returns having
+    // written NOTHING, not even an action index, and above all never marks the request.
+    // Every skip reason is a deterministic function of the row and of local state, so
+    // every node skips the same row for the same reason; a skip is logged once, and the
+    // row stays in the mirror for audit and for the on-chain batch.
+    async _applyMirroredResponse(data){
+        let row       = data['MIRROR_RESPONSE'];
+        let request   = data['MIRROR_REQUEST'];
+        let requestId = String((row && row.request_id) || '').toLowerCase();
+        let skip = (why) => {
+            console.log("\t ATTEST mirror : id=" + requestId.substring(0,16) + '...' +
+                        ' : block=' + data['BLOCK_INDEX'] + ' : SKIPPED (' + why + ')');
+        };
+
+        // Re-gates rather than trusting the pass that selected this row: the selection
+        // and the apply are separated by a synthesized action, and a guard that only
+        // exists in the selector is one refactor away from being the only guard.
+        if(!request || String(request.request_status) !== 'pending')
+            return skip('local request not pending');
+        if(!this.isMirrorEraRequest(request))
+            return skip('request is legacy-era, response must arrive on chain');
+        if(String(request.provider_id) !== String(row.provider_id))
+            return skip('provider_id does not match the request');
+        if(MIRROR_TERMINAL_STATUSES.indexOf(String(row.status)) === -1)
+            return skip('non-terminal status ' + row.status);
+
+        // Signature list, format-checked and lower-cased exactly as the wire parser does
+        // it, because the shared verifier's contract is that its caller has already done
+        // so. Deliberately NOT deduped here: the verifier dedupes before verifying, and
+        // one implementation of that rule is the point of the module.
+        let declared = null;
+        try { declared = JSON.parse(String(row.signatures == null ? '' : row.signatures)); }
+        catch(_){ declared = null; }
+        if(!Array.isArray(declared) || declared.length === 0)
+            return skip('signatures column is not a non-empty JSON array');
+        let sigs = [];
+        for(let s of declared){
+            let pubkey = String((s && s.pubkey) || '').toLowerCase();
+            let sig    = String((s && s.sig) || '').toLowerCase();
+            if(!/^[0-9a-f]{64}$/.test(pubkey) || !/^[0-9a-f]{128}$/.test(sig))
+                return skip('signature entry format');
+            sigs.push({ pubkey, sig });
+        }
+
+        // The body as bytes. The mirror stores the DECODE of the attested bytes (as
+        // `attests.response_payload` does), so re-encoding is the only bytes available
+        // here; a body that is not UTF-8 round-trippable cannot reproduce the hash the
+        // canonical signs, and the echo check below is what makes that a clean skip
+        // instead of an opaque signature failure.
+        let responseBodyBytes = Buffer.from(String(row.response_payload == null ? '' : row.response_payload), 'utf8');
+        if(responseBodyBytes.length > ATTEST_RESPONSE_BODY_MAX_BYTES)
+            return skip('body ' + responseBodyBytes.length + ' bytes over the ' + ATTEST_RESPONSE_BODY_MAX_BYTES + '-byte cap');
+        let echoHash = crypto.createHash('sha256').update(responseBodyBytes).digest('hex');
+        if(echoHash !== String(row.response_hash || '').toLowerCase())
+            return skip('response_hash does not match the stored body');
+
+        // ONE verifier for both delivery routes (§4.3). Nothing about the height the
+        // signatures are checked at is reachable from here: the module buries the LOCAL
+        // request row's own block itself. `atBlock`/`gateBlock` are the APPLYING block,
+        // which is this synthesized action's own block, so the widening ladder and the
+        // lower-case-id gate are evaluated exactly where the chain path evaluates them
+        // (D57). requestIdRaw equals requestId because a mirror row's id is lower-case
+        // hex by construction: there is no wire case to preserve.
+        //
+        // effectiveTime is the mirror row's SIGNED effective_time, and it is passed because
+        // the mirror-era canonical appends that field: the validators signed the body plus
+        // the time the response became effective, so a verifier that omitted it would build
+        // the legacy canonical and refuse every honest hub-signed row. The shared module
+        // threads whatever the caller passes into the canonical it verifies against, so the
+        // chain path and this one differ only in where the field comes from.
+        let verdict = await avr.verifyAttestationResponse({
+            request,
+            sigs,
+            requestId,
+            requestIdRaw:    requestId,
+            providerId:      row.provider_id,
+            responseStatus:  row.status,
+            meta:            row.meta,
+            responseBodyBytes,
+            effectiveTime:   Number(row.effective_time),
+            atBlock:         data['BLOCK_INDEX'],
+            gateBlock:       data['BLOCK_INDEX'],
+            error:           null,
+            coin:            this.config['COIN'],
+            network:         this.config['NETWORK'],
+            indexerDb:       this.indexerDb,
+            protocolChanges: this.actions.protocolChanges,
+            computeResponsibleSet: this._computeResponsibleSet.bind(this),
+        });
+        if(verdict.error)
+            return skip(verdict.error);
+
+        // Verified. Only now does the row get an action: minting first would leave a
+        // gap in the action sequence for a row that wrote nothing.
+        data['ACTION_INDEX'] = await this.indexerDb.createActionIndex({
+            ACTION:      'ATTEST',
+            BLOCK_INDEX: data['BLOCK_INDEX'],
+            FORMAT:      1
+        }, true);
+        // Deterministic synthetic TX_HASH: sha256('ATTESTMIRROR:<network>:<chain>:<request_id>')
+        // (execContext.synthesizeTxHash). Namespaced by request_id, which is unique per
+        // request and derived from chain data, so every node derives the same hash and
+        // anything the callback emits (ATTEST/XCALL/emit.execute) gets ids that resolve.
+        data['TX_HASH'] = synthesizeTxHash(
+            SYNTH_TAGS.ATTEST_MIRROR_RESPONSE, this.config['NETWORK'], this.config['CHAIN'], requestId);
+
+        data['REQUEST_ID']       = requestId;
+        data['PROVIDER_ID']      = row.provider_id;
+        data['RESPONSE_PAYLOAD'] = String(row.response_payload == null ? '' : row.response_payload);
+        data['RESPONSE_STATUS']  = String(row.status);
+        data['META']             = row.meta;
+        data['RESPONSE_HASH']    = verdict.responseHash;
+        data['VALID_SIGS']       = verdict.validSigs;
+        data['STATUS']           = 'valid';
+        // Same inlined JSON the chain path stores, so a mirror-fed node's row and a
+        // chain-fed node's row are byte-identical (AT2 asserts exactly that).
+        data['VALIDATOR_SIGNATURES'] = verdict.verifiedSigs.length
+            ? JSON.stringify(verdict.verifiedSigs.map(s => ({ pubkey: s.pubkey, sig: s.sig })))
+            : null;
+
+        console.log("\t ATTEST mirror : id=" + requestId.substring(0,16) + '...' +
+                    ' : status=' + data['RESPONSE_STATUS'] +
+                    ' : sigs=' + verdict.validSigs + '/' + request.redundancy +
+                    ' : effective=' + row.effective_time +
+                    ' : block=' + data['BLOCK_INDEX'] + ' (no transaction)');
+
+        await this.indexerDb.createAttestationResponse(data);
+
+        // The v5/v6 batch carrying this body can land BEFORE the row binds (the chain-only
+        // rebuild inserts the mirror row with its link already stamped), in which case the
+        // mirror's own stamp found no v1 row to write it onto. Fires only when the selected
+        // mirror row carries the column, and the link is display only either way.
+        if(row.batch_action_index != null)
+            await this.indexerDb.setAttestationResponseBatchIndex(requestId, row.batch_action_index);
+
+        if(String(data['RESPONSE_STATUS']) === 'ok'){
+            for(let s of verdict.verifiedSigs){
+                await this.indexerDb.incrementAttestationValidatorStat(
+                    s.pubkey, String(row.provider_id), 'fulfilled_count', data['BLOCK_INDEX']
+                );
+            }
+        }
+
+        // Terminal by construction: the mirror carries no retryable status, so there is
+        // no leave-the-request-pending branch here (the chain path's RETRYABLE_STATUSES).
+        let newRequestStatus = (String(data['RESPONSE_STATUS']) === 'ok') ? 'fulfilled' : 'errored';
+        await this.indexerDb.updateAttestationRequestStatus(requestId, newRequestStatus, data['BLOCK_INDEX']);
+
+        // Fee disposition at THIS synthesized action's index, so a reorg of the applying
+        // block removes the settle rows generically while the v0 escrow survives.
+        await this._settleRequestFee(request, data, newRequestStatus);
+
+        // A relay-materialized request's contract lives on the origin chain; the response
+        // goes back as a v4 and the callback fires there (the same guard the chain path
+        // has, for the same reason).
+        if(this._isForeignOrigin(request)){
+            console.log("\t ATTEST mirror : id=" + requestId.substring(0,16) + '...' +
+                        ' : origin=' + request.origin_chain + ', callback deferred to the relay leg');
+            await this.mapper.createMappings(data);
+            return;
+        }
+
+        try {
+            let callbackActionIndex = await this._injectCallbackExecute(request, data);
+            if(callbackActionIndex)
+                await this.indexerDb.setAttestationResponseCallbackIndex(data['ACTION_INDEX'], callbackActionIndex);
+        } catch(e){
+            // Infra faults halt the block rather than commit a locally-dropped callback
+            // that forks contract_hash against healthy peers (faultGuard.js).
+            rethrowIfInfraFault(e);
+            console.warn('Mirror-applied attestation callback injection failed:', e);
+        }
+
+        await this.mapper.createMappings(data);
+    }
+
     // ATTEST v2: Expire (system-synthesized)
     async _parseExpire(params, data, error){
 
@@ -806,6 +1040,430 @@ class Attest {
         }
 
         await this.mapper.createMappings(data);
+    }
+
+    // ATTEST v5: the response BATCH head.
+    //
+    // A window of finalized responses, compressed and chunked, carrying the batch quorum's
+    // signature set. It is what makes the hub mirror auditable: every terminal response body
+    // lands on chain, so a node that replays the chain rebuilds the mirror table and
+    // re-derives every callback without trusting any hub.
+    //
+    // THE DOGE SIDE VERIFIES THE BATCH QUORUM ONLY, NEVER THE PER-ROW RESPONSIBLE SET, and
+    // this is a constraint rather than a shortcut: `_computeResponsibleSet` returns [] off
+    // BTC by construction (attestation stake is BTC-only) and the stake-weighted gate tests
+    // the literal 'BTC', so a DOGE indexer cannot resolve a responsible set at all. Per-row
+    // verification therefore happens where the stake actually resolves, on the BTC indexer,
+    // through the shared verifier after the hub re-serves the row. A batch that carries a
+    // row the BTC side later rejects leaves that row unapplied and inert, exactly as a bad
+    // mirror row is.
+    //
+    // A failing batch is `invalid` identically on every node, with NO partial absorb: the
+    // one signature set covers the whole window, so dropping a row changes the signed bytes
+    // and fails every signature. A signed batch is atomic exactly as a signed round is.
+    //
+    // ONE CANONICAL HEAD PER PUBLISHER AND WINDOW. The batch key is derived from the
+    // window, so one publisher republishing it (a failover rank, a retry after a stuck
+    // broadcast) would otherwise absorb the same window twice and enqueue two hub pushes.
+    // The earliest valid head for (batch key, author) is the canonical one and a later one
+    // from the same publisher is refused; the pick is by action_index, a total order, so
+    // every node picks the same head whatever order the wires arrived in. The scope is the
+    // AUTHOR's, never the key's alone, because a key-wide pick would let a junk head
+    // squatting a window deny the honest publisher outright.
+    async _parseBatchHead(params, data, error){
+
+        // DOGE-plane guard. Stored as a verdict rather than hard-returned like the relay
+        // legs, because a batch is publisher-broadcast on a known rail: one landing on
+        // BTC or LTC is a publisher fault worth a visible row, not an unknown version.
+        if(!error && String(this.config['COIN']) !== BATCH_CHAIN)
+            error = 'invalid: ATTEST v5 (batches ride the ' + BATCH_CHAIN + ' rail)';
+
+        let head = null;
+        if(!error){
+            head = abw.parseAttestBatchHead(params);
+            if(!head.ok) error = head.status;
+        }
+
+        // A batch names the network it covers, and the mirror is network-scoped, so a
+        // batch for another network must not be absorbed by this one even when both
+        // chains are reachable from one operator's stack.
+        if(!error && head.network !== String(this.config['NETWORK']))
+            error = 'invalid: NETWORK (batch declares ' + head.network + ')';
+
+        // Everything already on chain under this key, and the slice of it that is this
+        // publisher's. The read happens even for a single-wire batch, because the
+        // duplicate-head test below needs it whatever the geometry says.
+        let author = String(data['SOURCE'] || '');
+        let mine   = [];
+        if(!error){
+            // Scoped in the QUERY, not only here: the row limit inside it is only safe
+            // after the author partition, because a batch key is a hash over the window it
+            // names, so anyone can derive it and file wires under it ahead of the honest
+            // publisher. The JS filter stays as a harmless second pass.
+            mine = this._authoredBy(await this.indexerDb.getAttestBatchChunks(head.batchKey, author), author);
+            if(this._canonicalBatchHead(mine))
+                error = 'invalid: BATCH_KEY (this publisher already has a head for the window)';
+        }
+
+        // Reassembly, then the quorum. A multi-chunk batch is absorbed only once its
+        // continuations are on chain; until then the head is a structurally sound action
+        // that has delivered nothing, which is the ANCHOR archive head's behaviour and for
+        // the same reason (a head can legitimately land before its chunks). When the head
+        // lands LAST it reassembles here, against the chunks already stored, so the batch
+        // absorbs exactly once whichever order the wires arrive in.
+        let batch = null;
+        if(!error){
+            let stored = (head.totalChunks === 1) ? [] : mine;
+            let assembled = abw.reassembleAttestBatch(head, stored);
+            if(assembled.ok) batch = assembled.batch;
+            // Incomplete coverage is the ONE failure that is not a verdict: the missing
+            // chunks may still be mined. Every other one is the batch's, and is recorded
+            // identically on every node from the same bytes.
+            else if(assembled.reason !== abw.ATTEST_BATCH_FAIL_REASONS.COVERAGE) error = assembled.status;
+        }
+
+        if(!error && batch){
+            let quorum = await this._verifyBatchQuorum(batch);
+            if(!quorum.ok) error = quorum.error;
+        }
+
+        data['REQUEST_ID'] = head && head.ok ? head.batchKey : '';
+        data['VERSION']    = abw.ATTEST_BATCH_HEAD_VERSION;
+        data['STATUS']     = error || 'valid';
+        this._stampBatchColumns(data, head, 0);
+
+        console.log("\t ATTEST v5 : batch=" + String(data['REQUEST_ID']).substring(0,16) + '...' +
+                    (head && head.ok ? ' : window=' + head.windowStart + '-' + head.windowEnd +
+                                       ' rows=' + head.rowCount +
+                                       ' anchor=' + head.btcBlockHeight +
+                                       ' chunks=' + head.totalChunks : '') +
+                    ' : ' + data['STATUS']);
+
+        await this.indexerDb.createAttestationBatchAction(data);
+
+        // Durable transactional outbox, the `price_batch` pattern verbatim: the
+        // pending_hub_pushes row is written through the OPEN block transaction so it
+        // commits atomically with the action row and rolls back with it. The hub is what
+        // turns a parsed batch back into mirror rows every BTC indexer then verifies for
+        // itself, so this push is the chain-only rebuild road and not an optimisation.
+        if(!error && batch && this.hubClient && this.hubClient.enabled){
+            let pushGeneration = await this.indexerDb.getPushGeneration(data['COIN']);
+            let payload = this._buildBatchHubPush(batch, data, pushGeneration, data['ACTION_INDEX']);
+            let pushId  = await this.indexerDb.enqueueHubPushTx('attest_batch', payload);
+            this.indexerDb.stageHubPush({ id: pushId, pushType: 'attest_batch', payload });
+        }
+
+        await this.mapper.createMappings(data);
+    }
+
+    // ATTEST v6: a batch continuation chunk.
+    //
+    // Carries one slice of the head's compressed body and nothing else: no window header,
+    // no signatures. The head owns the VERDICT on the batch, so a continuation's own status
+    // only ever reports whether ITS bytes are well formed, and a batch that fails when this
+    // chunk completes it is stamped on the head instead.
+    //
+    // The chunk that completes the coverage DOES absorb, because it is the moment the whole
+    // window is finally on chain, and it is the same moment on every node.
+    //
+    // A SLOT BELONGS TO THE PUBLISHER WHOSE BATCH IT IS. Every read here is scoped to this
+    // wire's own author, so a continuation joins its own publisher's head and no other, and
+    // the duplicate-slot guard counts only that publisher's slots. A chunk broadcast by
+    // anyone else is the chunk of its own batch: it can neither occupy a slot in this one
+    // nor contribute bytes to its reassembly. Without that scope the first wire into a slot
+    // owned it, so a junk chunk denied the window and a well-formed one for another
+    // encoding forced the honest head `invalid`.
+    async _parseBatchContinuation(params, data, error){
+
+        if(!error && String(this.config['COIN']) !== BATCH_CHAIN)
+            error = 'invalid: ATTEST v6 (batches ride the ' + BATCH_CHAIN + ' rail)';
+
+        let chunk = null;
+        if(!error){
+            chunk = abw.parseAttestBatchContinuation(params);
+            if(!chunk.ok) error = chunk.status;
+        }
+
+        // One read serves all three things this handler needs from the batch's stored rows:
+        // the head to verify against, the geometry to agree with, and the slots already
+        // taken. Rejected rows never appear in it, so junk neither occupies a slot nor
+        // contributes bytes, and the author partition makes the rest this publisher's own.
+        let stored = [], headRow = null;
+        if(!error){
+            let chunkAuthor = String(data['SOURCE'] || '');
+            stored  = this._authoredBy(await this.indexerDb.getAttestBatchChunks(chunk.batchKey, chunkAuthor),
+                                       chunkAuthor);
+            headRow = this._canonicalBatchHead(stored);
+        }
+
+        // Geometry must agree with the head that owns the batch. Both fields are signed
+        // into neither wire, so this is not a security check: it stops two DIFFERENT
+        // encodings of one window (a republish at a different chunk size, say) from
+        // interleaving into a body no publisher ever produced.
+        if(!error && headRow && Number(headRow.total_chunks) !== chunk.totalChunks)
+            error = 'invalid: TOTAL_CHUNKS (does not match the batch head)';
+        if(!error && headRow && String(headRow.batch_crc32) !== chunk.batchCrc32)
+            error = 'invalid: BATCH_CRC32 (does not match the batch head)';
+
+        // Duplicate-slot guard, the ANCHOR continuation's: a filled slot cannot be refilled,
+        // which is what makes a replayed chunk inert instead of a second absorption.
+        if(!error && stored.some(r => Number(r.version) === abw.ATTEST_BATCH_CONTINUATION_VERSION &&
+                                      Number(r.chunk_index) === chunk.chunkIndex))
+            error = 'invalid: CHUNK_INDEX (duplicate)';
+
+        data['REQUEST_ID'] = chunk && chunk.ok ? chunk.batchKey : '';
+        data['VERSION']    = abw.ATTEST_BATCH_CONTINUATION_VERSION;
+        data['STATUS']     = error || 'valid';
+        this._stampBatchColumns(data, chunk, chunk && chunk.ok ? chunk.chunkIndex : null);
+
+        console.log("\t ATTEST v6 : batch=" + String(data['REQUEST_ID']).substring(0,16) + '...' +
+                    (chunk && chunk.ok ? ' : chunk=' + chunk.chunkIndex + '/' + chunk.totalChunks : '') +
+                    ' : ' + data['STATUS']);
+
+        await this.indexerDb.createAttestationBatchAction(data);
+
+        if(!error && headRow)
+            await this._absorbCompletedBatch(headRow, stored, chunk, data);
+
+        await this.mapper.createMappings(data);
+    }
+
+    // Persist the chunk-table half of a batch action: this wire's slot, its body slice and,
+    // on a head, the window header. The header is stored because it is the INPUT to a later
+    // reassembly: a continuation landing after the head has no other way to rebuild the head
+    // it must verify the assembled body against.
+    //
+    // @param {Object} data the landing action
+    // @param {Object} parsed the parsed head or continuation (null/failed leaves every column NULL)
+    // @param {number} chunkIndex this wire's slot: 0 for a head, its own index for a continuation
+    _stampBatchColumns(data, parsed, chunkIndex){
+        if(!parsed || parsed.ok !== true) return;
+        data['BATCH_CRC32']  = parsed.batchCrc32;
+        data['TOTAL_CHUNKS'] = parsed.totalChunks;
+        data['CHUNK_INDEX']  = chunkIndex;
+        data['CHUNK_B64']    = parsed.chunkB64;
+        if(chunkIndex !== 0) return;
+        data['WINDOW_START']     = parsed.windowStart;
+        data['WINDOW_END']       = parsed.windowEnd;
+        data['ROW_COUNT']        = parsed.rowCount;
+        data['BTC_BLOCK_HEIGHT'] = parsed.btcBlockHeight;
+    }
+
+    // One publisher's slice of everything filed under a batch key.
+    //
+    // A BATCH'S IDENTITY IS (KEY, AUTHOR), NEVER THE KEY ALONE. The key is derived from
+    // the window a head declares, so anyone can mint a wire under it. Without this
+    // partition whoever lands a slot first owns it: a junk chunk broadcast ahead of the
+    // honest one takes the slot, the duplicate guard then refuses the real chunk and the
+    // window is denied outright, and a well-formed chunk of a different encoding joins the
+    // reassembly and forces the head `invalid`. With it, a foreign wire is a chunk of its
+    // own batch and governs nobody else's slots. It is the anchor archive rail's rule
+    // (ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL), applied to the same failure.
+    //
+    // `source` comes from actions.source_id, the only authenticated identity a chain wire
+    // carries. An unresolvable author scopes to NOTHING rather than to everything, which
+    // fails closed: such a publisher's multi-chunk batch simply never assembles.
+    _authoredBy(rows, author){
+        let scope = String(author || '');
+        if(scope.length === 0) return [];
+        return (rows || []).filter(r => String(r.source || '') === scope);
+    }
+
+    // The canonical head of one publisher's batch: the earliest valid v5 slot 0 in an
+    // already author-partitioned set, or null when that publisher has none on chain.
+    //
+    // Earliest by action_index, which is a total order, so every node names the same head
+    // whatever order the wires arrived in and the pick is independent of the read's own
+    // ordering. It is what makes a publisher's second head for a window a duplicate that
+    // absorbs nothing rather than a second delivery of one window, and it is the row a
+    // continuation authenticates its geometry against.
+    _canonicalBatchHead(rows){
+        let heads = (rows || []).filter(r => Number(r.version) === abw.ATTEST_BATCH_HEAD_VERSION &&
+                                             Number(r.chunk_index) === 0);
+        if(heads.length === 0) return null;
+        return heads.reduce((best, r) => (Number(r.action_index) < Number(best.action_index)) ? r : best);
+    }
+
+    // Rebuild the parsed head a stored v5 row came from, so a continuation reassembles
+    // through the SAME path the head-side does, byte for byte.
+    //
+    // The network is this node's own rather than a stored column: a head declaring another
+    // network is refused before it is ever recorded valid, and only valid rows reach here,
+    // so the two cannot disagree. One network per database is what makes that hold.
+    _headFromRow(row){
+        return {
+            ok:             true,
+            batchKey:       String(row.request_id),
+            network:        String(this.config['NETWORK']),
+            windowStart:    Number(row.window_start),
+            windowEnd:      Number(row.window_end),
+            rowCount:       Number(row.row_count),
+            btcBlockHeight: Number(row.btc_block_height),
+            batchCrc32:     String(row.batch_crc32),
+            totalChunks:    Number(row.total_chunks),
+            chunkB64:       String(row.chunk_b64)
+        };
+    }
+
+    // Absorb the batch on the continuation that completes its coverage, or do nothing when
+    // slots are still missing.
+    //
+    // The landing chunk is joined to the stored set in memory rather than re-read: it was
+    // written a statement ago, and the two sets are the same one. Coverage is decided by the
+    // INDEX SET, never by a count, so a stray out-of-range row can neither pad an incomplete
+    // set nor let a complete one absorb twice.
+    //
+    // A failure here is the BATCH's, so it lands on the head, exactly as the ANCHOR archive
+    // stamps its own head (actions/anchor.js). This chunk's bytes were well formed and its
+    // row stays valid, which is what keeps one bad batch from re-judging an honest wire.
+    //
+    // The push carries the HEAD's action index and THIS action's block and time. They are
+    // different things: the index NAMES THE BATCH (the hub stamps it onto every carried
+    // response as batch_action_index, and that is the link an explorer opens, which must
+    // land on the head that declares the window rather than on whichever continuation
+    // happened to close it), while the block and time are the completing action's because
+    // that is the action whose rollback un-lands the delivery and the stamp any hub keying
+    // on time needs.
+    async _absorbCompletedBatch(headRow, stored, chunk, data){
+        let head   = this._headFromRow(headRow);
+        let chunks = stored.concat([{
+            chunk_index:  chunk.chunkIndex,
+            chunk_b64:    chunk.chunkB64,
+            action_index: data['ACTION_INDEX']
+        }]);
+        if(abw.attestChunkCoverage(chunks, head.totalChunks) === null) return;
+
+        let assembled = abw.reassembleAttestBatch(head, chunks);
+        let failure   = assembled.ok ? null : assembled.status;
+        let batch     = assembled.ok ? assembled.batch : null;
+        if(batch){
+            let quorum = await this._verifyBatchQuorum(batch);
+            if(!quorum.ok) failure = quorum.error;
+        }
+
+        if(failure){
+            console.warn("\t ATTEST v6 : batch=" + String(head.batchKey).substring(0,16) + '...' +
+                         ' : completed and failed, flagging the head : ' + failure);
+            await this.indexerDb.setAttestBatchStatus(Number(headRow.action_index), failure);
+            return;
+        }
+
+        // Same durable transactional outbox the single-chunk head uses, for the same
+        // reason: this push is the chain-only rebuild road, not an optimisation.
+        if(this.hubClient && this.hubClient.enabled){
+            let pushGeneration = await this.indexerDb.getPushGeneration(data['COIN']);
+            let payload = this._buildBatchHubPush(batch, data, pushGeneration, Number(headRow.action_index));
+            // The QUEUE ROW is keyed on THIS action, never on the head the payload names.
+            // pending_hub_pushes.action_index is the reorg purge key (rollback deletes every
+            // row at or above the orphaned range) and the action that lands this delivery is
+            // the completing continuation. Keyed at the head instead, a rollback of the very
+            // chunk that completed the batch leaves the queued delivery alive, and attest_batch
+            // is an uncapped durable push type, so it would retry until the hub published a
+            // completion for chunks no longer on chain. Every other wire of the batch landed at
+            // or below this action, so keying here purges on a rollback of any of them too.
+            let pushId  = await this.indexerDb.enqueueHubPushTx('attest_batch', payload, Number(data['ACTION_INDEX']));
+            this.indexerDb.stageHubPush({ id: pushId, pushType: 'attest_batch', payload });
+        }
+    }
+
+    // The hub push payload for a valid batch. The KEY NAMES ARE THE INTERFACE and the
+    // transport validates none of them: the hub's `pushattestbatch` handler destructures
+    // exactly these, so a typo fails silently at runtime (an undefined field, a refused
+    // batch) rather than loudly at build time. A test pins this key set.
+    //
+    // `rows` and `sigs` are the reassembled body verbatim, so the hub re-verifies the same
+    // bytes this node verified rather than a re-serialization of them. `block_time` rides
+    // along for the same reason the PRICE batch carries it: batching widens the hub/chain
+    // skew, and a hub keying anything on time needs the LANDING action's own stamp.
+    //
+    // `action_index` is the batch HEAD's, which is why it is a parameter rather than read
+    // off `data`: on a multi-chunk batch the landing action is the completing continuation,
+    // and naming that one would point every carried response's batch link at a chunk.
+    //
+    // @param {Object} batch the reassembled batch body
+    // @param {Object} data the landing v5/v6 action
+    // @param {number} pushGeneration the source-chain reorg fence
+    // @param {number} headActionIndex the batch head's action index
+    // @returns {Object} the pushattestbatch payload
+    _buildBatchHubPush(batch, data, pushGeneration, headActionIndex){
+        return {
+            source_chain:     data['COIN'],
+            network:          batch.network,
+            window_start:     batch.window_start,
+            window_end:       batch.window_end,
+            row_count:        batch.row_count,
+            btc_block_height: batch.btc_block_height,
+            rows:             batch.rows,
+            sigs:             batch.sigs,
+            action_index:     headActionIndex,
+            block_index:      data['BLOCK_INDEX'],
+            block_time:       data['BLOCK_TIME'],
+            push_generation:  pushGeneration
+        };
+    }
+
+    // Verify the batch quorum over the batch canonical, against the `attestation`
+    // capability snapshot at the batch's signed BTC anchor.
+    //
+    // The set, the weights and the count all key on that anchor and never on this action's
+    // own height: capability_snapshots.snapshot_block is a BTC height, so a DOGE landing
+    // height matches nothing. Off BTC all three reads reach the mirrored snapshot through
+    // db.usesCapabilitySnapshot, which is why `attestation` had to join that redirect.
+    //
+    // Signer-set rule is the PRICE batch's, because both are the same trust decision on
+    // the same rail: stake-weighted (source-deduped) at and above STAKE_WEIGHTED_QUORUM,
+    // else the legacy PBFT count. A pubkey is marked seen only AFTER its signature
+    // verifies, so a garbage signature carrying a qualified validator's pubkey cannot be
+    // ordered ahead of the real one to consume its slot. This wire has no pre-flag-day
+    // history to preserve, so that rule is unconditional here rather than gated.
+    async _verifyBatchQuorum(batch){
+        let anchor    = Number(batch.btc_block_height);
+        let network   = this.config['NETWORK'];
+        let canonical = abw.buildAttestBatchCanonical(batch);
+
+        // Same truncation fallback the PRICE batch carries: getValidatorsByCapability caps
+        // at VALIDATOR_QUERY_LIMIT and hasCapability does not, so treating a TRUNCATED read
+        // as the whole set would silently drop a qualified signer and under-count.
+        let capableRows = await this.indexerDb.getValidatorsByCapability('attestation', anchor);
+        let capableSet  = (capableRows && capableRows.truncated === true)
+                        ? null
+                        : new Set((capableRows || []).map(v => String(v.pubkey).toLowerCase()));
+        let capabilityCache = new Map();
+
+        let signers = [], seen = new Set();
+        for(let s of batch.sigs){
+            let pubkey = String(s.pubkey || '').toLowerCase();
+            let sig    = String(s.sig || '').toLowerCase();
+            if(seen.has(pubkey)) continue;
+
+            let capable;
+            if(capableSet){
+                capable = capableSet.has(pubkey);
+            } else {
+                capable = capabilityCache.get(pubkey);
+                if(capable === undefined){
+                    capable = await this.indexerDb.hasCapability(pubkey, 'attestation', anchor);
+                    capabilityCache.set(pubkey, capable);
+                }
+            }
+            if(!capable) continue;
+            if(!ed25519.verify(canonical, sig, pubkey)) continue;
+
+            seen.add(pubkey);
+            signers.push(pubkey);
+        }
+
+        if(swq.isStakeWeightedQuorumActive(anchor, network)){
+            let validators = await this.indexerDb.getStakeWeightsByCapability('attestation', anchor);
+            if(!swq.meetsStakeThreshold(validators, signers))
+                return { ok: false, error: 'invalid: insufficient signer stake' };
+        } else {
+            let n = await this.indexerDb.getActiveCapabilityCount('attestation', anchor);
+            let quorum = (n <= 1) ? 1 : Math.max(2 * Math.floor((n - 1) / 3) + 1, Math.ceil((n + 1) / 2));
+            if(signers.length < quorum)
+                return { ok: false, error: 'invalid: insufficient PBFT quorum (' + signers.length + '/' + quorum + ')' };
+        }
+        return { ok: true, signers: signers };
     }
 
     // Compute the responsible validator set for a given request (same deterministic rule
@@ -1230,7 +1888,17 @@ class Attest {
             data['RESPONSIBLE_SET_JSON'] = JSON.stringify(responsibleSet);
         }
 
-        await this.indexerDb.createAttestationRequest(data);
+        // Withhold the row of a REFUSED v3, so the id it named stays free. The single-v0
+        // guard in db.createAttestationRequest counts every stored v0 row, and a relay
+        // id rides the wire, so a stored refusal answers that guard for the federation's
+        // real relay and drops it silently and permanently. Same shape as the two other
+        // ways a v3 fails to be a relay (wrong chain, below activation): nothing
+        // persisted, nothing hashed, the verdict still on the action row. Flag-day
+        // gated, plane and arming state in attest_relay_reject_slot_activation.js.
+        let withholdRefusal = (data['REQUEST_STATUS'] === 'rejected') &&
+            relayRejectSlot.isAttestRelayRejectSlotActive(data['BLOCK_TIME'], this.config['NETWORK']);
+        if(!withholdRefusal)
+            await this.indexerDb.createAttestationRequest(data);
         await this.mapper.createMappings(data);
     }
 
@@ -1524,6 +2192,23 @@ class Attest {
     //                 reimbursement + N*share can never exceed the escrow by a ULP.
     async _broadcastFeeReimbursement(request, data, responsible, feeAmount, feeCap){
         if(!responsible || responsible.length === 0) return '0';
+
+        // RETIRED at and above the response-mirror flag day. Nobody broadcasts a
+        // mirror-era response, so there is no miner fee to reimburse and the carve-out
+        // would pay back a cost no validator ever paid. Returning '0' retires all three
+        // halves of the carve-out in one place: the caller writes no `attest_bcast` row,
+        // leaves `splitPool` as the untouched escrow, and the WHOLE escrow splits among
+        // the signers, so per-signer amounts RISE by exactly the retired carve-out for a
+        // post-activation request. Below the height nothing here is reached differently
+        // and the legacy ledger is byte-identical.
+        //
+        // Judged on the REQUEST's own block through the one era predicate, never on the
+        // settling action's: a request admitted under the legacy rules settles under them
+        // however late its response lands, which is the same plane the gate on the chain
+        // handler and the mirror applier use. The mirror applier settles through this same
+        // routine, so its fee split is retired here too rather than in a second place.
+        if(this.isMirrorEraRequest(request)) return '0';
+
         if(!attestBcastFee.isAttestBroadcastFeeActive(data['BLOCK_INDEX'], this.config['NETWORK']))
             return '0';
 
@@ -1728,3 +2413,4 @@ class Attest {
 
 module.exports = Attest;
 module.exports.REQUEST_ID_PREIMAGE_FIELDS = REQUEST_ID_PREIMAGE_FIELDS;
+module.exports.ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK = ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK;

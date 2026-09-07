@@ -100,19 +100,40 @@ class Callback {
             }
         }
 
-        // Calculate total number of database hits for this CALLBACK. LEGACY_FEE_NUMERIC_DBHITS
-        // gates the db_hits string-concatenation fix: below the flag-day reproduce the
-        // original `+= bcmul(...)` concatenation byte-for-byte (4 + "6" -> "46") for
-        // pre-activation replay parity; at/above it accumulate numerically. See protocol_changes.js.
-        let numericDbHits = await this.actions.protocolChanges.isEnabled('LEGACY_FEE_NUMERIC_DBHITS', data['BLOCK_INDEX']);
-        let db_hits = 4;                                                                       // 1 debits, 1 credits, 1 balances, 1 callback
-        if(numericDbHits)
-            db_hits += (recipients) ? Number(Object.keys(recipients).length) * 3 : 0;          // 1 debits, 1 credits, 1 balances
-        else
-            db_hits += (recipients) ? this.util.bcmul(Object.keys(recipients).length, 3, 0) : 0;
+        // Determine the total transaction FEE. UNIFIED_FEES_SWEEP_CALLBACK gates the move off
+        // the legacy per-DB-hit model: the legacy price has no floor, so on LTC/DOGE (where
+        // detectFeePaymentMode REJECTS a missing native-coin fee output rather than falling
+        // back to an XCHAIN debit) a small CALLBACK priced below the chain's dust threshold
+        // and could not be submitted at all. Below the flag-day the legacy model is
+        // reproduced exactly so a pre-activation replay commits the identical fee. See
+        // protocol_changes.js.
+        let unifiedFees = await this.actions.protocolChanges.isEnabled('UNIFIED_FEES_SWEEP_CALLBACK', data['BLOCK_INDEX']);
+        if(unifiedFees){
+            // Unified gas schedule: a flat base plus per-recipient gas, at DIVIDEND/AIRDROP
+            // per-recipient parity. `recipients` is the post-ALLOW_LIST/BLOCK_LIST set the
+            // settlement block below credits, which is the same count the legacy db_hits term
+            // used, so only the price changes.
+            let result = this.util.getUnifiedBaseItemFee(Object.keys(recipients).length, 'CALLBACK_BASE', 'CALLBACK_PER_RECIPIENT');
+            fees['GAS_COST']    = result.gasCost;
+            fees['AMOUNT']      = result.fee;
+            fees['FEE_VERSION'] = 2;
+        } else {
+            // Legacy: database hits model. LEGACY_FEE_NUMERIC_DBHITS gates the db_hits
+            // string-concatenation fix: below THAT flag-day reproduce the original
+            // `+= bcmul(...)` concatenation byte-for-byte (4 + "6" -> "46") for
+            // pre-activation replay parity; at/above it accumulate numerically. See
+            // protocol_changes.js.
+            let numericDbHits = await this.actions.protocolChanges.isEnabled('LEGACY_FEE_NUMERIC_DBHITS', data['BLOCK_INDEX']);
+            let db_hits = 4;                                                                   // 1 debits, 1 credits, 1 balances, 1 callback
+            if(numericDbHits)
+                db_hits += (recipients) ? Number(Object.keys(recipients).length) * 3 : 0;      // 1 debits, 1 credits, 1 balances
+            else
+                db_hits += (recipients) ? this.util.bcmul(Object.keys(recipients).length, 3, 0) : 0;
+            fees['AMOUNT'] = this.util.getTransactionFee(db_hits, fees['TICK']);
+        }
 
         // Emitted (VM-synthesized) actions pay no separate per-tx fee; see util.feeForAction.
-        fees['AMOUNT'] = this.util.feeForAction(this.util.getTransactionFee(db_hits, fees['TICK']), data);
+        fees['AMOUNT'] = this.util.feeForAction(fees['AMOUNT'], data);
 
         /*****************************************************************
          * TICK Validations

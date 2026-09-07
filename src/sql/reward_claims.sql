@@ -16,7 +16,7 @@ DROP TABLE IF EXISTS reward_claims;
 CREATE TABLE reward_claims (
     action_index        BIGINT UNSIGNED NOT NULL,
     source_id           BIGINT UNSIGNED NOT NULL,
-    amount              VARCHAR(250) NOT NULL,
+    amount              VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
     status_id           BIGINT UNSIGNED,
     block_index         BIGINT UNSIGNED NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;

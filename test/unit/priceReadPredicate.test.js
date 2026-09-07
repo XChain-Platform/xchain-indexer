@@ -73,9 +73,13 @@ function makeDb() {
     const db = new Database('127.0.0.1', 3306, 'xchain_btc_regtest', 'u', 'p', indexer);
     // Every read site below must assert BEFORE it queries, so a stub that fails
     // the test if it is ever reached proves the assertion fires first.
-    sinon.stub(db, 'doQuery').callsFake(() => {
+    // Both helpers: the barrier-guarded price reads run through doQueryStrict (M-17),
+    // so a tripwire on the permissive one alone would stop proving anything.
+    const tripwire = () => {
         throw new Error('doQuery reached: the price-barrier assertion did not fire first');
-    });
+    };
+    sinon.stub(db, 'doQuery').callsFake(tripwire);
+    sinon.stub(db, 'doQueryStrict').callsFake(tripwire);
     return db;
 }
 

@@ -144,6 +144,21 @@ const MAX_ANCHOR_PAGES = 25;
 const NODE_CLASS_DEPENDENT_STATUS =
     /^(?:unverified|invalid: insufficient|invalid: SECTION \d+ insufficient|invalid_archive)/i;
 
+// Can this row be evidence for the reward tuple at all? The three chain-data terms _judge's
+// evidence loop applies before it will accept a row: not deterministically invalid, right
+// checkpoint network, right publisher. Factored out so the old-peer bundle-header
+// reconstruction in _judge (which has no action identity to group on) narrows its maximum
+// with EXACTLY the predicates the loop will later apply, and the two can never drift apart
+// into a header no candidate row can equal. The version-family term stays at each call site,
+// which already knows which family it is asking about.
+function isRewardCandidateRow(a, network, publisher){
+    let status = String((a && a.status) || '');
+    if(/^invalid/i.test(status) && !NODE_CLASS_DEPENDENT_STATUS.test(status)) return false;
+    if(String((a && a.checkpoint_network) || '') !== network) return false;
+    if(String((a && a.publisher) || '').toLowerCase() !== publisher) return false;
+    return true;
+}
+
 class AnchorProofClient {
 
     // `config` is the indexer config (COIN/NETWORK). `opts.timeoutMs` bounds each call;
@@ -342,21 +357,57 @@ class AnchorProofClient {
         // indexer writes the SECTION's value onto the section's row, so no single row reports
         // the header. The parser proves the header IS the maximum over the sections (a header
         // above every section would move the attestation round, and the reward's earn block,
-        // onto an oracle_publish set no section signed against), so the maximum over the v0
-        // rows of this transaction reconstructs it exactly. The hub keys the one bundle reward
-        // on that header block, so binding here is what stops a LAGGING section, riding the
-        // bundle at its own older block, from proving a reward at that older block: a reward
-        // the federation never attested and the bundle never earned. Rows above are complete by
-        // construction (proveMined walks every page before judging), and one transaction
-        // carries one bundle, so this maximum is that bundle's header and nothing else.
-        let bundleBlock = null;
+        // onto an oracle_publish set no section signed against), so the maximum over ONE
+        // BUNDLE's rows reconstructs it exactly. The hub keys the one bundle reward on that
+        // header block, so binding here is what stops a LAGGING section, riding the bundle at
+        // its own older block, from proving a reward at that older block: a reward the
+        // federation never attested and the bundle never earned.
+        //
+        // SCOPED PER ACTION, not per transaction. "One transaction carries one bundle" is a
+        // convention of the publishing hub, not a rule of the wire: a BATCH gives each command
+        // its own action_index, so anyone can ride a second ANCHOR on the same DOGE
+        // transaction, and even a bundle too malformed to yield a section still writes a row
+        // carrying its header block. A transaction-wide maximum let that unrelated row raise
+        // the header above the real bundle's, so the genuine section never equalled it, the
+        // loop below fell through to a positively-detected mis-bind, and proveMined memoized a
+        // permanent 'rejected' - a legitimate COLLECT-spendable reward forfeited by a
+        // third-party write. Grouping on action_index is what the wire actually means by "this
+        // bundle", so two anchors on one transaction can no longer perturb each other.
+        //
+        // The grouping needs the row identity, which a DOGE indexer predating that field does
+        // not serve. Answering 'unknown' there is not an option (it raises
+        // AnchorProofUnavailableError, halting block processing fleet-wide until the peer is
+        // upgraded), so the old-peer path keeps ONE maximum but takes it only over rows that
+        // pass the same version / deterministic-invalid / network / publisher predicates the
+        // evidence loop applies. That is strictly narrower than the transaction-wide maximum it
+        // replaces and is still fleet-deterministic (every term is chain data), so 'rejected'
+        // stays memoizable; it cannot close the case of a forged sibling naming the real
+        // publisher under a node-class-dependent status, which is why identity is the fix and
+        // this is the fallback.
+        //
+        // Consensus note: this changes which rewards derive, so it is deployed like the other
+        // pre-arming remedies in anchor_reward_activation.js - remedy in code while
+        // ANCHOR_REWARD_DERIVE_ACTIVATION.mainnet is inert (null), with the operator ratifying
+        // a height only once the whole fleet carries it. It needs no gate of its own.
+        let bundleBlockByAction = new Map();
+        let bundleBlockFiltered = null;
         if(family === 'bundle'){
             for(let a of anchors){
                 // Either era's bundle rows (v0, or pre-restart v7) reconstruct the header;
-                // one transaction carries one bundle, so the eras never mix on one txid.
+                // one bundle is one era, so the eras never mix within an action.
                 if(!REWARD_FAMILY_VERSIONS.bundle.includes(Number(a.version))) continue;
                 let b = Number(a.snapshot_block);
-                if(Number.isFinite(b) && (bundleBlock === null || b > bundleBlock)) bundleBlock = b;
+                if(!Number.isFinite(b)) continue;
+                let ai = Number(a.action_index);
+                if(Number.isInteger(ai)){
+                    let cur = bundleBlockByAction.get(ai);
+                    if(cur === undefined || b > cur) bundleBlockByAction.set(ai, b);
+                }
+                // Old-peer fallback only. Sections of one action share status, network and
+                // publisher (they are written from one decoded action), so filtering here
+                // never drops a genuine section of a bundle this node could prove.
+                if(!isRewardCandidateRow(a, network, publisher)) continue;
+                if(bundleBlockFiltered === null || b > bundleBlockFiltered) bundleBlockFiltered = b;
             }
         }
         let sawAttested = false;
@@ -367,26 +418,32 @@ class AnchorProofClient {
             // section can never prove an archive reward and an archive head can never prove a
             // bundle one, in either era, whatever else on the transaction matches.
             if(!versions.includes(Number(a.version))) continue;
-            // Decoded-invalid never anchored anything, EXCEPT where the invalidity is a
-            // node-class verdict rather than chain data (NODE_CLASS_DEPENDENT_STATUS above):
-            // those are skipped as evidence so two BTC nodes reading different DOGE indexers
-            // cannot decide the same reward tuple oppositely and fork the derived set.
-            let status = String(a.status || '');
-            if(/^invalid/i.test(status) && !NODE_CLASS_DEPENDENT_STATUS.test(status)) continue;
-            if(String(a.checkpoint_network || '') !== network) continue;
+            // The three chain-data terms, applied through isRewardCandidateRow above so the
+            // old-peer header reconstruction narrows on exactly what this loop will accept:
+            //   - Decoded-invalid never anchored anything, EXCEPT where the invalidity is a
+            //     node-class verdict rather than chain data (NODE_CLASS_DEPENDENT_STATUS
+            //     above): those are skipped as evidence so two BTC nodes reading different DOGE
+            //     indexers cannot decide the same reward tuple oppositely and fork the set.
+            //   - The checkpoint network must be the reward's.
+            //   - The publisher must be the elected one the reward pays.
             // No CHAIN term: neither live family binds one. The archive XANCPUB canonical keys on
             // MATCH_BATCH_SEQ, and its head carries the chain of whatever checkpoint wrapped it;
             // a bundle is ONE action carrying every checkpointed chain as a section under one
             // publisher tail and one reward keyed on the bundle SNAPSHOT_BLOCK, so it is bound to
             // the BUNDLE and names no chain at all. The retired per-chain family was the only one
             // that needed the term, and it can no longer be proven at all (see rewardFamily).
-            if(String(a.publisher || '').toLowerCase() !== publisher) continue;
+            if(!isRewardCandidateRow(a, network, publisher)) continue;
             // On a v0 section row this column is the SECTION's own snapshot block, not the
             // bundle header's, because a lagging chain rides a bundle at its own block. So the
             // bundle leg holds the row to BOTH values: the reward's snapshot block and the
             // reconstructed header above. The two together prove the row is the header-block
             // section of the bundle the reward names.
-            if(family === 'bundle' && Number(a.snapshot_block) !== bundleBlock) continue;
+            if(family === 'bundle'){
+                let ai = Number(a.action_index);
+                let header = bundleBlockByAction.has(ai) ? bundleBlockByAction.get(ai)
+                                                         : bundleBlockFiltered;
+                if(Number(a.snapshot_block) !== header) continue;
+            }
             if(Number(a.snapshot_block) !== snapshot) continue;
             // The round term per family. Archive: match_batch_seq. Bundle: the snapshot block
             // itself, because a bundle's round_reference IS its SNAPSHOT_BLOCK (one reward per
