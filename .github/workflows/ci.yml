@@ -294,6 +294,12 @@ jobs:
       # floor, which reads as a coverage collapse and is really a missing checkout.
       - name: Check out declared sibling repositories
         uses: XChain-Platform/.github/actions/checkout-siblings@master # one definition for every call site; see the action for why this tracks master
+        # Same release-awareness as the shared workflow call above, and it has
+        # to be the same expression: the coverage ratchet re-runs the unit
+        # suite, so a sibling pinned at develop makes it measure the bundled
+        # snapshot against a version develop is never going to carry.
+        with:
+          ref: ${{ startsWith(github.head_ref, 'release/') && github.head_ref || '' }}
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
