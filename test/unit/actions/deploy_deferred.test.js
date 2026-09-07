@@ -48,8 +48,15 @@ describe('Deferred chunked DEPLOY assembly @regression @tier2', function () {
     let indexer, ctx, db, handler, ledgerWrites;
 
     // gateOn / balance / chunkRows / pendingAssembler are the four axes every case below moves.
-    function build({ gateOn = true, balance = '1000', chunkRows = [], pendingAssembler = null, ctorGas = 5000 } = {}){
+    // scheduleOverrides is a fifth, narrow one: the gas-parity test neutralizes
+    // VM_DEPLOY_PER_BYTE so DEPLOY_INLINE collapses to the same base DEPLOY_CHUNKED always
+    // charges. Reassigned on THIS call's own config object only (never mutated in place),
+    // since src/configs/_adapter.js hands every getConfig() call the SAME cached
+    // GAS_SCHEDULE object and an in-place edit would leak into every other test file.
+    function build({ gateOn = true, balance = '1000', chunkRows = [], pendingAssembler = null, ctorGas = 5000, scheduleOverrides = null } = {}){
         const config = getTestConfig();
+        if(scheduleOverrides)
+            config['GAS_SCHEDULE'] = Object.assign({}, config['GAS_SCHEDULE'], scheduleOverrides);
         indexer = createMockIndexer({ config });
         db = indexer.indexerDb;
         for(const m of ['createContract','createContractPermission','deleteContract','createContractExecution',
@@ -119,6 +126,18 @@ describe('Deferred chunked DEPLOY assembly @regression @tier2', function () {
             assert.strictEqual(contractRow().STATUS, 'pending: CODE_HASH (awaiting chunks)');
             assert.strictEqual(contractRow().CODE_HASH, HASH);   // NOT sha256('')
             assert.strictEqual(contractRow().CODE, '');
+            assert.strictEqual(execRow().ERROR_MESSAGE, null);   // a pending landing is not a failure
+        });
+
+        it('lands PENDING when a middle position is missing, not just when no chunks exist at all', async function () {
+            // 'missing chunk i' is the OTHER repairable (incomplete) assembly verdict: only
+            // position 0 of a declared 2-chunk group has arrived. Same landing as no-chunks-at-all.
+            build({ chunkRows: [carrierChunk({ chunk_index: 0, total_chunks: 2, action_index: 10 })] });
+            const data = assemblerData();
+            await handler.parse(['2', HASH, '100000', 'x'], data, null);
+            assert.strictEqual(data['STATUS'], 'pending: CODE_HASH (awaiting chunks)');
+            assert.strictEqual(contractRow().CODE_HASH, HASH);
+            assert.strictEqual(contractRow().CODE, '');
         });
 
         it('charges the base gas at the assembler and records the mode it paid in', async function () {
@@ -178,6 +197,36 @@ describe('Deferred chunked DEPLOY assembly @regression @tier2', function () {
             const data = assemblerData();
             await handler.parse(['2', HASH, '100000', 'x'], data, null);
             assert.strictEqual(data['STATUS'], 'invalid: SOURCE (sleeping)');
+        });
+
+        it('lets the chunk verdict win over a broken native fee below the flag day', async function () {
+            // Pre-activation: the incomplete-group error is assigned BEFORE the fee/sleeping
+            // checks even run (deploy.js's `else { error = assembly.error; }` branch), so a
+            // simultaneously-broken fee output cannot surface here as it does post-activation.
+            build({ gateOn: false, chunkRows: [] });
+            indexer.util.detectFeePaymentMode = () => 'rejected';
+            const data = assemblerData();
+            await handler.parse(['2', HASH, '100000', 'x'], data, null);
+            assert.strictEqual(data['STATUS'], 'invalid: CODE_HASH (no chunks)');
+        });
+
+        it('lets the chunk verdict win over a sleeping source below the flag day', async function () {
+            build({ gateOn: false, chunkRows: [] });
+            db.isActionAllowed.resolves(false);
+            const data = assemblerData();
+            await handler.parse(['2', HASH, '100000', 'x'], data, null);
+            assert.strictEqual(data['STATUS'], 'invalid: CODE_HASH (no chunks)');
+        });
+
+        it('pays the base fee via a native output at the assembler, recording mode 1', async function () {
+            build({ chunkRows: [] });
+            indexer.util.detectFeePaymentMode = () => 'native';
+            indexer.util.validateNativeCoinFee = async () => ({ valid: true, nativeCoinAmount: '0.001', nativeCoin: 'BTC', oracleRound: 7 });
+            const data = assemblerData();
+            await handler.parse(['2', HASH, '100000', 'x'], data, null);
+            assert.strictEqual(data['STATUS'], 'pending: CODE_HASH (awaiting chunks)');
+            assert.strictEqual(execRow().FEE_PAYMENT_MODE, 1);
+            assert.strictEqual(totalDebited(), 0);   // native: the base rides the tx output, not the ledger
         });
 
         it('is unchanged below the flag day: an early assembler is invalid and pays no gas', async function () {
@@ -295,6 +344,15 @@ describe('Deferred chunked DEPLOY assembly @regression @tier2', function () {
             assert.strictEqual(contractRow().STATUS, 'valid');
             assert.strictEqual(execRow().FEE_PAYMENT_MODE, 1);
             assert.strictEqual(totalDebited(), 0);   // native: neither leg debits XCHAIN
+
+            // Matches an inline native deploy of the same source exactly: neither ever
+            // debits XCHAIN, because constructor gas is charged only in XCHAIN mode (D3/D15).
+            build({ chunkRows: [] });
+            indexer.util.detectFeePaymentMode = () => 'native';
+            indexer.util.validateNativeCoinFee = async () => ({ valid: true, nativeCoinAmount: '0.001', nativeCoin: 'BTC', oracleRound: 7 });
+            await handler.parse(['0', B64, '100000', 'x'], carrierData({ FORMAT: 0, ACTION_INDEX: 950 }), null);
+            assert.strictEqual(contractRow().STATUS, 'valid');
+            assert.strictEqual(totalDebited(), 0);
         });
 
         it('is unchanged below the flag day: a carrier never looks for an assembler', async function () {
@@ -302,6 +360,38 @@ describe('Deferred chunked DEPLOY assembly @regression @tier2', function () {
             await handler.parse(['4', HASH, '0', '1', B64], carrierData(), null);
             assert.strictEqual(db.getPendingDeployAssembler.callCount, 0);
             assert.strictEqual(db.createContract.callCount, 0);
+        });
+    });
+
+    describe('Gas parity: A + C sum to an inline deploy of the same source', function () {
+
+        it("A's base gas_used plus C's constructor gas_used equals a single inline deploy's total", async function () {
+            // DEPLOY_CHUNKED always charges VM_DEPLOY_BASE alone (its v4 carriers already paid
+            // per-byte separately), while DEPLOY_INLINE also charges per byte for the code
+            // itself. Neutralizing VM_DEPLOY_PER_BYTE collapses the two bases to the same
+            // number, isolating the claim under test (the per-byte asymmetry between a
+            // carrier's b64 slice and an inline deploy's decoded bytes is a separate,
+            // already-documented approximation - deploy_chunk.js's file header "net cost ~=" -
+            // not this one).
+            const CTOR_GAS = 4242;
+            const zero = { VM_DEPLOY_PER_BYTE: 0 };
+
+            build({ chunkRows: [], ctorGas: CTOR_GAS, scheduleOverrides: zero });
+            await handler.parse(['2', HASH, '100000', 'x'], assemblerData(), null);
+            const gasAtA = Number(execRow().GAS_USED);
+
+            build({ chunkRows: [carrierChunk()], pendingAssembler: assemblerRow(), ctorGas: CTOR_GAS, scheduleOverrides: zero });
+            await handler.parse(['4', HASH, '0', '1', B64], carrierData(), null);
+            const gasAtC = Number(execRow().GAS_USED);
+
+            build({ ctorGas: CTOR_GAS, scheduleOverrides: zero });
+            await handler.parse(['0', B64, '100000', 'x'], carrierData({ FORMAT: 0, ACTION_INDEX: 950 }), null);
+            const gasInline = Number(execRow().GAS_USED);
+
+            assert.strictEqual(gasAtA, 100000);      // VM_DEPLOY_BASE
+            assert.strictEqual(gasAtC, CTOR_GAS);    // constructor only (D3 split)
+            assert.strictEqual(gasInline, 100000 + CTOR_GAS);
+            assert.strictEqual(gasAtA + gasAtC, gasInline);
         });
     });
 });
