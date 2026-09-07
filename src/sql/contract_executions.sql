@@ -24,10 +24,13 @@ CREATE TABLE contract_executions (
     status_id           BIGINT UNSIGNED NOT NULL,
     error_message       TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
     emitted_count       INT UNSIGNED NOT NULL DEFAULT 0,
-    block_index         BIGINT UNSIGNED NOT NULL
+    block_index         BIGINT UNSIGNED NOT NULL,
+    assembler_action_index BIGINT UNSIGNED,             -- deferred chunked DEPLOY: the pending assembler this constructor row consumed; NULL for inline and self-completed deploys
+    fee_payment_mode    TINYINT UNSIGNED                 -- DEPLOY constructor rows from DEPLOY_DEFERRED_ASSEMBLY on: 1 native, 2 XCHAIN (read at the completing carrier)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
-CREATE UNIQUE INDEX action_index   ON contract_executions (action_index);
-CREATE        INDEX contract_index ON contract_executions (contract_index);
-CREATE        INDEX caller_id      ON contract_executions (caller_id);
-CREATE        INDEX block_index    ON contract_executions (block_index);
+CREATE UNIQUE INDEX action_index           ON contract_executions (action_index);
+CREATE        INDEX contract_index         ON contract_executions (contract_index);
+CREATE        INDEX caller_id              ON contract_executions (caller_id);
+CREATE        INDEX block_index            ON contract_executions (block_index);
+CREATE        INDEX assembler_action_index ON contract_executions (assembler_action_index);
