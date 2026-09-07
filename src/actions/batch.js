@@ -751,13 +751,9 @@ class Batch {
             let weight = this.commandWeights[action];
             if(weight === undefined)
                 return 1;
-            // Chunk-carrier DEPLOY (format 4) takes the default row-write weight rather than
-            // DEPLOY's VM weight. The bound is the DEPLOY name cap, not the carrier's own work:
-            // gatedActionLimits['DEPLOY'] = 1 above admits ONE DEPLOY of ANY format per batch,
-            // so whether or not a carrier can complete a chunk group and run its constructor
-            // (it can, from the DEPLOY_DEFERRED_ASSEMBLY flag day), a batch still buys at most
-            // the single constructor the weight-30 seat already permits. The format comes from
-            // the same util.getFormatVersion(params[0]) derivation the dispatcher uses (see the
+            // Chunk-carrier DEPLOY (format 4) runs no constructor, so it takes the default
+            // row-write weight rather than DEPLOY's VM weight. The format comes from the same
+            // util.getFormatVersion(params[0]) derivation the dispatcher uses (see the
             // commandWeights['DEPLOY'] note above); anything unparseable falls through to the
             // full weight, which is the safe (over-charging) direction.
             if(action === 'DEPLOY' && this.util.getFormatVersion(String(command).split('|')[1]) === 4)
