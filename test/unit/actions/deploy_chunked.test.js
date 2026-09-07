@@ -59,8 +59,12 @@ describe('Chunked DEPLOY: v4 carrier handler @regression @tier2', function () {
         indexer.indexerDb.isActionAllowed.resolves(true);
         indexer.indexerDb.getTokenInfo.resolves({ TICK_ID: 1 });
         indexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
-        ctx = { config: indexer.config, util: indexer.util, mapper: indexer.mapper, decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb };
-        handler = new DeployChunk(ctx);
+        // Pre-activation carrier behaviour: with DEPLOY_DEFERRED_ASSEMBLY off, a stored carrier
+        // never looks for a pending assembler and can never deploy. The post-activation carrier
+        // is driven in deploy_deferred.test.js.
+        ctx = { config: indexer.config, util: indexer.util, mapper: indexer.mapper, decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb,
+                protocolChanges: { isEnabled: sinon.stub().resolves(false) } };
+        handler = new DeployChunk(ctx, new Deploy(ctx));
         indexer.util.resetLists();
     });
     afterEach(function () { sinon.restore(); });
@@ -132,7 +136,12 @@ describe('Chunked DEPLOY : DEPLOY v2/v3 assembly @regression @tier2', function (
         indexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
         // Inline (v0/v1) decode is gated on DEPLOY_BASE64_CODE; default the stub to
         // enabled (base64) so these v0/v1 fixtures behave as on a post-activation node.
-        ctx = { config: indexer.config, util: indexer.util, mapper: indexer.mapper, decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb, vm: { validateSyntax: () => ({ valid: true, errors: [] }), checkFloatWarnings: () => [], readManifest: async () => ({ ok: true, methods: [] }), execute: async () => ({ success: true, gasUsed: 0 }) }, protocolChanges: { isEnabled: sinon.stub().resolves(true) } };
+        // Every gate on EXCEPT DEPLOY_DEFERRED_ASSEMBLY: these cases pin the PRE-activation
+        // chunk verdicts (an incomplete group is invalid at the assembler, byte-for-byte as it
+        // has always been). The post-activation verdicts live in deploy_deferred.test.js.
+        const isEnabled = sinon.stub().resolves(true);
+        isEnabled.withArgs('DEPLOY_DEFERRED_ASSEMBLY', sinon.match.any).resolves(false);
+        ctx = { config: indexer.config, util: indexer.util, mapper: indexer.mapper, decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb, vm: { validateSyntax: () => ({ valid: true, errors: [] }), checkFloatWarnings: () => [], readManifest: async () => ({ ok: true, methods: [] }), execute: async () => ({ success: true, gasUsed: 0 }) }, protocolChanges: { isEnabled } };
         handler = new Deploy(ctx);
         indexer.util.resetLists();
     });
