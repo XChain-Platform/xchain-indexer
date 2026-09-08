@@ -134,15 +134,23 @@ class HubClient {
     // Push a chain tip update to the hub (fire-and-forget). Network is
     // optional; older hubs ignore it, newer ones use it to scope the
     // chain_tips entry so multi-network hubs don't collide on 'mainnet'.
-    async pushChainTip(coin, network, blockHeight, blockTime){
+    //
+    // chainId is the block-1 hash of this chain, sent by the BITCOIN indexer only: it is
+    // how the hub learns which Bitcoin chain instance it is serving, so it can stamp its
+    // cross-chain rows with it and every mirror can refuse the rows of a chain that was
+    // re-genesised out from under a hub database. Omitted from the params when absent, so
+    // an older hub and every non-BTC indexer are on exactly the wire they were.
+    async pushChainTip(coin, network, blockHeight, blockTime, chainId){
         if(!this.enabled) return;
         try {
-            await this._call('pushchaintip', {
+            let params = {
                 coin:         coin,
                 network:      network,
                 block_height: blockHeight,
                 block_time:   blockTime
-            });
+            };
+            if(chainId !== null && chainId !== undefined) params.chain_id = chainId;
+            await this._call('pushchaintip', params);
         } catch (err) {
             console.warn('HubClient: pushChainTip failed:', err);
         }

@@ -30,6 +30,7 @@ CREATE TABLE capability_snapshots (
                                                              -- for. Quorum weight is per-source, NOT
                                                              -- per-key (DELEGATE v0 is additive).
     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    btc_chain_id   CHAR(64),                                 -- hash of BTC block 1 on the writing hub's chain; NULL accepted by every mirror; transport, not consensus (never in a canonical)
     -- Presence of a row = that pubkey QUALIFIED for `capability` at `snapshot_block`
     -- (the hub only mirrors pubkeys already filtered by min_stake). Lets a non-BTC
     -- indexer verify cross-chain match signatures without local capability stakes.

@@ -584,6 +584,41 @@ class HubDbSync {
         // arms and the fences above stand alone, as before.
         this.network = options.network || null;
 
+        // ── Chain identity for the three CROSS_CHAIN_TABLES ─────────────────────────
+        //
+        // `network` above scopes a mirrored row to mainnet/testnet/regtest, and on regtest
+        // that is not enough: one network name spans every Bitcoin chain a venue has ever
+        // had. A venue that re-genesises its Bitcoin chain without rebuilding the hub
+        // database keeps serving the dead chain's finalized matches and capability
+        // snapshots, and every fresh indexer mirrors all of them (measured on the
+        // regtest venue 2026-09-08: two relic matches and 33 snapshots, evaluated at every
+        // block against a validator set that no longer exists on the chain).
+        //
+        // The identity is the hash of BITCOIN BLOCK 1 on the chain the hub's Bitcoin indexer
+        // follows, carried on the wire and locally as `btc_chain_id`. Block 0 cannot serve:
+        // the regtest genesis hash is a chainparams constant, identical across every
+        // re-genesis, while block 1 commits to the instant the chain was created.
+        //
+        // Two sources, and they are NOT equal. A Bitcoin indexer reads block 1 from its own
+        // decoder database and sets it 'local': that is this node's own measurement of the
+        // chain it indexes, and no hub can overrule it. Every other consumer (a DOGE or LTC
+        // indexer, the explorer's vendored display mirror) has no Bitcoin chain of its own to
+        // read and learns the id 'hub', from the value the hub advertises on the three
+        // snapshot envelopes; a hub id is FOLLOWED, so a re-genesis the hub has already
+        // adopted cannot strand a running non-BTC mirror on rows it refuses forever.
+        //
+        // A NULL on a row is always accepted: every row written before the column existed
+        // carries NULL, so mainnet and testnet history keeps mirroring unchanged.
+        this._expectedBtcChainId = null;                   // 64 lowercase hex, or null while unknown
+        this._btcChainIdSource   = null;                   // 'local' | 'hub' | null
+        // Refusals waiting to be reported, keyed table + '|' + hash. Counted rather than
+        // logged per row, so a drain that refuses a whole relic table says so once.
+        this._refusedChainIdRows = new Map();
+        // One re-probe per unseen id and one warning per process, so a stream of foreign
+        // rows can storm neither the hub nor the log (see _maybeAdoptHubChainId).
+        this._chainIdProbedIds     = new Set();
+        this._foreignHubChainNoted = false;
+
         // Pending waitForSnapshotSync() resolvers. Unlike the match barrier (a cached
         // scalar max(effective_time)), snapshot-presence is set-dependent: a match can
         // only be settled once the capability_snapshots row set for its snapshot_block is
@@ -1151,6 +1186,7 @@ class HubDbSync {
                 // sides of it. A row with no usable block_timestamp (0/absent) is never
                 // bounded out - the bound only ever narrows on evidence.
                 let boundOut = false;
+                let refused  = false;
                 if (priceHorizon > 0) {
                     let rowTs = Number(row.block_timestamp);
                     if (Number.isFinite(rowTs) && rowTs > 0 && rowTs < priceHorizon) {
@@ -1177,7 +1213,10 @@ class HubDbSync {
                 }
                 try {
                     if (boundOut) priceSkipped++;
-                    else if (!batched) await this._applyRow(table, row);
+                    // A row the chain-identity fence refuses reports false, and is counted
+                    // out of `applied` below: "bootstrapped N rows" must not include rows
+                    // this mirror deliberately did not take.
+                    else if (!batched) refused = ((await this._applyRow(table, row)) === false);
                     if (servedMatchIds) {
                         servedMatchIds.add(String(row.match_id));
                         let sid = Number(row.id);
@@ -1197,7 +1236,7 @@ class HubDbSync {
                             else servedPriceKeys.add(priceRoundKey(row.round_number, row.coin_pair));
                         }
                     }
-                    if (!boundOut) applied++;
+                    if (!boundOut && !refused) applied++;
                 } catch (err) {
                     applyErrors++;
                     console.warn('HubDbSync: failed to apply row in ' + table + ':', err);
@@ -1256,6 +1295,15 @@ class HubDbSync {
                 return null;
             }
 
+            // Chain-identity handshake, before a single row of this page is applied. The
+            // three cross-chain snapshot envelopes carry the hub's own btc_chain_id (the
+            // block-1 hash of the Bitcoin chain its indexer pushes tips from), which is how
+            // a consumer with no Bitcoin chain of its own - a DOGE or LTC indexer, the
+            // explorer's display mirror - learns which chain to fence on. A Bitcoin indexer
+            // has already set the id 'local' and setExpectedBtcChainId ignores this.
+            if (CROSS_CHAIN_TABLES.indexOf(table) !== -1)
+                await this.setExpectedBtcChainId(result.btc_chain_id, 'hub');
+
             pagesFetched++;
             for (let row of result.rows) {
                 fetched++;
@@ -1277,6 +1325,9 @@ class HubDbSync {
         console.log('HubDbSync: bootstrapped ' + applied + ' rows into ' + table +
             (priceSkipped > 0 ? ' (' + priceSkipped + ' row(s) below the ' + priceFloor +
                 ' mirror floor left unapplied)' : ''));
+        // One line per foreign chain this drain refused rows from, rather than one per row:
+        // a hub database that outlived a venue re-genesis serves its whole relic table.
+        this._reportRefusedChainRows(table);
 
         // Defense-in-depth: if the hub told us its max_id at subscription time and our
         // local copy is still behind that ceiling, the REST snapshot window may have
@@ -1637,6 +1688,183 @@ class HubDbSync {
             '(local cursor ' + localMax + ' above the hub ceiling ' + ceiling + '); the mirror will be rebuilt ' +
             'from the hub in full');
         return removed;
+    }
+
+    // ── Chain identity fence for the three CROSS_CHAIN_TABLES ────────────────────
+
+    // Record which Bitcoin chain this mirror's cross-chain rows must belong to.
+    //
+    // `source` is 'local' (this node read block 1 from its own decoder database) or 'hub'
+    // (the value the hub advertises on the snapshot envelopes); see the constructor for why
+    // a local id outranks a hub one. Anything else is ignored.
+    //
+    // A null or malformed id STATES NOTHING and leaves the current expectation alone. A hub
+    // that has not yet been told its chain advertises null, and clearing the expectation on
+    // that would drop the fence at exactly the moment relics are being served.
+    //
+    // Returns true when the expectation moved. On the first non-null value, and on every
+    // change after it, the local relics are purged (see _purgeForeignChainIdRows): rows
+    // applied before the identity was known - a freshly re-genesised chain has no block 1
+    // while the first bootstrap drains - are otherwise invisible to the apply-time filter
+    // for the life of the mirror.
+    async setExpectedBtcChainId(id, source) {
+        if (source !== 'local' && source !== 'hub') return false;
+        let next = (typeof id === 'string') ? id.trim().toLowerCase() : null;
+        if (next === null) return false;
+        if (!/^[0-9a-f]{64}$/.test(next)) {
+            console.warn('HubDbSync: ignoring a malformed btc_chain_id from the ' + source + ' source: ' + id);
+            return false;
+        }
+        // A local measurement is never replaced by a hub value; a disagreement is the hub's
+        // to explain, and it is reported rather than acted on.
+        if (source === 'hub' && this._btcChainIdSource === 'local') {
+            if (next !== this._expectedBtcChainId) this._noteForeignHubChain(next);
+            return false;
+        }
+        if (next === this._expectedBtcChainId) {
+            this._btcChainIdSource = source;               // same chain, now measured locally
+            return false;
+        }
+        let previous = this._expectedBtcChainId;
+        this._expectedBtcChainId = next;
+        this._btcChainIdSource   = source;
+        this._chainIdProbedIds.clear();
+        console.log('HubDbSync: cross-chain rows are fenced to Bitcoin chain ' + next + ' (block 1, ' +
+            (source === 'local' ? 'read from this node\'s own chain' : 'as advertised by the hub') + ')');
+        await this._purgeForeignChainIdRows(previous);
+        return true;
+    }
+
+    // The hub follows a different chain from the one this node indexes. Logged once per
+    // process: it is an operator-visible misconfiguration (or a hub that has not caught up
+    // with a venue re-genesis), not a per-row event, and the local measurement stands
+    // either way, so every row naming the hub's chain is refused.
+    _noteForeignHubChain(hubChainId) {
+        if (this._foreignHubChainNoted) return;
+        this._foreignHubChainNoted = true;
+        console.warn('HubDbSync: the hub follows a different chain (it advertises btc_chain_id ' + hubChainId +
+            ', this node indexes ' + this._expectedBtcChainId + '); its cross-chain rows for that chain are refused');
+    }
+
+    // Clear the mirrored cross-chain rows of a chain this mirror no longer follows.
+    //
+    // Runs when the expectation is first learned and whenever it changes, which is the one
+    // window the apply-time filter cannot cover: rows the hub served before block 1 existed
+    // were applied with no expectation to check them against, and nothing later re-delivers
+    // them for the filter to refuse.
+    //
+    // Deletion rests on the warrant _purgeForeignNetworkRows states: belonging to another
+    // chain is a property of the ROW, provable from the row and this mirror's own
+    // expectation, with no dependence on what one snapshot response happened to contain. A
+    // NULL is not such a property - it means "written before the column existed" - so NULL
+    // rows are always left in place.
+    async _purgeForeignChainIdRows(previous) {
+        let expected = this._expectedBtcChainId;
+        if (!expected) return 0;
+        let total = 0, refreshMatches = false, refreshCalls = false;
+        for (let table of CROSS_CHAIN_TABLES) {
+            let result;
+            try {
+                result = await this.hubDb.doQuery(
+                    'DELETE FROM ' + table + ' WHERE btc_chain_id IS NOT NULL AND btc_chain_id <> ?', [expected]);
+            } catch (e) {
+                console.warn('HubDbSync: could not clear foreign-chain rows from ' + table + ':', e);
+                continue;
+            }
+            // doQuery collapses a non-transactional query error into [], which carries no
+            // affectedRows and is otherwise indistinguishable from a clean zero-row delete.
+            // Say so: an unreported purge leaves relics that the apply-time filter can never
+            // reach again, which is the silent state this method exists to end.
+            let removed = Number(result && result.affectedRows);
+            if (!Number.isFinite(removed)) {
+                console.warn('HubDbSync: foreign-chain purge of ' + table + ' reported no result; ' +
+                    'if this mirror keeps holding rows from a dead chain, this read is where to look');
+                continue;
+            }
+            if (removed <= 0) continue;
+            total += removed;
+            console.warn('HubDbSync: purged ' + removed + ' ' + table + ' row(s) from ' +
+                (previous ? ('chain ' + previous) : 'another chain'));
+            if (table === 'cross_chain_matches') refreshMatches = true;
+            if (table === 'cross_chain_calls')   refreshCalls   = true;
+        }
+        // The two settlement barriers cache MAX(effective_time) over these tables, so a
+        // purge that removed the row holding the maximum must re-read it exactly as a
+        // retraction does; a cached scalar left high opens a barrier over rows that are gone.
+        try {
+            if (refreshMatches) await this._refreshMatchSyncTimestamp();
+            if (refreshCalls)   await this._refreshCallSyncTimestamp();
+            if (refreshMatches || refreshCalls) await this._releaseSnapshotWaiters();
+        } catch (e) {
+            console.warn('HubDbSync: could not refresh the sync barriers after a foreign-chain purge:', e);
+        }
+        return total;
+    }
+
+    // True when this row belongs to a Bitcoin chain other than the one this mirror follows,
+    // and must therefore not be applied.
+    //
+    // Only the three CROSS_CHAIN_TABLES carry the column. A NULL (or absent) value applies
+    // as before, and so does every row while no expectation is known: the fence refuses only
+    // on positive evidence that the row names a different chain.
+    //
+    // A refusal is NOT an apply error. The row is skipped, the cursor moves past it and the
+    // drain continues, because a relic is not a hole in the mirror - it is a row the mirror
+    // is supposed to be without - and failing the page closed here would wedge every
+    // settlement barrier forever against a hub database nobody purged.
+    _refuseForeignChainRow(table, row) {
+        if (CROSS_CHAIN_TABLES.indexOf(table) === -1) return false;
+        let expected = this._expectedBtcChainId;
+        if (!expected) return false;
+        let rowChainId = (row && typeof row.btc_chain_id === 'string') ? row.btc_chain_id.trim().toLowerCase() : null;
+        if (!rowChainId || rowChainId === expected) return false;
+        let key   = table + '|' + rowChainId;
+        let entry = this._refusedChainIdRows.get(key);
+        if (entry) entry.count++;
+        else this._refusedChainIdRows.set(key, { table: table, hash: rowChainId, count: 1 });
+        return true;
+    }
+
+    // Report the refusals counted for `table` since the last report, one line per foreign
+    // chain, and clear them. Called at the end of that table's drain (so a bootstrap that
+    // refused a whole relic table says so once, with the count) and after a refused live row.
+    _reportRefusedChainRows(table) {
+        for (let [key, entry] of Array.from(this._refusedChainIdRows.entries())) {
+            if (entry.table !== table) continue;
+            this._refusedChainIdRows.delete(key);
+            console.warn('HubDbSync: refused ' + entry.count + ' ' + entry.table + ' row(s) carrying btc_chain_id ' +
+                entry.hash + ' (this chain is ' + this._expectedBtcChainId + ')');
+        }
+    }
+
+    // A live row names a chain this mirror does not follow. Decide, ONCE per id, whether the
+    // mirror is the stale side.
+    //
+    // A 'hub' expectation is second-hand: such a consumer has no Bitcoin chain of its own to
+    // read, so a venue re-genesis the hub has already adopted reaches it only as rows it
+    // would otherwise refuse forever. Re-read ONE envelope; if the hub now advertises the
+    // row's id, that is the hub restating its own identity, and the mirror follows it (which
+    // purges the previous chain's rows before this row applies). A 'local' expectation is
+    // this node's own measurement of the chain it indexes and is never adopted away from.
+    async _maybeAdoptHubChainId(table, row) {
+        if (CROSS_CHAIN_TABLES.indexOf(table) === -1) return;
+        let expected = this._expectedBtcChainId;
+        if (!expected) return;
+        let rowChainId = (row && typeof row.btc_chain_id === 'string') ? row.btc_chain_id.trim().toLowerCase() : null;
+        if (!rowChainId || rowChainId === expected) return;
+        if (this._btcChainIdSource !== 'hub') { this._noteForeignHubChain(rowChainId); return; }
+        if (this._chainIdProbedIds.has(rowChainId)) return;  // asked once for this id already
+        this._chainIdProbedIds.add(rowChainId);
+        let envelope;
+        try {
+            envelope = await this._httpGet('/hub-db/snapshot/capability_snapshots?since_id=0&limit=1');
+        } catch (e) {
+            return;                                          // unreachable hub: refuse, and re-ask on a later id
+        }
+        let advertised = (envelope && typeof envelope.btc_chain_id === 'string')
+            ? envelope.btc_chain_id.trim().toLowerCase() : null;
+        if (advertised !== rowChainId) return;               // the hub does not claim this chain: refuse
+        await this.setExpectedBtcChainId(advertised, 'hub');
     }
 
     // Converge the half of a retract/revive the bootstrap cannot re-deliver (#3211).
@@ -2109,6 +2337,12 @@ class HubDbSync {
     // skipped -> finalized upgrade is keyed on VALUES(status), so a chunk holding
     // both states for one round converges to the same row either order.
     async _applyRowsBatched(table, rows) {
+        // The chain-identity fence lives in _applyRow, the single funnel every applied row
+        // passes through. A batch has no per-row verdict, so a CROSS_CHAIN_TABLES row must
+        // never travel this path: declining here keeps the three tables on the per-row path
+        // where the fence runs, and keeps that true if the batch is ever widened beyond
+        // price_snapshots.
+        if (CROSS_CHAIN_TABLES.indexOf(table) !== -1) return false;
         if (table !== 'price_snapshots') return false;
         if (this._batchApplyDisabled) return false;
         if (!Array.isArray(rows) || rows.length < 2) return false;
@@ -2163,6 +2397,11 @@ class HubDbSync {
     // anchor_txid landed with the ANCHOR rollout and stopped all state_checkpoints
     // mirroring). Unknown columns are dropped, never errors.
     async _applyRow(table, row) {
+        // Chain-identity fence, first and for every path that applies a row (bootstrap
+        // per-row, batch fallback, live event, buffered replay). Returns false so the
+        // bootstrap's accounting can tell a refused relic from an applied row; the caller
+        // moves its cursor past it either way, since a refusal is not an apply error.
+        if (this._refuseForeignChainRow(table, row)) return false;
         let allowed = await this._localColumns(table);
         let cols = Object.keys(row).filter(c => allowed.has(c));
         // capability_snapshots is a NATURAL-KEY mirror (uq_cap_snap: snapshot_block,
@@ -3139,7 +3378,14 @@ class HubDbSync {
             return;
         }
         if (event.type === 'row:inserted' && event.table && event.row) {
+            // A live cross-chain row naming another chain is the one case where the mirror
+            // may be the stale side: a consumer that learned its expectation FROM the hub
+            // re-asks the hub once before refusing, so a venue re-genesis the hub has
+            // adopted cannot strand a running DOGE/LTC mirror. A locally-measured
+            // expectation is never adopted away from (see _maybeAdoptHubChainId).
+            await this._maybeAdoptHubChainId(event.table, event.row);
             await this._applyRow(event.table, event.row);
+            this._reportRefusedChainRows(event.table);
             if (event.table === 'price_snapshots')     await this._refreshPriceSyncHeight();
             if (event.table === 'oracle_prices')       await this._refreshOracleSyncTimestamp();
             if (event.table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp();

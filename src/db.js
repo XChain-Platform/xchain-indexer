@@ -2515,6 +2515,32 @@ class Database {
         return block_time;
     }
 
+    // A block's own hash, read from the DECODER database (blocks.block_hash_id points at
+    // the index_transactions row that carries the hash string).
+    //
+    // Read on the DECODER instance, for block 1, this is the chain-instance identity the
+    // cross-chain mirror fences on. Block 0 cannot serve: the regtest genesis hash is a
+    // chainparams constant, identical across every re-genesis, while block 1 commits to
+    // the instant the chain was created. A regtest venue that re-genesises its Bitcoin
+    // chain keeps the same network name and the same hub, so this hash is the only thing
+    // that separates the new chain's cross-chain rows from the dead chain's relics.
+    //
+    // Returns null rather than throwing on any fault: the identity is transport-only (it
+    // enters no canonical and no block-hash preimage), so an unavailable decoder means
+    // "not known yet" and the caller retries on a later block, never a stalled parse.
+    async getDecoderBlockHash(block_index){
+        let query = `SELECT t.hash AS hash FROM blocks b JOIN index_transactions t ON t.id = b.block_hash_id WHERE b.block_index = ? LIMIT 1`;
+        let results;
+        try {
+            results = await this.doQueryStrict(query, [block_index]);
+        } catch(e){
+            return null;
+        }
+        if(!results || results.length === 0) return null;
+        let hash = results[0]['hash'];
+        return (typeof hash === 'string' && hash !== '') ? hash.toLowerCase() : null;
+    }
+
     // Invalidate the single-entry getBlockTime() memo. A reorg replaces the content of an
     // already-processed height: the decoder re-inserts the new-chain block with a new
     // block_time, and the indexer's blocks row for that height is deleted by rollback. The

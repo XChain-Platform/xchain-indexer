@@ -281,6 +281,15 @@ class XChainIndexer {
         this.lastDecoderBlock = null;
         this.stopFlag         = false
 
+        // This chain's instance identity: the hash of BLOCK 1, read once from the decoder
+        // database. BITCOIN ONLY - the cross-chain tables are BTC-anchored, so this is the
+        // id the hub stamps on them and every mirror fences on. Block 0 cannot serve: the
+        // regtest genesis hash is a chainparams constant, identical across every re-genesis,
+        // while block 1 commits to the instant the chain was created. Null until block 1 is
+        // parsed, which on a freshly re-genesised chain is not true at startup, so the read
+        // is retried once per parsed block until it resolves (see _resolveBtcChainId).
+        this.btcChainId = null;
+
         // Short machine-readable reason the block counter is currently not advancing,
         // or null when advancing normally. Set at each point where the catch-up loop
         // defers a block (the hub-sync barriers below time out, or the VM executor is
@@ -935,6 +944,12 @@ class XChainIndexer {
             // sync client writes into), start the hub DB sync in the background.
             // Deferred from construction above so the bootstrap never inserts into a
             // not-yet-created mirror table. Failures don't block indexer startup.
+            // Arm the cross-chain chain-identity fence BEFORE the first bootstrap drains, so
+            // a hub database that outlived a venue re-genesis has its relic matches and
+            // capability snapshots refused on arrival rather than mirrored and then purged.
+            // No-op off BTC and while block 1 is not decoded yet; the block loop retries.
+            await this._resolveBtcChainId();
+
             if(this.hubDbSync){
                 this.hubDbSync.start().catch(err => {
                     console.warn('HubDbSync: start failed:', err.message);
@@ -1687,9 +1702,15 @@ class XChainIndexer {
                     // CHAIN_TIP_PUSH_MAX_LAG blocks of the decoder tip (lastDecoderBlock here is
                     // the prior iteration's value, i.e. at most one block stale, which is fine).
                     if(!this.util.bcgt(this.util.bcsub(lastDecoderBlock, lastIndexerBlock), this.config['CHAIN_TIP_PUSH_MAX_LAG'])){
+                        // The chain identity rides the tip push that already exists rather than
+                        // a new RPC. Resolved here (not only at startup) because a chain that
+                        // was re-genesised has no block 1 to read when this process boots; the
+                        // memoized read costs one point query per block until it lands, and
+                        // nothing is sent until then, which leaves an older hub's wire intact.
+                        let chainId = await this._resolveBtcChainId();
                         // rawBlockTime: the hub publishes this as the chain's tip timestamp to
                         // other services, which compare it against wall clock for freshness.
-                        this.hubClient.pushChainTip(this.config['COIN'], this.config['NETWORK'], lastIndexerBlock, rawBlockTime);
+                        this.hubClient.pushChainTip(this.config['COIN'], this.config['NETWORK'], lastIndexerBlock, rawBlockTime, chainId);
                     }
 
                     // Deliver the PRICE hub pushes durably staged inside the just-committed block
@@ -1986,6 +2007,41 @@ class XChainIndexer {
     // Returns null - meaning "mirror everything", the unbounded behavior - whenever the
     // horizon cannot be established: no blocks anywhere yet, an unresolvable block time, or
     // any read fault. Never throws.
+    // Resolve (and memoize) this chain's instance identity: the hash of BITCOIN block 1.
+    //
+    // Bitcoin only. The cross-chain tables are BTC-anchored, so the hub stamps its rows with
+    // the id its Bitcoin indexer reports and every mirror fences on it; a DOGE or LTC indexer
+    // has no such chain of its own to read and learns the id from the hub's snapshot
+    // envelopes instead (HubDbSync.setExpectedBtcChainId with source 'hub').
+    //
+    // Returns null while block 1 is not in the decoder database yet, which is the normal
+    // state of a freshly re-genesised regtest chain at startup: nothing is pushed and no
+    // fence is armed until it resolves, and the caller retries once per parsed block. The
+    // read is memoized because block 1's hash cannot change without a reorg that deep, which
+    // is a new chain rather than an event this process survives.
+    //
+    // Never throws: the identity is transport (it enters no canonical and no block-hash
+    // preimage), so a decoder read fault must never reach the block loop.
+    async _resolveBtcChainId(){
+        if(this.btcChainId) return this.btcChainId;
+        if(this.config['COIN'] !== 'BTC') return null;
+        let hash = null;
+        try {
+            hash = await this.decoderDb.getDecoderBlockHash(1);
+        } catch(e){
+            return null;
+        }
+        if(typeof hash !== 'string' || !/^[0-9a-f]{64}$/.test(hash)) return null;
+        this.btcChainId = hash;
+        console.log('Chain identity  : BTC block 1 is ' + hash + ' (stamped on this hub\'s cross-chain rows)');
+        // Authoritative for this node: a hub advertising another chain never overrides it.
+        if(this.hubDbSync && typeof this.hubDbSync.setExpectedBtcChainId === 'function'){
+            try { await this.hubDbSync.setExpectedBtcChainId(hash, 'local'); }
+            catch(e){ console.warn('HubDbSync: could not set the local chain identity:', e.message); }
+        }
+        return this.btcChainId;
+    }
+
     async _priceMirrorHorizon(){
         const SLOP_SECONDS = 86400;
         // Local null test rather than this.util.isNull: util is wired in start(), and a
