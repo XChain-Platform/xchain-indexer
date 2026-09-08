@@ -177,7 +177,7 @@ const DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME = 1788998400;
 const BATCH_ISSUANCE_LIMITS_MAINNET_TIME = 1786838400;
 
 // Mainnet arm for BATCH_COST_WEIGHTING, the weighted per-BATCH cost budget that replaces
-// the flat 250-command cap registered above (see claude/specs/batch-cost-weighting.md).
+// the flat 250-command cap registered above (see the batch cost-weighting spec).
 //
 // UNARMED, on the house sentinel (9999999999, year 2286), and deliberately so.
 //
