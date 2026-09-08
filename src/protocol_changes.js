@@ -142,9 +142,15 @@ const DEPLOY_DEFERRED_ASSEMBLY_MAINNET_TIME = 0;
 // the constant is re-pinned forward if the repin slips (an activation already past is
 // not a flag day). Regtest stays genesis-active (0) so the suites and regtest venues
 // exercise the rule from block 0.
-// Pinned by the v0.15.3 release: 2026-09-10T00:00:00Z, the second day after the release
-// lands, above TBTC 150681 (block time 1788303761) and the repin tip (151433 at 1788824545).
-const DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME = 1788998400;
+// Pinned by the v0.15.3 release at 2026-09-10T00:00:00Z (1788998400), the second day
+// after the release landed, above TBTC 150681 (block time 1788303761) and the repin tip
+// (151433 at 1788824545). Re-pinned EARLIER by v0.15.5 to 2026-09-08T12:00:00Z: every
+// testnet indexer already ran v0.15.3 by 2026-09-08T03:14Z and a fresh replay under it
+// reproduced the fleet's hashes block for block, so the two-day repin buffer bought
+// nothing; the new instant is still above TBTC 150681 and above the tip's median time
+// past at the re-pin (151460 at 1788843745) with hours to spare, so no block any node
+// has parsed is reinterpreted.
+const DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME = 1788868800;
 
 // Mainnet arm for BATCH_ISSUANCE_LIMITS, the BATCH issuance rework: the dotted-TICK
 // exemption that lets one BATCH carry a parent plus any number of child ISSUEs, the global
