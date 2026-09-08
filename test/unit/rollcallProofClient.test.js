@@ -163,6 +163,59 @@ describe('rollcall_proof_client', function () {
         assert.strictEqual(calls2, 2, 'an unknown must NOT be memoized');
     });
 
+    // ROLLCALL v1: the close chooses which canonical it verifies against by whether
+    // the row carries a GATES string, so the field has to survive the transport with
+    // "absent" and "present" still distinguishable.
+    describe('the ROLLCALL v1 GATES passthrough', function () {
+
+        const KEY   = 'aa'.repeat(32);
+        const GATES = 'anchor_reward_activation.ANCHOR_REWARD_ACTIVATION,rollcall_activation.ROLLCALL_ACTIVATION';
+
+        function signerRow(over){
+            return Object.assign({
+                sig: '11'.repeat(64), ledger_hash: 'cd'.repeat(32), publisher: KEY,
+                action_index: 1, block_index: 10
+            }, over || {});
+        }
+
+        it('carries the GATES string through untouched', async function () {
+            let r = await clientWith(goodReply({ signers: { [KEY]: signerRow({ gates: GATES }) } })).fetchSigners(ask);
+            assert.strictEqual(r.decided, true, r.reason);
+            assert.strictEqual(r.signers[KEY].gates, GATES);
+            // Every other field of the row is passed through unchanged.
+            assert.strictEqual(r.signers[KEY].sig, '11'.repeat(64));
+            assert.strictEqual(r.signers[KEY].ledger_hash, 'cd'.repeat(32));
+            assert.strictEqual(r.signers[KEY].block_index, 10);
+        });
+
+        it('spells a v0 row\'s missing GATES as an explicit null, never undefined', async function () {
+            // A peer that predates v1 answers without the key at all. The close reads
+            // null as "v0 row"; undefined would work by accident today and stop working
+            // the moment anything asks for the field by name.
+            let r = await clientWith(goodReply({ signers: { [KEY]: signerRow() } })).fetchSigners(ask);
+            assert.strictEqual(r.decided, true, r.reason);
+            assert.ok('gates' in r.signers[KEY], 'the field must be present');
+            assert.strictEqual(r.signers[KEY].gates, null);
+        });
+
+        it('passes a null GATES through as null', async function () {
+            let r = await clientWith(goodReply({ signers: { [KEY]: signerRow({ gates: null }) } })).fetchSigners(ask);
+            assert.strictEqual(r.signers[KEY].gates, null);
+        });
+
+        it('keeps a key with no in-window row as null, not as a row shape', async function () {
+            let r = await clientWith(goodReply({ signers: { [KEY]: null } })).fetchSigners(ask);
+            assert.strictEqual(r.decided, true, r.reason);
+            assert.strictEqual(r.signers[KEY], null);
+        });
+
+        it('reads a non-object row as absent rather than handing the close a string', async function () {
+            let r = await clientWith(goodReply({ signers: { [KEY]: 'garbage' } })).fetchSigners(ask);
+            assert.strictEqual(r.decided, true, r.reason);
+            assert.strictEqual(r.signers[KEY], null);
+        });
+    });
+
     it('exports its own error class, distinct from the anchor rail\'s', function () {
         let e = new RollcallProofUnavailableError('x');
         assert.strictEqual(e.name, 'RollcallProofUnavailableError');

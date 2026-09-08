@@ -30,10 +30,15 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 const Rollcall = require('../../../src/actions/rollcall.js');
 const eq       = require('../../../src/equivocation_header.js');
 const rca      = require('../../../src/rollcall_activation.js');
+const rga      = require('../../../src/rollcall_gates_activation.js');
+const { buildRollcallCanonical } = require('../../../src/rollcall_canonical.js');
+const { knownGateKeys }          = require('../../../src/consensus_rules_digest.js');
 
 const NETWORK = 'regtest';
 const EPOCH   = 30;                       // ROLLCALL_INTERVAL_BLOCKS.regtest
 const LEDGER  = 'ab'.repeat(32);
+// The publisher's list as a v1 roll call carries it: comma-joined, sorted.
+const GATES   = knownGateKeys().join(',');
 
 function identity(){
     let { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
@@ -51,11 +56,32 @@ function signFor(id, epochHeight, ledgerHash){
     return crypto.sign(null, Buffer.from(canon, 'utf8'), id.priv).toString('hex');
 }
 
+// The v1 canonical: the same fields plus sha256(GATES) as CARRIED. Built through
+// the shared helper, which is the point of the helper: the hub, this parser and
+// the BTC close must produce identical bytes, and a second spelling here would
+// certify this file's idea of the canonical rather than the network's.
+function signForV1(id, epochHeight, ledgerHash, gates){
+    let canon = buildRollcallCanonical({ network: NETWORK, epochHeight, ledgerHash, gates });
+    return crypto.sign(null, Buffer.from(canon, 'utf8'), id.priv).toString('hex');
+}
+
 // params[0] is VERSION; actions.js splits the wire string this way.
 function paramsFor(over){
     let o = Object.assign({ epoch: EPOCH, ledger: LEDGER, publisher: null, sigs: [], count: null }, over || {});
     let pub = o.publisher === null ? o.sigs[0].pubkey : o.publisher;
     let p = ['ROLLCALL', String(o.epoch), o.ledger, pub,
+             String(o.count === null ? o.sigs.length : o.count)];
+    for(let s of o.sigs) p.push(s.pubkey, s.sig);
+    return p;
+}
+
+// v1 inserts GATES between PUBLISHER and SIG_COUNT and shifts the pairs one
+// field right; everything else is the v0 shape.
+function paramsForV1(over){
+    let o = Object.assign({ epoch: EPOCH, ledger: LEDGER, publisher: null, gates: GATES,
+                            sigs: [], count: null }, over || {});
+    let pub = o.publisher === null ? o.sigs[0].pubkey : o.publisher;
+    let p = ['ROLLCALL', String(o.epoch), o.ledger, pub, o.gates,
              String(o.count === null ? o.sigs.length : o.count)];
     for(let s of o.sigs) p.push(s.pubkey, s.sig);
     return p;
@@ -202,6 +228,14 @@ describe('ROLLCALL handler (§3.3) - AT7 reason falsification', function(){
             assert.strictEqual(rows[0].sig, good.sig, 'the REAL signature must survive the junk one');
         });
 
+        it('a v0 row carries a null gates column', async function(){
+            // The column exists for both versions; below the gates height there is no
+            // list to record, and a '' would read downstream as "this signer named no
+            // gates" rather than "this epoch predates the field".
+            let { indexer } = await run(paramsFor({ sigs: goodSigs() }));
+            assert.strictEqual(indexer.indexerDb.insertRollcallSigners.firstCall.args[0][0].gates, null);
+        });
+
         it('indexes a partial set rather than failing the whole action', async function(){
             // Union semantics: a publisher can add signers but never remove them, so one
             // bad pair among good ones must not discard the good ones.
@@ -210,6 +244,145 @@ describe('ROLLCALL handler (§3.3) - AT7 reason falsification', function(){
             let { out, indexer } = await run(paramsFor({ sigs }));
             assert.strictEqual(out['STATUS'], 'valid');
             assert.strictEqual(indexer.indexerDb.insertRollcallSigners.firstCall.args[0].length, 1);
+        });
+    });
+
+    // ── ROLLCALL v1: the GATES form ──────────────────────────────────────────
+    //
+    // EXACTLY ONE version is legal per epoch, decided by the carried EPOCH_HEIGHT
+    // against ROLLCALL_GATES_ACTIVATION. The threshold is stubbed rather than armed
+    // through XC_ROLLCALL_GATES_REGTEST_ACTIVATION because that variable is read
+    // ONCE at require time: setting it here would arm the module for every suite
+    // mocha loads in the same process. The env grammar is the gate module's own test.
+
+    describe('v1 (GATES)', function(){
+
+        let savedGates;
+        beforeEach(function(){ savedGates = rga.ROLLCALL_GATES_ACTIVATION[NETWORK]; });
+        afterEach(function(){
+            rga.ROLLCALL_GATES_ACTIVATION[NETWORK] = savedGates;
+            // Each case builds its own mock indexer, and the GATES table case builds
+            // eight; without this the shared sinon sandbox passes its leak threshold.
+            sinon.restore();
+        });
+
+        function armGates(h){ rga.ROLLCALL_GATES_ACTIVATION[NETWORK] = (h === undefined ? 0 : h); }
+        function goodV1(gates){
+            let g = gates === undefined ? GATES : gates;
+            return [{ pubkey: signer.pubkey, sig: signForV1(signer, EPOCH, LEDGER, g) }];
+        }
+        function runV1(params, dataOver, coin){
+            return run(params, Object.assign({ FORMAT: 1 }, dataOver || {}), coin);
+        }
+
+        it('the handler advertises formats[1] with GATES between PUBLISHER and SIG_COUNT', function(){
+            let handler = new Rollcall(mockIndexer());
+            assert.strictEqual(handler.formats[1],
+                'VERSION|EPOCH_HEIGHT|LEDGER_HASH|PUBLISHER|GATES|SIG_COUNT|PUBKEY|SIG|...');
+        });
+
+        it('accepts a v1 roll call, verifies over the GATES canonical and stores the raw list', async function(){
+            armGates();
+            let { out, indexer } = await runV1(paramsForV1({ sigs: goodV1() }));
+            assert.strictEqual(out['STATUS'], 'valid');
+            let rows = indexer.indexerDb.insertRollcallSigners.firstCall.args[0];
+            assert.strictEqual(rows.length, 1);
+            assert.strictEqual(rows[0].pubkey, signer.pubkey);
+            assert.strictEqual(rows[0].epoch_height, EPOCH);
+            // The RAW carried string: the BTC close rebuilds the canonical from this
+            // column, so any normalisation here breaks every signature it re-verifies.
+            assert.strictEqual(rows[0].gates, GATES);
+        });
+
+        it('a signature over the GATES-STRIPPED v0 canonical does not verify in a v1 action', async function(){
+            // The drop-the-gates attack: a parser that rebuilt the v0 canonical for a
+            // v1 action would accept these and record a list nobody signed.
+            armGates();
+            let sigs = [{ pubkey: signer.pubkey, sig: signFor(signer, EPOCH, LEDGER) }];
+            let { out, indexer } = await runV1(paramsForV1({ sigs }));
+            assert.strictEqual(out['STATUS'], 'invalid: SIG_COUNT');
+            assert.strictEqual(indexer.indexerDb.insertRollcallSigners.callCount, 0);
+        });
+
+        it('a signature over a DIFFERENT gate list does not verify', async function(){
+            // Signers sign the PUBLISHER's list, so a build one gate ahead signs other
+            // bytes and is simply absent for the epoch (§7.2: roll BETWEEN epochs).
+            armGates();
+            let other = GATES + ',zzz_module.ZZZ_EXPORT';
+            let sigs  = [{ pubkey: signer.pubkey, sig: signForV1(signer, EPOCH, LEDGER, other) }];
+            let { out } = await runV1(paramsForV1({ sigs }));
+            assert.strictEqual(out['STATUS'], 'invalid: SIG_COUNT');
+        });
+
+        it('invalid: ROLLCALL v1 before gates activation', async function(){
+            armGates(EPOCH + 1);
+            let { out, indexer } = await runV1(paramsForV1({ sigs: goodV1() }));
+            assert.strictEqual(out['STATUS'], 'invalid: ROLLCALL v1 before gates activation');
+            assert.strictEqual(indexer.indexerDb.insertRollcallSigners.callCount, 0);
+        });
+
+        it('invalid: ROLLCALL v1 before gates activation - the INERT null placeholder', async function(){
+            // `0 >= null` is true in JS; only the isFinite guard keeps an unarmed
+            // network from accepting a v1 roll call at height 0.
+            rga.ROLLCALL_GATES_ACTIVATION[NETWORK] = null;
+            let { out } = await runV1(paramsForV1({ sigs: goodV1() }));
+            assert.strictEqual(out['STATUS'], 'invalid: ROLLCALL v1 before gates activation');
+        });
+
+        it('invalid: ROLLCALL v0 after gates activation', async function(){
+            // The other half of "one legal version per epoch": accepting both would let
+            // a publisher choose which canonical the epoch's signers are judged against.
+            armGates();
+            let { out, indexer } = await run(paramsFor({ sigs: goodSigs() }));
+            assert.strictEqual(out['STATUS'], 'invalid: ROLLCALL v0 after gates activation');
+            assert.strictEqual(indexer.indexerDb.insertRollcallSigners.callCount, 0);
+        });
+
+        it('invalid: GATES - empty, malformed, out of order or duplicated', async function(){
+            armGates();
+            const cases = {
+                'empty':        '',
+                'no module':    'ROLLCALL_ACTIVATION',
+                'bad chars':    'rollcall activation.ROLLCALL_ACTIVATION',
+                'empty token':  'a.B,,c.D',
+                'descending':   'rollcall_activation.ROLLCALL_ACTIVATION,equivocation_header.EQUIV_HEADER_ACTIVATION',
+                'duplicate':    'a.B,a.B',
+                'space padded': 'a.B, c.D'
+            };
+            for(const [name, gates] of Object.entries(cases)){
+                let { out, indexer } = await runV1(paramsForV1({ gates, sigs: goodV1(gates) }));
+                assert.strictEqual(out['STATUS'], 'invalid: GATES', name);
+                assert.strictEqual(indexer.indexerDb.insertRollcallSigners.callCount, 0, name);
+            }
+            // ...and a well-formed ascending pair of the same shape is accepted, so the
+            // cases above are failing on the rule and not on the fixture.
+            let ok = 'a.B,c.D';
+            let { out } = await runV1(paramsForV1({ gates: ok, sigs: goodV1(ok) }));
+            assert.strictEqual(out['STATUS'], 'valid');
+        });
+
+        it('invalid: SIG_COUNT - the count is read at the v1 offset, not the v0 one', async function(){
+            // A parser still reading params[4] would parse GATES as SIG_COUNT and read
+            // the pairs one field short of where they are.
+            armGates();
+            let { out } = await runV1(paramsForV1({ sigs: goodV1(), count: 2 }));
+            assert.strictEqual(out['STATUS'], 'invalid: SIG_COUNT');
+        });
+
+        it('keeps the DOGE-only guard and the first-seen semantics', async function(){
+            armGates();
+            let { out } = await runV1(paramsForV1({ sigs: goodV1() }), null, 'BTC');
+            assert.strictEqual(out['STATUS'], 'invalid: ROLLCALL only valid on DOGE');
+
+            // A junk pair ordered FIRST must not suppress the real signature.
+            let good = goodV1()[0];
+            let sigs = [{ pubkey: signer.pubkey, sig: '2'.repeat(128) }, good];
+            let r = await runV1(paramsForV1({ sigs }));
+            assert.strictEqual(r.out['STATUS'], 'valid');
+            let rows = r.indexer.indexerDb.insertRollcallSigners.firstCall.args[0];
+            assert.strictEqual(rows.length, 1);
+            assert.strictEqual(rows[0].sig, good.sig);
+            assert.strictEqual(rows[0].gates, GATES);
         });
     });
 });

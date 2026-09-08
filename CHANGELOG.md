@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-09-08
+
+- Testnet activation heights sized: zero-confirmation ATTEST service from block 151800 and ROLLCALL v1 gates from epoch 152208.
+### Added
+- Above a new zero-confirmation activation height the responsible set carries one headroom slot from the request block, the mirror applier falls through an inert response row to the next valid one, and a fulfilled request's fee splits among the validators that actually signed the accepted response.
+- ROLLCALL v1 is parsed and verified with its gates list, the epoch close records each verified signer's list in a new `rollcall_gates` table, and the attestation capability set drops a validator whose recorded list lacks a rule active at the request block; a request that then falls under its redundancy is refused with a distinct reason.
+- The ROLLCALL close line tallies the signers it dropped by reason (no row, foreign ledger hash, wrong form for the epoch, bad signature), so a federation discarded on a canonical mismatch no longer reads as a silent absence.
+
 ## [0.15.5] - 2026-09-08
 
 ### Changed

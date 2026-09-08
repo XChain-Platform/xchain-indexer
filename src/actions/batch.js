@@ -153,7 +153,7 @@ class Batch {
 
         // VM actions (D8 for EXECUTE/XEXEC, D5's cost half for DEPLOY). RATIFIED AT 30 BY THE
         // OPERATOR ON 2026-08-15, on the measurement in bin/measure-batch-execute-cost.js and
-        // claude/reports/2026-08-14_batch-execute-cost-measurement.md. This is a consensus
+        // the 2026-08-14 batch-execute cost-measurement report in the platform tree. This is a consensus
         // constant: it decides verdicts, so it may only move behind a flag day.
         //
         // WHY 30, stated so a future retune can re-derive it rather than guess. A worst-case
@@ -199,9 +199,15 @@ class Batch {
         // (220 at weight 30, against 249 today).
         //
         // CHUNKED DEPLOY (deploy.js format 4) IS DISCOUNTED TO THE DEFAULT WEIGHT OF 1
-        // (operator ruling 2026-08-20; subCommandWeight below). A chunk carrier runs no
-        // constructor - deploy.js short-circuits format 4 into DeployChunk.parse() before the
-        // VM path - so it is really a row write, and 30 charged VM cost for work that has none.
+        // (operator ruling 2026-08-20; subCommandWeight below). Before DEPLOY_DEFERRED_ASSEMBLY
+        // a chunk carrier never ran a constructor (deploy.js short-circuits format 4 into
+        // DeployChunk.parse() before the VM path), so it was really a row write and 30 charged
+        // VM cost for work that had none. At/after that activation the carrier that completes a
+        // group DOES run the constructor (deploy_chunk.js, R1 of the chunked-deploy spec), and
+        // the discount's real bound is the per-name cap of ONE DEPLOY per batch (the
+        // 'invalid: DEPLOY (limit)' loop above): a batch can buy at most the one constructor its
+        // weight-30 seat already permits, whichever piece completes the group, and a
+        // non-completing carrier is not over-charged for work it never does (spec D20).
         // The drift objection that first kept it over-charged does not hold up: the format is
         // read with the SAME util.getFormatVersion(params[0]) call the dispatcher (actions.js)
         // uses to set data['FORMAT'], one shared derivation rather than a second one, and
@@ -751,8 +757,10 @@ class Batch {
             let weight = this.commandWeights[action];
             if(weight === undefined)
                 return 1;
-            // Chunk-carrier DEPLOY (format 4) runs no constructor, so it takes the default
-            // row-write weight rather than DEPLOY's VM weight. The format comes from the same
+            // Chunk-carrier DEPLOY (format 4) takes the default row-write weight rather than
+            // DEPLOY's VM weight: since DEPLOY_DEFERRED_ASSEMBLY the carrier that completes a
+            // group does run the constructor, but the one-DEPLOY-per-batch name cap already
+            // bounds a batch to one constructor whichever piece completes it. The format comes from the same
             // util.getFormatVersion(params[0]) derivation the dispatcher uses (see the
             // commandWeights['DEPLOY'] note above); anything unparseable falls through to the
             // full weight, which is the safe (over-charging) direction.

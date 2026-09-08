@@ -29,6 +29,7 @@ const srb     = require('../../../src/snapshot_reorg_buffer.js');
 // Same module instance Attest holds a reference to (Node module cache); stubbing
 // `verify` here controls signature acceptance inside the handler.
 const ed25519 = require('../../../src/ed25519.js');
+const wid     = require('../../../src/attest_responsible_widening_activation.js');
 
 // 64-hex pubkeys / 128-hex sigs (format-valid; verification is stubbed)
 const PUBKEY_A = 'a'.repeat(64);
@@ -872,8 +873,14 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         // tests can pick in-set vs out-of-set coalitions without hard-coding hashes.
         const PUBKEY_OUT1 = 'c'.repeat(64);
         const PUBKEY_OUT2 = 'e'.repeat(64);
+        const PUBKEY_OUT3 = 'f'.repeat(64);
         const SIG_C = '3'.repeat(128);
         const SIG_D = '4'.repeat(128);
+        const SIG_E = '5'.repeat(128);
+        // Regtest is above ATTEST_ZERO_CONF_ACTIVATION (armed at 0), so the stage-2 ladder
+        // grants one headroom slot from the request block: the set the verifier admits is
+        // redundancy + widenSlots(responseBlock 100, requestBlock 90, deadline 200) = 2 + 1.
+        const WIDEN_AT_100 = wid.widenSlots(100, 90, 200, 'regtest');
         function rankResponsible(reqId, pubkeys, redundancy) {
             return pubkeys
                 .map(pk => ({ pk, h: crypto.createHash('sha256').update(String(reqId), 'utf8').update(pk, 'utf8').digest('hex') }))
@@ -888,9 +895,9 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             // valid ed25519). Pre-fix this counted toward quorum (capability + sig
             // only) and produced a valid v1; post-fix the out-of-set signers are
             // filtered out and the response is rejected as insufficient.
-            const universe = [PUBKEY_A, PUBKEY_B, PUBKEY_OUT1, PUBKEY_OUT2];
-            const sigByPub = { [PUBKEY_A]: SIG_A, [PUBKEY_B]: SIG_B, [PUBKEY_OUT1]: SIG_C, [PUBKEY_OUT2]: SIG_D };
-            const responsible = rankResponsible(REQ_ID.toLowerCase(), universe, 2);
+            const universe = [PUBKEY_A, PUBKEY_B, PUBKEY_OUT1, PUBKEY_OUT2, PUBKEY_OUT3];
+            const sigByPub = { [PUBKEY_A]: SIG_A, [PUBKEY_B]: SIG_B, [PUBKEY_OUT1]: SIG_C, [PUBKEY_OUT2]: SIG_D, [PUBKEY_OUT3]: SIG_E };
+            const responsible = rankResponsible(REQ_ID.toLowerCase(), universe, 2 + WIDEN_AT_100);
             const outsiders   = universe.filter(pk => !responsible.includes(pk));
             assert.strictEqual(outsiders.length, 2, 'sanity: a 2-signer coalition outside the responsible set');
 
@@ -907,10 +914,11 @@ describe('Attest (ATTEST) @regression @tier3', function () {
 
         it('accepts a v1 signed by the deterministic responsible set', async function () {
             // The complement of the test above: the SAME universe, but now the
-            // in-set pair signs → quorum is met and the response is valid.
-            const universe = [PUBKEY_A, PUBKEY_B, PUBKEY_OUT1, PUBKEY_OUT2];
-            const sigByPub = { [PUBKEY_A]: SIG_A, [PUBKEY_B]: SIG_B, [PUBKEY_OUT1]: SIG_C, [PUBKEY_OUT2]: SIG_D };
-            const responsible = rankResponsible(REQ_ID.toLowerCase(), universe, 2);
+            // in-set members sign (the assigned pair plus the headroom slot) → quorum is
+            // met and the response is valid.
+            const universe = [PUBKEY_A, PUBKEY_B, PUBKEY_OUT1, PUBKEY_OUT2, PUBKEY_OUT3];
+            const sigByPub = { [PUBKEY_A]: SIG_A, [PUBKEY_B]: SIG_B, [PUBKEY_OUT1]: SIG_C, [PUBKEY_OUT2]: SIG_D, [PUBKEY_OUT3]: SIG_E };
+            const responsible = rankResponsible(REQ_ID.toLowerCase(), universe, 2 + WIDEN_AT_100);
 
             indexer.indexerDb.getValidatorsByCapability.resolves(universe.map(pk => ({ pubkey: pk })));
             indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 2 }));
@@ -918,7 +926,9 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             await handler.parse(v1Params(responsible.map(pk => ({ pubkey: pk, sig: sigByPub[pk] }))), data, null);
 
             assert.strictEqual(data['STATUS'], 'valid');
-            assert.strictEqual(data['VALID_SIGS'], 2, 'both responsible signers count');
+            // Every admitted signer counts, the headroom member included: the ladder widens
+            // who may SIGN, and the verifier counts what it admitted, not the redundancy.
+            assert.strictEqual(data['VALID_SIGS'], 2 + WIDEN_AT_100, 'every responsible signer counts, headroom included');
         });
 
         it('injects exactly one EXECUTE callback on quorum success', async function () {

@@ -183,7 +183,7 @@ const DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME = 1788868800;
 const BATCH_ISSUANCE_LIMITS_MAINNET_TIME = 1786838400;
 
 // Mainnet arm for BATCH_COST_WEIGHTING, the weighted per-BATCH cost budget that replaces
-// the flat 250-command cap registered above (see claude/specs/batch-cost-weighting.md).
+// the flat 250-command cap registered above (see the batch cost-weighting spec).
 //
 // UNARMED, on the house sentinel (9999999999, year 2286), and deliberately so.
 //
@@ -356,7 +356,7 @@ const UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME = 9999999999;
 // (the ATTEST response mirror, ROLLCALL) gates on its OWN per-network activation
 // heights, which are unarmed off regtest, not on this ordinal. So the second line
 // of the deliberate two-line decision is: the rule set does not move here.
-const CONSENSUS_VERSION = '0.15.5';
+const CONSENSUS_VERSION = '0.16.0';
 
 // Predicate for the NATIVE_FEE_PRICE_TIME_GATE flag-day. Its ONE consumer is
 // utility.getFeeOraclePrices (query selection); nothing else in src/ consults it.

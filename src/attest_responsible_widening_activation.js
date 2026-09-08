@@ -68,6 +68,9 @@
 
 'use strict';
 
+// The stage-2 selector. Required at the top: this module never feeds that one.
+const zc = require('./attest_zero_conf_activation.js');
+
 // Per-network activation height (LOCAL COPY, parity-tested). Compared against
 // the ATTEST v0 request's own BTC block_index.
 const ATTEST_RESPONSIBLE_WIDENING_ACTIVATION = {
@@ -81,7 +84,9 @@ const ATTEST_RESPONSIBLE_WIDENING_ACTIVATION = {
 // FROZEN, and deliberately NOT the hub's operator-tunable ATTESTATION_CONFIRMATIONS /
 // ATTESTATION_LEADER_ROTATION_BLOCKS. Those two shape only which hub goes first, which no
 // validator checks; these shape WHO MAY SIGN, which every indexer checks. Sourcing them from
-// per-hub config would let one operator's tuning fork the set.
+// per-hub config would let one operator's tuning fork the set. (Above
+// ATTEST_ZERO_CONF_ACTIVATION the hub's confirmations knob is inert anyway: the hub serves
+// at the tip, AttestationRound.confirmationsFor, and its ladders start where this one does.)
 //
 // PROPORTIONAL TO THE REQUEST'S OWN WINDOW, not a fixed block count, and that choice is the
 // whole reason this ladder is usable. A fixed window sized to sit after leader rotation's cap of
@@ -100,13 +105,44 @@ const ATTEST_RESPONSIBLE_WIDENING = {
     maxSlots:      2,
 };
 
+// STAGE 2, selected by ATTEST_ZERO_CONF_ACTIVATION on the request block (LOCAL COPY,
+// parity-tested). Two things change and one does not:
+//
+//   startOffset 0: the ladder starts AT the request block, where the hub now starts its
+//   own leader and model ladders. It is named startOffset rather than confirmations because
+//   it is a ladder-start offset and the hub's ATTESTATION_CONFIRMATIONS is a different knob.
+//
+//   headroom 1: one extra slot from step 0, before any segment has elapsed. The failure
+//   this exists for, measured on testnet, is one member that can never sign: an old key seated in 1
+//   of 7 slots stalls every 3-of-7 draw that includes it at 2 of 3 until the ladder opens,
+//   a third of the deadline window later. Headroom makes such a round finalize inside the
+//   first segment with no clock at all, and keeps the assignment deterministic. The
+//   assigned set (the persisted RESPONSIBLE_SET_JSON, the missed_count charge) is still
+//   the unwidened slice: headroom widens who may EARN, never who is CHARGED.
+//
+//   maxSlots 2 is kept, so the set can reach redundancy + 3: headroom plus two ladder
+//   steps for two dead members.
+const ATTEST_RESPONSIBLE_WIDENING_V2 = {
+    startOffset: 0,
+    headroom:    1,
+    maxSlots:    2,
+};
+
 // Extra responsible slots at `atBlock` for a request admitted at `requestBlock` with
 // deadline `deadlineBlock`. Returns 0 (the legacy fixed-REDUNDANCY set, byte for byte)
 // whenever the network is unratified, the request predates the flag-day, any height is
 // unusable, the span is degenerate, or the ladder is still inside its first segment.
 //
+// Above ATTEST_ZERO_CONF_ACTIVATION (on the request block) the stage-2 ladder runs
+// instead: it starts at the request block and never returns less than the headroom, so
+// the two early returns that read 0 below read `headroom` there. At the round's own
+// start elapsed is 0, and a 0 on that branch would make headroom inert on exactly the
+// block it exists for.
+//
 // A height past the deadline clamps to maxSlots rather than running off the end; the
 // deadline check itself lives in the callers, which reject a late v1 outright.
+// Monotonic in atBlock under both stages, which is what lets the indexer evaluate it at
+// the response block and still hold a superset of the signing hub's set.
 function widenSlots(atBlock, requestBlock, deadlineBlock, network){
     let threshold = ATTEST_RESPONSIBLE_WIDENING_ACTIVATION[network];
     // null is the UNRATIFIED sentinel and must read as "off". Without the explicit
@@ -118,6 +154,7 @@ function widenSlots(atBlock, requestBlock, deadlineBlock, network){
     let dl  = parseInt(deadlineBlock);
     if(!Number.isFinite(req) || !Number.isFinite(at) || !Number.isFinite(dl)) return 0;
     if(req < threshold) return 0;
+    if(zc.isZeroConfActive(req, network)) return widenSlotsV2(at, req, dl);
     let start = req + ATTEST_RESPONSIBLE_WIDENING.confirmations;
     let span  = dl - start;
     // Degenerate span (a deadline at or inside the confirmation lag): no room to
@@ -131,8 +168,26 @@ function widenSlots(atBlock, requestBlock, deadlineBlock, network){
     return Math.max(0, Math.min(idx, ATTEST_RESPONSIBLE_WIDENING.maxSlots));
 }
 
+// Stage 2 (spec §4.1): headroom from step 0, the ladder from the request block, clamped
+// to headroom + maxSlots. Inputs are already parsed finite integers past the activation
+// guards above.
+function widenSlotsV2(at, req, dl){
+    const V2 = ATTEST_RESPONSIBLE_WIDENING_V2;
+    let start = req + V2.startOffset;
+    let span  = dl - start;
+    // Degenerate span: the assigned set plus headroom stands for the whole window.
+    if(!(span > 0)) return V2.headroom;
+    let elapsed = at - start;
+    // At the request's own block elapsed is 0; headroom is the whole point of that block.
+    if(!(elapsed > 0)) return V2.headroom;
+    let segment = span / (V2.maxSlots + 1);
+    let idx     = Math.floor(elapsed / segment);
+    return V2.headroom + Math.min(idx, V2.maxSlots);
+}
+
 module.exports = {
     ATTEST_RESPONSIBLE_WIDENING_ACTIVATION,
     ATTEST_RESPONSIBLE_WIDENING,
+    ATTEST_RESPONSIBLE_WIDENING_V2,
     widenSlots
 };

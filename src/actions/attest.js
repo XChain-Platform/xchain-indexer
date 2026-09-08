@@ -65,8 +65,15 @@ const attestRelay     = require('../attest_relay_activation.js');
 const relayRejectSlot = require('../attest_relay_reject_slot_activation.js');
 const attestBcastFee  = require('../attest_broadcast_fee_activation.js');
 const wid     = require('../attest_responsible_widening_activation.js');
+// The zero-conf flip, keyed on the REQUEST's own block. Read here for the fulfilled
+// fee split, which pays the verified signers rather than the widened set above it.
+const zc      = require('../attest_zero_conf_activation.js');
 const eq      = require('../equivocation_header.js');
 const srb     = require('../snapshot_reorg_buffer.js');
+// The rules-aware capability filter: drops a validator whose last rolled ROLLCALL
+// gate list does not cover the gates active at the request block. Inert on every
+// network whose ROLLCALL_GATES_ACTIVATION is null, where it never queries.
+const rgf     = require('../rollcall_gates_filter.js');
 // The ONE response verifier: this chain path and the hub-mirror applier call the
 // same module, so an artifact cannot be judged differently by delivery route.
 const avr     = require('../attest_response_verify.js');
@@ -414,11 +421,29 @@ class Attest {
         // use; see attest_admission_activation.js for why the two differ and why the
         // difference must not be "corrected" without its own flag-day.
         if(!error && !relayOrigin && attestAdmission.isAttestAdmissionActive(data['BLOCK_INDEX'], this.config['NETWORK'])){
+            // The rules-aware filter (spec §7.4) reports how many keys it removed
+            // through this out-parameter; nothing else about the call moves.
+            let gatesStats = {};
             admissionSet = await this._computeResponsibleSet(
-                String(data['REQUEST_ID'] || '').toLowerCase(), data['REDUNDANCY'], data['BLOCK_INDEX'], data['PROVIDER_ID']);
+                String(data['REQUEST_ID'] || '').toLowerCase(), data['REDUNDANCY'], data['BLOCK_INDEX'], data['PROVIDER_ID'],
+                undefined, gatesStats);
             let neededSlots = Math.max(1, Number(data['REDUNDANCY']) || 1);
-            if(admissionSet.length < neededSlots)
-                error = 'invalid: REDUNDANCY (responsible set ' + admissionSet.length + ' < ' + neededSlots + ' at request block)';
+            if(admissionSet.length < neededSlots){
+                // FAIL CLOSED with the reason that is actually true (D61). A set that
+                // was never large enough and a set the rules filter shrank need
+                // different literals: the first is a staking problem the requester can
+                // do nothing about, the second names a fleet that has not rolled a call
+                // covering the gates active at this block, which is an operator action.
+                // The rules-aware literal is tested FIRST so it wins whenever the
+                // filter dropped anybody. Neither is a refund: a v0 exists only as a VM
+                // emission and processEmission throws on a non-valid one, so the
+                // emitting EXECUTE reverts with its sibling writes.
+                error = (Number(gatesStats.dropped) > 0)
+                    ? 'invalid: REDUNDANCY (rules-aware set ' + admissionSet.length + ' < ' + neededSlots + ' at request block)'
+                    : 'invalid: REDUNDANCY (responsible set ' + admissionSet.length + ' < ' + neededSlots + ' at request block)';
+                let line = rgf.formatGatesFilterStats(gatesStats);
+                if(line) console.log("\t ATTEST v0 : " + line);
+            }
         }
 
         // Framework spec §11.1 per-block admission caps (flag-day gated). An admitted
@@ -1489,7 +1514,13 @@ class Attest {
     // v2 expiry missed_count charge faults the ASSIGNED set, so neither may move. A
     // validator pulled in late by the ladder is permitted to earn, never charged for a
     // request that was already failing before it was eligible.
-    async _computeResponsibleSet(requestId, redundancy, blockIndex, providerId, widen){
+    //
+    // `stats` is an OPTIONAL out-parameter, mutated by the rules-aware gate filter
+    // below with { dropped, epochHeight, closeBlock, needed }. It exists so the v0
+    // admission caller can tell "the snapshot was always this small" from "the rules
+    // filter shrank it", which are two different rejection literals (D61). The return
+    // shape is untouched, so every existing caller passes nothing and is unaffected.
+    async _computeResponsibleSet(requestId, redundancy, blockIndex, providerId, widen, stats){
         // The SWQ gate is BTC-ANCHORED, so only evaluate it where `blockIndex`
         // actually is a BTC height.
         //
@@ -1540,6 +1571,18 @@ class Attest {
         let validators = weighted
             ? await this.indexerDb.getStakeWeightsByCapability('attestation', resolveBlock)
             : await this.indexerDb.getValidatorsByCapability('attestation', resolveBlock);
+        if(!validators || validators.length === 0) return [];
+        // RULES-AWARE FILTER (spec §7.4, D59). Applied ONCE, here: after the capability
+        // read and before both the provider floor and the hash ranking, so a slot the
+        // filter frees is filled by the next qualifying validator instead of leaving a
+        // hole in the draw. The hub receives an already-filtered set from
+        // getcapabilityvalidators and rollback.js filters the same snapshot at the same
+        // block, so all three derive one set. Inert (and query-free) wherever
+        // ROLLCALL_GATES_ACTIVATION is null, which is mainnet and testnet today.
+        validators = await rgf.filterByRolledGates({
+            db: this.indexerDb, validators, requestBlock: blockIndex,
+            network: this.config['NETWORK'], stats
+        });
         if(!validators || validators.length === 0) return [];
         // Provider floor, weighted path only. Applied BEFORE the hash ranking so the
         // slot the filter frees is filled by the next qualifying validator, exactly as
@@ -2068,7 +2111,12 @@ class Attest {
     //                          credit stays the FULL escrow either way, so the
     //                          solvency argument is unchanged (carve-out +
     //                          N*share <= escrow by construction, both floored
-    //                          onto the same decimal grid).
+    //                          onto the same decimal grid). At/above
+    //                          ATTEST_ZERO_CONF the split pays the verified
+    //                          SIGNERS of the response instead of the whole
+    //                          widened set (_signerPaySet); the pool credit,
+    //                          the carve-out and the solvency argument are
+    //                          unchanged, since the paid set is a subset.
     //   'errored'/'expired'  → escrow → refund to FEE_PAYER.
     // Feeless requests (fee_amount NULL/0) are a no-op.
     async _settleRequestFee(request, data, terminalStatus){
@@ -2101,6 +2149,19 @@ class Attest {
                 wid.widenSlots(data['BLOCK_INDEX'], Number(request.block_index),
                                request.deadline_block, this.config['NETWORK'])
             );
+            // WHO IS PAID. Below the zero-conf height the split is the recomputed
+            // responsible set, unchanged. At and above it the escrow is split among the
+            // validators whose signatures the accepted response actually carries
+            // (spec §4.3, D12 ruled a): the V2 ladder seats a headroom member on EVERY
+            // request, and a member that need never sign would otherwise take a share
+            // off each validator that did. `responsible` is still the set the §11
+            // carve-out is measured against and is still the ASSIGNED set the expiry
+            // charge faults (§4.2), so neither the assignment plane nor missed_count
+            // moves with this.
+            let paid = responsible;
+            if(zc.isZeroConfActive(Number(request.block_index), this.config['NETWORK']))
+                paid = this._signerPaySet(request, data, responsible);
+
             let broadcastFee = '0';
             if(responsible.length > 0){
                 // Equal split, floored to GAS decimals (feeCap = min(8, gasDecimals)),
@@ -2138,10 +2199,10 @@ class Attest {
                 }
 
                 let perValidator = this.util.bcmulfloor(
-                    this.util.bcdiv(splitPool, String(responsible.length), 18), '1', feeCap
+                    this.util.bcdiv(splitPool, String(paid.length), 18), '1', feeCap
                 );
                 if(this.util.bcgt(perValidator, '0')){
-                    for(let pk of responsible){
+                    for(let pk of paid){
                         // round_reference is BIGINT; key idempotency on the
                         // REQUEST's action_index (unique per request), not the
                         // 64-hex request_id.
@@ -2152,7 +2213,7 @@ class Attest {
                 }
             }
             console.log("\t ATTEST fee : " + feeAmount + ' ' + gas + ' → REWARD pool, split ' +
-                        responsible.length + ' way(s)' +
+                        paid.length + ' way(s)' +
                         (this.util.bcgt(broadcastFee, '0') ? ', broadcast reimbursement ' + broadcastFee : '') +
                         ' [request ' + String(request.request_id).substring(0,16) + '...]');
         } else {
@@ -2167,6 +2228,51 @@ class Attest {
             addresses = Object.keys(this.util.getAddressesList());
         await this.indexerDb.updateBalances(addresses);
         await this.indexerDb.updateTokens(tickers);
+    }
+
+    // The pubkeys the fulfilled split pays at and above the zero-conf height: the
+    // verified signers inlined on the settling response row, deduped, lower-cased and
+    // sorted ascending (D70). The order is the WRITE order of the validator_rewards
+    // rows, so it is sorted rather than left in the hub-authored order the row carries:
+    // two nodes replaying the same row must emit the same rows in the same sequence.
+    //
+    // `data['VALIDATOR_SIGNATURES']` is the JSON array the chain path (:684) and the
+    // mirror applier (:909) both stamp before this settle runs, so both fulfilled
+    // routes above the height pay signers. The v4 relay path deliberately stores null
+    // there (its signatures are cross_chain relay signatures, not the attestation
+    // quorum, :2010), and so does any row whose signature list failed to parse: those
+    // fall back to the recomputed responsible set and say so (D90). The fallback is a
+    // pure function of the same row and local state, so every node takes it together.
+    _signerPaySet(request, data, responsible){
+        let raw    = data ? data['VALIDATOR_SIGNATURES'] : null;
+        let parsed = null;
+        if(Array.isArray(raw)) parsed = raw;
+        else if(raw != null && String(raw) !== ''){
+            try { parsed = JSON.parse(String(raw)); } catch(e){ parsed = null; }
+        }
+
+        let seen = new Set();
+        let keys = [];
+        if(Array.isArray(parsed)){
+            for(let s of parsed){
+                let pk = (s && s.pubkey != null) ? String(s.pubkey).toLowerCase() : '';
+                // A duplicate pubkey would take two shares of one escrow; the verifier
+                // already refuses one, and dropping it here keeps that true by construction.
+                if(!pk || seen.has(pk)) continue;
+                seen.add(pk);
+                keys.push(pk);
+            }
+        }
+
+        if(keys.length === 0){
+            console.warn('Attestation fee settle: no verified signatures on the fulfilled response for request ' +
+                         String(request.request_id).substring(0,16) +
+                         '..., splitting among the recomputed responsible set instead');
+            return responsible;
+        }
+
+        keys.sort((a, b) => (a < b) ? -1 : (a > b ? 1 : 0));
+        return keys;
     }
 
     // The XCHAIN-denominated broadcast-fee reimbursement owed to the leader for this

@@ -44,6 +44,8 @@ const reorgHistoryQuery = require('./reorg-history-query');
 const { stampGiveDecimals } = require('./crossChainOfferDecimals');
 const merkle        = require('./merkle');
 const stateSubtree  = require('./state_subtree_activation');
+const srb           = require('./snapshot_reorg_buffer.js');      // CANONICAL_REORG_BUFFER, to reconstruct the raw request height
+const gatesFilter   = require('./rollcall_gates_filter.js');      // rules-aware attestation capability filter
 const crypto        = require('crypto');
 const { installObservability } = require('./observability');   // default-off /metrics + structured log shim
 const { installIndexerMetrics } = require('./indexerMetrics');  // poll-freshness heartbeat gauge
@@ -767,6 +769,37 @@ async function startApi(){
                 if(blk > latestBlock)
                     return { error: 'block_index ' + blk + ' not yet indexed (latest: ' + latestBlock + ')' };
                 let validators = await db.getValidatorsByCapability(capability, blk, min_stake);
+                // VALIDATOR_QUERY_LIMIT flag rides on the array itself, so read it
+                // BEFORE the rules filter below hands back a fresh array.
+                let truncated  = validators.truncated === true;
+                // RULES-AWARE FILTER, `attestation` only (spec §7.4, D16, D86). The
+                // indexer, not the hub, owns this: the hub's CapabilitySnapshot carries
+                // no twin, and adding a height parameter to this RPC would let a caller
+                // choose the height its own set is judged at, which is precisely the
+                // attack attest_response_verify.js:32-41 names.
+                //
+                // WHY block_index + CANONICAL_REORG_BUFFER. `block_index` here is
+                // ALREADY the buried block: CapabilitySnapshot.getSnapshot subtracts the
+                // buffer before it calls (CapabilitySnapshot.js:238). The filter buries
+                // its own argument, exactly as _computeResponsibleSet does, so it must
+                // be handed the raw request height whose burial is this block_index.
+                // Two edges follow. buriedSnapshotBlock clamps at 0, so for the first
+                // CANONICAL_REORG_BUFFER blocks of a chain several raw heights bury to
+                // the same block and this reconstruction is off by the clamp; those
+                // blocks predate any rolled epoch, so the filter reads no row and drops
+                // nobody there either way. And on a network where snapshot burial is not
+                // armed the filter's burial is the identity, so it would judge at
+                // block_index + buffer; that is inert too, because ROLLCALL_GATES is null
+                // on every network whose burial is un-armed.
+                if(capability === 'attestation'){
+                    let gatesStats = {};
+                    validators = await gatesFilter.filterByRolledGates({
+                        db, validators, requestBlock: blk + srb.CANONICAL_REORG_BUFFER,
+                        network: indexer.config['NETWORK'], stats: gatesStats
+                    });
+                    let line = gatesFilter.formatGatesFilterStats(gatesStats);
+                    if(line) console.log('getcapabilityvalidators: ' + line);
+                }
                 // Confirm which threshold this snapshot actually filtered by, so a
                 // hub↔indexer MIN_STAKE mismatch is visible in the indexer log
                 // rather than surfacing only as a silently-divergent quorum N.
@@ -782,7 +815,7 @@ async function startApi(){
                     count:       validators.length,
                     // Additive: true when the result hit VALIDATOR_QUERY_LIMIT, so a
                     // hub can alarm rather than silently consume a truncated set.
-                    truncated:   validators.truncated === true,
+                    truncated:   truncated,
                     validators:  validators
                 };
             } catch (err) {
@@ -1462,7 +1495,10 @@ async function startApi(){
                             ledger_hash:  String(r.ledger_hash).toLowerCase(),
                             publisher:    String(r.publisher).toLowerCase(),
                             action_index: Number(r.action_index),
-                            block_index:  Number(r.block_index)
+                            block_index:  Number(r.block_index),
+                            // ROLLCALL v1 GATES as carried, null on a v0 row: the BTC close
+                            // needs it to rebuild the v1 canonical it re-verifies against.
+                            gates:        (r.gates === undefined || r.gates === null) ? null : String(r.gates)
                         };
                     }
                     for(let r of await db.getRollcallPublishers(epoch, pubs, hcut)){

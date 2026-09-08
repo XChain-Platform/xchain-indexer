@@ -28,6 +28,10 @@ const fs     = require('fs');
 // module attest.js's isMirrorEraRequest seam reads, so the applier pass and the
 // handler can never disagree about which era a request is in.
 const attestResponseMirror = require('./attest_response_mirror_activation.js');
+// The zero-confirmation flag day, also read from the LOCAL v0 request row. Change C
+// of that height is this file's: above it the applier falls through an inert
+// candidate row to the next one instead of stranding the request until its deadline.
+const attestZeroConf = require('./attest_zero_conf_activation.js');
 
 // Page size the mirror applier walks its applicability read in. NOT consensus and
 // deliberately not exported: it shapes how many rows a node holds at once, never which
@@ -2229,6 +2233,17 @@ class Utility {
     // A deferred row needs no bookkeeping, because it is still applicable at the next
     // block and this same call selects it there; the constant's own comment carries the
     // carry-forward rule in full.
+    //
+    // ABOVE THE ZERO-CONF HEIGHT (zero-confirmation-flip spec §5, keyed per request on
+    // the request's OWN block, D38) the item additionally carries `candidates`: every
+    // eligible mirror row for that request, sorted (effective_time ASC, response_hash
+    // ASC), with `response` the head of that list. The read has no ORDER BY of its own,
+    // so this sort is the only order there is (D35). It is still ONE item per request
+    // and the cap still counts requests (D34): what changed is that the applier can try
+    // the second row when the first turns out to be inert, instead of re-selecting the
+    // same inert row every block until the deadline. Below the height the item is the
+    // single choice above and carries no `candidates` key at all, so a mixed fleet
+    // agrees byte for byte on every request below it (D11).
     selectApplicableAttestationResponses(mirrorRows, requestRows, blockIndex, blockTime, network){
         let block = Number(blockIndex);
         let time  = Number(blockTime);
@@ -2236,6 +2251,11 @@ class Utility {
         // bind to at all, which is the same set the SQL bound selects; re-stated here
         // because THIS is the copy of the rule that is tested and falsified.
         let byId = new Map();
+        // Ids whose request sits above the zero-conf height, so their item carries the
+        // full candidate list. Kept beside byId rather than stamped onto the request row
+        // because that row is handed to the handler as data['MIRROR_REQUEST'] and must
+        // stay the row the local read returned.
+        let fallThroughIds = new Set();
         for(let req of (requestRows || [])){
             if(String(req.request_status) !== 'pending')                    continue;
             if(!(block <= Number(req.deadline_block)))                      continue;
@@ -2243,7 +2263,12 @@ class Utility {
             // local row. attest.js's isMirrorEraRequest is the same module: the applier
             // re-checks it as its own gate, and row 18's chain-side gate calls it too.
             if(!attestResponseMirror.isResponseMirrorActive(req.block_index, network)) continue;
-            byId.set(String(req.request_id).toLowerCase(), req);
+            let reqId = String(req.request_id).toLowerCase();
+            byId.set(reqId, req);
+            // Evaluated HERE, beside the mirror-era check and off the same field (D38):
+            // both eras are properties of the request, never of the applying block, so a
+            // node that catches up late reaches the same verdict for the same request.
+            if(attestZeroConf.isZeroConfActive(req.block_index, network)) fallThroughIds.add(reqId);
         }
         if(byId.size === 0) return [];
 
@@ -2255,10 +2280,21 @@ class Utility {
         // broken by response_hash, both signed fields, so every node picks the same one
         // and the other is skipped rather than applied second.
         let chosen = new Map();
+        // id -> every eligible row for that request, above the height only.
+        let candidatesById = new Map();
         for(let row of (mirrorRows || [])){
             let id = String(row.request_id || '').toLowerCase();
             if(!byId.has(id))                          continue;
             if(!(Number(row.effective_time) <= time))  continue;
+            if(fallThroughIds.has(id)){
+                // Above the height nothing is discarded here: the loser of the tie-break
+                // is the FALL-THROUGH candidate, and discarding it is exactly the bug
+                // §5 removes. The head is picked by the sort below, not by this pass.
+                let list = candidatesById.get(id);
+                if(!list) candidatesById.set(id, list = []);
+                list.push(row);
+                continue;
+            }
             let prior = chosen.get(id);
             if(prior){
                 let a = Number(row.effective_time), b = Number(prior.effective_time);
@@ -2268,11 +2304,30 @@ class Utility {
             }
             chosen.set(id, row);
         }
+        // The same (effective_time, response_hash) rule the tie-break above applies, as an
+        // ORDER instead of a choice: the head is what binds first, and the tail is what the
+        // applier tries next. Both keys are signed fields, so every node builds the same
+        // sequence; equal on both keys means two copies of one signed response, and the
+        // sort is stable, so even that is ordered identically everywhere.
+        for(let [id, list] of candidatesById){
+            list.sort((x, y) => {
+                let a = Number(x.effective_time), b = Number(y.effective_time);
+                if(a !== b) return a - b;
+                let hx = String(x.response_hash || ''), hy = String(y.response_hash || '');
+                return hx < hy ? -1 : (hx > hy ? 1 : 0);
+            });
+            chosen.set(id, list[0]);
+        }
         if(chosen.size === 0) return [];
 
         let out = [];
-        for(let [id, row] of chosen)
-            out.push({ response: row, request: byId.get(id) });
+        for(let [id, row] of chosen){
+            let item = { response: row, request: byId.get(id) };
+            // Present only above the height, so the below-height item shape is untouched.
+            let list = candidatesById.get(id);
+            if(list) item.candidates = list;
+            out.push(item);
+        }
         out.sort((x, y) => {
             let bx = Number(x.request.block_index),  by = Number(y.request.block_index);
             if(bx !== by) return bx - by;
@@ -2361,29 +2416,51 @@ class Utility {
         }
 
         for(let item of applicable){
-            let data = {};
-            data['ACTION']       = 'ATTEST';
-            data['FORMAT']       = 1;
-            data['BLOCK_INDEX']  = block_index;
-            // Load-bearing, not decoration: _settleRequestFee reaches the broadcast-fee
-            // reimbursement, which reads BLOCK_TIME for its fee-oracle lookup, and the
-            // injected callback context carries it too.
-            data['BLOCK_TIME']   = block_time;
-            // No transaction is behind a mirror-applied response. That is the entire
-            // point of the design, and it is what AT1 asserts on the resulting action.
-            data['TX_INDEX']     = null;
-            data['TX_VOUT']      = null;
-            data['IS_SYNTHETIC'] = true;
-            // The mirror row plus the LOCAL request row it binds to. Passing the pair is
-            // what keeps the handler from re-reading (and re-ordering) state the binding
-            // rule already decided.
-            data['MIRROR_RESPONSE'] = item.response;
-            data['MIRROR_REQUEST']  = item.request;
-            data['REQUEST_ID']      = item.response.request_id;
-            // Mirror the synthetic-action positional layout: VERSION|REQUEST_ID. The
-            // handler reads the row, not these params; they exist so the action looks
-            // like every other synthesized one.
-            await actions.processAction('ATTEST', [1, item.response.request_id], data, null);
+            // FALL-THROUGH, and why the candidates ride inside the item rather than as
+            // extra items in `applicable`: the handler re-gates on data['MIRROR_REQUEST'],
+            // an in-memory snapshot taken once by the read above, so a second item for a
+            // request the first item already bound would still read 'pending' off that
+            // stale object and bind again, producing a second response row, a second fee
+            // split, a second callback and a second action under the same synthetic
+            // TX_HASH (it is namespaced on request_id alone). One request is dispatched
+            // here at most once; the fall-through happens inside that one dispatch.
+            // Below the height there is exactly one candidate and this is today's loop.
+            let candidates = (item.candidates && item.candidates.length)
+                ? item.candidates : [item.response];
+            for(let candidate of candidates){
+                // A FRESH data object per candidate. The handler writes its results into
+                // this object (ACTION_INDEX, TX_HASH, STATUS), so reusing one across two
+                // candidates would carry a skipped row's leftovers into the next attempt.
+                let data = {};
+                data['ACTION']       = 'ATTEST';
+                data['FORMAT']       = 1;
+                data['BLOCK_INDEX']  = block_index;
+                // Load-bearing, not decoration: _settleRequestFee reaches the broadcast-fee
+                // reimbursement, which reads BLOCK_TIME for its fee-oracle lookup, and the
+                // injected callback context carries it too.
+                data['BLOCK_TIME']   = block_time;
+                // No transaction is behind a mirror-applied response. That is the entire
+                // point of the design, and it is what AT1 asserts on the resulting action.
+                data['TX_INDEX']     = null;
+                data['TX_VOUT']      = null;
+                data['IS_SYNTHETIC'] = true;
+                // The mirror row plus the LOCAL request row it binds to. Passing the pair is
+                // what keeps the handler from re-reading (and re-ordering) state the binding
+                // rule already decided.
+                data['MIRROR_RESPONSE'] = candidate;
+                data['MIRROR_REQUEST']  = item.request;
+                data['REQUEST_ID']      = candidate.request_id;
+                // Mirror the synthetic-action positional layout: VERSION|REQUEST_ID. The
+                // handler reads the row, not these params; they exist so the action looks
+                // like every other synthesized one.
+                await actions.processAction('ATTEST', [1, candidate.request_id], data, null);
+                // THE BIND SIGNAL (D89). _applyMirroredResponse sets STATUS 'valid' only
+                // after the row verified; every skip path returns before it, leaving the
+                // key unset. Stopping here is what makes the request bind exactly once:
+                // a bound request must never see a second candidate, and each skip has
+                // already logged its own reason inside the handler.
+                if(data['STATUS'] === 'valid') break;
+            }
         }
     }
 
