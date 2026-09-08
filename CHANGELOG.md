@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.3] - 2026-09-08
+
+### Added
+- A chunked contract deploys exactly once in the block where its last piece confirms, whatever order the pieces arrived in; an assembling DEPLOY that lands early is held pending with its base fee paid instead of failing. Activation is at genesis on mainnet and regtest and unarmed on testnet until the shipping release pins the instant.
+- New federation read `getpricebatches` answers which oracle rounds in a range already ride a valid PRICE batch, so the hub can skip re-publishing windows the chain carries.
+
 ## [0.15.0] - 2026-09-07
 
 ### Added

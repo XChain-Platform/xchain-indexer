@@ -16267,6 +16267,36 @@ class Database {
         return await this.doQuery(query, [source_id, codeHash, beforeActionIndex]);
     }
 
+    // Find the UNCONSUMED pending assembler of a chunked-DEPLOY group (same deployer,
+    // same code_hash) at a LOWER action_index than the action asking (DEPLOY_DEFERRED_
+    // ASSEMBLY, R1/R2). A pending assembler is a contracts row whose status is the
+    // pending string, written once at the assembler's index and never mutated; it is
+    // consumed iff some contract_executions row names it in assembler_action_index (the
+    // row the completing action writes unconditionally), so consumption is a NOT EXISTS
+    // and rollback of the completing action un-consumes it by construction. Returns the
+    // wire parameters the deployment at the completing action needs (gas_limit and
+    // input_params from the assembler's execution row, cooldown_blocks and the resolved
+    // slash_destination_id from its contracts row, the mode it paid its base fee in) or
+    // null when the group has no pending assembler. Lowest action_index wins so every
+    // node picks the same one; the duplicate-pending rejection in deploy.js means there
+    // is at most one anyway.
+    async getPendingDeployAssembler(source, codeHash, beforeActionIndex){
+        let source_id = await this.getAddressId(source);
+        if(source_id === null) return null;
+        let query = `SELECT c.action_index, c.block_index, c.code_hash, c.cooldown_blocks, c.slash_destination_id,
+                            ce.gas_limit, ce.input_params, ce.fee_payment_mode
+                     FROM contracts c
+                     INNER JOIN contract_executions ce ON (ce.action_index=c.action_index)
+                     INNER JOIN index_statuses s ON (s.id=c.status_id)
+                     WHERE c.source_id=? AND c.code_hash=? AND c.action_index < ?
+                       AND s.status='pending: CODE_HASH (awaiting chunks)'
+                       AND NOT EXISTS (SELECT 1 FROM contract_executions x WHERE x.assembler_action_index=c.action_index)
+                     ORDER BY c.action_index ASC
+                     LIMIT 1`;
+        let results = await this.doQuery(query, [source_id, codeHash, beforeActionIndex]);
+        return results.length > 0 ? results[0] : null;
+    }
+
     // Persist a contract's declared permissions manifest (Phase E). Upsert keyed on
     // the DEPLOY action_index (the rollback key) - mirrors createContract. PERMISSIONS
     // is the validated array of permitted emission action types (stored as JSON) or
@@ -16352,6 +16382,13 @@ class Database {
         let error_message = data['ERROR_MESSAGE'];
         let emitted_count = data['EMITTED_COUNT'] || 0;
         let block_index  = data['BLOCK_INDEX'];
+        // Deferred chunked-DEPLOY fields (DEPLOY_DEFERRED_ASSEMBLY): the pending
+        // assembler this constructor row consumed (NULL for inline and self-completed
+        // deploys, and for every non-DEPLOY execution) and the fee mode a DEPLOY
+        // constructor row's base fee was paid in (1 native, 2 XCHAIN; NULL before the
+        // flag day and for non-DEPLOY rows). Neither enters a block-hash preimage.
+        let assembler_action_index = this.util.isNull(data['ASSEMBLER_ACTION_INDEX']) ? null : data['ASSEMBLER_ACTION_INDEX'];
+        let fee_payment_mode = this.util.isNull(data['FEE_PAYMENT_MODE']) ? null : data['FEE_PAYMENT_MODE'];
         let query  = "SELECT action_index FROM contract_executions WHERE action_index=? LIMIT 1";
         let args   = [action_index];
         let exists = false;
@@ -16362,20 +16399,24 @@ class Database {
             query = `UPDATE contract_executions SET
                         contract_index=?, caller_id=?, method_name=?, input_params=?,
                         gas_used=?, gas_limit=?, status_id=?, error_message=?,
-                        emitted_count=?, block_index=?
+                        emitted_count=?, block_index=?,
+                        assembler_action_index=?, fee_payment_mode=?
                     WHERE action_index=?`;
             args = [contract_index, caller_id, method_name, input_params,
                     gas_used, gas_limit, status_id, error_message,
-                    emitted_count, block_index, action_index];
+                    emitted_count, block_index,
+                    assembler_action_index, fee_payment_mode, action_index];
         } else {
             query = `INSERT INTO contract_executions
                         (contract_index, caller_id, method_name, input_params,
                          gas_used, gas_limit, status_id, error_message,
-                         emitted_count, block_index, action_index)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                         emitted_count, block_index,
+                         assembler_action_index, fee_payment_mode, action_index)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
             args = [contract_index, caller_id, method_name, input_params,
                     gas_used, gas_limit, status_id, error_message,
-                    emitted_count, block_index, action_index];
+                    emitted_count, block_index,
+                    assembler_action_index, fee_payment_mode, action_index];
         }
         await this.doQuery(query, args);
     }

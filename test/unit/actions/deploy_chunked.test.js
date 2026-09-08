@@ -59,8 +59,12 @@ describe('Chunked DEPLOY: v4 carrier handler @regression @tier2', function () {
         indexer.indexerDb.isActionAllowed.resolves(true);
         indexer.indexerDb.getTokenInfo.resolves({ TICK_ID: 1 });
         indexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
-        ctx = { config: indexer.config, util: indexer.util, mapper: indexer.mapper, decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb };
-        handler = new DeployChunk(ctx);
+        // Pre-activation carrier behaviour: with DEPLOY_DEFERRED_ASSEMBLY off, a stored carrier
+        // never looks for a pending assembler and can never deploy. The post-activation carrier
+        // is driven in deploy_deferred.test.js.
+        ctx = { config: indexer.config, util: indexer.util, mapper: indexer.mapper, decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb,
+                protocolChanges: { isEnabled: sinon.stub().resolves(false) } };
+        handler = new DeployChunk(ctx, new Deploy(ctx));
         indexer.util.resetLists();
     });
     afterEach(function () { sinon.restore(); });
@@ -99,6 +103,67 @@ describe('Chunked DEPLOY: v4 carrier handler @regression @tier2', function () {
     });
 });
 
+// assembleCode is the ONE primitive both R1 (a carrier completing its own group at C, bound
+// C + 1) and R2 (an assembler landing pending/invalid, bound its own action_index) call, so
+// its `incomplete` flag - the switch between a repairable landing and a terminal one - and its
+// `beforeActionIndex` bound are pinned directly here rather than only indirectly through the
+// full parse() pipeline in deploy_deferred.test.js.
+describe('DeployChunk.assembleCode: the incomplete flag and the assembly bound @regression @tier2', function () {
+
+    function makeHandler(rows) {
+        const config  = getTestConfig();
+        const indexer = createMockIndexer({ config });
+        indexer.indexerDb.getDeployChunksForAssembly = sinon.stub().callsFake(async (src, hash, before) =>
+            rows.filter(r => Number(r.action_index) < Number(before)));
+        const ctx = { config: indexer.config, util: indexer.util, mapper: indexer.mapper, decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb };
+        return new DeployChunk(ctx, null);   // no owning Deploy needed: assembleCode alone is under test
+    }
+
+    const HASH = sha256Hex(CODE);
+
+    it('is incomplete (repairable) with no chunks recorded at all', async function () {
+        const handler = makeHandler([]);
+        const result = await handler.assembleCode(SOURCE, HASH, 1000);
+        assert.strictEqual(result.error, 'invalid: CODE_HASH (no chunks)');
+        assert.strictEqual(result.incomplete, true);
+    });
+
+    it('is incomplete (repairable) when a middle position is missing', async function () {
+        const rows = chunkRows(CODE, 3).filter(r => r.chunk_index !== 1);
+        const handler = makeHandler(rows);
+        const result = await handler.assembleCode(SOURCE, HASH, 1000);
+        assert.strictEqual(result.error, 'invalid: CODE_HASH (missing chunk 1)');
+        assert.strictEqual(result.incomplete, true);
+    });
+
+    it('is terminal (not repairable) when the assembled bytes do not match the declared hash', async function () {
+        const handler = makeHandler(chunkRows(CODE, 2));
+        const wrongHash = sha256Hex(CODE + ' // tampered');
+        const result = await handler.assembleCode(SOURCE, wrongHash, 1000);
+        assert.strictEqual(result.error, 'invalid: CODE_HASH (assembly mismatch)');
+        assert.strictEqual(result.incomplete, false);
+    });
+
+    it('is terminal (not repairable) on a malformed CODE_HASH', async function () {
+        const handler = makeHandler([]);
+        const result = await handler.assembleCode(SOURCE, 'NOTAHASH', 1000);
+        assert.strictEqual(result.error, 'invalid: CODE_HASH (format)');
+        assert.strictEqual(result.incomplete, false);
+    });
+
+    it('the bound excludes a row at or above it and includes everything below (R1s C + 1)', async function () {
+        const rows = chunkRows(CODE, 2);   // rows at action_index 10 (pos 0) and 11 (pos 1)
+        const handler = makeHandler(rows);
+        // Bound = 11 excludes the position-1 row filed AT 11: the group still reads incomplete.
+        let result = await handler.assembleCode(SOURCE, HASH, 11);
+        assert.strictEqual(result.incomplete, true);
+        // Bound = 12 (C + 1 for a completing carrier at C = 11) includes it: the group assembles.
+        result = await handler.assembleCode(SOURCE, HASH, 12);
+        assert.strictEqual(result.error, null);
+        assert.strictEqual(result.code, CODE);
+    });
+});
+
 describe('Chunked DEPLOY : DEPLOY v2/v3 assembly @regression @tier2', function () {
     let indexer, ctx, handler;
 
@@ -132,7 +197,12 @@ describe('Chunked DEPLOY : DEPLOY v2/v3 assembly @regression @tier2', function (
         indexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
         // Inline (v0/v1) decode is gated on DEPLOY_BASE64_CODE; default the stub to
         // enabled (base64) so these v0/v1 fixtures behave as on a post-activation node.
-        ctx = { config: indexer.config, util: indexer.util, mapper: indexer.mapper, decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb, vm: { validateSyntax: () => ({ valid: true, errors: [] }), checkFloatWarnings: () => [], readManifest: async () => ({ ok: true, methods: [] }), execute: async () => ({ success: true, gasUsed: 0 }) }, protocolChanges: { isEnabled: sinon.stub().resolves(true) } };
+        // Every gate on EXCEPT DEPLOY_DEFERRED_ASSEMBLY: these cases pin the PRE-activation
+        // chunk verdicts (an incomplete group is invalid at the assembler, byte-for-byte as it
+        // has always been). The post-activation verdicts live in deploy_deferred.test.js.
+        const isEnabled = sinon.stub().resolves(true);
+        isEnabled.withArgs('DEPLOY_DEFERRED_ASSEMBLY', sinon.match.any).resolves(false);
+        ctx = { config: indexer.config, util: indexer.util, mapper: indexer.mapper, decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb, vm: { validateSyntax: () => ({ valid: true, errors: [] }), checkFloatWarnings: () => [], readManifest: async () => ({ ok: true, methods: [] }), execute: async () => ({ success: true, gasUsed: 0 }) }, protocolChanges: { isEnabled } };
         handler = new Deploy(ctx);
         indexer.util.resetLists();
     });

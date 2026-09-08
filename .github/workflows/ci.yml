@@ -28,7 +28,7 @@ jobs:
       # sibling snapshot against a sibling still declaring the old version. That
       # is unsatisfiable: the snapshot must move for the release, and develop
       # must not. Empty everywhere else, which keeps the existing behaviour.
-      siblings-ref: ${{ startsWith(github.head_ref, 'release/') && github.head_ref || '' }}
+      siblings-ref: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || '' }}
     # Override the Node version for a repo if ever needed:
     #   node-version: "20"
 
@@ -299,7 +299,7 @@ jobs:
         # suite, so a sibling pinned at develop makes it measure the bundled
         # snapshot against a version develop is never going to carry.
         with:
-          ref: ${{ startsWith(github.head_ref, 'release/') && github.head_ref || '' }}
+          ref: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || '' }}
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4

@@ -69,6 +69,14 @@ const MAX_DEPLOY_CHUNKS = PROTO.MAX_DEPLOY_CHUNKS;
 // is consensus-hashed via contract_hash).
 const GAS_CEILING = 1000000;
 
+// The status a chunked assembler (v2/v3) lands with when its group is not complete yet
+// (DEPLOY_DEFERRED_ASSEMBLY, R2.3): its rows exist at its own action, but the contract is
+// deployed later, by the action that completes the group. Written once and NEVER mutated -
+// a status flip would be an in-place mutation needing bespoke rollback and a hash rule.
+// db.js repeats this literal in the pending-assembler lookup, the same way the seven
+// CODE_HASH verdict strings are repeated across deploy.js and deploy_chunk.js.
+const PENDING_ASSEMBLY_STATUS = 'pending: CODE_HASH (awaiting chunks)';
+
 class Deploy {
 
     constructor(action){
@@ -109,9 +117,12 @@ class Deploy {
         this.MIN_COOLDOWN_BLOCKS = 1;
         this.MAX_COOLDOWN_BLOCKS = 100000;
 
-        // Chunk-carrier (v4) collaborator: validates + stores a single code slice.
+        // Chunk-carrier (v4) collaborator: validates + stores a single code slice, owns the
+        // slice-assembly routine both sides use, and (post-DEPLOY_DEFERRED_ASSEMBLY) runs the
+        // deployment when the carrier it just stored completes a pending group. It is handed
+        // THIS instance so that deployment is the identical code path an assembler takes.
         // Not routed by action name; DEPLOY.parse() delegates to it for v4.
-        this.chunkStore = new DeployChunk(action);
+        this.chunkStore = new DeployChunk(action, this);
     }
 
     async parse(params, data, error){
@@ -252,53 +263,33 @@ class Deploy {
         // (base64 is 1.33x vs hex's 2x and has no '|', so it is delimiter-safe;
         // Buffer.from is lenient, so we round-trip to reject non-canonical base64 deterministically.)
         let code = '';
+        // A chunk verdict this assembler must not commit to until the fee and sleeping checks
+        // have run (R2). Both stay null pre-activation and on every inline deploy, so the path
+        // below is the one this file has always taken.
+        let pendingCodeHash = null;  // R2.3: land pending under the DECLARED hash
+        let deferredError   = null;  // R2.2: a verdict the fee/sleeping rejects still win over
         if(!error && isChunked){
             let declaredHash = String(data['CODE_HASH_PARAM']);
-            if(!/^[0-9a-f]{64}$/.test(declaredHash)){
-                error = 'invalid: CODE_HASH (format)';
+            // Assembly is the chunk store's routine so the deferred path at a completing
+            // carrier runs byte-identical dedup / range / decode / sha256 checks; the bound is
+            // exclusive, so an assembler assembles from carriers strictly below it.
+            let assembly = await this.chunkStore.assembleCode(data['SOURCE'], declaredHash, data['ACTION_INDEX']);
+            code = assembly.code;
+            // R2, post-activation and only for a group that is NOT complete yet ('no chunks' /
+            // 'missing chunk i'). Every other assembly verdict (bad hash format, count out of
+            // range, bad base64, assembly mismatch) is terminal: the group cannot be repaired by
+            // a later carrier, since dedup keeps the LOWEST action_index for each position.
+            if(assembly.incomplete && await this.actions.protocolChanges.isEnabled('DEPLOY_DEFERRED_ASSEMBLY', data['BLOCK_INDEX'])){
+                // One pending assembler per group (D4): without this, a second pending assembler
+                // would be re-armed by any later duplicate slice and deploy a surprise second
+                // contract. The lookup is bounded below this action, so it never sees itself.
+                let pending = await this.indexerDb.getPendingDeployAssembler(data['SOURCE'], declaredHash, data['ACTION_INDEX']);
+                if(pending)
+                    deferredError = 'invalid: CODE_HASH (duplicate pending)';
+                else
+                    pendingCodeHash = declaredHash;
             } else {
-                // Gather only VALID chunks from THIS deployer for THIS group, recorded at a
-                // LOWER action_index than this DEPLOY (assembly never consumes a chunk that
-                // does not precede it, so any reorg dropping a chunk also drops the dependent
-                // DEPLOY, so rollback needs no bespoke logic). Dedup by position; the query is
-                // ordered so the first (lowest action_index) submission deterministically wins.
-                let rows  = await this.indexerDb.getDeployChunksForAssembly(data['SOURCE'], declaredHash, data['ACTION_INDEX']);
-                let parts = {};
-                let total = null;
-                for(let row of rows){
-                    let ci = Number(row.chunk_index);
-                    if(parts[ci] === undefined){
-                        parts[ci] = String(row.code_part);
-                        if(total === null) total = Number(row.total_chunks);
-                    }
-                }
-                if(total === null){
-                    error = 'invalid: CODE_HASH (no chunks)';
-                } else if(total < 1 || total > MAX_DEPLOY_CHUNKS){
-                    error = 'invalid: CODE_HASH (chunk count out of range)';
-                } else {
-                    let b64 = '';
-                    for(let i = 0; i < total; i++){
-                        if(parts[i] === undefined){ error = 'invalid: CODE_HASH (missing chunk ' + i + ')'; break; }
-                        b64 += parts[i];
-                    }
-                    if(!error){
-                        try {
-                            code = Buffer.from(b64, 'base64').toString('utf8');
-                            if(Buffer.from(code, 'utf8').toString('base64') !== b64)
-                                error = 'invalid: CODE_HASH (base64 decode failed)';
-                        } catch(e){
-                            error = 'invalid: CODE_HASH (base64 decode failed)';
-                        }
-                    }
-                    // CODE_HASH binds the assembled bytes: a wrong / missing / extra / reordered
-                    // slice changes the digest. This is the integrity gate for the whole group.
-                    if(!error){
-                        let assembledHash = crypto.createHash('sha256').update(code).digest('hex');
-                        if(assembledHash !== declaredHash)
-                            error = 'invalid: CODE_HASH (assembly mismatch)';
-                    }
-                }
+                error = assembly.error;
             }
         } else if(!error){
             if(this.util.isNull(data['CODE_ENCODING'])){
@@ -329,10 +320,97 @@ class Deploy {
             }
         }
 
+        // Everything from here on is the deployment itself, shared with the deferred
+        // assembly path: the wire parameters travel explicitly so a caller that did NOT
+        // parse them off this transaction (a chunk carrier completing a group, which reads
+        // them from the assembler's stored rows) can hand over the identical set while
+        // `data` stays its OWN transaction context.
+        return await this.runDeployment(data, {
+            code:              code,
+            isChunked:         isChunked,
+            gasLimit:          data['GAS_LIMIT'],
+            constructorParams: data['CONSTRUCTOR_PARAMS'],
+            cooldownBlocks:    data['COOLDOWN_BLOCKS'],
+            slashDestination:  data['SLASH_DESTINATION']
+        }, error, {
+            pendingCodeHash: pendingCodeHash,
+            deferredError:   deferredError
+        });
+    }
+
+    /**
+     * The deployment: every step after the contract source exists, from the size check
+     * through the syntax/lint gates, the permissions manifest, the gas fee, the derived
+     * address, the constructor and its state/emissions, to the contracts /
+     * contract_permissions / contract_executions rows, the ledger debit and the mappings.
+     *
+     * Split out of parse() because a DEPLOY is not always deployed by the action that
+     * carried its parameters: a chunked group whose pieces confirm out of order is deployed
+     * by the action that completes it, which owns a different transaction. Hence the two
+     * distinct inputs.
+     *
+     * @param {object} data  The DEPLOYING action's own transaction context, and the only
+     *                       source of everything transaction-derived: ACTION_INDEX (which is
+     *                       the contract's index and its permanent C:<CHAIN>:<index> address),
+     *                       SOURCE, BLOCK_INDEX, BLOCK_TIME, TX_HASH, TX_INDEX, TX_VOUT,
+     *                       BATCH_POSITION, TX_OUTPUTS and ISSUANCE_LIMIT_LEDGER. Mutated:
+     *                       STATUS is written here, and the native-fee fields when that
+     *                       validation runs. Every row this method writes is keyed at
+     *                       data['ACTION_INDEX'], which is what keeps rollback generic.
+     * @param {object} wire  The DEPLOY's own parameters, which may come from another
+     *                       action's stored rows: {code, isChunked, gasLimit,
+     *                       constructorParams, cooldownBlocks, slashDestination}.
+     *                       `slashDestination` must already be resolved to an address
+     *                       (carets and the BURN sentinel resolve per block, at the action
+     *                       that parsed them). `isChunked` selects the gas schedule row:
+     *                       a chunked deploy is not charged per byte again, its carriers
+     *                       already paid that.
+     * @param {?string} error  A verdict already reached by the caller, or null. Non-null
+     *                       short-circuits every check below exactly as an inline reject does.
+     * @param {object} [options]  Deferred-assembly seams, all defaulting to the inline
+     *                       behaviour:
+     *                       - skipBaseFee: the base fee was already validated and charged at
+     *                         another action, so neither validate nor re-derive the mode here.
+     *                       - feePaymentMode: the mode that other action actually paid in
+     *                         (1 native, 2 XCHAIN); it decides whether the constructor gas is
+     *                         debited at all, so it cannot be re-detected from this
+     *                         transaction's outputs.
+     *                       - skipSleeping: the source's sleeping check already ran at this
+     *                         same block for this same action's transaction.
+     *                       - assemblerActionIndex: the assembler this deployment consumes,
+     *                         recorded on the execution row (that row IS the consumption
+     *                         marker, so it must be written whatever the constructor does).
+     *                       - pendingDebits: [tick, amount, address] triples this SAME action
+     *                         already owes (the completing carrier's own gas fee). They ride
+     *                         the single ledger write below and are applied to the in-memory
+     *                         balances first, because getAddressBalances bounds at
+     *                         action_index < this action and so cannot see them.
+     *                       - pendingCodeHash: this action is a chunked assembler whose group
+     *                         is not complete yet, so it lands PENDING under that declared hash
+     *                         instead of deploying (R2.3). The fee and sleeping checks still
+     *                         run and their rejects win; the base fee is still charged.
+     *                       - deferredError: a verdict held until after those same two checks
+     *                         (R2.2's duplicate-pending), so a fee-mode or sleeping reject wins
+     *                         over it exactly as it does for a pending landing.
+     */
+    async runDeployment(data, wire, error = null, options = {}){
+
+        let { code, isChunked, gasLimit, constructorParams, cooldownBlocks, slashDestination } = wire;
+        let { skipBaseFee = false, skipSleeping = false, assemblerActionIndex = null, feePaymentMode: paidFeePaymentMode = null,
+              pendingDebits = [], pendingCodeHash = null, deferredError = null } = options;
+
+        // The held chunk verdict (R2). While one is held no deployment happens - no VM work, no
+        // derived address, no constructor - but the fee and sleeping checks below still run,
+        // which is the whole point of holding it: post-activation an early assembler on a
+        // native-fee chain with no fee output is 'invalid: insufficient fee (native coin output
+        // required)' and a sleeping source's is 'invalid: SOURCE (sleeping)', not a pending row.
+        let heldVerdict   = pendingCodeHash !== null ? PENDING_ASSEMBLY_STATUS : deferredError;
+        let landedPending = false;
+
         if(!error && Buffer.byteLength(code, 'utf8') > this.MAX_CODE_SIZE)
             error = 'invalid: CODE_ENCODING (exceeds max size)';
 
-        if(!error && (this.util.isNull(data['GAS_LIMIT']) || !this.util.isNumeric(data['GAS_LIMIT'])))
+        if(!error && (this.util.isNull(gasLimit) || !this.util.isNumeric(gasLimit)))
             error = 'invalid: GAS_LIMIT (required)';
 
         /*****************************************************************
@@ -352,14 +430,17 @@ class Deploy {
         // the block loop rolls back and retries without committing until the
         // native VM is rebuilt. No consensus rule changes, so no flag-day is
         // needed - a healthy node validates exactly as before.
-        if(!error && !this.actions.vm){
+        if(!error && !heldVerdict && !this.actions.vm){
             let e = new Error('deploy VM executor unavailable');
             e.code = 'EXECUTOR_UNAVAILABLE';
             throw e;
         }
 
+        // A held verdict skips every VM gate below: there is no assembled source to lint or read
+        // a manifest from (the pending assembler's `code` is empty), and running the gates on
+        // empty bytes would let a lint verdict pre-empt the pending landing.
         let floatWarnings = [];
-        if(!error && this.actions.vm){
+        if(!error && !heldVerdict && this.actions.vm){
             // banned-async (async/await/Promise) is a consensus-gated deploy rule:
             // below the VM_BANNED_ASYNC flag-day such a contract was ACCEPTED, so a
             // from-genesis replay must reproduce that historical verdict. Resolve the
@@ -423,7 +504,7 @@ class Deploy {
         let declaredPermissions = null;   // string[] | null
         let declaredMaxTakeBps  = null;   // number   | null
         let hasInitialize       = false;  // contract exports a callable constructor (DEPLOY_INIT_STRICT)
-        if(!error && this.actions.vm){
+        if(!error && !heldVerdict && this.actions.vm){
             // Read the manifest under THIS DEPLOY's block context, not pre-activation defaults:
             // the verdict hashes into deploy status, so resolving the VM's activation gates from
             // an absent context would read the manifest under a different sandbox rule set than
@@ -481,9 +562,22 @@ class Deploy {
         let tokenInfo = await this.indexerDb.getTokenInfo(gas, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
-        // Native coin or XCHAIN balance
-        let feePaymentMode = 2; // default: xchain balance
-        if(!error && tokenInfo && this.util.bcgt(fee, 0)){
+        // Debits this SAME action already owes. getAddressBalances bounds at
+        // action_index < this action, so a debit incurred at this index (the completing
+        // carrier's own gas fee) is invisible to it: apply it here or every check below reads a
+        // balance the source no longer has.
+        if(tokenInfo){
+            for(let [debitTick, debitAmount, debitAddress] of pendingDebits){
+                if(debitAddress === data['SOURCE'] && String(debitTick) === String(gas))
+                    balances = this.util.debitBalances(balances, tokenInfo['TICK_ID'], debitAmount);
+            }
+        }
+
+        // Native coin or XCHAIN balance. A deferred deployment does not re-detect the mode:
+        // the base fee was validated and paid at the assembler, in the mode THAT transaction's
+        // outputs decided, and the mode governs whether constructor gas is debited below.
+        let feePaymentMode = paidFeePaymentMode === null ? 2 : Number(paidFeePaymentMode); // default: xchain balance
+        if(!error && !skipBaseFee && tokenInfo && this.util.bcgt(fee, 0)){
             let pmMode = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']);
             if(pmMode === 'native'){
                 let tempFees = { AMOUNT: fee };
@@ -504,14 +598,39 @@ class Deploy {
             }
         }
 
-        // Adjust balances to reduce by gas fee (only for XCHAIN deduction mode)
-        if(!error && tokenInfo && feePaymentMode === 2)
+        // Adjust balances to reduce by gas fee (only for XCHAIN deduction mode). Skipped for a
+        // deferred deployment: the base fee was charged at the assembler, so charging it again
+        // here (in memory or on the ledger) would bill the deployer twice for one deploy.
+        if(!error && !skipBaseFee && tokenInfo && feePaymentMode === 2)
             balances = this.util.debitBalances(balances, tokenInfo['TICK_ID'], fee);
 
-        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
+        // D3, the one divergence from an inline deploy, and it exists only because A and C are
+        // different actions: the source can be drained between them. Before the constructor runs
+        // at C it must still hold the worst-case constructor spend, on top of whatever this same
+        // action already owes. Only in XCHAIN mode - a deployment whose base fee was paid by a
+        // native output is charged nothing further here, exactly as an inline native deploy is.
+        if(!error && skipBaseFee && tokenInfo && feePaymentMode === 2){
+            let gasReserve = this.util.bcmul(Math.min(Number(gasLimit), GAS_CEILING), this.config['GAS_PRICE'], 8);
+            if(this.util.bcgt(gasReserve, 0) && !this.util.hasBalance(balances, tokenInfo['TICK_ID'], gasReserve))
+                error = 'invalid: insufficient funds (GAS)';
+        }
+
+        // Skipped only for a deferred deployment: the action that carries this deployment ran
+        // the identical check for the identical source in the identical block before reaching
+        // here, so re-running it would be a second read of the same answer.
+        if(!error && !skipSleeping && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
-        let codeHash = crypto.createHash('sha256').update(code).digest('hex');
+        // The held chunk verdict lands here, after the two checks it must not pre-empt. From
+        // this point it behaves exactly as any other rejection: nothing below deploys anything.
+        if(!error && heldVerdict){
+            error = heldVerdict;
+            landedPending = (pendingCodeHash !== null);
+        }
+
+        // A pending assembler stores the DECLARED hash, not sha256('') as an unassembled row
+        // does today: that hash IS the group id the completing carrier looks it up by.
+        let codeHash = landedPending ? String(pendingCodeHash) : crypto.createHash('sha256').update(code).digest('hex');
 
         /*****************************************************************
          * Contract Derived Address
@@ -543,7 +662,7 @@ class Deploy {
         // timestamp 1786060800 in protocol_changes.js); below it the trigger is byte-identical
         // to today.
         let initStrict = await this.actions.protocolChanges.isEnabled('DEPLOY_INIT_STRICT', data['BLOCK_INDEX']);
-        let runConstructor = initStrict ? (hasInitialize || !!data['CONSTRUCTOR_PARAMS']) : !!data['CONSTRUCTOR_PARAMS'];
+        let runConstructor = initStrict ? (hasInitialize || !!constructorParams) : !!constructorParams;
 
         // Per-root discriminator for the constructor's subtree: a DEPLOY inside a BATCH
         // shares the transaction's single TX_VOUT with every sibling subcommand, so it
@@ -577,7 +696,7 @@ class Deploy {
                 // Empty CONSTRUCTOR_PARAMS => zero args ([]), not ['']. ''.split('|')
                 // would pass a single empty-string arg; under DEPLOY_INIT_STRICT a
                 // params-less constructor must receive no args.
-                params:           data['CONSTRUCTOR_PARAMS'] ? data['CONSTRUCTOR_PARAMS'].split('|') : [],
+                params:           constructorParams ? constructorParams.split('|') : [],
                 caller:           data['SOURCE'],
                 contractAddress:  contractAddress,
                 contractIndex:    data['ACTION_INDEX'],
@@ -666,8 +785,8 @@ class Deploy {
             API_VERSION       : 1,
             STATUS            : status,
             BLOCK_INDEX       : data['BLOCK_INDEX'],
-            COOLDOWN_BLOCKS   : data['COOLDOWN_BLOCKS'],
-            SLASH_DESTINATION : data['SLASH_DESTINATION']
+            COOLDOWN_BLOCKS   : cooldownBlocks,
+            SLASH_DESTINATION : slashDestination
         });
 
         if(constructorError)
@@ -795,18 +914,39 @@ class Deploy {
             fee = this.util.bcmul(totalGas, this.config['GAS_PRICE'], 8);
         }
 
+        // D3's split, applied to both halves of the same number: a deferred deployment's base
+        // component was charged at the assembler, so this action charges - and records as
+        // gas_used - only the constructor gas it actually ran. A's base plus C's constructor
+        // therefore sum to the single charge an inline deploy of the same source pays, and each
+        // row's gas_used equals the debit written beside it. Identical to totalGas inline.
+        let chargedGas = skipBaseFee ? Math.max(0, totalGas - gasCost) : totalGas;
+        fee = this.util.bcmul(chargedGas, this.config['GAS_PRICE'], 8);
+
+        // The fee mode is persisted only from the DEPLOY_DEFERRED_ASSEMBLY flag-day, because
+        // that is the first block at which anything reads it: a deployment deferred to a later
+        // action must charge constructor gas in the mode its assembler already paid the base
+        // fee in, and cannot re-derive that from its own transaction. Below the flag-day the
+        // column stays NULL so a from-genesis replay writes exactly the row it wrote before.
+        let recordFeePaymentMode = await this.actions.protocolChanges.isEnabled('DEPLOY_DEFERRED_ASSEMBLY', data['BLOCK_INDEX']);
+
         await this.indexerDb.createContractExecution({
             ACTION_INDEX    : data['ACTION_INDEX'],
             CONTRACT_INDEX  : data['ACTION_INDEX'], // contract_index = its own action_index
             CALLER          : data['SOURCE'],
             METHOD_NAME     : 'constructor',
-            INPUT_PARAMS    : data['CONSTRUCTOR_PARAMS'] || '',
-            GAS_USED        : totalGas,
-            GAS_LIMIT       : data['GAS_LIMIT'] || totalGas,
+            INPUT_PARAMS    : constructorParams || '',
+            GAS_USED        : chargedGas,
+            GAS_LIMIT       : gasLimit || chargedGas,
             STATUS          : status,
-            ERROR_MESSAGE   : error || null,
+            // A pending landing is not a failure, so it carries no error detail: the status
+            // itself says the group is waiting for its carriers.
+            ERROR_MESSAGE   : landedPending ? null : (error || null),
             EMITTED_COUNT   : constructorResult ? constructorResult.emittedActions.length : 0,
-            BLOCK_INDEX     : data['BLOCK_INDEX']
+            BLOCK_INDEX     : data['BLOCK_INDEX'],
+            // Consumption marker for a deferred assembly: NULL whenever this action carried its
+            // own parameters (an inline deploy, or an assembler whose group was already complete).
+            ASSEMBLER_ACTION_INDEX : assemblerActionIndex,
+            FEE_PAYMENT_MODE       : recordFeePaymentMode ? feePaymentMode : null
         });
 
         this.util.addAddressTicker(data['SOURCE'], gas);
@@ -814,13 +954,23 @@ class Deploy {
         let credits = [],
             debits  = [];
 
+        // Debits this action incurred before the deployment ran (the completing carrier's own
+        // gas fee, which it owes whatever the deployment then does). They MUST ride this one
+        // write: two ledger writes at a single action_index cannot see each other, so a split
+        // would let the second debit an amount the source never had, which drops the ledger
+        // supply without moving the balances projection and trips the per-block SanityError.
+        for(let pendingDebit of pendingDebits)
+            debits.push(pendingDebit);
+
         // Debit gas fee from SOURCE. Mirror the in-memory balance debit above
         // EXACTLY (!error && feePaymentMode === 2). Recording a ledger debit for a
         // rejected deploy (e.g. one rejected for insufficient GAS funds) burns gas
         // the source never had: the ledger supply drops but getAddressBalances only
         // iterates credit ticks, so the debit-only tick is invisible to the balances
         // projection, leaving balance = ledger + 1 and tripping the supply SanityError.
-        if(!error && tokenInfo && feePaymentMode === 2)
+        // (a pending landing is the one status other than 'valid' that still pays: it is an
+        // accepted action awaiting its carriers, and D15 charges it the base fee at A).
+        if((!error || landedPending) && tokenInfo && feePaymentMode === 2)
             debits.push([gas, fee, data['SOURCE']]);
 
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);

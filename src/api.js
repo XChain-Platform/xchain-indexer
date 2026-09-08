@@ -39,6 +39,7 @@ const { createShutdown, createIndexerDrain } = require('./shutdown');
 const { getStakeSourceByPubkey } = require('./stake-source');
 const { rewardPushRetiredError } = require('./reward-push-gate');
 const anchorActionQuery = require('./anchor-action-query');
+const priceBatchQuery   = require('./price-batch-query');
 const reorgHistoryQuery = require('./reorg-history-query');
 const { stampGiveDecimals } = require('./crossChainOfferDecimals');
 const merkle        = require('./merkle');
@@ -173,6 +174,7 @@ const FEDERATION_READ_METHODS = new Set([
     'getopencrosschainorders',
     'getactionconfirmations',
     'getanchoraction',
+    'getpricebatches',
     'getanchorconfirmations',
     'getrollcallsigners',
     'getarchiveanchor',
@@ -1251,6 +1253,35 @@ async function startApi(){
             } catch (err) {
                 console.error('getcrosschaincallresult error:', err);
                 return { error: 'failed to look up cross-chain call result' };
+            }
+        },
+
+        // Which oracle rounds in [first_round, last_round] already ride a VALID PRICE
+        // batch on this chain. The hub's batch publisher asks before it re-proposes a
+        // buffered window: a validator's own tables cannot answer (its snapshots keep
+        // the per-round proof for rounds it finalized itself, and its published-round
+        // markers cover only what IT broadcast), so without this read a hub restarted
+        // onto a full buffer re-publishes windows the chain already carries, at a fee
+        // apiece. Invalid wires are deliberately excluded: they do not carry their
+        // rounds for a replaying node, so those windows are right to fill. Returns the
+        // latest indexed block in the same round-trip, and `truncated` when the page
+        // filled, so the caller pages past its last batch rather than reading the
+        // remainder as empty. Body: { first_round, last_round, limit? }
+        async getpricebatches({first_round, last_round, limit}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            let v = priceBatchQuery.validatePriceBatchParams({ first_round, last_round, limit });
+            if(!v.ok) return { error: v.error };
+            // Federation READ isolation: committed-only, off the block tx.
+            let db = indexer.indexerDb.apiView();
+            try {
+                let latest = await db.getLatestBlockIndex();
+                let rows   = await db.doQuery(priceBatchQuery.PRICE_BATCHES_SQL,
+                    ['valid', v.last_round, v.first_round, v.limit]);
+                return priceBatchQuery.buildPriceBatchesResponse(latest, rows, v);
+            } catch (err) {
+                console.error('getpricebatches error:', err);
+                return { error: 'failed to look up price batches' };
             }
         },
 

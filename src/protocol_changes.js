@@ -112,6 +112,40 @@ const ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME = 9999999999;
 // and regtest venues exercise the corrected rule from block 0.
 const ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME = 1787961600;
 
+// Arms for DEPLOY_DEFERRED_ASSEMBLY, order-independent assembly of a chunked DEPLOY
+// group. A chunked contract is N format-4 carriers plus one assembling DEPLOY, each its
+// own transaction with no on-chain ordering between them; below the flag day the
+// assembler must land after every carrier or it is permanently
+// 'invalid: CODE_HASH (no chunks)' / '(missing chunk i)', and a reorg can hand a
+// correctly sequenced group back to the mempool in any order (measured on Bitcoin
+// testnet4 at block 150679 and by the regtest reorg drill). At/above it an early
+// assembler lands 'pending: CODE_HASH (awaiting chunks)' with its base fee paid, and
+// the first action that completes the group runs the deployment at its own index with
+// the assembler's wire parameters; a second pending assembler for the same group is
+// 'invalid: CODE_HASH (duplicate pending)'. The fee and sleeping checks move ahead of
+// the chunk verdict, and the pending rows enter the block's contract_hash through the
+// existing classes, so the rule is a consensus change (see actions/deploy.js and
+// actions/deploy_chunk.js).
+//
+// Mainnet: genesis-active (0). Every mainnet chain holds zero contracts and zero
+// deploy_chunks (measured 2026-09-01 and to be re-measured at the mainnet cut), so
+// there is no history the rule reinterprets and a from-genesis replay is unaffected.
+const DEPLOY_DEFERRED_ASSEMBLY_MAINNET_TIME = 0;
+
+// Testnet: house UNARMED sentinel (9999999999, year 2286) at this build rung. Bitcoin
+// testnet4 already holds a group of exactly the shape this rule reinterprets (action 70
+// assembler, carriers 71 and 75, blocks 150679-150681): an instant at or below block
+// 150679's time would turn action 70 into a pending assembler on a fresh replay and fork
+// it from every running node. The testnet instant is pinned by the release that ships
+// the rule, at 00:00:00Z of the second day after the indexer release lands, strictly
+// above the tip at repin; all three testnet indexers must run this code before it, and
+// the constant is re-pinned forward if the repin slips (an activation already past is
+// not a flag day). Regtest stays genesis-active (0) so the suites and regtest venues
+// exercise the rule from block 0.
+// Pinned by the v0.15.3 release: 2026-09-10T00:00:00Z, the second day after the release
+// lands, above TBTC 150681 (block time 1788303761) and the repin tip (151433 at 1788824545).
+const DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME = 1788998400;
+
 // Mainnet arm for BATCH_ISSUANCE_LIMITS, the BATCH issuance rework: the dotted-TICK
 // exemption that lets one BATCH carry a parent plus any number of child ISSUEs, the global
 // 250-command cap that bounds the scan it rides on, the batch-cumulative fee/settlement
@@ -316,7 +350,7 @@ const UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME = 9999999999;
 // (the ATTEST response mirror, ROLLCALL) gates on its OWN per-network activation
 // heights, which are unarmed off regtest, not on this ordinal. So the second line
 // of the deliberate two-line decision is: the rule set does not move here.
-const CONSENSUS_VERSION = '0.15.0';
+const CONSENSUS_VERSION = '0.15.3';
 
 // Predicate for the NATIVE_FEE_PRICE_TIME_GATE flag-day. Its ONE consumer is
 // utility.getFeeOraclePrices (query selection); nothing else in src/ consults it.
@@ -1620,6 +1654,30 @@ class ProtocolChanges {
         // rule from block 0.
         this.addChange('ISSUE_INHERITED_MINT_WINDOW', '0.2.0',ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME,ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME,0,0,0,0);
 
+        // DEPLOY_DEFERRED_ASSEMBLY: a chunked DEPLOY group (one source, one code_hash)
+        // deploys exactly once, in the block where its last piece confirms, whatever
+        // order the pieces confirmed in. Below the flag day the assembling DEPLOY must
+        // follow every carrier or it fails permanently; at/above it an early assembler
+        // lands 'pending: CODE_HASH (awaiting chunks)' (base fee paid, no code, no
+        // address, no state) and the first VALID action that completes the group, an
+        // assembler or a carrier, runs the deployment at ITS action_index with the
+        // pending assembler's wire parameters and its own transaction context; the
+        // constructor row it writes names the consumed assembler in
+        // contract_executions.assembler_action_index. One pending assembler per group
+        // ('invalid: CODE_HASH (duplicate pending)'); no expiry; rollback is the generic
+        // action-keyed delete because every row the deployment writes is keyed at the
+        // completing action.
+        //
+        // Gated because the observable outcomes change: an out-of-order group deploys
+        // instead of failing, an early assembler pays base gas and lands pending instead
+        // of invalid and unpaid, the fee and sleeping checks now precede the chunk
+        // verdict, and the pending contracts row enters that block's contract_hash.
+        // Keyed on block_TIME like the sibling multi-chain gates. MAINNET at genesis (no
+        // chunked-DEPLOY history on any mainnet chain), TESTNET UNARMED until the shipping
+        // release pins the instant (the constants above carry the reasoning and the
+        // testnet4 history that forbids a past instant), regtest at genesis (0).
+        this.addChange('DEPLOY_DEFERRED_ASSEMBLY', '0.2.0',DEPLOY_DEFERRED_ASSEMBLY_MAINNET_TIME,DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME,0,0,0,0);
+
         // NOTE: STAKE_WEIGHTED_QUORUM (WI-1) is deliberately NOT registered here.
         // Standard activations gate on the LOCAL processing block via isEnabled();
         // stake-weighted quorum must gate on the BTC-anchored `snapshot_block`
@@ -1787,6 +1845,12 @@ module.exports.BATCH_ROOT_SUB_INDEX_MAINNET_TIME = BATCH_ROOT_SUB_INDEX_MAINNET_
 // (2026-08-29T00:00:00Z) instant rather than a retroactive or drifted value.
 module.exports.ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME = ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME;
 module.exports.ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME = ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME;
+// Genesis-active mainnet arm + UNARMED testnet sentinel for deferred chunked-DEPLOY
+// assembly, exported so the suite can assert mainnet is at 0 (no chunked-DEPLOY history on
+// any mainnet chain) and that testnet still waits on the shipping release to pin an instant
+// above Bitcoin testnet4's recorded out-of-order group at blocks 150679-150681.
+module.exports.DEPLOY_DEFERRED_ASSEMBLY_MAINNET_TIME = DEPLOY_DEFERRED_ASSEMBLY_MAINNET_TIME;
+module.exports.DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME = DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME;
 // ARMED mainnet instant for the BATCH issuance-limits rework (1786838400, 2026-08-16T00:00Z,
 // armed 2026-08-14 pre-launch), exported so the suite can pin the ratified value, assert it
 // was never retroactive, that it never precedes BATCH_SUBACTION_NORMALIZATION, and that it

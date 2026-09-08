@@ -30,3 +30,4 @@ CREATE        INDEX source_id            ON contracts (source_id);
 CREATE        INDEX code_hash            ON contracts (code_hash);
 CREATE        INDEX status_id            ON contracts (status_id);
 CREATE        INDEX slash_destination_id ON contracts (slash_destination_id);
+CREATE        INDEX source_code_hash     ON contracts (source_id, code_hash);
