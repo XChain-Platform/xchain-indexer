@@ -84,7 +84,7 @@ const ENVELOPE_KEYS = new Set(['ts', 'level', 'service', 'msg', 'version']);
 // A bare token only where it cannot be confused with the next pair: anything
 // carrying whitespace, `=` or a quote is JSON-quoted so a reader can split the
 // tail on unquoted spaces. This is the half of the text format the watch
-// collector's parser is written against (claude/scripts/xchain-watch.js).
+// collector's parser is written against.
 function formatFieldValue(value) {
     if (value === null) return 'null';
     if (typeof value === 'string') {

@@ -129,9 +129,8 @@ parity check CI runs across the vendored copies.
 These four names configure the shim itself. The fleet deploy path carries them
 into the container: `xchain-node` forwards any of them set in the module config
 store or in the deploy host's environment (`ModuleService.resolveObservabilityEnv`),
-and the validator compose files under `claude/deploy/testnet-validators/` name
-them outright. Nothing is fabricated when neither source sets one, so these
-defaults hold on an unconfigured box:
+and the validator compose files name them outright. Nothing is fabricated when
+neither source sets one, so these defaults hold on an unconfigured box:
 
 | Variable | Default | Effect |
 |---|---|---|
