@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ROLLCALL v1 is parsed and verified with its gates list, the epoch close records each verified signer's list in a new `rollcall_gates` table, and the attestation capability set drops a validator whose recorded list lacks a rule active at the request block; a request that then falls under its redundancy is refused with a distinct reason.
 - The ROLLCALL close line tallies the signers it dropped by reason (no row, foreign ledger hash, wrong form for the epoch, bad signature), so a federation discarded on a canonical mismatch no longer reads as a silent absence.
 
+## [0.15.5] - 2026-09-08
+
+### Changed
+- The testnet activation of order-independent chunked DEPLOY assembly moves earlier, to 2026-09-08T12:00:00Z, now that every testnet indexer runs the release.
+
 ## [0.15.3] - 2026-09-08
 
 ### Added
