@@ -202,7 +202,7 @@ describe('Chunked DEPLOY : DEPLOY v2/v3 assembly @regression @tier2', function (
         // has always been). The post-activation verdicts live in deploy_deferred.test.js.
         const isEnabled = sinon.stub().resolves(true);
         isEnabled.withArgs('DEPLOY_DEFERRED_ASSEMBLY', sinon.match.any).resolves(false);
-        ctx = { config: indexer.config, util: indexer.util, mapper: indexer.mapper, decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb, vm: { validateSyntax: () => ({ valid: true, errors: [] }), checkFloatWarnings: () => [], readManifest: async () => ({ ok: true, methods: [] }), execute: async () => ({ success: true, gasUsed: 0 }) }, protocolChanges: { isEnabled } };
+        ctx = { config: indexer.config, util: indexer.util, mapper: indexer.mapper, decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb, vm: { validateSyntax: () => ({ valid: true, errors: [] }), checkFloatWarnings: () => [], readManifest: async () => ({ success: true, manifest: { hasInitialize: false, permissionsType: 'undefined', maxTakeBpsType: 'undefined', metaType: 'object', metaJson: JSON.stringify({ name: 'Unit Fixture', description: 'A unit-test contract fixture.', version: '1.0.0' }), metaError: false, metaOversize: false } }), execute: async () => ({ success: true, gasUsed: 0 }) }, protocolChanges: { isEnabled } };
         handler = new Deploy(ctx);
         indexer.util.resetLists();
     });

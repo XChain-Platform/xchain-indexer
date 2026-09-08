@@ -133,7 +133,9 @@ describe('Provider deadline-window overlay parity (VM injection) @regression @ti
         const vm = {
             validateSyntax:     sinon.stub().returns({ valid: true }),
             checkFloatWarnings: sinon.stub().returns([]),
-            readManifest:       sinon.stub().resolves({ success: true, manifest: null, error: null }),
+            // A conforming meta, because CONTRACT_META_REQUIRED is genesis-active on regtest and a
+            // null manifest would read 'manifest read failed' before the VM ever ran.
+            readManifest:       sinon.stub().resolves({ success: true, manifest: { hasInitialize: false, permissionsType: 'undefined', maxTakeBpsType: 'undefined', metaType: 'object', metaJson: JSON.stringify({ name: 'Unit Fixture', description: 'A unit-test contract fixture.', version: '1.0.0' }), metaError: false, metaOversize: false }, error: null }),
             execute:            sinon.stub().resolves({
                 success: true, gasUsed: 0, stateChanges: [], stateDeletes: [], emittedActions: []
             })

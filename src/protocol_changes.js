@@ -152,6 +152,33 @@ const DEPLOY_DEFERRED_ASSEMBLY_MAINNET_TIME = 0;
 // has parsed is reinterpreted.
 const DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME = 1788868800;
 
+// Arms for CONTRACT_META_REQUIRED, the rule that makes a contract's human-readable
+// identity a consensus-required export. At/above the flag day a DEPLOY whose contract
+// does not export meta.name and meta.description (see src/contract_meta.js for the
+// seven verdict rows and the text grammar) is rejected with an
+// 'invalid: CONTRACT_MANIFEST (...)' status instead of deploying nameless. The verdict
+// is evaluated OUTSIDE the manifest success guard, so a contract whose module top level
+// throws - which deploys 'valid' today and fails on its first execute - is rejected too;
+// that is the reason this cannot ride the ungated manifest block.
+//
+// Mainnet: genesis-active (0). Every mainnet chain holds zero contracts (measured
+// 2026-09-08 through the public explorer, the same state DEPLOY_DEFERRED_ASSEMBLY
+// recorded on 2026-09-01), so there is no history the rule reinterprets and a
+// from-genesis replay is unaffected.
+const CONTRACT_META_REQUIRED_MAINNET_TIME = 0;
+
+// Testnet: house UNARMED sentinel (9999999999, year 2286) at this build rung. TBTC
+// already holds 9 contracts, none of them exporting a meta-shaped object (measured
+// 2026-09-08), so a genesis-active testnet arm would flip every one of them from its
+// recorded verdict and fork a fresh replay from every running node. The instant is
+// pinned by the RELEASE that ships the rule, at 00:00:00Z of the second day after the
+// carrying indexer release lands, strictly above the tip and the tip's median-time-past
+// at re-pin, moved forward if the roll slips (an activation already past is not a flag
+// day), and re-pinnable earlier once every testnet indexer is proven on the code and a
+// fresh replay reproduces the fleet's hashes. Regtest stays genesis-active (0) so the
+// suites and the regtest venues exercise the rule from block 0.
+const CONTRACT_META_REQUIRED_TESTNET_TIME = 9999999999;
+
 // Mainnet arm for BATCH_ISSUANCE_LIMITS, the BATCH issuance rework: the dotted-TICK
 // exemption that lets one BATCH carry a parent plus any number of child ISSUEs, the global
 // 250-command cap that bounds the scan it rides on, the batch-cumulative fee/settlement
@@ -1684,6 +1711,27 @@ class ProtocolChanges {
         // testnet4 history that forbids a past instant), regtest at genesis (0).
         this.addChange('DEPLOY_DEFERRED_ASSEMBLY', '0.2.0',DEPLOY_DEFERRED_ASSEMBLY_MAINNET_TIME,DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME,0,0,0,0);
 
+        // CONTRACT_META_REQUIRED: a contract must name itself. At/above the flag day a
+        // DEPLOY is rejected unless its exports carry a plain-object `meta` with a
+        // conforming `name` and `description` (and a conforming `version` when the key
+        // is present); the seven verdict strings and the text grammar live in
+        // src/contract_meta.js. The meta verdict is judged AFTER the permissions and
+        // maxTakeBps verdicts, so a contract malformed on both keeps reporting today's
+        // string, and OUTSIDE the manifest success guard, so a module-level throw is
+        // 'invalid: CONTRACT_MANIFEST (manifest read failed)' rather than a nameless
+        // 'valid'. A chunked group is judged once, at the completing piece: a pending
+        // assembler holds its verdict and never reaches the VM block.
+        //
+        // Gated because the observable outcome changes for two classes of contract that
+        // deploy 'valid' today (no meta, and a throwing top level), and because the
+        // extracted values are written into the new contracts.meta_* columns. Keyed on
+        // block_TIME like the rest of the contract-era cohort (DEPLOY_INIT_STRICT,
+        // CONTROLLER_GUARD, VM_BANNED_ASYNC): one indexer-side verdict, no per-coin axis.
+        // MAINNET at genesis (no mainnet contracts), TESTNET UNARMED until the shipping
+        // release pins the instant (the constants above carry the reasoning and the TBTC
+        // history that forbids a past instant), regtest at genesis (0).
+        this.addChange('CONTRACT_META_REQUIRED', '0.2.0',CONTRACT_META_REQUIRED_MAINNET_TIME,CONTRACT_META_REQUIRED_TESTNET_TIME,0,0,0,0);
+
         // NOTE: STAKE_WEIGHTED_QUORUM (WI-1) is deliberately NOT registered here.
         // Standard activations gate on the LOCAL processing block via isEnabled();
         // stake-weighted quorum must gate on the BTC-anchored `snapshot_block`
@@ -1857,6 +1905,12 @@ module.exports.ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME = ISSUE_INHERITED_MINT_W
 // above Bitcoin testnet4's recorded out-of-order group at blocks 150679-150681.
 module.exports.DEPLOY_DEFERRED_ASSEMBLY_MAINNET_TIME = DEPLOY_DEFERRED_ASSEMBLY_MAINNET_TIME;
 module.exports.DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME = DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME;
+// Genesis-active mainnet arm + UNARMED testnet sentinel for the required contract meta
+// export, exported so the suite can assert mainnet is at 0 (no mainnet contracts) and that
+// testnet still waits on the shipping release to pin an instant above the 9 recorded TBTC
+// contracts, none of which exports a meta-shaped object.
+module.exports.CONTRACT_META_REQUIRED_MAINNET_TIME = CONTRACT_META_REQUIRED_MAINNET_TIME;
+module.exports.CONTRACT_META_REQUIRED_TESTNET_TIME = CONTRACT_META_REQUIRED_TESTNET_TIME;
 // ARMED mainnet instant for the BATCH issuance-limits rework (1786838400, 2026-08-16T00:00Z,
 // armed 2026-08-14 pre-launch), exported so the suite can pin the ratified value, assert it
 // was never retroactive, that it never precedes BATCH_SUBACTION_NORMALIZATION, and that it

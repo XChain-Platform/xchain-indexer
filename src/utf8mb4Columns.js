@@ -81,6 +81,11 @@
  *   * the ledger amount columns (balances / credits / debits / escrows) and the derived
  *     projections (order_matches, dispenses, fees) - only a validated, canonical decimal
  *     string is ever written there, so they are not a halt vector.
+ *   * contracts.meta_name / meta_description / meta_version / meta_json - born utf8mb4 on
+ *     BOTH schema paths (src/sql/contracts.sql declares the charset, and
+ *     2026-09-08-contract-meta-columns.sql ADDs them carrying it), so there is no utf8mb3
+ *     value anywhere to widen. This list is the WIDEN set, and an entry here would demand
+ *     a dated MODIFY that has nothing to do.
  *
  * BYTE-ALIGNED TWIN: copied verbatim into xchain-sync/src/utf8mb4Columns.js (sync has no
  * dependency on this package by design; same convention as tableLifecycle.js /

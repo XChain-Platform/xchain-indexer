@@ -16278,6 +16278,14 @@ class Database {
         if(!this.util.isNull(data['SLASH_DESTINATION'])){
             slash_destination_id = await this.createAddress(data['SLASH_DESTINATION']);
         }
+        // Contract meta manifest (CONTRACT_META_REQUIRED). deploy.js hands these over only
+        // for a valid deploy whose exported meta conforms to the byte grammar, so an absent
+        // key is a NULL column and an oversized value never reaches VARCHAR(64) at all - the
+        // write site, not the column width, is what keeps errno 1406 out of the indexer.
+        let meta_name        = (this.util.isNull(data['META_NAME']))        ? null : data['META_NAME'];
+        let meta_description = (this.util.isNull(data['META_DESCRIPTION'])) ? null : data['META_DESCRIPTION'];
+        let meta_version     = (this.util.isNull(data['META_VERSION']))     ? null : data['META_VERSION'];
+        let meta_json        = (this.util.isNull(data['META_JSON']))        ? null : data['META_JSON'];
         let query  = "SELECT action_index FROM contracts WHERE action_index=? LIMIT 1";
         let args   = [action_index];
         let exists = false;
@@ -16287,17 +16295,21 @@ class Database {
         if(exists){
             query = `UPDATE contracts SET
                         source_id=?, code=?, code_hash=?, api_version=?, status_id=?, block_index=?,
-                        cooldown_blocks=?, slash_destination_id=?
+                        cooldown_blocks=?, slash_destination_id=?,
+                        meta_name=?, meta_description=?, meta_version=?, meta_json=?
                     WHERE action_index=?`;
             args = [source_id, code, code_hash, api_version, status_id, block_index,
-                    cooldown_blocks, slash_destination_id, action_index];
+                    cooldown_blocks, slash_destination_id,
+                    meta_name, meta_description, meta_version, meta_json, action_index];
         } else {
             query = `INSERT INTO contracts
                         (source_id, code, code_hash, api_version, status_id, block_index,
-                         cooldown_blocks, slash_destination_id, action_index)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                         cooldown_blocks, slash_destination_id,
+                         meta_name, meta_description, meta_version, meta_json, action_index)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
             args = [source_id, code, code_hash, api_version, status_id, block_index,
-                    cooldown_blocks, slash_destination_id, action_index];
+                    cooldown_blocks, slash_destination_id,
+                    meta_name, meta_description, meta_version, meta_json, action_index];
         }
         await this.doQuery(query, args);
     }

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Added the CONTRACT_META_REQUIRED flag day: a DEPLOY is rejected unless its contract exports a conforming meta.name and meta.description.
+- A contract's own exported name, description and version are extracted at deploy time into searchable columns on the contracts table, with a full-text index over the name and description so a contract can be found by a word instead of only by its index.
+
 ## [0.16.0] - 2026-09-08
 
 - Testnet activation heights sized: zero-confirmation ATTEST service from block 151800 and ROLLCALL v1 gates from epoch 152208.

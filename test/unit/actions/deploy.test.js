@@ -42,13 +42,40 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
         db.getStatusString         = sinon.stub().resolves('valid');
     }
 
+    // CONTRACT_META_REQUIRED is genesis-active on regtest (this file's INDEXER_NETWORK)
+    // and this suite's isEnabled stub resolves true, so every default deploy must read a
+    // CONFORMING meta or it lands 'invalid: CONTRACT_MANIFEST (...)' instead of 'valid'.
+    // A manifest of null is the (manifest read failed) verdict, not "no manifest", so the
+    // default report is now a full one that declares nothing but its identity.
+    const CONFORMING_META = {
+        name:        'Unit Fixture',
+        description: 'A contract used by the deploy unit suite.',
+        version:     '1.0.0'
+    };
+    function metaFields(meta = CONFORMING_META) {
+        return {
+            metaType:     'object',
+            metaJson:     JSON.stringify(meta),
+            metaError:    false,
+            metaOversize: false
+        };
+    }
+    function baseManifest(hasInitialize = false) {
+        return Object.assign({
+            permissions: null, permissionsType: 'undefined',
+            maxTakeBps:  null, maxTakeBpsType:  'undefined',
+            hasInitialize
+        }, metaFields());
+    }
+
     function makeVm(overrides = {}) {
         return {
             validateSyntax:    sinon.stub().returns({ valid: true }),
             checkFloatWarnings:sinon.stub().returns([]),
             // Phase E: by default a contract declares no permissions manifest
-            // (manifest null → unrestricted), so deploy behaves as pre-Phase-E.
-            readManifest:      sinon.stub().resolves({ success: true, manifest: null, error: null }),
+            // (permissionsType 'undefined' → unrestricted), so deploy behaves as
+            // pre-Phase-E, and it carries the meta the flag day requires.
+            readManifest:      sinon.stub().resolves({ success: true, manifest: baseManifest(), error: null }),
             execute:           sinon.stub().resolves({
                 success:      true,
                 gasUsed:      0,
@@ -374,10 +401,11 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
 
     describe('constructor execution under DEPLOY_INIT_STRICT (Option C)', function () {
 
-        // Real readManifest always reports permissions/maxTakeBps types; mirror that
-        // full shape so the deploy path's permissions check does not misfire.
+        // Real readManifest always reports permissions/maxTakeBps types and, from the
+        // CONTRACT_META_REQUIRED flag day, the meta fields; mirror that full shape so
+        // neither the permissions check nor the meta verdict misfires.
         function manifest(hasInitialize) {
-            return { permissions: null, permissionsType: 'undefined', maxTakeBps: null, maxTakeBpsType: 'undefined', hasInitialize };
+            return baseManifest(hasInitialize);
         }
         function vmWithManifest(hasInitialize, executeResult) {
             return makeVm(Object.assign(
