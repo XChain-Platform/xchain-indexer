@@ -51,21 +51,28 @@ const GAS_ISSUE = `ISSUE|0|${GAS_TICK}|21000000|1000|8|Gas bootstrap`;
 /**
  * Seed the gas bootstrap block: ISSUE XCHAIN + MINT `amount` to each address.
  * @param {DecoderSeeder} seeder
- * @param {object} opts { blockIndex=99, blockTime=1699999000, addresses=[], amount='100' }
+ * @param {object} opts { blockIndex=99, blockTime=1699999000, addresses=[], amount='100',
+ *                        funder=GAS_FUNDER }
  *                 Pass blockIndex explicitly when the scenario's blocks do
  *                 not start at 100; keep it contiguous (first block - 1).
+ *                 Pass `funder` for a scenario that does NOT run on regtest: the
+ *                 "any address may issue the gas tick" exemption in
+ *                 actions/issue.js is regtest-only, so off regtest the preamble
+ *                 must be issued by that network's own ADDRESS.GAS or the whole
+ *                 bootstrap is rejected and every later action is unfunded.
  */
 async function seedGas(seeder, opts = {}) {
     const blockIndex = opts.blockIndex || 99;
     const blockTime  = opts.blockTime  || 1699999000;
     const addresses  = opts.addresses  || [];
     const amount     = opts.amount     || '100';
+    const funder     = opts.funder     || GAS_FUNDER;
 
     // Explicit tx hashes in a 'b'-prefixed space: the seeder's auto-generated
     // hashes and several tests' hand-pinned hashes both live in 'aaa...NN',
     // so colliding there reuses a tx_hash_id and trips the transactions table's
     // UNIQUE key (observed via 06's determinism test).
-    const txs = [{ source: GAS_FUNDER, data: GAS_ISSUE,
+    const txs = [{ source: funder, data: GAS_ISSUE,
                    txHash: 'b'.repeat(56) + '00000001' }];
     let n = 2;
     for (const addr of addresses)

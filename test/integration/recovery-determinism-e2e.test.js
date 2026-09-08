@@ -121,7 +121,12 @@ const ARCHIVE_PUBLISHER = 'DArchivePublisher0000000000000000';
 // ORDER BY chunk_index, action_index against a real engine (delivery-order independence).
 const CONTRACT_DEPLOYER = 'btc1qAaa';   // created in CHAIN block 1 (has a deterministic id on both nodes)
 const CONTRACT_BLOCK    = 5;            // after EARN/COLLECT so the deploy never perturbs the reward assertions
-const CONTRACT_CODE     = 'module.exports = { run: function(state, params) { return { value: 42 }; } };'
+// `meta` first, because this handler's protocolChanges stub answers enabled for every
+// gate, CONTRACT_META_REQUIRED included, and a nameless assembled source is then
+// `invalid: CONTRACT_MANIFEST (meta required)` at the completing piece (spec 2.1/2.3).
+const CONTRACT_CODE     = "module.exports = { meta: { name: 'Recovery Fixture',"
+                        + " description: 'Chunked-deploy recovery byte-identity fixture.', version: '1.0.0' },"
+                        + ' run: function(state, params) { return { value: 42 }; } };'
                         + ' // chunked-DEPLOY recovery byte-identity regression: padded to force a multi-slice base64 body split across v4 carriers';
 const CONTRACT_HASH     = crypto.createHash('sha256').update(Buffer.from(CONTRACT_CODE, 'utf8')).digest('hex');
 const CONTRACT_CHUNKS   = 3;
