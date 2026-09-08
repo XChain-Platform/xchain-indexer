@@ -743,6 +743,26 @@ describe('ROLLCALL epoch close (§3.4)', function(){
             assert.strictEqual(db.writes.gates.length, 0, 'an unrolled epoch writes no gates rows');
         });
 
+        it('names why each key was dropped on the close line, so a discarded federation is not read as an absence', async function(){
+            // The shape that motivated this: rows of the wrong form for the epoch (here
+            // v0 rows at a v1 epoch) closed "present 0/4" with nothing on the line to say
+            // a canonical mismatch, not a silent federation, was the cause.
+            let fed = federation(4);
+            let db  = dbFor(fed);
+            let a = answerV1(fed, [0,1,2]);
+            for(let i of [0,1,2]) a.signers[fed.ids[i].pubkey].gates = null;
+            let lines = [];
+            let orig  = console.log;
+            console.log = function(){ lines.push(Array.prototype.join.call(arguments, ' ')); };
+            try { await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(a), UTIL); }
+            finally { console.log = orig; }
+            assert.strictEqual(db.writes.rollcalls[0].rolled, 0);
+            let line = lines.find((l) => l.indexOf('ROLLCALL close') !== -1 && l.indexOf('UNROLLED') !== -1);
+            assert.ok(line, 'the close logged its UNROLLED line');
+            assert.ok(line.indexOf('dropped[no_row=1 ledger_hash=0 form=3 sig=0 v1 epoch]') !== -1,
+                'the close line must tally the drops by reason; got: ' + line);
+        });
+
         it('writes no gates rows when a rolled epoch verified nobody it could record', async function(){
             // Degenerate but reachable: the write is skipped rather than handing the db
             // an empty row list.

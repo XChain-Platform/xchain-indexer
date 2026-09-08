@@ -181,12 +181,18 @@ async function closeRollcallEpochs(indexerDb, config, blockIndex, proof, util){
     let presentKeys    = [];
     let presentSources = new Set();
     let gatesRows      = [];
+    // Why a key was NOT counted, tallied per reason and printed on the close line.
+    // Every drop below is deliberate and consensus-neutral, but a silent one is
+    // indistinguishable from an absence: a whole federation dropped on the form
+    // test read as "present 0/N" with nothing to say a v1 canonical was ever
+    // involved, and the operator went looking at the venue instead of the close.
+    let dropped = { no_row: 0, ledger_hash: 0, form: 0, sig: 0 };
     for(let key of keys){
         let row = answer.signers ? answer.signers[key] : null;
-        if(!row || !row.sig) continue;
+        if(!row || !row.sig){ dropped.no_row++; continue; }
         // The carried hash must be ours. A signature bound to a different epoch
         // block is a signature about a chain this node is not on.
-        if(String(row.ledger_hash).toLowerCase() !== ledgerHash) continue;
+        if(String(row.ledger_hash).toLowerCase() !== ledgerHash){ dropped.ledger_hash++; continue; }
 
         // An empty GATES reads as ABSENT, never as a v1 row with an empty list.
         // The column defaults to NULL, but a default of '' anywhere upstream would
@@ -195,13 +201,13 @@ async function closeRollcallEpochs(indexerDb, config, blockIndex, proof, util){
         // every build that can publish one.
         let gates = (row.gates === undefined || row.gates === null || String(row.gates) === '')
                     ? null : String(row.gates);
-        if(gatesActive !== (gates !== null)) continue;
+        if(gatesActive !== (gates !== null)){ dropped.form++; continue; }
 
         let canonical = gatesActive
             ? Buffer.from(rcc.buildRollcallCanonical(
                   { network: network, epochHeight: epochHeight, ledgerHash: ledgerHash, gates: gates }), 'utf8')
             : v0Canonical;
-        if(!ed25519.verify(canonical, String(row.sig).toLowerCase(), key)) continue;
+        if(!ed25519.verify(canonical, String(row.sig).toLowerCase(), key)){ dropped.sig++; continue; }
 
         presentKeys.push(key);
         presentSources.add(sourceOf.get(key));
@@ -226,9 +232,13 @@ async function closeRollcallEpochs(indexerDb, config, blockIndex, proof, util){
     await indexerDb.insertRollcall(epochHeight, snapshotBlock, closeBlock, rolled ? 1 : 0,
                                   rolled ? sortedSources : null);
 
+    let droppedNote = (dropped.no_row + dropped.ledger_hash + dropped.form + dropped.sig > 0)
+        ? ' dropped[no_row=' + dropped.no_row + ' ledger_hash=' + dropped.ledger_hash +
+          ' form=' + dropped.form + ' sig=' + dropped.sig + ' ' + (gatesActive ? 'v1' : 'v0') + ' epoch]'
+        : '';
     if(!rolled){
         console.log('\t ROLLCALL close : epoch=' + epochHeight + ' UNROLLED (present ' +
-                    presentSources.size + '/' + allSources.size + ' sources, below threshold)');
+                    presentSources.size + '/' + allSources.size + ' sources, below threshold)' + droppedNote);
         return 1;
     }
 
@@ -303,7 +313,7 @@ async function closeRollcallEpochs(indexerDb, config, blockIndex, proof, util){
     console.log('\t ROLLCALL close : epoch=' + epochHeight + ' ROLLED (present ' +
                 presentSources.size + '/' + allSources.size + ' sources, ' +
                 absentSources.length + ' absent, ' + evictedSources.length + ' evicted)' +
-                (leader ? ' leader=' + leader.substring(0, 16) + '...' : ''));
+                (leader ? ' leader=' + leader.substring(0, 16) + '...' : '') + droppedNote);
     return 1;
 }
 
