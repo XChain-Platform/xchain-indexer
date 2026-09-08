@@ -42,7 +42,7 @@
  * balances, and therefore moves balances_root. It does NOT ride
  * BATCH_ISSUANCE_LIMITS: folding it in would widen an already-large consensus
  * change late and entangle its replay evidence with
- * everything else there. Spec: claude/specs/ledger-amount-precision.md.
+ * everything else there.
  *
  * `null` means inert: below any threshold, and on every chain with no pinned
  * height, the legacy per-row quantization runs and historical replay stays
