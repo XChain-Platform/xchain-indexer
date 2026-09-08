@@ -9148,6 +9148,15 @@ class Database {
     // protocol cap once the gate is on, and MAX_SAFE_INTEGER before, which is the legacy
     // uncapped pass. This method never evaluates the gate itself, so it can never disagree
     // with the caller about which side of the flag day a block is on.
+    // Whether an action index has been parsed on this chain (a row in `actions`), as of the
+    // current parse height. CROSS_SETTLE uses it to tell a local leg the replay has not
+    // reached yet (retry on a later block) from one that is indexed and is not an offer
+    // (never settles). Read-only; no consensus row depends on it.
+    async isActionIndexParsed(actionIndex){
+        let rows = await this.doQuery('SELECT 1 AS present FROM actions WHERE action_index = ? LIMIT 1', [actionIndex]);
+        return rows.length > 0;
+    }
+
     async getEffectiveUnsettledMatches(coin, block_time, limit){
         // network filter: a match only settles on the indexer of the network it was matched
         // + signed on (also bound into the signed canonical - see cross_settle._canonical).

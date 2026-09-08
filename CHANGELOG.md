@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Above a new zero-confirmation activation height the responsible set carries one headroom slot from the request block, the mirror applier falls through an inert response row to the next valid one, and a fulfilled request's fee splits among the validators that actually signed the accepted response.
 - ROLLCALL v1 is parsed and verified with its gates list, the epoch close records each verified signer's list in a new `rollcall_gates` table, and the attestation capability set drops a validator whose recorded list lacks a rule active at the request block; a request that then falls under its redundancy is refused with a distinct reason.
 - The ROLLCALL close line tallies the signers it dropped by reason (no row, foreign ledger hash, wrong form for the epoch, bad signature), so a federation discarded on a canonical mismatch no longer reads as a silent absence.
+### Fixed
+- An unsettleable cross-chain match, one whose local leg is an indexed action that is not an offer, is dismissed once instead of being re-read and re-logged at every block.
 
 ## [0.15.5] - 2026-09-08
 

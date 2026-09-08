@@ -240,6 +240,7 @@ function createMockDb() {
         createSwapMatch: sinon.stub().resolves(),
         findSwapMatches: sinon.stub().resolves([]),
         getSwapInfo: sinon.stub().resolves(null),
+        isActionIndexParsed: sinon.stub().resolves(false),
         getSwapEdits: sinon.stub().resolves([]),
 
         // Dispenser
