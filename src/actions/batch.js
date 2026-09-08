@@ -153,7 +153,7 @@ class Batch {
 
         // VM actions (D8 for EXECUTE/XEXEC, D5's cost half for DEPLOY). RATIFIED AT 30 BY THE
         // OPERATOR ON 2026-08-15, on the measurement in bin/measure-batch-execute-cost.js and
-        // claude/reports/2026-08-14_batch-execute-cost-measurement.md. This is a consensus
+        // the 2026-08-14 batch-execute cost-measurement report in the platform tree. This is a consensus
         // constant: it decides verdicts, so it may only move behind a flag day.
         //
         // WHY 30, stated so a future retune can re-derive it rather than guess. A worst-case
