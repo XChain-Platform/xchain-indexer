@@ -356,7 +356,7 @@ const UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME = 9999999999;
 // (the ATTEST response mirror, ROLLCALL) gates on its OWN per-network activation
 // heights, which are unarmed off regtest, not on this ordinal. So the second line
 // of the deliberate two-line decision is: the rule set does not move here.
-const CONSENSUS_VERSION = '0.15.3';
+const CONSENSUS_VERSION = '0.15.5';
 
 // Predicate for the NATIVE_FEE_PRICE_TIME_GATE flag-day. Its ONE consumer is
 // utility.getFeeOraclePrices (query selection); nothing else in src/ consults it.
