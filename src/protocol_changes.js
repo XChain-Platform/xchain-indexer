@@ -142,7 +142,9 @@ const DEPLOY_DEFERRED_ASSEMBLY_MAINNET_TIME = 0;
 // the constant is re-pinned forward if the repin slips (an activation already past is
 // not a flag day). Regtest stays genesis-active (0) so the suites and regtest venues
 // exercise the rule from block 0.
-const DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME = 9999999999;
+// Pinned by the v0.15.3 release: 2026-09-10T00:00:00Z, the second day after the release
+// lands, above TBTC 150681 (block time 1788303761) and the repin tip (151433 at 1788824545).
+const DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME = 1788998400;
 
 // Mainnet arm for BATCH_ISSUANCE_LIMITS, the BATCH issuance rework: the dotted-TICK
 // exemption that lets one BATCH carry a parent plus any number of child ISSUEs, the global
@@ -348,7 +350,7 @@ const UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME = 9999999999;
 // (the ATTEST response mirror, ROLLCALL) gates on its OWN per-network activation
 // heights, which are unarmed off regtest, not on this ordinal. So the second line
 // of the deliberate two-line decision is: the rule set does not move here.
-const CONSENSUS_VERSION = '0.15.0';
+const CONSENSUS_VERSION = '0.15.3';
 
 // Predicate for the NATIVE_FEE_PRICE_TIME_GATE flag-day. Its ONE consumer is
 // utility.getFeeOraclePrices (query selection); nothing else in src/ consults it.

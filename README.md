@@ -4,8 +4,8 @@
 # XChain Platform Indexer
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.15.0-blue" alt="Version">
-  <img src="https://img.shields.io/badge/tests-8%2C590%2B%20passing-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/version-0.15.3-blue" alt="Version">
+  <img src="https://img.shields.io/badge/tests-8%2C851%2B%20passing-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/node-%3E%3D22-green" alt="Node">
   <img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue" alt="License">
 </p>
@@ -146,7 +146,7 @@ defaults hold on an unconfigured box:
 |---|---|
 | `npm run api` | Start the indexer and API server |
 | `bin/run-db-tiers.sh` | Run the DB-backed tiers against a throwaway MariaDB it starts and drops |
-| `npm test` | Run unit tests (~7,939 tests) |
+| `npm test` | Run unit tests (~8,200 tests) |
 | `npm run test:integration` | Integration tests (~275 tests, requires MariaDB) |
 | `npm run test:e2e` | End-to-end tests (43 tests, requires full stack) |
 | `npm run test:boundary` | Boundary condition tests (132 tests) |
@@ -162,10 +162,10 @@ defaults hold on an unconfigured box:
 | `npm run test:perf` | All performance tests (26 tests) |
 | `npm run test:perf:regimes` | Load-regime scenarios: fast chain (DOGE) and fee spike (9 tests) |
 | `npm run test:regression` | Regression tests (tagged across all suites, 6,830 tests) |
-| `npm run test:regression:fast` | Fast regression (tier1 + tier4, unit only, 3,438 tests) |
+| `npm run test:regression:fast` | Fast regression (tier1 + tier4, unit only, 3,566 tests) |
 | `npm run test:regression:full` | Full regression suite (6,830 tests) |
-| `npm run test:nodb` | All tests that don't require a database (8,192 tests) |
-| `npm run test:full` | Complete test suite (8,494 tests) |
+| `npm run test:nodb` | All tests that don't require a database (8,453 tests) |
+| `npm run test:full` | Complete test suite (8,755 tests) |
 
 ### Running the DB-backed tiers
 
