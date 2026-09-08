@@ -215,12 +215,12 @@ describe('rollcall_gates_filter: the rules-aware attestation capability filter @
     describe('the pass-through cases', function () {
 
         it('an INERT network never reads the database and returns the same array reference', async function () {
-            // mainnet and testnet ship ROLLCALL_GATES_ACTIVATION null, and an un-armed
-            // network must be byte-for-byte the pre-filter indexer INCLUDING its query
-            // count; the admission suite asserts one snapshot query per request.
+            // mainnet ships ROLLCALL_GATES_ACTIVATION null (testnet is sized at 152208 since
+            // D106), and an un-armed network must be byte-for-byte the pre-filter indexer
+            // INCLUDING its query count; the admission suite asserts one snapshot query per request.
             const db   = dbDouble(epochRow(960, 990, [[PK_A, []]]));
             const rows = [{ pubkey: PK_A }];
-            for(const net of ['mainnet', 'testnet']){
+            for(const net of ['mainnet']){
                 const out = await armed.filterByRolledGates({
                     db, validators: rows, requestBlock: H, network: net });
                 assert.strictEqual(out, rows, net + ': the input array itself must come back');

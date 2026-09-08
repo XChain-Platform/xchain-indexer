@@ -91,9 +91,10 @@ describe('attest_responsible_widening (indexer copy)', function () {
         }
     });
 
-    it('stage 1 (testnet, widening armed, zero-conf null): grants nothing in the first segment and both slots before the deadline', function () {
+    it('stage 1 (testnet, widening armed, request below the zero-conf flip): grants nothing in the first segment and both slots before the deadline', function () {
         assert.strictEqual(wid.ATTEST_RESPONSIBLE_WIDENING_ACTIVATION.testnet, 150780);
-        assert.strictEqual(zc.ATTEST_ZERO_CONF_ACTIVATION.testnet, null);
+        assert.strictEqual(typeof zc.ATTEST_ZERO_CONF_ACTIVATION.testnet, 'number');
+        assert.ok(REQ_S1 < zc.ATTEST_ZERO_CONF_ACTIVATION.testnet, 'stage 1 is asserted on a request below the zero-conf flip (D106)');
         for (const at of [REQ_S1, REQ_S1 + 3, REQ_S1 + 4])
             assert.strictEqual(wid.widenSlots(at, REQ_S1, DEADLINE_S1, 'testnet'), 0, 'block ' + at);
         assert.strictEqual(wid.widenSlots(REQ_S1 + 6, REQ_S1, DEADLINE_S1, 'testnet'), 1);

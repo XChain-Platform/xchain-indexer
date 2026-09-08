@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Testnet activation heights sized: zero-confirmation ATTEST service from block 151800 and ROLLCALL v1 gates from epoch 152208.
 ### Added
 - Above a new zero-confirmation activation height the responsible set carries one headroom slot from the request block, the mirror applier falls through an inert response row to the next valid one, and a fulfilled request's fee splits among the validators that actually signed the accepted response.
 - ROLLCALL v1 is parsed and verified with its gates list, the epoch close records each verified signer's list in a new `rollcall_gates` table, and the attestation capability set drops a validator whose recorded list lacks a rule active at the request block; a request that then falls under its redundancy is refused with a distinct reason.
