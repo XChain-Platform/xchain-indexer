@@ -14039,10 +14039,10 @@ class Database {
 
     // Create/Update record in `anchor_actions` table.
     //
-    // Keyed on (action_index, section_index), not action_index alone: an ANCHOR v7 bundle
+    // Keyed on (action_index, section_index), not action_index alone: an ANCHOR v0 bundle
     // is ONE action carrying N per-chain sections, and each section gets its own row so
     // idx_anchor_checkpoint and every per-chain reader keep working unchanged. Every
-    // version that carries a single body (v1/v2/v6 archive rows) writes section_index 0,
+    // version that carries a single body (the v1/v2 archive rows) writes section_index 0,
     // which is also the column's DEFAULT, so old rows and old writers land where they
     // always did.
     async createAnchorAction(data){
@@ -14164,7 +14164,7 @@ class Database {
         // Version set is the single source of truth in anchor-action-query.js
         // (shared with getAnchorActionByCheckpoint + the RPC) so the replay
         // watermark can never drift from the checkpoint-bearing definition
-        // (a hand-copied literal here once omitted v4/v5, freezing the guard).
+        // (a hand-copied literal here once omitted a live checkpoint version, freezing the guard).
         let versions = ANCHOR_CHECKPOINT_VERSIONS;
         let query = `SELECT MAX(a.checkpoint_seq) AS max_seq
                      FROM anchor_actions a
@@ -14207,7 +14207,7 @@ class Database {
         return rows.length > 0 ? rows[0] : null;
     }
 
-    // The two watermarks the v1/v6 archive replay guard needs, read from ONE row
+    // The two watermarks the v1 archive replay guard needs, read from ONE row
     // set so they cannot disagree: the highest archive batch seq recorded, and the
     // highest wrapper checkpoint seq among those same archive-head rows.
     //
@@ -14217,9 +14217,9 @@ class Database {
     // (one stubbed, one live; one filtered on a drifted version list) and the guard
     // would then reject a legitimate archive or admit a replay. Reading both in one
     // statement makes the impossible combination unrepresentable, and the version
-    // predicate comes from ARCHIVE_HEAD_VERSIONS rather than a literal IN (1, 6)
+    // predicate comes from ARCHIVE_HEAD_VERSIONS rather than a hand-copied literal
     // for the same reason getMaxAnchorCheckpointSeq stopped hand-copying its set
-    // (a copied literal once omitted v4/v5 and froze that guard).
+    // (a copied literal once omitted a live archive-head version and froze that guard).
     //
     // 'unverified' is included for the same reason it is in getMaxAnchorCheckpointSeq:
     // a node with no mirrored oracle_publish snapshot cannot verify signatures and
@@ -14243,11 +14243,11 @@ class Database {
         };
     }
 
-    // The archive-head anchor (v1, or the publisher-bearing v6) that started an
+    // The archive-head anchor (v1, which always carries the publisher tail) that started an
     // archive batch (status irrelevant - chunk geometry checks belong to the caller).
     // match_batch_seq is NOT unique: the replay guard in anchor.js _parseCheckpoint accepts
     // an EQUAL MATCH_BATCH_SEQ ('never below the recorded max; equal is allowed'), so a
-    // permissionless re-broadcast or failover double-publish stores a SECOND v1/v6 row for
+    // permissionless re-broadcast or failover double-publish stores a SECOND v1 row for
     // the same batch. The returned parent feeds a consensus-visible geometry/CRC verdict in
     // anchor.js _parseContinuation (TOTAL_CHUNKS gate + batch_crc32 reassembly, which stamps
     // setAnchorArchiveStatus(parent.action_index,'invalid_archive')), so the pick MUST be a
@@ -14274,7 +14274,7 @@ class Database {
     // fail-closed (the chunk lands 'orphan' rather than authenticated against nothing).
     async getAnchorV1ByBatchSeq(batchSeq, author){
         let scoped = (author !== undefined && author !== null);
-        // Version set from ARCHIVE_HEAD_VERSIONS, never a literal IN (1, 6), for the
+        // Version set from ARCHIVE_HEAD_VERSIONS, never a hand-copied literal, for the
         // reason getArchiveReplayWatermarks states above: this is the same earliest-head
         // pick as ARCHIVE_HEAD_AUTHOR_SQL in anchor-action-query.js, and it feeds the
         // consensus-visible geometry/CRC verdict in anchor.js _parseContinuation. A
@@ -14368,7 +14368,7 @@ class Database {
     // (action_index, section_index): the anchor verdict is ALL-OR-NOTHING (spec D15), so
     // every section row of one action always carries the same status and stamping them
     // together is the correct behavior, not an oversight. Do not "fix" this into a
-    // section-scoped update: an archive head is a single-body v1/v6 row at section 0
+    // section-scoped update: an archive head is a single-body v1 row at section 0
     // anyway, and a per-section stamp would let one action hold two verdicts, which no
     // reader is built to reconcile.
     async setAnchorArchiveStatus(actionIndex, status){

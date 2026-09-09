@@ -78,10 +78,10 @@ function rewardCanonical(row){
         return base;
     }
     if(String(row.reward_type) === 'anchor_bundle'){
-        // Bundle leg (v7): ONE reward per per-network bundle. round_reference IS the
+        // Bundle leg (v0): ONE reward per per-network bundle. round_reference IS the
         // snapshot block, so field 2 and field 3 repeat it; the six-field positional
         // layout is kept so slash.js reads snapshot_block at index 3 for every XANCPUB
-        // family. MUST byte-match anchor.js._rewardCanonical's v7 branch and the hub's
+        // family. MUST byte-match anchor.js._rewardCanonical's v0 branch and the hub's
         // bundle attestation canonical.
         let base = ['XANCPUB', 'anchor_bundle', roundReference,
                     String(snapshotBlock), publisher, ar.ANCHOR_REWARD_AMOUNT].join('|');
@@ -105,7 +105,7 @@ function rewardCanonical(row){
 
 // Verify a mirrored row's XANCPUB attestation against the local oracle_publish set at
 // snapshot_block. Returns true iff the 2f+1 (or stake-weighted) quorum is met AND the
-// publisher is itself a member of that set. Mirrors anchor.js's v4/v5/v6 attestation check
+// publisher is itself a member of that set. Mirrors anchor.js's v0/v1 attestation check
 // (verify-then-mark-seen; stake-weighted at/above STAKE_WEIGHTED_QUORUM, else count).
 async function verifyAttestation(indexerDb, row){
     let snapshotBlock = Number(row.snapshot_block);

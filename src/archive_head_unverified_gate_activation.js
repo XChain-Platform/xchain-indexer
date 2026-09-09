@@ -20,7 +20,7 @@
  * ARRIVING CHUNK's status, never the parent head's. The head-side gate (in
  * _parseCheckpoint) covers the opposite ordering, chunks first and the head
  * last, and it keyed on the HEAD's own status being 'valid'. On a node with
- * no mirrored oracle_publish snapshot every v1/v6 head is stored
+ * no mirrored oracle_publish snapshot every v1 head is stored
  * 'unverified' (oracleN === 0), so on exactly those nodes a chunks-last
  * arrival ran the CRC check and a head-last arrival skipped it: the ordering
  * nondeterminism the head-side gate exists to close, still open.
@@ -96,7 +96,7 @@
 
 'use strict';
 
-// Per-network activation, interpreted against the DOGE block_index the v1/v6
+// Per-network activation, interpreted against the DOGE block_index the v1
 // archive head landed in. Every network is armed from genesis. Changing any value
 // here is a consensus change: read the header block first.
 const ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION = {

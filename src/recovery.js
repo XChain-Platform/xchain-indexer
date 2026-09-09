@@ -128,7 +128,7 @@ class AnchorRecovery {
         // STATUS to 'valid'); do NOT loosen this to a LEFT JOIN accepting NULL, which reopens the hole.
         // match_batch_seq is NOT unique: the _parseCheckpoint replay guard admits an EQUAL
         // MATCH_BATCH_SEQ (a permissionless re-broadcast or failover double-publish stores a
-        // second v1/v6 head for the same batch, db.js 'match_batch_seq is NOT unique'). The
+        // second v1 head for the same batch, db.js 'match_batch_seq is NOT unique'). The
         // rebuild below is order-dependent (latest-status-wins per match_id; finalized-wins full
         // overwrite per (call_id,phase)), so equal-seq heads MUST replay in a deterministic total
         // order or two nodes persist divergent finalized content. Break the tie on action_index
@@ -204,12 +204,10 @@ class AnchorRecovery {
         let totalChunks = Number(v1.total_chunks) || 1;
         let b64 = String(v1.archive_b64 || '');
         if(totalChunks > 1){
-            // The SAME query the live path uses, imported rather than hand-copied:
-            // recovery holds only a doQuery handle, so the shape used to be
-            // inlined here with a "keep the two in step" note, and the authorship term
-            // is exactly the kind of addition that would have drifted. Rejected
-            // 'invalid: ...' rows are excluded so one permissionless junk v2 tx cannot
-            // inflate the count and block the batch forever ('incomplete
+            // Import the live path's query rather than inline a copy: recovery holds
+            // only a doQuery handle, and a hand-copied shape drifts on the authorship
+            // term. Rejected 'invalid: ...' rows are excluded so one permissionless junk
+            // v2 tx cannot inflate the count and block the batch forever ('incomplete
             // batch'); 'orphan' rows are KEPT (a chunk that landed before its
             // parent head carries legitimate archive bytes) and are exactly why the
             // authorship filter must be in the read path; and only chunks authored by
@@ -219,7 +217,7 @@ class AnchorRecovery {
             // At/after the publisher-scoped flag day the batch key is
             // (match_batch_seq, head author), so THIS head reassembles the chunks of its
             // own publisher and a junk head squatting the seq can no longer filter them
-            // out. Gated on the batch's canonical head (earliest v1/v6 row, the one row
+            // out. Gated on the batch's canonical head (earliest v1 row, the one row
             // resolved identically on every node without consulting status), byte-for-byte
             // the anchor the live parse path uses, so recovery and the live path never
             // apply different rules to the same batch. Below the flag day the legacy
@@ -886,10 +884,10 @@ class AnchorRecovery {
                 // inflated anchor_<chain> amount that recovery would stage COLLECT-spendable
                 // while a live node credits only the frozen amount -> recovered/live divergence
                 // + over-credit on the COLLECT rail. anchor_archive gets the same pinning at/above
-                // its own ARCHIVE_REWARD flag-day (derived from the ANCHOR v6 attestation
-                // with the frozen ARCHIVE_REWARD_AMOUNT); below each flag-day the legacy
-                // operator-tunable amount is kept as archived (matches the live push path).
-                // anchor_bundle (ANCHOR v7) rides the per-chain pin: it is the same
+                // its own ARCHIVE_REWARD flag-day (derived from the ANCHOR v1 archive-head
+                // attestation with the frozen ARCHIVE_REWARD_AMOUNT); below each flag-day the
+                // legacy operator-tunable amount is kept as archived (matches the live push path).
+                // anchor_bundle (the ANCHOR v0 bundle) rides the per-chain pin: it is the same
                 // ANCHOR_REWARD_AMOUNT under the same anchor-reward flag-day, one per
                 // per-network bundle instead of one per chain. Without it an archived
                 // bundle reward would be staged at whatever amount the archive claims.

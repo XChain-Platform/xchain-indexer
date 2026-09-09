@@ -816,7 +816,7 @@ class Rollback {
                 // range containing only such a maturity leaves firstActionIndex null and would skip
                 // the reversal entirely, forking the ledger vs a from-genesis replay.
 
-                // Reset an anchor archive batch's parent (v1/v6 archive-head) status that an
+                // Reset an anchor archive batch's parent (v1 archive-head) status that an
                 // orphaned final chunk flipped to 'invalid_archive' IN PLACE on a surviving row. A
                 // chunked archive batch spans multiple blocks: a head in an early block, then v2
                 // continuation chunks in later blocks. When the LAST v2 chunk lands, anchor.js
@@ -829,7 +829,8 @@ class Rollback {
                 // re-mined validly) would re-derive the parent's pre-flip status. anchor_actions
                 // .status_id is not in any block-hash projection, so this is a state-table
                 // divergence (and could mislead the archive-integrity flag / recovery selection,
-                // which read version IN (1, 6) status IN ('valid','unverified')), not a consensus fork.
+                // which read the ARCHIVE_HEAD_VERSIONS set at status 'valid'/'unverified'), not a
+                // consensus fork.
                 //
                 // Reset to 'unverified', the conservative re-verification state (anchor.js stores
                 // a v1 'unverified' whenever its signer snapshot isn't locally mirrored, and
@@ -857,13 +858,14 @@ class Rollback {
                     // snapshot catch-up (it cannot intern locally without diverging the replicated
                     // id, and anchor status_id is in no block-hash projection).
                     //
-                    // Version predicate: the parent is any ARCHIVE_HEAD version (v1
-                    // legacy, v6 publisher-bearing post-ARCHIVE_REWARD), shared constant from
-                    // stateHash.js. Unconditionally widened: a v6 parent's stamp is exactly as
-                    // un-re-derivable after the chunk delete as a v1's, and this reset is not a
-                    // hash preimage (the GATED anchor_invalid state-hash class covers the stamp
-                    // itself), so no flag-day applies here. ClientRollback.js mirrors this;
-                    // the drift guard pins the widened predicate on both sides.
+                    // Version predicate: the parent is any ARCHIVE_HEAD version (today v1, the
+                    // publisher-bearing archive head), spliced from the stateHash.js constant
+                    // rather than hand-copied, so a head version added later reaches this reset
+                    // too. No flag day gates it: every head version's stamp is equally
+                    // un-re-derivable after the chunk delete, and this reset is not a hash
+                    // preimage (the GATED anchor_invalid state-hash class covers the stamp
+                    // itself). ClientRollback.js mirrors this; the drift guard pins the
+                    // predicate on both sides.
                     //
                     // Author scope, flag-day gated and INERT on every network today: the seq is
                     // not a batch key once archive batches are publisher-scoped, so a second
