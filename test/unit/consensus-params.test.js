@@ -68,7 +68,10 @@ const GOLDEN_GAS_SCHEDULE = {
     VM_EMISSION:        500,
     VM_COMPUTATION:     1
 };
-const EXPECTED_VM_CONSENSUS_VERSION = '3';
+// Epoch 4: REST_PATTERN_METER added the `banned-rest` deploy rule VM-side, and a
+// CONSENSUS_RULES change moves the epoch. This pin and the digests below are ONE
+// unit; bumping the integer alone makes every assertion under it vacuous.
+const EXPECTED_VM_CONSENSUS_VERSION = '4';
 // Frozen digest of the bundled VM's deploy/execution contract surface, asserted in
 // lockstep with the version above. Any change to the sandbox strip set or the deploy
 // validator's CONSENSUS_RULES must bump EXPECTED_VM_CONSENSUS_VERSION (and the VM's
@@ -84,9 +87,13 @@ const EXPECTED_VM_STRIPPED_GLOBAL_NAMES = [
     'clearInterval', 'clearTimeout', 'fetch', 'performance', 'queueMicrotask',
     'setImmediate', 'setInterval', 'setTimeout', 'structuredClone'
 ];
+// `banned-rest` is the epoch-4 addition: the deploy validator refuses the four rest
+// positions with no source expression to wrap, which the allocator meter cannot
+// reach and which therefore copy O(n) elements for a flat 1 gas.
 const EXPECTED_VM_CONSENSUS_RULES = [
     'banned-async', 'banned-generator', 'banned-literal', 'banned-math',
-    'banned-wasm', 'invalid-type', 'reserved-identifier', 'unsupported-syntax'
+    'banned-rest', 'banned-wasm', 'invalid-type', 'reserved-identifier',
+    'unsupported-syntax'
 ];
 // The sandbox neuters more than the global strip set: prototype-method strips
 // (regex + locale/ICU), the prototype .constructor neuters, and the SafeMath
