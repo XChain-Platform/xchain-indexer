@@ -252,6 +252,37 @@ class HubClient {
         return this._requireHubAccepted('pushdexreorg', await this._call('pushdexreorg', params, this.reorgApiKey));
     }
 
+    // Notify the hub that a reorg un-landed an ATTEST v5/v6 batch this chain carried, so
+    // it can clear the batch link that landing stamped on every response the batch
+    // carried (spec §6.3, frontier row 55).
+    //
+    // NOT A RANGE, and not a delete. The other three retractions above name a rolled-back
+    // action range and the hub removes what that range seeded; this one names ONE batch,
+    // because the hub-side effect is to NULL a single link column and never to remove a
+    // row: a mirror row is legitimate whichever batch carried it (its federation
+    // signatures are the authority), and on a chain-only node the batch-inserted row is
+    // the only copy in existence. Clearing the link is also what lets the batch re-land,
+    // since the hub sets that column only where it IS NULL.
+    //
+    // The batch is named by its key AND by the signed window bounds that key is derived
+    // from, so the hub re-derives the key rather than trusting it, plus the action index
+    // the landing push carried (the HEAD's, per row 52), which is the value stamped on
+    // the rows. No generation fence: the mirror table has no push_generation column and
+    // the link is cosmetic by construction (D78).
+    async retractAttestBatch(sourceChain, retraction){
+        if(!this.enabled) return;
+        let params = {
+            source_chain: sourceChain,
+            network:      retraction.network,
+            batch_key:    retraction.batch_key,
+            window_start: retraction.window_start,
+            window_end:   retraction.window_end,
+            action_index: retraction.action_index
+        };
+        return this._requireHubAccepted('retractattestbatch',
+            await this._call('retractattestbatch', params, this.reorgApiKey));
+    }
+
     // Throw on an application-level hub rejection a retry could still clear, so the durable
     // outbox RETAINS the row instead of deleting it. _call resolves any
     // error-free JSON-RPC envelope, so before this every rejection read as a delivery:

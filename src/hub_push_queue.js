@@ -264,6 +264,12 @@ class HubPushQueue {
                 // Reorg XCALL relay retraction parked by rollback.js when the live RPC
                 // failed. retractXcallRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
                 await this.hubClient.retractXcallRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
+            } else if(row.push_type === 'attest_batch_retraction'){
+                // Reorg ATTEST batch-link retraction parked by rollback.js when the live RPC
+                // failed. Keyed on ONE batch rather than on an action range (the hub clears a
+                // link column, never a row), and idempotent: the hub answers a retraction that
+                // matches no link with an accepted no-op, so a replayed drain is free.
+                await this.hubClient.retractAttestBatch(payload.coin, payload);
             } else if(row.push_type === 'match_retraction'){
                 // Reorg DEX cross-chain match retraction parked by rollback.js when the
                 // live RPC failed. retractMatchRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
@@ -329,6 +335,12 @@ class HubPushQueue {
             // any more, so a batch retired to 'failed' strands an hour of responses that no later
             // block re-emits and no replay recovers. The window is also what a chain-only node
             // proves its coverage from, so losing one leaves a permanent hole in that proof.
+            //
+            // `attest_batch_retraction` is caught by the `_retraction` suffix above and belongs
+            // there for the same reason as its siblings: it is the only remaining record that a
+            // batch link no longer has a chain behind it, and the hub's own structural refusals
+            // are phrased 'invalid ...', which HubClient classes as terminal, so a genuinely
+            // unacceptable payload still leaves the queue instead of retrying forever.
             //
             // Retrying forever is only bounded because HubClient resolves TERMINAL hub rejections
             // rather than throwing them: a payload the hub can never accept leaves the

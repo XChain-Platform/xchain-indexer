@@ -31,6 +31,10 @@ const lifecycle = require('./tableLifecycle.js');
 const ar        = require('./anchor_reward_activation.js');
 const { ARCHIVE_HEAD_VERSIONS_SQL } = require('./stateHash.js');
 const { archiveAuthorScopeJoin } = require('./archive_rollback_author_scope_activation.js');
+// Wire versions only, for the ATTEST batch-link retraction below: the head and the
+// continuation are what make an `attests` row part of a batch, and naming them from the
+// wire module keeps the reorg query and the parser reading the same two numbers.
+const abw       = require('./attest_batch_wire.js');
 
 class Rollback {
 
@@ -226,6 +230,14 @@ class Rollback {
         );
         if(maxRows.length > 0 && maxRows[0].last_action_index !== null)
             lastActionIndex = Number(maxRows[0].last_action_index);
+
+        // The ATTEST batches this reorg un-lands (spec §6.3, frontier row 55). Read HERE,
+        // in the read phase, because the `attests` rows that identify them are deleted by
+        // the dataTables purge below, and the hub retraction has to name a batch that no
+        // longer exists locally by the time it is sent.
+        let unlandedAttestBatches = [];
+        if(firstActionIndex !== null && this.hubClient && this.hubClient.enabled)
+            unlandedAttestBatches = await this._collectUnlandedAttestBatches(firstActionIndex);
 
         // Handle looking up data for any action_indexes in the rollback
         if(firstActionIndex !== null){
@@ -896,7 +908,7 @@ class Rollback {
                     // drain later is safe: their fence cannot delete rows re-published after
                     // this reorg's generation bump.
                     if(table === 'pending_hub_pushes'){
-                        query = `DELETE FROM pending_hub_pushes WHERE action_index >= ? AND push_type NOT IN ('price_retraction', 'xcall_retraction', 'match_retraction')`;
+                        query = `DELETE FROM pending_hub_pushes WHERE action_index >= ? AND push_type NOT IN ('price_retraction', 'xcall_retraction', 'match_retraction', 'attest_batch_retraction')`;
                     }
                     await this.indexerDb.doQuery(query, args);
                 }
@@ -1421,6 +1433,32 @@ class Rollback {
                         last_action_index: lastActionIndex, retraction_generation: retractionGeneration });
                     stagedRetractions.push({ pushType, id });
                 }
+
+                // One durable row per ATTEST batch this reorg un-landed, on the same
+                // write-ahead reasoning: the landing push already told a hub to stamp a batch
+                // link on every response the batch carried, and after the purge below this node
+                // holds nothing that could re-derive which batch that was. The payload names ONE
+                // batch rather than an action range, because the hub-side effect is a link
+                // cleared and never a row deleted (HubClient.retractAttestBatch says why).
+                for(let batch of unlandedAttestBatches){
+                    let payload = {
+                        coin:         this.config['COIN'],
+                        network:      this.config['NETWORK'],
+                        batch_key:    batch.batch_key,
+                        window_start: batch.window_start,
+                        window_end:   batch.window_end,
+                        // The link the hub stamped is the HEAD's action index (row 52), so that
+                        // is the value the retraction has to name, never the chunk that
+                        // completed the batch or the lowest rolled-back action.
+                        action_index: batch.action_index
+                    };
+                    // Keyed at the head's action index like every other queue row, so a deeper
+                    // reorg's purge would carry it away were the retraction types not excluded
+                    // from that delete.
+                    let id = await this.indexerDb.enqueueHubPushTx('attest_batch_retraction', payload,
+                        batch.action_index);
+                    stagedRetractions.push({ pushType: 'attest_batch_retraction', id, payload });
+                }
             }
 
             // Commit: the rollback is now atomically applied
@@ -1513,10 +1551,15 @@ class Rollback {
                     price_retraction: (last) => this.hubClient.retractPriceRange(coin, firstActionIndex, last, retractionGeneration),
                     xcall_retraction: (last) => this.hubClient.retractXcallRange(coin, firstActionIndex, last, retractionGeneration),
                     match_retraction: (last) => this.hubClient.retractMatchRange(coin, firstActionIndex, last, retractionGeneration),
+                    // Takes the staged PAYLOAD rather than a range ceiling: this retraction names
+                    // one batch, and the live and deferred deliveries are byte-identical because
+                    // there is no open-ended form to narrow. It is the same payload the durable
+                    // row carries, so a queued retry cannot diverge from what was tried here.
+                    attest_batch_retraction: (last, payload) => this.hubClient.retractAttestBatch(coin, payload),
                 };
                 for(let r of stagedRetractions){
                     try {
-                        await liveByType[r.pushType](null);
+                        await liveByType[r.pushType](null, r.payload);
                         await this.indexerDb.markHubPushDelivered(r.id);
                     } catch(err) {
                         // Live delivery failed; the durable (closed-range) write-ahead row stays for
@@ -1544,6 +1587,51 @@ class Rollback {
 
         // Log the rollback time
         this.util.logTimer(rollbackTimer, 'Rollback Done');
+    }
+
+    // The ATTEST v5/v6 batches whose chain wire this reorg orphans (spec §6.3, row 55).
+    //
+    // A batch is un-landed when ANY of its wires is orphaned, not only its head. The
+    // delivery fires on the action that COMPLETES the batch's chunk coverage (row 52), so
+    // a reorg that takes one continuation leaves a head standing whose batch no longer
+    // exists on the surviving chain, and the hub is still serving the link that delivery
+    // stamped. Joining every rolled-back chunk row back to its head is what catches that
+    // case; scoping the join to the head's own key is what makes the result the identity
+    // the retraction has to carry (the key, its signed window and the HEAD's action index,
+    // which is the value the hub stamped).
+    //
+    // Only VALID heads: a batch whose reassembly or quorum failed was stamped invalid on
+    // its head and never pushed, so there is no link to retract. A head that is valid but
+    // never completed its coverage is harmless the other way: the retraction matches no
+    // link on the hub and is answered as an accepted no-op.
+    //
+    // doQueryStrict, like the two reads above it and for the same reason: this runs
+    // outside the transaction, where doQuery collapses a transient DB fault into an empty
+    // result, which here is indistinguishable from "no batch was un-landed" and would
+    // silently skip a retraction the reorg is never retried to re-issue.
+    async _collectUnlandedAttestBatches(firstActionIndex){
+        let query = `SELECT DISTINCT
+                        LOWER(h.request_id)     AS batch_key,
+                        h.action_index          AS action_index,
+                        h.batch_window_start    AS window_start,
+                        h.batch_window_end      AS window_end
+                     FROM attests h
+                        JOIN index_statuses hs ON hs.id = h.status_id AND hs.status = 'valid'
+                        JOIN attests c ON c.request_id = h.request_id
+                                      AND c.version IN (${abw.ATTEST_BATCH_HEAD_VERSION}, ${abw.ATTEST_BATCH_CONTINUATION_VERSION})
+                                      AND c.batch_chunk_index IS NOT NULL
+                                      AND c.action_index >= ?
+                     WHERE h.version = ${abw.ATTEST_BATCH_HEAD_VERSION}
+                       AND h.batch_chunk_index IS NOT NULL
+                       AND h.batch_window_start IS NOT NULL
+                       AND h.batch_window_end IS NOT NULL`;
+        let rows = await this.indexerView.doQueryStrict(query, [firstActionIndex]);
+        return (rows || []).map(r => ({
+            batch_key:    String(r.batch_key),
+            action_index: Number(r.action_index),
+            window_start: Number(r.window_start),
+            window_end:   Number(r.window_end)
+        }));
     }
 
     // Reverse cooldown-maturity completions whose maturity block was orphaned by the reorg.

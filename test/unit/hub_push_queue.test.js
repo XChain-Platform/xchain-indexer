@@ -32,7 +32,8 @@ function makeIndexer(hubClientOpts){
         pushAttestBatch: sinon.stub().resolves(),
         retractPriceRange: sinon.stub().resolves(),
         retractXcallRange: sinon.stub().resolves(),
-        retractMatchRange: sinon.stub().resolves()
+        retractMatchRange: sinon.stub().resolves(),
+        retractAttestBatch: sinon.stub().resolves()
     }, hubClientOpts || {});
 
     let indexerDb = {
@@ -450,6 +451,34 @@ describe('HubPushQueue', function(){
                 'a failed attest_batch row must stay queued, never be dropped');
         });
 
+        // ─── attest_batch_retraction (reorg un-lands an ATTEST batch, spec §6.3 row 55) ─────
+        it('calls retractAttestBatch for attest_batch_retraction rows and marks delivered', async function(){
+            let indexer = makeIndexer();
+            let q = new HubPushQueue(indexer);
+            let payload = { coin: 'DOGE', network: 'regtest', batch_key: 'ab'.repeat(32),
+                            window_start: 1700000000, window_end: 1700003600, action_index: 71 };
+            let row = makeRow({ id: 40, push_type: 'attest_batch_retraction', payload: JSON.stringify(payload) });
+            await q._attempt(row);
+            assert.strictEqual(indexer.hubClient.retractAttestBatch.calledOnce, true);
+            // The chain is the first argument and the whole staged payload the second, so a
+            // queued retry sends byte-identically what rollback.js tried live.
+            assert.strictEqual(indexer.hubClient.retractAttestBatch.firstCall.args[0], 'DOGE');
+            assert.deepStrictEqual(indexer.hubClient.retractAttestBatch.firstCall.args[1], payload);
+            assert.strictEqual(indexer.indexerDb.markHubPushDelivered.calledWith(40), true);
+        });
+
+        it('does NOT retire an unknown-to-the-dispatch retraction type as an unknown push_type', async function(){
+            let indexer = makeIndexer();
+            let q = new HubPushQueue(indexer);
+            let row = makeRow({ id: 41, push_type: 'attest_batch_retraction',
+                payload: JSON.stringify({ coin: 'DOGE', action_index: 71 }) });
+            await q._attempt(row);
+            // The failure this pins: an arm that does not exist falls through to the else,
+            // which records 'unknown push_type' with a cap of 1 and retires the row on the spot.
+            assert.strictEqual(indexer.indexerDb.recordHubPushAttempt.callCount, 0,
+                'a dispatched retraction must never be recorded as an unknown push_type');
+        });
+
         it('calls retractPriceRange for price_retraction rows and marks delivered (open-ended when no ceiling)', async function(){
             let indexer = makeIndexer();
             let q = new HubPushQueue(indexer);
@@ -583,12 +612,13 @@ describe('HubPushQueue', function(){
         // range; retiring it to 'failed' after maxAttempts (a hub outage overlapping a reorg)
         // permanently strands stale prices / 'finalized' XCALL+DEX rows on the hub. Retractions
         // are idempotent + generation-fenced, so they must retry indefinitely, never retire.
-        for(const rt of ['price_retraction', 'xcall_retraction', 'match_retraction']){
+        for(const rt of ['price_retraction', 'xcall_retraction', 'match_retraction', 'attest_batch_retraction']){
             it('does NOT retire a ' + rt + ' after maxAttempts failures (retries forever)', async function(){
                 let indexer = makeIndexer();
                 indexer.hubClient.retractPriceRange = sinon.stub().rejects(new Error('hub down'));
                 indexer.hubClient.retractXcallRange = sinon.stub().rejects(new Error('hub down'));
                 indexer.hubClient.retractMatchRange = sinon.stub().rejects(new Error('hub down'));
+                indexer.hubClient.retractAttestBatch = sinon.stub().rejects(new Error('hub down'));
                 let q = new HubPushQueue(indexer, { maxAttempts: 3 });
                 // A row that has already burned through maxAttempts: a forward push would be retired.
                 let row = makeRow({ id: 9, push_type: rt, attempts: 3,
