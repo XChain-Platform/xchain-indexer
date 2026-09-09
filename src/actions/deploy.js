@@ -477,7 +477,16 @@ class Deploy {
             // contracts, 0 DEPLOY, measured 2026-09-09), so this resolves true there
             // from block 0 and no already-accepted deploy is reinterpreted.
             let enforceLintGlobalAlias = vmLintGlobalAlias.isVmLintGlobalAliasActive(data['BLOCK_INDEX'], this.config['NETWORK'], this.config['COIN']);
-            let syntaxResult = this.actions.vm.validateSyntax(code, { enforceBannedAsync, enforceLintHardening, enforceBannedGenerator, enforceBannedWasm, enforceLintGlobalAlias });
+            // banned-rest (unmeterable rest positions) is the deploy half of
+            // REST_PATTERN_METER. Its VM twin wraps a top-level rest's source in the
+            // size-charged helper; the positions with no addressable source cannot be
+            // metered and are refused here instead. Keyed on block_TIME through
+            // protocolChanges like the two gates above, NOT on the contract-era instant:
+            // that one is in the past and reusing it would retroactively reject contracts
+            // the chain already accepted. Below the flag day the rule is dropped and the
+            // historical verdict replays byte-identically.
+            let enforceBannedRest = await this.actions.protocolChanges.isEnabled('REST_PATTERN_METER', data['BLOCK_INDEX']);
+            let syntaxResult = this.actions.vm.validateSyntax(code, { enforceBannedAsync, enforceLintHardening, enforceBannedGenerator, enforceBannedWasm, enforceLintGlobalAlias, enforceBannedRest });
             if(!syntaxResult.valid)
                 error = 'invalid: CODE_ENCODING (' + syntaxResult.error + ')';
 

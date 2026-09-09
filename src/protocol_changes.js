@@ -1041,6 +1041,30 @@ class ProtocolChanges {
         let ccRoyaltyRegtestTime = parseInt(process.env.CROSS_CHAIN_ROYALTY_REGTEST_TIME) || 0;
         this.addChange('CROSS_CHAIN_ROYALTY', '0.2.0',1798761600,0,ccRoyaltyRegtestTime,0,0,0);
 
+        // REST_PATTERN_METER: the deploy half of the rest-destructuring metering change.
+        // A rest destructure (`{...c}`, `[...c]`) copies O(n) at a flat __gas(1) today, so
+        // the allocator meter cannot see it. The VM half wraps a TOP-LEVEL rest's source
+        // expression in the size-charged helper; the positions that have no addressable
+        // source (rest PARAMETER, NESTED rest, CATCH-clause rest) cannot be metered at all
+        // and are rejected here at deploy instead, which is what closes the class rather
+        // than narrowing it.
+        //
+        // The instant is the VM's REST_PATTERN_METER_GATE_BLOCK_TIME literal and the two
+        // are pinned to equality by consensus-params suites in BOTH repos: a repin that
+        // edits one and misses the other passes both CIs and forks the fleet at activation,
+        // so this third argument stays an inline literal the guard's regex can read.
+        //
+        // It deliberately does NOT ride the contract-era flag day (1786060800, 2026-08-07):
+        // that instant is in the PAST, and reusing it would retroactively re-price every
+        // rest destructure already executed and rewrite settled gasUsed on replay. It takes
+        // its own FUTURE instant, shared with CROSS_CHAIN_ROYALTY above so the fleet has one
+        // coordination event rather than two. testnet and regtest activate at genesis,
+        // matching the VM's isRestPatternMeterActive, which returns true on both
+        // unconditionally; measured 2026-09-09, no deployed contract on any chain uses rest
+        // syntax (0 mainnet contracts; 12 on TBTC, none containing `...` outside a comment),
+        // so arming testnet at genesis reinterprets no accepted deploy.
+        this.addChange('REST_PATTERN_METER', '0.2.0',1798761600,0,0,0,0,0);
+
         // Async/Promise contract surface (VM CONSENSUS_VERSION '2'). Below this
         // activation the on-chain deploy validator (validateSyntax) ACCEPTS a
         // contract that uses async/await or references the global Promise, and the
