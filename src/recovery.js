@@ -76,7 +76,7 @@ const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
 // Archive-head version set, spliced rather than hand-copied: recovery must replay the
 // SAME heads the live mirror path reads, so a new publisher-bearing version added to
 // ARCHIVE_HEAD_VERSIONS cannot reach one path and silently skip the other.
-const { ARCHIVE_HEAD_VERSIONS_SQL } = require('./stateHash.js');
+const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('./stateHash.js');
 
 // Capabilities whose archived snapshot is re-resolvable from the BTC capability stakes.
 // Both cross-checks gate on this one set (_verifyStakes for its delegated-key admission,
@@ -147,7 +147,10 @@ class AnchorRecovery {
              WHERE a.version ${ARCHIVE_HEAD_VERSIONS_SQL} AND s.status IN ('valid', 'unverified')
              ORDER BY a.match_batch_seq ASC, a.action_index ASC`);
         if(!v1s || v1s.length === 0){
-            this.log('recovery: no archive anchors found (anchor_actions has no v1/v6 rows)');
+            // Name the versions the query actually scanned, so the operator reading this
+            // during an incident is never sent hunting for a retired wire.
+            this.log('recovery: no archive anchors found (anchor_actions has no ' +
+                     ARCHIVE_HEAD_VERSIONS.map(v => 'v' + v).join('/') + ' rows)');
             return report;
         }
 
