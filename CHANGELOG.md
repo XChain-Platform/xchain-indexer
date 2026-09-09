@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.1] - 2026-09-09
+
+### Fixed
+- The anchor row writer binds every value to fit its column, so a rejected ANCHOR wire (a pre-activation legacy version or a malformed head) is recorded instead of failing the INSERT forever; a from-genesis DOGE testnet replay no longer loops at the first legacy anchor.
+
 ## [0.16.0] - 2026-09-08
 
 - Testnet activation heights sized: zero-confirmation ATTEST service from block 151800 and ROLLCALL v1 gates from epoch 152208.
