@@ -175,11 +175,10 @@ const ATTEST_MAX_EXPIRIES_PER_BLOCK = 25;
 // history it reinterpreted, a vehicle this cap does not have.
 //
 // The number below is the cap's VALUE; the gate decides WHEN it applies.
-// testnet/regtest activate at genesis, so the cap is in force there and in the
-// suites. Mainnet is parked on the UNARMED sentinel until the operator ratifies
-// the anchor (CROSS_SETTLE_CAP_MAINNET_TIME in protocol_changes.js): before it,
-// mainnet runs the uncapped legacy pass byte for byte, so no already-indexed
-// block is reinterpreted.
+// testnet/regtest activate at genesis, and mainnet now does too
+// (CROSS_SETTLE_CAP_MAINNET_TIME in protocol_changes.js is 0): ARMED at genesis
+// by the 2026-09-09 ruling, identity on the indexed mainnet history (this cap
+// reinterprets 0 already-indexed cross-settle blocks, measured 2026-09-09).
 const CROSS_SETTLE_MAX_PER_BLOCK = 25;
 
 // ── Token-gated content (PC-29) ─────────────────────────────────────────────

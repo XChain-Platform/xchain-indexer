@@ -19,6 +19,7 @@ const sinon  = require('sinon');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
 
 const Send = require('../../../src/actions/send.js');
+const gatedHandoffRef = require('../../../src/gated_handoff_ref_activation.js');
 
 function makeActionsCtx(indexer) {
     return {
@@ -631,7 +632,9 @@ describe('Send handler: conditional gated handoff (PC-29) @regression @tier1', f
  * misses the ordinary wallet-composed handoff and rejects the SEND while the
  * rest of the batch commits. Above the flag day a caret spelling is resolved
  * before the compare; below it the byte compare runs untouched so historical
- * replay stays byte-identical. Both sides are driven here.
+ * replay stays byte-identical. Both sides are driven here. Every network is armed
+ * at genesis since the 2026-09-09 ruling, so the below-flag cases reach the legacy
+ * era by pinning the gate's own key inert rather than by naming a network.
  ********************************************************************/
 describe('Send handler: caret-compacted handoff destination @regression @tier1', function () {
 
@@ -662,12 +665,27 @@ describe('Send handler: caret-compacted handoff destination @regression @tier1',
 
     afterEach(function () { sinon.restore(); });
 
-    // regtest is genesis-active, mainnet sits on the UNARMED sentinel, so the
-    // network alone selects the era.
+    // Every network is genesis-active for this gate now: regtest and testnet since it
+    // landed, mainnet since the 2026-09-09 ruling (mainnet history is ISSUE and ANCHOR
+    // only, so 0 SEND, measured 2026-09-09, leaves the resolved compare identity over
+    // it). The network therefore no longer selects the era on its own.
     function handlerOn(network) {
         return new Send(Object.assign({}, actionsCtx, {
             config: Object.assign({}, indexer.config, { NETWORK: network })
         }));
+    }
+
+    // The pre-flag-day era is reached by pinning THIS key inert on a mainnet venue for
+    // the duration of the call. Pinning only this key is deliberate: the venue keeps
+    // every other mainnet gate send.js reads (consolidation_leg_amount) at the value the
+    // fleet runs, so the legacy arm being compared against is the real one.
+    const HOUSE_SENTINEL = 9999999999;
+    async function belowFlag(fn) {
+        const map   = gatedHandoffRef.GATED_HANDOFF_REF_ACTIVATION;
+        const saved = map.mainnet;
+        map.mainnet = HOUSE_SENTINEL;
+        try { return await fn(); }
+        finally { map.mainnet = saved; }
     }
 
     // How the indexer's resolver answers a `^<id>`: to `addr`, or refused.
@@ -690,12 +708,24 @@ describe('Send handler: caret-compacted handoff destination @regression @tier1',
             'the rule is about the address, and this MESSAGE is addressed to the destination');
     });
 
-    it('UNARMED: the same transaction is still rejected below the flag day', async function () {
+    it('UNARMED (key pinned inert): the same transaction is still rejected below the flag day', async function () {
         refResolves(DESTINATION);
-        assert.strictEqual(await statusFor(handlerOn('mainnet'), [messageTo(REF)]), NEEDS_HANDOFF,
+        assert.strictEqual(
+            await belowFlag(() => statusFor(handlerOn('mainnet'), [messageTo(REF)])), NEEDS_HANDOFF,
             'below the threshold the byte compare runs untouched, so replay stays byte-identical');
         assert.strictEqual(indexer.indexerDb.resolveAddressRefChecked.callCount, 0,
             'an unarmed chain must not even issue the resolution read');
+    });
+
+    it('ARMED (mainnet, shipped map): the same transaction is accepted since the 2026-09-09 ruling', async function () {
+        // The other half of the pair above, driven on the shipped key: the exact wire the
+        // pinned-inert arm rejects is now accepted on mainnet, and the resolution read the
+        // inert arm must never issue is issued here.
+        refResolves(DESTINATION);
+        assert.strictEqual(await statusFor(handlerOn('mainnet'), [messageTo(REF)]), 'valid',
+            'mainnet is armed at genesis, so a caret-spelled handoff resolves before the compare');
+        assert.ok(indexer.indexerDb.resolveAddressRefChecked.callCount > 0,
+            'the armed chain must issue the resolution read');
     });
 
     it('ARMED: a `^<id>` resolving to a DIFFERENT address is still rejected', async function () {
@@ -729,8 +759,9 @@ describe('Send handler: caret-compacted handoff destination @regression @tier1',
         assert.strictEqual(await statusFor(handlerOn('regtest'), [messageTo(DEST2)]), NEEDS_HANDOFF);
     });
 
-    it('UNARMED: a full-address handoff still passes', async function () {
-        assert.strictEqual(await statusFor(handlerOn('mainnet'), [messageTo(DESTINATION)]), 'valid',
+    it('UNARMED (key pinned inert): a full-address handoff still passes', async function () {
+        assert.strictEqual(
+            await belowFlag(() => statusFor(handlerOn('mainnet'), [messageTo(DESTINATION)])), 'valid',
             'the legacy path is unchanged for every transaction that already worked');
     });
 

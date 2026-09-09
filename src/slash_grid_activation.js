@@ -56,10 +56,22 @@
  * ledger_amount_precision_activation.js documents.
  *
  * `null` means NOT YET PINNED and therefore inert: the legacy arithmetic runs
- * verbatim and historical replay stays byte-identical. Mainnet and testnet are
- * unpinned pending the measurement of how many historical slashes are off-grid
- * against a coarse-decimals staked tick; regtest runs from genesis, matching
- * stake_weight_collation_activation.js, the nearest gate in this family.
+ * verbatim and historical replay stays byte-identical.
+ *
+ * MAINNET IS ARMED AT GENESIS, all three chains (operator ruling 2026-09-09).
+ * The measurement this arming waited on, how many historical slashes are
+ * off-grid against a coarse-decimals staked tick, was taken read-only against
+ * the live indexer databases on 2026-09-09: mainnet holds 0 stakes and 0
+ * slashes, so slashContractStake has never run there and the floored-at-entry
+ * rule is the identity function over every mainnet block committed so far. The
+ * BINARY_ALLOC objection above is about borrowing a passed threshold from
+ * another gate, which supplies no such measurement; this height carries its
+ * own. The proof is a per-chain OLD-vs-ON replay witness, not this comment.
+ *
+ * TESTNET STAYS UNPINNED: it has been a live public ledger since 2026-09-01 and
+ * carries stake history, so the empty-chain argument does not reach it. regtest
+ * runs from genesis, matching stake_weight_collation_activation.js, the nearest
+ * gate in this family.
  *
  * Indexer-only with no xchain-sync twin: xchain-sync replicates materialized
  * rows and never runs slashContractStake.
@@ -75,9 +87,13 @@ const SLASH_DEDUCTION_PRECISION = 18;
 // Per-chain activation heights, interpreted against the chain's own block_index.
 // `null` = NOT YET PINNED = inert (legacy arithmetic, byte-identical replay).
 const SLASH_GRID_ACTIVATION = {
-    'BTC:mainnet':  null,
-    'LTC:mainnet':  null,
-    'DOGE:mainnet': null,
+    // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet
+    // history (0 stakes, 0 slashes on every chain, measured 2026-09-09).
+    'BTC:mainnet':  0,
+    'LTC:mainnet':  0,
+    'DOGE:mainnet': 0,
+    // Unpinned: testnet carries stake history, so its heights are pinned at
+    // flag-day assembly with the replay evidence that step requires.
     'BTC:testnet':  null,
     'LTC:testnet':  null,
     'DOGE:testnet': null,

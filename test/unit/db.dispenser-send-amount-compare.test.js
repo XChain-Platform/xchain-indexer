@@ -19,6 +19,12 @@
  * sender's tokens were stranded at the dispenser address. At/after the
  * activation both operands are CAST to DECIMAL(60,18) first.
  *
+ * Mainnet is ARMED AT GENESIS on all three chains by the 2026-09-09 operator
+ * ruling: mainnet carries 0 dispensers and 0 dispenses (measured 2026-09-09), so
+ * findDispenserSends has never returned a row there and the two predicates agree
+ * vacuously over all committed history. Testnet stays unpinned; it carries
+ * dispenser history and arms at flag-day assembly.
+ *
  * These are mock-based (doQuery stubbed) and lock:
  *   - the GATE: the legacy predicate is emitted BYTE-IDENTICALLY on every
  *     unpinned chain, and the CAST form only where the gate is armed;
@@ -75,8 +81,8 @@ describe('token-SEND dispense affordability compare gate @regression @tier1', fu
 
     describe('gate: which predicate is emitted', function () {
 
-        it('BTC mainnet is unpinned, so the legacy predicate is emitted byte-identically', async function () {
-            const db = dbFor('mainnet');
+        it('BTC testnet is unpinned, so the legacy predicate is emitted byte-identically', async function () {
+            const db = dbFor('testnet');
             await db.findDispenserSends(1, 5000000);
             const q = sendsQuery(db);
             assert.ok(q.includes(LEGACY_PREDICATE_BYTES),
@@ -84,16 +90,31 @@ describe('token-SEND dispense affordability compare gate @regression @tier1', fu
             assert.doesNotMatch(q, /CAST\(/, 'no CAST may leak onto an unpinned chain');
         });
 
-        it('every mainnet and testnet chain is unpinned today (the gate ships inert)', async function () {
-            for (const network of ['mainnet', 'testnet']) {
-                for (const coin of ['BTC', 'LTC', 'DOGE']) {
-                    const db = dbFor(network, coin);
-                    await db.findDispenserSends(1, 999999999);
-                    assert.doesNotMatch(sendsQuery(db), /CAST\(/,
-                        coin + ':' + network + ' emitted the corrected predicate; this gate must ship inert ' +
-                        'on every chain with history, and arming one is a separate coordinated release step');
-                    sinon.restore();
-                }
+        it('every testnet chain is still unpinned (it carries dispenser history)', async function () {
+            for (const coin of ['BTC', 'LTC', 'DOGE']) {
+                const db = dbFor('testnet', coin);
+                await db.findDispenserSends(1, 999999999);
+                assert.doesNotMatch(sendsQuery(db), /CAST\(/,
+                    coin + ':testnet emitted the corrected predicate; testnet has been a live ' +
+                    'public ledger since 2026-09-01, so arming it is a coordinated release step ' +
+                    'with replay evidence, not a code change');
+                sinon.restore();
+            }
+        });
+
+        it('every mainnet chain is armed at genesis and emits the CAST predicate', async function () {
+            // The 2026-09-09 ruling. 0 dispensers and 0 dispenses on mainnet, so the two
+            // predicates never graded a row differently and height 0 opens no retroactive
+            // window; a mainnet block at ANY height must now compare numerically.
+            for (const coin of ['BTC', 'LTC', 'DOGE']) {
+                const db = dbFor('mainnet', coin);
+                await db.findDispenserSends(1, 0);
+                const q = sendsQuery(db).replace(/\s+/g, ' ');
+                assert.match(q, /CAST\(s1\.amount AS DECIMAL\(60,18\)\) >= CAST\(d1\.get_amount AS DECIMAL\(60,18\)\)/,
+                    coin + ':mainnet is armed at genesis and must compare both operands numerically');
+                assert.doesNotMatch(q, /s1\.amount >= d1\.get_amount/,
+                    coin + ':mainnet still emitted the lexicographic predicate');
+                sinon.restore();
             }
         });
 
@@ -121,7 +142,7 @@ describe('token-SEND dispense affordability compare gate @regression @tier1', fu
         });
 
         it('the rest of the query is untouched on both sides of the gate', async function () {
-            const legacy = dbFor('mainnet');
+            const legacy = dbFor('testnet');
             await legacy.findDispenserSends(7, 5000000);
             const legacyQ = sendsQuery(legacy);
             sinon.restore();
@@ -147,8 +168,17 @@ describe('token-SEND dispense affordability compare gate @regression @tier1', fu
 
         it('a null (unpinned) height is inert at every block index', function () {
             for (const height of [0, 1, 963000, Number.MAX_SAFE_INTEGER]) {
-                assert.strictEqual(dsc.isDispenserSendAmountCompareActive(height, 'mainnet', 'BTC'), false);
+                assert.strictEqual(dsc.isDispenserSendAmountCompareActive(height, 'testnet', 'BTC'), false);
                 assert.strictEqual(dsc.isDispenserSendAmountCompareActive(height, 'testnet', 'DOGE'), false);
+            }
+        });
+
+        it('mainnet is armed at genesis on every chain, so it is active at any height', function () {
+            for (const coin of ['BTC', 'LTC', 'DOGE']) {
+                assert.strictEqual(dsc.DISPENSER_SEND_AMOUNT_COMPARE_ACTIVATION[coin + ':mainnet'], 0);
+                for (const height of [0, 1, 963000, Number.MAX_SAFE_INTEGER])
+                    assert.strictEqual(dsc.isDispenserSendAmountCompareActive(height, 'mainnet', coin), true,
+                        coin + ':mainnet must be active at height ' + height);
             }
         });
 
@@ -165,17 +195,32 @@ describe('token-SEND dispense affordability compare gate @regression @tier1', fu
         });
 
         it('the coin-qualified key wins over the bare network key', function () {
-            // regtest is armed by its bare key; a coin-qualified mainnet key is
+            // regtest is armed by its bare key; a coin-qualified testnet key is
             // pinned null and must not fall through to it.
-            assert.strictEqual(dsc.isDispenserSendAmountCompareActive(0, 'mainnet', 'BTC'), false);
+            assert.strictEqual(dsc.isDispenserSendAmountCompareActive(0, 'testnet', 'BTC'), false);
             assert.strictEqual(dsc.isDispenserSendAmountCompareActive(0, 'regtest', 'BTC'), true);
         });
 
-        it('no mainnet or testnet height is pinned in the shipped map', function () {
+        it('a coin-less mainnet caller finds no bare key and stays inert', function () {
+            // There is no bare `mainnet` key, only the three coin-qualified ones, so a
+            // caller with no block context still cannot be moved onto the new rule by
+            // accident even now that mainnet is armed.
+            assert.strictEqual(dsc.DISPENSER_SEND_AMOUNT_COMPARE_ACTIVATION.mainnet, undefined);
+            assert.strictEqual(dsc.isDispenserSendAmountCompareActive(0, 'mainnet', null), false);
+            assert.strictEqual(dsc.isDispenserSendAmountCompareActive(0, 'mainnet', undefined), false);
+        });
+
+        it('mainnet is pinned at genesis and testnet is still unpinned, in the shipped map', function () {
             for (const [key, height] of Object.entries(dsc.DISPENSER_SEND_AMOUNT_COMPARE_ACTIVATION)) {
                 if (key === 'regtest') { assert.strictEqual(height, 0); continue; }
+                if (key.endsWith(':mainnet')) {
+                    assert.strictEqual(height, 0,
+                        key + ' must be armed at genesis by the 2026-09-09 ruling; the gate is ' +
+                        'identity on a mainnet history holding 0 dispensers and 0 dispenses');
+                    continue;
+                }
                 assert.strictEqual(height, null,
-                    key + ' carries a pinned height; arming a chain with history is a coordinated ' +
+                    key + ' carries a pinned height; arming testnet is a coordinated ' +
                     'release step with replay evidence, not a code change');
             }
         });

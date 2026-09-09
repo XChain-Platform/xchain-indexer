@@ -158,10 +158,15 @@ describe('PRICE v0 canonical price-value flag day @regression @tier3', function 
     // -----------------------------------------------------------------------
     describe('the rule this node ships', function () {
 
-        it('is UNARMED on mainnet and runs from genesis on testnet/regtest', function () {
-            assert.strictEqual(priceScale.PRICE_SCALE_ACTIVATION.mainnet, 9999999999);
+        it('runs from genesis on every network, mainnet by the 2026-09-09 ruling', function () {
+            // 0 PRICE actions have ever been indexed on any mainnet chain (measured
+            // 2026-09-09), so the tightened decimal bound rejects no round ever accepted.
+            assert.strictEqual(priceScale.PRICE_SCALE_ACTIVATION.mainnet, 0);
+            assert.strictEqual(priceScale.isPriceScaleCanonicalActive(0, 'mainnet'), true);
             assert.strictEqual(
-                priceScale.isPriceScaleCanonicalActive(Math.floor(Date.now() / 1000), 'mainnet'), false);
+                priceScale.isPriceScaleCanonicalActive(Math.floor(Date.now() / 1000), 'mainnet'), true);
+            // A network the gate cannot evaluate still falls closed to the legacy rule.
+            assert.strictEqual(priceScale.isPriceScaleCanonicalActive(0, 'signet'), false);
             assert.strictEqual(priceScale.isPriceScaleCanonicalActive(0, 'testnet'), true);
             assert.strictEqual(priceScale.isPriceScaleCanonicalActive(0, 'regtest'), true);
         });

@@ -56,28 +56,31 @@
  * threshold and buy the legacy behaviour back. The v3 leg lands on the home
  * chain only, so one chain's block time names the cutover unambiguously.
  *
- * MAINNET IS UNARMED, on the house sentinel (9999999999, year 2286). ATTEST
- * relay is armed on mainnet from BTC 963000, so this rule cannot borrow the
- * empty-chain argument that let the two admission lookups drop refused rows
- * ungated: v3 history above that height may exist. Whether any refused v3 row
- * does exist is a row count against the six live indexer databases, and naming
- * the activation instant on the strength of it is the operator's act and a
- * one-line edit here. testnet/regtest run from genesis.
+ * MAINNET IS ARMED AT GENESIS (operator ruling 2026-09-09). ATTEST relay is
+ * armed on mainnet from BTC 963000, so this rule could not borrow the
+ * empty-chain argument on its face; the row count that settles it was taken
+ * instead, read-only against the live indexer databases on 2026-09-09, and
+ * mainnet holds 0 attestations of any version. With no v3 row above that height
+ * there is no refusal to withhold, so the rule is the identity function over
+ * every mainnet block committed so far and a from-genesis replay cannot
+ * diverge. The proof is a per-chain OLD-vs-ON replay witness, not this comment.
+ * testnet/regtest run from genesis.
  *
  * Execution-path gate (which rows an action handler persists) rather than a
  * change to how a row is hashed, so indexer-only with no xchain-sync twin:
  * xchain-sync replicates materialized rows and never runs a handler. No hub twin
- * either, and the hub half stays as it is until this is armed: the hub's
- * already-materialized view counts a refused row, and correcting it ahead of
- * this gate turns a permanent block into a broadcast that this indexer still
- * drops, once per relay round.
+ * either. The hub's already-materialized view counts a refused row, and
+ * correcting it was held back only while this gate was inert, because a
+ * correction ahead of the gate turns a permanent block into a broadcast this
+ * indexer still drops, once per relay round. Arming here releases that hold; the
+ * hub-side correction is a separate change.
  *
  ********************************************************************/
 
 // Per-network activation, interpreted against the LANDING block's consensus
 // timestamp (data['BLOCK_TIME']) on the home chain.
 const ATTEST_RELAY_REJECT_SLOT_ACTIVATION = {
-    mainnet: 9999999999,    // UNARMED sentinel; the instant is the operator's to name
+    mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 attestations, measured 2026-09-09)
     testnet: 0,
     regtest: 0,
 };

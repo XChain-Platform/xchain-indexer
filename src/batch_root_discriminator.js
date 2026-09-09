@@ -45,10 +45,10 @@
  *
  * FLAG-DAY GATED. The request_id is a consensus preimage (it is what the ATTEST v0
  * handler re-derives to accept a request, what validators sign over, and what the
- * callback resolves against), and mainnet carries live history, so below the flag
- * day the bare TX_VOUT must be reproduced verbatim. The gate is
- * BATCH_SUBCOMMAND_ROOT_DISCRIMINATOR in protocol_changes.js: genesis on
- * testnet/regtest, UNARMED on mainnet until the operator dates it.
+ * callback resolves against). The gate is BATCH_SUBCOMMAND_ROOT_DISCRIMINATOR in
+ * protocol_changes.js: ARMED at genesis on testnet/regtest and, by the 2026-09-09
+ * ruling, on mainnet too (identity on the indexed mainnet history, 0 BATCH
+ * subcommands to reinterpret, measured 2026-09-09).
  *
  ********************************************************************/
 

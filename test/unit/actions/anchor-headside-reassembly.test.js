@@ -31,9 +31,20 @@ const aact    = require('../../../src/anchor_activation.js');
 
 // A mainnet fixture must be mined AT OR ABOVE the ANCHOR activation height or the
 // activation gate rejects it before any flag day is consulted, and these cases are
-// about the flag day, not the restart. Both mainnet flag days here are the inert
-// sentinel 999999999, so this height leaves them inert exactly as intended.
+// about the flag day, not the restart.
 const MAINNET_ACTIVE = aact.ANCHOR_ACTIVATION.mainnet;
+
+// Mainnet is armed at genesis since the 2026-09-09 ruling, so the network name alone
+// no longer reaches the below-flag arm. Pin THIS key inert for the duration of a call
+// and leave the ANCHOR activation gate the fixture heights depend on untouched.
+const HEIGHT_SENTINEL = 999999999;
+async function belowFlag(fn) {
+    let map   = ahug.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION;
+    let saved = map.mainnet;
+    map.mainnet = HEIGHT_SENTINEL;
+    try { return await fn(); }
+    finally { map.mainnet = saved; }
+}
 
 const PUBKEY_A = 'a'.repeat(64);
 const SIG      = '1'.repeat(128);
@@ -188,8 +199,11 @@ describe('Anchor head-side reassembly gate @regression', function () {
 // stateHash.js class 6) and it does NOT move the two node classes together: a mirrored
 // node whose quorum FAILS gets error set, so the gate never runs and no stamp lands,
 // while a snapshot-less node's same head is 'unverified' with error null and stamps.
-// So it ships default INERT behind a per-network height, like every other
-// preimage-moving change in this repo, and must never be re-landed ungated.
+// So it ships behind a per-network height, like every other preimage-moving change
+// in this repo, and must never be re-landed ungated. Mainnet took a genesis height
+// on 2026-09-09 because the indexed mainnet history carries 0 archive chunks
+// (measured 2026-09-09), so the two node classes have no stamp to disagree about
+// and the widening is identity over it.
 describe('Anchor head-side reassembly gate: unverified flag-day @regression', function () {
     let indexer, handler, verifyStub, swqStub;
     let headSlice, chunk1, chunk2;
@@ -236,9 +250,13 @@ describe('Anchor head-side reassembly gate: unverified flag-day @regression', fu
         return { stamped: indexer.indexerDb.setAnchorArchiveStatus.calledWith(21, 'invalid_archive'), status: data['STATUS'] };
     }
 
-    it('mainnet stays INERT while testnet and regtest are armed at 0', function () {
-        assert.strictEqual(ahug.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION.mainnet, 999999999,
-            'mainnet must stay an INERT placeholder until the class-6 height-key repair is pinned on the same train');
+    it('every network is armed at 0, mainnet included since the 2026-09-09 ruling', function () {
+        assert.strictEqual(ahug.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION.mainnet, 0,
+            'mainnet armed at genesis: 0 archive chunks there (measured 2026-09-09), so the ' +
+            'widened head-side gate has no invalid_archive stamp to move');
+        // Either sentinel reads back as "still unarmed" at the GoLiveGate.
+        assert.notStrictEqual(ahug.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION.mainnet, 999999999);
+        assert.notStrictEqual(ahug.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION.mainnet, 9999999999);
         // Testnet is armed from genesis: its indexer state is rebuilt from the chain, so the
         // widened gate contradicts nothing already indexed under the narrower rule.
         assert.strictEqual(ahug.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION.testnet, 0, 'testnet armed at genesis');
@@ -251,21 +269,32 @@ describe('Anchor head-side reassembly gate: unverified flag-day @regression', fu
         assert.strictEqual(ahug.isArchiveHeadUnverifiedGateActive(0, 'nosuchnet'), false);
         assert.strictEqual(ahug.isArchiveHeadUnverifiedGateActive(0, 'regtest'), true);
         assert.strictEqual(ahug.isArchiveHeadUnverifiedGateActive(0, 'testnet'), true);
-        // mainnet is now the network carrying the inert sentinel.
-        assert.strictEqual(ahug.isArchiveHeadUnverifiedGateActive(999999998, 'mainnet'), false);
+        assert.strictEqual(ahug.isArchiveHeadUnverifiedGateActive(0, 'mainnet'), true);
+        assert.strictEqual(ahug.isArchiveHeadUnverifiedGateActive(999999998, 'mainnet'), true);
+        // Fail-closed still binds on mainnet now that its threshold is 0: NaN is not ">= 0".
+        assert.strictEqual(ahug.isArchiveHeadUnverifiedGateActive('nope', 'mainnet'), false);
     });
 
-    it('gate INERT (mainnet), unverified head, corrupt blob: deployed valid-only rule stands, no stamp', async function () {
-        let r = await stampedAt('mainnet', MAINNET_ACTIVE, true);
+    it('gate INERT (mainnet, key pinned inert), unverified head, corrupt blob: deployed valid-only rule stands, no stamp', async function () {
+        let r = await belowFlag(() => stampedAt('mainnet', MAINNET_ACTIVE, true));
         assert.strictEqual(r.status, 'unverified');
         assert.strictEqual(r.stamped, false,
             'below the flag day the head-side gate must keep its deployed valid-only rule, or the widening forks the fleet ungated');
     });
 
-    it('gate INERT (mainnet), VALID head, corrupt blob: the always-on half of the gate still stamps', async function () {
-        let r = await stampedAt('mainnet', MAINNET_ACTIVE, false);
+    it('gate INERT (mainnet, key pinned inert), VALID head, corrupt blob: the always-on half of the gate still stamps', async function () {
+        let r = await belowFlag(() => stampedAt('mainnet', MAINNET_ACTIVE, false));
         assert.strictEqual(r.status, 'valid');
         assert.strictEqual(r.stamped, true, 'the flag day governs ONLY the unverified admission, never the valid path');
+    });
+
+    it('gate ARMED (mainnet, shipped map), unverified head, corrupt blob: stamps from genesis', async function () {
+        // The shipped key, driven through the real handler: the same head that produced
+        // no stamp under the pinned-inert arm above now runs the CRC check.
+        let r = await stampedAt('mainnet', MAINNET_ACTIVE, true);
+        assert.strictEqual(r.status, 'unverified');
+        assert.strictEqual(r.stamped, true,
+            'mainnet is armed at 0, so an unverified head runs the same CRC check as a valid one');
     });
 
     it('gate ARMED (testnet), unverified head, corrupt blob: stamps from genesis', async function () {

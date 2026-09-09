@@ -40,34 +40,40 @@ const NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME = 1786060800;
 // testnet/regtest. Do NOT arm it at the 2026-08-07 contract-era anchor: that date is
 // already past, and a loosening with a retroactive boundary makes a from-genesis
 // replay accept mints the live fleet rejected.
+//
+// This is the ONE gate the 2026-09-09 genesis-arm ruling deliberately keeps on a future
+// instant. Its siblings arm at 0 because the action types they touch have no mainnet
+// history at all; this rule touches MAX_SUPPLY=0, which about 168,000 mainnet ISSUEs
+// carry (124,158 of BTC's 124,160 and all 43,934 of DOGE's, measured 2026-09-09), so a
+// genesis arm would reinterpret every one of them. The instant is T, the mainnet launch
+// instant, and only the operator names it.
 const UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME = 9999999999;
 
-// Mainnet arm for CROSS_SETTLE_PER_BLOCK_CAP. Same house UNARMED sentinel
-// as the constant above (9999999999, year 2286): the operator ruled on 2026-08-11
-// that the CROSS_SETTLE per-block cap lands behind a flag day rather than ungated
-// under the pre-launch wipe-and-replay route, and ratifying the anchor is a
-// separate act that has not happened yet. Arming it is a one-line edit here.
-// Until then the cap is inert on mainnet (the pass runs uncapped exactly as the
-// live chains have always run it) and live from genesis on testnet/regtest.
-// Do NOT arm it at the 2026-08-07 contract-era anchor: that date is already past,
-// and a TIGHTENING with a retroactive boundary makes a from-genesis replay defer
-// settlements the live fleet already applied, which is the fork the gate exists to
-// prevent.
-const CROSS_SETTLE_CAP_MAINNET_TIME = 9999999999;
+// Mainnet arm for CROSS_SETTLE_PER_BLOCK_CAP. ARMED AT GENESIS (0) by the operator's
+// 2026-09-09 ruling. The cap can only move a verdict where the CROSS_SETTLE pass has a
+// finalized match to defer, and the indexed mainnet history has none: mainnet holds
+// 124,160 BTC ISSUEs, 43,934 DOGE ISSUEs and 56 DOGE ANCHORs, with no LTC actions and
+// zero of every other action type (measured read-only on the mainnet replicas
+// 2026-09-09). The 2026-08-11 ruling read mainnet as carrying settled cross-chain
+// history; that reading was wrong, which is why a flag day was reserved for it, and the
+// measurement is what supersedes it. A genesis arm is therefore identity on every block
+// a from-genesis replay can reach, and the OLD-vs-ON replay witness per chain is the
+// proof rather than the argument: a divergence there returns this constant to a future
+// instant. testnet/regtest were already genesis-active.
+const CROSS_SETTLE_CAP_MAINNET_TIME = 0;
 
 // Mainnet arm for BATCH_SUBCOMMAND_ROOT_DISCRIMINATOR, the per-subcommand root
 // discriminator that stops two same-contract EXECUTE subcommands of one BATCH from
-// deriving the IDENTICAL ATTEST request_id (see the registration below). Same house
-// UNARMED sentinel as the two constants above (9999999999, year 2286): the operator
-// ruled the remedy on 2026-08-11 but naming the activation instant is a separate act
-// no lane may perform, and a consensus preimage cannot be moved at a guessed value.
-// Arming it is a one-line edit here. Until then the discriminator is inert on mainnet
-// (the preimage is assembled exactly as the live chains have always assembled it) and
-// live from genesis on testnet/regtest. Do NOT arm it at the 2026-08-07 contract-era
-// anchor: that date is already past, and a preimage change with a retroactive boundary
-// makes a from-genesis replay derive request_ids the live fleet never wrote, which is
-// the fork the gate exists to prevent.
-const BATCH_ROOT_SUB_INDEX_MAINNET_TIME = 9999999999;
+// deriving the IDENTICAL ATTEST request_id (see the registration below). ARMED AT
+// GENESIS (0) by the operator's 2026-09-09 ruling. The composite discriminator differs
+// from the bare TX_VOUT only for a root action that is a BATCH sub-command, and mainnet
+// has never carried a BATCH: its whole indexed history is 124,160 BTC ISSUEs, 43,934
+// DOGE ISSUEs and 56 DOGE ANCHORs, with zero BATCHes, zero EXECUTEs and zero
+// attestations (measured read-only on the mainnet replicas 2026-09-09). No request_id a
+// from-genesis replay derives can move, so there is no preimage history to preserve and
+// no flag day to coordinate. The OLD-vs-ON replay witness per chain is the proof.
+// testnet/regtest were already genesis-active.
+const BATCH_ROOT_SUB_INDEX_MAINNET_TIME = 0;
 
 // Arms for ISSUE_INHERITED_MINT_WINDOW, the re-parameterization fix that scopes the ISSUE
 // mint-window recency checks (MINT_START_BLOCK / MINT_STOP_BLOCK must be >= the current
@@ -81,12 +87,15 @@ const BATCH_ROOT_SUB_INDEX_MAINNET_TIME = 9999999999;
 // 2026-08-22: exempt inherited values, keep the recency check on explicit ones, so the
 // anti-backdating purpose is untouched (see actions/issue.js).
 //
-// Mainnet: house UNARMED sentinel (9999999999, year 2286). The ruling settled the REMEDY;
-// naming the mainnet instant is a separate act, and a loosening cannot be armed at a
-// guessed value. Arming it is a one-line edit here. Do NOT arm it at a past instant: a
-// loosening with a retroactive boundary makes a from-genesis replay accept re-issues the
-// live fleet rejected.
-const ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME = 9999999999;
+// Mainnet: ARMED AT GENESIS (0) by the operator's 2026-09-09 ruling. The loosening bites
+// only on a re-parameterizing ISSUE that the inherited window rejected, and mainnet's
+// indexed history is ISSUE plus 56 DOGE ANCHORs with no MINT at all (124,160 BTC ISSUEs,
+// 43,934 DOGE ISSUEs, no LTC actions, measured read-only on the mainnet replicas
+// 2026-09-09), so no stored mint window has ever opened for an inherited value to fall
+// behind. The from-genesis OLD-vs-ON replay witness per chain is what settles that
+// rather than this reasoning: if it turns up an ISSUE whose verdict moves, this constant
+// goes back to a future instant beside UNCAPPED_MAX_SUPPLY_ZERO.
+const ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME = 0;
 
 // Testnet: ARMED (operator remedy ruling 2026-08-22, pre-launch) at 1787961600 =
 // 2026-08-29T00:00:00Z. RE-PINNED FORWARD on 2026-08-25 for the v0.11.0 train, per the
@@ -212,15 +221,15 @@ const BATCH_ISSUANCE_LIMITS_MAINNET_TIME = 1786838400;
 // Mainnet arm for BATCH_COST_WEIGHTING, the weighted per-BATCH cost budget that replaces
 // the flat 250-command cap registered above (see the batch cost-weighting spec).
 //
-// UNARMED, on the house sentinel (9999999999, year 2286), and deliberately so.
-//
-// WHY IT IS A SECOND FLAG RATHER THAN A WIDENING OF THE ONE ABOVE. That one arms at
-// 2026-08-16T00:00:00Z, and folding this in would mean shipping a consensus cap-model
-// replacement, its client mirrors, its prose and its replay evidence under that clock.
-// The operator established on 2026-08-14 that a pre-launch flag day is cheap - arming the
-// set above cost one deploy cycle - so a second boundary is a far better price than a
-// rushed one. Once the instant above passes, this entry is what makes re-expressing the
-// cap possible at all without rewriting armed history.
+// ARMED AT GENESIS (0) by the operator's 2026-09-09 ruling (sitting-1 Q3). That ruling
+// SUPERSEDES the 2026-08-20 one which reserved a dedicated mainnet flag day for this
+// entry: mainnet has never carried a BATCH. Its whole indexed history is 124,160 BTC
+// ISSUEs, 43,934 DOGE ISSUEs and 56 DOGE ANCHORs, with zero BATCHes, DEPLOYs, EXECUTEs,
+// AIRDROPs and DIVIDENDs (measured read-only on the mainnet replicas 2026-09-09), so
+// neither the budget nor the weights can move a verdict a from-genesis replay reaches,
+// and the acceptance evidence a flag day would have bought has nothing to measure. The
+// OLD-vs-ON replay witness per chain is the proof; a divergence there returns this
+// constant to a future instant.
 //
 // WHAT IT GATES. The flat count check becomes a WEIGHT BUDGET: each sub-command
 // contributes a weight and the batch caps their SUM. The budget stays 250 and the default
@@ -239,18 +248,31 @@ const BATCH_ISSUANCE_LIMITS_MAINNET_TIME = 1786838400;
 // DOGE, whose heights diverge by millions of blocks, so no single height names one cutover
 // across all three but a single timestamp does.
 //
-// This entry MUST activate at or after BATCH_ISSUANCE_LIMITS above. The budget check
+// ORDERING AGAINST BATCH_ISSUANCE_LIMITS, and why 0 does not break it. The budget check
 // REPLACES that entry's command cap in the same position (first, so it still bounds the
-// O(N) scans behind it) and reuses its classification of sub-commands; a window where this
-// is live and that is not would run a weight scan over un-normalized params AND would leave
-// the batch with no bound at all in the gap. Nothing in isEnabled() enforces the ordering,
-// so test/unit/batchCostWeightingGate.test.js asserts it per network.
-const BATCH_COST_WEIGHTING_MAINNET_TIME = 9999999999;
+// O(N) scans behind it) and reuses its classification of sub-commands, so a window where
+// the budget ran and the cap did not would weigh un-normalized params and leave the batch
+// with no bound at all. On mainnet this constant is now BELOW that entry's 1786838400,
+// and the invariant survives because batch.js never lets the two run apart: every site
+// that reads `weightsActive` sits inside an `if(limitsActive)` (parse's cap block and the
+// aggregate gas pre-check), so the weighting gate is a strict refinement of the issuance
+// one and its effective mainnet activation is still 2026-08-16T00:00:00Z. That window is
+// also entirely in the past and holds zero BATCHes. The numeric ordering still holds on
+// testnet and regtest, where both are 0; batchCostWeightingGate.test.js pins the nesting
+// by driving a batch inside the window rather than by comparing the two constants.
+const BATCH_COST_WEIGHTING_MAINNET_TIME = 0;
 
 // Mainnet arm for EMISSION_ISSUANCE_LIMITS: VM-emitted ISSUEs counted against
 // the SAME per-transaction top-level issuance limit the wire path has always carried.
 //
-// UNARMED, on the house sentinel (9999999999, year 2286), and deliberately so.
+// ARMED AT GENESIS (0) by the operator's 2026-09-09 ruling. Mainnet holds zero EXECUTEs
+// and zero contracts, so there is no VM emission for the budget to count (124,160 BTC
+// ISSUEs, 43,934 DOGE ISSUEs, 56 DOGE ANCHORs, no LTC actions, measured read-only on the
+// mainnet replicas 2026-09-09). ONE CAVEAT, and the from-genesis OLD-vs-ON replay witness
+// per chain is what settles it rather than this comment: the budget is per TRANSACTION,
+// so it would also bite if the genesis import ever put two top-level ISSUEs in a single
+// transaction. If the witness finds such a transaction, this constant goes back to a
+// future instant beside UNCAPPED_MAX_SUPPLY_ZERO.
 //
 // WHAT IT GATES. Every ISSUE, whatever emitted it, draws from one per-TRANSACTION budget
 // of ONE top-level (undotted) tick; dotted child ticks stay exempt exactly as batch.js
@@ -266,21 +288,23 @@ const BATCH_COST_WEIGHTING_MAINNET_TIME = 9999999999;
 // protect. Operator decision 2026-08-15: count them, rather than charge them or widen the
 // per-EXECUTE emission cap.
 //
-// WHY IT IS ITS OWN FLAG rather than a widening of BATCH_ISSUANCE_LIMITS above: that entry
-// arms at 2026-08-16T00:00:00Z, and a node still on pre-arm code would apply the old rules
-// past the boundary and fork. A tightening that lands after an armed instant needs its own
-// boundary, never a retroactive edit of an armed one.
+// WHY IT IS ITS OWN ENTRY rather than a widening of BATCH_ISSUANCE_LIMITS above: that
+// entry is armed on mainnet at 2026-08-16T00:00:00Z, and editing an armed instant is
+// never allowed, whatever the new value would be. A separate entry is how a rule that
+// lands after an armed one gets its own boundary, and here that boundary is genesis.
 //
 // Keyed on block TIME like every sibling issuance gate: ISSUE runs on BTC, LTC and DOGE,
 // whose heights diverge by millions of blocks, so no single height names one cutover
 // across all three but a single timestamp does.
-const EMISSION_ISSUANCE_LIMITS_MAINNET_TIME = 9999999999;
+const EMISSION_ISSUANCE_LIMITS_MAINNET_TIME = 0;
 
 // Arms for UNIFIED_FEES_SWEEP_CALLBACK: SWEEP and CALLBACK priced on the unified gas
 // schedule instead of the legacy flat per-DB-hit fee.
 //
-// BOTH UNARMED, on the house sentinel (9999999999, year 2286). Regtest is genesis-active
-// (0) so the suites and every regtest venue exercise the unified price from block 0.
+// MAINNET IS ARMED AT GENESIS (0) and TESTNET at 1790812800 (2026-10-01T00:00:00Z).
+// Regtest is genesis-active (0) so the suites and every regtest venue exercise the
+// unified price from block 0. The two networks differ because their histories do, and
+// the constants below carry the reasoning for each.
 //
 // WHAT IT GATES. Below the flag both actions keep the legacy model exactly: db_hits counted
 // as they always were (itself still gated by LEGACY_FEE_NUMERIC_DBHITS above) and priced at
@@ -310,18 +334,28 @@ const EMISSION_ISSUANCE_LIMITS_MAINNET_TIME = 9999999999;
 // diverge by millions of blocks, so no single shared height names one cutover across all
 // three but a single timestamp does.
 //
-// WHY TESTNET IS UNARMED TOO, unlike every other time-keyed gate in this file. Those were
-// registered while testnet was a scratch venue that carried no history the new rule would
-// reinterpret. Testnet went PUBLIC on 2026-09-01 with third-party validators, wallets and
-// explorers reading it, so its ledgers are now live: a genesis-active testnet arm would
-// re-price every SWEEP and CALLBACK already committed there and fork every synced testnet
-// node against a fresh reindex. Arming is an operator act on both networks, and the instant
-// must be in the FUTURE when it ships and must leave every indexer time to deploy this code
-// first (testnet4 tips can run ~2h ahead of wall clock, so budget that margin). An activation
-// already past is not a flag day: the fleet applies the legacy price beyond it while a
+// MAINNET, genesis (0) by the operator's 2026-09-09 ruling. The re-pricing can only move
+// a ledger amount where a SWEEP or CALLBACK was committed, and mainnet has never carried
+// either: its whole indexed history is 124,160 BTC ISSUEs, 43,934 DOGE ISSUEs and 56 DOGE
+// ANCHORs, with zero SWEEPs and zero CALLBACKs (measured read-only on the mainnet
+// replicas 2026-09-09). No fee DEBIT a from-genesis replay recomputes can differ, so
+// there is no committed ledger to preserve and no fleet to coordinate. The OLD-vs-ON
+// replay witness per chain is the proof.
+//
+// TESTNET IS DIFFERENT, and this is the one gate in this cohort where 0 was never an
+// option. Testnet went PUBLIC on 2026-09-01 with third-party validators, wallets and
+// explorers reading it, and it has carried real SWEEP and CALLBACK traffic since, so a
+// genesis-active testnet arm would re-price fees already committed there and fork every
+// synced testnet node against a fresh reindex. The instant below is 1790812800
+// (2026-10-01T00:00:00Z), about three weeks out, which clears the 14-day pre-launch
+// notice the upgrade policy requires. It rides the v0.17.0 train, and if that train slips
+// the instant is DEFERRED by the release that does carry it: an activation already past
+// is not a flag day, because the fleet applies the legacy price beyond it while a
 // from-genesis replay applies the new one, and the two diverge at the first comparison.
-const UNIFIED_FEES_SWEEP_CALLBACK_MAINNET_TIME = 9999999999;
-const UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME = 9999999999;
+// Every testnet indexer must be running this code before the instant, and testnet4 tips
+// can run about 2h ahead of wall clock, so the deploy needs that margin.
+const UNIFIED_FEES_SWEEP_CALLBACK_MAINNET_TIME = 0;
+const UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME = 1790812800;
 
 // Consensus protocol version, COMPILED IN.
 //
@@ -1453,10 +1487,12 @@ class ProtocolChanges {
         // by proxy. Budget 250, default weight 1: a batch with no VM and no fan-out
         // sub-command is decided exactly as it is today.
         //
-        // MAINNET IS UNARMED (see BATCH_COST_WEIGHTING_MAINNET_TIME above for the
-        // sentinel and for why this is a second flag day rather than a widening of the
-        // entry above); testnet/regtest activate at genesis (all zeros), so drills and
-        // suites run the post-flag-day rules.
+        // EVERY NETWORK ACTIVATES AT GENESIS (all zeros). Mainnet was armed there on
+        // 2026-09-09, superseding the 2026-08-20 ruling that reserved it a dedicated flag
+        // day: mainnet has never carried a BATCH, so neither the budget nor the weights
+        // can move a verdict. BATCH_COST_WEIGHTING_MAINNET_TIME above carries the
+        // measurement and the ordering note (this entry now registers BELOW
+        // BATCH_ISSUANCE_LIMITS on mainnet, and batch.js is what keeps the two together).
         this.addChange('BATCH_COST_WEIGHTING', '0.2.0',BATCH_COST_WEIGHTING_MAINNET_TIME,0,0,0,0,0);
 
         // Per-TRANSACTION top-level issuance budget that VM emissions draw from too
@@ -1468,10 +1504,11 @@ class ProtocolChanges {
         // path, which routes past that scan and is fee-exempt under
         // ISSUANCE_FEE_EMISSION_EXEMPT.
         //
-        // MAINNET IS UNARMED (see EMISSION_ISSUANCE_LIMITS_MAINNET_TIME above for the
-        // sentinel and for why this is its own flag day rather than a widening of
-        // BATCH_ISSUANCE_LIMITS, which is already armed); testnet/regtest activate at
-        // genesis (all zeros), so drills and suites run the post-flag-day rules.
+        // EVERY NETWORK ACTIVATES AT GENESIS (all zeros). Mainnet was armed there on
+        // 2026-09-09 on the measurement that it holds zero EXECUTEs and zero contracts, so
+        // there is no VM emission for the budget to count. The one caveat, which the
+        // from-genesis replay witness settles, is a genesis-import transaction carrying two
+        // top-level ISSUEs; EMISSION_ISSUANCE_LIMITS_MAINNET_TIME above carries it.
         this.addChange('EMISSION_ISSUANCE_LIMITS', '0.2.0',EMISSION_ISSUANCE_LIMITS_MAINNET_TIME,0,0,0,0,0);
 
         // Numeric legacy-fee db_hits accumulation. The legacy
@@ -1503,9 +1540,11 @@ class ProtocolChanges {
         // SWEEP and CALLBACK priced on the unified gas schedule (a BASE cost plus a
         // per-item cost) instead of the legacy flat per-DB-hit fee, so a small one clears
         // the dust threshold on the chains where the protocol fee must be a native-coin
-        // output. MAINNET AND TESTNET ARE BOTH UNARMED on the house sentinel; regtest
-        // activates at genesis (0). The full rationale, and why testnet does not get the
-        // usual genesis arm, is at UNIFIED_FEES_SWEEP_CALLBACK_MAINNET_TIME above.
+        // output. MAINNET AND REGTEST ACTIVATE AT GENESIS (0); TESTNET is armed at a future
+        // instant instead, because it is the only network of the three that has committed
+        // SWEEP and CALLBACK fees a genesis arm would re-price. The measurement behind the
+        // mainnet arm, and the testnet instant's notice and deferral rule, are at
+        // UNIFIED_FEES_SWEEP_CALLBACK_MAINNET_TIME above.
         this.addChange('UNIFIED_FEES_SWEEP_CALLBACK', '0.2.0',
             UNIFIED_FEES_SWEEP_CALLBACK_MAINNET_TIME, UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME, 0, 0, 0, 0);
 
@@ -1588,10 +1627,12 @@ class ProtocolChanges {
         // token and breaks from-genesis replay byte-identity. Keyed on block_TIME for the
         // reasons stated at DEPLOY_BASE64_CODE above.
         //
-        // MAINNET IS UNARMED (see UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME above): the
-        // operator's 2026-08-11 ruling settled the product direction, not the flag day.
-        // testnet/regtest activate at genesis (all zeros) so the exemption is in force from
-        // block 0 there and in the unit/e2e suites.
+        // MAINNET IS UNARMED (see UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME above), and it is
+        // the ONE gate the 2026-09-09 genesis-arm ruling deliberately held back: about
+        // 168,000 mainnet ISSUEs carry MAX_SUPPLY=0, so unlike its siblings this rule has
+        // real history to reinterpret and its instant is T, the mainnet launch instant,
+        // which only the operator names. testnet/regtest activate at genesis (all zeros) so
+        // the exemption is in force from block 0 there and in the unit/e2e suites.
         this.addChange('UNCAPPED_MAX_SUPPLY_ZERO', '0.2.0',UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME,0,0,0,0,0);
 
         // Per-block cap on the CROSS_SETTLE pass
@@ -1601,24 +1642,22 @@ class ProtocolChanges {
         // (snapshot_block, match_id) order; with it OFF the pass drains the whole
         // backlog in one block transaction, which is the legacy behavior.
         //
-        // Gated because the cap is CONSENSUS-VISIBLE: deferring a settlement moves the
-        // block it lands in, and with it the actions rows, the contract hash and the
-        // checkpoint preimage. CROSS_CHAIN_DEX is genesis-active on every network
-        // (all-zero thresholds below) and the fresh-genesis restart of 816d1e1 covered
-        // the three TESTNET chains only, so mainnet carries settled history that an
-        // ungated cap would reinterpret on any from-genesis replay. The sibling
-        // ATTEST_MAX_EXPIRIES_PER_BLOCK could ship ungated only because the pre-launch
-        // fleet-wide replay recomputed the history it reinterpreted; this cap has no
-        // such vehicle. Operator ruling of 2026-08-11, option (b).
+        // Kept as its own consensus rule because the cap is CONSENSUS-VISIBLE where it
+        // bites: deferring a settlement moves the block it lands in, and with it the
+        // actions rows, the contract hash and the checkpoint preimage. The 2026-08-11
+        // ruling reserved a flag day for it on the belief that mainnet carried settled
+        // cross-chain history, since the fresh-genesis restart of 816d1e1 covered the
+        // three TESTNET chains only.
         //
         // Keyed on block_TIME like the other multi-chain gates: CROSS_SETTLE runs on
         // BTC, LTC and DOGE, whose heights diverge by millions of blocks, so no single
         // height names one cutover across all three but a single timestamp does.
         //
-        // MAINNET IS UNARMED (see CROSS_SETTLE_CAP_MAINNET_TIME above): the ruling
-        // settled the ROUTE, not the flag day, and the anchor is still the operator's
-        // to ratify. testnet/regtest activate at genesis (all zeros) so the cap is in
-        // force from block 0 there and in the unit/e2e suites.
+        // EVERY NETWORK NOW ACTIVATES AT GENESIS (all zeros). The 2026-09-09 measurement
+        // showed mainnet holds no cross-chain matches at all, so the belief above was
+        // wrong and there is nothing for the cap to reinterpret;
+        // CROSS_SETTLE_CAP_MAINNET_TIME above carries the count and names the replay
+        // witness that proves it.
         this.addChange('CROSS_SETTLE_PER_BLOCK_CAP', '0.2.0',CROSS_SETTLE_CAP_MAINNET_TIME,0,0,0,0,0);
 
         // Per-subcommand root discriminator for the ATTEST request_id / XCALL call_id
@@ -1640,19 +1679,21 @@ class ProtocolChanges {
         // non-BATCH root keeps the bare TX_VOUT, so every id derived outside a BATCH is
         // byte-identical across the flag day and no pending request's id moves.
         //
-        // Gated because the request_id is a CONSENSUS preimage: it is what the handler
-        // re-derives to accept an ATTEST v0, what validators sign over, and what the
-        // callback resolves against. Mainnet carries live history, so a from-genesis
-        // replay must reproduce the historical (colliding) id below the flag day.
+        // Kept as its own consensus rule because the request_id is a CONSENSUS preimage:
+        // it is what the handler re-derives to accept an ATTEST v0, what validators sign
+        // over, and what the callback resolves against. A network that had derived one
+        // inside a BATCH would need a from-genesis replay to reproduce the historical
+        // (colliding) id below the boundary.
         //
         // Keyed on block_TIME like the sibling contract-era gates: EXECUTE runs on BTC,
         // LTC and DOGE, whose heights diverge by millions of blocks, so no single height
         // names one cutover across all three but a single timestamp does.
         //
-        // MAINNET IS UNARMED (see BATCH_ROOT_SUB_INDEX_MAINNET_TIME above): the operator
-        // ruled the REMEDY on 2026-08-11 and naming the activation instant is a separate
-        // act that has not happened yet. testnet/regtest activate at genesis (all zeros),
-        // so the discriminator is in force from block 0 there and in the unit/e2e suites.
+        // EVERY NETWORK ACTIVATES AT GENESIS (all zeros). Mainnet was armed there on
+        // 2026-09-09 on the measurement that it holds no BATCHes, no EXECUTEs and no
+        // attestations, so no id it ever derived can move;
+        // BATCH_ROOT_SUB_INDEX_MAINNET_TIME above carries the counts and names the replay
+        // witness that proves it.
         this.addChange('BATCH_SUBCOMMAND_ROOT_DISCRIMINATOR', '0.2.0',BATCH_ROOT_SUB_INDEX_MAINNET_TIME,0,0,0,0,0);
 
         // ISSUE mint-window re-parameterization fix. Below this activation the
@@ -1677,14 +1718,15 @@ class ProtocolChanges {
         // of blocks, so no single height names one cutover across all three but a
         // single timestamp does.
         //
-        // MAINNET IS UNARMED and TESTNET IS ARMED at ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME
-        // (1787961600 = 2026-08-29T00:00:00Z, re-pinned forward from the lapsed
-        // 2026-08-24 instant on 2026-08-25) - the
-        // first nonzero testnet threshold in this registry; the constants above
-        // (ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME / _TESTNET_TIME) carry the
-        // reasoning, including why testnet cannot be genesis-active here. Regtest
-        // activates at genesis (0) so the unit/e2e suites exercise the corrected
-        // rule from block 0.
+        // MAINNET IS ARMED AT GENESIS (0) by the 2026-09-09 ruling, on the measurement
+        // that mainnet holds no MINT at all, so no stored mint window has ever opened for
+        // an inherited value to fall behind. TESTNET IS ARMED at
+        // ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME (1787961600 = 2026-08-29T00:00:00Z,
+        // re-pinned forward from the lapsed 2026-08-24 instant on 2026-08-25), because
+        // BTC testnet4 holds a recorded rejection of exactly this shape and cannot be
+        // genesis-active; the constants above carry both reasonings and name the replay
+        // witness that settles the mainnet one. Regtest activates at genesis (0) so the
+        // unit/e2e suites exercise the corrected rule from block 0.
         this.addChange('ISSUE_INHERITED_MINT_WINDOW', '0.2.0',ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME,ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME,0,0,0,0);
 
         // DEPLOY_DEFERRED_ASSEMBLY: a chunked DEPLOY group (one source, one code_hash)

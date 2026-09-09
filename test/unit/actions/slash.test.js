@@ -284,8 +284,37 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
     });
 
     it('BELOW the flag-day both reads use the declared height verbatim', async function () {
-        // Burial changes acceptance, so it is flag-day gated per network and mainnet ships
-        // INERT. Below the gate this handler must be byte-identical to its pre-fix self.
+        // Burial changes acceptance, so it is flag-day gated per network. Every network is
+        // armed at genesis now, so the pre-flag-day era is reached by pinning the burial
+        // key inert (`null` is that map's own INERT marker) for the duration of the call
+        // rather than by naming a network. Below the gate this handler must be
+        // byte-identical to its pre-fix self.
+        const map   = srb.SNAPSHOT_BURIAL_ACTIVATION;
+        const saved = map.mainnet;
+        map.mainnet = null;
+
+        const mainnetCtx = Object.assign({}, ctx, {
+            config: Object.assign({}, indexer.config, { NETWORK: 'mainnet' }),
+        });
+        const mainnetHandler = new Slash(mainnetCtx);
+        indexer.indexerDb.getStakeSourceForDelegatedPubkey = sinon.stub().resolves(42);
+
+        const { msgA, msgB } = dexProof();
+        const d = data();
+        try {
+            await mainnetHandler.parse(params('cross_chain', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+        } finally { map.mainnet = saved; }
+
+        assert.strictEqual(d['STATUS'], 'valid');
+        assert.deepStrictEqual(indexer.indexerDb.getValidatorsByCapability.firstCall.args, ['cross_chain', 100]);
+        assert.strictEqual(indexer.indexerDb.getStakeSourceForDelegatedPubkey.firstCall.args[1], 100);
+    });
+
+    it('AT the flag-day on mainnet both reads use the BURIED height', async function () {
+        // The other half of the pair, on the shipped key: mainnet is armed at genesis, so
+        // the same proof that resolves at the declared height above now resolves where the
+        // signer resolved it. Both reads must move together or an authorized key resolves
+        // to no owner.
         const mainnetCtx = Object.assign({}, ctx, {
             config: Object.assign({}, indexer.config, { NETWORK: 'mainnet' }),
         });
@@ -296,9 +325,10 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         const d = data();
         await mainnetHandler.parse(params('cross_chain', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
 
-        assert.strictEqual(d['STATUS'], 'valid');
-        assert.deepStrictEqual(indexer.indexerDb.getValidatorsByCapability.firstCall.args, ['cross_chain', 100]);
-        assert.strictEqual(indexer.indexerDb.getStakeSourceForDelegatedPubkey.firstCall.args[1], 100);
+        assert.strictEqual(d['STATUS'], 'valid', 'got ' + d['STATUS']);
+        assert.deepStrictEqual(indexer.indexerDb.getValidatorsByCapability.firstCall.args,
+            ['cross_chain', buried(100)]);
+        assert.strictEqual(indexer.indexerDb.getStakeSourceForDelegatedPubkey.firstCall.args[1], buried(100));
     });
 
     it('REJECTS an honest view change (R-3): same round, different view → different key', async function () {

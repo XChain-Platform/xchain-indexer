@@ -15,21 +15,23 @@
  *
  * the flag-day gate on the CROSS_SETTLE per-block cap.
  *
- * The cap itself (CROSS_SETTLE_MAX_PER_BLOCK) is consensus-visible:
- * deferring a settlement to a later block moves actions rows, the contract hash
- * and the checkpoint preimage. CROSS_CHAIN_DEX is genesis-active on every
- * network and the fresh-genesis restart of 816d1e1 covered the three TESTNET
- * chains only, so the live mainnet chains carry settled history an ungated cap
- * would reinterpret on any from-genesis replay, with no fleet-wide replay behind
- * it (which is the only reason the sibling ATTEST_MAX_EXPIRIES_PER_BLOCK could
- * ship ungated). The operator ruled on 2026-08-11, option (b): the cap lands
- * behind CROSS_SETTLE_PER_BLOCK_CAP in protocol_changes.js, not ungated under
- * the §0 wipe-and-replay route.
+ * The cap itself (CROSS_SETTLE_MAX_PER_BLOCK) is consensus-visible where it
+ * bites: deferring a settlement to a later block moves actions rows, the
+ * contract hash and the checkpoint preimage. That is why it lands behind
+ * CROSS_SETTLE_PER_BLOCK_CAP in protocol_changes.js rather than ungated
+ * (operator ruling 2026-08-11, option (b)), and it stays a registered change.
  *
- * This suite pins both halves of that ruling:
- *   - the REGISTRATION: a time-keyed 2.0.0 change, genesis-active on testnet and
- *     regtest, mainnet parked on the UNARMED sentinel (the operator still owes
- *     the anchor, so no guessed height may ship);
+ * Where that ruling has since MOVED: it reserved a mainnet flag day on the
+ * belief that the live mainnet chains carried settled cross-chain history,
+ * since the fresh-genesis restart of 816d1e1 covered the three TESTNET chains
+ * only. The 2026-09-09 measurement showed mainnet holds no cross-chain matches
+ * at all, so there is nothing for the cap to reinterpret, and the operator armed
+ * it at genesis on every network.
+ *
+ * This suite pins both halves:
+ *   - the REGISTRATION: a time-keyed 2.0.0 change, genesis-active on EVERY
+ *     network, mainnet included, and armed at exactly 0 rather than at some
+ *     other past instant;
  *   - the BEHAVIOR at the pass: gate ON settles the capped prefix, gate OFF
  *     drains the full effective backlog, which is the legacy pass byte for byte.
  *     A gate that changed nothing, or a cap that fired regardless of it, both
@@ -122,14 +124,17 @@ describe('CROSS_SETTLE per-block cap flag day @regression @tier1', function(){
             assert.strictEqual(change.regtest_time, 0);
         });
 
-        it('mainnet is UNARMED: the operator owes the anchor, so no guessed height ships', function(){
-            const sentinel = ProtocolChanges.CROSS_SETTLE_CAP_MAINNET_TIME;
-            assert.strictEqual(typeof sentinel, 'number', 'the sentinel must be exported');
-            assert.strictEqual(pcFor('mainnet').pc.changes[GATE].mainnet_time, sentinel);
-            // A value inside any plausible chain lifetime means somebody armed a
-            // consensus-visible tightening without the operator's flag day.
-            assert.ok(sentinel > YEAR_2100,
-                'the mainnet arm must stay a far-future UNARMED sentinel until the anchor is ratified');
+        it('mainnet is ARMED AT GENESIS by the 2026-09-09 ruling', function(){
+            const instant = ProtocolChanges.CROSS_SETTLE_CAP_MAINNET_TIME;
+            assert.strictEqual(typeof instant, 'number', 'the instant must be exported');
+            assert.strictEqual(pcFor('mainnet').pc.changes[GATE].mainnet_time, instant);
+            // 0, and nothing else. Mainnet holds no cross-chain matches (measured
+            // 2026-09-09), so a genesis arm defers nothing a replay would have settled.
+            // Any OTHER value inside a plausible chain lifetime would be the harmful
+            // case: a consensus-visible tightening at an instant the fleet never saw.
+            assert.strictEqual(instant, 0,
+                'mainnet must be armed at genesis, not at a sentinel and not at an instant');
+            assert.ok(instant < YEAR_2100, 'a far-future value here reads as an unarmed sentinel');
         });
 
         it('regtest: capped from genesis, so drills and suites run the post-flag-day rule', async function(){
@@ -138,10 +143,13 @@ describe('CROSS_SETTLE per-block cap flag day @regression @tier1', function(){
             assert.strictEqual(await pc.isEnabled(GATE, 0), true);
         });
 
-        it('mainnet: inert at every plausible block time, so no settled block is reinterpreted', async function(){
-            const { pc, indexer } = pcFor('mainnet');
-            indexer.decoderDb.getBlockTime.resolves(YEAR_2100);
-            assert.strictEqual(await pc.isEnabled(GATE, 1000000), false);
+        it('mainnet: capped from block 0 and at every block time above it', async function(){
+            for(const t of [0, 1, 1786060800, YEAR_2100]){
+                const { pc, indexer } = pcFor('mainnet');
+                indexer.decoderDb.getBlockTime.resolves(t);
+                assert.strictEqual(await pc.isEnabled(GATE, 0), true,
+                    'the cap must be in force at block_time ' + t);
+            }
         });
     });
 

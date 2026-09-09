@@ -24,9 +24,12 @@
  * dropped by db.createAttestationRequest's prior-row guard.
  *
  * This suite pins both halves of the remedy:
- *   - the REGISTRATION: a time-keyed 2.0.0 change, genesis-active on testnet and
- *     regtest, mainnet parked on the UNARMED sentinel (the operator still owes the
- *     activation instant, so no guessed value may ship);
+ *   - the REGISTRATION: a time-keyed 2.0.0 change, genesis-active on EVERY network.
+ *     Mainnet was armed at 0 by the 2026-09-09 ruling: the composite discriminator
+ *     differs from the bare TX_VOUT only for a BATCH subcommand, and mainnet has
+ *     never carried a BATCH, an EXECUTE or an attestation, so no id it ever derived
+ *     can move. 0 means genesis; any other past value would be a preimage that
+ *     changed at an instant the fleet never observed;
  *   - the FORM the discriminator takes on each side of the gate: below it the bare
  *     TX_VOUT, byte for byte what the live chains have always hashed; above it the
  *     composite "<TX_VOUT>.<position>", which must stay distinct for positions that
@@ -88,14 +91,15 @@ describe('BATCH per-subcommand root discriminator flag day @regression @tier1', 
             assert.strictEqual(change.regtest_time, 0);
         });
 
-        it('mainnet is UNARMED: the operator owes the activation instant', function(){
-            const sentinel = ProtocolChanges.BATCH_ROOT_SUB_INDEX_MAINNET_TIME;
-            assert.strictEqual(typeof sentinel, 'number', 'the sentinel must be exported');
-            assert.strictEqual(pcFor('mainnet').pc.changes[GATE].mainnet_time, sentinel);
-            // A value inside any plausible chain lifetime means somebody armed a
-            // consensus-preimage change without the operator's flag day.
-            assert.ok(sentinel > YEAR_2100,
-                'the mainnet arm must stay a far-future UNARMED sentinel until the instant is ratified');
+        it('mainnet is ARMED AT GENESIS by the 2026-09-09 ruling', function(){
+            const instant = ProtocolChanges.BATCH_ROOT_SUB_INDEX_MAINNET_TIME;
+            assert.strictEqual(typeof instant, 'number', 'the instant must be exported');
+            assert.strictEqual(pcFor('mainnet').pc.changes[GATE].mainnet_time, instant);
+            // 0, and nothing else. Any other value inside a plausible chain lifetime
+            // would mean a consensus preimage moved at an instant the fleet never saw.
+            assert.strictEqual(instant, 0,
+                'mainnet must be armed at genesis, not at a sentinel and not at an instant');
+            assert.ok(instant < YEAR_2100, 'a far-future value here reads as an unarmed sentinel');
         });
 
         it('regtest: active from genesis, so drills and suites run the post-flag-day rule', async function(){
@@ -104,10 +108,13 @@ describe('BATCH per-subcommand root discriminator flag day @regression @tier1', 
             assert.strictEqual(await pc.isEnabled(GATE, 0), true);
         });
 
-        it('mainnet: inert at any real block time while the sentinel stands', async function(){
-            const { pc, indexer } = pcFor('mainnet');
-            indexer.decoderDb.getBlockTime.resolves(YEAR_2100);
-            assert.strictEqual(await pc.isEnabled(GATE, 1000000), false);
+        it('mainnet: active from block 0 and at every block time above it', async function(){
+            for(const t of [0, 1, 1786060800, YEAR_2100]){
+                const { pc, indexer } = pcFor('mainnet');
+                indexer.decoderDb.getBlockTime.resolves(t);
+                assert.strictEqual(await pc.isEnabled(GATE, 0), true,
+                    'the discriminator must be in force at block_time ' + t);
+            }
         });
     });
 

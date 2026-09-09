@@ -32,7 +32,8 @@
  * The suite also pins the flag day's narrowness: a token payment whose amounts
  * fit 8 dp settles and RECORDS identically on both sides of the gate, so only
  * the amounts the defect misprices move; the batch pool keeps its 8 dp scale,
- * which coinpay.js and validateOracleFee share; and mainnet is unarmed.
+ * which coinpay.js and validateOracleFee share; and mainnet is armed at genesis
+ * by the 2026-09-09 ruling.
  ********************************************************************/
 
 'use strict';
@@ -49,10 +50,24 @@ const activation = require('../../../src/dispense_payment_tally_scale_activation
 const DISPENSER_ADDRESS = 'dispenserAddress11111111111';
 const BUYER             = 'buyerAddress';
 
-// Regtest is armed at genesis, so a block time BELOW the mainnet sentinel and a
-// network of 'mainnet' is how a test asks for the pre-flag-day behaviour.
+// Regtest is armed at genesis. Mainnet is armed at genesis too since the
+// 2026-09-09 ruling, so 'mainnet' alone no longer names the pre-flag-day arm; a
+// below-flag venue is a mainnet venue with THIS gate's key pinned inert for the
+// duration of the call (belowFlag). Pinning only this key is deliberate: the
+// venue keeps every other mainnet gate the dispense path reads, dispenser_caps
+// above all, at the value the live chain runs, so the legacy arm being compared
+// against is the real one.
 const ARMED_NETWORK   = 'regtest';
 const UNARMED_NETWORK = 'mainnet';
+const HOUSE_SENTINEL  = 9999999999;
+
+async function belowFlag(fn){
+    let map   = activation.DISPENSE_PAYMENT_TALLY_SCALE_ACTIVATION;
+    let saved = map.mainnet;
+    map.mainnet = HOUSE_SENTINEL;
+    try { return await fn(); }
+    finally { map.mainnet = saved; }
+}
 
 function makeUtil(network){
     let util = new Utility();
@@ -158,11 +173,23 @@ const INSUFFICIENT = 'invalid: GET_AMOUNT (insufficient funds)';
 
 describe('dispense payment tally scale: activation @regression @tier1', function () {
 
-    it('mainnet is UNARMED on the house sentinel', function () {
-        assert.strictEqual(activation.DISPENSE_PAYMENT_TALLY_SCALE_ACTIVATION.mainnet, 9999999999);
+    it('mainnet is ARMED AT GENESIS by the 2026-09-09 ruling', function () {
+        // 0 dispensers and 0 dispenses on mainnet (measured 2026-09-09), so no
+        // token-triggered dispense ever settled under the 8 dp tally there and the
+        // exact tally is identity over the indexed history.
+        assert.strictEqual(activation.DISPENSE_PAYMENT_TALLY_SCALE_ACTIVATION.mainnet, 0);
+        // Either sentinel reads back as "still unarmed" at the GoLiveGate.
+        assert.notStrictEqual(activation.DISPENSE_PAYMENT_TALLY_SCALE_ACTIVATION.mainnet, 9999999999);
+        assert.notStrictEqual(activation.DISPENSE_PAYMENT_TALLY_SCALE_ACTIVATION.mainnet, 999999999);
         assert.strictEqual(
-            activation.isDispensePaymentTallyScaleActive(1786838400, 'mainnet'), false,
-            'a block after the batch-issuance arming must still read the legacy scale');
+            activation.isDispensePaymentTallyScaleActive(0, 'mainnet'), true);
+        assert.strictEqual(
+            activation.isDispensePaymentTallyScaleActive(1786838400, 'mainnet'), true,
+            'a block after the batch-issuance arming reads the exact scale');
+        assert.strictEqual(
+            activation.dispenseTallyScale(1786838400, 'mainnet', true, false),
+            activation.DISPENSE_TALLY_EXACT_SCALE,
+            'and a token-denominated non-batch tally on mainnet is kept at the exact scale');
     });
 
     it('testnet and regtest run from genesis', function () {
@@ -208,7 +235,7 @@ describe('dispense payment tally scale: over-issuance @regression @tier1', funct
     it('BELOW the flag one payment settles all THREE (the replay case)', async function () {
         let { dispense, calls } = makeVenue(Object.assign({ network: UNARMED_NETWORK }, THREE));
 
-        await dispense.parse(null, sendDispenseData(PAYMENT), false);
+        await belowFlag(() => dispense.parse(null, sendDispenseData(PAYMENT), false));
 
         assert.deepStrictEqual(statuses(calls), ['valid', 'valid', 'valid'],
             'the defect must reproduce exactly below the flag or historical blocks fork');
@@ -258,7 +285,7 @@ describe('dispense payment tally scale: over-charge @regression @tier1', functio
     it('BELOW the flag the first fill drains the whole payment and the second is refused', async function () {
         let { dispense, calls } = makeVenue(Object.assign({ network: UNARMED_NETWORK }, TWO));
 
-        await dispense.parse(null, sendDispenseData(PAYMENT), false);
+        await belowFlag(() => dispense.parse(null, sendDispenseData(PAYMENT), false));
 
         assert.deepStrictEqual(statuses(calls), ['valid', INSUFFICIENT],
             'the 8 dp render rounds a 0.000000006 charge up to a full satoshi');
@@ -296,7 +323,7 @@ describe('dispense payment tally scale: unaffected settlements @regression @tier
         let below = makeVenue(Object.assign({ network: UNARMED_NETWORK }, THREE_WHOLE));
         let above = makeVenue(Object.assign({ network: ARMED_NETWORK },   THREE_WHOLE));
 
-        await below.dispense.parse(null, sendDispenseData('3.00000000'), false);
+        await belowFlag(() => below.dispense.parse(null, sendDispenseData('3.00000000'), false));
         await above.dispense.parse(null, sendDispenseData('3.00000000'), false);
 
         assert.deepStrictEqual(statuses(above.calls), ['valid', 'valid', 'valid']);
@@ -316,7 +343,7 @@ describe('dispense payment tally scale: unaffected settlements @regression @tier
         let below = makeVenue(Object.assign({ network: UNARMED_NETWORK }, THREE_WHOLE));
         let above = makeVenue(Object.assign({ network: ARMED_NETWORK },   THREE_WHOLE));
 
-        await below.dispense.parse(null, coinData, false);
+        await belowFlag(() => below.dispense.parse(null, coinData, false));
         await above.dispense.parse(null, coinData, false);
 
         assert.deepStrictEqual(getAmounts(above.calls), getAmounts(below.calls));

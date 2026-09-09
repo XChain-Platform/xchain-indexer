@@ -40,14 +40,31 @@
  * NOT ride dispense_cancelling_match_activation: that gate's mainnet threshold
  * (1786060800 = 2026-08-07) is in the PAST, and hanging new behaviour on a
  * passed threshold arms it retroactively over blocks the fleet has already
- * committed - a chain split, not a flag day.
+ * committed - a chain split, not a flag day. The mainnet keys below now sit at
+ * 0, which is retroactive in form; the arming note two paragraphs down carries
+ * the measurement that makes it a no-op in effect, which is what a passed
+ * threshold picked off another gate could never supply.
  *
  * `null` means inert: below any threshold, and on every chain with no pinned
  * height, the legacy string compare is emitted BYTE-IDENTICALLY and historical
- * replay is unchanged. Only regtest is armed, so fresh regtest stacks exercise
- * the corrected path end to end; mainnet and testnet heights are pinned at
- * flag-day assembly on the standing 21-day rule, as a separate coordinated
- * release step, with the replay evidence that step requires.
+ * replay is unchanged.
+ *
+ * MAINNET IS ARMED AT GENESIS, all three chains (operator ruling 2026-09-09).
+ * The retroactive-window hazard above is a hazard only where a carrying fleet
+ * has already passed blocks the new predicate would grade differently, and the
+ * count that settles it was taken read-only against the live indexer databases
+ * on 2026-09-09: mainnet holds 0 dispensers and 0 dispenses on every chain, so
+ * findDispenserSends has never returned a row there and the two predicates
+ * agree vacuously over all committed history. A node that reindexes across
+ * height 0 derives the same state as one that did not. The proof is a
+ * per-chain OLD-vs-ON replay witness, not this comment.
+ *
+ * TESTNET STAYS UNPINNED. Testnet has been a live public ledger since
+ * 2026-09-01 and carries dispenser history, so the empty-chain argument does
+ * not reach it; its heights are pinned at flag-day assembly on the standing
+ * 21-day rule, as a separate coordinated release step, with the replay evidence
+ * that step requires. regtest runs from genesis, so fresh regtest stacks
+ * exercise the corrected path end to end.
  *
  ********************************************************************/
 
@@ -67,15 +84,19 @@ const DISPENSER_SEND_COMPARE_SCALE = 18;
 
 // Per-chain activation heights, interpreted against the chain's own block_index.
 // `null` = NOT YET PINNED = inert (legacy lexicographic compare, byte-identical
-// replay). Only regtest is armed.
+// replay). Mainnet and regtest are armed; testnet is still unpinned.
 const DISPENSER_SEND_AMOUNT_COMPARE_ACTIVATION = {
-    // Unpinned. Mainnet and testnet arm at flag-day assembly, above the tip
-    // recorded at that time, in one coordinated fleet deploy. A height a
-    // carrying fleet has already passed opens a retroactive window: a node that
-    // reindexes across it derives different state than one that did not.
-    'BTC:mainnet':  null,
-    'LTC:mainnet':  null,
-    'DOGE:mainnet': null,
+    // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet
+    // history (0 dispensers, 0 dispenses on every chain, measured 2026-09-09), so
+    // height 0 opens no retroactive window.
+    'BTC:mainnet':  0,
+    'LTC:mainnet':  0,
+    'DOGE:mainnet': 0,
+    // Unpinned. Testnet arms at flag-day assembly, above the tip recorded at that
+    // time, in one coordinated fleet deploy. A height a carrying fleet has already
+    // passed opens a retroactive window: a node that reindexes across it derives
+    // different state than one that did not, and testnet does carry the history
+    // that makes that real.
     'BTC:testnet':  null,
     'LTC:testnet':  null,
     'DOGE:testnet': null,

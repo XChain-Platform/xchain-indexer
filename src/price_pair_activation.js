@@ -60,13 +60,14 @@ const PRICE_PAIR_TICKER_MAX_WIDE   = 6;
 // Per-network activation TIME (LOCAL COPY of the canonical map in
 // xchain-documentation/protocol/constants.js). Keyed on the action's own block time.
 //
-// UNARMED on mainnet: 9999999999 is a far-future sentinel (year 2286), NOT a
-// scheduled flag-day. The pre-launch instant this arms at is an open operator
-// decision; the usual contract-era stamp 1786060800 (2026-08-07) is not usable
-// because it falls AFTER the early-September launch target and would leave
-// LTC/DOGE native-coin fees unpayable straight through launch.
+// ARMED at genesis on every network. Mainnet was ruled on 2026-09-09: no PRICE action has
+// ever been indexed on any mainnet chain (measured 2026-09-09), so the widened ticker bound
+// reinterprets nothing and the from-genesis OLD-vs-ON replay is the witness. Arming at 0
+// rather than at a launch instant is what keeps LTC/DOGE native-coin fees payable from the
+// first mainnet block that carries one; the contract-era stamp 1786060800 (2026-08-07)
+// would have left them unpayable up to that instant.
 const PRICE_PAIR_WIDEN_ACTIVATION = {
-    mainnet: 9999999999,  // UNARMED sentinel, see header for the operator-decision rationale
+    mainnet: 0,           // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 PRICE actions, measured 2026-09-09)
     testnet: 0,
     regtest: 0,
 };

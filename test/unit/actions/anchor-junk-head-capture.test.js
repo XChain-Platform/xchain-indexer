@@ -22,8 +22,10 @@
 // (match_batch_seq, head author), so a chunk is judged against the earliest head
 // authored by the SAME address, and a foreign head governs nothing. That is
 // status-agnostic (no mirrored/unmirrored fork) and deterministic. It moves
-// consensus-visible verdicts, so it is flag-day gated: armed at genesis on regtest
-// and on testnet (2026-08-11 operator ruling), INERT placeholder on mainnet.
+// consensus-visible verdicts, so it is flag-day gated: armed at genesis on regtest,
+// on testnet (2026-08-11 operator ruling) and, since the 2026-09-09 ruling, on
+// mainnet, where the indexed history carries 0 archive chunks (measured 2026-09-09)
+// and the publisher-scoped rule is therefore identity over it.
 
 process.env.INDEXER_COIN = 'DOGE';
 process.env.INDEXER_NETWORK = 'regtest';
@@ -45,9 +47,21 @@ const ATTACKER  = 'mzBc4XEFSdzCDcTxAgf6EZXgsZWpztRhef';
 
 // The DOGE height the archive head landed at (anchor_actions.block_index_doge, NOT
 // block_index, which is the CHECKPOINTED height on the checkpointed chain). At/after
-// the regtest activation, which is armed at 0; the legacy pins switch network to
-// MAINNET instead, the only network still carrying an inert placeholder.
+// the regtest activation, which is armed at 0. Every network is armed at genesis
+// now, so the legacy pins reach the pre-flag-day rule by pinning THIS key inert on
+// a mainnet venue for the duration of the call (belowFlag), which leaves the ANCHOR
+// activation gate the fixture heights depend on exactly as the fleet runs it.
 const ARMED_BLOCK = 500;
+
+// The height sentinel this key used to carry, reused only as a scratch inert value.
+const HEIGHT_SENTINEL = 999999999;
+async function belowFlag(fn) {
+    let map   = abs.ARCHIVE_BATCH_AUTHOR_ACTIVATION;
+    let saved = map.mainnet;
+    map.mainnet = HEIGHT_SENTINEL;
+    try { return await fn(); }
+    finally { map.mainnet = saved; }
+}
 
 const PUBKEY_A = 'a'.repeat(64);
 const SIG      = '1'.repeat(128);
@@ -237,10 +251,11 @@ describe('ANCHOR archive batch capture by a junk head @regression @tier1', funct
         seedJunkHeadAheadOfTheRealOne(3);
         // AT the ANCHOR activation height: the activation gate runs before every flag day,
         // so a default (low) mainnet height would be rejected as pre-restart and this case
-        // would never reach the rule it is pinning. ARCHIVE_BATCH_AUTHOR stays inert here.
+        // would never reach the rule it is pinning. ARCHIVE_BATCH_AUTHOR is pinned inert
+        // for this call only, since mainnet is armed at genesis in the shipped map.
         let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 40, SOURCE: PUBLISHER,
                                     BLOCK_INDEX: aact.ANCHOR_ACTIVATION.mainnet });
-        await handler.parse(['2', '9', '1', '3', 'BBBB'], data, null);
+        await belowFlag(() => handler.parse(['2', '9', '1', '3', 'BBBB'], data, null));
         assert.strictEqual(data['STATUS'], 'invalid: TOTAL_CHUNKS (does not match parent v1)',
             'below the flag day the pre-existing (capturable) verdict must be reproduced byte for byte');
     });
@@ -270,18 +285,25 @@ describe('ANCHOR archive batch capture by a junk head @regression @tier1', funct
         assert.doesNotMatch(gate, /\bh\.block_index\b(?!_doge)/i);
     });
 
-    it('activation is network-keyed, armed on regtest/testnet, inert on mainnet', function () {
+    it('activation is network-keyed and armed at genesis on regtest, testnet and mainnet', function () {
         assert.strictEqual(abs.isArchiveBatchAuthorActive(0, 'regtest'), true);
-        assert.strictEqual(abs.isArchiveBatchAuthorActive(999999998, 'mainnet'), false);
         // Testnet armed at genesis by the 2026-08-11 operator ruling: the publisher-scoped
-        // rule is live from block 0 there, so the unratified path is exercised on a real
-        // network before mainnet pins a height.
+        // rule is live from block 0 there, so the rule was exercised on a real network
+        // before mainnet took a height.
         assert.strictEqual(abs.ARCHIVE_BATCH_AUTHOR_ACTIVATION.testnet, 0);
         assert.strictEqual(abs.isArchiveBatchAuthorActive(0, 'testnet'), true);
         assert.strictEqual(abs.isArchiveBatchAuthorActive(999999998, 'testnet'), true);
-        // Mainnet is the one placeholder left; flipping it is a ratification, not a chore.
-        assert.strictEqual(abs.ARCHIVE_BATCH_AUTHOR_ACTIVATION.mainnet, 999999999);
+        // Mainnet armed at genesis by the 2026-09-09 ruling: 0 archive chunks on mainnet
+        // (measured 2026-09-09), so the rule is identity over the indexed history.
+        assert.strictEqual(abs.ARCHIVE_BATCH_AUTHOR_ACTIVATION.mainnet, 0);
+        // Either sentinel reads back as "still unarmed" at the GoLiveGate.
+        assert.notStrictEqual(abs.ARCHIVE_BATCH_AUTHOR_ACTIVATION.mainnet, 999999999);
+        assert.notStrictEqual(abs.ARCHIVE_BATCH_AUTHOR_ACTIVATION.mainnet, 9999999999);
+        assert.strictEqual(abs.isArchiveBatchAuthorActive(0, 'mainnet'), true);
+        assert.strictEqual(abs.isArchiveBatchAuthorActive(999999998, 'mainnet'), true);
         assert.strictEqual(abs.isArchiveBatchAuthorActive(NaN, 'regtest'), false);
+        // Fails closed on mainnet too, now that its threshold is 0: NaN is not ">= 0".
+        assert.strictEqual(abs.isArchiveBatchAuthorActive(NaN, 'mainnet'), false);
         // Fails closed on an armed network too: NaN must never read as ">= 0".
         assert.strictEqual(abs.isArchiveBatchAuthorActive(NaN, 'testnet'), false);
         assert.strictEqual(abs.isArchiveBatchAuthorActive(0, 'nosuchnet'), false);

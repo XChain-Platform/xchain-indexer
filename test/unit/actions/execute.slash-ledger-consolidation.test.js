@@ -50,8 +50,9 @@ describe('Execute._processSlashEmission multi-slash ledger conservation @regress
     const PUBKEY_B = 'b'.repeat(64);
     const DEST     = '1SlashDestXXXXXXXXXXXXXXXXXXXXX';
 
-    // `network` picks the gate state: regtest is armed at genesis, mainnet is unpinned and
-    // therefore inert, which is what makes the legacy cases below reachable at all.
+    // `network` picks the gate state: regtest and mainnet are armed at genesis (mainnet by
+    // the 2026-09-09 ruling), testnet is unpinned and therefore inert, which is what makes
+    // the legacy cases below reachable at all.
     function makeHandler(network) {
         const config = Object.assign({}, getTestConfig(), { NETWORK: network, COIN: 'BTC' });
         config['GAS_PRICE'] = '0';
@@ -83,9 +84,9 @@ describe('Execute._processSlashEmission multi-slash ledger conservation @regress
 
     afterEach(function () { sinon.restore(); });
 
-    it('gate is armed on regtest and inert on every unpinned chain', function () {
+    it('gate is armed on regtest and on mainnet at genesis by the 2026-09-09 ruling, inert on testnet', function () {
         assert.strictEqual(gate.isSlashLedgerConsolidationActive(0, 'regtest', 'BTC'), true);
-        assert.strictEqual(gate.isSlashLedgerConsolidationActive(9e9, 'mainnet', 'BTC'), false);
+        assert.strictEqual(gate.isSlashLedgerConsolidationActive(9e9, 'mainnet', 'BTC'), true);
         assert.strictEqual(gate.isSlashLedgerConsolidationActive(9e9, 'testnet', 'BTC'), false);
     });
 
@@ -106,7 +107,7 @@ describe('Execute._processSlashEmission multi-slash ledger conservation @regress
     }
 
     it('LEGACY (inert gate): the second credit overwrites the first, losing 10', async function () {
-        const out = await twoOwnerSlashes('mainnet');
+        const out = await twoOwnerSlashes('testnet');
         // Each write carries only its own share, and the row keyed (99, DEST, STK) ends at 20
         // while 30 of stake was debited and 30 of escrow released.
         assert.deepStrictEqual(out.credits, ['10', '20']);
@@ -138,7 +139,7 @@ describe('Execute._processSlashEmission multi-slash ledger conservation @regress
     }
 
     it('LEGACY (inert gate): a repeat slash on one owner collapses that owner release', async function () {
-        const out = await sameOwnerSlashes('mainnet');
+        const out = await sameOwnerSlashes('testnet');
         assert.deepStrictEqual(out.credits, ['10', '5']);
         assert.deepStrictEqual(out.escrows, ['-10', '-5']);
     });
@@ -180,7 +181,7 @@ describe('Execute._processSlashEmission multi-slash ledger conservation @regress
     });
 
     it('LEGACY (inert gate): two spellings of one token still lose the first write', async function () {
-        const out = await mixedCaseSlashes('mainnet');
+        const out = await mixedCaseSlashes('testnet');
         assert.deepStrictEqual(out.credits, ['10', '20']);
         assert.deepStrictEqual(out.escrows, ['-10', '-20']);
     });
@@ -197,7 +198,7 @@ describe('Execute._processSlashEmission multi-slash ledger conservation @regress
             sinon.restore();
             return out;
         };
-        assert.deepStrictEqual(await one('regtest'), await one('mainnet'));
+        assert.deepStrictEqual(await one('regtest'), await one('testnet'));
     });
 
     it('a caller that passes no ledger keeps the legacy per-emission write', async function () {

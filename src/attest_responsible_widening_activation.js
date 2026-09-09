@@ -73,8 +73,12 @@ const zc = require('./attest_zero_conf_activation.js');
 
 // Per-network activation height (LOCAL COPY, parity-tested). Compared against
 // the ATTEST v0 request's own BTC block_index.
+// MAINNET IS ARMED AT 0 by the 2026-09-09 ruling. Widening only changes who may sign a
+// round that has already failed to finalize, and 0 attestations have ever been recorded on
+// any mainnet chain (measured 2026-09-09), so no admitted request is reinterpreted; the
+// from-genesis OLD-vs-ON replay per chain is the witness.
 const ATTEST_RESPONSIBLE_WIDENING_ACTIVATION = {
-    mainnet: null,        // INERT: operator-owned height, unratified
+    mainnet: 0,           // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 attestations, measured 2026-09-09)
     testnet: 150780,      // ARMED 2026-09-02. Tip was 150760 at 17:08Z running 20 min/block, so ~20 blocks (~6.5h). Sized to OUR fleet's deploy wave, not to the community's, and the SAFETY comes from deploy ORDER rather than from this margin: only an upgraded hub can PRODUCE a widened ATTEST v1, so indexers upgraded before hubs leaves no divergence window even if the height arrives mid-deploy.
     regtest: 0,           // ARMED at genesis so the e2e venue exercises the ladder
 };

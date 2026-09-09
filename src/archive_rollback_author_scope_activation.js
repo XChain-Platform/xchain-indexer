@@ -49,11 +49,12 @@
  * reorged under different rules answer a later recompute differently: the
  * switchover wants one coordinated height per network, not a deploy race.
  *
- * SHIPS INERT ON EVERY NETWORK. Arming is a one-line edit here per network, and
- * a replica arms only once SyncService hands ClientRollback its network: an
- * omitted network reads as inactive, which is correct while every threshold is
- * inert and wrong the moment one is not. A guard test in xchain-sync fails if a
- * threshold is armed while that wiring is still optional.
+ * ARMED ON MAINNET AND TESTNET (2026-09-09 ruling); regtest keeps the inert
+ * sentinel so the flag-day-off control path stays drivable. A replica reads its
+ * threshold only once it has a network, so ClientRollback now REQUIRES one at
+ * construction rather than treating an omitted network as inactive: with a live
+ * threshold, silently falling back to the legacy unscoped reset is the fleet
+ * split this gate exists to prevent.
  *
  * KEYED ON THE ROLLBACK'S OWN TARGET BLOCK, per network, on the DOGE scale the
  * ANCHOR actions land on. The orphaned chunk always sits at or above that
@@ -63,13 +64,12 @@
 
 'use strict';
 
-// Per-network activation, interpreted against the block index a rollback targets.
-// Every key is an INERT placeholder: no live network can reach it, so the reset
-// keeps its deployed unscoped shape until an operator pins a real height.
+// Per-network activation, interpreted against the block index a rollback targets,
+// on the DOGE scale (see the KEYED ON note above).
 const ARCHIVE_ROLLBACK_AUTHOR_SCOPE_ACTIVATION = {
-    mainnet: 9999999999,   // INERT placeholder; pin on the coordinated activation train, never below ARCHIVE_BATCH_AUTHOR
-    testnet: 9999999999,   // INERT placeholder; testnet arms ARCHIVE_BATCH_AUTHOR at 0, so any height here is legal once the wiring lands
-    regtest: 9999999999,   // INERT placeholder
+    mainnet: 0,            // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 archive chunks, measured 2026-09-09), and ARCHIVE_BATCH_AUTHOR is 0 there too, so the precondition holds
+    testnet: 67915000,     // testnet runs a public chain with live history, so 0 would be retroactive rather than a flag day; TDOGE tip 67881714 on 2026-09-09 + 33286 blocks @1440/day = ~23 days, to ride the v0.17.0 train
+    regtest: 9999999999,   // INERT sentinel: keeps the flag-day-off control path drivable on a throwaway stack
 };
 
 // The joins that bind an orphaned chunk to its own head's author. Spliced into

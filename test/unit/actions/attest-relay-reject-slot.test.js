@@ -243,14 +243,22 @@ describe('a refused ATTEST v3 and the request_id slot @regression @tier1', funct
         assert.strictEqual(pendingRows().length, 1);
     });
 
-    it('the real gate is unarmed on mainnet and genesis-active on testnet and regtest', function () {
+    it('the real gate is genesis-active on mainnet, testnet and regtest', function () {
         sinon.restore();
         const { ATTEST_RELAY_REJECT_SLOT_ACTIVATION: map,
                 isAttestRelayRejectSlotActive: active } = relayRejectSlot;
 
-        assert.strictEqual(map.mainnet, 9999999999, 'mainnet is on the house sentinel');
-        assert.strictEqual(active(map.mainnet - 1, 'mainnet'), false);
+        // ARMED at genesis by the 2026-09-09 ruling: mainnet holds 0 attestations
+        // (measured 2026-09-09), so no v3 refusal has ever claimed a slot there and
+        // withholding one is identity over the indexed history.
+        assert.strictEqual(map.mainnet, 0, 'mainnet is armed at genesis');
+        // Either sentinel reads back as "still unarmed" at the GoLiveGate.
+        assert.notStrictEqual(map.mainnet, 9999999999);
+        assert.notStrictEqual(map.mainnet, 999999999);
         assert.strictEqual(active(map.mainnet, 'mainnet'), true);
+        assert.strictEqual(active(0, 'mainnet'), true);
+        // A live mainnet block time, well above the threshold.
+        assert.strictEqual(active(1788000000, 'mainnet'), true);
         assert.strictEqual(active(0, 'testnet'), true);
         assert.strictEqual(active(0, 'regtest'), true);
         // Fail closed, never open: an unknown network or an unreadable timestamp keeps

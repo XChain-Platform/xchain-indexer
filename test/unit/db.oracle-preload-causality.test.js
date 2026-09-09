@@ -130,15 +130,28 @@ function callFor(db, which){
 
 afterEach(function(){ sinon.restore(); });
 
+// Mainnet is armed at genesis by the 2026-09-09 ruling, so the network name alone
+// no longer reaches the inert arm. Pin THIS key inert for the duration of a call
+// and leave every other mainnet gate the preload consults at its live value, so
+// the legacy arm being compared against is the one the fleet actually ran.
+const HOUSE_SENTINEL = 9999999999;
+async function belowFlag(fn){
+    const map   = pca.ORACLE_PRELOAD_CAUSALITY_ACTIVATION;
+    const saved = map.mainnet;
+    map.mainnet = HOUSE_SENTINEL;
+    try { return await fn(); }
+    finally { map.mainnet = saved; }
+}
+
 describe('VM oracle preload causality gate (getOracleDataForVM) @regression @tier1', function(){
 
     describe('behaviour: does the preload admit a round finalized after the block', function(){
 
-        it('INERT arm (LTC mainnet, unarmed): the future round reaches the VM, which is the defect', async function(){
+        it('INERT arm (LTC mainnet, key pinned inert): the future round reaches the VM, which is the defect', async function(){
             const db  = dbFor('mainnet', 'LTC');
             // A local LTC height far above every BTC anchor, so `reference_block <= ?`
             // matches both rows and bounds nothing.
-            const out = await db.getOracleDataForVM(3154250, BLOCK_TIME, 0);
+            const out = await belowFlag(() => db.getOracleDataForVM(3154250, BLOCK_TIME, 0));
 
             assert.strictEqual(out.prices['BTC/USD'].roundNumber, 2,
                 'unarmed: getPrice() answers with the round finalized after this block');
@@ -146,6 +159,19 @@ describe('VM oracle preload causality gate (getOracleDataForVM) @regression @tie
                 'unarmed: getPriceAtRound() carries the future round too');
             assert.strictEqual(callFor(db, 'age').args[0], 3154250,
                 'unarmed: the age query keeps its armed-but-vacuous height cap');
+        });
+
+        it('ARMED arm (LTC mainnet, genesis-active since the 2026-09-09 ruling): the future round is gone', async function(){
+            // The same venue with the shipped key. Mainnet holds 0 contracts (measured
+            // 2026-09-09), so no committed block ever read the unbounded preload, and
+            // arming at genesis simply means today's mainnet contracts read causally.
+            const db  = dbFor('mainnet', 'LTC');
+            const out = await db.getOracleDataForVM(3154250, BLOCK_TIME, 0);
+
+            assert.strictEqual(out.prices['BTC/USD'].roundNumber, 1,
+                'armed: getPrice() answers with the latest round at/before this block');
+            assert.strictEqual(out.rounds['BTC/USD']['2'], undefined,
+                'armed: the round finalized after this block is gone from getPriceAtRound()');
         });
 
         it('ARMED arm (LTC regtest, genesis-active): the future round is gone from every view', async function(){
@@ -212,7 +238,7 @@ describe('VM oracle preload causality gate (getOracleDataForVM) @regression @tie
 
         it('inert: every read is byte-identical to the pre-gate call', async function(){
             const db = dbFor('mainnet', 'DOGE');
-            await db.getOracleDataForVM(6319000, BLOCK_TIME, 0);
+            await belowFlag(() => db.getOracleDataForVM(6319000, BLOCK_TIME, 0));
 
             for(const which of Object.keys(READS)){
                 const c = callFor(db, which);
@@ -246,13 +272,20 @@ describe('VM oracle preload causality gate (getOracleDataForVM) @regression @tie
             assert.strictEqual(pca.isOraclePreloadCausalityActive(999999, 'regtest', 'DOGE'), true);
         });
 
-        it('mainnet is UNARMED: the sentinel keeps it inert at any reachable height', function(){
-            assert.strictEqual(pca.ORACLE_PRELOAD_CAUSALITY_ACTIVATION.mainnet, 9999999999,
-                'arming mainnet is an operator edit, and it changes what contracts read');
-            assert.strictEqual(pca.isOraclePreloadCausalityActive(6319000, 'mainnet', 'DOGE'), false);
-            assert.strictEqual(pca.isOraclePreloadCausalityActive(3154250, 'mainnet', 'LTC'), false);
-            assert.strictEqual(pca.isOraclePreloadCausalityActive(9999999999, 'mainnet', 'LTC'), true,
-                'the sentinel is a height, not a disablement: it arms at year 2286');
+        it('mainnet is ARMED AT GENESIS by the 2026-09-09 ruling, off the reference chain', function(){
+            assert.strictEqual(pca.ORACLE_PRELOAD_CAUSALITY_ACTIVATION.mainnet, 0,
+                'mainnet holds 0 contracts (measured 2026-09-09), so the bound is identity ' +
+                'over the indexed history and genesis is the height');
+            // Either sentinel reads back as "still unarmed" at the GoLiveGate.
+            assert.notStrictEqual(pca.ORACLE_PRELOAD_CAUSALITY_ACTIVATION.mainnet, 9999999999);
+            assert.notStrictEqual(pca.ORACLE_PRELOAD_CAUSALITY_ACTIVATION.mainnet, 999999999);
+            assert.strictEqual(pca.isOraclePreloadCausalityActive(0, 'mainnet', 'DOGE'), true);
+            assert.strictEqual(pca.isOraclePreloadCausalityActive(6319000, 'mainnet', 'DOGE'), true);
+            assert.strictEqual(pca.isOraclePreloadCausalityActive(3154250, 'mainnet', 'LTC'), true);
+            // The permanent BTC carve-out outranks the arming: the reference chain's own
+            // height cap is exact, and a time bound there would admit rounds anchored
+            // after a forward-skewed block.
+            assert.strictEqual(pca.isOraclePreloadCausalityActive(0, 'mainnet', 'BTC'), false);
         });
 
         it('unknown network or unparseable height is off (keeps deployed behavior)', function(){

@@ -93,9 +93,11 @@ const B_FILL  = [149702, 149703, 149704];
 const B_POST  = 149705;
 
 // Below CONTRACT_META_REQUIRED_TESTNET_TIME (9999999999) and above every ARMED
-// testnet gate (ISSUE_INHERITED_MINT_WINDOW 1787961600, DEPLOY_DEFERRED_ASSEMBLY
-// 1788868800), so the pre-activation block runs the same rule set as the post one
-// minus the meta verdict.
+// testnet gate this corpus can reach (ISSUE_INHERITED_MINT_WINDOW 1787961600,
+// DEPLOY_DEFERRED_ASSEMBLY 1788868800), so the pre-activation block runs the same
+// rule set as the post one minus the meta verdict. The one armed testnet gate that
+// sits ABOVE these times, UNIFIED_FEES_SWEEP_CALLBACK at 1790812800, prices SWEEP
+// and CALLBACK, and this corpus carries neither, so it moves nothing on either side.
 const T_GAS = 1788999400;
 const T_PRE = 1789000000;
 // Above the UNARMED sentinel: this is what "the flag day arrives" looks like to

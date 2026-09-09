@@ -107,15 +107,15 @@ function resolveRegtestActivation(env){
 }
 
 // Per-network BTC height at/above which ROLLCALL epochs exist at all.
-// INERT on mainnet (null = never active) until the operator pins a height with
-// the mainnet federation. The null placeholder follows the live precedent of
-// SNAPSHOT_BURIAL_ACTIVATION.mainnet; because null is a legitimate value here,
-// every read MUST go through the Number.isFinite guard below -- a bare
-// `height >= ROLLCALL_ACTIVATION[network]` arms mainnet at height 0, since
-// `0 >= null` is true in JS. Regtest is null for the same reason until the venue
-// opts in, so the same guard covers it.
+// MAINNET ARMS AT 0 by the 2026-09-09 ruling: eviction can only reinterpret a chain that
+// has validators to evict, and mainnet carries 0 validators, 0 stakes and 0 roll-calls
+// (measured 2026-09-09), so every epoch below the tip closes empty and the from-genesis
+// OLD-vs-ON replay per chain is the witness. null is still a legitimate value here (regtest
+// holds it until the venue opts in), so every read MUST go through the Number.isFinite
+// guard below: a bare `height >= ROLLCALL_ACTIVATION[network]` would arm a null network at
+// height 0, since `0 >= null` is true in JS.
 const ROLLCALL_ACTIVATION = {
-    mainnet: null,        // INERT placeholder: the operator owns this height
+    mainnet: 0,           // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 validators, 0 stakes, 0 roll-calls, measured 2026-09-09)
     testnet: 151200,      // 1008 x 150 = 144 x 1050; tip was 150400 on 2026-08-30, ~5.5 days out
     regtest: resolveRegtestActivation(process.env),   // ARMS AT 0 when the venue sets XC_ROLLCALL_REGTEST_ACTIVATION
 };

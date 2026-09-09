@@ -23,9 +23,12 @@
  * the Package 3 heights are in the past, so reusing either would retroactively
  * reject contracts already accepted.
  *
- * Mainnet is still UNARMED (explicit null sentinel) pending the operator's
- * ratified per-coin train heights. The assertions below are what make an
- * accidental one-sided arming fail CI.
+ * Mainnet is ARMED AT GENESIS by the operator's 2026-09-09 ruling: a mainnet gate
+ * that is identity on the indexed mainnet history arms at genesis rather than at a
+ * train height, and this one is identity there (0 contracts, 0 DEPLOY actions on
+ * mainnet, measured 2026-09-09), so there is no accepted deploy verdict the widened
+ * rules can reverse. The assertions below are what make a one-sided move, in either
+ * direction, fail CI.
  */
 
 'use strict';
@@ -36,23 +39,23 @@ const { isVmLintGlobalAliasActive, VM_LINT_GLOBAL_ALIAS_ACTIVATION } =
 
 describe('VM deploy-lint global-alias activation predicate @regression @tier1', function () {
 
-    it('mainnet is UNARMED for every coin: inert at every height', function () {
+    it('mainnet is ARMED AT GENESIS for every coin: active at every height', function () {
         for (const coin of ['BTC', 'LTC', 'DOGE']) {
-            assert.strictEqual(isVmLintGlobalAliasActive(0, 'mainnet', coin), false);
-            assert.strictEqual(isVmLintGlobalAliasActive(961000, 'mainnet', coin), false);
-            assert.strictEqual(isVmLintGlobalAliasActive(Number.MAX_SAFE_INTEGER, 'mainnet', coin), false);
+            assert.strictEqual(isVmLintGlobalAliasActive(0, 'mainnet', coin), true);
+            assert.strictEqual(isVmLintGlobalAliasActive(961000, 'mainnet', coin), true);
+            assert.strictEqual(isVmLintGlobalAliasActive(Number.MAX_SAFE_INTEGER, 'mainnet', coin), true);
         }
     });
 
-    it('the unarmed sentinel is an explicit null, not a missing key', function () {
-        // A missing key would also resolve off, but silently: an operator filling in the
-        // ratified heights needs the three slots visible and named in the map.
+    it('the genesis height is an explicit per-coin 0, not an inherited or missing key', function () {
+        // A missing key would resolve OFF and silently disarm mainnet, which is the
+        // failure this pin exists to catch; the three slots stay visible and named.
         assert.ok('BTC:mainnet'  in VM_LINT_GLOBAL_ALIAS_ACTIVATION);
         assert.ok('LTC:mainnet'  in VM_LINT_GLOBAL_ALIAS_ACTIVATION);
         assert.ok('DOGE:mainnet' in VM_LINT_GLOBAL_ALIAS_ACTIVATION);
-        assert.strictEqual(VM_LINT_GLOBAL_ALIAS_ACTIVATION['BTC:mainnet'], null);
-        assert.strictEqual(VM_LINT_GLOBAL_ALIAS_ACTIVATION['LTC:mainnet'], null);
-        assert.strictEqual(VM_LINT_GLOBAL_ALIAS_ACTIVATION['DOGE:mainnet'], null);
+        assert.strictEqual(VM_LINT_GLOBAL_ALIAS_ACTIVATION['BTC:mainnet'], 0);
+        assert.strictEqual(VM_LINT_GLOBAL_ALIAS_ACTIVATION['LTC:mainnet'], 0);
+        assert.strictEqual(VM_LINT_GLOBAL_ALIAS_ACTIVATION['DOGE:mainnet'], 0);
     });
 
     it('testnet and regtest are genesis-active (pre-launch cohort)', function () {
@@ -70,12 +73,14 @@ describe('VM deploy-lint global-alias activation predicate @regression @tier1', 
         assert.strictEqual(isVmLintGlobalAliasActive(961000, 'mainnet', null), false);
     });
 
-    it('no bare mainnet key exists, so a mainnet coin can never inherit a 0', function () {
-        // LTC (~3.1M) and DOGE (~6.3M) tips already sit far past any BTC-scale height, so
-        // a bare-network fallback on mainnet would read as active-on-deploy there.
+    it('no bare mainnet key exists, so a mainnet coin can never inherit a height', function () {
+        // Each mainnet coin carries its own key. A later re-arm that moves one coin has
+        // to move that coin's key, and a coin whose key went missing resolves off rather
+        // than inheriting someone else's number.
         assert.strictEqual(VM_LINT_GLOBAL_ALIAS_ACTIVATION['mainnet'], undefined);
         assert.strictEqual(VM_LINT_GLOBAL_ALIAS_ACTIVATION['testnet'], 0);
         assert.strictEqual(VM_LINT_GLOBAL_ALIAS_ACTIVATION['regtest'], 0);
+        assert.strictEqual(isVmLintGlobalAliasActive(961000, 'mainnet', 'XYZ'), false);
     });
 
     it('the map EQUALS the VM LINT_GLOBAL_ALIAS_ACTIVATION (the twinned pair cannot arm one-sided)', function () {

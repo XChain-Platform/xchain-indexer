@@ -472,8 +472,10 @@ class Deploy {
             // object leg resolves through isGlobalObjectRef under this epoch. It cannot ride
             // either gate above: VM_LINT_HARDENING is already open on every network and
             // the Pkg 3 heights are in the past, so reusing either would retroactively
-            // reject contracts the chain already accepted. Mainnet is still unarmed, so
-            // this resolves false there and mainnet replay is byte-identical.
+            // reject contracts the chain already accepted. Mainnet is ARMED at genesis
+            // by the 2026-09-09 ruling (identity on the indexed mainnet history: 0
+            // contracts, 0 DEPLOY, measured 2026-09-09), so this resolves true there
+            // from block 0 and no already-accepted deploy is reinterpreted.
             let enforceLintGlobalAlias = vmLintGlobalAlias.isVmLintGlobalAliasActive(data['BLOCK_INDEX'], this.config['NETWORK'], this.config['COIN']);
             let syntaxResult = this.actions.vm.validateSyntax(code, { enforceBannedAsync, enforceLintHardening, enforceBannedGenerator, enforceBannedWasm, enforceLintGlobalAlias });
             if(!syntaxResult.valid)

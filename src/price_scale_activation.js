@@ -70,9 +70,11 @@
  * Resolved ONCE per action, alongside the pair-name bound, so every round in a
  * batch is judged under one rule and no window can straddle this gate.
  *
- * MAINNET IS UNARMED, on the house sentinel (9999999999, year 2286). Naming the
- * activation instant is a separate operator act and a one-line edit here.
- * testnet/regtest run from genesis, matching the price-pair family.
+ * MAINNET IS ARMED AT GENESIS by the 2026-09-09 ruling: no PRICE action has ever
+ * been indexed on any mainnet chain (measured 2026-09-09), so tightening the
+ * decimal bound rejects no round that was ever accepted, and the from-genesis
+ * OLD-vs-ON replay is the witness. testnet/regtest run from genesis too,
+ * matching the price-pair family.
  *
  * VENDORED byte-identically into xchain-hub/src, where PriceAggregator gates
  * both v0 ingest paths on it. The hub resolves the same key the chain does, so
@@ -89,10 +91,10 @@ const PRICE_SCALE_MAX_DECIMALS = 8;
 
 // Per-network activation TIME, keyed on the action's own block time.
 //
-// UNARMED on mainnet: 9999999999 is a far-future sentinel (year 2286), not a
-// scheduled flag-day. The instant this arms at is an open operator decision.
+// ARMED at genesis on every network, mainnet by the 2026-09-09 ruling on the measurement
+// the header records (0 PRICE actions ever indexed on any mainnet chain).
 const PRICE_SCALE_ACTIVATION = {
-    mainnet: 9999999999,  // UNARMED sentinel; the instant is the operator's to name
+    mainnet: 0,           // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 PRICE actions, measured 2026-09-09)
     testnet: 0,
     regtest: 0,
 };

@@ -98,7 +98,9 @@
  *   testnet 0  - armed at genesis, RATIFIED by the operator 2026-08-18 on the
  *                evidence below, so the public testnet launches with the cap in
  *                force rather than discovering it dormant afterwards.
- *   mainnet    - UNRATIFIED. The operator owns this height.
+ *   mainnet 0  - armed at genesis, RULED by the operator 2026-09-09 on its own
+ *                measurement (below), so the cap is in force from the first
+ *                mainnet block that carries a request.
  *
  * WHY 0 IS SAFE ON TESTNET, measured rather than assumed. Arming at genesis on a
  * chain that already has history is replay-safe only if no past block ever
@@ -110,11 +112,13 @@
  * attestations`, checked 2026-08-18). Zero requests in a chain's whole history
  * means no block of it can have exceeded a cap of 10, so arming from block 0
  * reinterprets nothing and replay stays byte-identical on every testnet chain.
- * Do not generalize the result: mainnet has real attestation history, so pinning
- * a height there needs its own measurement, not this one.
+ * MAINNET WAS MEASURED SEPARATELY, not generalized from the testnet result: the
+ * explorer reports 0 attestation rows ever recorded on BTC, LTC and DOGE mainnet
+ * (measured 2026-09-09), so no mainnet block can have exceeded a cap of 10
+ * either, and the from-genesis OLD-vs-ON replay per chain is the witness.
  *
  * A null height means the rule is INERT on that network and the legacy uncapped
- * admission path runs byte for byte, which is what mainnet still does.
+ * admission path runs byte for byte; no network is inert today.
  *
  * LOCAL COPY of the canonical maps in xchain-documentation/protocol/
  * constants.js; kept value-identical by a parity test. A one-sided edit forks
@@ -126,7 +130,7 @@
 // xchain-documentation/protocol/constants.js). Compared against the request's own
 // LOCAL block_index on its own chain.
 const ATTEST_REQUEST_CAP_ACTIVATION = {
-    mainnet: null,        // INERT: operator-owned height, unratified
+    mainnet: 0,           // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 attestations, measured 2026-09-09)
     testnet: 0,           // ARMED at genesis (operator-ratified 2026-08-18; zero historical attestations, so nothing is reinterpreted)
     regtest: 0,           // ARMED at genesis so the e2e venue exercises the cap
 };

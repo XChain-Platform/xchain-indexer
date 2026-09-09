@@ -60,10 +60,15 @@
  * parameters are byte-identical to the pre-gate ones and a from-genesis replay
  * is unchanged.
  *
- * MAINNET IS UNARMED, on the house sentinel (9999999999, year 2286): naming the
- * activation heights is a ratified-deploy-train decision and a one-line edit
- * here. testnet and regtest run from genesis, so the bounded path is exercised
- * end to end pre-launch.
+ * MAINNET IS ARMED AT GENESIS (operator ruling 2026-09-09). Read-only against
+ * the live indexer databases on 2026-09-09, mainnet holds 0 contracts and 0
+ * EXECUTE actions, so getOracleDataForVM has never run for a committed mainnet
+ * block and no contract_execution, emission or contract_hash exists there for
+ * the added time bound to move. The rule is the identity function over every
+ * mainnet block committed so far, which is what makes a genesis height safe on
+ * a chain that does carry ISSUE history. The proof is a per-chain OLD-vs-ON
+ * replay witness, not this comment. testnet and regtest run from genesis, so
+ * the bounded path is exercised end to end.
  *
  * EXECUTION-PATH gate (a VM read) rather than a change to how a row is hashed,
  * so it is indexer-only with no xchain-sync twin: xchain-sync's BlockHasher
@@ -80,10 +85,10 @@
 const ORACLE_PRELOAD_CAUSALITY_REFERENCE_COIN = 'BTC';
 
 // Per-chain activation, interpreted as the processing chain's OWN block_index
-// (the value db.getOracleDataForVM already caps on). Mainnet unarmed on the
-// house sentinel; testnet and regtest genesis-active.
+// (the value db.getOracleDataForVM already caps on). Every network is
+// genesis-active; BTC is carved out below at any height.
 const ORACLE_PRELOAD_CAUSALITY_ACTIVATION = {
-    mainnet: 9999999999,    // UNARMED sentinel; the heights are the operator's to name
+    mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 contracts, measured 2026-09-09)
     testnet: 0,
     regtest: 0,
 };

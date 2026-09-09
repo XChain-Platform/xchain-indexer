@@ -21,9 +21,12 @@
  * registration on both sides of the gate and, critically, pin it EQUAL to the VM's
  * EXEC_LINT_ACTIVATION: the twinned pair must arm together or the fleet forks.
  *
- * Mainnet is deliberately UNARMED (`null`): the operator ratified the mechanism on
- * 2026-08-11 but still owes the per-coin train heights. The unarmed assertions below
- * are what make an accidental one-sided arming fail CI.
+ * Mainnet is ARMED AT GENESIS: the operator ratified the mechanism on 2026-08-11 and
+ * ruled on 2026-09-09 that a gate which is identity on the indexed mainnet history arms
+ * at genesis rather than at a train height. This one is identity there: 0 contracts,
+ * 0 DEPLOY and 0 EXECUTE actions on mainnet (measured 2026-09-09), so height 0 rejects
+ * nothing that ever happened. The assertions below are what make a one-sided move,
+ * in either direction, fail CI.
  */
 
 'use strict';
@@ -34,23 +37,23 @@ const { isVmExecLintActive, VM_EXEC_LINT_ACTIVATION } =
 
 describe('VM execute-time lint activation predicate @regression @tier1', function () {
 
-    it('mainnet is UNARMED for every coin: inert at every height', function () {
+    it('mainnet is ARMED AT GENESIS for every coin: active at every height', function () {
         for (const coin of ['BTC', 'LTC', 'DOGE']) {
-            assert.strictEqual(isVmExecLintActive(0, 'mainnet', coin), false);
-            assert.strictEqual(isVmExecLintActive(961000, 'mainnet', coin), false);
-            assert.strictEqual(isVmExecLintActive(Number.MAX_SAFE_INTEGER, 'mainnet', coin), false);
+            assert.strictEqual(isVmExecLintActive(0, 'mainnet', coin), true);
+            assert.strictEqual(isVmExecLintActive(961000, 'mainnet', coin), true);
+            assert.strictEqual(isVmExecLintActive(Number.MAX_SAFE_INTEGER, 'mainnet', coin), true);
         }
     });
 
-    it('the unarmed sentinel is an explicit null, not a missing key', function () {
-        // A missing key would also resolve off, but silently: an operator filling in the
-        // ratified heights needs the three slots visible and named in the map.
+    it('the genesis height is an explicit per-coin 0, not an inherited or missing key', function () {
+        // A missing key would resolve OFF and silently disarm mainnet, which is the
+        // failure this pin exists to catch; the three slots stay visible and named.
         assert.ok('BTC:mainnet'  in VM_EXEC_LINT_ACTIVATION);
         assert.ok('LTC:mainnet'  in VM_EXEC_LINT_ACTIVATION);
         assert.ok('DOGE:mainnet' in VM_EXEC_LINT_ACTIVATION);
-        assert.strictEqual(VM_EXEC_LINT_ACTIVATION['BTC:mainnet'], null);
-        assert.strictEqual(VM_EXEC_LINT_ACTIVATION['LTC:mainnet'], null);
-        assert.strictEqual(VM_EXEC_LINT_ACTIVATION['DOGE:mainnet'], null);
+        assert.strictEqual(VM_EXEC_LINT_ACTIVATION['BTC:mainnet'], 0);
+        assert.strictEqual(VM_EXEC_LINT_ACTIVATION['LTC:mainnet'], 0);
+        assert.strictEqual(VM_EXEC_LINT_ACTIVATION['DOGE:mainnet'], 0);
     });
 
     it('testnet is genesis-active for every coin (pre-launch cohort)', function () {
@@ -72,18 +75,20 @@ describe('VM execute-time lint activation predicate @regression @tier1', functio
         assert.strictEqual(isVmExecLintActive(961000, 'mainnet', null), false);
     });
 
-    it('an armed height would gate on the coin\'s OWN block index (predicate proven, map still unarmed)', function () {
-        // The map is unarmed, so exercise the predicate against a stand-in map of the same
-        // shape. This proves the comparator is a >= on the per-coin key (not a bare
-        // network key, which would be active-on-deploy on LTC/DOGE whose tips already sit
-        // far past any BTC-scale height) BEFORE the operator arms the real values.
-        const probe = Object.assign({}, VM_EXEC_LINT_ACTIVATION);
-        assert.strictEqual(probe['BTC:mainnet'], null);
-        // Sanity on the shape the operator will fill: bare-network fallback must exist
-        // only for the pre-launch nets, so a mainnet coin can never inherit a 0.
+    it('each mainnet coin is gated by its OWN key, never by a bare network fallback', function () {
+        // The bare-network fallback exists only for the pre-launch nets. A mainnet coin
+        // must never INHERIT its height: a later re-arm that moves one coin has to move
+        // that coin's key, and a coin whose key went missing must resolve off loudly
+        // rather than pick up someone else's number.
         assert.strictEqual(VM_EXEC_LINT_ACTIVATION['mainnet'], undefined);
         assert.strictEqual(VM_EXEC_LINT_ACTIVATION['testnet'], 0);
         assert.strictEqual(VM_EXEC_LINT_ACTIVATION['regtest'], 0);
+        // Drive it through the predicate: a coin with no key of its own on mainnet has
+        // nothing to fall back to, while the three named coins resolve from theirs.
+        assert.strictEqual(isVmExecLintActive(961000, 'mainnet', 'XYZ'), false);
+        assert.strictEqual(isVmExecLintActive(0, 'mainnet', 'BTC'), true);
+        assert.strictEqual(isVmExecLintActive(0, 'mainnet', 'LTC'), true);
+        assert.strictEqual(isVmExecLintActive(0, 'mainnet', 'DOGE'), true);
     });
 
     it('the map EQUALS the VM EXEC_LINT_ACTIVATION (the twinned pair cannot arm one-sided)', function () {

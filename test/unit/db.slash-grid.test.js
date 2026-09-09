@@ -44,8 +44,9 @@ const Utility           = require('../../src/utility');
 const Database          = require('../../src/db');
 const slashGrid         = require('../../src/slash_grid_activation');
 
-// `network` picks the gate state: 'regtest' is armed at genesis, 'mainnet' is unpinned
-// and therefore inert, which is what makes the legacy cases below reachable at all.
+// `network` picks the gate state: 'regtest' and 'mainnet' are armed at genesis (mainnet
+// by the 2026-09-09 ruling), 'testnet' is unpinned and therefore inert, which is what
+// makes the legacy cases below reachable at all.
 function makeDb(network) {
     const config  = Object.assign({}, getTestConfig(), { NETWORK: network, COIN: 'BTC' });
     const util    = new Utility();
@@ -63,9 +64,9 @@ afterEach(function () { sinon.restore(); });
 
 describe('Database.slashContractStake() off-grid conservation guard @regression @tier1', function () {
 
-    it('gate is armed on regtest and inert on every unpinned chain', function () {
+    it('gate is armed on regtest and on mainnet at genesis by the 2026-09-09 ruling, inert on testnet', function () {
         assert.strictEqual(slashGrid.isSlashGridActive(0, 'regtest', 'BTC'), true);
-        assert.strictEqual(slashGrid.isSlashGridActive(9e9, 'mainnet', 'BTC'), false);
+        assert.strictEqual(slashGrid.isSlashGridActive(9e9, 'mainnet', 'BTC'), true);
         assert.strictEqual(slashGrid.isSlashGridActive(9e9, 'testnet', 'BTC'), false);
     });
 
@@ -73,7 +74,7 @@ describe('Database.slashContractStake() off-grid conservation guard @regression 
     // total on an unpinned chain, the gate has stopped being inert and historical replay
     // has moved.
     it('LEGACY (inert gate): a 0.5 slash of a decimals=0 stake credits 1 and debits nothing', async function () {
-        const db = makeDb('mainnet');
+        const db = makeDb('testnet');
         const calls = [];
         sinon.stub(db, 'getStatusId').callsFake(async (s) => (s === 'valid' ? 1 : (s === 'pending' ? 2 : null)));
         sinon.stub(db, 'getTokenDecimalPrecision').resolves(0);
@@ -211,6 +212,6 @@ describe('Database.slashContractStake() off-grid conservation guard @regression 
             sinon.restore();
             return out;
         };
-        assert.deepStrictEqual(await run('regtest'), await run('mainnet'));
+        assert.deepStrictEqual(await run('regtest'), await run('testnet'));
     });
 });

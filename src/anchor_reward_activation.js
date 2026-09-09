@@ -113,12 +113,12 @@ function isArchiveRewardActive(snapshotBlock, network){
 // boundaries because those are already live (0) on testnet/regtest, which
 // would flip this relocation the instant code deploys with no coordinated
 // deploy-first-then-flip window, risking a COLLECT-mediated fork mid-upgrade.
-// An unratified flag-day stays inert (null) until the operator picks a
-// coordinated height; regtest activates from genesis so the fix is exercised
-// where the bug lives.
+// That window is what the table was held inert for; every network is now armed
+// at genesis, mainnet by the 2026-09-09 ruling, because there is no pre-flag
+// reward history on any of them to flip under a partially-upgraded fleet.
 //
-// PRE-ARMING BLOCKERS (ALL THREE LANDED 2026-08-13; the table stays inert until
-// the operator picks the height). Three consensus defects sat on the derive path
+// PRE-ARMING BLOCKERS (ALL THREE LANDED 2026-08-13, well before any network
+// armed). Three consensus defects sat on the derive path
 // and were harmless only while this table was inert; arming mainnet or testnet
 // before they landed would have forked the COLLECT rail. Their remedies are now
 // in code and are described here because the remedies, not the defects, are what
@@ -221,7 +221,13 @@ function isArchiveRewardActive(snapshotBlock, network){
 // window to protect; what testnet has instead is the only chance to run the
 // relocated derive path (hub attestation write, XANCREWARD federation, BTC-side
 // re-verification, mirror-maturity deferral) on a real multi-host network before
-// mainnet ratifies a height. Mainnet stays null until the operator picks one.
+// mainnet ratifies a height.
+//
+// MAINNET IS ARMED AT 0 (operator ruling 2026-09-09). The deploy-first-then-flip
+// window above assumed live COLLECT-spendable mainnet history to fork; there is
+// none. Mainnet carries 0 anchor reward attestations and 0 validator_rewards rows
+// on any chain (measured 2026-09-09), so relocating the derive reinterprets no
+// existing reward, and the from-genesis OLD-vs-ON replay per chain is the witness.
 //
 // TESTNET DEPLOY ORDER, unchanged by the arming: every testnet hub and indexer
 // must carry the schema of BOTH
@@ -233,7 +239,7 @@ function isArchiveRewardActive(snapshotBlock, network){
 // pre-arming note above), so what to check before an anchor is which build each
 // host runs, not which rows its schema_migrations happens to hold.
 const ANCHOR_REWARD_DERIVE_ACTIVATION = {
-    mainnet: null,        // INERT placeholder: the operator owns this height; the three blockers above have landed, ratification has not
+    mainnet: 0,           // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 anchor reward attestations, 0 validator_rewards rows, measured 2026-09-09)
     testnet: 0,           // ARMED at genesis 2026-08-14 per the 2026-08-11 operator ruling; see the testnet note above
     regtest: 0,
 };
