@@ -15,11 +15,14 @@
  * Gates when the validator anchor reward stops being trusted from the hub's
  * `pushvalidatorrewards` JSON-RPC and is instead derived by every indexer from
  * on-chain ANCHOR bytes. At/above this height the hub emits a publisher-bearing
- * ANCHOR (v4 rootless / v5 root-bearing) carrying the elected publisher pubkey
+ * ANCHOR bundle (v0 since the version restart, root-bearing by construction;
+ * the retired v4/v5 pair is what split rootless from root-bearing) carrying
+ * the elected publisher pubkey
  * plus a 2f+1 `oracle_publish` attestation (XANCPUB) over the reward tuple; the
  * indexer verifies that quorum and credits the publisher with
  * ANCHOR_REWARD_AMOUNT, a frozen consensus constant never taken from the wire.
- * Below the threshold the old push path stands and v4/v5 anchors are rejected.
+ * Below the threshold the old push path stands and a publisher-bearing bundle
+ * is rejected.
  *
  * The credited reward is a COLLECT-spendable `validator_rewards` row, so this
  * is consensus-relevant and must deploy to the hub and every indexer
@@ -52,7 +55,8 @@ const ANCHOR_REWARD_AMOUNT = '10.00000000';
 
 // Whether anchor rewards are DERIVED from chain (vs pushed) for an ANCHOR whose
 // BTC-anchored snapshot is at `snapshotBlock` on `network`. Below the threshold ->
-// off (legacy push path; v4/v5 rejected). Unknown network -> off (safe).
+// off (legacy push path; a publisher-bearing bundle rejected). Unknown network
+// -> off (safe).
 function isAnchorRewardActive(snapshotBlock, network){
     let sb = parseInt(snapshotBlock);
     if(!Number.isFinite(sb)) return false;
@@ -63,13 +67,15 @@ function isAnchorRewardActive(snapshotBlock, network){
 
 // Archive-reward re-derivation flag-day. Same shape as ANCHOR_REWARD_ACTIVATION,
 // gating the ARCHIVE leg: at/above this BTC-anchored snapshot_block the elected
-// archive leader emits a publisher-bearing archive anchor (v6, the v1 archive
-// anchor plus the same PUBLISHER|ATTEST_SIG_COUNT|... tail as v4/v5, attested
+// archive leader emits a publisher-bearing archive head (v1 since the version
+// restart, which always carries the PUBLISHER|ATTEST_SIG_COUNT|... tail; the
+// retired v6 was that tail bolted onto a tail-less v1), attested
 // over an 'anchor_archive' XANCPUB canonical) and the indexer derives the
 // anchor_archive reward from those bytes; the key-authenticated
 // pushvalidatorrewards rail is rejected for anchor_archive, closing the
 // insider-with-key forge surface the per-chain flag-day left open. Below the
-// threshold the legacy v1 + push path stands and v6 is rejected.
+// threshold the legacy tail-less archive wire and the push path stand, and a
+// publisher-bearing archive head is rejected.
 const ARCHIVE_REWARD_ACTIVATION = {
     mainnet: 963000,      // ARMED 2026-07-16, RE-PINNED 2026-08-12 off block 969500 onto the mainnet pre-freeze deploy-train boundary (tip 959,853 on 07-27 at ~144 blocks/day + 21d); deploy every consumer before this height
     testnet: 0,
@@ -83,7 +89,8 @@ const ARCHIVE_REWARD_AMOUNT = '10.00000000';
 
 // Whether the anchor_archive reward is DERIVED from chain (vs pushed) for an archive
 // anchor whose BTC-anchored snapshot is at `snapshotBlock` on `network`. Below the
-// threshold -> off (legacy push path; v6 rejected). Unknown network -> off (safe).
+// threshold -> off (legacy push path; a publisher-bearing archive head rejected).
+// Unknown network -> off (safe).
 function isArchiveRewardActive(snapshotBlock, network){
     let sb = parseInt(snapshotBlock);
     if(!Number.isFinite(sb)) return false;
