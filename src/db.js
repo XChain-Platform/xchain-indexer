@@ -1297,7 +1297,10 @@ class Database {
     // are not reconciled here. Index/column names come from the trusted SQL files.
     parseExpectedIndexes(sqlData, table){
         sqlData = this.stripSqlLineComments(sqlData);
-        const re = /CREATE\s+(UNIQUE\s+)?INDEX\s+`?(\w+)`?\s+ON\s+`?(\w+)`?\s*\(\s*([\s\S]+?)\s*\)\s*;/gi;
+        // UNIQUE and FULLTEXT are both admitted: a FULLTEXT index (contracts.meta_search)
+        // was invisible to this parser, so an aged database could never self-heal it and
+        // the migration was its only creation path.
+        const re = /CREATE\s+(UNIQUE\s+|FULLTEXT\s+)?INDEX\s+`?(\w+)`?\s+ON\s+`?(\w+)`?\s*\(\s*([\s\S]+?)\s*\)\s*;/gi;
         const out = [];
         let m;
         while((m = re.exec(sqlData)) !== null){
@@ -1313,7 +1316,8 @@ class Database {
             const columns    = parts.map(c => c.replace(/\(\d+\)$/, ''));
             const prefixes   = parts.map(c => { const pm = /\((\d+)\)$/.exec(c); return pm ? Number(pm[1]) : null; });
             const directions = specs.map(c => /\sDESC\b/i.test(c) ? 'DESC' : 'ASC');
-            if(columns.length) out.push({ name: m[2], unique: !!m[1], columns, prefixes, directions });
+            const kind = (m[1] || '').trim().toUpperCase();
+            if(columns.length) out.push({ name: m[2], unique: kind === 'UNIQUE', fulltext: kind === 'FULLTEXT', columns, prefixes, directions });
         }
         return out;
     }
@@ -1334,14 +1338,14 @@ class Database {
 
             // Live indexes -> map keyed by ordered column-set: "c1,c2" => {unique}
             const rows = await db.query(
-                "SELECT INDEX_NAME, NON_UNIQUE, COLUMN_NAME, SEQ_IN_INDEX, SUB_PART FROM information_schema.statistics " +
+                "SELECT INDEX_NAME, NON_UNIQUE, INDEX_TYPE, COLUMN_NAME, SEQ_IN_INDEX, SUB_PART FROM information_schema.statistics " +
                 "WHERE table_schema = ? AND table_name = ? ORDER BY INDEX_NAME, SEQ_IN_INDEX",
                 [this.dbName, table]);
             const byName = new Map();
             const liveNames = new Set();
             for(const r of rows){
                 liveNames.add(r.INDEX_NAME.toLowerCase());
-                if(!byName.has(r.INDEX_NAME)) byName.set(r.INDEX_NAME, { unique: Number(r.NON_UNIQUE) === 0, cols: [], subParts: [] });
+                if(!byName.has(r.INDEX_NAME)) byName.set(r.INDEX_NAME, { unique: Number(r.NON_UNIQUE) === 0, fulltext: String(r.INDEX_TYPE || '').toUpperCase() === 'FULLTEXT', cols: [], subParts: [] });
                 byName.get(r.INDEX_NAME).cols.push(r.COLUMN_NAME.toLowerCase());
                 byName.get(r.INDEX_NAME).subParts.push(r.SUB_PART == null ? null : Number(r.SUB_PART));
             }
@@ -1351,7 +1355,7 @@ class Database {
             for(const idx of expected){
                 const key  = idx.columns.map(c => c.toLowerCase()).join(',');
                 const live = liveByCols.get(key);
-                if(live && (!idx.unique || live.unique)){
+                if(live && (!idx.unique || live.unique) && (!idx.fulltext || live.fulltext)){
                     // Satisfied by column set, but the column-set match is blind to
                     // prefix widths: an aged `address(62)` index and the declared
                     // full-column index read as identical here and no auto path
@@ -1384,9 +1388,9 @@ class Database {
                     let liveInfo = null;
                     for(const [nm, info] of byName){ if(nm.toLowerCase() === idx.name.toLowerCase()){ liveInfo = info; break; } }
                     const liveDesc = liveInfo
-                        ? (liveInfo.unique ? 'UNIQUE' : 'non-unique') + ' on (' + liveInfo.cols.join(',') + ')'
+                        ? (liveInfo.unique ? 'UNIQUE' : liveInfo.fulltext ? 'FULLTEXT' : 'non-unique') + ' on (' + liveInfo.cols.join(',') + ')'
                         : 'a differently-defined index';
-                    console.warn('Schema drift on ' + table + ': declared ' + (idx.unique ? 'UNIQUE ' : '') +
+                    console.warn('Schema drift on ' + table + ': declared ' + (idx.unique ? 'UNIQUE ' : idx.fulltext ? 'FULLTEXT ' : '') +
                         'index ' + idx.name + ' on (' + key + ') cannot be applied - the name is already held by ' + liveDesc +
                         '. Not auto-healed (never DROP an index we did not create); apply a manual migration via node src/migrate.js to converge.');
                     continue;
@@ -1402,6 +1406,13 @@ class Database {
                     return '`' + c + '`' + prefix + dir;
                 }).join(', ');
 
+                if(idx.fulltext){
+                    // A FULLTEXT index takes no prefix widths or directions; MariaDB refuses
+                    // both, so the heal names the columns bare.
+                    console.log('Schema drift on ' + table + ': missing FULLTEXT index ' + idx.name + ' (' + key + '). Adding.');
+                    await db.query('ALTER TABLE `' + table + '` ADD FULLTEXT INDEX `' + idx.name + '` (' + idx.columns.map(c => '`' + c + '`').join(', ') + ')');
+                    continue;
+                }
                 if(!idx.unique){
                     console.log('Schema drift on ' + table + ': missing index ' + idx.name + ' (' + key + '). Adding.');
                     await db.query('ALTER TABLE `' + table + '` ADD INDEX `' + idx.name + '` (' + colList + ')');

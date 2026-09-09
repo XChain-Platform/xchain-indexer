@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- The boot-time index reconciler now recognises FULLTEXT indexes, so an aged database self-heals the contracts meta_search index instead of depending on the migration alone.
 - Added the CONTRACT_META_REQUIRED flag day: a DEPLOY is rejected unless its contract exports a conforming meta.name and meta.description.
 - A contract's own exported name, description and version are extracted at deploy time into searchable columns on the contracts table, with a full-text index over the name and description so a contract can be found by a word instead of only by its index.
 
