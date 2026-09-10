@@ -35,6 +35,11 @@ const { archiveAuthorScopeJoin } = require('./archive_rollback_author_scope_acti
 // continuation are what make an `attests` row part of a batch, and naming them from the
 // wire module keeps the reorg query and the parser reading the same two numbers.
 const abw       = require('./attest_batch_wire.js');
+// Byte-identical copy of actions/attest.js's ATTEST_BATCH_COMPLETION_STAMP, the marker a
+// completing v6 continuation appends to the verdict it stamps on a surviving v5 head. The
+// reorg reset below restores ONLY marked stamps; the constant is duplicated rather than
+// required (rollback.js requires no action handler) and a test pins the two copies equal.
+const ATTEST_BATCH_COMPLETION_STAMP = ' (stamped on batch completion)';
 
 class Rollback {
 
@@ -886,6 +891,78 @@ class Rollback {
                                 WHERE p.version ${ARCHIVE_HEAD_VERSIONS_SQL}
                                   AND p.action_index < ?`;
                     args = [firstActionIndex, firstActionIndex];
+                    await this.indexerDb.doQuery(query, args);
+                }
+
+                // Restore an ATTEST v5 batch head that an orphaned v6 continuation flipped IN
+                // PLACE on a surviving row. The exact shape of the archive reset
+                // above, on the batch rail, and for the same reason.
+                //
+                // A chunked batch spans blocks: the v5 head in an early block, v6 continuations
+                // after it. The chunk that COMPLETES the coverage reassembles the window and,
+                // when the body or the quorum fails, stamps the verdict on the head
+                // (attest.js _absorbCompletedBatch) - a direct UPDATE on a row created in an
+                // earlier block, which therefore survives the bulk delete below. If that
+                // completing chunk is in the orphaned range, the delete removes the chunk and
+                // cannot undo the stamp, and the damage is worse than a stale verdict: the head
+                // is now terminal, getAttestBatchChunks reads status 'valid' only, so the head
+                // is missing from its OWN chunk set and _canonicalBatchHead resolves nothing.
+                // The re-mined continuation then rejoins a batch with no head, absorbs nothing,
+                // and the window is permanently dead on this node while a from-genesis replay
+                // (the chunk never re-mined, or re-mined into a batch that reassembles) has it
+                // live. attests.status_id is in no block-hash projection, so this is a
+                // state-table divergence, not a consensus fork.
+                //
+                // ONLY A MARKED STAMP IS RESTORED, and this is the whole safety argument. A
+                // blanket "reset every non-valid head joined to an orphaned chunk" is UNSAFE:
+                // a head can be terminal because it was terminal AT WRITE TIME (a duplicate
+                // head for the publisher's own window, a foreign NETWORK, a single-chunk head
+                // that failed its own quorum), every one of which can sit below the orphaned
+                // range with a valid same-author continuation above it, and restoring one
+                // REVIVES a head that was never valid - two live heads for one window. So the
+                // stamp writes ATTEST_BATCH_COMPLETION_STAMP (attest.js; keep the two copies
+                // byte-identical, a test pins the pair) and only rows carrying it are matched.
+                // 'valid' is then not a guess either: a head reaches the stamp only by coming
+                // back from the status='valid' chunk read, so 'valid' is the one value the
+                // flip could have overwritten.
+                //
+                // Publisher scope, UNCONDITIONAL and with no flag day, unlike the archive twin:
+                // a batch's identity has been (key, author) since the rail shipped (attest.js
+                // _authoredBy), so the scope here has never been wider than the live path's and
+                // narrowing it suppresses no reset that was ever owed. Scoped on actions
+                // .source_id rather than the resolved address: both rows are local, the ids are
+                // exact, and index_addresses.address is a case-folding collation. An
+                // unresolvable author on either side is a NULL that no equality matches, so it
+                // authenticates nothing rather than everything, matching _authoredBy's
+                // fail-closed rule.
+                //
+                // Runs BEFORE the delete (both rows still present) and AFTER the read-phase
+                // retraction collect, which requires the head's status to be 'valid': a batch
+                // stamped on its head never pushed, so it has no hub link to retract, and
+                // restoring it any earlier would invent one.
+                if(firstActionIndex !== null){
+                    // Intern 'valid' first, for the archive reset's reason: the UPDATE resolves
+                    // its target id through `JOIN index_statuses vs ON vs.status = 'valid'`, and
+                    // a JOIN that matches nothing silently no-ops the reset. index_statuses ids
+                    // are never hashed, so an in-rollback intern is byte-neutral.
+                    await this.indexerDb.createStatus('valid');
+                    query = `UPDATE attests p
+                                JOIN index_statuses ps ON ps.id = p.status_id AND ps.status LIKE ?
+                                JOIN actions        pa ON pa.action_index = p.action_index
+                                JOIN attests c
+                                  ON c.request_id = p.request_id
+                                 AND c.version = ${abw.ATTEST_BATCH_CONTINUATION_VERSION}
+                                 AND c.batch_chunk_index IS NOT NULL
+                                 AND c.action_index >= ?
+                                JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid'
+                                JOIN actions        ca ON ca.action_index = c.action_index
+                                                      AND ca.source_id    = pa.source_id
+                                JOIN index_statuses vs ON vs.status = 'valid'
+                                SET p.status_id = vs.id
+                                WHERE p.version = ${abw.ATTEST_BATCH_HEAD_VERSION}
+                                  AND p.batch_chunk_index = 0
+                                  AND p.action_index < ?`;
+                    args = ['%' + ATTEST_BATCH_COMPLETION_STAMP, firstActionIndex, firstActionIndex];
                     await this.indexerDb.doQuery(query, args);
                 }
 

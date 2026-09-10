@@ -472,6 +472,25 @@ function priceRoundKey(round, pair) {
     return String(round) + ' ' + String(pair);
 }
 
+// Memory bound on the served-key set the capability-snapshot reconciliation builds
+// over a full re-page (_reconcileForeignCapabilitySnapshots). One key per row the hub
+// serves; the hub writes one row per (block boundary, capability, key, source) and never
+// prunes, so this only trips on a pathological table. Above it the pass degrades to the
+// snapshot_block-ceiling rule, which needs no set at all.
+const CAPABILITY_SNAPSHOT_KEY_CAP = 500000;
+
+// Natural key of a capability_snapshots row: its UNIQUE uq_cap_snap
+// (snapshot_block, capability, signing_pubkey, source). Lowercased and NUL-joined:
+// the mirror table is utf8_general_ci, so the DB itself cannot hold two rows whose
+// keys differ only in case, and matching that here keeps a hub-served row and the
+// same row read back (AnchorRecovery writes signing_pubkey lowercased) from deriving
+// two different keys and making a healthy row look unserved. `source` defaults to ''
+// exactly as the column does, so a hub that omits it keys the same on both sides.
+function capabilitySnapshotKey(row) {
+    return [row.snapshot_block, row.capability, row.signing_pubkey, (row.source == null ? '' : row.source)]
+        .map(v => String(v).toLowerCase()).join(' ');
+}
+
 class HubDbSync {
 
     constructor(hubDb, options) {
@@ -1115,6 +1134,24 @@ class HubDbSync {
         let servedPriceKeys   = (table === 'price_snapshots') ? new Set() : null;
         let priceKeysComplete = true;
         let maxServedRound    = 0;
+        // capability_snapshots only: the same problem as price_snapshots, arrived at by the
+        // same route. Its snapshot endpoint is UNFILTERED too (hub api.js: SELECT * ...
+        // WHERE id > ?), so a complete re-page is the hub's whole table; it carries no
+        // `network` column, so _mirrorNetworkScope returns null and BOTH purges above are
+        // structurally unreachable for it; and being a FULL_REPAGE table its cursor is forced
+        // to 0, so the id-ceiling fence never runs either. Collect the natural keys the hub
+        // actually served so the pass after the drain can clear what it did not, and record
+        // where the local id space stood BEFORE this drain so that pass can only ever judge
+        // rows that predate it. See _reconcileForeignCapabilitySnapshots.
+        let servedSnapshotKeys    = (table === 'capability_snapshots') ? new Set() : null;
+        let snapshotKeysComplete  = true;
+        let maxServedSnapshotBlock = 0;
+        // The local ids are AUTO_INCREMENT and locally assigned (_applyRow strips the wire
+        // id), so a row inserted while this drain runs - a live WS event, or this drain's own
+        // apply - necessarily carries an id above this mark. Reading it here, before the first
+        // page is applied, is what lets the reconciliation exempt those rows without needing a
+        // buffer like the price path's.
+        let snapshotPreDrainMaxId = (table === 'capability_snapshots') ? await this._localMaxId(table, scope) : 0;
         // price_snapshots only: the bootstrap bound. `priceHorizon` is the block
         // time of the oldest block this consumer can still process, 0 when no bound applies.
         // `priceFloor` is how far below it this drain reaches. Rows older than the floor are
@@ -1235,6 +1272,17 @@ class HubDbSync {
                             if (servedPriceKeys.size >= PRICE_FINALIZED_KEY_CAP) priceKeysComplete = false;
                             else servedPriceKeys.add(priceRoundKey(row.round_number, row.coin_pair));
                         }
+                    }
+                    if (servedSnapshotKeys) {
+                        // Every row the hub SERVED, including one the chain-identity fence
+                        // refused to apply: the question this set answers is what the hub
+                        // holds, not what this mirror took from it. A refused relic is
+                        // reported separately (_reportRefusedChainRows) and must not have its
+                        // local twin deleted on the strength of a fence decision made here.
+                        let sb = Number(row.snapshot_block);
+                        if (Number.isFinite(sb) && sb > maxServedSnapshotBlock) maxServedSnapshotBlock = sb;
+                        if (servedSnapshotKeys.size >= CAPABILITY_SNAPSHOT_KEY_CAP) snapshotKeysComplete = false;
+                        else servedSnapshotKeys.add(capabilitySnapshotKey(row));
                     }
                     if (!boundOut && !refused) applied++;
                 } catch (err) {
@@ -1448,6 +1496,13 @@ class HubDbSync {
         // COMPLETE re-page: a partial drain has not seen every row the hub holds, so a
         // "missing" match may simply be on a page we never fetched.
         if (fullyDrained && servedMatchIds) await this._reconcileRetractedMatches(servedMatchIds, maxServedId);
+
+        // Clear the capability snapshots this hub does not hold (#1837). Same COMPLETE-re-page
+        // precondition as the two passes above, and ordered BEFORE the barrier re-evaluation
+        // in the block below so _releaseSnapshotWaiters judges the cleaned table.
+        if (fullyDrained && servedSnapshotKeys)
+            await this._reconcileForeignCapabilitySnapshots(servedSnapshotKeys, snapshotKeysComplete,
+                                                            maxServedSnapshotBlock, snapshotPreDrainMaxId);
 
         // Only arm this table's barrier state once it FULLY drained. The per-table refresh
         // sets <x>Bootstrapped = true and caches its scalar; on a PARTIAL drain (rows fetched
@@ -2024,6 +2079,118 @@ class HubDbSync {
             'not hold (a repointed or rebuilt hub leaves the previous one\'s rounds behind, and the newest ' +
             'round_number wins every price read); the mirror now holds only what this hub serves');
         await this._refreshPriceSyncHeight();
+    }
+
+    // Clear capability snapshots this hub does not hold (#1837).
+    //
+    // capability_snapshots is defenceless against a repoint for exactly the reasons
+    // price_snapshots is: no `network` column (so _mirrorNetworkScope returns null and
+    // both purges are unreachable), and a FULL_REPAGE cursor forced to 0 (so the
+    // id-ceiling fence never runs). The re-page then converges only the uq_cap_snap keys
+    // the two hubs SHARE, and a row from the previous hub at a block boundary the new one
+    // has never reached is simply never addressed. MEASURED 2026-08-28: both testnet
+    // indexer mirrors still held 43 rows at snapshot_block 957439 - a BTC MAINNET height -
+    // inherited from the retired first-generation mainnet hub.
+    //
+    // Those survivors are not inert. snapshot_block is the plane every read of this table
+    // keys on: db.getStakeWeightsByCapability / getValidatorsByCapability resolve a
+    // validator set at a block boundary, and _applyRetraction gates the RETRACTION_SIGNING
+    // era on MAX(snapshot_block) over the mirror itself, so a mainnet height sitting in a
+    // testnet mirror both offers a mainnet stake set to any future capability whose
+    // boundary lands on it and holds a flag-day gate open from the wrong chain's height.
+    //
+    // What makes the delete provable is the same warrant _reconcileForeignPriceRounds
+    // rests on, and it is the stronger kind: the hub's snapshot endpoint for this table is
+    // UNFILTERED (hub api.js: SELECT * FROM capability_snapshots WHERE id > ?), and the hub
+    // never deletes or prunes a row it has written, so a COMPLETE drain - short final page,
+    // zero apply errors, the only state this runs in - has seen every row the hub holds. A
+    // local row at a key that drain did not serve is a row this hub does not have, and no
+    // later delivery can address it.
+    //
+    // TWO FENCES on top of that warrant, because this table is consensus-bearing:
+    //   - only rows that PREDATE the drain are judged (id <= preDrainMaxId). The ids are
+    //     locally assigned, so a row applied while the drain ran - a live WS event on this
+    //     table applies immediately rather than buffering, unlike the price path - carries a
+    //     higher id and is exempt; the next drain judges it once the pages cover it.
+    //   - if the hub served rows and NOT ONE local row matched a served key, the two sides
+    //     are not deriving the same key (a column rename, a driver type change) and this
+    //     pass would empty a healthy mirror. Refuse, loudly: a stalled reconciliation is
+    //     recoverable, a wiped validator-set history under a mirror the operator believes
+    //     is converging is not.
+    //
+    // Delete rather than mark: presence of the row IS the qualification statement (there is
+    // no status column and no tombstone consensus honours), and the hub's own row for that
+    // key re-arrives on the next drain if it exists.
+    async _reconcileForeignCapabilitySnapshots(servedKeys, keysComplete, maxServedBlock, preDrainMaxId) {
+        if (!servedKeys) return;
+        preDrainMaxId = Number(preDrainMaxId);
+        // Nothing predates this drain: an empty mirror has nothing to reconcile, and a
+        // read that failed reports 0 (see _localMaxId), where deleting on a guess is the
+        // one outcome worse than waiting for the next drain.
+        if (!Number.isFinite(preDrainMaxId) || preDrainMaxId <= 0) return;
+        let stale;
+        if (!keysComplete) {
+            // The set overflowed its memory cap, so absence from it proves nothing. Fall back
+            // to the weaker half that needs no set: the drain saw every row the hub holds, so
+            // no boundary above the highest it served exists there. That still clears the
+            // shape this pass exists for (a foreign chain's height sits ABOVE anything a
+            // younger network has reached) and leaves any lower foreign boundary alone.
+            console.warn('HubDbSync: capability snapshot reconciliation exceeded its key cap (' +
+                CAPABILITY_SNAPSHOT_KEY_CAP + '); falling back to the snapshot_block-ceiling rule ' +
+                '(boundaries above ' + maxServedBlock + ' only)');
+            let rows;
+            try {
+                rows = await this.hubDb.doQuery(
+                    'SELECT id FROM capability_snapshots WHERE id <= ? AND snapshot_block > ?',
+                    [preDrainMaxId, maxServedBlock]);
+            } catch (e) {
+                console.warn('HubDbSync: capability snapshot reconciliation skipped (read failed):', e);
+                return;
+            }
+            stale = (rows || []).map(r => Number(r.id)).filter(Number.isFinite);
+        } else {
+            let locals;
+            try {
+                // Unrestricted read: the id fence decides what may be DELETED, but the
+                // key-derivation fence below has to weigh every local row, including the ones
+                // this drain just applied. On a mirror whose whole pre-drain content is
+                // foreign - the repoint case - those fresh rows are the only proof that the
+                // two sides still derive the same key.
+                locals = await this.hubDb.doQuery(
+                    'SELECT id, snapshot_block, capability, signing_pubkey, source FROM capability_snapshots');
+            } catch (e) {
+                console.warn('HubDbSync: capability snapshot reconciliation skipped (read failed):', e);
+                return;
+            }
+            locals = locals || [];
+            let matched = locals.filter(r => servedKeys.has(capabilitySnapshotKey(r))).length;
+            if (servedKeys.size > 0 && locals.length > 0 && matched === 0) {
+                console.error('HubDbSync: capability snapshot reconciliation refused: the hub served ' +
+                    servedKeys.size + ' row(s) but NONE of the ' + locals.length + ' local row(s) matched ' +
+                    'a served key. That is a key-derivation mismatch, not contamination; leaving the ' +
+                    'mirror untouched.');
+                return;
+            }
+            stale = locals
+                .filter(r => Number(r.id) <= preDrainMaxId && !servedKeys.has(capabilitySnapshotKey(r)))
+                .map(r => Number(r.id))
+                .filter(Number.isFinite);
+        }
+        if (stale.length === 0) return;
+        // Chunked so one oversized IN list can never blow the statement limit.
+        for (let i = 0; i < stale.length; i += 500) {
+            let chunk = stale.slice(i, i + 500);
+            try {
+                await this.hubDb.doQuery(
+                    'DELETE FROM capability_snapshots WHERE id IN (' + chunk.map(() => '?').join(',') + ')', chunk);
+            } catch (e) {
+                console.warn('HubDbSync: capability snapshot reconciliation failed for a chunk:', e);
+                return;
+            }
+        }
+        console.warn('HubDbSync: removed ' + stale.length + ' capability_snapshots row(s) this hub does not ' +
+            'hold (a repointed or rebuilt hub leaves the previous one\'s validator sets behind, and every ' +
+            'read of this table keys on snapshot_block); the mirror now holds only what this hub serves');
     }
 
     // Re-read EVERY barrier height/timestamp from the local mirror and release the
