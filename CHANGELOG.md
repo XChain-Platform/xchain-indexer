@@ -7,10 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-09-10
+
 ### Added
 - The boot-time index reconciler now recognises FULLTEXT indexes, so an aged database self-heals the contracts meta_search index instead of depending on the migration alone.
 - Added the CONTRACT_META_REQUIRED flag day: a DEPLOY is rejected unless its contract exports a conforming meta.name and meta.description.
 - A contract's own exported name, description and version are extracted at deploy time into searchable columns on the contracts table, with a full-text index over the name and description so a contract can be found by a word instead of only by its index.
+- Added the REST_PATTERN_METER rule: the deploy validator refuses the rest positions the allocator meter cannot reach, armed at genesis on testnet and regtest and on 2027-01-01 on mainnet, pinned byte-equal to the VM gate.
+
+### Changed
+- CONTRACT_META_REQUIRED arms on testnet at 2026-09-13T00:00:00Z (1789257600); mainnet stays at genesis, regtest at genesis.
+- Mainnet activation gates are armed at genesis under the 2026-09-09 ruling, proven identity on the measured mainnet history and on a from-genesis replay witness.
+- The VM consensus-epoch pin and its goldens move to epoch 4 with the `banned-rest` deploy rule.
+
+### Fixed
+- A hub-mirror stream watermark that froze under healthy heartbeats is bounded, so a stalled mirror surfaces instead of reading as current.
+- A -32602 rejection from the hub is a terminal push rather than a retry, so a mis-pointed push stops re-sending forever.
+- A marker-stamped ATTEST v5 batch head is reset when the v6 chunk that completed it is reorged out, so the re-mined chunk rejoins a live head instead of a dead window.
+- The hub-db-sync bootstrap clears `capability_snapshots` rows the current hub does not serve, so a repointed indexer stops judging against a previous hub's set.
+- A reorg that un-lands an ATTEST v5/v6 batch retracts the batch link on the hub instead of leaving it pointing at a transaction the chain no longer carries.
+- The empty-archive recovery log names a version that can exist.
 
 ## [0.16.1] - 2026-09-09
 

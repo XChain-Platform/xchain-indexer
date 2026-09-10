@@ -422,7 +422,12 @@ const UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME = 1790812800;
 // (the ATTEST response mirror, ROLLCALL) gates on its OWN per-network activation
 // heights, which are unarmed off regtest, not on this ordinal. So the second line
 // of the deliberate two-line decision is: the rule set does not move here.
-const CONSENSUS_VERSION = '0.16.1';
+// 0.16.1 -> 0.17.0 registers nothing new, checked the same way: all 96 entries
+// below (24 at 0.1.0, 72 at 0.2.0) still sit at those two rungs, so the enabled
+// set is identical on both sides of the bump. The two rules this train carries,
+// CONTRACT_META_REQUIRED and REST_PATTERN_METER, both register at 0.2.0 and take
+// their own per-network instants, not this ordinal.
+const CONSENSUS_VERSION = '0.17.0';
 
 // Predicate for the NATIVE_FEE_PRICE_TIME_GATE flag-day. Its ONE consumer is
 // utility.getFeeOraclePrices (query selection); nothing else in src/ consults it.
