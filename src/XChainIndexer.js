@@ -568,6 +568,15 @@ class XChainIndexer {
     // whose mirror really is missing rows is no more permissive after it fires than before.
     //
     // Returns the hold in ms (0 when nothing is held), for the caller and for tests.
+    // End the process under a named reason, for a fault that no amount of further running
+    // can clear. Matches what api.js does with a fatal indexer error, and is a method
+    // rather than an inline process.exit so a test can observe the decision without
+    // taking the runner down with it.
+    fatalExit(reason){
+        console.error('Fatal indexer error: ' + reason);
+        process.exit(1);
+    }
+
     _noteBarrierHold(blockToParse, now = Date.now()){
         let prev = this.barrierHold;
         this.barrierHold = nextBarrierHold(prev, blockToParse, this.stallReason, this.stallClearsAt, now);
@@ -804,7 +813,13 @@ class XChainIndexer {
                     // rounds the blocks THIS node will parse can read, not the oracle's whole
                     // history. Re-evaluated on every (re-)bootstrap, and null-safe - an
                     // unresolvable horizon mirrors the table in full, as before.
-                    getPriceMirrorHorizon: () => this._priceMirrorHorizon()
+                    getPriceMirrorHorizon: () => this._priceMirrorHorizon(),
+                    // Fail-loud stage of the mirror's watermark-stall detector. The mirror
+                    // never ends a process on its own (a consumer running several mirrors
+                    // in one process must not lose all of them to one stalled chain); this
+                    // service has exactly one, and every barrier it owns is frozen while
+                    // that watermark is, so the supervisor restart IS the recovery.
+                    onFatalStall: (reason) => this.fatalExit(reason)
                 });
                 // NOTE: do NOT start() here. The hub-mirror tables (price_snapshots,
                 // oracle_prices, cross_chain_*, capability_snapshots, state_checkpoints)

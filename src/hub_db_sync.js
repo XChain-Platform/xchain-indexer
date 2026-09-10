@@ -214,6 +214,89 @@ function resolveBarrierHoldCeilingMs(raw){
     return parseInt(String(override).trim(), 10) * 1000;
 }
 
+// ── Stream-watermark stall: the bound on a mirror that certifies NOTHING ──
+//
+// The ceiling above is driven by the BLOCK LOOP: it fires only while one block sits
+// behind a mirror barrier, and only after its own long window. A watermark that
+// freezes for a few minutes and then recovers therefore never reaches it, so the only
+// thing that ended such a freeze was an operator restarting the container.
+//
+// This is the second bound, owned by the mirror itself and keyed on the mirror's own
+// evidence rather than on a block. Every heartbeat carries the timestamp through which
+// the hub has produced rows. When that hub tip runs AHEAD of our certified stream
+// watermark and our watermark does not move for a whole detection window, the mirror
+// is certifying nothing while its socket reads perfectly healthy. That single
+// condition holds no matter WHICH gate is stuck (a bootstrap that never drains, a
+// message chain parked on an apply that never settles, a per-table cursor wedged on a
+// row the apply path refuses), which is what lets the remedy be cause-agnostic.
+//
+// Two stages, because a re-subscribe clears most of those and a restart clears the rest:
+//   1. force a fresh subscribe-then-bootstrap, the ONE path that re-arms the gate,
+//   2. if the watermark still has not moved a bounded window later, hand the process to
+//      its supervisor under a named fatal.
+//
+// OPERATIONAL, NOT CONSENSUS, for the same reason as the ceiling: neither stage opens a
+// barrier, shortens a grace or commits a block one second earlier. A node that restarts
+// here comes back deferring exactly as it was, so a per-node value cannot fork
+// settlement and the env overrides are honored on every network.
+//
+// Sized above a full re-bootstrap drain (minutes on a large price_snapshots table) so an
+// ordinary slow drain finishes on its own and only a mirror that is genuinely not
+// converging ever reaches stage 2.
+const HUB_SYNC_WATERMARK_STALL_S      = 180;
+const HUB_SYNC_WATERMARK_STALL_EXIT_S = 300;
+
+// How often the stall condition is sampled. Small relative to the windows it measures
+// so a stall is caught within a sample of its deadline rather than a whole window late.
+const WATERMARK_STALL_CHECK_MS = 10000;
+
+// Resolve one stall window in MILLISECONDS. Same contract as resolveBarrierHoldCeilingMs:
+// an unusable value falls back to the named default with a warning rather than throwing,
+// because a bad value here can only mis-time a log line and must never keep an indexer
+// from booting. 0 is the documented off switch (no detection at all, or detection
+// without the fatal stage).
+function resolveWatermarkStallMs(raw, envKey, defaultS){
+    const override = (raw === undefined) ? process.env[envKey] : raw;
+    if(override === undefined || override === null || override === '')
+        return defaultS * 1000;
+    if(!/^\d+$/.test(String(override).trim())){
+        console.log('WARNING: ' + envKey + '="' + override + '" is not a non-negative integer ' +
+            'number of seconds; using the default ' + defaultS + 's.');
+        return defaultS * 1000;
+    }
+    return parseInt(String(override).trim(), 10) * 1000;
+}
+
+// Decide what a frozen stream watermark has earned, as a pure function of the mirror's
+// observable state, so the decision is testable without a socket, a DB or a real clock.
+// Returns 'ok', 'resync' (stage 1) or 'exit' (stage 2).
+//
+// Each suppression below is a state where a frozen watermark is CORRECT and neither
+// remedy could help:
+//   - poll mode freezes the watermark by design (_bootstrapAll refuses to certify a
+//     mirror that cannot receive upserts or retractions),
+//   - a schema mismatch is a deliberate permanent fail-closed hold that only a hub
+//     upgrade clears, so restarting into it would buy a restart loop and nothing else,
+//   - a mirror that has never certified a watermark is a cold start, not a stall; its
+//     bound is the block loop's hold ceiling,
+//   - a hub tip at or behind our watermark means the hub has produced nothing we lack,
+//     which is the ordinary quiet-chain state and the reason a bare "unchanged for X"
+//     test cannot be used on its own.
+function watermarkStallVerdict(state, now){
+    const s = state || {};
+    if(!(s.stallMs > 0))                                   return 'ok';
+    if(s.pollMode || s.schemaMismatch)                     return 'ok';
+    if(s.lastAdvanceAt == null)                            return 'ok';
+    if(!(Number(s.hubTipTs) > Number(s.streamWatermark)))  return 'ok';
+    // Stage 1 measures from the last real advance; stage 2 measures from the remedy, so
+    // a resync that is still draining is given its own full window rather than being
+    // charged the time that produced it.
+    if(s.resyncAt == null)
+        return ((now - s.lastAdvanceAt) >= s.stallMs) ? 'resync' : 'ok';
+    if(!(s.exitMs > 0))                                    return 'ok';
+    return ((now - s.resyncAt) >= s.exitMs) ? 'exit' : 'ok';
+}
+
 // ── signed-retraction verification helpers ───────────────────────────
 
 // Rebuild the retraction canonical from the wire event. MUST byte-match the
@@ -778,6 +861,32 @@ class HubDbSync {
         this.watermarkIntervalMs = parseInt(options.watermarkIntervalMs || process.env.HUB_SYNC_WATERMARK_INTERVAL_MS || '10000');
         this.watermarkTimeoutMs = this.watermarkIntervalMs * 3;
 
+        // Stream-watermark stall detector; see the constant block above for the why.
+        // The watchdog directly above proves FRAMES are arriving and says nothing about
+        // whether any of them still moves the watermark, so these fields are the other
+        // half of that pair. _hubTipTs is the newest tip the hub has claimed in a
+        // heartbeat, recorded whether or not the gate let it through, which is the only
+        // reason "hub ahead, us frozen" is observable at all. _lastWatermarkAdvanceAt is
+        // when the watermark last actually moved. _watermarkStallResyncAt latches the one
+        // forced resync per stall episode, so stage 2 times a window AFTER the remedy
+        // instead of running a second detection window.
+        this._hubTipTs               = 0;
+        this._lastWatermarkAdvanceAt = null;
+        this._watermarkStallResyncAt = null;
+        this._stallTimer             = null;
+        this.watermarkStallMs     = Number.isFinite(options.watermarkStallMs)
+            ? options.watermarkStallMs
+            : resolveWatermarkStallMs(undefined, 'HUB_SYNC_WATERMARK_STALL_S', HUB_SYNC_WATERMARK_STALL_S);
+        this.watermarkStallExitMs = Number.isFinite(options.watermarkStallExitMs)
+            ? options.watermarkStallExitMs
+            : resolveWatermarkStallMs(undefined, 'HUB_SYNC_WATERMARK_STALL_EXIT_S', HUB_SYNC_WATERMARK_STALL_EXIT_S);
+        // Fail-loud seam for stage 2. Left unwired, the detector re-subscribes and logs
+        // but never ends the process, which is what a consumer that embeds this mirror
+        // beside unrelated work needs (one chain's stalled mirror must not take down a
+        // process serving several). The indexer wires its own exit so its supervisor can
+        // restart it, which is the posture every other fatal in that service takes.
+        this._onFatalStall = (typeof options.onFatalStall === 'function') ? options.onFatalStall : null;
+
         // Batched price applies and the drain's progress counter. Both are
         // reporting/throughput only - no barrier, floor or mirrored row depends on
         // either - so both carry a plain off switch rather than a fail-closed gate.
@@ -800,6 +909,12 @@ class HubDbSync {
         ts = Number(ts);
         if (!Number.isFinite(ts) || ts <= this.streamWatermark) return;
         this.streamWatermark = ts;
+        // The watermark moved, so whatever the stall detector was timing is over: re-arm
+        // from here and drop any latched stage-1 resync. Stamped on a real ADVANCE only,
+        // never on a refused or repeated tip, because "the last time this mirror actually
+        // certified progress" is the whole measurement.
+        this._lastWatermarkAdvanceAt = Date.now();
+        this._watermarkStallResyncAt = null;
         this._releasePriceWaiters();
         this._releasePriceTimeWaiters();
         this._releaseOracleWaiters();
@@ -807,6 +922,90 @@ class HubDbSync {
         this._releaseCallWaiters();
         this._releaseAnchorAttestWaiters();
         this._releaseAttestResponseWaiters();
+    }
+
+    // Record the newest tip the hub has claimed in a heartbeat, independently of whether
+    // the watermark gate accepted it. A refused tip is exactly the evidence the stall
+    // detector runs on, so it must be kept even when it changes nothing else.
+    _noteHubTip(ts) {
+        const t = Number(ts);
+        if (Number.isFinite(t) && t > this._hubTipTs) this._hubTipTs = t;
+    }
+
+    // Sample the stall condition once and act on the verdict. Split from the timer so a
+    // test can drive a single evaluation at a chosen clock, with no socket and no DB.
+    _checkWatermarkStall(now) {
+        if (now === undefined) now = Date.now();
+        if (!this.enabled || !this.running) return 'ok';
+
+        const verdict = watermarkStallVerdict({
+            stallMs:         this.watermarkStallMs,
+            exitMs:          this.watermarkStallExitMs,
+            pollMode:        !!this._pollMode,
+            schemaMismatch:  !!this._schemaMismatchSeen,
+            lastAdvanceAt:   this._lastWatermarkAdvanceAt,
+            resyncAt:        this._watermarkStallResyncAt,
+            hubTipTs:        this._hubTipTs,
+            streamWatermark: this.streamWatermark
+        }, now);
+        if (verdict === 'ok') return verdict;
+
+        const frozenS = Math.round((now - this._lastWatermarkAdvanceAt) / 1000);
+        const shape   = 'stream watermark frozen at ' + this.streamWatermark + ' for ' + frozenS +
+                        's while the hub heartbeat tip reached ' + this._hubTipTs;
+
+        if (verdict === 'resync') {
+            this._watermarkStallResyncAt = now;
+            console.error('HubDbSync: ' + shape + '. Heartbeats are arriving, so the transport is ' +
+                'healthy and the mirror is certifying nothing; forcing a subscribe-then-bootstrap ' +
+                'cycle, then exiting if it is still frozen ' +
+                Math.round(this.watermarkStallExitMs / 1000) + 's from now.');
+            // Deliberately bypasses requestResync's hold-ceiling throttle: this detector
+            // carries its own one-per-episode latch above, and a block-loop resync minutes
+            // earlier must not silently consume the single remedy stage 2 is timing.
+            this._driveResync(shape);
+            return verdict;
+        }
+
+        // Stage 2. Re-arm the latch first so a consumer whose handler does NOT end the
+        // process keeps re-driving on the same cadence instead of re-firing every sample.
+        this._watermarkStallResyncAt = now;
+        const reason = 'hub-mirror stream watermark stalled: ' + shape + ', still frozen ' +
+                       Math.round(this.watermarkStallExitMs / 1000) + 's after a forced resync ' +
+                       '(HUB_SYNC_WATERMARK_STALL_S / HUB_SYNC_WATERMARK_STALL_EXIT_S)';
+        console.error('HubDbSync: ' + reason);
+        this._driveResync(shape + ' after a forced resync');
+        if (this._onFatalStall) this._onFatalStall(reason);
+        else console.error('HubDbSync: no onFatalStall handler wired, so this mirror stays up and ' +
+            'keeps re-driving; a consumer that wants a supervisor restart must wire one.');
+        return verdict;
+    }
+
+    // Cadence for the sampler, clamped down when the windows themselves are small so a
+    // short test or a short operator override is still sampled several times per window.
+    _stallCheckIntervalMs() {
+        const windows = [this.watermarkStallMs, this.watermarkStallExitMs].filter((v) => v > 0);
+        const smallest = windows.length ? Math.min.apply(null, windows) : WATERMARK_STALL_CHECK_MS;
+        return Math.max(1000, Math.min(WATERMARK_STALL_CHECK_MS, Math.floor(smallest / 4)));
+    }
+
+    _startStallDetector() {
+        this._stopStallDetector();
+        if (!(this.watermarkStallMs > 0)) return;
+        this._stallTimer = setInterval(() => {
+            // A throw here would kill the interval and silently retire the last bound this
+            // mirror has, so the sampler swallows and keeps its cadence.
+            try { this._checkWatermarkStall(); }
+            catch (err) { console.warn('HubDbSync: watermark stall check failed:', err && err.message); }
+        }, this._stallCheckIntervalMs());
+        if (typeof this._stallTimer.unref === 'function') this._stallTimer.unref();
+    }
+
+    _stopStallDetector() {
+        if (this._stallTimer) {
+            clearInterval(this._stallTimer);
+            this._stallTimer = null;
+        }
     }
 
     // Adopt the hub's advertised heartbeat cadence (from the 'ready' message's
@@ -869,6 +1068,10 @@ class HubDbSync {
             return;
         }
         this.running = true;
+        // Armed from the start, but inert until the watermark has advanced at least once:
+        // a cold start that never drains is the block loop's hold ceiling to bound, not
+        // this detector's, and exiting during a first drain would only restart-loop.
+        this._startStallDetector();
 
         if (WebSocket) {
             // Subscribe first so no row is missed between the REST snapshot and
@@ -974,6 +1177,7 @@ class HubDbSync {
 
     stop() {
         this.running = false;
+        this._stopStallDetector();
         if (this.ws) {
             try { this.ws.close(); } catch (e) { /* ignore */ }
             this.ws = null;
@@ -1004,6 +1208,12 @@ class HubDbSync {
             connected: !!this.ws,
             bootstrapped: this._bootstrapDrained,
             streamWatermark: this.streamWatermark,
+            // The stall detector's two inputs, surfaced so an operator can read the
+            // "hub ahead, mirror frozen" gap off /status instead of inferring it from
+            // deferral logs. null age means the mirror has not certified anything yet.
+            hubTipTs: this._hubTipTs,
+            watermarkFrozenMs: (this._lastWatermarkAdvanceAt == null)
+                ? null : (Date.now() - this._lastWatermarkAdvanceAt),
             tables: tables
         };
     }
@@ -3723,6 +3933,10 @@ class HubDbSync {
                             // Do not advance while a live schema mismatch is outstanding:
                             // rows are being refused below, so certifying the stream as
                             // caught-up would settle blocks against data we did not apply.
+                            // Record the hub's claimed tip BEFORE the gate. A tip the gate
+                            // refuses is the evidence the stall detector runs on: without
+                            // it a frozen watermark is indistinguishable from a quiet hub.
+                            this._noteHubTip(event.ts);
                             if (this._bootstrapDrained && !this._schemaMismatchSeen) this._advanceWatermark(event.ts);
                         } else if (event.type === 'row:inserted' || event.type === 'row:deleted') {
                             // Schema fail-closed check, price-event buffering
@@ -3801,6 +4015,15 @@ class HubDbSync {
         const now = Date.now();
         if (this._lastResyncRequestAt && (now - this._lastResyncRequestAt) < this.barrierHoldCeilingMs) return false;
         this._lastResyncRequestAt = now;
+        return this._driveResync(reason);
+    }
+
+    // The resync itself, without the hold-ceiling throttle above. Split out because the
+    // watermark-stall detector has to be able to spend its ONE remedy on its own
+    // schedule: sharing requestResync's rate limiter would let an unrelated block-loop
+    // resync minutes earlier swallow the stage-1 attempt whose outcome stage 2 then
+    // measures, and the detector would exit having never actually retried.
+    _driveResync(reason) {
         this.forcedResyncCount++;
         console.warn('HubDbSync: forcing a mirror resync (' + String(reason || 'barrier hold ceiling reached') + ')');
         if (this.ws) {
@@ -4065,6 +4288,14 @@ module.exports.resolveWatermarkGrace = resolveWatermarkGrace;
 // storm the hub or never re-drive it at all.
 module.exports.HUB_SYNC_BARRIER_HOLD_CEILING_S = HUB_SYNC_BARRIER_HOLD_CEILING_S;
 module.exports.resolveBarrierHoldCeilingMs     = resolveBarrierHoldCeilingMs;
+// The stall detector's windows, their resolver and the verdict itself. The verdict is
+// exported because it is the whole decision: a test that drove it only through timers
+// and a socket could not tell a suppression apart from a window that had not elapsed.
+module.exports.HUB_SYNC_WATERMARK_STALL_S      = HUB_SYNC_WATERMARK_STALL_S;
+module.exports.HUB_SYNC_WATERMARK_STALL_EXIT_S = HUB_SYNC_WATERMARK_STALL_EXIT_S;
+module.exports.WATERMARK_STALL_CHECK_MS        = WATERMARK_STALL_CHECK_MS;
+module.exports.resolveWatermarkStallMs         = resolveWatermarkStallMs;
+module.exports.watermarkStallVerdict           = watermarkStallVerdict;
 // The batch's chunk size and the drain's progress cadence, plus the shared upsert
 // builder: exported so the test can prove the batched statement and the per-row
 // statement are the same statement, which is the only thing keeping the ODKU body
