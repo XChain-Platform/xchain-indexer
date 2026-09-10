@@ -406,16 +406,19 @@ describe('DEPLOY meta verdicts (CONTRACT_META_REQUIRED) @regression @tier1', fun
 
     describe('registration', function () {
 
-        it('CONTRACT_META_REQUIRED is registered, genesis-active on mainnet and regtest and UNARMED on testnet', function () {
+        it('CONTRACT_META_REQUIRED is registered, genesis-active on mainnet and regtest and armed on testnet at 2026-09-13T00:00:00Z', function () {
             const ProtocolChanges = require('../../../src/protocol_changes.js');
+            const TESTNET_ARM = 1789257600; // 2026-09-13T00:00:00Z, pinned by the v0.17.0 cut
             assert.strictEqual(ProtocolChanges.CONTRACT_META_REQUIRED_MAINNET_TIME, 0);
-            assert.strictEqual(ProtocolChanges.CONTRACT_META_REQUIRED_TESTNET_TIME, 9999999999);
+            assert.strictEqual(ProtocolChanges.CONTRACT_META_REQUIRED_TESTNET_TIME, TESTNET_ARM);
+            assert.strictEqual(TESTNET_ARM, Date.UTC(2026, 8, 13) / 1000,
+                'the armed instant is 00:00:00Z of the second day after the carrying release lands');
 
             const pc = new ProtocolChanges(createMockIndexer(), '0.2.0');
             const change = pc.changes['CONTRACT_META_REQUIRED'];
             assert.ok(change, 'CONTRACT_META_REQUIRED must be registered');
             assert.strictEqual(change.mainnet_time, 0);
-            assert.strictEqual(change.testnet_time, 9999999999);
+            assert.strictEqual(change.testnet_time, TESTNET_ARM);
             assert.strictEqual(change.regtest_time, 0);
             assert.strictEqual(change.mainnet_block, 0);
             assert.strictEqual(change.testnet_block, 0);

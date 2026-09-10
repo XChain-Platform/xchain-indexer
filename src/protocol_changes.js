@@ -176,17 +176,22 @@ const DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME = 1788868800;
 // from-genesis replay is unaffected.
 const CONTRACT_META_REQUIRED_MAINNET_TIME = 0;
 
-// Testnet: house UNARMED sentinel (9999999999, year 2286) at this build rung. TBTC
-// already holds 9 contracts, none of them exporting a meta-shaped object (measured
-// 2026-09-08), so a genesis-active testnet arm would flip every one of them from its
-// recorded verdict and fork a fresh replay from every running node. The instant is
-// pinned by the RELEASE that ships the rule, at 00:00:00Z of the second day after the
-// carrying indexer release lands, strictly above the tip and the tip's median-time-past
-// at re-pin, moved forward if the roll slips (an activation already past is not a flag
-// day), and re-pinnable earlier once every testnet indexer is proven on the code and a
-// fresh replay reproduces the fleet's hashes. Regtest stays genesis-active (0) so the
-// suites and the regtest venues exercise the rule from block 0.
-const CONTRACT_META_REQUIRED_TESTNET_TIME = 9999999999;
+// Testnet: ARMED 2026-09-10 (operator, at the cut of the carrying release) at
+// 1789257600 = 2026-09-13T00:00:00Z. It was the house UNARMED sentinel (9999999999,
+// year 2286) up to this build rung, because TBTC already holds contracts that export no
+// meta-shaped object (measured 2026-09-08), so a genesis-active testnet arm would flip
+// every one of them from its recorded verdict and fork a fresh replay from every running
+// node. The instant is pinned by the RELEASE that ships the rule, at 00:00:00Z of the
+// second day after the carrying indexer release lands: the release cuts 2026-09-10 and
+// the fleet roll may land as late as 09-11, so the second day after the latest plausible
+// landing is 09-13. That sits more than a day above the tip's median-time-past at the
+// cut, which is the property that matters, because protocol time off mainnet is
+// median-time-past and not the block's own stamp. It is moved forward if the roll slips
+// (an activation already past is not a flag day), and re-pinnable earlier once every
+// testnet indexer is proven on the code and a fresh replay reproduces the fleet's
+// hashes. Regtest stays genesis-active (0) so the suites and the regtest venues
+// exercise the rule from block 0.
+const CONTRACT_META_REQUIRED_TESTNET_TIME = 1789257600;
 
 // Mainnet arm for BATCH_ISSUANCE_LIMITS, the BATCH issuance rework: the dotted-TICK
 // exemption that lets one BATCH carry a parent plus any number of child ISSUEs, the global

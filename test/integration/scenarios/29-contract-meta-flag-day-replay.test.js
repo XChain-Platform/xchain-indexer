@@ -36,7 +36,7 @@
  * block-TIME keyed (protocol_changes.js addChange, resolved through the decoder's
  * block_time). regtest arms it at 0, so on regtest there is no below-flag block to
  * replay at all: the regtest-active half is 16-controller-permissions. testnet
- * carries the UNARMED sentinel (9999999999, spec 2.4), which is a real block time
+ * arms it at a future instant (1789257600, spec 2.4), which is a real block time
  * a decoder row can hold (block_time is BIGINT UNSIGNED on both schemas), so a
  * seeded block above it activates the rule on the same chain that carries the
  * blocks below it. That is strictly stronger than comparing two networks: the
@@ -50,9 +50,9 @@
  * AND THE CLOCK IS MEDIAN TIME PAST. testnet resolves protocol time from MTP over
  * the previous 11 blocks (src/protocol_time.js; regtest and mainnet read the raw
  * stamp), so ONE future-stamped block arms nothing: the corpus drags the median
- * across the sentinel with a short run of blocks, and the first of them carries a
+ * across the flag day with a short run of blocks, and the first of them carries a
  * nameless deploy that must still read `valid` precisely because its own stamp is
- * above the sentinel while the median below it is not. That is the same arithmetic
+ * above the flag day while the median below it is not. That is the same arithmetic
  * spec 2.4 puts on the release re-pin ("strictly above the tip and the tip's
  * median-time-past at re-pin").
  *
@@ -92,15 +92,15 @@ const B_PRE   = 149701;
 const B_FILL  = [149702, 149703, 149704];
 const B_POST  = 149705;
 
-// Below CONTRACT_META_REQUIRED_TESTNET_TIME (9999999999) and above every ARMED
+// Below CONTRACT_META_REQUIRED_TESTNET_TIME (1789257600) and above every other ARMED
 // testnet gate this corpus can reach (ISSUE_INHERITED_MINT_WINDOW 1787961600,
 // DEPLOY_DEFERRED_ASSEMBLY 1788868800), so the pre-activation block runs the same
-// rule set as the post one minus the meta verdict. The one armed testnet gate that
+// rule set as the post one minus the meta verdict. The other armed testnet gate that
 // sits ABOVE these times, UNIFIED_FEES_SWEEP_CALLBACK at 1790812800, prices SWEEP
 // and CALLBACK, and this corpus carries neither, so it moves nothing on either side.
 const T_GAS = 1788999400;
 const T_PRE = 1789000000;
-// Above the UNARMED sentinel: this is what "the flag day arrives" looks like to
+// Above the armed instant: this is what "the flag day arrives" looks like to
 // isEnabled, which compares the change's testnet_time against getBlockTime().
 //
 // AND THAT IS MEDIAN TIME PAST ON TESTNET, not the block's own stamp
@@ -109,7 +109,7 @@ const T_PRE = 1789000000;
 // the timestamps of the blocks BELOW it. With the two pre-activation blocks plus
 // the three fillers below B_POST the window is [T_GAS, T_PRE, T_FILL x3], whose
 // median is a T_FILL value, so B_POST is the first block whose PROTOCOL time is
-// above the sentinel. This is the same arithmetic the release re-pin obeys (spec
+// above the flag day. This is the same arithmetic the release re-pin obeys (spec
 // 2.4: strictly above the tip AND the tip's median-time-past).
 const T_FILL = [10000000001, 10000000002, 10000000003];
 const T_POST = 10000000004;
@@ -132,7 +132,7 @@ const META = "meta:{ name:'Escrow', description:'Two-party escrow with an arbite
 // four code hashes distinct so each row is addressable by hash; it is the ONLY
 // difference between a pre and post source of the same shape.
 const NAMELESS_PRE  = "module.exports={ guard:function(){ return {}; }, era:'pre'  };";
-// Deployed in a block whose RAW stamp is already above the sentinel while its MTP is
+// Deployed in a block whose RAW stamp is already above the flag day while its MTP is
 // not: the vector that proves the gate reads protocol time, not the block's own stamp.
 const NAMELESS_MTP  = "module.exports={ guard:function(){ return {}; }, era:'mtp'  };";
 const NAMELESS_POST = "module.exports={ guard:function(){ return {}; }, era:'post' };";
@@ -170,7 +170,7 @@ describe('29 - CONTRACT_META_REQUIRED flag day: pre-activation replay + activati
         // report a venue gap as a product failure (same guard as scenario 16).
         try { require('xchain-vm'); } catch (e) { return this.skip(); }
 
-        // testnet is the network that carries the UNARMED sentinel. Mocha runs
+        // testnet is the network whose arm this scenario crosses. Mocha runs
         // every file in one process and the other scenarios read
         // `process.env.INDEXER_NETWORK || 'regtest'`, so leaking testnet out of
         // this file would silently re-network whichever suite runs next; the env
@@ -263,8 +263,8 @@ describe('29 - CONTRACT_META_REQUIRED flag day: pre-activation replay + activati
         before(async function () {
             if (!nodeA) return this.skip();
             // The filler blocks exist so MTP (the value isEnabled actually compares)
-            // crosses the sentinel at B_POST. The FIRST one carries a nameless deploy
-            // on purpose: its raw stamp is already above the sentinel while its MTP is
+            // crosses the flag day at B_POST. The FIRST one carries a nameless deploy
+            // on purpose: its raw stamp is already above the flag day while its MTP is
             // not, so its verdict says which clock the gate reads.
             for (let i = 0; i < B_FILL.length; i++)
                 await seeder.seedBlock(B_FILL[i], T_FILL[i], i === 0
@@ -301,7 +301,7 @@ describe('29 - CONTRACT_META_REQUIRED flag day: pre-activation replay + activati
             assert.strictEqual(named.meta_name, 'Escrow');
         });
 
-        it('the gate reads PROTOCOL time: a block stamped past the sentinel is still below it while its MTP is', async function () {
+        it('the gate reads PROTOCOL time: a block stamped past the flag day is still below it while its MTP is', async function () {
             // B_FILL[0]'s own timestamp is above CONTRACT_META_REQUIRED_TESTNET_TIME,
             // but db.getBlockTime medians the blocks below it, and that median is still
             // a pre-activation stamp. A gate wired to the raw stamp would reject here;
