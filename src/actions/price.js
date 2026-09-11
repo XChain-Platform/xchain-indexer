@@ -42,6 +42,7 @@ const pricePair = require('../price_pair_activation.js');
 const priceScale    = require('../price_scale_activation.js');
 const priceSigTally = require('../price_sig_tally_activation.js');
 const priceV2       = require('../price_batch_compression.js');
+const priceRange    = require('../price_zero_validity_activation.js');
 
 class Price {
 
@@ -177,6 +178,14 @@ class Price {
                 // scale every producer already emits and bounds the string to 19 characters.
                 let pricePattern = priceScale.priceValuePattern(data['BLOCK_TIME'], this.config['NETWORK']);
 
+                // Price-RANGE bound, resolved on the same key as the two above so all three are
+                // one rule per action and no batch window can straddle any of them. At/above its
+                // gate a price must sit strictly inside (0, PRICE_MAX) under the SAME expression
+                // the hub's ingest points evaluate: without it a quorum-signed '0' or
+                // at-ceiling price is chain-valid and hub-invalid, and the hub silently discards
+                // the whole batch window the round rides in. Resolved once, applied per pair.
+                let rangeBound = priceRange.isPriceZeroValidityActive(data['BLOCK_TIME'], this.config['NETWORK']);
+
                 // ROUND_COUNT equalling the number of round blocks actually present is enforced by
                 // CONSUMPTION, not by a trailing tally: a short count leaves the next round block's
                 // ROUND field to be read as SIG_COUNT and its TIMESTAMP as a pubkey (not 64-hex, so
@@ -214,6 +223,11 @@ class Price {
                         if(!pair || !price) throw new Error('missing pair data at round ' + i + ' pair ' + j);
                         if(!pairPattern.test(pair)) throw new Error('invalid pair format: ' + pair);
                         if(!pricePattern.test(price)) throw new Error('invalid price format: ' + price);
+                        // Range AFTER format: the format rule is what bounds the string's length,
+                        // so a garbage-length value is refused as a format breach exactly as it is
+                        // today rather than being handed to parseFloat first.
+                        if(rangeBound && !priceRange.isPriceInHubRange(price))
+                            throw new Error('invalid price range: ' + price);
                         pairs.push({ pair: pair, price: price });
                     }
                     // btcBlockHeight (camel) is the shape buildPriceBatchPayload reads; the snake
@@ -447,6 +461,14 @@ class Price {
         // Validate VALUE (positive 8-decimal string)
         if(!error && (!data['V1_VALUE'] || !/^[0-9]+(\.[0-9]{1,8})?$/.test(data['V1_VALUE']) || this.util.bclte(data['V1_VALUE'], '0')))
             error = 'invalid: VALUE (format)';
+
+        // VALUE ceiling, behind the same flag day the v0 pair prices ride. The hub's v1 ingest
+        // refuses a value not `< PRICE_MAX` and the check above bounds only the lower end, so
+        // an at/above-ceiling oracle price is chain-valid and hub-invalid, the same seam as v0
+        // on the one action version whose loss is never re-derivable. Same expression as the
+        // hub's, so the two verdicts agree at/above the gate; below it nothing runs.
+        if(!error && !priceRange.isPriceRangeValid(data['V1_VALUE'], data['BLOCK_TIME'], this.config['NETWORK']))
+            error = 'invalid: VALUE (range)';
 
         // Validate FEE (decimal between 0 and 1, optional). The regex caps precision at 18
         // decimals (bcmath width) and the range gate uses exact bcmath comparators, not
