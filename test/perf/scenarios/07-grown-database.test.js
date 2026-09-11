@@ -82,7 +82,7 @@ describe('07 Grown-Database Regression', function () {
     const reporter = new ReportGenerator();
 
     before(async function () {
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
     });
 

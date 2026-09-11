@@ -37,7 +37,6 @@ const jsonRouter    = require('express-json-rpc-router');
 const { buildHealthResponse, committedView, inFlightBlockIndex } = require('./health');
 const { createShutdown, createIndexerDrain } = require('./shutdown');
 const { getStakeSourceByPubkey } = require('./stake-source');
-const { rewardPushRetiredError } = require('./reward-push-gate');
 const anchorActionQuery = require('./anchor-action-query');
 const priceBatchQuery   = require('./price-batch-query');
 const reorgHistoryQuery = require('./reorg-history-query');
@@ -150,8 +149,22 @@ else if(!INDEXER_API_KEY)
 const ENABLE_DRYRUN = INDEXER_NETWORK === 'regtest'
     && (process.env.INDEXER_ENABLE_DRYRUN === 'true' || process.env.INDEXER_ENABLE_DRYRUN === '1');
 
-// Set of write methods that require the API key when one is configured
-const WRITE_METHODS = new Set(['pushvalidatorrewards']);
+// Set of write methods that require the API key when one is configured.
+//
+// EMPTY, and that is the finished state of the PUSH-ANCHOR endgame, not an
+// oversight. `pushvalidatorrewards` was the only member: a key-authenticated
+// rail that minted COLLECT-spendable validator_rewards rows. Every reward it
+// carried is now derived from on-chain bytes by every indexer, the hub holds no
+// caller for it any more (xchain-hub/src/RewardTracker.js has no push loop and
+// no terminal-refusal predicate), and mainnet is past both reward flag-days with
+// no pre-flag reward history to reinterpret. With no caller left to answer, the
+// method is gone rather than kept as a refusing stub: an unknown method answers
+// -32601 method-not-found, which is what a caller that should not exist deserves.
+//
+// The set itself stays because the gate below is shaped around three sets and a
+// future write method must land in one of them rather than ship ungated by
+// default. Anything that writes goes HERE.
+const WRITE_METHODS = new Set([]);
 
 // Methods that execute the VM / mutate AUTO_INCREMENT and must fail closed (401)
 // without a valid x-api-key when a key is configured, even though they roll back.
@@ -286,9 +299,10 @@ async function startApi(){
     installIndexerMetrics(observability, indexer);
 
     // API key enforcement for write + federation read + gated exec methods.
-    // These methods forge spendable validator_rewards rows or enumerate the
-    // staked validator set, so they must never be reachable by an unauthenticated
-    // peer. The gate fails closed by default: with INDEXER_API_KEY set, a valid
+    // These methods enumerate the staked validator set, run the VM, or (once a
+    // write method exists again) mutate replicated state, so they must never be
+    // reachable by an unauthenticated peer. The gate fails closed by default:
+    // with INDEXER_API_KEY set, a valid
     // x-api-key is required; with no key set and no explicit escape hatch, the
     // call is rejected. Only INDEXER_ALLOW_UNAUTHENTICATED=true restores keyless
     // pass-through for a single-host / regtest node.
@@ -298,8 +312,9 @@ async function startApi(){
         // array body, so the gate must inspect ALL of them: require the key if
         // ANY element invokes a gated method. Reading req.body.method off an
         // array leaves it undefined, which would smuggle a gated method (e.g.
-        // pushvalidatorrewards, which forges spendable validator_rewards rows)
-        // past the check unauthenticated inside a one-element batch.
+        // feequotedryrun, which runs the VM on the caller's bytes, or
+        // getactivevalidators, which enumerates the staked set) past the check
+        // unauthenticated inside a one-element batch.
         let calls = Array.isArray(req.body) ? req.body : [req.body];
         let id = (Array.isArray(req.body) ? null : (req.body && req.body.id)) || null;
         let gated = calls.some(call => {
@@ -1632,35 +1647,13 @@ async function startApi(){
             }
         },
 
-        // Receive validator reward records pushed from xchain-hub. RETIRED: this rail
-        // no longer writes anything, for any reward type, on any network.
-        //
-        // Every reward it ever carried is now DERIVED deterministically from on-chain
-        // bytes. oracle_round, attest_fee and attest_bcast always were, and were rejected
-        // outright here. anchor_bundle is derived from the ANCHOR v0 bundle's publisher
-        // attestation and anchor_archive from the ANCHOR v1 archive head's, on the parse
-        // path itself; the retired per-chain anchor_<CHAIN> leg derived the same way from
-        // a wire that no longer parses. Mainnet is past both reward flag-days and both are
-        // 0 on testnet and regtest, so a staged gate here would refuse every push on every
-        // live network anyway: unreachable code guarding a key-authenticated write into a
-        // COLLECT-spendable table.
-        //
-        // The write path is DELETED rather than gated, which is the decisive close of the
-        // forge vector. No request body reaches createValidatorReward or the
-        // smallest-pubkey reconcileAnchorRewardWinner collapse any more, so a leaked or
-        // insider-held API key cannot mint a spendable reward row nor delete the derived
-        // winner for a round, and neither can a future refactor that loosens a gate input.
-        //
-        // The METHOD itself stays, and stays in WRITE_METHODS so it is still key-gated,
-        // so that an un-upgraded hub gets an explicit terminal refusal it logs and drops.
-        // Deleting the method outright would answer with a JSON-RPC method-not-found and
-        // no `result`, which RewardTracker's push loop reads as an acceptance and drops
-        // silently instead - the same lost reward, with no operator-visible reason.
-        // Body: { round, reward_type, block_index, rewards: [...] }; only reward_type is
-        // read, and only to name the refusal.
-        async pushvalidatorrewards({reward_type}){
-            return { error: rewardPushRetiredError(reward_type) };
-        },
+        // NOTE: `pushvalidatorrewards` is RETIRED and the method is gone from this
+        // controller entirely; see the WRITE_METHODS note above. An interim step kept
+        // it as a refusing stub so an un-upgraded hub read a terminal error instead of
+        // a method-not-found its push loop misread as acceptance. That reason has
+        // expired: no hub build carries a push loop or the terminal-refusal
+        // predicate any more, so there is no caller left for the stub to be kind to.
+        // A call now gets JSON-RPC -32601, which is the honest answer.
 
         // Resolve the staking source address that owned/delegated a signing
         // pubkey as of a block; stakes first, then DELEGATE v0 delegations

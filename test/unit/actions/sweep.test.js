@@ -163,6 +163,35 @@ describe('Sweep @regression @tier3', function () {
                 'byte order must differ from the old tick_id order for this fixture (test has teeth)');
         });
 
+        // a SWEEP with nothing to move for a held tick must not emit a zero-amount
+        // credit/debit leg for it - that showed up as a fake credit row on both the action
+        // page and the address Credits tab (seen on SWEEP 1237, amount "0").
+        it('a zero balance on a held tick emits no credit/debit leg for it', async function () {
+            // GAS (tick_id=1) pays the fee; tick_id=2 is held at exactly 0 - nothing to move.
+            indexer.indexerDb.getAddressBalances.resolves({ 1: '1', 2: '0' });
+            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+            indexer.indexerDb.getAddressOwnerships.resolves([]);
+            indexer.indexerDb.getAddressEscrows.resolves([]);
+            indexer.indexerDb.isActionAllowed.resolves(true);
+            const tickById = { 1: 'GAS', 2: 'ZEROTICK' };
+            indexer.indexerDb.getTicker.callsFake(async (id) => tickById[Number(id)] || null);
+
+            const data   = createBaseData({ ACTION: 'SWEEP', FORMAT: 0, SOURCE });
+            const params = ['0', DESTINATION];
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.ok(!indexer.indexerDb.createCredit.calledWith(sinon.match.any, 'ZEROTICK', sinon.match.any, sinon.match.any),
+                'no credit leg for a held tick with nothing to move');
+            assert.ok(!indexer.indexerDb.createDebit.calledWith(sinon.match.any, 'ZEROTICK', sinon.match.any, sinon.match.any),
+                'no debit leg for a held tick with nothing to move');
+            // Teeth: the fixture must actually exercise the zero-balance tick, and the
+            // non-zero GAS leg must still settle normally.
+            assert.ok(indexer.indexerDb.createCredit.calledWith(sinon.match.any, 'GAS', sinon.match.any, DESTINATION),
+                'the non-zero GAS balance must still be credited');
+        });
+
     });
 
     // ─── OWNERSHIPS=1 ────────────────────────────────────────────────

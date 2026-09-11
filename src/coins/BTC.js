@@ -347,9 +347,14 @@ module.exports = {
     // capability SLASH block. Mainnet-inert until the EQUIV_HEADER flag-day.
     CONFIG_SLASH: { BOUNTY_BPS: 500, BOUNTY_FLOOR: '50.00000000', BOUNTY_CAP: '1000.00000000' },
 
-    // Full-node possession-proof / verified-validator tier (NODEPROOF.md). The
-    // regtest-only env/sidecar overrides are applied by index.js for regtest ONLY;
-    // mainnet/testnet keep these frozen defaults with no env surface.
+    // Full-node possession-proof / verified-validator tier; see
+    // xchain-documentation/protocol/actions/nodeproof.md for the challenge/verdict
+    // action and xchain-documentation/getting-started/running-a-validator.md for the
+    // tier walkthrough. REWARD_SHARE 0 and an empty GENESIS_VERIFIERS below are the
+    // deliberate pre-activation state: the tier ships inert until a later flag-day
+    // arms it, not a bug. The regtest-only env/sidecar overrides are applied by
+    // index.js for regtest ONLY; mainnet/testnet keep these frozen defaults with no
+    // env surface.
     FULLNODE: {
         CHALLENGE_INTERVAL_BLOCKS:    144,
         CONFIRM_DEPTH:                100,

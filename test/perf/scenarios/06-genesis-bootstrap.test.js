@@ -88,7 +88,7 @@ describe('06 Genesis Bootstrap (full-scale)', function () {
         process.env.XCHAIN_GENESIS_BLOCK = String(GENESIS_BLOCK);
         process.env.GENESIS_LEDGER_PATH  = LEDGER_PATH;
 
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
         await resetDecoderDb();
         await resetIndexerDb();

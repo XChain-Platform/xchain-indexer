@@ -40,6 +40,33 @@ describe('HubDbSync price-sync barrier @regression @tier3', function () {
         assert.strictEqual(sync.priceSyncHeight, 123);
     });
 
+    it('_refreshPriceSyncHeight issues two single-MAX queries, not one statement carrying both MAXes', async function () {
+        // The two-MAX-in-one-statement shape defeats MariaDB's index-only min/max
+        // optimization and forces a full scan of the unbounded price_snapshots table
+        // (ATTEST lane 2026-09-05). Pin the shape directly: exactly two doQuery calls,
+        // neither of which asks for both aggregates at once, each independently supplying
+        // its own half of the result (so this fails if a "fix" collapses back to one
+        // query and just reads both fields off its single row).
+        const doQuery = sinon.stub();
+        doQuery.onCall(0).resolves([{ h: 321 }]);
+        doQuery.onCall(1).resolves([{ ts: 9999 }]);
+        const hubDb = { doQuery };
+        const sync = new HubDbSync(hubDb, { hubUrl: 'http://hub.test' });
+
+        await sync._refreshPriceSyncHeight();
+
+        assert.strictEqual(doQuery.callCount, 2, 'expected exactly two doQuery calls, one per MAX');
+        for (let call of doQuery.getCalls()) {
+            const sql = call.args[0];
+            const hasRefBlockMax = /MAX\(\s*reference_block\s*\)/i.test(sql);
+            const hasTimestampMax = /MAX\(\s*block_timestamp\s*\)/i.test(sql);
+            assert.ok(!(hasRefBlockMax && hasTimestampMax),
+                'a single statement must not carry both MAX(reference_block) and MAX(block_timestamp): ' + sql);
+        }
+        assert.strictEqual(sync.priceSyncHeight, 321, 'height must come from the reference_block query');
+        assert.strictEqual(sync.priceSyncMaxTimestamp, 9999, 'max timestamp must come from the block_timestamp query');
+    });
+
     it('_refreshPriceSyncHeight leaves height untouched when the table is not ready', async function () {
         const { sync, doQuery } = makeSync(0);
         sync.priceSyncHeight = 50;

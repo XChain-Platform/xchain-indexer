@@ -111,7 +111,7 @@ describe('08 Fast Chain (DOGE cadence, 10 blocks/s)', function () {
         process.env.INDEXER_COIN    = COIN;
         process.env.INDEXER_NETWORK = NETWORK;
 
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
         await resetDecoderDb();
         await resetIndexerDb();

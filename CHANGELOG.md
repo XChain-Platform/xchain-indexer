@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- The price-sync height refresh now runs two single-MAX queries so each resolves from its own index instead of scanning every price_snapshots row.
+- An indexer whose isolated-vm binding cannot load now refuses at boot naming the binding and the platform mismatch, instead of parking at the first contract block.
 - A market between a token and the chain's native coin keeps its row across reorgs and carries the coin it settles in, so the market API can list and price it; a manual migration restores the rows earlier reorgs removed.
 
 ## [0.17.0] - 2026-09-10

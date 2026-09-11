@@ -143,7 +143,7 @@ describe('09 Fee Spike (mempool backlog drain)', function () {
         process.env.INDEXER_COIN    = COIN;
         process.env.INDEXER_NETWORK = NETWORK;
 
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
         await resetDecoderDb();
         await resetIndexerDb();

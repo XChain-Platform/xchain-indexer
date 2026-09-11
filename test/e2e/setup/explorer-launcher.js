@@ -32,14 +32,30 @@ const path    = require('path');
 process.env.npm_package_version = process.env.npm_package_version || '1.0.0-test';
 process.env.npm_package_name    = process.env.npm_package_name    || 'xchain-explorer';
 
-const XChainExplorer = require(path.resolve(__dirname, '../../../../xchain-explorer/src/XChainExplorer.js'));
-const { DB_HOST, DB_PORT, DB_USER, DB_PASS, DECODER_DB, INDEXER_DB } = require('../../integration/setup/db-connection');
+// Keep the whole module, never a destructure: DECODER_DB/INDEXER_DB are getters
+// that move when a test file claims its own schemas, and pulling them out here
+// would freeze the pre-claim base names into the explorer's config forever.
+const dbConnection = require('../../integration/setup/db-connection');
+
+// The explorer class is required lazily so this module can be loaded (and its
+// name resolution exercised) without the sibling xchain-explorer checkout.
+let XChainExplorer = null;
+function loadExplorerClass() {
+    if (!XChainExplorer) {
+        XChainExplorer = require(path.resolve(__dirname, '../../../../xchain-explorer/src/XChainExplorer.js'));
+    }
+    return XChainExplorer;
+}
 
 /**
  * Build a configInfo object that satisfies XChainExplorer and its db.js layer.
  * Only configures BTC regtest pointed at the test databases.
+ *
+ * Every database field is read off dbConnection at CALL time, so the explorer
+ * connects to whichever schemas the calling test file has claimed.
  */
 function buildTestConfigInfo() {
+    const { DB_HOST, DB_PORT, DB_USER, DB_PASS, DECODER_DB, INDEXER_DB } = dbConnection;
     const config = {
         COIN_NETWORKS:  { BTC: 'Bitcoin' },
         COIN_PREFIXES:  { mainnet: '', testnet: 'T', regtest: 'R' },
@@ -88,7 +104,8 @@ async function startExplorer() {
     app.use(cors({ origin: parseCorsOrigin(process.env.CORS_ORIGIN || 'http://localhost'), methods: ['GET', 'POST'] }));
 
     const testConfigInfo = buildTestConfigInfo();
-    const explorer = new XChainExplorer(app, testConfigInfo);
+    const ExplorerClass = loadExplorerClass();
+    const explorer = new ExplorerClass(app, testConfigInfo);
     await explorer.init();
 
     return new Promise((resolve, reject) => {
@@ -134,4 +151,4 @@ async function stopExplorer(server, explorer) {
     await new Promise((resolve) => server.close(resolve));
 }
 
-module.exports = { startExplorer, stopExplorer, closeExplorerPools, resetExplorerPools };
+module.exports = { startExplorer, stopExplorer, closeExplorerPools, resetExplorerPools, buildTestConfigInfo };

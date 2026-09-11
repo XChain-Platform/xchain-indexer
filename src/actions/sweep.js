@@ -464,6 +464,13 @@ class Sweep {
                 for(let { tick_id, tick } of settleTicks){
                     let amount = balances[tick_id];
 
+                    // A held balance can be exactly 0 (e.g. a prior sweep already moved it, or the
+                    // fee debit above reduced it to nothing). Nothing moves for that tick this run,
+                    // so write no debit/credit leg for it: a zero-amount credit is a fake row on
+                    // both the action page and the address Credits tab even though no
+                    // value changed hands.
+                    if(this.util.isNull(amount) || !this.util.bcgt(String(amount), '0')) continue;
+
                     debits.push([tick,  amount, data['SOURCE']]);
                     credits.push([tick, amount, data['DESTINATION']]);
 

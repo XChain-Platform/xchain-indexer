@@ -44,7 +44,7 @@ describe('E2E: Order Lifecycle @regression @tier2', function () {
     let seeder, indexer;
 
     before(async function () {
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
         ({ server, port, explorer } = await startExplorer());
         client = createClient(port);

@@ -119,7 +119,7 @@ describe('01 Baseline Throughput', function () {
     const reporter = new ReportGenerator();
 
     before(async function () {
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
     });
 

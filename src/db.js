@@ -133,6 +133,31 @@ function requireStakeWeight(weight, label){
     return String(weight);
 }
 
+// Compare form for two stake amounts that came from DIFFERENT producers (this node's own
+// SUM() and a hub's serialization of its own SUM()). Used ONLY by
+// verifyCapabilitySnapshotRow, never on a canonical/hashing path, where the byte form is
+// the value. A refusal has to mean "these are different numbers", not "these are the same
+// number spelled differently": '100' and '100.00' and '0100' are one weight, and refusing
+// a mirrored row over a trailing zero would blow a hole in the mirror for a formatting
+// difference. Returns null for anything non-numeric, which never equals anything (a
+// garbage amount is therefore a contradiction, not an accidental match).
+function normalizeStakeAmount(v){
+    if(v === null || v === undefined) return null;
+    let s = String(v).trim();
+    if(s === '' || !STAKE_WEIGHT_NUMERIC.test(s)) return null;
+    let neg = s[0] === '-';
+    if(s[0] === '+' || s[0] === '-') s = s.slice(1);
+    let dot  = s.indexOf('.');
+    let int  = dot === -1 ? s : s.slice(0, dot);
+    let frac = dot === -1 ? '' : s.slice(dot + 1);
+    int  = int.replace(/^0+/, '');
+    frac = frac.replace(/0+$/, '');
+    if(int === '') int = '0';
+    let out = int + (frac === '' ? '' : '.' + frac);
+    // -0 and 0 are the same weight.
+    return (neg && out !== '0') ? '-' + out : out;
+}
+
 // Tables whose highest-`id`-survivor dedupe rule is validated and safe to auto-apply at
 // startup (see dedupeForUniqueIndex: an upsert that degraded to plain INSERT appended a
 // fresh row per change, so the highest id is the live value). reconcileTableIndexes will
@@ -140,6 +165,17 @@ function requireStakeWeight(weight, label){
 // with blocking duplicates is left intact with a loud warning for a manual migration, so a
 // mis-declared UNIQUE index can never silently destroy rows on an unvalidated table.
 const AUTO_DEDUP_TABLES = new Set(['balances']);
+
+// Accumulate one undeclared-shape finding for the verifyTables summary. `store` is the
+// Map verifyTables hangs off the instance for the length of a run; it is absent outside
+// one (unit harnesses call the reconcilers directly), and then this is a no-op, so the
+// per-table warnings never depend on a collector existing.
+function recordShapeDrift(store, table, kind, items){
+    if(!store || !items || !items.length) return;
+    const entry = store.get(table) || { columns: [], indexes: [] };
+    entry[kind] = entry[kind].concat(items);
+    store.set(table, entry);
+}
 
 // Watchdog-fence context (M-16). The block loop runs each block's processing inside
 // txEpochStore.run(epoch, ...) so every DB call it makes carries the transaction epoch
@@ -475,6 +511,10 @@ class Database {
         console.log('Verifying database and tables...');
         let checked = 0;
         let created = 0;
+        // Collector for the undeclared-shape findings the two reconcilers raise, so the
+        // boot log carries ONE comparable summary per DB. Reading that line off all nine
+        // fleet indexers is the drift comparison, in place of a hand audit.
+        this.schemaShapeDrift = new Map();
         // Loop through SQL files
         for (file of files){
             if(file.indexOf('.sql') !== -1){
@@ -505,7 +545,28 @@ class Database {
         }
         await db.release();
         console.log('Database and tables verified (' + checked + ' tables, ' + created + ' created).');
+        console.log(this.schemaShapeSummary());
         return true;
+    }
+
+    // One line (plus a per-table breakdown when there is one) naming everything live that
+    // no SQL source declares. Printed at the end of verifyTables so the fleet-wide
+    // "does every indexer DB carry the same shape?" question is answered by comparing one
+    // boot line per DB rather than by a hand schema diff across nine databases.
+    schemaShapeSummary(){
+        const store = this.schemaShapeDrift;
+        if(!store || !store.size) return 'Schema shape: no undeclared columns or indexes.';
+        const lines = [];
+        let columns = 0;
+        let indexes = 0;
+        for(const [table, entry] of store){
+            const parts = [];
+            if(entry.columns.length){ columns += entry.columns.length; parts.push('columns ' + entry.columns.join(', ')); }
+            if(entry.indexes.length){ indexes += entry.indexes.length; parts.push('indexes ' + entry.indexes.map(i => i.name).join(', ')); }
+            lines.push('  ' + table + ': ' + parts.join('; '));
+        }
+        return 'SCHEMA SHAPE DRIFT: ' + store.size + ' table(s) carry ' + columns + ' undeclared column(s) and ' +
+               indexes + ' undeclared index(es); this DB does not match a fresh install of this release.\n' + lines.join('\n');
     }
 
     // Apply tracked, ordered schema migrations from src/sql/migrations/ - the changes
@@ -1158,6 +1219,96 @@ class Database {
         return cols.length > 0 ? cols : null;
     }
 
+    // Parse the index declarations that live INSIDE the CREATE TABLE block: inline
+    // `PRIMARY KEY (...)` / `KEY` / `UNIQUE KEY` / `FULLTEXT KEY` clauses, plus the
+    // column-level `PRIMARY KEY` and `UNIQUE` attributes the engine turns into an index
+    // of its own. parseExpectedIndexes deliberately ignores all of these (they are
+    // created WITH the table, so there is nothing for the reconciler to re-add), but the
+    // undeclared-index detector below needs them: without them every inline KEY on every
+    // table would read as an orphan and the warning would be pure noise.
+    //
+    // Returns [{ name, columns:[...] }] with `name` null for an unnamed inline key (the
+    // engine derives its live name from the first column, so the detector falls back to
+    // matching such a key by column set).
+    parseInlineIndexes(sqlData, table){
+        sqlData = this.stripSqlLineComments(sqlData);
+        const m = sqlData.match(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?\S+\s*\(([\s\S]+?)\)\s*ENGINE/i);
+        if(!m) return [];
+        const cols = (list) => String(list).split(',')
+            .map(c => c.trim().replace(/`/g, '').split(/\s+/)[0].replace(/\(\d+\)$/, ''))
+            .filter(Boolean);
+        const out = [];
+        // Same top-level-comma split parseExpectedColumns uses, so a type's own parens
+        // (VARCHAR(250), DECIMAL(30,8)) do not shred a declaration into fragments.
+        for(let raw of m[1].split(/,(?![^()]*\))/g)){
+            const line = raw.replace(/--[^\n\r]*/g, '').trim();
+            if(!line) continue;
+            let k;
+            if((k = /^PRIMARY\s+KEY\s*\(([^)]*)\)/i.exec(line))){
+                out.push({ name: 'PRIMARY', columns: cols(k[1]) });
+            } else if((k = /^(?:UNIQUE|FULLTEXT|SPATIAL)?\s*(?:KEY|INDEX)\s+`?(\w+)`?\s*\(([^)]*)\)/i.exec(line))){
+                out.push({ name: k[1], columns: cols(k[2]) });
+            } else if((k = /^(?:UNIQUE|FULLTEXT|SPATIAL)?\s*(?:KEY|INDEX)\s*\(([^)]*)\)/i.exec(line))){
+                out.push({ name: null, columns: cols(k[1]) });
+            } else if(/^(?:CHECK|CONSTRAINT|FOREIGN)\b/i.test(line)){
+                continue;
+            } else {
+                // A column definition. Column-level PRIMARY KEY / UNIQUE each create an
+                // index the CREATE TABLE never names as a key line.
+                const name = line.split(/\s+/)[0].replace(/`/g, '');
+                if(!name) continue;
+                if(/\bPRIMARY\s+KEY\b/i.test(line)) out.push({ name: 'PRIMARY',  columns: [name] });
+                else if(/\bUNIQUE\b/i.test(line))   out.push({ name: name,       columns: [name] });
+            }
+        }
+        return out;
+    }
+
+    // Live columns that NO SQL source declares - the other half of drift detection.
+    //
+    // alterTableForDrift converges the source onto the DB (adds what is declared and
+    // missing) but has never looked the other way, so a column that exists only live is
+    // invisible on every startup: a retired column whose declaration was deleted, a
+    // mirror twin from a superseded wire, or one an operator added by hand. DOGE regtest
+    // carried 8 such signed mirror-twin columns plus a pre-fence checkpoint key - a shape
+    // no other DB in the fleet had - and nothing reported it until a manual migration
+    // backlog converged it by hand.
+    //
+    // Detection only, never a DROP: dropping a column we did not create destroys data
+    // unattended, and this is the same never-DROP posture reconcileTableIndexes already
+    // takes on its name-collision branch. Returns the live column names, in live order.
+    undeclaredLiveColumns(expected, live){
+        const declared = new Set((expected || []).map(c => String(c.name).toLowerCase()));
+        return (live || []).map(c => c.COLUMN_NAME).filter(n => !declared.has(String(n).toLowerCase()));
+    }
+
+    // Live indexes that NO SQL source declares - the index half of the same gap. An index
+    // counts as declared when either its NAME or its ordered COLUMN SET appears in the
+    // definition (standalone CREATE INDEX or an inline key), because both forms are
+    // legitimate and a renamed-but-equivalent index is the shape the reconciler already
+    // treats as present. The column-set fallback is also what covers an unnamed inline
+    // key, whose live name the engine invents.
+    //
+    // The pre-fence state_checkpoints key is the canonical case: the definition moved from
+    // (chain, network, block_index, checkpoint_seq) to the narrower (chain, network,
+    // checkpoint_seq), the reconciler added the new one, and the old wider UNIQUE key
+    // stayed live forever because nothing ever looked for indexes the source did not name.
+    undeclaredLiveIndexes(declared, byName){
+        const names = new Set();
+        const keys  = new Set();
+        for(const d of declared || []){
+            if(d.name) names.add(String(d.name).toLowerCase());
+            if(d.columns && d.columns.length) keys.add(d.columns.map(c => String(c).toLowerCase()).join(','));
+        }
+        const out = [];
+        for(const [name, info] of byName){
+            if(names.has(String(name).toLowerCase())) continue;
+            if(keys.has(info.cols.join(','))) continue;
+            out.push({ name, unique: !!info.unique, fulltext: !!info.fulltext, columns: info.cols.slice() });
+        }
+        return out;
+    }
+
     // Detect schema drift between the live table and its SQL source, and fix
     // it by ALTER. Two kinds of drift are handled:
     //   1. Missing columns - a column declared in the SQL source but absent
@@ -1289,6 +1440,17 @@ class Database {
                 await db.query('ALTER TABLE `' + table + '` MODIFY `' + exp.name + '` ' + cur.COLUMN_TYPE + collate + ' NULL');
             }
         }
+        // The other direction: columns the live table carries that the source declares
+        // nowhere. Never healed here (a DROP would destroy data unattended), but reported
+        // so a DB whose shape has diverged from a fresh install of this release says so on
+        // every boot instead of being found by a hand comparison across the fleet.
+        const undeclared = this.undeclaredLiveColumns(expected, live);
+        if(undeclared.length){
+            console.warn('Schema shape drift on ' + table + ': live column(s) ' + undeclared.join(', ') +
+                ' are declared by NO SQL source. Not auto-healed (never DROP a column we did not create); ' +
+                'converge with a dated migration via node src/migrate.js, or restore the declaration to ' + file + '.');
+            recordShapeDrift(this.schemaShapeDrift, table, 'columns', undeclared);
+        }
     }
 
     // Parse standalone `CREATE [UNIQUE] INDEX <name> ON <table> (<cols>)` statements
@@ -1334,7 +1496,9 @@ class Database {
             const data     = fs.readFileSync(dir + '/' + file, "utf8");
             const table    = file.substring(0, file.indexOf('.sql'));
             const expected = this.parseExpectedIndexes(data, table);
-            if(!expected.length) return;
+            // The live read happens even with nothing to re-add: the undeclared-index
+            // detector at the bottom runs on every table, and a table whose keys are all
+            // inline declares no standalone CREATE INDEX at all.
 
             // Live indexes -> map keyed by ordered column-set: "c1,c2" => {unique}
             const rows = await db.query(
@@ -1437,6 +1601,21 @@ class Database {
                         console.log('  ' + table + '.' + idx.name + ' still failing after dedupe - leaving as-is: ' + (e2 && e2.message));
                     }
                 }
+            }
+
+            // Indexes present live that no declaration reaches. Matched against BOTH
+            // declaration forms (standalone CREATE INDEX and the inline keys inside the
+            // CREATE TABLE block) so only a genuine orphan is reported. Detection only -
+            // the never-DROP rule that governs the name-collision branch above governs
+            // this too; converging is a dated migration's job.
+            const undeclared = this.undeclaredLiveIndexes(
+                expected.concat(this.parseInlineIndexes(data, table)), byName);
+            if(undeclared.length){
+                console.warn('Schema shape drift on ' + table + ': live index(es) ' +
+                    undeclared.map(i => (i.unique ? 'UNIQUE ' : i.fulltext ? 'FULLTEXT ' : '') + i.name + ' (' + i.columns.join(',') + ')').join('; ') +
+                    ' are declared by NO SQL source. Not auto-healed (never DROP an index we did not create); ' +
+                    'converge with a dated migration via node src/migrate.js, or restore the declaration to ' + file + '.');
+                recordShapeDrift(this.schemaShapeDrift, table, 'indexes', undeclared);
             }
         } catch(e){
             // Never abort startup over index reconciliation.
@@ -5606,9 +5785,17 @@ class Database {
                         amount=?`;
             args = [memo_id, status_id, action_index, tick_id, destination_id, amount];
         } else {
-            // INSERT record
-            query = `INSERT INTO sends (tick_id, destination_id, amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
-            args = [tick_id, destination_id, amount, memo_id, status_id, action_index];
+            // INSERT record, stamping this leg's position on the wire.
+            //
+            // The action loop settles the legs of a multi-send in broadcast order and
+            // calls this method once per leg, so "the number of legs already stored for
+            // this action" IS this leg's 0-based wire position. It is computed inside the
+            // statement (COALESCE(MAX(leg_ordinal) + 1, 0)) rather than read first and
+            // bound, so the read and the write cannot be separated. The UPDATE branch
+            // above deliberately never touches leg_ordinal: a re-parse rewrites a leg's
+            // VALUES, it does not move the leg on the wire.
+            query = `INSERT INTO sends (tick_id, destination_id, amount, memo_id, status_id, action_index, leg_ordinal) SELECT ?, ?, ?, ?, ?, ?, COALESCE(MAX(leg_ordinal) + 1, 0) FROM sends WHERE action_index=?`;
+            args = [tick_id, destination_id, amount, memo_id, status_id, action_index, action_index];
         }
         results = await this.doQuery(query, args);
     }
@@ -5923,9 +6110,12 @@ class Database {
                         memo_id<=>?`;
             args  = [amount, status_id, action_index, tick_id, memo_id];
         } else {
-            // INSERT record
-            query = `INSERT INTO destroys (tick_id, amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?)`;
-            args  = [tick_id, amount, memo_id, status_id, action_index];
+            // INSERT record, stamping this leg's position on the wire. Same rule as
+            // createSend: the ordinal is the count of legs already stored for this
+            // action, computed inside the statement, and the UPDATE branch leaves it
+            // alone so a re-parse cannot reorder an already-indexed action.
+            query = `INSERT INTO destroys (tick_id, amount, memo_id, status_id, action_index, leg_ordinal) SELECT ?, ?, ?, ?, ?, COALESCE(MAX(leg_ordinal) + 1, 0) FROM destroys WHERE action_index=?`;
+            args  = [tick_id, amount, memo_id, status_id, action_index, action_index];
         }
         results = await this.doQuery(query, args);
     }
@@ -9862,6 +10052,10 @@ class Database {
                         LIMIT 1`;
             }
             // DESTROY action
+            //
+            // A multi-destroy has one row per leg under this action_index, and this
+            // summary shows one of them: ORDER BY leg_ordinal makes that "the first leg
+            // as broadcast" instead of whichever row the engine happened to hand back.
             if(type=='DESTROY'){
                 sql = `SELECT
                             a2.action,
@@ -9886,8 +10080,11 @@ class Database {
                             INNER JOIN index_statuses     s1 ON (s1.id=d1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                             INNER JOIN index_tickers      t3 ON (t3.id=d1.tick_id)
-                        WHERE 
+                        WHERE
                             d1.action_index=?
+                        ORDER BY
+                            d1.action_index ASC,
+                            d1.leg_ordinal ASC
                         LIMIT 1`;
             }
             // DISPENSER action
@@ -10226,6 +10423,8 @@ class Database {
             }
             // SEND action
             // TODO: Revisit this code and optimize it to support Multi-sends (right now shows first send status instead of every send status as it should)
+            // Until then, "first" is at least well defined: ORDER BY leg_ordinal pins the
+            // returned leg to the first one as broadcast rather than an engine-arbitrary row.
             if(type=='SEND'){
                 sql = `SELECT
                             a2.action,
@@ -10252,9 +10451,12 @@ class Database {
                             INNER JOIN index_statuses     s2 ON (s2.id=s1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                             INNER JOIN index_tickers      t3 ON (t3.id=s1.tick_id)
-                        WHERE 
+                        WHERE
                             s1.action_index=?
-                        LIMIT 1`;                  
+                        ORDER BY
+                            s1.action_index ASC,
+                            s1.leg_ordinal ASC
+                        LIMIT 1`;
             }
             // SLEEP action
             if(type=='SLEEP'){
@@ -12273,11 +12475,12 @@ class Database {
     }
 
     // Create record in `reward_claims` table
-    // Create a validator reward record. Two writers:
-    //   - deterministic block processing (PRICE v0 oracle_round split, ATTEST fee
-    //     settlement) - replayable on reindex by construction
-    //   - the hub's pushvalidatorrewards RPC (anchor publish rewards) - restored
-    //     on reindex from the ANCHOR archive via recovery.js
+    // Create a validator reward record. ONE writer since the PUSH-ANCHOR endgame
+    // retired the hub's pushvalidatorrewards RPC: deterministic block processing
+    // (PRICE v0 oracle_round split, ATTEST fee settlement, and the anchor/archive
+    // publish rewards derived from the mirrored XANCPUB attestation), replayable on
+    // reindex by construction and restored from the ANCHOR archive by recovery.js.
+    // No RPC handler reaches this any more; a caller that does is a forge vector.
     // pubkeyHex: 64-char hex Ed25519 signing pubkey of the validator that earned the reward
     // roundReference: round number (oracle_round) or attestation index
     // rewardType: 'oracle_round', 'attest_fee', 'attest_bcast', 'anchor_<chain>', 'anchor_archive'
@@ -12731,11 +12934,12 @@ class Database {
     // API-path view of this DB instance: same methods, but every doQuery()
     // draws an independent pooled connection (_poolQuery) instead of routing
     // through getConnection(), which returns the open block's
-    // transactionConnection while a block is processing. Federation RPC
-    // handlers that WRITE (pushvalidatorrewards) must use this view: a push
-    // landing mid-block would otherwise join the block's ACID transaction and
-    // be rolled back on a reorg/throw AFTER the API already acked it (the hub
-    // never retries), and its statements would share the block's physical
+    // transactionConnection while a block is processing. Any federation RPC
+    // handler that WRITES must use this view. There is none today (the last one,
+    // pushvalidatorrewards, was retired), and the rule is what made that safe: a
+    // write landing mid-block would otherwise join the block's ACID transaction
+    // and be rolled back on a reorg/throw AFTER the API already acked it (the
+    // caller never retries), and its statements would share the block's physical
     // connection with commitTransaction()'s release. The view also sees only
     // COMMITTED state, so stake-source resolution never reads rows the block
     // may still roll back. Do NOT use it for anything that opens its own
@@ -13498,6 +13702,92 @@ class Database {
             // map with no stake and quietly shrink the quorum denominator S.
             weight: requireStakeWeight(r.weight, 'getCapabilitySnapshotWeights(' + capability + ')')
         }));
+    }
+
+    // Re-derive ONE hub-mirrored capability_snapshots row against this node's OWN
+    // authoritative stakes at the row's snapshot_block, and say whether the hub's
+    // claim contradicts what this chain can prove.
+    //
+    // capability_snapshots is the only mirrored table with no authentication on the
+    // wire: rows arrive over a bare SELECT and land via INSERT IGNORE, and they are the
+    // verification authority every off-BTC resolver reads (cross_chain, oracle_publish,
+    // price, attestation). The full remedy is an SMT membership proof against the BTC
+    // state_checkpoints stakes_root, which needs a new hub endpoint, a trust anchor, an
+    // activation height and a grandfathering watermark. This is the FIRST step of that
+    // ladder and nothing more: falsifiability, not coverage.
+    //
+    // Its honest limit, stated so no caller mistakes it for the proof: it protects BTC
+    // ONLY, because BTC is the one chain whose capability stakes are local and therefore
+    // the one chain that can re-derive a row without trusting anyone. It is also the one
+    // chain that does NOT read the mirror to resolve a capability (usesCapabilitySnapshot
+    // is false on BTC). What it buys is that a hub serving FORGED validator sets is
+    // caught on the BTC indexers rather than being silently mirrored everywhere.
+    //
+    // Verdict shape is anchor_proof_client.js's, deliberately:
+    //   'verified' - the row's (signing_pubkey, source, amount) matches this node's own
+    //                effective-signer set and source aggregate at snapshot_block.
+    //   'refused'  - this node CAN re-derive that block and the row contradicts it.
+    //   'unknown'  - this node cannot judge (block not reached, capability not local,
+    //                set truncated, read failed). The caller applies the row as before:
+    //                an unjudgeable row must never become a mirror hole.
+    //
+    // The local set is re-derived with minStake '0' ON PURPOSE. The hub filters its rows
+    // by its OWN authoritative MIN_STAKE, which can legitimately differ from this node's
+    // local floor, so re-deriving at the local floor would refuse honest rows the moment
+    // the two drifted. At '0' the local set is the widest superset (every source with any
+    // active stake, every effective key of it), and per-source weight is the source
+    // aggregate, which no threshold changes. So this check asks only "could this key, under
+    // this source, carry this weight here?" - a contradiction is real, and the rows the hub
+    // legitimately withheld simply are not examined. Completeness (a row the hub SHOULD
+    // have served and did not) is NOT checkable without knowing the hub's MIN_STAKE and is
+    // deliberately out of scope for this step.
+    async verifyCapabilitySnapshotRow(row){
+        if(!row) return { verdict: 'unknown', reason: 'no row' };
+        let capability = row.capability == null ? '' : String(row.capability);
+        // A chain that RESOLVES this capability from the mirror has no local stakes to
+        // re-derive from; asking it would compare the mirror against itself.
+        if(usesCapabilitySnapshot(this.config, capability))
+            return { verdict: 'unknown', reason: 'this chain resolves ' + capability + ' from the mirror' };
+        if(!this.isCapabilityConfigured(capability))
+            return { verdict: 'unknown', reason: 'capability ' + capability + ' is not configured on this node' };
+        let block = Number(row.snapshot_block);
+        if(!Number.isFinite(block) || block < 0 || Math.floor(block) !== block)
+            return { verdict: 'unknown', reason: 'unusable snapshot_block ' + String(row.snapshot_block).slice(0, 32) };
+        // Availability fence. Below our own tip the stake history at `block` is whatever
+        // we have parsed so far, which for an unreached block is nothing - refusing there
+        // would reject every honest row served ahead of our sync.
+        let tip = await this.getLatestBlockIndex();
+        if(!(Number(tip) >= block))
+            return { verdict: 'unknown', reason: 'local tip ' + tip + ' has not reached snapshot_block ' + block };
+        let local;
+        try {
+            local = await this.getStakeWeightsByCapability(capability, block, '0');
+        } catch(e) {
+            return { verdict: 'unknown', reason: 'local stake re-derivation failed: ' + (e && e.message ? e.message : e) };
+        }
+        if(!Array.isArray(local))
+            return { verdict: 'unknown', reason: 'local stake re-derivation returned no set' };
+        // A truncated set is a PARTIAL set: a row missing from it may be missing only
+        // because the cap cut it off, so no refusal can be drawn from this block.
+        if(local.truncated)
+            return { verdict: 'unknown', reason: 'local stake set truncated at block ' + block };
+        let pubkey = String(row.signing_pubkey == null ? '' : row.signing_pubkey).toLowerCase();
+        let source = String(row.source == null ? '' : row.source).toLowerCase();
+        let match = null;
+        for(let r of local){
+            if(String(r.pubkey).toLowerCase() === pubkey &&
+               String(r.source == null ? '' : r.source).toLowerCase() === source){ match = r; break; }
+        }
+        if(match === null)
+            return { verdict: 'refused',
+                     reason: 'no local stake makes ' + pubkey.slice(0, 16) + ' an effective signer for source ' +
+                             source.slice(0, 24) + ' at block ' + block };
+        if(normalizeStakeAmount(match.weight) !== normalizeStakeAmount(row.amount))
+            return { verdict: 'refused',
+                     reason: 'weight for ' + pubkey.slice(0, 16) + '/' + source.slice(0, 24) + ' at block ' + block +
+                             ' is locally ' + String(match.weight).slice(0, 32) + ', hub served ' +
+                             String(row.amount).slice(0, 32) };
+        return { verdict: 'verified' };
     }
 
     // Whether `capability` is present in this indexer's STAKING.CAPABILITIES config.
@@ -17703,6 +17993,14 @@ Database.MIGRATION_LEDGER_RENAMES = {
     'add_balances_composite_index.sql':                 '2026-05-30-balances-composite-index.sql',
     'unique_full_column_index_addresses.sql':           '2026-06-03-unique-full-column-index-addresses.sql',
     'add_cross_chain_matches_partial_fill_columns.sql': '2026-06-09-cross-chain-matches-partial-fill-columns.sql',
+    // v0.17.0 regtest-first rehearsal (2026-09-11): both files sorted before an
+    // already-applied migration (2026-09-08-deploy-deferred-assembly.sql), so they
+    // were renamed forward to 2026-09-11- to restore lexical=chronological order.
+    // The fleet already recorded them applied under their 2026-09-08- names, so
+    // without these entries the rename alone makes both look pending again and the
+    // auto path re-applies an ADD COLUMN that is already there.
+    '2026-09-08-contract-meta-columns.sql':      '2026-09-11-contract-meta-columns.sql',
+    '2026-09-08-cross-chain-btc-chain-id.sql':   '2026-09-11-cross-chain-btc-chain-id.sql',
 };
 
 // Pure planner for the one-time ledger rename heal. Given the names already recorded

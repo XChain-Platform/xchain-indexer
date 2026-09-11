@@ -212,10 +212,161 @@ const vote               = require('./actions/vote.js');
 
 // VM runtime
 let XChainVM;
+let vmLoadError = null;
 try {
     XChainVM = require('xchain-vm');
 } catch(e) {
-    console.log('WARNING: xchain-vm not available; DEPLOY/EXECUTE will not run contract code', e);
+    // Held, not logged-and-forgotten: the constructor turns it into a boot refusal
+    // (assertVmRuntimeLoadable) so the loader's own text reaches the operator once,
+    // attached to the reason the process is exiting.
+    vmLoadError = e;
+}
+
+// Object-format sniff for a native binding, from its first bytes. Used only to NAME the
+// mismatch in the boot refusal: a binding built for another OS is the recurring cause
+// (an NFS-shared node_modules built on Linux, mounted on a Darwin host), and "is ELF
+// (Linux), host is darwin" is the sentence that ends the investigation. Pure so the
+// refusal text is testable without a foreign binding on disk.
+function bindingObjectFormat(head){
+    if(!head || head.length < 4)
+        return null;
+    if(head[0] === 0x7f && head[1] === 0x45 && head[2] === 0x4c && head[3] === 0x46)
+        return 'ELF (Linux)';
+    if(head[0] === 0x4d && head[1] === 0x5a)
+        return 'PE (Windows)';
+    const be = (head[0] << 24 >>> 0) + (head[1] << 16) + (head[2] << 8) + head[3];
+    if(be === 0xfeedface || be === 0xfeedfacf || be === 0xcefaedfe || be === 0xcffaedfe)
+        return 'Mach-O (macOS)';
+    if(be === 0xcafebabe || be === 0xbebafeca)
+        return 'Mach-O universal (macOS)';
+    return null;
+}
+
+// The .node path a loader error names, when it names one (dlopen errors do).
+function bindingPathFromError(loadError){
+    const msg = loadError && loadError.message ? String(loadError.message) : '';
+    const m   = /([^\s'"()]+\.node)/.exec(msg);
+    return m ? m[1] : null;
+}
+
+// Everything the refusal needs about THIS host and the binding it could not load.
+// Best-effort and never throwing: a diagnostic must not replace the failure it describes.
+//
+// The loader error's own path wins over anything resolved here. More than one isolated-vm
+// copy can sit in a tree (this indexer's node_modules and xchain-vm's own), only one of
+// which the failed load actually touched, so sniffing a resolved copy can name a binding
+// that had nothing to do with the failure. Resolution is the fallback for the case where
+// the error carries no path, and it is anchored on xchain-vm's own tree first because that
+// is the package whose require() failed.
+function collectVmRuntimeEnv(loadError){
+    const env = {
+        platform:    process.platform,
+        arch:        process.arch,
+        nodeVersion: process.version,
+        modules:     process.versions.modules,
+        bindingPath: null,
+        bindingFormat: null
+    };
+    const fs   = require('fs');
+    const path = require('path');
+
+    const sniff = (candidate) => {
+        try {
+            if(!fs.existsSync(candidate))
+                return false;
+            env.bindingPath = candidate;
+            const fd   = fs.openSync(candidate, 'r');
+            const head = Buffer.alloc(4);
+            try { fs.readSync(fd, head, 0, 4, 0); } finally { fs.closeSync(fd); }
+            env.bindingFormat = bindingObjectFormat(head);
+            return true;
+        } catch(e) {
+            return false;
+        }
+    };
+
+    const named = bindingPathFromError(loadError);
+    if(named && sniff(named))
+        return env;
+
+    try {
+        const roots = [];
+        try {
+            roots.push(path.dirname(require.resolve('xchain-vm/package.json')));
+        } catch(e) {
+            // Not installed at all: fall through to this module's own resolution paths.
+        }
+        for(const from of roots.concat([__dirname])){
+            let ivRoot;
+            try { ivRoot = path.dirname(require.resolve('isolated-vm/package.json', { paths: [from] })); }
+            catch(e) { continue; }
+            const found = ['out/isolated_vm.node', 'build/Release/isolated_vm.node']
+                .some((rel) => sniff(path.join(ivRoot, rel)));
+            if(found)
+                break;
+        }
+    } catch(e) {
+        // No isolated-vm on disk at all, or an unreadable one: the loader error still
+        // carries the primary fact, and the message degrades to host details only.
+    }
+    return env;
+}
+
+// The boot-refusal text. Names WHAT could not load, on WHICH host, and (when the binding
+// is on disk) the platform mismatch itself, then the remedy.
+function describeVmLoadFailure(loadError, env){
+    const e    = loadError || {};
+    const code = e.code ? String(e.code) : 'unknown';
+    const msg  = String(e.message || e).split('\n')[0];
+    const host = `host ${env.platform}-${env.arch}, Node ${env.nodeVersion} (modules ABI ${env.modules})`;
+
+    let cause;
+    if(code === 'MODULE_NOT_FOUND'){
+        cause = 'the xchain-vm package is not installed for this indexer; run npm install here';
+    } else if(env.bindingPath && env.bindingFormat && !env.bindingFormat.startsWith(hostObjectFormatPrefix(env.platform))){
+        cause = `the isolated-vm binding ${env.bindingPath} is ${env.bindingFormat}, which cannot load on ` +
+            `${env.platform}-${env.arch}: node_modules was built for another platform (a shared or NFS-mounted ` +
+            'node_modules is the usual cause). Reinstall this indexer\'s dependencies on this host';
+    } else if(env.bindingPath){
+        cause = `the isolated-vm binding ${env.bindingPath} exists but did not load on ${env.platform}-${env.arch}; ` +
+            'rebuild or reinstall it on this host';
+    } else {
+        cause = 'the isolated-vm binding could not be found or loaded; reinstall this indexer\'s dependencies on this host';
+    }
+
+    return 'VM RUNTIME UNAVAILABLE: xchain-vm could not be loaded, so this indexer can never execute a ' +
+        'contract block. REFUSING TO START rather than serving a height that stops at the first contract ' +
+        `block. ${host}. Cause: ${cause}. Loader error (${code}): ${msg}`;
+}
+
+// The object format a binding must have to load on this platform.
+function hostObjectFormatPrefix(platform){
+    if(platform === 'darwin') return 'Mach-O';
+    if(platform === 'win32')  return 'PE';
+    return 'ELF';
+}
+
+// Boot gate: an indexer that cannot load the VM must refuse AT BOOT, not park later.
+//
+// Warning at require() time and continuing with this.vm = null is not enough. The process
+// then starts, answers health and RPC normally, and only stops at the FIRST CONTRACT BLOCK,
+// where deploy/execute raise EXECUTOR_UNAVAILABLE and the block loop halts (stallReason
+// vm_executor_unavailable) rather than fabricate a result and fork. That halt is correct;
+// reaching it is not. The park height is data-dependent (the first contract block, not the
+// tip), so the node can serve a stale height hundreds of blocks behind the decoder before
+// anything looks wrong, and the visible symptom (503 at a frozen height) names neither the
+// binding nor the platform mismatch that caused it. Measured 2026-09-04: indexer 0 answered
+// 503 at height 593 against a decoder at 4006, with a Linux-built isolated_vm.node on a
+// Darwin host.
+//
+// Refusing here aborts Actions construction, so api.js traps the start() rejection and exits
+// 1 with the mismatch named, the same fail-closed shape as assertConsensusRuntime. No bypass
+// flag: an indexer without a VM cannot validate this chain at all, so there is no workflow an
+// override would serve.
+function assertVmRuntimeLoadable(vmModule, loadError, env){
+    if(vmModule)
+        return;
+    throw new Error(describeVmLoadFailure(loadError, env || collectVmRuntimeEnv(loadError)));
 }
 
 // Consensus-runtime gate: refuse to run contracts on an off-pin JS engine.
@@ -336,45 +487,42 @@ class Actions {
         this.actionSweep           = new sweep(this);
         this.actionUnknown         = new unknown(this);
 
-        // VM runtime
-        if(XChainVM){
-            this.vm = new XChainVM({
-                // Run every contract in a forked worker process. A contract that
-                // aborts V8 (process-wide SIGABRT, e.g. a bulk allocation that
-                // bypasses the isolate memory limit) then crashes only the worker,
-                // never this indexer; the executor returns a deterministic
-                // resource-failure result (gasUsed = ceiling) and respawns, so the
-                // block still advances. REQUIRES the bundled xchain-vm to support
-                // process isolation (process-executor.js / vm-worker.js).
-                execution:   'subprocess',
-                gasSchedule: this.config['GAS_SCHEDULE'],
-                gasCeiling:  1000000,
-                limits: {
-                    // NOT the binding wall-clock constraint: at/after the VM's flag-day every
-                    // node runs one execution against the consensus constant
-                    // CONSENSUS_MAX_WALL_MS (xchain-vm src/consensus-wall-clock.js) whatever
-                    // this says, because a per-node budget made status and gasUsed (fee
-                    // debit, contract checkpoint) an operator setting. Kept equal to the
-                    // constant so this indexer's ungated/legacy-replay path behaves the same
-                    // as its gated one; changing it moves neither.
-                    maxCpuTimeMs:      30000,
-                    maxMemory:         8,
-                    maxEmissions:      50,
-                    maxStateKeys:      10000,
-                    maxStateValueSize: 65536,
-                    // Canonical MAX_CODE_SIZE: single-sourced from deploy.js (which
-                    // pins xchain-documentation/protocol/constants.js) so the isolate
-                    // limit can never drift from the DEPLOY-time byte-length check.
-                    maxCodeSize:       deploy.MAX_CODE_SIZE
-                }
-            });
-        } else {
-            this.vm = null;
-        }
+        // VM runtime: refuse at boot when it could not load (see assertVmRuntimeLoadable).
+        assertVmRuntimeLoadable(XChainVM, vmLoadError);
+
+        this.vm = new XChainVM({
+            // Run every contract in a forked worker process. A contract that
+            // aborts V8 (process-wide SIGABRT, e.g. a bulk allocation that
+            // bypasses the isolate memory limit) then crashes only the worker,
+            // never this indexer; the executor returns a deterministic
+            // resource-failure result (gasUsed = ceiling) and respawns, so the
+            // block still advances. REQUIRES the bundled xchain-vm to support
+            // process isolation (process-executor.js / vm-worker.js).
+            execution:   'subprocess',
+            gasSchedule: this.config['GAS_SCHEDULE'],
+            gasCeiling:  1000000,
+            limits: {
+                // NOT the binding wall-clock constraint: at/after the VM's flag-day every
+                // node runs one execution against the consensus constant
+                // CONSENSUS_MAX_WALL_MS (xchain-vm src/consensus-wall-clock.js) whatever
+                // this says, because a per-node budget made status and gasUsed (fee
+                // debit, contract checkpoint) an operator setting. Kept equal to the
+                // constant so this indexer's ungated/legacy-replay path behaves the same
+                // as its gated one; changing it moves neither.
+                maxCpuTimeMs:      30000,
+                maxMemory:         8,
+                maxEmissions:      50,
+                maxStateKeys:      10000,
+                maxStateValueSize: 65536,
+                // Canonical MAX_CODE_SIZE: single-sourced from deploy.js (which
+                // pins xchain-documentation/protocol/constants.js) so the isolate
+                // limit can never drift from the DEPLOY-time byte-length check.
+                maxCodeSize:       deploy.MAX_CODE_SIZE
+            }
+        });
 
         // Consensus-runtime gate: fail CLOSED on an off-pin engine.
-        if(this.vm)
-            assertConsensusRuntime(XChainVM);
+        assertConsensusRuntime(XChainVM);
 
         // VM action instances
         this.actionDeploy           = new deploy(this);
@@ -1703,3 +1851,10 @@ module.exports.getProbeVmReachingActions      = () => new Set(PROBE_VM_REACHING_
 // Pure consensus-runtime gate, exported so its fail-closed contract is unit-testable
 // without a real off-pin engine.
 module.exports.assertConsensusRuntime = assertConsensusRuntime;
+// Pure VM-load boot gate and its message builder, exported so the refusal (and the text that
+// names the binding/platform mismatch) is testable without a foreign binding on disk.
+module.exports.assertVmRuntimeLoadable = assertVmRuntimeLoadable;
+module.exports.describeVmLoadFailure   = describeVmLoadFailure;
+module.exports.bindingObjectFormat     = bindingObjectFormat;
+module.exports.bindingPathFromError    = bindingPathFromError;
+module.exports.collectVmRuntimeEnv     = collectVmRuntimeEnv;

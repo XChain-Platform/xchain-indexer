@@ -421,6 +421,29 @@ const FULL_REPAGE_TABLES = ['capability_snapshots', 'price_snapshots', 'cross_ch
 // above; see the id strip in _applyRow and the FULL_REPAGE_TABLES entry that follows from it.
 const HUB_STATE_TABLES = ['state_checkpoints', 'anchor_reward_attestations', 'attestation_responses'];
 
+// Tables whose local id N and hub id N are THE SAME ROW, and whose rows are never updated
+// in place. Both properties are needed before a difference in content at a shared id can
+// mean anything: id parity makes the two rows comparable at all (the FULL_REPAGE tables
+// that strip the wire id have locally-assigned ids, where id N names nothing on the hub),
+// and append-only makes a difference a CONTRADICTION rather than a version skew.
+//
+// The columns are each table's UNIQUE natural key - the tuple that says WHICH logical row
+// this is, which is exactly the question "did the source's id space get replaced" asks.
+// They are signed/consensus inputs and immutable once written, so a legitimate mirror can
+// never hold a different one at the hub's id. See _detectRebuiltSourceByContent.
+const REBUILT_SOURCE_IDENTITY_COLUMNS = Object.freeze({
+    state_checkpoints:          Object.freeze(['chain', 'network', 'checkpoint_seq']),
+    anchor_reward_attestations: Object.freeze(['chain', 'network', 'reward_type', 'round_reference',
+                                               'snapshot_block', 'publisher'])
+});
+
+// How many rows of the hub's FIRST page the content probe compares. A rebuilt source
+// restarts its ids at 1, so the retired ids a re-grown source now reuses are the LOWEST
+// ones it holds, and the contradiction (if there is one) is in this window. Sized to stay
+// one small request while covering more than the "handful of rows" exposure that made the
+// overlap case reachable in the first place.
+const REBUILT_SOURCE_PROBE_ROWS = 200;
+
 // TTL for the per-table local-column cache. Bounds how long a hub-side column
 // rename can keep silently NULLing the mirror before _localColumns re-reads the
 // schema and self-heals (see _localColumns).
@@ -656,6 +679,18 @@ class HubDbSync {
         // Coin this indexer settles for (e.g. 'LTC'). Used to scope the snapshot-presence
         // barrier to matches this chain will actually settle. See waitForSnapshotSync.
         this.coin = options.coin || null;
+
+        // Database holding this node's OWN authoritative stake rows, the source for
+        // re-deriving mirrored capability_snapshots rows (see
+        // _refuseUnprovenCapabilitySnapshot).
+        // Capability stakes are indexed into the INDEXER db, not the hub-mirror db, so
+        // this is deliberately NOT hubDb. Supplied explicitly by a test or an embedder;
+        // otherwise resolved lazily off the mirror db's parent indexer, because that is
+        // the only wiring the live service has and the check must not depend on a new
+        // constructor argument reaching every consumer. Absent (the explorer's vendored
+        // display mirror, direct-hub-DB mode) the check never runs and rows apply exactly
+        // as they did before, which is the fail-open the verdict shape already encodes.
+        this.authoritativeDb = options.authoritativeDb || null;
 
         // Receive-side retraction guards (XCALL-RETRACT-1). row:deleted events
         // arrive unsigned over the hub stream, and the hub's push*reorg RPCs forward the
@@ -1225,7 +1260,10 @@ class HubDbSync {
     // Returns the snapshot response's stream watermark when this table fully
     // drained (page not full, every row applied), or null otherwise; the caller
     // (_bootstrapAll) only advances the global watermark once every table drains.
-    async _bootstrapTable(table) {
+    // `afterRebuiltPurge` is set only on the re-drain this method schedules for itself after
+    // the content probe below cleared a retired id space. It suppresses a second probe, so
+    // the detect -> purge -> re-page sequence can run exactly once per bootstrap.
+    async _bootstrapTable(table, afterRebuiltPurge) {
         const PAGE_LIMIT = 10000;
         const MAX_PAGES  = 1000;                             // runaway backstop (10M rows)
 
@@ -1587,6 +1625,48 @@ class HubDbSync {
         // a hub database that outlived a venue re-genesis serves its whole relic table.
         this._reportRefusedChainRows(table);
 
+        // THE HALF A COMPARISON OF IDS ALONE CANNOT SEE.
+        //
+        // The ceiling fence above catches a replaced id space only while the local cursor
+        // sits ABOVE what the hub advertises. Once a rebuilt source has re-grown onto the
+        // retired ids, both sides agree on every id and disagree only on what those ids
+        // MEAN, and no comparison of ids can reach that. Nothing purges, the id-parity
+        // INSERT IGNORE apply drops each incoming row against the stale one holding its id,
+        // and the mirror serves the retired rows forever while every service reports healthy
+        // (state_checkpoints readers take MAX(checkpoint_seq), which a retired row wins).
+        //
+        // Content is the signal that does reach it, on the tables named in
+        // REBUILT_SOURCE_IDENTITY_COLUMNS: they are append-only and id-parity, so a hub row
+        // at id N whose natural key differs from local id N is a CONTRADICTION, not an
+        // absence. That distinction is the whole warrant for the delete, and it is the one
+        // _purgeForeignNetworkRows draws: a filtered endpoint, a paging hole or a partial
+        // drain can each make a valid row look UNSERVED, and none of them can fabricate a
+        // conflicting row at an id the source itself served.
+        //
+        // WHY HERE, AFTER A DRAIN THAT FETCHED NOTHING, rather than before the drain. A
+        // zero-row drain is the mirror claiming to be level with its source, which is both
+        // the cheapest moment to ask the question (one small page-1 request per bootstrap
+        // of two small tables, and none at all while a mirror is still catching up) and the
+        // exact symptom this defect presents: a stranded mirror draining zero rows on every
+        // attempt with no other signal. A mirror still behind its source defers the check to
+        // the bootstrap that finds it level, which is the next reconnect at the latest.
+        if (fetched === 0 && applyErrors === 0 && lastId > 0 && !afterRebuiltPurge) {
+            let clash = await this._detectRebuiltSourceByContent(table, scope, lastId);
+            if (clash) {
+                console.warn('HubDbSync: ' + table + ' id ' + clash.id + ' holds ' + clash.column + '=' +
+                    clash.local + ' locally while the hub serves ' + clash.hub + ' at that id. This table is ' +
+                    'append-only and id-parity, so one id cannot mean two rows: the source id space has been ' +
+                    'replaced and re-grown onto the retired ids (a rebuilt hub database). Clearing the mirror ' +
+                    'for this scope and re-paging from 0.');
+                let removed = await this._purgeRebuiltSourceRows(table, scope, lastId, readyCeiling,
+                    'id ' + clash.id + ' carries ' + clash.column + '=' + clash.local + ' locally while the hub ' +
+                    'serves ' + clash.hub + ' at that id');
+                // Only a purge that actually removed rows changes what a re-page would find;
+                // without one the retry would drain the same zero rows and probe again.
+                if (removed > 0) return await this._bootstrapTable(table, true);
+            }
+        }
+
         // Defense-in-depth: if the hub told us its max_id at subscription time and our
         // local copy is still behind that ceiling, the REST snapshot window may have
         // missed rows that arrived right before the snapshot was served. Issue a targeted
@@ -1914,7 +1994,90 @@ class HubDbSync {
     // Scoped exactly like the cursor that detected the problem, so on a mirror serving one
     // network this touches only that network's rows and leaves a null scope unscoped rather
     // than widening the delete beyond what was proven.
-    async _purgeRebuiltSourceRows(table, scope, localMax, ceiling) {
+    // Compare the hub's first page against the mirror's rows at the SAME ids, and report the
+    // first contradiction. A contradiction is the only evidence this method will return: a
+    // row the hub does not serve at an id the mirror holds proves nothing (page windows,
+    // filters and paging holes all produce that), while a DIFFERENT natural key at an id the
+    // hub itself served cannot be produced by any of them on an append-only, id-parity table.
+    //
+    // Returns { id, column, local, hub } for the first such id, or null for "no evidence" -
+    // which is also what every read that could not answer returns (no identity columns for
+    // this table, no proven scope, a page the hub refused or shaped differently, a schema
+    // version this build does not mirror, a local read that threw). Nothing is deleted on a
+    // question that could not be asked.
+    async _detectRebuiltSourceByContent(table, scope, localMax) {
+        let identity = REBUILT_SOURCE_IDENTITY_COLUMNS[table];
+        if (!identity || !scope || !(localMax > 0)) return null;
+
+        // The local table must actually carry every identity column; a schema that has
+        // drifted from this build's expectation is not something to delete rows over.
+        let cols;
+        try { cols = await this._localColumns(table); } catch (e) { return null; }
+        if (!cols || typeof cols.has !== 'function' || !identity.every((c) => cols.has(c))) return null;
+
+        let page;
+        try {
+            page = await this._httpGet('/hub-db/snapshot/' + table +
+                '?since_id=0&limit=' + REBUILT_SOURCE_PROBE_ROWS);
+        } catch (e) {
+            console.warn('HubDbSync: rebuilt-source content probe of ' + table + ' could not fetch page 1:', e);
+            return null;
+        }
+        if (!page || !Array.isArray(page.rows) || page.rows.length === 0) return null;
+        // Same fail-closed rule the page loop applies: a row shape this build does not mirror
+        // is not a row this build may judge.
+        if (page.schema_version != null && page.schema_version !== HUB_SCHEMA_VERSION) return null;
+
+        // Only ids the mirror could already hold, and only rows in this mirror's scope - the
+        // local read below is network-scoped, so a hub row for another network has no local
+        // counterpart to contradict and must not be compared against one.
+        let hubById = new Map();
+        for (let r of page.rows) {
+            let id = Number(r && r.id);
+            if (!Number.isFinite(id) || id <= 0 || id > localMax) continue;
+            if (r.network != null && String(r.network) !== String(scope)) continue;
+            hubById.set(id, r);
+        }
+        if (hubById.size === 0) return null;
+
+        let ids = Array.from(hubById.keys());
+        let local;
+        try {
+            local = await this.hubDb.doQuery(
+                'SELECT id, ' + identity.join(', ') + ' FROM ' + table +
+                ' WHERE network = ? AND id IN (' + ids.map(() => '?').join(',') + ')',
+                [scope].concat(ids));
+        } catch (e) {
+            return null;
+        }
+        if (!Array.isArray(local) || local.length === 0) return null;
+
+        for (let lr of local) {
+            let hr = hubById.get(Number(lr.id));
+            if (!hr) continue;
+            for (let col of identity) {
+                let mine  = this._identityText(lr[col]);
+                let theirs = this._identityText(hr[col]);
+                if (mine === theirs) continue;
+                return { id: Number(lr.id), column: col, local: mine, hub: theirs };
+            }
+        }
+        return null;
+    }
+
+    // Compare-only rendering of one identity value. The two sides arrive by different routes
+    // (a driver row and a JSON wire row), so a BIGINT read back as a BigInt and the same
+    // number on the wire must compare EQUAL or every bootstrap would report a contradiction.
+    _identityText(value) {
+        if (value === null || value === undefined) return '';
+        if (Buffer.isBuffer(value)) return value.toString('hex');
+        return String(value);
+    }
+
+    // `evidence` names what proved the id space is retired, for the logs; the caller that
+    // compares against the advertised ceiling leaves it out and gets that wording.
+    async _purgeRebuiltSourceRows(table, scope, localMax, ceiling, evidence) {
+        let why = evidence || ('the local cursor ' + localMax + ' sits above the hub ceiling ' + ceiling);
         // NO PROVEN SCOPE, NO DELETE. Without a network this would be an unqualified
         // DELETE FROM <table>, and the caller reaches here on evidence about an ID SPACE,
         // which is a far thinner warrant than a whole-table wipe. Two consumers land here
@@ -1925,10 +2088,9 @@ class HubDbSync {
         // be the bolder one. The cursor still restarts, which is the pre-existing behaviour
         // for these consumers and leaves them no worse than before.
         if (!scope) {
-            console.warn('HubDbSync: ' + table + ' cursor ' + localMax + ' sits above the hub ceiling ' +
-                ceiling + ', but this mirror has no proven network scope, so the retired rows are LEFT IN ' +
-                'PLACE (an unscoped delete here would clear the whole table). Re-paging only; if this mirror ' +
-                'keeps serving rows the hub does not have, give it a network.');
+            console.warn('HubDbSync: ' + table + ': ' + why + ', but this mirror has no proven network scope, ' +
+                'so the retired rows are LEFT IN PLACE (an unscoped delete here would clear the whole table). ' +
+                'Re-paging only; if this mirror keeps serving rows the hub does not have, give it a network.');
             return 0;
         }
         let result;
@@ -1949,9 +2111,8 @@ class HubDbSync {
             return 0;
         }
         if (removed <= 0) return 0;
-        console.warn('HubDbSync: removed ' + removed + ' row(s) from ' + table + ' carrying a retired id space ' +
-            '(local cursor ' + localMax + ' above the hub ceiling ' + ceiling + '); the mirror will be rebuilt ' +
-            'from the hub in full');
+        console.warn('HubDbSync: removed ' + removed + ' row(s) from ' + table + ' carrying a retired id space (' +
+            why + '); the mirror will be rebuilt from the hub in full');
         return removed;
     }
 
@@ -2087,6 +2248,55 @@ class HubDbSync {
         let entry = this._refusedChainIdRows.get(key);
         if (entry) entry.count++;
         else this._refusedChainIdRows.set(key, { table: table, hash: rowChainId, count: 1 });
+        return true;
+    }
+
+    // The authoritative-stake database, resolved lazily. Capability stakes are indexed
+    // into the INDEXER db; the mirror db only holds the hub's copy of them, which is the
+    // very thing under test here, so re-deriving against it would be self-certification.
+    _authoritativeStakeDb() {
+        if (this.authoritativeDb) return this.authoritativeDb;
+        let parent = this.hubDb && this.hubDb.indexer;
+        return (parent && parent.indexerDb) ? parent.indexerDb : null;
+    }
+
+    // BTC-only re-derivation fence for one mirrored capability_snapshots row.
+    // True = refuse the row.
+    //
+    // capability_snapshots is pulled from the hub over an unauthenticated SELECT and
+    // applied with INSERT IGNORE, and it is the verification authority the off-BTC
+    // resolvers read for cross_chain, oracle_publish, price and attestation. The full
+    // remedy is an SMT membership proof against the BTC state_checkpoints stakes_root;
+    // it needs a hub proof endpoint, a pinned trust anchor, a new activation height and
+    // a grandfathering watermark, so it is a later spec round. THIS is the first step,
+    // and its whole value is falsifiability: a BTC node holds the same stakes the hub
+    // built these rows from, so it can catch a forged set instead of mirroring it.
+    //
+    // Deliberate limits, so nothing downstream reads more into this than it says:
+    //   - It only ever runs where the node can prove the claim (BTC). Off BTC the verdict
+    //     is 'unknown' and the row applies exactly as before, which is why this buys no
+    //     coverage on the chains that actually resolve from the mirror.
+    //   - Only CONTRADICTIONS are refused. A row the hub withheld is invisible here.
+    //   - Every non-refusal (unreached block, unconfigured capability, truncated set,
+    //     a read that threw, no authoritative db wired) applies the row. An unjudgeable
+    //     row must never become a permanent mirror hole.
+    async _refuseUnprovenCapabilitySnapshot(row) {
+        let db = this._authoritativeStakeDb();
+        // The explorer's vendored display mirror carries no such db and no such method.
+        if (!db || typeof db.verifyCapabilitySnapshotRow !== 'function') return false;
+        let verdict;
+        try {
+            verdict = await db.verifyCapabilitySnapshotRow(row);
+        } catch (e) {
+            // A failed re-derivation is not evidence of a forgery.
+            console.warn('HubDbSync: capability_snapshots re-derivation failed, applying row unchecked: ' +
+                (e && e.message ? e.message : e));
+            return false;
+        }
+        if (!verdict || verdict.verdict !== 'refused') return false;
+        console.error('HubDbSync: REFUSED a capability_snapshots row this node can disprove from its own ' +
+            'stakes - ' + verdict.reason + '. The hub is serving a validator set that contradicts the chain; ' +
+            'off-BTC nodes cannot see this and will have mirrored it.');
         return true;
     }
 
@@ -2425,11 +2635,24 @@ class HubDbSync {
     async _refreshPriceSyncHeight() {
         let height = 0, maxTs = 0;
         try {
-            let rows = await this.hubDb.doQuery(
-                "SELECT MAX(reference_block) AS h, MAX(block_timestamp) AS ts FROM price_snapshots WHERE status = 'finalized'"
+            // Two separate single-MAX queries, not one SELECT carrying both. A single
+            // statement with two MAX()s over different columns defeats MariaDB's index-only
+            // min/max optimization (it needs one clean index range per aggregate) and falls
+            // back to a full scan of price_snapshots - unbounded and hub-mirrored, so this
+            // is the one mirrored table a fleet-wide scan actually shows up on (ATTEST lane
+            // 2026-09-05: 126MB/s reads at innodb_buffer_pool_size=128MB). Split, each query
+            // leads on `status` into its own covering index (idx_status_block_round for
+            // reference_block, idx_status_timestamp_round for block_timestamp - both defined
+            // in src/sql/price_snapshots.sql) and MariaDB resolves it as a single index
+            // lookup ("Select tables optimized away") instead of a table scan.
+            let hRow  = await this.hubDb.doQuery(
+                "SELECT MAX(reference_block) AS h FROM price_snapshots WHERE status = 'finalized'"
             );
-            if (rows.length > 0 && rows[0].h  != null) height = Number(rows[0].h);
-            if (rows.length > 0 && rows[0].ts != null) maxTs  = Number(rows[0].ts);
+            let tsRow = await this.hubDb.doQuery(
+                "SELECT MAX(block_timestamp) AS ts FROM price_snapshots WHERE status = 'finalized'"
+            );
+            if (hRow.length  > 0 && hRow[0].h   != null) height = Number(hRow[0].h);
+            if (tsRow.length > 0 && tsRow[0].ts != null) maxTs  = Number(tsRow[0].ts);
         } catch (e) {
             return;                                         // table not ready yet; leave height untouched
         }
@@ -2779,6 +3002,12 @@ class HubDbSync {
         // bootstrap's accounting can tell a refused relic from an applied row; the caller
         // moves its cursor past it either way, since a refusal is not an apply error.
         if (this._refuseForeignChainRow(table, row)) return false;
+        // Stake re-derivation fence for capability_snapshots, on the SAME footing as the
+        // chain-identity fence above and for the same reason: this is the one mirrored
+        // table that arrives with no authentication at all, so a hub that serves a forged
+        // validator set is otherwise mirrored verbatim. A BTC node can prove the claim
+        // against its own stakes; every other verdict applies the row unchanged.
+        if (table === 'capability_snapshots' && await this._refuseUnprovenCapabilitySnapshot(row)) return false;
         let allowed = await this._localColumns(table);
         let cols = Object.keys(row).filter(c => allowed.has(c));
         // capability_snapshots is a NATURAL-KEY mirror (uq_cap_snap: snapshot_block,

@@ -12,12 +12,14 @@
  *
  **********************************************************************
  *
- * XChain Indexer - validator-reward push rail, retired
+ * XChain Indexer - reward_type canonical naming
  *
- * The refusal the pushvalidatorrewards RPC now answers with, for every reward
- * type and on every network, plus the reward_type canonicalization that names
- * the type in it. Kept out of api.js so both are unit-testable as behaviour
- * rather than as handler source text.
+ * What survives the retired validator-reward push rail: the executable statement
+ * of the uppercase-chain invariant every mirrored anchor reward row must satisfy.
+ * The rail itself (the pushvalidatorrewards RPC, its staged flag-day gates and
+ * the terminal refusal that replaced them) is gone from src/api.js; this file is
+ * the invariant note test/unit/anchorRewardCanonicalGolden.test.js cites, in a
+ * form a test can run rather than a comment a refactor can quietly falsify.
  *
  ********************************************************************/
 
@@ -31,13 +33,16 @@
 // (actions/anchor.js) into a utf8_general_ci column, so a mixed-case pushed
 // variant slipped the case-SENSITIVE flag-day gate AND then collation-collided
 // with the derived winner inside reconcileAnchorRewardWinner's MIN(pubkey)
-// collapse, deleting the legitimate derived row. With the write path removed
-// there is no gate to slip and no row to collide with, so what is left of this
-// is presentational: the refusal below names the type with the same spelling the
-// derived row carries, which keeps operator logs on both sides of a retired push
-// talking about the same reward. The uppercase-chain invariant it documents is
-// still load-bearing for the derive path (see the note in
-// test/unit/anchorRewardCanonicalGolden.test.js).
+// collapse, deleting the legitimate derived row. With the whole push rail gone
+// there is no gate to slip and no pushed row to collide with, so this is no
+// longer a control. What it still is, is the canonical spelling the DERIVE path
+// writes: Anchor.prototype._rewardCanonical upper-cases d.CHAIN, while the
+// mirror-row copy in the derive code slices the chain verbatim out of
+// reward_type, and the two agree only for as long as every mirrored row carries
+// an uppercase chain. That is the invariant
+// test/unit/anchorRewardCanonicalGolden.test.js asserts against and points here
+// for; normalizing case on the derive side would alter a signed string and is a
+// flag-day, not test hygiene.
 // Other reward types (oracle_round, ...) pass through unchanged.
 function canonicalizeRewardType(type){
     let str = String(type == null ? '' : type);
@@ -46,25 +51,10 @@ function canonicalizeRewardType(type){
     if(/^anchor_archive$/i.test(str)) return 'anchor_archive';
     // The ANCHOR v7 bundle reward. Lowercase like anchor_archive (it names a leg, not a
     // chain), and folded here for the same presentational reason: the refusal below must
-    // name the type with the spelling the derived row carries, so operator logs on both
-    // sides of a retired push talk about the same reward.
+    // name the type with the spelling the derived row carries, so a bundle reward reads
+    // the same everywhere it is logged.
     if(/^anchor_bundle$/i.test(str)) return 'anchor_bundle';
     return str;
 }
 
-// The refusal for an inbound pushvalidatorrewards RPC. There is no admitted case:
-// every validator reward is derived from on-chain bytes, so this returns a message
-// for whatever the caller asked for, never null.
-//
-// The wording is load-bearing on the hub side. RewardTracker.isTerminalPushError
-// matches /is not pushable|push retired|is required|must be an array/, and an
-// un-upgraded hub must read this as FINAL and drop the push rather than burn its
-// retry budget against a node that will never accept. Both phrases are here so a
-// hub on either side of that predicate's history stops on the first answer.
-function rewardPushRetiredError(rewardType){
-    let type = canonicalizeRewardType(rewardType);
-    return 'reward_type ' + (type || '(unset)') + ' is not pushable: every validator reward is ' +
-           'derived on-chain during block processing; push retired';
-}
-
-module.exports = { canonicalizeRewardType, rewardPushRetiredError };
+module.exports = { canonicalizeRewardType };
