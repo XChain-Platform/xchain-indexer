@@ -603,6 +603,10 @@ class Database {
         const result = await this._runMigrationsInner(opts);
         await this._assertPubkeyColumnIsUncompressedWide();
         await this._assertStakeWeightOrderingCollation();
+        // Invoked through the prototype rather than `this`: the reward-identity assertion is
+        // a fail-closed COLLECT-rail guard, and a partial object that happens not to carry
+        // the method would otherwise drop it without a word. Nothing may opt out of it.
+        await Database.prototype._assertRewardUniqueKeyCarriesQualifier.call(this);
         return result;
     }
 
@@ -910,6 +914,96 @@ class Database {
                     'for uncompressed keys; narrower silently NULLs or truncates the source_pubkey seam field. ' +
                     'Run the pending migration: node src/migrate.js --file ' +
                     Database.startupAssertedMigrationFile('_assertPubkeyColumnIsUncompressedWide')
+                );
+            }
+        } finally {
+            if(conn && this.transactionConnection == null){
+                try { await conn.release(); } catch(_){}
+            }
+        }
+    }
+
+    // Assert validator_rewards.reward_unique keys the QUALIFIED reward identity, i.e. that
+    // the index carries round_qualifier. 2026-08-24-validator-rewards-round-qualifier.sql
+    // is mode=manual and is the ONLY convergence path for that key on an aged database:
+    // both round_qualifier columns are NOT NULL with a DEFAULT, so the boot drift
+    // reconciler ADDs them, but reconcileTableIndexes never DROPs an index name already
+    // held by a differently-defined live index, so `reward_unique` stays the four-column
+    // key and only logs drift. A build carrying the qualifier-aware reward writers against
+    // that four-column key re-collapses two genuinely distinct archive anchors into one
+    // paid reward inside its own UNIQUE index, which is a COLLECT-rail divergence from its
+    // peers rather than an error anything reports. Halting at boot is the cheap end of that.
+    //
+    // BOTH halves of the qualified identity are read, because both are fatal and they fail
+    // at different moments. The KEY is the silent half (the divergence above) and the one
+    // this file is the only convergence path for. The COLUMN is the loud half: a writer
+    // naming round_qualifier against a table that has not got it is errno 1054, so the node
+    // dies MID-BLOCK instead of at boot. Neither is reported by anything else, and the
+    // index check cannot stand in for the column check - the counts come from different
+    // information_schema tables and an index carrying no qualifier says nothing about
+    // whether the column exists.
+    //
+    // non_unique = 0 is asserted, not assumed: a same-named NON-unique index carrying the
+    // qualifier would satisfy a name-and-column test while deduplicating nothing.
+    //
+    // Passes through (never halts) when validator_rewards does not exist yet, when it
+    // carries no reward_unique index at all, and when a count is unreadable: a fresh
+    // install has no table, a missing index is another contract's business, and an answer
+    // we could not read is not evidence of drift.
+    //
+    // REGISTERED in Database.STARTUP_ASSERTED_MIGRATIONS and tagged
+    // `deploy-precondition=required` in the migration's own header, which is what lets a
+    // deploy refuse before it recreates a container instead of after (see that constant).
+    async _assertRewardUniqueKeyCarriesQualifier(){
+        // Name the exact file in every halt, for the same reason the pubkey halt above
+        // does: a bare `node src/migrate.js` on an aged fleet database means "apply every
+        // pending manual migration", which is never what a scoped recovery wants.
+        const remedy = ' Run the pending migration: node src/migrate.js --file ' +
+            Database.startupAssertedMigrationFile('_assertRewardUniqueKeyCarriesQualifier');
+        let conn;
+        try {
+            conn = await this.getConnection();
+            const rows = await conn.query(
+                "WITH p AS (SELECT ? AS db) SELECT " +
+                "(SELECT COUNT(*) FROM information_schema.tables, p WHERE table_schema = p.db " +
+                "AND table_name = 'validator_rewards') AS reward_table, " +
+                "(SELECT COUNT(*) FROM information_schema.columns, p WHERE table_schema = p.db " +
+                "AND table_name = 'validator_rewards' AND column_name = 'round_qualifier') AS qualifier_column, " +
+                "(SELECT COUNT(*) FROM information_schema.statistics, p WHERE table_schema = p.db " +
+                "AND table_name = 'validator_rewards' AND index_name = 'reward_unique') AS key_columns, " +
+                "(SELECT COUNT(*) FROM information_schema.statistics, p WHERE table_schema = p.db " +
+                "AND table_name = 'validator_rewards' AND index_name = 'reward_unique' " +
+                "AND column_name = 'round_qualifier' AND non_unique = 0) AS qualifier_columns",
+                [this.dbName]
+            );
+            if(!rows || !rows.length) return;
+            const row   = rows[0] || {};
+            const count = (v) => {
+                if(v == null) return null;
+                const n = Number(v);
+                return Number.isNaN(n) ? null : n;
+            };
+            const table    = count(row.reward_table);
+            const column   = count(row.qualifier_column);
+            const keyCols  = count(row.key_columns);
+            const qualCols = count(row.qualifier_columns);
+            // An unreadable answer is not evidence of drift; leave the migration's own
+            // PENDING state as the signal rather than halting on a row we cannot parse.
+            if(table == null || column == null || keyCols == null || qualCols == null) return;
+            if(table < 1) return;                     // table absent: not created yet
+            if(column < 1){
+                throw new Error(
+                    'validator_rewards has no round_qualifier column, but this build writes rewards on the ' +
+                    'qualified identity: the first archive reward it derives fails errno 1054 mid-block.' + remedy
+                );
+            }
+            if(keyCols < 1) return;                   // no reward_unique index to compare
+            if(qualCols < 1){
+                throw new Error(
+                    'validator_rewards.reward_unique does not include round_qualifier, so this database still ' +
+                    'keys a reward on the UNQUALIFIED identity while this build derives archive rewards on the ' +
+                    'qualified one: two distinct archive anchors would collapse into one paid reward and diverge ' +
+                    'the COLLECT rail from the rest of the fleet.' + remedy
                 );
             }
         } finally {
@@ -17847,6 +17941,17 @@ Database.MIGRATION_CHECKSUM_REBASELINES = {
         from: '05dfd2ef7d246929a451521aa7c4c6e0f21faf019dd06f1f16384a450675267c', // orphaned blob 8a293ccf, pre-scrub
         to:   '0796c26842434c39b056e9875ba5ee7dbbcfd92d340e2899f7921e03147c5458',
     },
+    // Added the `deploy-precondition=required` header tag (and the DEPLOY PRECONDITION
+    // comment block explaining it) when the reward-identity startup assertion landed, the
+    // same retag the pubkeys widen carries above. Comment lines only: the four ALTER TABLE
+    // statements are byte-identical, verified by comparing the comment-stripped residue
+    // against the pre-tag revision rather than assumed. a0dd6d08 is the file's only
+    // committed revision, so one `from` covers every database that applied it by hand;
+    // where none has, the entry is inert.
+    '2026-08-24-validator-rewards-round-qualifier.sql': {
+        from: '069f0e73f1cb6179d0dcab361832204c96aa1cb4072454ddcd7e6a8acd2d31ab', // a0dd6d08, pre-tag
+        to:   '37ff284b7f11f248e9f52979f70e5fe8f13c9cad7a7e719b4633866e8c81dc1a',
+    },
 };
 
 // Applicability preconditions the runner evaluates against the LIVE schema before it
@@ -18092,6 +18197,11 @@ Database.STARTUP_ASSERTED_MIGRATIONS = [
         file:      '2026-07-24-pubkeys-widen-uncompressed.sql',
         assertion: '_assertPubkeyColumnIsUncompressedWide',
         symptom:   'Fatal indexer error: pubkeys.pubkey holds 66 chars but VARCHAR(130) is required'
+    },
+    {
+        file:      '2026-08-24-validator-rewards-round-qualifier.sql',
+        assertion: '_assertRewardUniqueKeyCarriesQualifier',
+        symptom:   'Fatal indexer error: validator_rewards.reward_unique does not include round_qualifier'
     }
 ];
 

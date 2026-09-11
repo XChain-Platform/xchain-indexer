@@ -1,4 +1,4 @@
--- xchain:migration mode=manual
+-- xchain:migration mode=manual deploy-precondition=required
 -- Migration: validator_rewards.round_qualifier + anchor_reward_reconcile_log.round_qualifier,
 --            and the validator_rewards UNIQUE key rebuilt to include it.
 --
@@ -64,6 +64,22 @@
 -- with the new build but the old four-column key silently re-collapses two distinct archive
 -- rewards inside its own UNIQUE index - the exact defect this closes - and forks the COLLECT
 -- rail against its peers. The boot warning above is the tell; the migration is the fix.
+--
+-- DEPLOY PRECONDITION, which is what the extra header token declares.
+-- `deploy-precondition=required` on the directive line above means the code in this tree
+-- ASSERTS this file's end state at startup: _assertRewardUniqueKeyCarriesQualifier halts
+-- the service when validator_rewards carries a `reward_unique` index that does not include
+-- round_qualifier, and the assertion is registered in Database.STARTUP_ASSERTED_MIGRATIONS.
+-- The tag is the machine-readable half: the deploy tool reads it out of the source tree it
+-- is about to deploy and refuses BEFORE recreating the container, so an aged database that
+-- never applied this file is discovered as a refused deploy rather than as a crash-loop.
+-- That ordering is the whole reason the tag exists; a build that asserts a manual migration
+-- without it took all three mainnet indexers down on 2026-08-09.
+--
+-- Halting is the correct end state here rather than a warning: the alternative is a node
+-- running the qualifier-aware writers against the four-column key, re-collapsing two
+-- distinct archive rewards inside its own UNIQUE index and forking the COLLECT rail
+-- against its peers, silently and only once a real archive reward is derived.
 --
 -- HOW TO RUN
 --   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-08-24-validator-rewards-round-qualifier.sql

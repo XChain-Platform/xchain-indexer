@@ -245,6 +245,49 @@ describe('MIGRATION_CHECKSUM_REBASELINES[validator-rewards derive_block_index] @
     });
 });
 
+// The deploy-precondition retag changed this file's sha256 the same way, and every
+// database that applied it by hand records the pre-tag hash. Without the entry the
+// immutability guard logs `content CHANGED` on every boot and `node src/migrate.js`
+// fails closed, which strands the whole pending manual backlog on that host.
+describe('MIGRATION_CHECKSUM_REBASELINES[validator-rewards round_qualifier] @regression @tier1', function () {
+
+    const fs     = require('fs');
+    const path   = require('path');
+    const crypto = require('crypto');
+
+    const readQualifier = () => fs.readFileSync(
+        path.join(__dirname, '..', '..', 'src', 'sql', 'migrations', QUALIFIER_FILE), 'utf8');
+
+    it('pins the current file content as `to`', function () {
+        const entry = Database.MIGRATION_CHECKSUM_REBASELINES[QUALIFIER_FILE];
+        assert.ok(entry, QUALIFIER_FILE + ' must have a checksum rebaseline entry');
+        assert.strictEqual(entry.to, crypto.createHash('sha256').update(readQualifier()).digest('hex'),
+            '`to` must be the sha256 of the file as committed');
+    });
+
+    it('lists every prior revision in `from`, and never the current hash', function () {
+        const entry = Database.MIGRATION_CHECKSUM_REBASELINES[QUALIFIER_FILE];
+        const from  = [].concat(entry.from);
+        assert.ok(from.length >= 1);
+        assert.ok(!from.includes(entry.to), '`from` must not contain the current hash');
+        for (const h of from) assert.match(h, /^[0-9a-f]{64}$/);
+    });
+
+    it('rebaselines a COMMENT-only retag: the executable SQL is byte-identical', function () {
+        // The documented contract of this table. The tag rides on the directive comment
+        // line, so the four ALTER TABLE statements must be untouched; an executable edit
+        // needs its own dated migration, never an entry here.
+        const statements = Database.prototype.splitSqlStatements.call({
+            stripSqlLineComments: Database.prototype.stripSqlLineComments
+        }, readQualifier());
+        assert.strictEqual(statements.length, 4, 'got: ' + JSON.stringify(statements));
+        assert.ok(statements.every(s => /^ALTER TABLE/i.test(s.trim())),
+            'every statement in this migration is an ALTER TABLE; got: ' + JSON.stringify(statements));
+        assert.ok(!statements.some(s => /deploy-precondition/i.test(s)),
+            'the tag must live in the header comment, never in an executable statement');
+    });
+});
+
 describe('Database._migrationPreconditionSkip() @regression @tier1', function () {
 
     // Bind to a bare object carrying only what the method reads: dbName is the
@@ -420,7 +463,14 @@ describe('runMigrations() precondition baseline branch, round_qualifier @regress
         return out;
     }
 
-    async function runAgainstShape(shape) {
+    // `assertRows` is what the POST-RUN startup assertion
+    // (_assertRewardUniqueKeyCarriesQualifier) sees, which is a different question from
+    // the precondition predicate and answered by a different query. It defaults to an
+    // absent reward_unique index - a state the assertion passes through - so these cases
+    // isolate the runner's precondition branch; the assertion's own halt behaviour is
+    // driven directly in migration-preconditions.test.js, and its coupling to the runner
+    // is driven by the last case in this block.
+    async function runAgainstShape(shape, assertRows = []) {
         const inserts = [];
         const logged  = [];
         const ledger  = ledgerWithoutQualifier();
@@ -433,6 +483,10 @@ describe('runMigrations() precondition baseline branch, round_qualifier @regress
                     return Array.from(ledger, ([name, checksum]) => ({ name, checksum }));
                 }
                 if (/CREATE TABLE IF NOT EXISTS schema_migrations/i.test(sql)) return {};
+                // Ordered BEFORE the precondition matcher: both queries mention
+                // round_qualifier and information_schema, and only this one asks for the
+                // index-shape counts the startup assertion reads.
+                if (/qualifier_columns/i.test(sql)) return assertRows;
                 if (/round_qualifier/i.test(sql) && /information_schema/i.test(sql)) return [shape];
                 if (/^INSERT INTO schema_migrations/i.test(sql.trim())) { inserts.push(params); return {}; }
                 if (/^(UPDATE|INSERT|CREATE|ALTER|DROP)/i.test(sql.trim())) return {};
@@ -485,5 +539,23 @@ describe('runMigrations() precondition baseline branch, round_qualifier @regress
         assert.ok(!result.baselined.includes(QUALIFIER_FILE),
             'baselining the four-column key would record the migration as done on the one schema it exists to converge');
         assert.strictEqual(inserts.length, 0, 'no ledger row should be inserted for a still-pending migration');
+    });
+
+    it('HALTS runMigrations on the trap shape once the live key is read, pending or not', async function () {
+        // Leaving the file pending is a log line an operator can miss for weeks. What stops
+        // a node from running the qualifier-aware reward writers against the four-column
+        // key is the startup assertion on the way out of runMigrations, and it must fire
+        // through the real wrapper - not merely exist as a method - or a deploy discovers
+        // the requirement as a diverged COLLECT rail instead of a refused boot.
+        await assert.rejects(
+            () => runAgainstShape({ reward_col: 1, log_col: 1, key_col: 0 },
+                                  [{ reward_table: 1, qualifier_column: 1, key_columns: 4, qualifier_columns: 0 }]),
+            /reward_unique does not include round_qualifier[\s\S]*--file 2026-08-24-validator-rewards-round-qualifier\.sql/);
+    });
+
+    it('returns normally when the live key already carries the qualifier', async function () {
+        const { result } = await runAgainstShape({ reward_col: 1, log_col: 1, key_col: 1 },
+                                                 [{ reward_table: 1, qualifier_column: 1, key_columns: 5, qualifier_columns: 1 }]);
+        assert.ok(result.baselined.includes(QUALIFIER_FILE));
     });
 });
