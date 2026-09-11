@@ -214,6 +214,89 @@ function resolveBarrierHoldCeilingMs(raw){
     return parseInt(String(override).trim(), 10) * 1000;
 }
 
+// ── Stream-watermark stall: the bound on a mirror that certifies NOTHING ──
+//
+// The ceiling above is driven by the BLOCK LOOP: it fires only while one block sits
+// behind a mirror barrier, and only after its own long window. A watermark that
+// freezes for a few minutes and then recovers therefore never reaches it, so the only
+// thing that ended such a freeze was an operator restarting the container.
+//
+// This is the second bound, owned by the mirror itself and keyed on the mirror's own
+// evidence rather than on a block. Every heartbeat carries the timestamp through which
+// the hub has produced rows. When that hub tip runs AHEAD of our certified stream
+// watermark and our watermark does not move for a whole detection window, the mirror
+// is certifying nothing while its socket reads perfectly healthy. That single
+// condition holds no matter WHICH gate is stuck (a bootstrap that never drains, a
+// message chain parked on an apply that never settles, a per-table cursor wedged on a
+// row the apply path refuses), which is what lets the remedy be cause-agnostic.
+//
+// Two stages, because a re-subscribe clears most of those and a restart clears the rest:
+//   1. force a fresh subscribe-then-bootstrap, the ONE path that re-arms the gate,
+//   2. if the watermark still has not moved a bounded window later, hand the process to
+//      its supervisor under a named fatal.
+//
+// OPERATIONAL, NOT CONSENSUS, for the same reason as the ceiling: neither stage opens a
+// barrier, shortens a grace or commits a block one second earlier. A node that restarts
+// here comes back deferring exactly as it was, so a per-node value cannot fork
+// settlement and the env overrides are honored on every network.
+//
+// Sized above a full re-bootstrap drain (minutes on a large price_snapshots table) so an
+// ordinary slow drain finishes on its own and only a mirror that is genuinely not
+// converging ever reaches stage 2.
+const HUB_SYNC_WATERMARK_STALL_S      = 180;
+const HUB_SYNC_WATERMARK_STALL_EXIT_S = 300;
+
+// How often the stall condition is sampled. Small relative to the windows it measures
+// so a stall is caught within a sample of its deadline rather than a whole window late.
+const WATERMARK_STALL_CHECK_MS = 10000;
+
+// Resolve one stall window in MILLISECONDS. Same contract as resolveBarrierHoldCeilingMs:
+// an unusable value falls back to the named default with a warning rather than throwing,
+// because a bad value here can only mis-time a log line and must never keep an indexer
+// from booting. 0 is the documented off switch (no detection at all, or detection
+// without the fatal stage).
+function resolveWatermarkStallMs(raw, envKey, defaultS){
+    const override = (raw === undefined) ? process.env[envKey] : raw;
+    if(override === undefined || override === null || override === '')
+        return defaultS * 1000;
+    if(!/^\d+$/.test(String(override).trim())){
+        console.log('WARNING: ' + envKey + '="' + override + '" is not a non-negative integer ' +
+            'number of seconds; using the default ' + defaultS + 's.');
+        return defaultS * 1000;
+    }
+    return parseInt(String(override).trim(), 10) * 1000;
+}
+
+// Decide what a frozen stream watermark has earned, as a pure function of the mirror's
+// observable state, so the decision is testable without a socket, a DB or a real clock.
+// Returns 'ok', 'resync' (stage 1) or 'exit' (stage 2).
+//
+// Each suppression below is a state where a frozen watermark is CORRECT and neither
+// remedy could help:
+//   - poll mode freezes the watermark by design (_bootstrapAll refuses to certify a
+//     mirror that cannot receive upserts or retractions),
+//   - a schema mismatch is a deliberate permanent fail-closed hold that only a hub
+//     upgrade clears, so restarting into it would buy a restart loop and nothing else,
+//   - a mirror that has never certified a watermark is a cold start, not a stall; its
+//     bound is the block loop's hold ceiling,
+//   - a hub tip at or behind our watermark means the hub has produced nothing we lack,
+//     which is the ordinary quiet-chain state and the reason a bare "unchanged for X"
+//     test cannot be used on its own.
+function watermarkStallVerdict(state, now){
+    const s = state || {};
+    if(!(s.stallMs > 0))                                   return 'ok';
+    if(s.pollMode || s.schemaMismatch)                     return 'ok';
+    if(s.lastAdvanceAt == null)                            return 'ok';
+    if(!(Number(s.hubTipTs) > Number(s.streamWatermark)))  return 'ok';
+    // Stage 1 measures from the last real advance; stage 2 measures from the remedy, so
+    // a resync that is still draining is given its own full window rather than being
+    // charged the time that produced it.
+    if(s.resyncAt == null)
+        return ((now - s.lastAdvanceAt) >= s.stallMs) ? 'resync' : 'ok';
+    if(!(s.exitMs > 0))                                    return 'ok';
+    return ((now - s.resyncAt) >= s.exitMs) ? 'exit' : 'ok';
+}
+
 // ── signed-retraction verification helpers ───────────────────────────
 
 // Rebuild the retraction canonical from the wire event. MUST byte-match the
@@ -472,6 +555,25 @@ function priceRoundKey(round, pair) {
     return String(round) + ' ' + String(pair);
 }
 
+// Memory bound on the served-key set the capability-snapshot reconciliation builds
+// over a full re-page (_reconcileForeignCapabilitySnapshots). One key per row the hub
+// serves; the hub writes one row per (block boundary, capability, key, source) and never
+// prunes, so this only trips on a pathological table. Above it the pass degrades to the
+// snapshot_block-ceiling rule, which needs no set at all.
+const CAPABILITY_SNAPSHOT_KEY_CAP = 500000;
+
+// Natural key of a capability_snapshots row: its UNIQUE uq_cap_snap
+// (snapshot_block, capability, signing_pubkey, source). Lowercased and NUL-joined:
+// the mirror table is utf8_general_ci, so the DB itself cannot hold two rows whose
+// keys differ only in case, and matching that here keeps a hub-served row and the
+// same row read back (AnchorRecovery writes signing_pubkey lowercased) from deriving
+// two different keys and making a healthy row look unserved. `source` defaults to ''
+// exactly as the column does, so a hub that omits it keys the same on both sides.
+function capabilitySnapshotKey(row) {
+    return [row.snapshot_block, row.capability, row.signing_pubkey, (row.source == null ? '' : row.source)]
+        .map(v => String(v).toLowerCase()).join(' ');
+}
+
 class HubDbSync {
 
     constructor(hubDb, options) {
@@ -583,6 +685,41 @@ class HubDbSync {
         // Absent (explorer's vendored display mirror, older wiring) the gate never
         // arms and the fences above stand alone, as before.
         this.network = options.network || null;
+
+        // ── Chain identity for the three CROSS_CHAIN_TABLES ─────────────────────────
+        //
+        // `network` above scopes a mirrored row to mainnet/testnet/regtest, and on regtest
+        // that is not enough: one network name spans every Bitcoin chain a venue has ever
+        // had. A venue that re-genesises its Bitcoin chain without rebuilding the hub
+        // database keeps serving the dead chain's finalized matches and capability
+        // snapshots, and every fresh indexer mirrors all of them (measured on the
+        // regtest venue 2026-09-08: two relic matches and 33 snapshots, evaluated at every
+        // block against a validator set that no longer exists on the chain).
+        //
+        // The identity is the hash of BITCOIN BLOCK 1 on the chain the hub's Bitcoin indexer
+        // follows, carried on the wire and locally as `btc_chain_id`. Block 0 cannot serve:
+        // the regtest genesis hash is a chainparams constant, identical across every
+        // re-genesis, while block 1 commits to the instant the chain was created.
+        //
+        // Two sources, and they are NOT equal. A Bitcoin indexer reads block 1 from its own
+        // decoder database and sets it 'local': that is this node's own measurement of the
+        // chain it indexes, and no hub can overrule it. Every other consumer (a DOGE or LTC
+        // indexer, the explorer's vendored display mirror) has no Bitcoin chain of its own to
+        // read and learns the id 'hub', from the value the hub advertises on the three
+        // snapshot envelopes; a hub id is FOLLOWED, so a re-genesis the hub has already
+        // adopted cannot strand a running non-BTC mirror on rows it refuses forever.
+        //
+        // A NULL on a row is always accepted: every row written before the column existed
+        // carries NULL, so mainnet and testnet history keeps mirroring unchanged.
+        this._expectedBtcChainId = null;                   // 64 lowercase hex, or null while unknown
+        this._btcChainIdSource   = null;                   // 'local' | 'hub' | null
+        // Refusals waiting to be reported, keyed table + '|' + hash. Counted rather than
+        // logged per row, so a drain that refuses a whole relic table says so once.
+        this._refusedChainIdRows = new Map();
+        // One re-probe per unseen id and one warning per process, so a stream of foreign
+        // rows can storm neither the hub nor the log (see _maybeAdoptHubChainId).
+        this._chainIdProbedIds     = new Set();
+        this._foreignHubChainNoted = false;
 
         // Pending waitForSnapshotSync() resolvers. Unlike the match barrier (a cached
         // scalar max(effective_time)), snapshot-presence is set-dependent: a match can
@@ -724,6 +861,32 @@ class HubDbSync {
         this.watermarkIntervalMs = parseInt(options.watermarkIntervalMs || process.env.HUB_SYNC_WATERMARK_INTERVAL_MS || '10000');
         this.watermarkTimeoutMs = this.watermarkIntervalMs * 3;
 
+        // Stream-watermark stall detector; see the constant block above for the why.
+        // The watchdog directly above proves FRAMES are arriving and says nothing about
+        // whether any of them still moves the watermark, so these fields are the other
+        // half of that pair. _hubTipTs is the newest tip the hub has claimed in a
+        // heartbeat, recorded whether or not the gate let it through, which is the only
+        // reason "hub ahead, us frozen" is observable at all. _lastWatermarkAdvanceAt is
+        // when the watermark last actually moved. _watermarkStallResyncAt latches the one
+        // forced resync per stall episode, so stage 2 times a window AFTER the remedy
+        // instead of running a second detection window.
+        this._hubTipTs               = 0;
+        this._lastWatermarkAdvanceAt = null;
+        this._watermarkStallResyncAt = null;
+        this._stallTimer             = null;
+        this.watermarkStallMs     = Number.isFinite(options.watermarkStallMs)
+            ? options.watermarkStallMs
+            : resolveWatermarkStallMs(undefined, 'HUB_SYNC_WATERMARK_STALL_S', HUB_SYNC_WATERMARK_STALL_S);
+        this.watermarkStallExitMs = Number.isFinite(options.watermarkStallExitMs)
+            ? options.watermarkStallExitMs
+            : resolveWatermarkStallMs(undefined, 'HUB_SYNC_WATERMARK_STALL_EXIT_S', HUB_SYNC_WATERMARK_STALL_EXIT_S);
+        // Fail-loud seam for stage 2. Left unwired, the detector re-subscribes and logs
+        // but never ends the process, which is what a consumer that embeds this mirror
+        // beside unrelated work needs (one chain's stalled mirror must not take down a
+        // process serving several). The indexer wires its own exit so its supervisor can
+        // restart it, which is the posture every other fatal in that service takes.
+        this._onFatalStall = (typeof options.onFatalStall === 'function') ? options.onFatalStall : null;
+
         // Batched price applies and the drain's progress counter. Both are
         // reporting/throughput only - no barrier, floor or mirrored row depends on
         // either - so both carry a plain off switch rather than a fail-closed gate.
@@ -746,6 +909,12 @@ class HubDbSync {
         ts = Number(ts);
         if (!Number.isFinite(ts) || ts <= this.streamWatermark) return;
         this.streamWatermark = ts;
+        // The watermark moved, so whatever the stall detector was timing is over: re-arm
+        // from here and drop any latched stage-1 resync. Stamped on a real ADVANCE only,
+        // never on a refused or repeated tip, because "the last time this mirror actually
+        // certified progress" is the whole measurement.
+        this._lastWatermarkAdvanceAt = Date.now();
+        this._watermarkStallResyncAt = null;
         this._releasePriceWaiters();
         this._releasePriceTimeWaiters();
         this._releaseOracleWaiters();
@@ -753,6 +922,90 @@ class HubDbSync {
         this._releaseCallWaiters();
         this._releaseAnchorAttestWaiters();
         this._releaseAttestResponseWaiters();
+    }
+
+    // Record the newest tip the hub has claimed in a heartbeat, independently of whether
+    // the watermark gate accepted it. A refused tip is exactly the evidence the stall
+    // detector runs on, so it must be kept even when it changes nothing else.
+    _noteHubTip(ts) {
+        const t = Number(ts);
+        if (Number.isFinite(t) && t > this._hubTipTs) this._hubTipTs = t;
+    }
+
+    // Sample the stall condition once and act on the verdict. Split from the timer so a
+    // test can drive a single evaluation at a chosen clock, with no socket and no DB.
+    _checkWatermarkStall(now) {
+        if (now === undefined) now = Date.now();
+        if (!this.enabled || !this.running) return 'ok';
+
+        const verdict = watermarkStallVerdict({
+            stallMs:         this.watermarkStallMs,
+            exitMs:          this.watermarkStallExitMs,
+            pollMode:        !!this._pollMode,
+            schemaMismatch:  !!this._schemaMismatchSeen,
+            lastAdvanceAt:   this._lastWatermarkAdvanceAt,
+            resyncAt:        this._watermarkStallResyncAt,
+            hubTipTs:        this._hubTipTs,
+            streamWatermark: this.streamWatermark
+        }, now);
+        if (verdict === 'ok') return verdict;
+
+        const frozenS = Math.round((now - this._lastWatermarkAdvanceAt) / 1000);
+        const shape   = 'stream watermark frozen at ' + this.streamWatermark + ' for ' + frozenS +
+                        's while the hub heartbeat tip reached ' + this._hubTipTs;
+
+        if (verdict === 'resync') {
+            this._watermarkStallResyncAt = now;
+            console.error('HubDbSync: ' + shape + '. Heartbeats are arriving, so the transport is ' +
+                'healthy and the mirror is certifying nothing; forcing a subscribe-then-bootstrap ' +
+                'cycle, then exiting if it is still frozen ' +
+                Math.round(this.watermarkStallExitMs / 1000) + 's from now.');
+            // Deliberately bypasses requestResync's hold-ceiling throttle: this detector
+            // carries its own one-per-episode latch above, and a block-loop resync minutes
+            // earlier must not silently consume the single remedy stage 2 is timing.
+            this._driveResync(shape);
+            return verdict;
+        }
+
+        // Stage 2. Re-arm the latch first so a consumer whose handler does NOT end the
+        // process keeps re-driving on the same cadence instead of re-firing every sample.
+        this._watermarkStallResyncAt = now;
+        const reason = 'hub-mirror stream watermark stalled: ' + shape + ', still frozen ' +
+                       Math.round(this.watermarkStallExitMs / 1000) + 's after a forced resync ' +
+                       '(HUB_SYNC_WATERMARK_STALL_S / HUB_SYNC_WATERMARK_STALL_EXIT_S)';
+        console.error('HubDbSync: ' + reason);
+        this._driveResync(shape + ' after a forced resync');
+        if (this._onFatalStall) this._onFatalStall(reason);
+        else console.error('HubDbSync: no onFatalStall handler wired, so this mirror stays up and ' +
+            'keeps re-driving; a consumer that wants a supervisor restart must wire one.');
+        return verdict;
+    }
+
+    // Cadence for the sampler, clamped down when the windows themselves are small so a
+    // short test or a short operator override is still sampled several times per window.
+    _stallCheckIntervalMs() {
+        const windows = [this.watermarkStallMs, this.watermarkStallExitMs].filter((v) => v > 0);
+        const smallest = windows.length ? Math.min.apply(null, windows) : WATERMARK_STALL_CHECK_MS;
+        return Math.max(1000, Math.min(WATERMARK_STALL_CHECK_MS, Math.floor(smallest / 4)));
+    }
+
+    _startStallDetector() {
+        this._stopStallDetector();
+        if (!(this.watermarkStallMs > 0)) return;
+        this._stallTimer = setInterval(() => {
+            // A throw here would kill the interval and silently retire the last bound this
+            // mirror has, so the sampler swallows and keeps its cadence.
+            try { this._checkWatermarkStall(); }
+            catch (err) { console.warn('HubDbSync: watermark stall check failed:', err && err.message); }
+        }, this._stallCheckIntervalMs());
+        if (typeof this._stallTimer.unref === 'function') this._stallTimer.unref();
+    }
+
+    _stopStallDetector() {
+        if (this._stallTimer) {
+            clearInterval(this._stallTimer);
+            this._stallTimer = null;
+        }
     }
 
     // Adopt the hub's advertised heartbeat cadence (from the 'ready' message's
@@ -815,6 +1068,10 @@ class HubDbSync {
             return;
         }
         this.running = true;
+        // Armed from the start, but inert until the watermark has advanced at least once:
+        // a cold start that never drains is the block loop's hold ceiling to bound, not
+        // this detector's, and exiting during a first drain would only restart-loop.
+        this._startStallDetector();
 
         if (WebSocket) {
             // Subscribe first so no row is missed between the REST snapshot and
@@ -920,6 +1177,7 @@ class HubDbSync {
 
     stop() {
         this.running = false;
+        this._stopStallDetector();
         if (this.ws) {
             try { this.ws.close(); } catch (e) { /* ignore */ }
             this.ws = null;
@@ -950,6 +1208,12 @@ class HubDbSync {
             connected: !!this.ws,
             bootstrapped: this._bootstrapDrained,
             streamWatermark: this.streamWatermark,
+            // The stall detector's two inputs, surfaced so an operator can read the
+            // "hub ahead, mirror frozen" gap off /status instead of inferring it from
+            // deferral logs. null age means the mirror has not certified anything yet.
+            hubTipTs: this._hubTipTs,
+            watermarkFrozenMs: (this._lastWatermarkAdvanceAt == null)
+                ? null : (Date.now() - this._lastWatermarkAdvanceAt),
             tables: tables
         };
     }
@@ -1080,6 +1344,24 @@ class HubDbSync {
         let servedPriceKeys   = (table === 'price_snapshots') ? new Set() : null;
         let priceKeysComplete = true;
         let maxServedRound    = 0;
+        // capability_snapshots only: the same problem as price_snapshots, arrived at by the
+        // same route. Its snapshot endpoint is UNFILTERED too (hub api.js: SELECT * ...
+        // WHERE id > ?), so a complete re-page is the hub's whole table; it carries no
+        // `network` column, so _mirrorNetworkScope returns null and BOTH purges above are
+        // structurally unreachable for it; and being a FULL_REPAGE table its cursor is forced
+        // to 0, so the id-ceiling fence never runs either. Collect the natural keys the hub
+        // actually served so the pass after the drain can clear what it did not, and record
+        // where the local id space stood BEFORE this drain so that pass can only ever judge
+        // rows that predate it. See _reconcileForeignCapabilitySnapshots.
+        let servedSnapshotKeys    = (table === 'capability_snapshots') ? new Set() : null;
+        let snapshotKeysComplete  = true;
+        let maxServedSnapshotBlock = 0;
+        // The local ids are AUTO_INCREMENT and locally assigned (_applyRow strips the wire
+        // id), so a row inserted while this drain runs - a live WS event, or this drain's own
+        // apply - necessarily carries an id above this mark. Reading it here, before the first
+        // page is applied, is what lets the reconciliation exempt those rows without needing a
+        // buffer like the price path's.
+        let snapshotPreDrainMaxId = (table === 'capability_snapshots') ? await this._localMaxId(table, scope) : 0;
         // price_snapshots only: the bootstrap bound. `priceHorizon` is the block
         // time of the oldest block this consumer can still process, 0 when no bound applies.
         // `priceFloor` is how far below it this drain reaches. Rows older than the floor are
@@ -1151,6 +1433,7 @@ class HubDbSync {
                 // sides of it. A row with no usable block_timestamp (0/absent) is never
                 // bounded out - the bound only ever narrows on evidence.
                 let boundOut = false;
+                let refused  = false;
                 if (priceHorizon > 0) {
                     let rowTs = Number(row.block_timestamp);
                     if (Number.isFinite(rowTs) && rowTs > 0 && rowTs < priceHorizon) {
@@ -1177,7 +1460,10 @@ class HubDbSync {
                 }
                 try {
                     if (boundOut) priceSkipped++;
-                    else if (!batched) await this._applyRow(table, row);
+                    // A row the chain-identity fence refuses reports false, and is counted
+                    // out of `applied` below: "bootstrapped N rows" must not include rows
+                    // this mirror deliberately did not take.
+                    else if (!batched) refused = ((await this._applyRow(table, row)) === false);
                     if (servedMatchIds) {
                         servedMatchIds.add(String(row.match_id));
                         let sid = Number(row.id);
@@ -1197,7 +1483,18 @@ class HubDbSync {
                             else servedPriceKeys.add(priceRoundKey(row.round_number, row.coin_pair));
                         }
                     }
-                    if (!boundOut) applied++;
+                    if (servedSnapshotKeys) {
+                        // Every row the hub SERVED, including one the chain-identity fence
+                        // refused to apply: the question this set answers is what the hub
+                        // holds, not what this mirror took from it. A refused relic is
+                        // reported separately (_reportRefusedChainRows) and must not have its
+                        // local twin deleted on the strength of a fence decision made here.
+                        let sb = Number(row.snapshot_block);
+                        if (Number.isFinite(sb) && sb > maxServedSnapshotBlock) maxServedSnapshotBlock = sb;
+                        if (servedSnapshotKeys.size >= CAPABILITY_SNAPSHOT_KEY_CAP) snapshotKeysComplete = false;
+                        else servedSnapshotKeys.add(capabilitySnapshotKey(row));
+                    }
+                    if (!boundOut && !refused) applied++;
                 } catch (err) {
                     applyErrors++;
                     console.warn('HubDbSync: failed to apply row in ' + table + ':', err);
@@ -1256,6 +1553,15 @@ class HubDbSync {
                 return null;
             }
 
+            // Chain-identity handshake, before a single row of this page is applied. The
+            // three cross-chain snapshot envelopes carry the hub's own btc_chain_id (the
+            // block-1 hash of the Bitcoin chain its indexer pushes tips from), which is how
+            // a consumer with no Bitcoin chain of its own - a DOGE or LTC indexer, the
+            // explorer's display mirror - learns which chain to fence on. A Bitcoin indexer
+            // has already set the id 'local' and setExpectedBtcChainId ignores this.
+            if (CROSS_CHAIN_TABLES.indexOf(table) !== -1)
+                await this.setExpectedBtcChainId(result.btc_chain_id, 'hub');
+
             pagesFetched++;
             for (let row of result.rows) {
                 fetched++;
@@ -1277,6 +1583,9 @@ class HubDbSync {
         console.log('HubDbSync: bootstrapped ' + applied + ' rows into ' + table +
             (priceSkipped > 0 ? ' (' + priceSkipped + ' row(s) below the ' + priceFloor +
                 ' mirror floor left unapplied)' : ''));
+        // One line per foreign chain this drain refused rows from, rather than one per row:
+        // a hub database that outlived a venue re-genesis serves its whole relic table.
+        this._reportRefusedChainRows(table);
 
         // Defense-in-depth: if the hub told us its max_id at subscription time and our
         // local copy is still behind that ceiling, the REST snapshot window may have
@@ -1397,6 +1706,13 @@ class HubDbSync {
         // COMPLETE re-page: a partial drain has not seen every row the hub holds, so a
         // "missing" match may simply be on a page we never fetched.
         if (fullyDrained && servedMatchIds) await this._reconcileRetractedMatches(servedMatchIds, maxServedId);
+
+        // Clear the capability snapshots this hub does not hold (#1837). Same COMPLETE-re-page
+        // precondition as the two passes above, and ordered BEFORE the barrier re-evaluation
+        // in the block below so _releaseSnapshotWaiters judges the cleaned table.
+        if (fullyDrained && servedSnapshotKeys)
+            await this._reconcileForeignCapabilitySnapshots(servedSnapshotKeys, snapshotKeysComplete,
+                                                            maxServedSnapshotBlock, snapshotPreDrainMaxId);
 
         // Only arm this table's barrier state once it FULLY drained. The per-table refresh
         // sets <x>Bootstrapped = true and caches its scalar; on a PARTIAL drain (rows fetched
@@ -1639,6 +1955,183 @@ class HubDbSync {
         return removed;
     }
 
+    // ── Chain identity fence for the three CROSS_CHAIN_TABLES ────────────────────
+
+    // Record which Bitcoin chain this mirror's cross-chain rows must belong to.
+    //
+    // `source` is 'local' (this node read block 1 from its own decoder database) or 'hub'
+    // (the value the hub advertises on the snapshot envelopes); see the constructor for why
+    // a local id outranks a hub one. Anything else is ignored.
+    //
+    // A null or malformed id STATES NOTHING and leaves the current expectation alone. A hub
+    // that has not yet been told its chain advertises null, and clearing the expectation on
+    // that would drop the fence at exactly the moment relics are being served.
+    //
+    // Returns true when the expectation moved. On the first non-null value, and on every
+    // change after it, the local relics are purged (see _purgeForeignChainIdRows): rows
+    // applied before the identity was known - a freshly re-genesised chain has no block 1
+    // while the first bootstrap drains - are otherwise invisible to the apply-time filter
+    // for the life of the mirror.
+    async setExpectedBtcChainId(id, source) {
+        if (source !== 'local' && source !== 'hub') return false;
+        let next = (typeof id === 'string') ? id.trim().toLowerCase() : null;
+        if (next === null) return false;
+        if (!/^[0-9a-f]{64}$/.test(next)) {
+            console.warn('HubDbSync: ignoring a malformed btc_chain_id from the ' + source + ' source: ' + id);
+            return false;
+        }
+        // A local measurement is never replaced by a hub value; a disagreement is the hub's
+        // to explain, and it is reported rather than acted on.
+        if (source === 'hub' && this._btcChainIdSource === 'local') {
+            if (next !== this._expectedBtcChainId) this._noteForeignHubChain(next);
+            return false;
+        }
+        if (next === this._expectedBtcChainId) {
+            this._btcChainIdSource = source;               // same chain, now measured locally
+            return false;
+        }
+        let previous = this._expectedBtcChainId;
+        this._expectedBtcChainId = next;
+        this._btcChainIdSource   = source;
+        this._chainIdProbedIds.clear();
+        console.log('HubDbSync: cross-chain rows are fenced to Bitcoin chain ' + next + ' (block 1, ' +
+            (source === 'local' ? 'read from this node\'s own chain' : 'as advertised by the hub') + ')');
+        await this._purgeForeignChainIdRows(previous);
+        return true;
+    }
+
+    // The hub follows a different chain from the one this node indexes. Logged once per
+    // process: it is an operator-visible misconfiguration (or a hub that has not caught up
+    // with a venue re-genesis), not a per-row event, and the local measurement stands
+    // either way, so every row naming the hub's chain is refused.
+    _noteForeignHubChain(hubChainId) {
+        if (this._foreignHubChainNoted) return;
+        this._foreignHubChainNoted = true;
+        console.warn('HubDbSync: the hub follows a different chain (it advertises btc_chain_id ' + hubChainId +
+            ', this node indexes ' + this._expectedBtcChainId + '); its cross-chain rows for that chain are refused');
+    }
+
+    // Clear the mirrored cross-chain rows of a chain this mirror no longer follows.
+    //
+    // Runs when the expectation is first learned and whenever it changes, which is the one
+    // window the apply-time filter cannot cover: rows the hub served before block 1 existed
+    // were applied with no expectation to check them against, and nothing later re-delivers
+    // them for the filter to refuse.
+    //
+    // Deletion rests on the warrant _purgeForeignNetworkRows states: belonging to another
+    // chain is a property of the ROW, provable from the row and this mirror's own
+    // expectation, with no dependence on what one snapshot response happened to contain. A
+    // NULL is not such a property - it means "written before the column existed" - so NULL
+    // rows are always left in place.
+    async _purgeForeignChainIdRows(previous) {
+        let expected = this._expectedBtcChainId;
+        if (!expected) return 0;
+        let total = 0, refreshMatches = false, refreshCalls = false;
+        for (let table of CROSS_CHAIN_TABLES) {
+            let result;
+            try {
+                result = await this.hubDb.doQuery(
+                    'DELETE FROM ' + table + ' WHERE btc_chain_id IS NOT NULL AND btc_chain_id <> ?', [expected]);
+            } catch (e) {
+                console.warn('HubDbSync: could not clear foreign-chain rows from ' + table + ':', e);
+                continue;
+            }
+            // doQuery collapses a non-transactional query error into [], which carries no
+            // affectedRows and is otherwise indistinguishable from a clean zero-row delete.
+            // Say so: an unreported purge leaves relics that the apply-time filter can never
+            // reach again, which is the silent state this method exists to end.
+            let removed = Number(result && result.affectedRows);
+            if (!Number.isFinite(removed)) {
+                console.warn('HubDbSync: foreign-chain purge of ' + table + ' reported no result; ' +
+                    'if this mirror keeps holding rows from a dead chain, this read is where to look');
+                continue;
+            }
+            if (removed <= 0) continue;
+            total += removed;
+            console.warn('HubDbSync: purged ' + removed + ' ' + table + ' row(s) from ' +
+                (previous ? ('chain ' + previous) : 'another chain'));
+            if (table === 'cross_chain_matches') refreshMatches = true;
+            if (table === 'cross_chain_calls')   refreshCalls   = true;
+        }
+        // The two settlement barriers cache MAX(effective_time) over these tables, so a
+        // purge that removed the row holding the maximum must re-read it exactly as a
+        // retraction does; a cached scalar left high opens a barrier over rows that are gone.
+        try {
+            if (refreshMatches) await this._refreshMatchSyncTimestamp();
+            if (refreshCalls)   await this._refreshCallSyncTimestamp();
+            if (refreshMatches || refreshCalls) await this._releaseSnapshotWaiters();
+        } catch (e) {
+            console.warn('HubDbSync: could not refresh the sync barriers after a foreign-chain purge:', e);
+        }
+        return total;
+    }
+
+    // True when this row belongs to a Bitcoin chain other than the one this mirror follows,
+    // and must therefore not be applied.
+    //
+    // Only the three CROSS_CHAIN_TABLES carry the column. A NULL (or absent) value applies
+    // as before, and so does every row while no expectation is known: the fence refuses only
+    // on positive evidence that the row names a different chain.
+    //
+    // A refusal is NOT an apply error. The row is skipped, the cursor moves past it and the
+    // drain continues, because a relic is not a hole in the mirror - it is a row the mirror
+    // is supposed to be without - and failing the page closed here would wedge every
+    // settlement barrier forever against a hub database nobody purged.
+    _refuseForeignChainRow(table, row) {
+        if (CROSS_CHAIN_TABLES.indexOf(table) === -1) return false;
+        let expected = this._expectedBtcChainId;
+        if (!expected) return false;
+        let rowChainId = (row && typeof row.btc_chain_id === 'string') ? row.btc_chain_id.trim().toLowerCase() : null;
+        if (!rowChainId || rowChainId === expected) return false;
+        let key   = table + '|' + rowChainId;
+        let entry = this._refusedChainIdRows.get(key);
+        if (entry) entry.count++;
+        else this._refusedChainIdRows.set(key, { table: table, hash: rowChainId, count: 1 });
+        return true;
+    }
+
+    // Report the refusals counted for `table` since the last report, one line per foreign
+    // chain, and clear them. Called at the end of that table's drain (so a bootstrap that
+    // refused a whole relic table says so once, with the count) and after a refused live row.
+    _reportRefusedChainRows(table) {
+        for (let [key, entry] of Array.from(this._refusedChainIdRows.entries())) {
+            if (entry.table !== table) continue;
+            this._refusedChainIdRows.delete(key);
+            console.warn('HubDbSync: refused ' + entry.count + ' ' + entry.table + ' row(s) carrying btc_chain_id ' +
+                entry.hash + ' (this chain is ' + this._expectedBtcChainId + ')');
+        }
+    }
+
+    // A live row names a chain this mirror does not follow. Decide, ONCE per id, whether the
+    // mirror is the stale side.
+    //
+    // A 'hub' expectation is second-hand: such a consumer has no Bitcoin chain of its own to
+    // read, so a venue re-genesis the hub has already adopted reaches it only as rows it
+    // would otherwise refuse forever. Re-read ONE envelope; if the hub now advertises the
+    // row's id, that is the hub restating its own identity, and the mirror follows it (which
+    // purges the previous chain's rows before this row applies). A 'local' expectation is
+    // this node's own measurement of the chain it indexes and is never adopted away from.
+    async _maybeAdoptHubChainId(table, row) {
+        if (CROSS_CHAIN_TABLES.indexOf(table) === -1) return;
+        let expected = this._expectedBtcChainId;
+        if (!expected) return;
+        let rowChainId = (row && typeof row.btc_chain_id === 'string') ? row.btc_chain_id.trim().toLowerCase() : null;
+        if (!rowChainId || rowChainId === expected) return;
+        if (this._btcChainIdSource !== 'hub') { this._noteForeignHubChain(rowChainId); return; }
+        if (this._chainIdProbedIds.has(rowChainId)) return;  // asked once for this id already
+        this._chainIdProbedIds.add(rowChainId);
+        let envelope;
+        try {
+            envelope = await this._httpGet('/hub-db/snapshot/capability_snapshots?since_id=0&limit=1');
+        } catch (e) {
+            return;                                          // unreachable hub: refuse, and re-ask on a later id
+        }
+        let advertised = (envelope && typeof envelope.btc_chain_id === 'string')
+            ? envelope.btc_chain_id.trim().toLowerCase() : null;
+        if (advertised !== rowChainId) return;               // the hub does not claim this chain: refuse
+        await this.setExpectedBtcChainId(advertised, 'hub');
+    }
+
     // Converge the half of a retract/revive the bootstrap cannot re-deliver (#3211).
     //
     // The hub never DELETEs a retracted match: retractMatchesForReorg UPDATEs it to
@@ -1796,6 +2289,118 @@ class HubDbSync {
             'not hold (a repointed or rebuilt hub leaves the previous one\'s rounds behind, and the newest ' +
             'round_number wins every price read); the mirror now holds only what this hub serves');
         await this._refreshPriceSyncHeight();
+    }
+
+    // Clear capability snapshots this hub does not hold (#1837).
+    //
+    // capability_snapshots is defenceless against a repoint for exactly the reasons
+    // price_snapshots is: no `network` column (so _mirrorNetworkScope returns null and
+    // both purges are unreachable), and a FULL_REPAGE cursor forced to 0 (so the
+    // id-ceiling fence never runs). The re-page then converges only the uq_cap_snap keys
+    // the two hubs SHARE, and a row from the previous hub at a block boundary the new one
+    // has never reached is simply never addressed. MEASURED 2026-08-28: both testnet
+    // indexer mirrors still held 43 rows at snapshot_block 957439 - a BTC MAINNET height -
+    // inherited from the retired first-generation mainnet hub.
+    //
+    // Those survivors are not inert. snapshot_block is the plane every read of this table
+    // keys on: db.getStakeWeightsByCapability / getValidatorsByCapability resolve a
+    // validator set at a block boundary, and _applyRetraction gates the RETRACTION_SIGNING
+    // era on MAX(snapshot_block) over the mirror itself, so a mainnet height sitting in a
+    // testnet mirror both offers a mainnet stake set to any future capability whose
+    // boundary lands on it and holds a flag-day gate open from the wrong chain's height.
+    //
+    // What makes the delete provable is the same warrant _reconcileForeignPriceRounds
+    // rests on, and it is the stronger kind: the hub's snapshot endpoint for this table is
+    // UNFILTERED (hub api.js: SELECT * FROM capability_snapshots WHERE id > ?), and the hub
+    // never deletes or prunes a row it has written, so a COMPLETE drain - short final page,
+    // zero apply errors, the only state this runs in - has seen every row the hub holds. A
+    // local row at a key that drain did not serve is a row this hub does not have, and no
+    // later delivery can address it.
+    //
+    // TWO FENCES on top of that warrant, because this table is consensus-bearing:
+    //   - only rows that PREDATE the drain are judged (id <= preDrainMaxId). The ids are
+    //     locally assigned, so a row applied while the drain ran - a live WS event on this
+    //     table applies immediately rather than buffering, unlike the price path - carries a
+    //     higher id and is exempt; the next drain judges it once the pages cover it.
+    //   - if the hub served rows and NOT ONE local row matched a served key, the two sides
+    //     are not deriving the same key (a column rename, a driver type change) and this
+    //     pass would empty a healthy mirror. Refuse, loudly: a stalled reconciliation is
+    //     recoverable, a wiped validator-set history under a mirror the operator believes
+    //     is converging is not.
+    //
+    // Delete rather than mark: presence of the row IS the qualification statement (there is
+    // no status column and no tombstone consensus honours), and the hub's own row for that
+    // key re-arrives on the next drain if it exists.
+    async _reconcileForeignCapabilitySnapshots(servedKeys, keysComplete, maxServedBlock, preDrainMaxId) {
+        if (!servedKeys) return;
+        preDrainMaxId = Number(preDrainMaxId);
+        // Nothing predates this drain: an empty mirror has nothing to reconcile, and a
+        // read that failed reports 0 (see _localMaxId), where deleting on a guess is the
+        // one outcome worse than waiting for the next drain.
+        if (!Number.isFinite(preDrainMaxId) || preDrainMaxId <= 0) return;
+        let stale;
+        if (!keysComplete) {
+            // The set overflowed its memory cap, so absence from it proves nothing. Fall back
+            // to the weaker half that needs no set: the drain saw every row the hub holds, so
+            // no boundary above the highest it served exists there. That still clears the
+            // shape this pass exists for (a foreign chain's height sits ABOVE anything a
+            // younger network has reached) and leaves any lower foreign boundary alone.
+            console.warn('HubDbSync: capability snapshot reconciliation exceeded its key cap (' +
+                CAPABILITY_SNAPSHOT_KEY_CAP + '); falling back to the snapshot_block-ceiling rule ' +
+                '(boundaries above ' + maxServedBlock + ' only)');
+            let rows;
+            try {
+                rows = await this.hubDb.doQuery(
+                    'SELECT id FROM capability_snapshots WHERE id <= ? AND snapshot_block > ?',
+                    [preDrainMaxId, maxServedBlock]);
+            } catch (e) {
+                console.warn('HubDbSync: capability snapshot reconciliation skipped (read failed):', e);
+                return;
+            }
+            stale = (rows || []).map(r => Number(r.id)).filter(Number.isFinite);
+        } else {
+            let locals;
+            try {
+                // Unrestricted read: the id fence decides what may be DELETED, but the
+                // key-derivation fence below has to weigh every local row, including the ones
+                // this drain just applied. On a mirror whose whole pre-drain content is
+                // foreign - the repoint case - those fresh rows are the only proof that the
+                // two sides still derive the same key.
+                locals = await this.hubDb.doQuery(
+                    'SELECT id, snapshot_block, capability, signing_pubkey, source FROM capability_snapshots');
+            } catch (e) {
+                console.warn('HubDbSync: capability snapshot reconciliation skipped (read failed):', e);
+                return;
+            }
+            locals = locals || [];
+            let matched = locals.filter(r => servedKeys.has(capabilitySnapshotKey(r))).length;
+            if (servedKeys.size > 0 && locals.length > 0 && matched === 0) {
+                console.error('HubDbSync: capability snapshot reconciliation refused: the hub served ' +
+                    servedKeys.size + ' row(s) but NONE of the ' + locals.length + ' local row(s) matched ' +
+                    'a served key. That is a key-derivation mismatch, not contamination; leaving the ' +
+                    'mirror untouched.');
+                return;
+            }
+            stale = locals
+                .filter(r => Number(r.id) <= preDrainMaxId && !servedKeys.has(capabilitySnapshotKey(r)))
+                .map(r => Number(r.id))
+                .filter(Number.isFinite);
+        }
+        if (stale.length === 0) return;
+        // Chunked so one oversized IN list can never blow the statement limit.
+        for (let i = 0; i < stale.length; i += 500) {
+            let chunk = stale.slice(i, i + 500);
+            try {
+                await this.hubDb.doQuery(
+                    'DELETE FROM capability_snapshots WHERE id IN (' + chunk.map(() => '?').join(',') + ')', chunk);
+            } catch (e) {
+                console.warn('HubDbSync: capability snapshot reconciliation failed for a chunk:', e);
+                return;
+            }
+        }
+        console.warn('HubDbSync: removed ' + stale.length + ' capability_snapshots row(s) this hub does not ' +
+            'hold (a repointed or rebuilt hub leaves the previous one\'s validator sets behind, and every ' +
+            'read of this table keys on snapshot_block); the mirror now holds only what this hub serves');
     }
 
     // Re-read EVERY barrier height/timestamp from the local mirror and release the
@@ -2109,6 +2714,12 @@ class HubDbSync {
     // skipped -> finalized upgrade is keyed on VALUES(status), so a chunk holding
     // both states for one round converges to the same row either order.
     async _applyRowsBatched(table, rows) {
+        // The chain-identity fence lives in _applyRow, the single funnel every applied row
+        // passes through. A batch has no per-row verdict, so a CROSS_CHAIN_TABLES row must
+        // never travel this path: declining here keeps the three tables on the per-row path
+        // where the fence runs, and keeps that true if the batch is ever widened beyond
+        // price_snapshots.
+        if (CROSS_CHAIN_TABLES.indexOf(table) !== -1) return false;
         if (table !== 'price_snapshots') return false;
         if (this._batchApplyDisabled) return false;
         if (!Array.isArray(rows) || rows.length < 2) return false;
@@ -2163,6 +2774,11 @@ class HubDbSync {
     // anchor_txid landed with the ANCHOR rollout and stopped all state_checkpoints
     // mirroring). Unknown columns are dropped, never errors.
     async _applyRow(table, row) {
+        // Chain-identity fence, first and for every path that applies a row (bootstrap
+        // per-row, batch fallback, live event, buffered replay). Returns false so the
+        // bootstrap's accounting can tell a refused relic from an applied row; the caller
+        // moves its cursor past it either way, since a refusal is not an apply error.
+        if (this._refuseForeignChainRow(table, row)) return false;
         let allowed = await this._localColumns(table);
         let cols = Object.keys(row).filter(c => allowed.has(c));
         // capability_snapshots is a NATURAL-KEY mirror (uq_cap_snap: snapshot_block,
@@ -3139,7 +3755,14 @@ class HubDbSync {
             return;
         }
         if (event.type === 'row:inserted' && event.table && event.row) {
+            // A live cross-chain row naming another chain is the one case where the mirror
+            // may be the stale side: a consumer that learned its expectation FROM the hub
+            // re-asks the hub once before refusing, so a venue re-genesis the hub has
+            // adopted cannot strand a running DOGE/LTC mirror. A locally-measured
+            // expectation is never adopted away from (see _maybeAdoptHubChainId).
+            await this._maybeAdoptHubChainId(event.table, event.row);
             await this._applyRow(event.table, event.row);
+            this._reportRefusedChainRows(event.table);
             if (event.table === 'price_snapshots')     await this._refreshPriceSyncHeight();
             if (event.table === 'oracle_prices')       await this._refreshOracleSyncTimestamp();
             if (event.table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp();
@@ -3310,6 +3933,10 @@ class HubDbSync {
                             // Do not advance while a live schema mismatch is outstanding:
                             // rows are being refused below, so certifying the stream as
                             // caught-up would settle blocks against data we did not apply.
+                            // Record the hub's claimed tip BEFORE the gate. A tip the gate
+                            // refuses is the evidence the stall detector runs on: without
+                            // it a frozen watermark is indistinguishable from a quiet hub.
+                            this._noteHubTip(event.ts);
                             if (this._bootstrapDrained && !this._schemaMismatchSeen) this._advanceWatermark(event.ts);
                         } else if (event.type === 'row:inserted' || event.type === 'row:deleted') {
                             // Schema fail-closed check, price-event buffering
@@ -3388,6 +4015,15 @@ class HubDbSync {
         const now = Date.now();
         if (this._lastResyncRequestAt && (now - this._lastResyncRequestAt) < this.barrierHoldCeilingMs) return false;
         this._lastResyncRequestAt = now;
+        return this._driveResync(reason);
+    }
+
+    // The resync itself, without the hold-ceiling throttle above. Split out because the
+    // watermark-stall detector has to be able to spend its ONE remedy on its own
+    // schedule: sharing requestResync's rate limiter would let an unrelated block-loop
+    // resync minutes earlier swallow the stage-1 attempt whose outcome stage 2 then
+    // measures, and the detector would exit having never actually retried.
+    _driveResync(reason) {
         this.forcedResyncCount++;
         console.warn('HubDbSync: forcing a mirror resync (' + String(reason || 'barrier hold ceiling reached') + ')');
         if (this.ws) {
@@ -3652,6 +4288,14 @@ module.exports.resolveWatermarkGrace = resolveWatermarkGrace;
 // storm the hub or never re-drive it at all.
 module.exports.HUB_SYNC_BARRIER_HOLD_CEILING_S = HUB_SYNC_BARRIER_HOLD_CEILING_S;
 module.exports.resolveBarrierHoldCeilingMs     = resolveBarrierHoldCeilingMs;
+// The stall detector's windows, their resolver and the verdict itself. The verdict is
+// exported because it is the whole decision: a test that drove it only through timers
+// and a socket could not tell a suppression apart from a window that had not elapsed.
+module.exports.HUB_SYNC_WATERMARK_STALL_S      = HUB_SYNC_WATERMARK_STALL_S;
+module.exports.HUB_SYNC_WATERMARK_STALL_EXIT_S = HUB_SYNC_WATERMARK_STALL_EXIT_S;
+module.exports.WATERMARK_STALL_CHECK_MS        = WATERMARK_STALL_CHECK_MS;
+module.exports.resolveWatermarkStallMs         = resolveWatermarkStallMs;
+module.exports.watermarkStallVerdict           = watermarkStallVerdict;
 // The batch's chunk size and the drain's progress cadence, plus the shared upsert
 // builder: exported so the test can prove the batched statement and the per-row
 // statement are the same statement, which is the only thing keeping the ODKU body

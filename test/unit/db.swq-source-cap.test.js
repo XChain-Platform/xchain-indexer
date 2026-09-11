@@ -36,9 +36,22 @@ const { getTestConfig } = require('../fixtures/config');
 const Utility           = require('../../src/utility');
 const Database          = require('../../src/db');
 const swqCap            = require('../../src/swq_source_cap_activation');
+const swc               = require('../../src/stake_weight_collation_activation');
 
 const MAX_SOURCES = swqCap.STAKE_WEIGHT_MAX_SOURCES;      // 1000
 const MAX_KEYS    = swqCap.STAKE_WEIGHT_MAX_KEYS_PER_SOURCE; // 64
+
+// The stake-weight ordering collation gate splices a ` COLLATE utf8_bin` suffix into
+// the very ORDER BY clauses this suite matches on, and it is armed on mainnet from
+// genesis (2026-09-09 ruling) while testnet stays unpinned. Derive the suffix from
+// that gate instead of freezing a literal: this suite stays about the SOURCE CAP,
+// and it additionally proves the two gates COMPOSE. Composition is what matters for
+// liveness here, because the follower rebuilds stakes_root from the byte-mirrored
+// query: a cap applied under a different order selects different survivors.
+function collateSuffix(blockIndex, coin, network) {
+    return swc.stakeWeightCollate(swc.isStakeWeightBinCollationActive(blockIndex, network, coin));
+}
+function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
 // Build a Database with an injected config + a captured doQuery. `network`/`block`
 // drive the gate; `rows` is what doQuery returns.
@@ -66,7 +79,9 @@ describe('SWQ source-cap gate + truncation (SWQ-TRUNC-1 liveness) @regression @t
             const db = dbFor('mainnet', []);
             await db.getStakeWeightsByCapability('price', 900000, '0');
             const { query, args } = db._calls[0];
-            assert.match(query, /ORDER BY source, pubkey\s+LIMIT \?/, 'legacy uncapped LIMIT shape');
+            const c = escapeRe(collateSuffix(900000, 'BTC', 'mainnet'));
+            assert.match(query, new RegExp('ORDER BY source' + c + ', pubkey' + c + '\\s+LIMIT \\?'),
+                'legacy uncapped LIMIT shape');
             assert.doesNotMatch(query, /DENSE_RANK/, 'no window cap below the height');
             assert.strictEqual(args[args.length - 1], db.config['VALIDATOR_QUERY_LIMIT'], 'LIMIT bound to VALIDATOR_QUERY_LIMIT');
         });
@@ -75,11 +90,30 @@ describe('SWQ source-cap gate + truncation (SWQ-TRUNC-1 liveness) @regression @t
             const db = dbFor('mainnet', []);
             await db.getStakeWeightsByCapability('price', 960000, '0');
             const { query, args } = db._calls[0];
-            assert.match(query, /DENSE_RANK\(\) OVER \(ORDER BY b\.source\)/, 'ranks DISTINCT sources');
-            assert.match(query, /ROW_NUMBER\(\) OVER \(PARTITION BY b\.source ORDER BY b\.pubkey\)/, 'bounds keys per source');
+            const c = escapeRe(collateSuffix(960000, 'BTC', 'mainnet'));
+            assert.match(query, new RegExp('DENSE_RANK\\(\\) OVER \\(ORDER BY b\\.source' + c + '\\)'),
+                'ranks DISTINCT sources');
+            assert.match(query, new RegExp('ROW_NUMBER\\(\\) OVER \\(PARTITION BY b\\.source' + c + ' ORDER BY b\\.pubkey' + c + '\\)'),
+                'bounds keys per source');
             assert.match(query, /WHERE r\._sr <= \? AND r\._kr <= \?/, 'applies both caps');
             assert.strictEqual(args[args.length - 2], MAX_SOURCES + 1, 'over-fetches one extra source for truncation detect');
             assert.strictEqual(args[args.length - 1], MAX_KEYS, 'per-source key bound is the last arg');
+        });
+
+        // The control that keeps the helper above honest, built through the SAME helper:
+        // an always-empty helper fails the mainnet cases, an always-suffix one fails here.
+        // testnet caps from genesis but is not collation-pinned, so it is that venue.
+        it('an un-collated venue keeps the bare window: the cap and the collation are separate gates', async function () {
+            assert.strictEqual(swc.STAKE_WEIGHT_COLLATION_ACTIVATION['BTC:testnet'], null,
+                'this control needs a capped-but-uncollated venue; re-point it if testnet is ever pinned');
+            const c = collateSuffix(900000, 'BTC', 'testnet');
+            assert.strictEqual(c, '', 'the collation gate must be off on an unpinned chain');
+            const db = dbFor('testnet', []);
+            await db.getStakeWeightsByCapability('price', 900000, '0');
+            const { query } = db._calls[0];
+            assert.match(query, new RegExp('DENSE_RANK\\(\\) OVER \\(ORDER BY b\\.source' + escapeRe(c) + '\\)'),
+                'testnet caps from genesis');
+            assert.doesNotMatch(query, /COLLATE/, 'an unpinned chain must order exactly as it does today');
         });
 
         it('regtest is capped from genesis (activation 0)', async function () {

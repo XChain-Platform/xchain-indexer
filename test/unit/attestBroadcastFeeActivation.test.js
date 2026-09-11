@@ -24,13 +24,13 @@ describe('ATTEST broadcast-fee activation (spec §11) @regression', function () 
 
     describe('isAttestBroadcastFeeActive', function () {
 
-        it('is INERT on mainnet: the operator still owns that height', function () {
-            assert.strictEqual(abf.ATTEST_BROADCAST_FEE_ACTIVATION.mainnet, null);
-            // A null threshold must read as OFF at every height, including absurd ones:
-            // a `blockIndex >= null` coercion would read 0 and arm the gate from genesis.
+        it('is ARMED at genesis on mainnet by the 2026-09-09 ruling', function () {
+            // 0 attestations have ever been recorded on any mainnet chain (measured
+            // 2026-09-09), so no settle exists whose escrow split this reinterprets.
+            assert.strictEqual(abf.ATTEST_BROADCAST_FEE_ACTIVATION.mainnet, 0);
             for (const h of [0, 1, 961000, 999999999])
-                assert.strictEqual(abf.isAttestBroadcastFeeActive(h, 'mainnet'), false,
-                    'an unallocated height must never arm at ' + h);
+                assert.strictEqual(abf.isAttestBroadcastFeeActive(h, 'mainnet'), true,
+                    'a genesis-armed mainnet must be active at ' + h);
         });
 
         it('is armed from genesis on testnet and regtest so both exercise the carve-out', function () {

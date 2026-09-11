@@ -59,11 +59,14 @@
  * instant across all of them rather than three heights that have to be kept in
  * step.
  *
- * MAINNET IS UNARMED, on the house sentinel (9999999999, year 2286). Naming the
- * activation instant is a separate operator act and a one-line edit here; the
- * incidence data that should inform it, how many gated SENDs live history has
- * already rejected on a compact spelling, is a query against the live indexer
- * databases and is not measured yet.
+ * MAINNET IS ARMED AT GENESIS (operator ruling 2026-09-09). The incidence data
+ * this arming waited on, how many gated SENDs live history has already rejected
+ * on a compact spelling, has now been queried read-only against the live
+ * indexer databases: mainnet history is ISSUE and ANCHOR only, so it holds 0
+ * SEND of any kind and therefore no gated SEND for the resolved compare to
+ * re-judge. The rule is the identity function over every mainnet block
+ * committed so far, and no balance or ledger hash moves under it. The proof is
+ * a per-chain OLD-vs-ON replay witness, not this comment.
  *
  * testnet and regtest are genesis-active, the posture every sibling
  * execution-path gate takes: testnet restarted at a fresh genesis and carries no
@@ -81,7 +84,7 @@
 // Per-network activation, interpreted against the block's consensus timestamp
 // (data['BLOCK_TIME']).
 const GATED_HANDOFF_REF_ACTIVATION = {
-    mainnet: 9999999999,    // UNARMED sentinel; the instant is the operator's to name
+    mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 SEND, measured 2026-09-09)
     testnet: 0,
     regtest: 0,
 };

@@ -46,6 +46,13 @@ class Cross_Settle {
         this.indexerDb = action.indexerDb;
         this.util      = action.util;
         this.mapper    = action.mapper;
+        // Matches whose local leg can never settle on this chain (the leg's action index is
+        // already parsed and is not a cross-chain offer or order), keyed by match_id with the
+        // block that judged them. Process-local on purpose: it changes no row, mints no action
+        // and moves no match out of the per-block prefix, so every node still evaluates the
+        // same list; it only stops re-reading and re-logging the same verdict on every block.
+        // A rollback below the judging block re-evaluates the match (see parse).
+        this._dismissed = new Map();
     }
 
     // Canonical signing string. MUST byte-match the hub's CrossChainDexEngine._canonicalMatch.
@@ -86,6 +93,46 @@ class Cross_Settle {
         // network; this is the security boundary's belt-and-suspenders guard.
         if(String(m.network || '') !== String(this.config['NETWORK'] || '')){
             console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : network mismatch (' + m.network + ' != ' + this.config['NETWORK'] + ') : skipping');
+            return;
+        }
+
+        // Identify this chain's leg: a = canonical-lower. On a's chain release a's escrow to b's payout (b_payout_addr);
+        // on b's chain release b's escrow to a's payout (a_payout_addr).
+        let isA = (m.a_chain === coin);
+        if(!isA && m.b_chain !== coin) return;                  // not our match
+
+        let localActionIndex = isA ? Number(m.a_action_index) : Number(m.b_action_index);
+        let localKind        = String(isA ? m.a_kind : m.b_kind) || 'swap';
+        let giveTick         = isA ? m.a_tick : m.b_tick;
+        let giveAmount       = isA ? m.a_amount : m.b_amount;   // FILL released from local escrow
+        let getAmount        = isA ? m.b_amount : m.a_amount;   // FILL the local offer receives
+        let getTick          = isA ? m.b_tick : m.a_tick;       // tick the local offer receives
+        let giveOwnership    = Number(isA ? m.a_ownership : m.b_ownership);
+        let payoutAddr       = isA ? m.b_payout_addr : m.a_payout_addr;
+        let counterpartyCoin = isA ? m.b_chain : m.a_chain;
+
+        // A match the mirror keeps serving but whose local leg is provably not an offer on
+        // this chain never settles, however many blocks re-evaluate it: a hub database that
+        // outlives a regtest re-genesis carries matches from the dead chain, and each fresh
+        // indexer then re-read and re-logged both of them at every block. Judge that BEFORE
+        // the signature work, since it depends on chain state only. "Provably" means the
+        // leg's action index is already parsed here and resolves to no open-able offer or
+        // order; an index not yet parsed is a leg the replay has not reached, so it falls
+        // through to the ordinary path and is retried. A dismissal holds only while the chain
+        // is above the block that judged it, so a rollback below that block re-evaluates
+        // the match without any rollback hook.
+        let blockIndex = Number(data['BLOCK_INDEX']);
+        let dismissed  = this._dismissed.get(m.match_id);
+        if(dismissed){
+            if(blockIndex > dismissed.block) return;
+            this._dismissed.delete(m.match_id);
+        }
+        let localInfo = (localKind === 'order')
+            ? await this.indexerDb.getOrderInfo(counterpartyCoin, localActionIndex)
+            : await this.indexerDb.getSwapInfo(counterpartyCoin, localActionIndex);
+        if(!localInfo && await this.indexerDb.isActionIndexParsed(localActionIndex)){
+            this._dismissed.set(m.match_id, { block: blockIndex });
+            console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : local ' + localKind + ' ' + coin + ':' + localActionIndex + ' is an indexed action but not a cross-chain ' + localKind + ' : dismissed until a reorg below block ' + blockIndex);
             return;
         }
 
@@ -147,29 +194,15 @@ class Cross_Settle {
             return;
         }
 
-        // Identify this chain's leg: a = canonical-lower. On a's chain release a's escrow to b's payout (b_payout_addr);
-        // on b's chain release b's escrow to a's payout (a_payout_addr).
-        let isA = (m.a_chain === coin);
-        if(!isA && m.b_chain !== coin) return;                  // not our match
-
-        let localActionIndex = isA ? Number(m.a_action_index) : Number(m.b_action_index);
-        let localKind        = String(isA ? m.a_kind : m.b_kind) || 'swap';
-        let giveTick         = isA ? m.a_tick : m.b_tick;
-        let giveAmount       = isA ? m.a_amount : m.b_amount;   // FILL released from local escrow
-        let getAmount        = isA ? m.b_amount : m.a_amount;   // FILL the local offer receives
-        let getTick          = isA ? m.b_tick : m.a_tick;       // tick the local offer receives
-        let giveOwnership    = Number(isA ? m.a_ownership : m.b_ownership);
-        let payoutAddr       = isA ? m.b_payout_addr : m.a_payout_addr;
-        let counterpartyCoin = isA ? m.b_chain : m.a_chain;
-
         // ORDER leg → partial-fill settlement (release the fill, decrement remaining, complete
         // only when fully filled). SWAP leg falls through to the Phase-A full-release path.
         if(localKind === 'order')
-            return await this._settleOrderLeg(data, m, coin, localActionIndex, giveTick, giveAmount, getAmount, getTick, giveOwnership, payoutAddr, counterpartyCoin);
+            return await this._settleOrderLeg(data, m, coin, localActionIndex, giveTick, giveAmount, getAmount, getTick, giveOwnership, payoutAddr, counterpartyCoin, localInfo);
 
         // The local offer must still be open (not already settled / cancelled / expired).
-        // A cross-chain swap stores get_coin = counterparty coin, so getSwapInfo resolves it.
-        let swapInfo = await this.indexerDb.getSwapInfo(counterpartyCoin, localActionIndex);
+        // A cross-chain swap stores get_coin = counterparty coin, so getSwapInfo resolved it
+        // above (the dismissal probe), once per block.
+        let swapInfo = localInfo;
         if(!swapInfo){
             console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : local offer ' + coin + ':' + localActionIndex + ' not found : skipping');
             return;
@@ -272,10 +305,12 @@ class Cross_Settle {
     // to the counterparty, record the fill (so the order's remaining drops), and complete the
     // order only once fully filled. Multiple partial fills each settle once (distinct match_id
     // → distinct cross_chain_settlements row), accumulating against the same local order.
-    async _settleOrderLeg(data, m, coin, localActionIndex, giveTick, giveAmount, getAmount, getTick, giveOwnership, payoutAddr, counterpartyCoin){
+    async _settleOrderLeg(data, m, coin, localActionIndex, giveTick, giveAmount, getAmount, getTick, giveOwnership, payoutAddr, counterpartyCoin, orderInfo){
         // A cross-chain order stores get_coin = counterparty coin, so getOrderInfo (which
-        // filters by get_coin) resolves it under the counterparty coin.
-        let orderInfo = await this.indexerDb.getOrderInfo(counterpartyCoin, localActionIndex);
+        // filters by get_coin) resolves it under the counterparty coin; parse() already read
+        // it for the dismissal probe and hands it in, so the leg is read once per block.
+        if(orderInfo === undefined)
+            orderInfo = await this.indexerDb.getOrderInfo(counterpartyCoin, localActionIndex);
         if(!orderInfo){
             console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : local order ' + coin + ':' + localActionIndex + ' not found : skipping');
             return;

@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.17.0] - 2026-09-10
+
+### Added
+- The boot-time index reconciler now recognises FULLTEXT indexes, so an aged database self-heals the contracts meta_search index instead of depending on the migration alone.
+- Added the CONTRACT_META_REQUIRED flag day: a DEPLOY is rejected unless its contract exports a conforming meta.name and meta.description.
+- A contract's own exported name, description and version are extracted at deploy time into searchable columns on the contracts table, with a full-text index over the name and description so a contract can be found by a word instead of only by its index.
+- Added the REST_PATTERN_METER rule: the deploy validator refuses the rest positions the allocator meter cannot reach, armed at genesis on testnet and regtest and on 2027-01-01 on mainnet, pinned byte-equal to the VM gate.
+
+### Changed
+- CONTRACT_META_REQUIRED arms on testnet at 2026-09-13T00:00:00Z (1789257600); mainnet stays at genesis, regtest at genesis.
+- Mainnet activation gates are armed at genesis under the 2026-09-09 ruling, proven identity on the measured mainnet history and on a from-genesis replay witness.
+- The VM consensus-epoch pin and its goldens move to epoch 4 with the `banned-rest` deploy rule.
+
+### Fixed
+- A hub-mirror stream watermark that froze under healthy heartbeats is bounded, so a stalled mirror surfaces instead of reading as current.
+- A -32602 rejection from the hub is a terminal push rather than a retry, so a mis-pointed push stops re-sending forever.
+- A marker-stamped ATTEST v5 batch head is reset when the v6 chunk that completed it is reorged out, so the re-mined chunk rejoins a live head instead of a dead window.
+- The hub-db-sync bootstrap clears `capability_snapshots` rows the current hub does not serve, so a repointed indexer stops judging against a previous hub's set.
+- A reorg that un-lands an ATTEST v5/v6 batch retracts the batch link on the hub instead of leaving it pointing at a transaction the chain no longer carries.
+- The empty-archive recovery log names a version that can exist.
+
 ## [0.16.1] - 2026-09-09
 
 ### Fixed
@@ -17,6 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Above a new zero-confirmation activation height the responsible set carries one headroom slot from the request block, the mirror applier falls through an inert response row to the next valid one, and a fulfilled request's fee splits among the validators that actually signed the accepted response.
 - ROLLCALL v1 is parsed and verified with its gates list, the epoch close records each verified signer's list in a new `rollcall_gates` table, and the attestation capability set drops a validator whose recorded list lacks a rule active at the request block; a request that then falls under its redundancy is refused with a distinct reason.
 - The ROLLCALL close line tallies the signers it dropped by reason (no row, foreign ledger hash, wrong form for the epoch, bad signature), so a federation discarded on a canonical mismatch no longer reads as a silent absence.
+- The hub mirror refuses cross-chain match, call and capability-snapshot rows stamped with another chain's Bitcoin block-1 hash, learns the expected hash from the Bitcoin chain locally or from the hub's snapshot pages otherwise, and purges rows from a previous chain once the hash is known.
+### Fixed
+- An unsettleable cross-chain match, one whose local leg is an indexed action that is not an offer, is dismissed once instead of being re-read and re-logged at every block.
 
 ## [0.15.5] - 2026-09-08
 

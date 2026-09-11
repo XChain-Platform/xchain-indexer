@@ -106,6 +106,34 @@ const ALLOWED_ORIGIN_CHAINS = ['LTC', 'DOGE'];
 // ALLOWED_ORIGIN_CHAINS is. A batch on any other chain is invalid.
 const BATCH_CHAIN = 'DOGE';
 
+// Marker appended to the verdict a COMPLETING v6 continuation stamps on a surviving
+// v5 head (_absorbCompletedBatch). It exists for the reorg reset in rollback.js and
+// for nothing else.
+//
+// WHY A MARKER AND NOT A BLANKET RESTORE. The stamp is an in-place write on a row
+// that landed in an EARLIER block, so a reorg taking the completing chunk deletes the
+// chunk and cannot undo the stamp: the head stays terminal, drops out of
+// getAttestBatchChunks (which reads status 'valid' only), and _canonicalBatchHead then
+// resolves NOTHING on replay, so the re-mined chunk rejoins a batch with no head and
+// the window is dead on this node while a from-genesis replay has it live. The obvious
+// remedy - reset every non-valid head joined to an orphaned chunk back to 'valid' - is
+// UNSAFE: a head can be terminal because it was terminal AT WRITE TIME (a duplicate
+// head for the publisher's window, a foreign NETWORK, a single-chunk head that failed
+// its own quorum), and blanket-restoring those REVIVES a head that was never valid,
+// handing one publisher two live heads for one window.
+//
+// A marker separates the two classes with no ambiguity at all: only the post-hoc stamp
+// carries it, and a row carrying it was, by construction, 'valid' immediately before
+// (the head reached _absorbCompletedBatch only by coming back from the status='valid'
+// chunk read). So the pre-flip status the reset restores is not a guess, it is the one
+// value the flip could possibly have overwritten.
+//
+// It is a SUFFIX so the verdict itself stays first and stays readable: an operator (and
+// every existing reader keyed on the reason's leading text) still sees why the batch
+// failed. Keep it byte-identical to the copy in rollback.js; a test pins the pair.
+// It must contain no SQL LIKE wildcard ('%' or '_'), because the reset matches on it.
+const ATTEST_BATCH_COMPLETION_STAMP = ' (stamped on batch completion)';
+
 // Decoded-body ceiling for a mirror-applied response, the byte-twin of the hub's
 // ATTEST_RESPONSE_BODY_MAX_BYTES (xchain-hub/src/lib/attest_response_body_cap.js),
 // which the leader enforces before proposing and every follower before signing.
@@ -1369,7 +1397,11 @@ class Attest {
         if(failure){
             console.warn("\t ATTEST v6 : batch=" + String(head.batchKey).substring(0,16) + '...' +
                          ' : completed and failed, flagging the head : ' + failure);
-            await this.indexerDb.setAttestBatchStatus(Number(headRow.action_index), failure);
+            // The verdict carries the completion marker so a later reorg of THIS chunk can
+            // tell an after-the-fact stamp from a head that was terminal when it was written,
+            // and restore only the former (ATTEST_BATCH_COMPLETION_STAMP; rollback.js).
+            await this.indexerDb.setAttestBatchStatus(Number(headRow.action_index),
+                                                      failure + ATTEST_BATCH_COMPLETION_STAMP);
             return;
         }
 
@@ -2520,3 +2552,4 @@ class Attest {
 module.exports = Attest;
 module.exports.REQUEST_ID_PREIMAGE_FIELDS = REQUEST_ID_PREIMAGE_FIELDS;
 module.exports.ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK = ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK;
+module.exports.ATTEST_BATCH_COMPLETION_STAMP = ATTEST_BATCH_COMPLETION_STAMP;

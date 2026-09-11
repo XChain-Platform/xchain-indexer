@@ -62,9 +62,15 @@ describe('Multi-leg consolidation: per-leg amount format @regression @tier1', fu
 
     describe('activation module', function () {
 
-        it('mainnet is UNARMED on the house sentinel', function () {
-            assert.strictEqual(activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION.mainnet, 9999999999);
-            assert.strictEqual(activation.isConsolidationLegAmountActive(1700000000, 'mainnet'), false);
+        it('mainnet is ARMED AT GENESIS by the 2026-09-09 ruling', function () {
+            // Mainnet history is ISSUE and ANCHOR only, so 0 SEND and 0 DESTROY
+            // (measured 2026-09-09) leave the per-leg rule identity over it.
+            assert.strictEqual(activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION.mainnet, 0);
+            // Either sentinel reads back as "still unarmed" at the GoLiveGate.
+            assert.notStrictEqual(activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION.mainnet, 9999999999);
+            assert.notStrictEqual(activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION.mainnet, 999999999);
+            assert.strictEqual(activation.isConsolidationLegAmountActive(0, 'mainnet'), true);
+            assert.strictEqual(activation.isConsolidationLegAmountActive(1700000000, 'mainnet'), true);
         });
 
         it('testnet and regtest run from genesis', function () {

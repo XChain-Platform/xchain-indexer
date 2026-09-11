@@ -17,7 +17,7 @@
  * names the CHAIN accepts, so the cases below are about the fork surface rather
  * than about regex mechanics: what is accepted either side of the boundary, that
  * the boundary itself is inclusive, that an un-evaluatable gate falls to the
- * legacy bound rather than opening early, and that mainnet is still UNARMED.
+ * legacy bound rather than opening early, and that mainnet is ARMED at genesis.
  */
 
 'use strict';
@@ -34,11 +34,15 @@ const ARMED = 1800000000;   // an arbitrary armed threshold, for the boundary ca
 describe('PRICE v0 pair-name widening flag-day @regression', function () {
 
     describe('the activation map', function () {
-        it('is still UNARMED on mainnet', function () {
-            // The moment this becomes a real timestamp it is a consensus commitment,
-            // so it must not drift in by accident. D6 arms it deliberately.
-            assert.strictEqual(PRICE_PAIR_WIDEN_ACTIVATION.mainnet, 9999999999);
-            assert.strictEqual(isPricePairWideningActive(Math.floor(Date.now() / 1000), 'mainnet'), false);
+        it('is ARMED at genesis on mainnet by the 2026-09-09 ruling', function () {
+            // 0 PRICE actions have ever been indexed on any mainnet chain (measured
+            // 2026-09-09), so the widened bound reinterprets no historical round, and
+            // arming at 0 keeps LTC/DOGE native-coin fees payable from the first block.
+            assert.strictEqual(PRICE_PAIR_WIDEN_ACTIVATION.mainnet, 0);
+            assert.strictEqual(isPricePairWideningActive(0, 'mainnet'), true);
+            assert.strictEqual(isPricePairWideningActive(Math.floor(Date.now() / 1000), 'mainnet'), true);
+            // Still fails closed on a time it cannot evaluate, even at threshold 0.
+            assert.strictEqual(isPricePairWideningActive('nope', 'mainnet'), false);
         });
 
         it('is genesis-on for testnet and regtest', function () {
@@ -137,13 +141,18 @@ describe('PRICE v0 pair-name widening flag-day @regression', function () {
     describe('pricePairPattern() / isValidPricePair()', function () {
         it('hands back the bound in force for the network and time', function () {
             assert.strictEqual(pricePairPattern(0, 'regtest'), PRICE_PAIR_RE_WIDE);
-            assert.strictEqual(pricePairPattern(0, 'mainnet'), PRICE_PAIR_RE_LEGACY);
+            assert.strictEqual(pricePairPattern(0, 'mainnet'), PRICE_PAIR_RE_WIDE);
+            // A network the gate cannot evaluate still falls back to the legacy bound:
+            // the negative control, now that mainnet is armed from genesis.
+            assert.strictEqual(pricePairPattern(0, 'signet'), PRICE_PAIR_RE_LEGACY);
         });
 
-        it('accepts XCHAIN/USD on regtest and refuses it on unarmed mainnet', function () {
+        it('accepts XCHAIN/USD on regtest and on genesis-armed mainnet, never on an unknown network', function () {
             assert.strictEqual(isValidPricePair('XCHAIN/USD', 0, 'regtest'), true);
-            assert.strictEqual(isValidPricePair('XCHAIN/USD', 4102444800, 'mainnet'), false);
+            assert.strictEqual(isValidPricePair('XCHAIN/USD', 0, 'mainnet'), true);
+            assert.strictEqual(isValidPricePair('XCHAIN/USD', 4102444800, 'mainnet'), true);
             assert.strictEqual(isValidPricePair('BTC/USD', 4102444800, 'mainnet'), true);
+            assert.strictEqual(isValidPricePair('XCHAIN/USD', 4102444800, 'signet'), false);
         });
 
         it('treats non-string input as malformed rather than coercing it', function () {

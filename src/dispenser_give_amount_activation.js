@@ -36,14 +36,16 @@
  * blocks, so it is gated on the block's consensus timestamp: below the
  * threshold the legacy acceptance runs and historical replay is byte-identical.
  *
- * MAINNET IS UNARMED, on the house sentinel (9999999999, year 2286). The
- * dispenser-family cohort anchor (1786060800, 2026-08-07) is already PAST, and
- * a tightening on a retroactive boundary makes a from-genesis replay reject
- * creates the live chain accepted, which is the fork the gate exists to
- * prevent. Naming the activation instant is a separate operator act, as with
- * the sibling sentinels in protocol_changes.js; arming it is a one-line edit
- * here. testnet/regtest run from genesis, matching every dispenser-family
- * activation and the 2.0.0 protocol_changes cohort they mirror.
+ * MAINNET IS ARMED AT GENESIS (operator ruling 2026-09-09). A tightening on a
+ * retroactive boundary only rejects creates the live chain accepted when the
+ * chain accepted some: read-only against the live indexer databases on
+ * 2026-09-09, mainnet holds 0 dispensers and 0 dispenses, so there is no
+ * format-0 create for this rule to re-judge and it is the identity function
+ * over every mainnet block committed so far. That is why genesis is safe here
+ * where the passed cohort anchor (1786060800, 2026-08-07) would not have been
+ * if any dispenser existed. The proof is a per-chain OLD-vs-ON replay witness,
+ * not this comment. testnet/regtest run from genesis, matching every
+ * dispenser-family activation and the 2.0.0 protocol_changes cohort they mirror.
  *
  * Execution-path gate (create-time acceptance), not a hashing-path change, so
  * indexer-only with no xchain-sync twin, exactly as dispenser_caps_activation.
@@ -53,7 +55,7 @@
 // Per-network activation, interpreted against the block's consensus timestamp
 // (data['BLOCK_TIME']).
 const DISPENSER_GIVE_AMOUNT_ACTIVATION = {
-    mainnet: 9999999999,    // UNARMED sentinel; the instant is the operator's to name
+    mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 dispensers, 0 dispenses, measured 2026-09-09)
     testnet: 0,
     regtest: 0,
 };

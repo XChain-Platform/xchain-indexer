@@ -51,23 +51,50 @@ describe('attest_responsible_widening (indexer copy)', function () {
     const unratified = () => Object.keys(wid.ATTEST_RESPONSIBLE_WIDENING_ACTIVATION)
         .filter(n => wid.ATTEST_RESPONSIBLE_WIDENING_ACTIVATION[n] === null);
 
+    // Every shipped network is armed since the 2026-09-09 genesis-arm ruling (mainnet 0),
+    // so the null branch is driven through a temporary key on the live map rather than
+    // riding whichever network happened to be unratified. Restored in finally, so a
+    // failure inside the body cannot leak a fake network into the rest of the suite.
+    function withNullNetwork(fn) {
+        const NET = 'unratifiednet';
+        wid.ATTEST_RESPONSIBLE_WIDENING_ACTIVATION[NET] = null;
+        try { fn(NET); }
+        finally { delete wid.ATTEST_RESPONSIBLE_WIDENING_ACTIVATION[NET]; }
+    }
+
     it('is inert on every network whose height is the null sentinel, at any height', function () {
-        const nets = unratified().concat(['nosuchnet', undefined]);
-        assert.ok(unratified().length > 0, 'no unratified network left: this test would be vacuous');
-        for (const net of nets) {
-            for (const at of [REQ, REQ + 8, REQ + 5000]) {
-                assert.strictEqual(wid.widenSlots(at, REQ, DEADLINE, net), 0, String(net) + '@' + at);
+        withNullNetwork(function (nullNet) {
+            const nets = unratified().concat([nullNet, 'nosuchnet', undefined]);
+            assert.ok(unratified().includes(nullNet), 'the null sentinel case must be reachable');
+            for (const net of nets) {
+                for (const at of [REQ, REQ + 8, REQ + 5000]) {
+                    assert.strictEqual(wid.widenSlots(at, REQ, DEADLINE, net), 0, String(net) + '@' + at);
+                }
             }
-        }
+        });
     });
 
     it('keeps the null sentinel from coercing into height 0', function () {
         // Without the explicit null test in widenSlots, `req >= null` coerces to
         // `req >= 0` and the ladder arms on every block of an unratified network.
-        for (const net of unratified()) {
-            assert.strictEqual(wid.widenSlots(0, 0, 10, net), 0, net + ' armed at block 0');
-            assert.strictEqual(wid.widenSlots(1e9, 0, 10, net), 0, net + ' armed at a high block');
-        }
+        withNullNetwork(function (nullNet) {
+            for (const net of unratified()) {
+                assert.strictEqual(wid.widenSlots(0, 0, 10, net), 0, net + ' armed at block 0');
+                assert.strictEqual(wid.widenSlots(1e9, 0, 10, net), 0, net + ' armed at a high block');
+            }
+            assert.ok(unratified().includes(nullNet));
+        });
+    });
+
+    it('arms mainnet at genesis, so a request at block 0 runs the ladder', function () {
+        // Ruled 2026-09-09: 0 attestations on any mainnet chain, so widening reinterprets
+        // no admitted request. Below-the-height is now unreachable on mainnet, which is
+        // the whole point of a genesis arm.
+        assert.strictEqual(wid.ATTEST_RESPONSIBLE_WIDENING_ACTIVATION.mainnet, 0);
+        // Request at block 0, deadline 30: start = 0 + confirmations (3), span 27,
+        // segment 9. The first segment grants nothing; the second grants one slot.
+        assert.strictEqual(wid.widenSlots(0, 0, 30, 'mainnet'), 0, 'the first segment is the unwidened set');
+        assert.strictEqual(wid.widenSlots(15, 0, 30, 'mainnet'), 1, 'the ladder must run on a genesis-armed mainnet');
     });
 
     it('gates an armed network on the REQUEST block, not the response block', function () {

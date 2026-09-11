@@ -42,10 +42,14 @@
  * This suite is the gate the runbook's "grep for placeholder regressions"
  * verify step automates: a re-introduced placeholder (or a gate silently
  * drifting off the ratified values) fails CI instead of silently leaving a
- * consensus protection dark on mainnet until 2027. The ONLY line permitted
- * to carry 1798761600 is the CROSS_CHAIN_ROYALTY create-side entry, whose
+ * consensus protection dark on mainnet until 2027. TWO lines are permitted
+ * to carry 1798761600: the CROSS_CHAIN_ROYALTY create-side entry, whose
  * one-quarter-after-CONTROLLER_GUARD deny window is CONFIRMED by design
- * (flag-day inventory, Decision 5). Since it also asserts the height
+ * (flag-day inventory, Decision 5), and REST_PATTERN_METER, admitted by
+ * ruling 2026-09-09 as a deliberate second occupant of that same confirmed
+ * instant so the fleet gets one coordination event rather than two. The
+ * allow-list is by NAME with an exact count, so a THIRD entry still reddens.
+ * Since it also asserts the height
  * half is ONE value across every member: the defect that item recorded was not
  * a wrong number, it was a repin that moved some members and not others.
  ********************************************************************/
@@ -87,14 +91,33 @@ describe('flag-day placeholder guard @regression @tier1', function () {
         }
     });
 
-    it('no timestamp gate besides the CONFIRMED royalty create-side carries 1798761600', function () {
+    it('only the two RATIFIED occupants of 1798761600 sit there, and nothing drifts back', function () {
+        // 1798761600 has two lives in this tree and the difference is the whole point of
+        // this guard. It was the PLACEHOLDER the 2026-07-15 hardening gates were evacuated
+        // from (see the file header), and it is ALSO a real scheduled instant: the
+        // CROSS_CHAIN_ROYALTY create-side deny window.
+        //
+        // REST_PATTERN_METER is admitted here by ruling 2026-09-09, as a deliberate second
+        // occupant rather than a drift-back. Its VM twin
+        // (xchain-vm REST_PATTERN_METER_GATE_BLOCK_TIME) documents the reason: the
+        // contract-era instant is in the PAST, so reusing it would retroactively re-price
+        // every rest destructure already executed, and it shares the royalty instant so the
+        // fleet gets ONE coordination event instead of two.
+        //
+        // The allow-list is by NAME and the count is exact, so a THIRD entry, or either of
+        // these two silently becoming something else, still reddens exactly as before. Do
+        // not widen this to a bare count.
+        const RATIFIED_OCCUPANTS = ['CROSS_CHAIN_ROYALTY', 'REST_PATTERN_METER'];
         const lines = pcSource.split('\n')
             .filter(l => l.includes(String(ROYALTY_CREATE_SIDE)))
             .filter(l => /this\.addChange\(/.test(l));
-        assert.strictEqual(lines.length, 1,
-            'exactly one addChange may sit at 1798761600 (the royalty create-side deny window); got: ' + lines.join(' | '));
-        assert.ok(lines[0].includes('CROSS_CHAIN_ROYALTY'),
-            'the surviving 1798761600 entry must be CROSS_CHAIN_ROYALTY');
+        assert.strictEqual(lines.length, RATIFIED_OCCUPANTS.length,
+            'exactly ' + RATIFIED_OCCUPANTS.length + ' addChange entries may sit at 1798761600 (' +
+            RATIFIED_OCCUPANTS.join(' + ') + '); got: ' + lines.join(' | '));
+        for (const name of RATIFIED_OCCUPANTS) {
+            assert.ok(lines.some(l => l.includes("'" + name + "'")),
+                name + ' must be one of the 1798761600 entries; a rename or a repin must move it deliberately');
+        }
     });
 
     it('ARCHIVE_REWARD_ACTIVATION is armed at the derived BTC height (983000 placeholder gone)', function () {

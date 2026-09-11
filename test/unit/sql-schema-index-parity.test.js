@@ -86,24 +86,36 @@ function normalizeIndexColumns(list){
         .filter(c => c.length > 0);
 }
 
-// table -> Map(lowercased index name -> {columns, unique}) declared in the canonical
-// definitions. A Map, not a Set, so the name-only checks below keep working while the
-// shape comparison gets the columns and the UNIQUE flag the old Set threw away (#3529).
+// The optional word between CREATE/ADD and INDEX, reduced to the two flags that make one
+// index a different index from another of the same name. FULLTEXT is admitted alongside
+// UNIQUE because contracts.meta_search is a FULLTEXT index declared on BOTH paths: read
+// with the old `(UNIQUE\s+)?` regexes, a `CREATE FULLTEXT INDEX` matched nothing at all,
+// so the index was invisible to every case in this file and the guard stayed green while
+// covering it not at all. Kept as two booleans rather than the raw capture so a UNIQUE
+// declaration and a FULLTEXT one can never compare equal just because both are truthy.
+function indexKind(qualifier){
+    const q = String(qualifier || '');
+    return { unique: /\bUNIQUE\b/i.test(q), fulltext: /\bFULLTEXT\b/i.test(q) };
+}
+
+// table -> Map(lowercased index name -> {columns, unique, fulltext}) declared in the
+// canonical definitions. A Map, not a Set, so the name-only checks below keep working while
+// the shape comparison gets the columns and the UNIQUE flag the old Set threw away (#3529).
 function collectDeclaredIndexes(){
     const declared = {};
-    const add = (table, index, unique, columns) => {
+    const add = (table, index, qualifier, columns) => {
         const key = String(index).toLowerCase();
         const map = (declared[table] || (declared[table] = new Map()));
         // First declaration wins; a table declaring one name twice is its own bug and
         // is caught by the engine, not here.
-        if(!map.has(key)) map.set(key, { unique: !!unique, columns: normalizeIndexColumns(columns) });
+        if(!map.has(key)) map.set(key, Object.assign(indexKind(qualifier), { columns: normalizeIndexColumns(columns) }));
     };
 
     for(const file of fs.readdirSync(SQL_DIR).filter(f => f.endsWith('.sql'))){
         const raw = fs.readFileSync(path.join(SQL_DIR, file), 'utf8');
 
-        // Standalone: CREATE [UNIQUE] INDEX <name> on <table> (...)
-        for(const m of raw.matchAll(/CREATE\s+(UNIQUE\s+)?INDEX\s+`?(\w+)`?\s+on\s+`?(\w+)`?\s*\(([^)]*(?:\([^)]*\)[^)]*)*)\)/gi))
+        // Standalone: CREATE [UNIQUE|FULLTEXT] INDEX <name> on <table> (...)
+        for(const m of raw.matchAll(/CREATE\s+(UNIQUE\s+|FULLTEXT\s+)?INDEX\s+`?(\w+)`?\s+on\s+`?(\w+)`?\s*\(([^)]*(?:\([^)]*\)[^)]*)*)\)/gi))
             add(m[3], m[2], m[1], m[4]);
 
         // Inline: KEY / UNIQUE KEY <name> (...) inside the CREATE TABLE block.
@@ -115,17 +127,17 @@ function collectDeclaredIndexes(){
     return declared;
 }
 
-// Every index a dated migration adds: {file, table, index, unique, columns}.
+// Every index a dated migration adds: {file, table, index, unique, fulltext, columns}.
 function collectMigrationIndexes(){
     const added = [];
     for(const file of fs.readdirSync(MIG_DIR).filter(f => f.endsWith('.sql'))){
         const raw = fs.readFileSync(path.join(MIG_DIR, file), 'utf8');
 
-        for(const m of raw.matchAll(/ALTER\s+TABLE\s+`?(\w+)`?\s+ADD\s+(UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?\s*\(([^)]*(?:\([^)]*\)[^)]*)*)\)/gi))
-            added.push({ file, table: m[1], index: m[3].toLowerCase(), unique: !!m[2], columns: normalizeIndexColumns(m[4]) });
+        for(const m of raw.matchAll(/ALTER\s+TABLE\s+`?(\w+)`?\s+ADD\s+(UNIQUE\s+|FULLTEXT\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?\s*\(([^)]*(?:\([^)]*\)[^)]*)*)\)/gi))
+            added.push(Object.assign({ file, table: m[1], index: m[3].toLowerCase(), columns: normalizeIndexColumns(m[4]) }, indexKind(m[2])));
 
-        for(const m of raw.matchAll(/CREATE\s+(UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?\s+on\s+`?(\w+)`?\s*\(([^)]*(?:\([^)]*\)[^)]*)*)\)/gi))
-            added.push({ file, table: m[3], index: m[2].toLowerCase(), unique: !!m[1], columns: normalizeIndexColumns(m[4]) });
+        for(const m of raw.matchAll(/CREATE\s+(UNIQUE\s+|FULLTEXT\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?\s+on\s+`?(\w+)`?\s*\(([^)]*(?:\([^)]*\)[^)]*)*)\)/gi))
+            added.push(Object.assign({ file, table: m[3], index: m[2].toLowerCase(), columns: normalizeIndexColumns(m[4]) }, indexKind(m[1])));
     }
     return added;
 }
@@ -147,6 +159,22 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
             'standalone CREATE INDEX form no longer parsed');
         assert.ok(declared['price_snapshots'] && declared['price_snapshots'].has('idx_status_block_round'),
             'inline KEY form no longer parsed');
+        // contracts.meta_search is the schema's only FULLTEXT index. A regex that admits
+        // only UNIQUE reads a `CREATE FULLTEXT INDEX` as no index at all, which is exactly
+        // how it would drop out of every case below without failing one.
+        const ft = declared['contracts'] && declared['contracts'].get('meta_search');
+        assert.ok(ft, 'standalone CREATE FULLTEXT INDEX form no longer parsed');
+        assert.strictEqual(ft.fulltext, true, 'contracts.meta_search parsed but not as FULLTEXT');
+        assert.strictEqual(ft.unique, false, 'FULLTEXT must not be read as UNIQUE');
+    });
+
+    it('sanity: the parser reads a FULLTEXT index off the ledger path too', function(){
+        const ft = collectMigrationIndexes().filter(a => a.fulltext);
+        assert.ok(ft.length > 0,
+            'no migration-added FULLTEXT index parsed out of src/sql/migrations; the ALTER ... ADD ' +
+            'FULLTEXT INDEX form has gone stale in the regexes above and such an index would be ' +
+            'unguarded on the ledger path');
+        assert.ok(ft.every(a => a.unique === false), 'FULLTEXT must not be read as UNIQUE');
     });
 
     it('no index exists only on the ledger path (every migration-added index is declared in its table definition)', function(){
@@ -184,6 +212,12 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
             else if(decl.unique !== a.unique)
                 mismatches.push(`  ${a.table}.${a.index} uniqueness: definition unique=${decl.unique} ` +
                                 `vs migration unique=${a.unique}  <- ${a.file}`);
+            // A FULLTEXT index and a B-tree over the same columns answer different queries
+            // (MATCH ... AGAINST vs a range scan), so the two paths carrying different kinds
+            // under one name is the same divergence the UNIQUE flag catches.
+            else if(!!decl.fulltext !== !!a.fulltext)
+                mismatches.push(`  ${a.table}.${a.index} kind: definition fulltext=${!!decl.fulltext} ` +
+                                `vs migration fulltext=${!!a.fulltext}  <- ${a.file}`);
         }
 
         assert.deepStrictEqual(mismatches, [],

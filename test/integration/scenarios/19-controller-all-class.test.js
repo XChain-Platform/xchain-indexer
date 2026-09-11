@@ -49,8 +49,10 @@ const sha = s => crypto.createHash('sha256').update(s).digest('hex');
 
 // Guard contracts. A 'all'-bound deny guard reverts whatever class routes to it;
 // a permissive allow guard returns {} so the action settles.
-const DENY_ALL = "module.exports={ guard:function(){ xchain.revert('all-class denied'); } };";
-const ALLOW    = "module.exports={ guard:function(){ return {}; } };";
+// CONTRACT_META_REQUIRED is genesis-active on regtest: a guard contract that must
+// deploy `valid` to be bound as a controller carries `meta` (spec 2.1).
+const DENY_ALL = "module.exports={ meta:{ name:'Deny All', description:'Reverts every action class routed to it.', version:'1.0.0' }, guard:function(){ xchain.revert('all-class denied'); } };";
+const ALLOW    = "module.exports={ meta:{ name:'Allow Guard', description:'Permits every action class routed to it.', version:'1.0.0' }, guard:function(){ return {}; } };";
 
 describe("Controller 'all' action class: fallback + override (real DB + real VM) @phaseE", function () {
     this.timeout(600000);

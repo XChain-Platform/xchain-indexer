@@ -94,9 +94,41 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
         ]) assert.ok(keys.includes(k), 'missing ' + k);
     });
 
+    // The 2026-09-09 genesis-arm ruling left no SHIPPED gate on the far-future sentinel,
+    // so the exclusion branch is driven against a stubbed gate module instead of riding
+    // whichever map happened to be unarmed. PRICE_PAIR_WIDEN_ACTIVATION, the last live
+    // example before the arm, is the map stubbed here.
     it('excludes a far-future sentinel height, however high the chain climbs', function () {
-        const at = crd.activeGatesAt(crd.FAR_FUTURE_HEIGHT_SENTINEL, 'mainnet');
-        assert.ok(!at.includes('price_pair_activation.PRICE_PAIR_WIDEN_ACTIVATION'));
+        const GATE  = require.resolve('../../src/price_pair_activation.js');
+        const CRD   = require.resolve('../../src/consensus_rules_digest.js');
+        const real  = require.cache[GATE];
+        const realCrd = require.cache[CRD];
+        try {
+            const stub = Object.create(Object.getPrototypeOf(real));
+            Object.assign(stub, real);
+            stub.exports = Object.assign({}, real.exports, {
+                PRICE_PAIR_WIDEN_ACTIVATION: { mainnet: crd.FAR_FUTURE_HEIGHT_SENTINEL, testnet: 0, regtest: 0 },
+            });
+            require.cache[GATE] = stub;
+            delete require.cache[CRD];                       // clears the module-level value cache
+            const fresh = require('../../src/consensus_rules_digest.js');
+            const at = fresh.activeGatesAt(fresh.FAR_FUTURE_HEIGHT_SENTINEL, 'mainnet');
+            assert.ok(!at.includes('price_pair_activation.PRICE_PAIR_WIDEN_ACTIVATION'),
+                'a sentinel height must read as inactive even at the sentinel itself');
+            assert.ok(fresh.activeGatesAt(0, 'testnet').includes('price_pair_activation.PRICE_PAIR_WIDEN_ACTIVATION'),
+                'the same stub is active on testnet, so the exclusion is the sentinel and not the stub');
+        } finally {
+            require.cache[GATE] = real;
+            require.cache[CRD]  = realCrd;
+        }
+    });
+
+    it('includes the gates this wave armed at genesis on mainnet, from block 0', function () {
+        // The 2026-09-09 ruling: identity on the indexed mainnet history.
+        for (const k of [
+            'price_pair_activation.PRICE_PAIR_WIDEN_ACTIVATION',
+            'snapshot_reorg_buffer.SNAPSHOT_BURIAL_ACTIVATION',
+        ]) assert.ok(crd.activeGatesAt(0, 'mainnet').includes(k), k + ' must be active at mainnet block 0');
     });
 
     it('excludes a null (unratified) entry at any height', function () {

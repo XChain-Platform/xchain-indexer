@@ -1297,7 +1297,10 @@ class Database {
     // are not reconciled here. Index/column names come from the trusted SQL files.
     parseExpectedIndexes(sqlData, table){
         sqlData = this.stripSqlLineComments(sqlData);
-        const re = /CREATE\s+(UNIQUE\s+)?INDEX\s+`?(\w+)`?\s+ON\s+`?(\w+)`?\s*\(\s*([\s\S]+?)\s*\)\s*;/gi;
+        // UNIQUE and FULLTEXT are both admitted: a FULLTEXT index (contracts.meta_search)
+        // was invisible to this parser, so an aged database could never self-heal it and
+        // the migration was its only creation path.
+        const re = /CREATE\s+(UNIQUE\s+|FULLTEXT\s+)?INDEX\s+`?(\w+)`?\s+ON\s+`?(\w+)`?\s*\(\s*([\s\S]+?)\s*\)\s*;/gi;
         const out = [];
         let m;
         while((m = re.exec(sqlData)) !== null){
@@ -1313,7 +1316,8 @@ class Database {
             const columns    = parts.map(c => c.replace(/\(\d+\)$/, ''));
             const prefixes   = parts.map(c => { const pm = /\((\d+)\)$/.exec(c); return pm ? Number(pm[1]) : null; });
             const directions = specs.map(c => /\sDESC\b/i.test(c) ? 'DESC' : 'ASC');
-            if(columns.length) out.push({ name: m[2], unique: !!m[1], columns, prefixes, directions });
+            const kind = (m[1] || '').trim().toUpperCase();
+            if(columns.length) out.push({ name: m[2], unique: kind === 'UNIQUE', fulltext: kind === 'FULLTEXT', columns, prefixes, directions });
         }
         return out;
     }
@@ -1334,14 +1338,14 @@ class Database {
 
             // Live indexes -> map keyed by ordered column-set: "c1,c2" => {unique}
             const rows = await db.query(
-                "SELECT INDEX_NAME, NON_UNIQUE, COLUMN_NAME, SEQ_IN_INDEX, SUB_PART FROM information_schema.statistics " +
+                "SELECT INDEX_NAME, NON_UNIQUE, INDEX_TYPE, COLUMN_NAME, SEQ_IN_INDEX, SUB_PART FROM information_schema.statistics " +
                 "WHERE table_schema = ? AND table_name = ? ORDER BY INDEX_NAME, SEQ_IN_INDEX",
                 [this.dbName, table]);
             const byName = new Map();
             const liveNames = new Set();
             for(const r of rows){
                 liveNames.add(r.INDEX_NAME.toLowerCase());
-                if(!byName.has(r.INDEX_NAME)) byName.set(r.INDEX_NAME, { unique: Number(r.NON_UNIQUE) === 0, cols: [], subParts: [] });
+                if(!byName.has(r.INDEX_NAME)) byName.set(r.INDEX_NAME, { unique: Number(r.NON_UNIQUE) === 0, fulltext: String(r.INDEX_TYPE || '').toUpperCase() === 'FULLTEXT', cols: [], subParts: [] });
                 byName.get(r.INDEX_NAME).cols.push(r.COLUMN_NAME.toLowerCase());
                 byName.get(r.INDEX_NAME).subParts.push(r.SUB_PART == null ? null : Number(r.SUB_PART));
             }
@@ -1351,7 +1355,7 @@ class Database {
             for(const idx of expected){
                 const key  = idx.columns.map(c => c.toLowerCase()).join(',');
                 const live = liveByCols.get(key);
-                if(live && (!idx.unique || live.unique)){
+                if(live && (!idx.unique || live.unique) && (!idx.fulltext || live.fulltext)){
                     // Satisfied by column set, but the column-set match is blind to
                     // prefix widths: an aged `address(62)` index and the declared
                     // full-column index read as identical here and no auto path
@@ -1384,9 +1388,9 @@ class Database {
                     let liveInfo = null;
                     for(const [nm, info] of byName){ if(nm.toLowerCase() === idx.name.toLowerCase()){ liveInfo = info; break; } }
                     const liveDesc = liveInfo
-                        ? (liveInfo.unique ? 'UNIQUE' : 'non-unique') + ' on (' + liveInfo.cols.join(',') + ')'
+                        ? (liveInfo.unique ? 'UNIQUE' : liveInfo.fulltext ? 'FULLTEXT' : 'non-unique') + ' on (' + liveInfo.cols.join(',') + ')'
                         : 'a differently-defined index';
-                    console.warn('Schema drift on ' + table + ': declared ' + (idx.unique ? 'UNIQUE ' : '') +
+                    console.warn('Schema drift on ' + table + ': declared ' + (idx.unique ? 'UNIQUE ' : idx.fulltext ? 'FULLTEXT ' : '') +
                         'index ' + idx.name + ' on (' + key + ') cannot be applied - the name is already held by ' + liveDesc +
                         '. Not auto-healed (never DROP an index we did not create); apply a manual migration via node src/migrate.js to converge.');
                     continue;
@@ -1402,6 +1406,13 @@ class Database {
                     return '`' + c + '`' + prefix + dir;
                 }).join(', ');
 
+                if(idx.fulltext){
+                    // A FULLTEXT index takes no prefix widths or directions; MariaDB refuses
+                    // both, so the heal names the columns bare.
+                    console.log('Schema drift on ' + table + ': missing FULLTEXT index ' + idx.name + ' (' + key + '). Adding.');
+                    await db.query('ALTER TABLE `' + table + '` ADD FULLTEXT INDEX `' + idx.name + '` (' + idx.columns.map(c => '`' + c + '`').join(', ') + ')');
+                    continue;
+                }
                 if(!idx.unique){
                     console.log('Schema drift on ' + table + ': missing index ' + idx.name + ' (' + key + '). Adding.');
                     await db.query('ALTER TABLE `' + table + '` ADD INDEX `' + idx.name + '` (' + colList + ')');
@@ -2513,6 +2524,32 @@ class Database {
         this._blockTimeCache.block_index = key;
         this._blockTimeCache.block_time  = block_time;
         return block_time;
+    }
+
+    // A block's own hash, read from the DECODER database (blocks.block_hash_id points at
+    // the index_transactions row that carries the hash string).
+    //
+    // Read on the DECODER instance, for block 1, this is the chain-instance identity the
+    // cross-chain mirror fences on. Block 0 cannot serve: the regtest genesis hash is a
+    // chainparams constant, identical across every re-genesis, while block 1 commits to
+    // the instant the chain was created. A regtest venue that re-genesises its Bitcoin
+    // chain keeps the same network name and the same hub, so this hash is the only thing
+    // that separates the new chain's cross-chain rows from the dead chain's relics.
+    //
+    // Returns null rather than throwing on any fault: the identity is transport-only (it
+    // enters no canonical and no block-hash preimage), so an unavailable decoder means
+    // "not known yet" and the caller retries on a later block, never a stalled parse.
+    async getDecoderBlockHash(block_index){
+        let query = `SELECT t.hash AS hash FROM blocks b JOIN index_transactions t ON t.id = b.block_hash_id WHERE b.block_index = ? LIMIT 1`;
+        let results;
+        try {
+            results = await this.doQueryStrict(query, [block_index]);
+        } catch(e){
+            return null;
+        }
+        if(!results || results.length === 0) return null;
+        let hash = results[0]['hash'];
+        return (typeof hash === 'string' && hash !== '') ? hash.toLowerCase() : null;
     }
 
     // Invalidate the single-entry getBlockTime() memo. A reorg replaces the content of an
@@ -9148,6 +9185,15 @@ class Database {
     // protocol cap once the gate is on, and MAX_SAFE_INTEGER before, which is the legacy
     // uncapped pass. This method never evaluates the gate itself, so it can never disagree
     // with the caller about which side of the flag day a block is on.
+    // Whether an action index has been parsed on this chain (a row in `actions`), as of the
+    // current parse height. CROSS_SETTLE uses it to tell a local leg the replay has not
+    // reached yet (retry on a later block) from one that is indexed and is not an offer
+    // (never settles). Read-only; no consensus row depends on it.
+    async isActionIndexParsed(actionIndex){
+        let rows = await this.doQuery('SELECT 1 AS present FROM actions WHERE action_index = ? LIMIT 1', [actionIndex]);
+        return rows.length > 0;
+    }
+
     async getEffectiveUnsettledMatches(coin, block_time, limit){
         // network filter: a match only settles on the indexer of the network it was matched
         // + signed on (also bound into the signed canonical - see cross_settle._canonical).
@@ -13993,10 +14039,10 @@ class Database {
 
     // Create/Update record in `anchor_actions` table.
     //
-    // Keyed on (action_index, section_index), not action_index alone: an ANCHOR v7 bundle
+    // Keyed on (action_index, section_index), not action_index alone: an ANCHOR v0 bundle
     // is ONE action carrying N per-chain sections, and each section gets its own row so
     // idx_anchor_checkpoint and every per-chain reader keep working unchanged. Every
-    // version that carries a single body (v1/v2/v6 archive rows) writes section_index 0,
+    // version that carries a single body (the v1/v2 archive rows) writes section_index 0,
     // which is also the column's DEFAULT, so old rows and old writers land where they
     // always did.
     async createAnchorAction(data){
@@ -14118,7 +14164,7 @@ class Database {
         // Version set is the single source of truth in anchor-action-query.js
         // (shared with getAnchorActionByCheckpoint + the RPC) so the replay
         // watermark can never drift from the checkpoint-bearing definition
-        // (a hand-copied literal here once omitted v4/v5, freezing the guard).
+        // (a hand-copied literal here once omitted a live checkpoint version, freezing the guard).
         let versions = ANCHOR_CHECKPOINT_VERSIONS;
         let query = `SELECT MAX(a.checkpoint_seq) AS max_seq
                      FROM anchor_actions a
@@ -14161,7 +14207,7 @@ class Database {
         return rows.length > 0 ? rows[0] : null;
     }
 
-    // The two watermarks the v1/v6 archive replay guard needs, read from ONE row
+    // The two watermarks the v1 archive replay guard needs, read from ONE row
     // set so they cannot disagree: the highest archive batch seq recorded, and the
     // highest wrapper checkpoint seq among those same archive-head rows.
     //
@@ -14171,9 +14217,9 @@ class Database {
     // (one stubbed, one live; one filtered on a drifted version list) and the guard
     // would then reject a legitimate archive or admit a replay. Reading both in one
     // statement makes the impossible combination unrepresentable, and the version
-    // predicate comes from ARCHIVE_HEAD_VERSIONS rather than a literal IN (1, 6)
+    // predicate comes from ARCHIVE_HEAD_VERSIONS rather than a hand-copied literal
     // for the same reason getMaxAnchorCheckpointSeq stopped hand-copying its set
-    // (a copied literal once omitted v4/v5 and froze that guard).
+    // (a copied literal once omitted a live archive-head version and froze that guard).
     //
     // 'unverified' is included for the same reason it is in getMaxAnchorCheckpointSeq:
     // a node with no mirrored oracle_publish snapshot cannot verify signatures and
@@ -14197,11 +14243,11 @@ class Database {
         };
     }
 
-    // The archive-head anchor (v1, or the publisher-bearing v6) that started an
+    // The archive-head anchor (v1, which always carries the publisher tail) that started an
     // archive batch (status irrelevant - chunk geometry checks belong to the caller).
     // match_batch_seq is NOT unique: the replay guard in anchor.js _parseCheckpoint accepts
     // an EQUAL MATCH_BATCH_SEQ ('never below the recorded max; equal is allowed'), so a
-    // permissionless re-broadcast or failover double-publish stores a SECOND v1/v6 row for
+    // permissionless re-broadcast or failover double-publish stores a SECOND v1 row for
     // the same batch. The returned parent feeds a consensus-visible geometry/CRC verdict in
     // anchor.js _parseContinuation (TOTAL_CHUNKS gate + batch_crc32 reassembly, which stamps
     // setAnchorArchiveStatus(parent.action_index,'invalid_archive')), so the pick MUST be a
@@ -14228,7 +14274,7 @@ class Database {
     // fail-closed (the chunk lands 'orphan' rather than authenticated against nothing).
     async getAnchorV1ByBatchSeq(batchSeq, author){
         let scoped = (author !== undefined && author !== null);
-        // Version set from ARCHIVE_HEAD_VERSIONS, never a literal IN (1, 6), for the
+        // Version set from ARCHIVE_HEAD_VERSIONS, never a hand-copied literal, for the
         // reason getArchiveReplayWatermarks states above: this is the same earliest-head
         // pick as ARCHIVE_HEAD_AUTHOR_SQL in anchor-action-query.js, and it feeds the
         // consensus-visible geometry/CRC verdict in anchor.js _parseContinuation. A
@@ -14322,7 +14368,7 @@ class Database {
     // (action_index, section_index): the anchor verdict is ALL-OR-NOTHING (spec D15), so
     // every section row of one action always carries the same status and stamping them
     // together is the correct behavior, not an oversight. Do not "fix" this into a
-    // section-scoped update: an archive head is a single-body v1/v6 row at section 0
+    // section-scoped update: an archive head is a single-body v1 row at section 0
     // anyway, and a per-section stamp would let one action hold two verdicts, which no
     // reader is built to reconcile.
     async setAnchorArchiveStatus(actionIndex, status){
@@ -16288,6 +16334,14 @@ class Database {
         if(!this.util.isNull(data['SLASH_DESTINATION'])){
             slash_destination_id = await this.createAddress(data['SLASH_DESTINATION']);
         }
+        // Contract meta manifest (CONTRACT_META_REQUIRED). deploy.js hands these over only
+        // for a valid deploy whose exported meta conforms to the byte grammar, so an absent
+        // key is a NULL column and an oversized value never reaches VARCHAR(64) at all - the
+        // write site, not the column width, is what keeps errno 1406 out of the indexer.
+        let meta_name        = (this.util.isNull(data['META_NAME']))        ? null : data['META_NAME'];
+        let meta_description = (this.util.isNull(data['META_DESCRIPTION'])) ? null : data['META_DESCRIPTION'];
+        let meta_version     = (this.util.isNull(data['META_VERSION']))     ? null : data['META_VERSION'];
+        let meta_json        = (this.util.isNull(data['META_JSON']))        ? null : data['META_JSON'];
         let query  = "SELECT action_index FROM contracts WHERE action_index=? LIMIT 1";
         let args   = [action_index];
         let exists = false;
@@ -16297,17 +16351,21 @@ class Database {
         if(exists){
             query = `UPDATE contracts SET
                         source_id=?, code=?, code_hash=?, api_version=?, status_id=?, block_index=?,
-                        cooldown_blocks=?, slash_destination_id=?
+                        cooldown_blocks=?, slash_destination_id=?,
+                        meta_name=?, meta_description=?, meta_version=?, meta_json=?
                     WHERE action_index=?`;
             args = [source_id, code, code_hash, api_version, status_id, block_index,
-                    cooldown_blocks, slash_destination_id, action_index];
+                    cooldown_blocks, slash_destination_id,
+                    meta_name, meta_description, meta_version, meta_json, action_index];
         } else {
             query = `INSERT INTO contracts
                         (source_id, code, code_hash, api_version, status_id, block_index,
-                         cooldown_blocks, slash_destination_id, action_index)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                         cooldown_blocks, slash_destination_id,
+                         meta_name, meta_description, meta_version, meta_json, action_index)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
             args = [source_id, code, code_hash, api_version, status_id, block_index,
-                    cooldown_blocks, slash_destination_id, action_index];
+                    cooldown_blocks, slash_destination_id,
+                    meta_name, meta_description, meta_version, meta_json, action_index];
         }
         await this.doQuery(query, args);
     }

@@ -54,8 +54,10 @@ const T0     = 1700000000;
 const b64 = s => Buffer.from(s, 'utf8').toString('base64');
 const sha = s => crypto.createHash('sha256').update(s).digest('hex');
 
-const DENY  = "module.exports={ guard:function(){ xchain.revert('policy denied'); } };";
-const ALLOW = "module.exports={ guard:function(){ return {}; } };";
+// CONTRACT_META_REQUIRED is genesis-active on regtest: a guard contract that must
+// deploy `valid` to be bound as a controller carries `meta` (spec 2.1).
+const DENY  = "module.exports={ meta:{ name:'Deny Guard', description:'Reverts every gated transfer.', version:'1.0.0' }, guard:function(){ xchain.revert('policy denied'); } };";
+const ALLOW = "module.exports={ meta:{ name:'Allow Guard', description:'Permits every gated transfer.', version:'1.0.0' }, guard:function(){ return {}; } };";
 
 describe('Controller: AIRDROP/DIVIDEND/SWEEP gated by the transfer controller (real DB + real VM) @phaseE', function () {
     this.timeout(600000);

@@ -42,13 +42,40 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
         db.getStatusString         = sinon.stub().resolves('valid');
     }
 
+    // CONTRACT_META_REQUIRED is genesis-active on regtest (this file's INDEXER_NETWORK)
+    // and this suite's isEnabled stub resolves true, so every default deploy must read a
+    // CONFORMING meta or it lands 'invalid: CONTRACT_MANIFEST (...)' instead of 'valid'.
+    // A manifest of null is the (manifest read failed) verdict, not "no manifest", so the
+    // default report is now a full one that declares nothing but its identity.
+    const CONFORMING_META = {
+        name:        'Unit Fixture',
+        description: 'A contract used by the deploy unit suite.',
+        version:     '1.0.0'
+    };
+    function metaFields(meta = CONFORMING_META) {
+        return {
+            metaType:     'object',
+            metaJson:     JSON.stringify(meta),
+            metaError:    false,
+            metaOversize: false
+        };
+    }
+    function baseManifest(hasInitialize = false) {
+        return Object.assign({
+            permissions: null, permissionsType: 'undefined',
+            maxTakeBps:  null, maxTakeBpsType:  'undefined',
+            hasInitialize
+        }, metaFields());
+    }
+
     function makeVm(overrides = {}) {
         return {
             validateSyntax:    sinon.stub().returns({ valid: true }),
             checkFloatWarnings:sinon.stub().returns([]),
             // Phase E: by default a contract declares no permissions manifest
-            // (manifest null → unrestricted), so deploy behaves as pre-Phase-E.
-            readManifest:      sinon.stub().resolves({ success: true, manifest: null, error: null }),
+            // (permissionsType 'undefined' → unrestricted), so deploy behaves as
+            // pre-Phase-E, and it carries the meta the flag day requires.
+            readManifest:      sinon.stub().resolves({ success: true, manifest: baseManifest(), error: null }),
             execute:           sinon.stub().resolves({
                 success:      true,
                 gasUsed:      0,
@@ -244,7 +271,10 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
         // either gate above: VM_LINT_HARDENING
         // is already open on every network and the Pkg 3 heights are in the past, so reusing
         // either would retroactively reject contracts the chain already accepted. Mainnet is
-        // still unarmed, which is what these assertions pin.
+        // ARMED AT GENESIS on this third gate by the 2026-09-09 ruling (0 contracts, 0 DEPLOY
+        // on the indexed mainnet history, measured 2026-09-09), which is what these
+        // assertions pin, along with the fact that it is still resolved SEPARATELY from the
+        // Pkg 3 heights.
 
         it('threads enforceLintGlobalAlias as its own flag', async function () {
             const { opts } = await optsFor('regtest', 'BTC', 0);
@@ -252,21 +282,30 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             assert.strictEqual(opts.enforceLintGlobalAlias, true, 'regtest is genesis-armed');
         });
 
-        it('is OFF on mainnet at every height while the epoch is unarmed', async function () {
-            for (const [coin, height] of [['BTC', 961000], ['LTC', 3154250], ['DOGE', 6319000]]) {
+        it('is ON on mainnet at every height, genesis included (armed by the 2026-09-09 ruling)', async function () {
+            for (const [coin, height] of [['BTC', 0], ['BTC', 961000], ['LTC', 3154250], ['DOGE', 6319000]]) {
                 const { data, opts } = await optsFor('mainnet', coin, height);
-                assert.strictEqual(opts.enforceLintGlobalAlias, false,
-                    coin + ' mainnet must stay pre-activation while the epoch is unarmed');
+                assert.strictEqual(opts.enforceLintGlobalAlias, true,
+                    coin + ' mainnet must be armed from genesis, height ' + height);
                 assert.strictEqual(data['STATUS'], 'valid', 'the mainnet deploy verdict must be unchanged');
             }
         });
 
         it('does NOT track the Pkg 3 gate (a separate epoch, resolved separately)', async function () {
-            // At the BTC Pkg 3 height the Pkg 3 flags are ON and the alias flag is OFF.
-            // If someone collapses the two gates, this is the assertion that reddens.
-            const { opts } = await optsFor('mainnet', 'BTC', 961000);
-            assert.strictEqual(opts.enforceBannedWasm, true);
-            assert.strictEqual(opts.enforceLintGlobalAlias, false);
+            // Both gates are open at the BTC Pkg 3 height now, so agreeing there no longer
+            // separates them. What does is the height each opens at: the Pkg 3 flags ride
+            // per-coin heights in the past (BTC 961000), the alias flag rides its own map
+            // armed at 0, so at mainnet genesis the alias flag is ON while the Pkg 3 flags
+            // are still OFF. If someone collapses the two gates, this is what reddens.
+            const genesis = await optsFor('mainnet', 'BTC', 0);
+            assert.strictEqual(genesis.opts.enforceBannedWasm, false);
+            assert.strictEqual(genesis.opts.enforceBannedGenerator, false);
+            assert.strictEqual(genesis.opts.enforceLintGlobalAlias, true);
+            // And they agree at the Pkg 3 height, which is the other half of "separate":
+            // two independent resolutions that happen to coincide, not one flag twice.
+            const atPkg3 = await optsFor('mainnet', 'BTC', 961000);
+            assert.strictEqual(atPkg3.opts.enforceBannedWasm, true);
+            assert.strictEqual(atPkg3.opts.enforceLintGlobalAlias, true);
         });
     });
 
@@ -374,10 +413,11 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
 
     describe('constructor execution under DEPLOY_INIT_STRICT (Option C)', function () {
 
-        // Real readManifest always reports permissions/maxTakeBps types; mirror that
-        // full shape so the deploy path's permissions check does not misfire.
+        // Real readManifest always reports permissions/maxTakeBps types and, from the
+        // CONTRACT_META_REQUIRED flag day, the meta fields; mirror that full shape so
+        // neither the permissions check nor the meta verdict misfires.
         function manifest(hasInitialize) {
-            return { permissions: null, permissionsType: 'undefined', maxTakeBps: null, maxTakeBpsType: 'undefined', hasInitialize };
+            return baseManifest(hasInitialize);
         }
         function vmWithManifest(hasInitialize, executeResult) {
             return makeVm(Object.assign(

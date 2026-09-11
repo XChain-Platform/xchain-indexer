@@ -40,6 +40,41 @@ const TERMINAL_HUB_REJECTIONS = [
     /^chain must be one of\b/i             // api.js validateChain
 ];
 
+// The THROWN counterpart of TERMINAL_HUB_REJECTIONS above. The hub's durable push
+// handlers now answer a refusal of the call's own arguments with a JSON-RPC error rather
+// than an in-result message, and _call rejects on a top-level `error` before
+// _requireHubAccepted ever sees a payload, so without this every such push retried
+// forever: the durable push types carry no attempt cap (hub_push_queue.js) and the queued
+// row replays the same arguments into the same verdict on every drain.
+//
+// -32602 (Invalid params) is the only code here, and deliberately. It judges the PAYLOAD,
+// which a replay cannot change. -32603 (Internal error), the hub's own -32029 throttle and
+// every transport failure describe the HUB's state, which a later attempt can clear, so
+// they stay retryable, on the same asymmetry the list above is built on: a needless retry
+// costs a queue slot, a wrong drop costs a never-re-derivable oracle price.
+const TERMINAL_HUB_RPC_CODES = new Set([-32602]);
+
+// Read the terminal reason out of a REJECTION, or null when a retry could still clear it.
+//
+// Keyed on the code alone, never on the message. The patterns above are safe against a
+// hub RESULT, whose text the hub authored, but a rejection's message can come from this
+// client's own transport paths, and one of those reads 'Invalid JSON response: ...', which
+// /^invalid\b/ matches. Classifying that terminal would drop a durable row on a truncated
+// body. The code is only ever set from a parsed JSON-RPC envelope, so it cannot collide.
+function terminalHubRejection(err){
+    if(!err) return null;
+    // A throttle is the hub declining to LOOK at the payload, never a verdict on it, and
+    // it can carry an rpcCode; check it first so a future terminal code cannot swallow one.
+    if(err.rateLimited) return null;
+    // _call re-homes the envelope's code as rpcCode so it cannot collide with Node's own
+    // string `code` on a socket error; `code` is still honoured when it is numeric, for a
+    // caller that hands back the hub's error object as the hub stamped it.
+    let code = (err.rpcCode !== undefined) ? err.rpcCode
+             : (typeof err.code === 'number' ? err.code : undefined);
+    if(!TERMINAL_HUB_RPC_CODES.has(code)) return null;
+    return String(err.message || code);
+}
+
 // Read the application-level rejection out of a hub result, or null when the call was
 // accepted. Covers BOTH shapes the hub uses: a check on `accepted` alone misses the
 // api.js { error } path, and that path carries the transient failures (a hub still
@@ -134,15 +169,23 @@ class HubClient {
     // Push a chain tip update to the hub (fire-and-forget). Network is
     // optional; older hubs ignore it, newer ones use it to scope the
     // chain_tips entry so multi-network hubs don't collide on 'mainnet'.
-    async pushChainTip(coin, network, blockHeight, blockTime){
+    //
+    // chainId is the block-1 hash of this chain, sent by the BITCOIN indexer only: it is
+    // how the hub learns which Bitcoin chain instance it is serving, so it can stamp its
+    // cross-chain rows with it and every mirror can refuse the rows of a chain that was
+    // re-genesised out from under a hub database. Omitted from the params when absent, so
+    // an older hub and every non-BTC indexer are on exactly the wire they were.
+    async pushChainTip(coin, network, blockHeight, blockTime, chainId){
         if(!this.enabled) return;
         try {
-            await this._call('pushchaintip', {
+            let params = {
                 coin:         coin,
                 network:      network,
                 block_height: blockHeight,
                 block_time:   blockTime
-            });
+            };
+            if(chainId !== null && chainId !== undefined) params.chain_id = chainId;
+            await this._call('pushchaintip', params);
         } catch (err) {
             console.warn('HubClient: pushChainTip failed:', err);
         }
@@ -152,13 +195,13 @@ class HubClient {
     // The hub deduplicates by round_number into the unified price_snapshots table
     async pushPriceRound(roundData){
         if(!this.enabled) return;
-        return this._requireHubAccepted('pushpriceround', await this._call('pushpriceround', roundData));
+        return this._push('pushpriceround', roundData);
     }
 
     // Push a validated PRICE v1 user oracle price to the hub for cross-chain aggregation
     async pushOraclePrice(priceData){
         if(!this.enabled) return;
-        return this._requireHubAccepted('pushoracleprice', await this._call('pushoracleprice', priceData));
+        return this._push('pushoracleprice', priceData);
     }
 
     // Push a validated PRICE batch (a signed window of rounds) to the hub for cross-chain
@@ -170,7 +213,7 @@ class HubClient {
     // ~10 minutes a single round carries to ~70 minutes for a six-round window.
     async pushPriceBatch(batchData){
         if(!this.enabled) return;
-        return this._requireHubAccepted('pushpricebatch', await this._call('pushpricebatch', batchData));
+        return this._push('pushpricebatch', batchData);
     }
 
     // Push a validated ATTEST batch (a signed window of finalized attestation responses,
@@ -186,7 +229,7 @@ class HubClient {
     // the chain, so the hub verifies the same bytes this node verified.
     async pushAttestBatch(batchData){
         if(!this.enabled) return;
-        return this._requireHubAccepted('pushattestbatch', await this._call('pushattestbatch', batchData));
+        return this._push('pushattestbatch', batchData);
     }
 
     // Notify the hub that a reorg rolled back PRICE actions on this chain so it can
@@ -205,7 +248,7 @@ class HubClient {
         let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
         if(toActionIndex !== undefined && toActionIndex !== null) params.to_action_index = toActionIndex;
         if(retractionGeneration !== undefined && retractionGeneration !== null) params.retraction_generation = retractionGeneration;
-        return this._requireHubAccepted('pushpricereorg', await this._call('pushpricereorg', params, this.reorgApiKey));
+        return this._push('pushpricereorg', params, this.reorgApiKey);
     }
 
     // Notify the hub that a reorg rolled back XCALL request actions on this chain so it
@@ -223,7 +266,7 @@ class HubClient {
         let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
         if(toActionIndex !== undefined && toActionIndex !== null) params.to_action_index = toActionIndex;
         if(retractionGeneration !== undefined && retractionGeneration !== null) params.retraction_generation = retractionGeneration;
-        return this._requireHubAccepted('pushxcallreorg', await this._call('pushxcallreorg', params, this.reorgApiKey));
+        return this._push('pushxcallreorg', params, this.reorgApiKey);
     }
 
     // Notify the hub that a reorg rolled back DEX ORDER actions on this chain so it can retract
@@ -241,7 +284,64 @@ class HubClient {
         let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
         if(toActionIndex !== undefined && toActionIndex !== null) params.to_action_index = toActionIndex;
         if(retractionGeneration !== undefined && retractionGeneration !== null) params.retraction_generation = retractionGeneration;
-        return this._requireHubAccepted('pushdexreorg', await this._call('pushdexreorg', params, this.reorgApiKey));
+        return this._push('pushdexreorg', params, this.reorgApiKey);
+    }
+
+    // Notify the hub that a reorg un-landed an ATTEST v5/v6 batch this chain carried, so
+    // it can clear the batch link that landing stamped on every response the batch
+    // carried (spec §6.3, frontier row 55).
+    //
+    // NOT A RANGE, and not a delete. The other three retractions above name a rolled-back
+    // action range and the hub removes what that range seeded; this one names ONE batch,
+    // because the hub-side effect is to NULL a single link column and never to remove a
+    // row: a mirror row is legitimate whichever batch carried it (its federation
+    // signatures are the authority), and on a chain-only node the batch-inserted row is
+    // the only copy in existence. Clearing the link is also what lets the batch re-land,
+    // since the hub sets that column only where it IS NULL.
+    //
+    // The batch is named by its key AND by the signed window bounds that key is derived
+    // from, so the hub re-derives the key rather than trusting it, plus the action index
+    // the landing push carried (the HEAD's, per row 52), which is the value stamped on
+    // the rows. No generation fence: the mirror table has no push_generation column and
+    // the link is cosmetic by construction (D78).
+    async retractAttestBatch(sourceChain, retraction){
+        if(!this.enabled) return;
+        let params = {
+            source_chain: sourceChain,
+            network:      retraction.network,
+            batch_key:    retraction.batch_key,
+            window_start: retraction.window_start,
+            window_end:   retraction.window_end,
+            action_index: retraction.action_index
+        };
+        return this._push('retractattestbatch', params, this.reorgApiKey);
+    }
+
+    // Deliver one push and judge BOTH shapes a hub refusal arrives in: the in-result message
+    // _requireHubAccepted reads, and the JSON-RPC error _call rejects on. Every push method
+    // above goes through here rather than calling _call directly, so the two shapes cannot
+    // drift apart again.
+    //
+    // A terminal rejection is returned as { error: message }, which is byte for byte what
+    // the hub itself returned for this same refusal before it moved the guard into the
+    // error slot. Nothing downstream reads the value (HubPushQueue and XChainIndexer both
+    // key on throw-versus-resolve alone), so the terminal verdict reaches them as the
+    // delivered path and the queued row is dropped instead of replayed forever.
+    async _push(method, params, apiKeyOverride){
+        let result;
+        try {
+            result = await this._call(method, params, apiKeyOverride);
+        } catch (err) {
+            let reason = terminalHubRejection(err);
+            if(reason === null) throw err;
+            // Never silently: a rail the hub refuses on the payload is a standing condition
+            // an operator has to clear, and this is the log line that says so. Worded like
+            // the in-result branch below so one grep finds both.
+            console.warn('HubClient: ' + method + ' rejected terminally by the hub (' +
+                reason + '); dropping the queued row');
+            return { error: reason };
+        }
+        return this._requireHubAccepted(method, result);
     }
 
     // Throw on an application-level hub rejection a retry could still clear, so the durable

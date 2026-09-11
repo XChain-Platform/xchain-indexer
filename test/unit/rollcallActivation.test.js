@@ -123,9 +123,12 @@ describe('rollcall_activation', function () {
         });
 
         // D96: flagdayPlaceholderGuard cannot take a null map, so the lock lives here.
-        it('MAINNET SHIPS INERT: ROLLCALL_ACTIVATION.mainnet is null', function () {
-            assert.strictEqual(act.ROLLCALL_ACTIVATION.mainnet, null,
-                'mainnet must stay inert until the operator pins a height with the mainnet federation');
+        it('MAINNET IS ARMED AT GENESIS: ROLLCALL_ACTIVATION.mainnet is 0', function () {
+            // Ruled 2026-09-09: mainnet carries 0 validators, 0 stakes and 0 roll-calls
+            // (measured that day), so every epoch below the tip closes empty and eviction
+            // reinterprets nothing.
+            assert.strictEqual(act.ROLLCALL_ACTIVATION.mainnet, 0,
+                'mainnet arms at genesis by the 2026-09-09 ruling');
         });
 
         it('the streak lookback is exactly 2K', function () {
@@ -226,7 +229,7 @@ describe('rollcall_activation', function () {
 
         it('NEITHER shared-ledger network is reachable from the environment', function () {
             const m = loadWithEnv('armed');
-            assert.strictEqual(m.ROLLCALL_ACTIVATION.mainnet, null, 'mainnet must never be env-tunable');
+            assert.strictEqual(m.ROLLCALL_ACTIVATION.mainnet, 0, 'mainnet must never be env-tunable');
             assert.strictEqual(m.ROLLCALL_ACTIVATION.testnet, 151200, 'testnet must never be env-tunable');
             const src = fs.readFileSync(ACT_PATH, 'utf8');
             const envReads = src.match(/process\.env/g) || [];
@@ -237,11 +240,12 @@ describe('rollcall_activation', function () {
 
     describe('isRollcallActive', function () {
 
-        // 0 >= null is TRUE in JS, so a bare comparison arms mainnet at height 0.
-        it('never arms an inert mainnet, at any height', function () {
-            assert.strictEqual(0 >= act.ROLLCALL_ACTIVATION.mainnet, true, 'the JS trap this guard exists for');
+        it('arms mainnet at genesis, every height included', function () {
+            assert.strictEqual(act.ROLLCALL_ACTIVATION.mainnet, 0);
             for (const h of [0, 1, 961000, 99999999])
-                assert.strictEqual(act.isRollcallActive(h, 'mainnet'), false, 'mainnet armed at ' + h);
+                assert.strictEqual(act.isRollcallActive(h, 'mainnet'), true, 'mainnet inert at ' + h);
+            // Still fails closed on a height it cannot parse, even at threshold 0.
+            assert.strictEqual(act.isRollcallActive('abc', 'mainnet'), false);
         });
 
         it('gates testnet exactly at its height', function () {
@@ -320,11 +324,16 @@ describe('rollcall_activation', function () {
             assert.strictEqual(armed.rollcallEpochClosingAt(12345, 'regtest'), null);
         });
 
-        it('never closes an epoch on an inert mainnet', function () {
+        it('closes epochs on a genesis-armed mainnet, and never on an inert regtest', function () {
             const C = act.rollcallCloseHeight(1008, 'mainnet');
             assert.strictEqual(typeof C, 'number', 'the arithmetic is still well-defined');
-            assert.strictEqual(act.rollcallEpochClosingAt(C, 'mainnet'), null,
-                'an inert network must never close an epoch, which is what keeps mainnet from evicting anyone');
+            assert.strictEqual(act.rollcallEpochClosingAt(C, 'mainnet'), 1008,
+                'a genesis-armed mainnet closes the epoch its close height names');
+            // The inert-network leg keeps its negative control on the network that is
+            // still inert by default: regtest, until a venue opts in.
+            const R = act.rollcallCloseHeight(30, 'regtest');
+            assert.strictEqual(act.rollcallEpochClosingAt(R, 'regtest'), null,
+                'an inert network must never close an epoch, which is what keeps it from evicting anyone');
         });
 
         it('fails closed on garbage rather than returning NaN', function () {

@@ -34,7 +34,8 @@ CREATE TABLE cross_chain_calls (
     return_payload_b64    TEXT,                                    -- result phase only (sha256'd into the canonical)
     validator_signatures  TEXT         NOT NULL,                   -- JSON [{pubkey, sig}], 2f+1 Ed25519 over the phase canonical
     push_generation       BIGINT       NOT NULL DEFAULT 0,         -- source-chain reorg fence (item 5308); mirrored from the hub
-    created_at            TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at            TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    btc_chain_id          CHAR(64)                                 -- hash of BTC block 1 on the writing hub's chain; NULL accepted by every mirror; transport, not consensus (never in a canonical)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX call_phase     ON cross_chain_calls (call_id, phase);

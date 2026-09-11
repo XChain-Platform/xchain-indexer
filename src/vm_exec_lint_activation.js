@@ -47,16 +47,19 @@
  * test/unit/vm_exec_lint_activation.test.js here and by the consensus-params suite in
  * xchain-vm. A height armed on one side only forks the fleet.
  *
- * *** NOT YET ARMED ON MAINNET. *** The operator ratified the MECHANISM on 2026-08-11
+ * *** ARMED AT GENESIS ON MAINNET. *** The operator ratified the MECHANISM on 2026-08-11
  * (execute-time enforcement, the validateSyntax verdict cached by the existing metering
- * sha256 key, its cost metered as gas) but still owes the concrete per-coin train
- * heights. `null` is the explicit unarmed sentinel: it resolves to inactive at every
- * mainnet height, so mainnet behaviour is byte-identical to today. Arming means filling
- * the ratified height into BOTH this map and xchain-vm's EXEC_LINT_ACTIVATION in the
- * same change, and deploying the fleet before the earliest of the three heights.
- * testnet + regtest are genesis-active: both are pre-launch and both already enforce
- * the identical rule set at deploy from genesis, so every contract that exists there
- * passes the execute-time check and the only observable change is the metered lint gas.
+ * sha256 key, its cost metered as gas) and ruled on 2026-09-09 that a mainnet gate which
+ * is identity on the indexed mainnet history arms at genesis instead of at a train
+ * height. This gate qualifies: mainnet carries 0 contracts, 0 DEPLOY and 0 EXECUTE
+ * actions (measured 2026-09-09), so there is no stored contract source for the
+ * execute-time re-lint to reject and no execution whose gas the lint charge could move.
+ * A from-genesis OLD-vs-ON replay witness per chain is the proof. Arming is one change
+ * across BOTH this map and xchain-vm's EXEC_LINT_ACTIVATION; a height armed on one side
+ * only forks the fleet. testnet + regtest were already genesis-active for the same
+ * reason: both enforce the identical rule set at deploy from genesis, so every contract
+ * that exists there passes the execute-time check and the only observable change is the
+ * metered lint gas.
  *
  * Because it is an EXECUTION-path gate, NOT a hashing-path change, it is INDEXER-ONLY
  * and has NO xchain-sync twin: BlockHasher reads the already-materialized action rows
@@ -69,11 +72,10 @@
 // the execution when a now-banned construct is present; below it there is no check and
 // no gas charge (byte-identical replay).
 // MUST equal xchain-vm/src/index.js EXEC_LINT_ACTIVATION.
-// null = UNARMED, awaiting the operator's ratified per-coin train heights.
 const VM_EXEC_LINT_ACTIVATION = {
-    'BTC:mainnet':  null,
-    'LTC:mainnet':  null,
-    'DOGE:mainnet': null,
+    'BTC:mainnet':  0,   // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 contracts, 0 DEPLOY, 0 EXECUTE, measured 2026-09-09)
+    'LTC:mainnet':  0,
+    'DOGE:mainnet': 0,
     testnet: 0,
     regtest: 0,
 };
@@ -87,8 +89,8 @@ function _activationThreshold(network, coin){
 }
 
 // Whether execute-time source-lint enforcement is in effect at `blockIndex` on
-// `network` for `coin`. Below the threshold, on an unknown chain, or while the coin's
-// entry is still the unarmed null -> off (no re-lint, no gas; byte-identical replay).
+// `network` for `coin`. Below the threshold, on an unknown chain, or on a null (unarmed)
+// entry -> off (no re-lint, no gas; byte-identical replay).
 function isVmExecLintActive(blockIndex, network, coin){
     let b = parseInt(blockIndex);
     if(!Number.isFinite(b)) return false;

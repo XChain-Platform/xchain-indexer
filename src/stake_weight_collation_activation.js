@@ -70,16 +70,19 @@ const STAKE_WEIGHT_COLLATION = 'utf8_bin';
 
 // Per-chain activation heights, interpreted against the chain's own block_index.
 // `null` = NOT YET PINNED = inert (legacy unpinned ordering, byte-identical
-// replay). Only regtest is armed, so fresh regtest stacks and the e2e
-// conformance scenario exercise the binary path end to end. Mainnet and testnet
-// heights are pinned at flag-day assembly, above the tip recorded at that time,
-// in ONE coordinated deploy of BOTH fleets: a height a carrying fleet has
-// already passed arms retroactively, and a height armed while one fleet is
-// behind halts the follower.
+// replay). Mainnet is armed at genesis by the 2026-09-09 ruling: the ordering
+// this gate pins only decides which stake sources and keys survive the snapshot
+// cap, and mainnet holds 0 stakes (measured 2026-09-09), so the binary order and
+// the folding order select the same empty set and a height of 0 reinterprets
+// nothing. The usual retroactivity hazard (a height a carrying fleet has already
+// passed) is what a from-genesis OLD-vs-ON replay witness per chain proves away
+// here. Testnet stays unpinned: it carries live stakes, so its height is pinned
+// at flag-day assembly above the tip recorded then, in ONE coordinated deploy of
+// BOTH fleets (a height armed while one fleet is behind halts the follower).
 const STAKE_WEIGHT_COLLATION_ACTIVATION = {
-    'BTC:mainnet':  null,
-    'LTC:mainnet':  null,
-    'DOGE:mainnet': null,
+    'BTC:mainnet':  0,      // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 stakes, measured 2026-09-09)
+    'LTC:mainnet':  0,
+    'DOGE:mainnet': 0,
     'BTC:testnet':  null,
     'LTC:testnet':  null,
     'DOGE:testnet': null,

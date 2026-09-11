@@ -48,10 +48,11 @@
  * verifier rejects are accepted by an upgraded one and vice versa, so a partial
  * rollout FORKS acceptance instead of fixing it. It also changes how already
  * signed and anchored historical artifacts read. Both the coordinated activation
- * height and the disposition of pre-flag-day artifacts are operator decisions, so
- * mainnet and testnet ship INERT (null = never active) and only regtest, which has
- * no history to preserve, is on from genesis. Below the gate every consumer
- * behaves byte-for-byte as it did before this module existed.
+ * height and the disposition of pre-flag-day artifacts are operator decisions, and
+ * every network is now armed at genesis: regtest and testnet have no quorum-signed
+ * history to preserve, and mainnet was ruled on 2026-09-09 on the same evidence
+ * (0 validators, 0 stakes, 0 quorum-signed artifacts measured 2026-09-09). Below
+ * the gate every consumer behaves byte-for-byte as it did before this module existed.
  *
  * PLANE. The gate is keyed on the BTC-anchored declared snapshot_block, the same
  * plane (and the same call site) as `equivocation_header.isEquivHeaderActive`, NOT
@@ -83,20 +84,21 @@ const CANONICAL_REORG_BUFFER = 6;
 // xchain-documentation/protocol/constants.js, kept equal by the cross-service
 // regression suite). Keyed on the BTC-anchored declared snapshot_block.
 //
-// INERT on mainnet/testnet (null = never active) until the operator ratifies a
-// coordinated BTC snapshot_block: arming this changes acceptance itself, so a
-// one-sided or partially-rolled-out arm forks the fleet rather than fixing it, and
-// it also re-reads every checkpoint already signed and anchored under the current
-// reading. Regtest is active from genesis (no history to preserve; the regtest
-// suites exercise the buried resolution from block 0).
+// Arming this changes acceptance itself, so a one-sided or partially-rolled-out arm would
+// fork the fleet rather than fix it, and it re-reads every checkpoint already signed and
+// anchored under the current reading. There is no such checkpoint on any network: mainnet
+// was ruled at genesis on 2026-09-09 after measuring 0 validators, 0 stakes and 0
+// quorum-signed artifacts on every mainnet chain, so burying reinterprets nothing there and
+// the from-genesis OLD-vs-ON replay is the witness. Regtest is active from genesis (no
+// history to preserve; the regtest suites exercise the buried resolution from block 0).
 const SNAPSHOT_BURIAL_ACTIVATION = {
-    mainnet: null,        // INERT placeholder: operator-ratify a BTC snapshot_block before arming
+    mainnet: 0,           // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 validators, 0 stakes, measured 2026-09-09)
     // ARMED AT GENESIS, operator-ratified 2026-08-18 as part of the pre-launch "every
     // feature active on testnet" ruling. Safe because testnet's indexer state is being
     // REBUILT from the chain before launch, and because testnet carries no artifacts
     // signed under the current reading for this to reinterpret: the live explorer reports
     // 0 validators, 0 capability stakes and 0 checkpoints on BTC testnet, so nothing has
-    // ever been quorum-signed there. Mainnet keeps its own ratification for that reason.
+    // ever been quorum-signed there. Mainnet was measured the same way on 2026-09-09.
     testnet: 0,
     regtest: 0,
 };

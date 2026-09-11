@@ -37,7 +37,11 @@ describe('runControllerGuard: guard returnValue parsing (royalty payoutLegs) @re
     function buildHandler(vmResult, manifest = null) {
         const indexer = createMockIndexer();
         const db = indexer.indexerDb;
-        db.getContract               = sinon.stub().resolves({ code: 'module.exports={guard:function(){}};', status_id: 7 });
+        // The stored source of a contract that deployed at/after CONTRACT_META_REQUIRED
+        // always carries `meta` (spec 2.1), so the fixture does too. The EXECUTE path
+        // never re-evaluates meta (the verdict lives in actions/deploy.js alone), so this
+        // is fixture realism, not a behaviour this suite asserts.
+        db.getContract               = sinon.stub().resolves({ code: "module.exports={meta:{name:'Guard',description:'Controller guard fixture.',version:'1.0.0'},guard:function(){}};", status_id: 7 });
         // Phase E: per-contract manifest (null = no declared manifest → unrestricted, global cap).
         db.getContractPermissions    = sinon.stub().resolves(manifest);
         db.getStatusString           = sinon.stub().resolves('valid');

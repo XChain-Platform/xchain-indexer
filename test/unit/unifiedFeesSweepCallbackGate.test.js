@@ -22,17 +22,18 @@
  *
  *   - the REGISTRATION: a time-keyed 0.2.0 change, genesis-active on regtest so
  *     every suite and regtest venue runs the unified price from block 0;
- *   - that BOTH mainnet AND testnet stay on the UNARMED sentinel. Testnet is the
- *     unusual half. Every other time-keyed gate in protocol_changes.js is
- *     genesis-active there because it was registered while testnet was a scratch
- *     venue carrying no history to reinterpret. Testnet went PUBLIC on 2026-09-01,
- *     so a genesis arm would re-price every SWEEP and CALLBACK already committed
- *     and fork every synced testnet node against a fresh reindex. An armed-looking
- *     real date in either slot means somebody armed a consensus fee change; if that
- *     was deliberate, flip the pin here in the same commit rather than deleting it;
- *   - that neither instant is ever BACKDATED. An activation already past is not a
- *     flag day: the fleet applies the legacy price beyond it while a from-genesis
- *     replay applies the new one, and the two diverge at the first comparison.
+ *   - that MAINNET IS ARMED AT GENESIS and TESTNET IS NOT, which is the whole point
+ *     of this pair. The 2026-09-09 ruling armed mainnet at 0 because mainnet has
+ *     never carried a SWEEP or a CALLBACK, so the re-pricing cannot move a fee
+ *     DEBIT a from-genesis replay recomputes. Testnet went PUBLIC on 2026-09-01
+ *     and has carried both actions since, so a genesis arm there WOULD re-price
+ *     committed fees and fork every synced node against a fresh reindex; it takes
+ *     a future instant instead;
+ *   - that the testnet instant is never BACKDATED, and that mainnet is armed at
+ *     exactly 0 rather than at some other past value. The two are not the same
+ *     thing: 0 means the rule always applied, which a replay reproduces exactly,
+ *     while a nonzero past instant means the price changed at a moment the fleet
+ *     never observed, which is the fork this gate exists to prevent.
  ********************************************************************/
 
 'use strict';
@@ -47,16 +48,17 @@ const ProtocolChanges       = require('../../src/protocol_changes.js');
 
 const GATE = 'UNIFIED_FEES_SWEEP_CALLBACK';
 
-// The house UNARMED sentinel for a change whose remedy is ruled but whose activation
-// instant is a separate, deliberate operator act.
+// The house UNARMED sentinel. No slot of this gate may hold it any more: mainnet is
+// armed at genesis and testnet at a named instant, so a sentinel here means an arm was
+// reverted without a ruling behind it.
 const UNARMED_SENTINEL = 9999999999;
-
-// A far-future instant no real chain reaches, the boundary the sibling unarmed-gate
-// suites use to tell a scheduled date from a sentinel.
-const YEAR_2100 = 4102444800;
 
 // The public testnet launch. Nothing may arm this gate at or before it.
 const TESTNET_LAUNCH = 1788220800; // 2026-09-01T00:00:00Z
+
+// The pinned testnet instant, read from the module so a re-pin forward moves the
+// boundary tests with it rather than reddening them.
+const TESTNET_INSTANT = ProtocolChanges.UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME;
 
 function pcFor(network){
     const indexer = createMockIndexer();
@@ -83,17 +85,30 @@ describe('SWEEP/CALLBACK unified-fee flag day @regression @tier1', function(){
             assert.strictEqual(change.regtest_time, 0);
         });
 
-        it('mainnet is UNARMED on the house sentinel, not a scheduled date', function(){
+        it('mainnet is ARMED AT GENESIS by the 2026-09-09 ruling', function(){
             const instant = ProtocolChanges.UNIFIED_FEES_SWEEP_CALLBACK_MAINNET_TIME;
             assert.strictEqual(typeof instant, 'number', 'the instant must be exported');
             assert.strictEqual(pcFor('mainnet').pc.changes[GATE].mainnet_time, instant);
-            assert.strictEqual(instant, UNARMED_SENTINEL,
-                'mainnet must stay on the UNARMED sentinel until the operator arms it');
-            assert.ok(instant >= YEAR_2100,
-                'a value below the house sentinel reads as a scheduled activation');
+            // 0, and nothing else. Mainnet has never carried a SWEEP or a CALLBACK
+            // (measured 2026-09-09), so the unified price has effectively always applied
+            // there and a genesis arm reproduces every recorded fee DEBIT. Any OTHER past
+            // value would be the harmful case: a price that changed at an instant the
+            // fleet never observed. Any future value would be a flag day nothing needs.
+            assert.strictEqual(instant, 0,
+                'mainnet must be armed at genesis, not at a sentinel and not at an instant');
+            assert.notStrictEqual(instant, UNARMED_SENTINEL);
         });
 
-        it('testnet is UNARMED too, because testnet is a live public ledger', function(){
+        it('mainnet: ACTIVE from block 0 and at every instant above it', async function(){
+            for(const t of [0, 1, 1786060800, Math.floor(Date.now() / 1000)]){
+                const { pc, indexer } = pcFor('mainnet');
+                indexer.decoderDb.getBlockTime.resolves(t);
+                assert.strictEqual(await pc.isEnabled(GATE, 0), true,
+                    'mainnet must price SWEEP and CALLBACK on the unified schedule at block_time ' + t);
+            }
+        });
+
+        it('testnet is NOT armed at genesis, because testnet is a live public ledger', function(){
             const instant = ProtocolChanges.UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME;
             assert.strictEqual(typeof instant, 'number', 'the instant must be exported');
             assert.strictEqual(pcFor('testnet').pc.changes[GATE].testnet_time, instant);
@@ -104,19 +119,19 @@ describe('SWEEP/CALLBACK unified-fee flag day @regression @tier1', function(){
                 'the testnet instant must be after the public launch, never inside committed history');
         });
 
-        it('neither instant is ever backdated', function(){
+        it('the testnet instant is never backdated', function(){
             // An activation already in the past is not a flag day at all. This is a
-            // wall-clock assertion on purpose: it starts failing the moment a pinned
-            // instant lapses, which is exactly when it must be re-pinned forward.
-            const now = Math.floor(Date.now() / 1000);
-            for(const [network, instant] of [
-                ['mainnet', ProtocolChanges.UNIFIED_FEES_SWEEP_CALLBACK_MAINNET_TIME],
-                ['testnet', ProtocolChanges.UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME],
-            ]){
-                assert.ok(instant > now,
-                    network + ' instant ' + instant + ' has lapsed: re-pin it forward, or the ' +
-                    'live fleet applies the legacy price past it while a replay applies the new one');
-            }
+            // wall-clock assertion on purpose: it starts failing the moment the pinned
+            // instant lapses, which is exactly when it must be re-pinned forward (the
+            // v0.17.0 train carries it; a slipped train defers the instant).
+            // Mainnet is exempt because it is armed at genesis, not at an instant: 0 is
+            // "the rule always applied", which is the one past value that cannot diverge
+            // a replay from the fleet. That distinction is asserted above.
+            const now     = Math.floor(Date.now() / 1000);
+            const instant = ProtocolChanges.UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME;
+            assert.ok(instant > now,
+                'testnet instant ' + instant + ' has lapsed: re-pin it forward, or the ' +
+                'live fleet applies the legacy price past it while a replay applies the new one');
         });
 
         it('regtest: active from genesis, so suites and venues run the unified price', async function(){
@@ -125,27 +140,30 @@ describe('SWEEP/CALLBACK unified-fee flag day @regression @tier1', function(){
             assert.strictEqual(await pc.isEnabled(GATE, 0), true);
         });
 
-        it('mainnet and testnet: inert at every instant a real chain reaches', async function(){
-            for(const network of ['mainnet','testnet']){
-                for(const t of [1, TESTNET_LAUNCH, TESTNET_LAUNCH + 315360000, UNARMED_SENTINEL - 1]){
-                    const { pc, indexer } = pcFor(network);
-                    indexer.decoderDb.getBlockTime.resolves(t);
-                    assert.strictEqual(await pc.isEnabled(GATE, 1000000), false,
-                        network + ' must be inert at block_time ' + t);
-                }
+        it('testnet: inert below its instant, active at and above it', async function(){
+            // The committed testnet history this gate must not re-price sits below the
+            // instant, so every one of these times must still take the legacy price.
+            for(const t of [1, TESTNET_LAUNCH, TESTNET_INSTANT - 1]){
+                const { pc, indexer } = pcFor('testnet');
+                indexer.decoderDb.getBlockTime.resolves(t);
+                assert.strictEqual(await pc.isEnabled(GATE, 1000000), false,
+                    'testnet must still be inert at block_time ' + t);
+            }
+            for(const t of [TESTNET_INSTANT, TESTNET_INSTANT + 315360000]){
+                const { pc, indexer } = pcFor('testnet');
+                indexer.decoderDb.getBlockTime.resolves(t);
+                assert.strictEqual(await pc.isEnabled(GATE, 1000000), true,
+                    'testnet must take the unified price at block_time ' + t);
             }
         });
     });
 
     describe('relationship to the fee gates it sits beside', function(){
 
-        // LEGACY_FEE_NUMERIC_DBHITS only has meaning while the legacy branch is still
-        // the one running. Arming this gate BELOW it would switch SWEEP and CALLBACK to
-        // the unified price before the legacy accumulator's own correction ever applied
-        // to them, which is harmless for those two but makes the recorded activation
-        // order a lie for anyone replaying it. Assert the ordering rather than trusting
-        // that nobody re-registers either entry.
-        for(const network of ['mainnet','testnet','regtest']){
+        // LEGACY_FEE_NUMERIC_DBHITS only has meaning while the legacy branch is still the
+        // one running. On testnet and regtest this gate sits at or above it, so the
+        // recorded activation order reads the way a replay walks it.
+        for(const network of ['testnet','regtest']){
             it(network + ': never activates before the legacy accumulator fix', function(){
                 const changes = pcFor(network).pc.changes;
                 const gate    = changes[GATE];
@@ -156,6 +174,23 @@ describe('SWEEP/CALLBACK unified-fee flag day @regression @tier1', function(){
                     ', before LEGACY_FEE_NUMERIC_DBHITS at ' + legacy[network + '_time']);
             });
         }
+
+        // MAINNET INVERTS THAT ORDER DELIBERATELY, and it is safe rather than tolerated.
+        // The genesis arm (2026-09-09 ruling) means the legacy branch never runs for
+        // SWEEP or CALLBACK on mainnet at all, so the accumulator fix LEGACY_FEE_NUMERIC_
+        // DBHITS carries has nothing to correct for these two actions at any height: it
+        // is not skipped, it is unreachable. Its other consumer, legacy DIVIDEND, is
+        // untouched by this gate and keeps its own 2026-08-07 boundary. Pinned so a
+        // future reader meets the inversion here rather than treating it as a slip.
+        it('mainnet: armed BELOW the legacy accumulator fix, which the genesis arm makes moot', function(){
+            const changes = pcFor('mainnet').pc.changes;
+            const gate    = changes[GATE];
+            const legacy  = changes['LEGACY_FEE_NUMERIC_DBHITS'];
+            assert.ok(gate && legacy, 'both gates must be registered');
+            assert.strictEqual(gate.mainnet_time, 0, 'the genesis arm is what makes this safe');
+            assert.ok(legacy.mainnet_time > 0,
+                'LEGACY_FEE_NUMERIC_DBHITS keeps its own mainnet boundary for legacy DIVIDEND');
+        });
 
         // UNIFIED_FEES (DIVIDEND/AIRDROP and the rest) is genesis-active on every
         // network. This gate is the same model reaching the last two handlers that never

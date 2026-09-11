@@ -34,11 +34,15 @@
  * one author still resolves to the same head.
  *
  * WHY GATED. This changes consensus-visible chunk-status verdicts (feeding
- * the class-6 anchor_invalid state-hash preimage), so it lands default inert:
+ * the class-6 anchor_invalid state-hash preimage), so it shipped default inert:
  * below the threshold the legacy canonical-head rule runs and historical
- * replay is byte-identical. Pin real heights on the coordinated mainnet
- * activation train and deploy every indexer (and any recovery host) before
- * the network crosses its height.
+ * replay is byte-identical.
+ *
+ * MAINNET IS ARMED AT GENESIS (operator ruling 2026-09-09). The indexed mainnet
+ * history carries 0 archive chunks (measured 2026-09-09), so the publisher-scoped
+ * rule is the identity function over every mainnet block already committed and
+ * there is nothing below the threshold for a from-genesis replay to diverge on.
+ * The proof is a per-chain OLD-vs-ON replay witness, not this comment.
  *
  * TESTNET IS ARMED AT 0 (operator ruling 2026-08-11, applied 2026-08-14).
  * The gate exists so a ratified mainnet height can be coordinated, not so the
@@ -46,7 +50,7 @@
  * tests. Testnet was re-genesised with no pre-flag history, so arming it at
  * block 0 costs no replay compatibility (there is nothing below the threshold
  * to stay byte-identical with) and buys a live network that runs the
- * publisher-scoped rule end to end. Mainnet stays inert until ratified.
+ * publisher-scoped rule end to end.
  *
  * KEYED ON THE DOGE BLOCK INDEX OF THE BATCH'S CANONICAL HEAD, per network,
  * not on SNAPSHOT_BLOCK like the anchor-reward family: a v2 chunk carries no
@@ -59,11 +63,10 @@
 'use strict';
 
 // Per-network activation, interpreted against the DOGE block_index of the batch's
-// canonical archive head. The mainnet placeholder is INERT (no live network can reach
-// it); testnet and regtest are armed from genesis so both exercise the rule end to end
-// before mainnet ratifies a height.
+// canonical archive head. Every network is armed from genesis, so all three run the
+// publisher-scoped rule end to end.
 const ARCHIVE_BATCH_AUTHOR_ACTIVATION = {
-    mainnet: 999999999,   // INERT placeholder; pin to a real height on the coordinated mainnet activation train before arming
+    mainnet: 0,           // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 archive chunks, measured 2026-09-09)
     testnet: 0,           // ARMED at genesis 2026-08-14 per the 2026-08-11 operator ruling; the re-genesised testnet has no pre-flag history to keep byte-identical
     regtest: 0,           // armed from genesis
 };

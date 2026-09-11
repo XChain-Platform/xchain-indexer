@@ -31,6 +31,15 @@ const lifecycle = require('./tableLifecycle.js');
 const ar        = require('./anchor_reward_activation.js');
 const { ARCHIVE_HEAD_VERSIONS_SQL } = require('./stateHash.js');
 const { archiveAuthorScopeJoin } = require('./archive_rollback_author_scope_activation.js');
+// Wire versions only, for the ATTEST batch-link retraction below: the head and the
+// continuation are what make an `attests` row part of a batch, and naming them from the
+// wire module keeps the reorg query and the parser reading the same two numbers.
+const abw       = require('./attest_batch_wire.js');
+// Byte-identical copy of actions/attest.js's ATTEST_BATCH_COMPLETION_STAMP, the marker a
+// completing v6 continuation appends to the verdict it stamps on a surviving v5 head. The
+// reorg reset below restores ONLY marked stamps; the constant is duplicated rather than
+// required (rollback.js requires no action handler) and a test pins the two copies equal.
+const ATTEST_BATCH_COMPLETION_STAMP = ' (stamped on batch completion)';
 
 class Rollback {
 
@@ -226,6 +235,14 @@ class Rollback {
         );
         if(maxRows.length > 0 && maxRows[0].last_action_index !== null)
             lastActionIndex = Number(maxRows[0].last_action_index);
+
+        // The ATTEST batches this reorg un-lands (spec §6.3, frontier row 55). Read HERE,
+        // in the read phase, because the `attests` rows that identify them are deleted by
+        // the dataTables purge below, and the hub retraction has to name a batch that no
+        // longer exists locally by the time it is sent.
+        let unlandedAttestBatches = [];
+        if(firstActionIndex !== null && this.hubClient && this.hubClient.enabled)
+            unlandedAttestBatches = await this._collectUnlandedAttestBatches(firstActionIndex);
 
         // Handle looking up data for any action_indexes in the rollback
         if(firstActionIndex !== null){
@@ -804,7 +821,7 @@ class Rollback {
                 // range containing only such a maturity leaves firstActionIndex null and would skip
                 // the reversal entirely, forking the ledger vs a from-genesis replay.
 
-                // Reset an anchor archive batch's parent (v1/v6 archive-head) status that an
+                // Reset an anchor archive batch's parent (v1 archive-head) status that an
                 // orphaned final chunk flipped to 'invalid_archive' IN PLACE on a surviving row. A
                 // chunked archive batch spans multiple blocks: a head in an early block, then v2
                 // continuation chunks in later blocks. When the LAST v2 chunk lands, anchor.js
@@ -817,7 +834,8 @@ class Rollback {
                 // re-mined validly) would re-derive the parent's pre-flip status. anchor_actions
                 // .status_id is not in any block-hash projection, so this is a state-table
                 // divergence (and could mislead the archive-integrity flag / recovery selection,
-                // which read version IN (1, 6) status IN ('valid','unverified')), not a consensus fork.
+                // which read the ARCHIVE_HEAD_VERSIONS set at status 'valid'/'unverified'), not a
+                // consensus fork.
                 //
                 // Reset to 'unverified', the conservative re-verification state (anchor.js stores
                 // a v1 'unverified' whenever its signer snapshot isn't locally mirrored, and
@@ -845,13 +863,14 @@ class Rollback {
                     // snapshot catch-up (it cannot intern locally without diverging the replicated
                     // id, and anchor status_id is in no block-hash projection).
                     //
-                    // Version predicate: the parent is any ARCHIVE_HEAD version (v1
-                    // legacy, v6 publisher-bearing post-ARCHIVE_REWARD), shared constant from
-                    // stateHash.js. Unconditionally widened: a v6 parent's stamp is exactly as
-                    // un-re-derivable after the chunk delete as a v1's, and this reset is not a
-                    // hash preimage (the GATED anchor_invalid state-hash class covers the stamp
-                    // itself), so no flag-day applies here. ClientRollback.js mirrors this;
-                    // the drift guard pins the widened predicate on both sides.
+                    // Version predicate: the parent is any ARCHIVE_HEAD version (today v1, the
+                    // publisher-bearing archive head), spliced from the stateHash.js constant
+                    // rather than hand-copied, so a head version added later reaches this reset
+                    // too. No flag day gates it: every head version's stamp is equally
+                    // un-re-derivable after the chunk delete, and this reset is not a hash
+                    // preimage (the GATED anchor_invalid state-hash class covers the stamp
+                    // itself). ClientRollback.js mirrors this; the drift guard pins the
+                    // predicate on both sides.
                     //
                     // Author scope, flag-day gated and INERT on every network today: the seq is
                     // not a batch key once archive batches are publisher-scoped, so a second
@@ -872,6 +891,78 @@ class Rollback {
                                 WHERE p.version ${ARCHIVE_HEAD_VERSIONS_SQL}
                                   AND p.action_index < ?`;
                     args = [firstActionIndex, firstActionIndex];
+                    await this.indexerDb.doQuery(query, args);
+                }
+
+                // Restore an ATTEST v5 batch head that an orphaned v6 continuation flipped IN
+                // PLACE on a surviving row. The exact shape of the archive reset
+                // above, on the batch rail, and for the same reason.
+                //
+                // A chunked batch spans blocks: the v5 head in an early block, v6 continuations
+                // after it. The chunk that COMPLETES the coverage reassembles the window and,
+                // when the body or the quorum fails, stamps the verdict on the head
+                // (attest.js _absorbCompletedBatch) - a direct UPDATE on a row created in an
+                // earlier block, which therefore survives the bulk delete below. If that
+                // completing chunk is in the orphaned range, the delete removes the chunk and
+                // cannot undo the stamp, and the damage is worse than a stale verdict: the head
+                // is now terminal, getAttestBatchChunks reads status 'valid' only, so the head
+                // is missing from its OWN chunk set and _canonicalBatchHead resolves nothing.
+                // The re-mined continuation then rejoins a batch with no head, absorbs nothing,
+                // and the window is permanently dead on this node while a from-genesis replay
+                // (the chunk never re-mined, or re-mined into a batch that reassembles) has it
+                // live. attests.status_id is in no block-hash projection, so this is a
+                // state-table divergence, not a consensus fork.
+                //
+                // ONLY A MARKED STAMP IS RESTORED, and this is the whole safety argument. A
+                // blanket "reset every non-valid head joined to an orphaned chunk" is UNSAFE:
+                // a head can be terminal because it was terminal AT WRITE TIME (a duplicate
+                // head for the publisher's own window, a foreign NETWORK, a single-chunk head
+                // that failed its own quorum), every one of which can sit below the orphaned
+                // range with a valid same-author continuation above it, and restoring one
+                // REVIVES a head that was never valid - two live heads for one window. So the
+                // stamp writes ATTEST_BATCH_COMPLETION_STAMP (attest.js; keep the two copies
+                // byte-identical, a test pins the pair) and only rows carrying it are matched.
+                // 'valid' is then not a guess either: a head reaches the stamp only by coming
+                // back from the status='valid' chunk read, so 'valid' is the one value the
+                // flip could have overwritten.
+                //
+                // Publisher scope, UNCONDITIONAL and with no flag day, unlike the archive twin:
+                // a batch's identity has been (key, author) since the rail shipped (attest.js
+                // _authoredBy), so the scope here has never been wider than the live path's and
+                // narrowing it suppresses no reset that was ever owed. Scoped on actions
+                // .source_id rather than the resolved address: both rows are local, the ids are
+                // exact, and index_addresses.address is a case-folding collation. An
+                // unresolvable author on either side is a NULL that no equality matches, so it
+                // authenticates nothing rather than everything, matching _authoredBy's
+                // fail-closed rule.
+                //
+                // Runs BEFORE the delete (both rows still present) and AFTER the read-phase
+                // retraction collect, which requires the head's status to be 'valid': a batch
+                // stamped on its head never pushed, so it has no hub link to retract, and
+                // restoring it any earlier would invent one.
+                if(firstActionIndex !== null){
+                    // Intern 'valid' first, for the archive reset's reason: the UPDATE resolves
+                    // its target id through `JOIN index_statuses vs ON vs.status = 'valid'`, and
+                    // a JOIN that matches nothing silently no-ops the reset. index_statuses ids
+                    // are never hashed, so an in-rollback intern is byte-neutral.
+                    await this.indexerDb.createStatus('valid');
+                    query = `UPDATE attests p
+                                JOIN index_statuses ps ON ps.id = p.status_id AND ps.status LIKE ?
+                                JOIN actions        pa ON pa.action_index = p.action_index
+                                JOIN attests c
+                                  ON c.request_id = p.request_id
+                                 AND c.version = ${abw.ATTEST_BATCH_CONTINUATION_VERSION}
+                                 AND c.batch_chunk_index IS NOT NULL
+                                 AND c.action_index >= ?
+                                JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid'
+                                JOIN actions        ca ON ca.action_index = c.action_index
+                                                      AND ca.source_id    = pa.source_id
+                                JOIN index_statuses vs ON vs.status = 'valid'
+                                SET p.status_id = vs.id
+                                WHERE p.version = ${abw.ATTEST_BATCH_HEAD_VERSION}
+                                  AND p.batch_chunk_index = 0
+                                  AND p.action_index < ?`;
+                    args = ['%' + ATTEST_BATCH_COMPLETION_STAMP, firstActionIndex, firstActionIndex];
                     await this.indexerDb.doQuery(query, args);
                 }
 
@@ -896,7 +987,7 @@ class Rollback {
                     // drain later is safe: their fence cannot delete rows re-published after
                     // this reorg's generation bump.
                     if(table === 'pending_hub_pushes'){
-                        query = `DELETE FROM pending_hub_pushes WHERE action_index >= ? AND push_type NOT IN ('price_retraction', 'xcall_retraction', 'match_retraction')`;
+                        query = `DELETE FROM pending_hub_pushes WHERE action_index >= ? AND push_type NOT IN ('price_retraction', 'xcall_retraction', 'match_retraction', 'attest_batch_retraction')`;
                     }
                     await this.indexerDb.doQuery(query, args);
                 }
@@ -1421,6 +1512,32 @@ class Rollback {
                         last_action_index: lastActionIndex, retraction_generation: retractionGeneration });
                     stagedRetractions.push({ pushType, id });
                 }
+
+                // One durable row per ATTEST batch this reorg un-landed, on the same
+                // write-ahead reasoning: the landing push already told a hub to stamp a batch
+                // link on every response the batch carried, and after the purge below this node
+                // holds nothing that could re-derive which batch that was. The payload names ONE
+                // batch rather than an action range, because the hub-side effect is a link
+                // cleared and never a row deleted (HubClient.retractAttestBatch says why).
+                for(let batch of unlandedAttestBatches){
+                    let payload = {
+                        coin:         this.config['COIN'],
+                        network:      this.config['NETWORK'],
+                        batch_key:    batch.batch_key,
+                        window_start: batch.window_start,
+                        window_end:   batch.window_end,
+                        // The link the hub stamped is the HEAD's action index (row 52), so that
+                        // is the value the retraction has to name, never the chunk that
+                        // completed the batch or the lowest rolled-back action.
+                        action_index: batch.action_index
+                    };
+                    // Keyed at the head's action index like every other queue row, so a deeper
+                    // reorg's purge would carry it away were the retraction types not excluded
+                    // from that delete.
+                    let id = await this.indexerDb.enqueueHubPushTx('attest_batch_retraction', payload,
+                        batch.action_index);
+                    stagedRetractions.push({ pushType: 'attest_batch_retraction', id, payload });
+                }
             }
 
             // Commit: the rollback is now atomically applied
@@ -1513,10 +1630,15 @@ class Rollback {
                     price_retraction: (last) => this.hubClient.retractPriceRange(coin, firstActionIndex, last, retractionGeneration),
                     xcall_retraction: (last) => this.hubClient.retractXcallRange(coin, firstActionIndex, last, retractionGeneration),
                     match_retraction: (last) => this.hubClient.retractMatchRange(coin, firstActionIndex, last, retractionGeneration),
+                    // Takes the staged PAYLOAD rather than a range ceiling: this retraction names
+                    // one batch, and the live and deferred deliveries are byte-identical because
+                    // there is no open-ended form to narrow. It is the same payload the durable
+                    // row carries, so a queued retry cannot diverge from what was tried here.
+                    attest_batch_retraction: (last, payload) => this.hubClient.retractAttestBatch(coin, payload),
                 };
                 for(let r of stagedRetractions){
                     try {
-                        await liveByType[r.pushType](null);
+                        await liveByType[r.pushType](null, r.payload);
                         await this.indexerDb.markHubPushDelivered(r.id);
                     } catch(err) {
                         // Live delivery failed; the durable (closed-range) write-ahead row stays for
@@ -1544,6 +1666,51 @@ class Rollback {
 
         // Log the rollback time
         this.util.logTimer(rollbackTimer, 'Rollback Done');
+    }
+
+    // The ATTEST v5/v6 batches whose chain wire this reorg orphans (spec §6.3, row 55).
+    //
+    // A batch is un-landed when ANY of its wires is orphaned, not only its head. The
+    // delivery fires on the action that COMPLETES the batch's chunk coverage (row 52), so
+    // a reorg that takes one continuation leaves a head standing whose batch no longer
+    // exists on the surviving chain, and the hub is still serving the link that delivery
+    // stamped. Joining every rolled-back chunk row back to its head is what catches that
+    // case; scoping the join to the head's own key is what makes the result the identity
+    // the retraction has to carry (the key, its signed window and the HEAD's action index,
+    // which is the value the hub stamped).
+    //
+    // Only VALID heads: a batch whose reassembly or quorum failed was stamped invalid on
+    // its head and never pushed, so there is no link to retract. A head that is valid but
+    // never completed its coverage is harmless the other way: the retraction matches no
+    // link on the hub and is answered as an accepted no-op.
+    //
+    // doQueryStrict, like the two reads above it and for the same reason: this runs
+    // outside the transaction, where doQuery collapses a transient DB fault into an empty
+    // result, which here is indistinguishable from "no batch was un-landed" and would
+    // silently skip a retraction the reorg is never retried to re-issue.
+    async _collectUnlandedAttestBatches(firstActionIndex){
+        let query = `SELECT DISTINCT
+                        LOWER(h.request_id)     AS batch_key,
+                        h.action_index          AS action_index,
+                        h.batch_window_start    AS window_start,
+                        h.batch_window_end      AS window_end
+                     FROM attests h
+                        JOIN index_statuses hs ON hs.id = h.status_id AND hs.status = 'valid'
+                        JOIN attests c ON c.request_id = h.request_id
+                                      AND c.version IN (${abw.ATTEST_BATCH_HEAD_VERSION}, ${abw.ATTEST_BATCH_CONTINUATION_VERSION})
+                                      AND c.batch_chunk_index IS NOT NULL
+                                      AND c.action_index >= ?
+                     WHERE h.version = ${abw.ATTEST_BATCH_HEAD_VERSION}
+                       AND h.batch_chunk_index IS NOT NULL
+                       AND h.batch_window_start IS NOT NULL
+                       AND h.batch_window_end IS NOT NULL`;
+        let rows = await this.indexerView.doQueryStrict(query, [firstActionIndex]);
+        return (rows || []).map(r => ({
+            batch_key:    String(r.batch_key),
+            action_index: Number(r.action_index),
+            window_start: Number(r.window_start),
+            window_end:   Number(r.window_end)
+        }));
     }
 
     // Reverse cooldown-maturity completions whose maturity block was orphaned by the reorg.

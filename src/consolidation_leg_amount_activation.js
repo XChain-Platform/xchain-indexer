@@ -41,13 +41,16 @@
  * consensus timestamp. Below the threshold the legacy merge key and the legacy
  * merge both run untouched and historical replay stays byte-identical.
  *
- * MAINNET IS UNARMED, on the house sentinel (9999999999, year 2286), exactly as
- * dispenser_amount_positivity_activation: a tightening on a retroactive
- * boundary makes a from-genesis replay reject actions the live chain accepted,
- * which is the fork the gate exists to prevent. Naming the activation instant
- * is a separate operator act and a one-line edit here; the incidence data that
- * should inform it has not been measured yet. testnet/regtest run from genesis,
- * matching the dispenser-family activations.
+ * MAINNET IS ARMED AT GENESIS (operator ruling 2026-09-09). A tightening on a
+ * retroactive boundary is only a fork when the boundary has actions under it to
+ * re-judge, and the incidence data has now been measured: read-only against the
+ * live indexer databases on 2026-09-09, mainnet history is ISSUE and ANCHOR
+ * only, so it holds 0 SEND and 0 DESTROY and there is no leg for the per-leg
+ * rule to hold out of a merge. The
+ * rule is the identity function over every mainnet block committed so far, and
+ * a from-genesis replay rejects nothing the live chain accepted. The proof is a
+ * per-chain OLD-vs-ON replay witness, not this comment. testnet/regtest run
+ * from genesis, matching the dispenser-family activations.
  *
  * Execution-path gate (action acceptance), not a hashing-path change, so
  * indexer-only with no xchain-sync twin: xchain-sync replicates materialized
@@ -58,7 +61,7 @@
 // Per-network activation, interpreted against the block's consensus timestamp
 // (data['BLOCK_TIME']).
 const CONSOLIDATION_LEG_AMOUNT_ACTIVATION = {
-    mainnet: 9999999999,    // UNARMED sentinel; the instant is the operator's to name
+    mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 SEND, 0 DESTROY, measured 2026-09-09)
     testnet: 0,
     regtest: 0,
 };

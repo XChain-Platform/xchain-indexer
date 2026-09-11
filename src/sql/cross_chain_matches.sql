@@ -44,6 +44,7 @@ CREATE TABLE cross_chain_matches (
     a_push_generation    BIGINT       NOT NULL DEFAULT 0,          -- A-leg source-chain reorg fence (item 5308); mirrored from the hub
     b_push_generation    BIGINT       NOT NULL DEFAULT 0,          -- B-leg source-chain reorg fence (item 5308); mirrored from the hub
     created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    btc_chain_id         CHAR(64),                                 -- hash of BTC block 1 on the writing hub's chain; NULL accepted by every mirror; transport, not consensus (never in a canonical)
     UNIQUE KEY uq_match_id (match_id),
     KEY idx_effective (effective_time),
     KEY idx_a_ref (a_chain, a_action_index),

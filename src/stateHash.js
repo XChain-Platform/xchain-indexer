@@ -266,23 +266,22 @@ const ARCHIVE_HEAD_VERSIONS_SQL = 'IN (' + ARCHIVE_HEAD_VERSIONS.join(', ') + ')
 // widening stays landed for the next archive version. Changes the class's row
 // selection, hence the hashed preimage, so it
 // is gated exactly like POLL_FINALIZE above (per-chain keys on the chain's OWN
-// local block_index) and landed DEFAULT INERT: below the threshold the query
-// keeps the legacy v1-only predicate and the preimage stays byte-identical to
-// the pre-feature shape. Pin real per-chain heights before ARCHIVE_REWARD
-// archives circulate, and deploy every indexer + sync process BEFORE the
-// earliest chain crosses its height. No STATE_HASH_VERSION bump: a block is
-// unambiguously pre- or post-activation on a given network. Keep
-// byte-identical to the xchain-sync twin. TESTNET IS ARMED AT 0 (operator ruling
-// 2026-08-11, applied 2026-08-14): the re-genesised testnet carries no pre-flag
-// blocks, so there is no legacy preimage to stay byte-identical with, and arming at
-// genesis makes testnet the network that actually exercises the widened class before
-// mainnet ratifies a height. Every testnet indexer AND sync follower must run this
-// code, since a straggler on the v1-only predicate recomputes a different preimage
-// and halts.
+// local block_index). No STATE_HASH_VERSION bump: a block is unambiguously pre-
+// or post-activation on a given network. Keep byte-identical to the xchain-sync
+// twin; every indexer AND sync process on a network must run this code, since a
+// straggler on the v1-only predicate recomputes a different preimage and halts.
+// TESTNET IS ARMED AT 0 (operator ruling 2026-08-11, applied 2026-08-14): the
+// re-genesised testnet carries no pre-flag blocks, so there is no legacy preimage
+// to stay byte-identical with, and arming at genesis made testnet the network that
+// exercises the widened class first. MAINNET IS ARMED AT 0 by the 2026-09-09
+// ruling: mainnet holds 0 archive chunks (measured 2026-09-09), so the widened
+// predicate and the legacy v1-only one select the same empty class and the
+// genesis-armed preimage is identical to the deployed one; the 56 DOGE ANCHOR
+// actions on record are checked by the from-genesis replay witness.
 const ARCHIVE_INVALID_STATE_HASH_ACTIVATION = {
-    'BTC:mainnet':  999999999,  // INERT placeholder; pin before ARCHIVE_REWARD archives circulate
-    'LTC:mainnet':  999999999,  // INERT placeholder
-    'DOGE:mainnet': 999999999,  // INERT placeholder (DOGE is the anchor chain; arm first here)
+    'BTC:mainnet':  0,          // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 archive chunks, measured 2026-09-09)
+    'LTC:mainnet':  0,
+    'DOGE:mainnet': 0,
     'BTC:testnet':  0,          // armed from genesis 2026-08-11 ruling
     'LTC:testnet':  0,          // armed from genesis 2026-08-11 ruling
     'DOGE:testnet': 0,          // armed from genesis 2026-08-11 ruling
@@ -321,27 +320,31 @@ function isArchiveInvalidStateHashActive(blockIndex, network, coin){
 // broken `c.block_index` key and the preimage stays byte-identical to what every
 // deployed node computes today.
 //
-// Every mainnet AND testnet key is an INERT placeholder on purpose. This repair
-// and the head-side archive reassembly gate in actions/anchor.js are both
-// preimage-moving and ride ONE flag-day train, so neither height is chosen alone;
-// pin them together at ratification. Deploy order at that ratification is not
-// free either: xchain-sync updatedRows.js carries the SAME broken key on the
-// replication side (fixed there un-gated, since shipping a row is not a preimage)
-// and must be live FIRST, or a follower is asked to hash a stamped parent row it
-// was never sent. Testnet is NOT armed at genesis the way the head-coverage gate
-// above was: that ruling was made one day after the testnet re-genesis, and
-// testnet has run for a week since, so a height of 0 here would be retroactive
-// rather than a flag day. regtest is armed at 0 so fresh regtest stacks exercise
-// the repaired class end to end. No STATE_HASH_VERSION bump: a block is
+// MAINNET IS ARMED AT 0 by the 2026-09-09 ruling. The repair only moves the
+// preimage where a stamped archive batch exists, and mainnet holds 0 archive
+// chunks (measured 2026-09-09), so the repaired key and the broken one select
+// the same empty class: arming at genesis leaves the preimage every deployed
+// mainnet node computes unchanged, and the from-genesis replay witness is the
+// proof of that identity (the 56 DOGE ANCHOR actions on record are covered by it).
+// TESTNET TAKES REAL FUTURE HEIGHTS, not 0: testnet is a public chain that has
+// run since the 2026-08-10 re-genesis, so a height of 0 here would be retroactive
+// rather than a flag day. They are sized from the 2026-09-09 tips (TBTC 151701,
+// TLTC 4883295, TDOGE 67881714) plus about 22 days, so the v0.17.0 train is live
+// on every testnet process before the earliest chain crosses.
+// Deploy order is not free: xchain-sync updatedRows.js carries the SAME broken key
+// on the replication side (fixed there un-gated, since shipping a row is not a
+// preimage) and must be live FIRST, or a follower is asked to hash a stamped
+// parent row it was never sent. regtest is armed at 0 so fresh regtest stacks
+// exercise the repaired class end to end. No STATE_HASH_VERSION bump: a block is
 // unambiguously pre- or post-activation. Keep byte-identical to the
 // xchain-sync twin.
 const ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION = {
-    'BTC:mainnet':  999999999,  // INERT placeholder; pinned with the sibling call at ratification
-    'LTC:mainnet':  999999999,  // INERT placeholder
-    'DOGE:mainnet': 999999999,  // INERT placeholder (DOGE is the anchor chain; arm first here)
-    'BTC:testnet':  999999999,  // INERT placeholder
-    'LTC:testnet':  999999999,  // INERT placeholder
-    'DOGE:testnet': 999999999,  // INERT placeholder
+    'BTC:mainnet':  0,          // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 archive chunks, measured 2026-09-09)
+    'LTC:mainnet':  0,
+    'DOGE:mainnet': 0,          // DOGE is the anchor chain, and the 56 mainnet ANCHORs there carry no archive chunk
+    'BTC:testnet':  155000,     // tip 151701 (2026-09-09) + 3299 blocks @144/day = ~23 days
+    'LTC:testnet':  4896000,    // tip 4883295 + 12705 blocks @576/day = ~22 days
+    'DOGE:testnet': 67915000,   // tip 67881714 + 33286 blocks @1440/day = ~23 days
     regtest: 0,                 // armed from genesis: fresh regtest stacks exercise the repaired class end to end
 };
 

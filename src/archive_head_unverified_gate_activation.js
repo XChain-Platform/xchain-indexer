@@ -20,7 +20,7 @@
  * ARRIVING CHUNK's status, never the parent head's. The head-side gate (in
  * _parseCheckpoint) covers the opposite ordering, chunks first and the head
  * last, and it keyed on the HEAD's own status being 'valid'. On a node with
- * no mirrored oracle_publish snapshot every v1/v6 head is stored
+ * no mirrored oracle_publish snapshot every v1 head is stored
  * 'unverified' (oracleN === 0), so on exactly those nodes a chunks-last
  * arrival ran the CRC check and a head-last arrival skipped it: the ordering
  * nondeterminism the head-side gate exists to close, still open.
@@ -50,11 +50,18 @@
  *
  * ONE TRAIN WITH THE CLASS-6 HEIGHT-KEY REPAIR, ON MAINNET. This gate and
  * stateHash.js's ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION are both
- * preimage-moving consensus calls over the SAME invalid_archive stamp, so on
- * a network carrying history that no rebuild will replay, neither height is
- * chosen alone: they are pinned together at ratification (operator ruling
- * 2026-08-16). Both mainnet keys are INERT placeholders today. regtest is
- * armed at 0 so fresh regtest stacks exercise the widened gate end to end.
+ * preimage-moving consensus calls over the SAME invalid_archive stamp, so
+ * neither mainnet key is ever moved alone: they are pinned together (operator
+ * ruling 2026-08-16), and the 2026-09-09 ruling arms both at genesis in one
+ * wave. regtest is armed at 0 so fresh regtest stacks exercise the widened gate
+ * end to end.
+ *
+ * MAINNET IS ARMED AT GENESIS (operator ruling 2026-09-09). The indexed mainnet
+ * history carries 0 archive chunks (measured 2026-09-09), so there is no
+ * invalid_archive stamp for the widened head-side gate to move and the mirrored
+ * and snapshot-less node classes cannot already have diverged: the widening is
+ * the identity function over every mainnet block committed so far. The proof is
+ * a per-chain OLD-vs-ON replay witness, not this comment.
  *
  * WHY TESTNET IS 0 HERE AND ITS CLASS-6 SIBLING IS NOT. This key was armed at
  * genesis by the 2026-08-18 wave, one of six gates armed ahead of the testnet
@@ -64,20 +71,18 @@
  * re-genesis then moved every testnet firstBlock forward again. So no testnet
  * block was ever indexed under the narrower valid-only rule, and a height of
  * 0 is a genesis rule here rather than a retroactive one. The class-6 sibling
- * was not in that wave and is still INERT on testnet as well as mainnet, so
- * the pinned-together rule above now binds MAINNET only. Testnet has been a
- * live public ledger since 2026-09-01: do not move this key.
+ * was not in that wave, so on testnet it cannot take 0 and is sized to a future
+ * height instead. Testnet has been a live public ledger since 2026-09-01: do
+ * not move this key.
  *
- * THE MAINNET ARMING IS RULED, NOT PENDING (operator ruling 2026-09-01). The
- * mainnet key stays INERT and takes a real height only from the post-launch
- * activation gate that a follow-up must write into the living
- * release-management spec as D4, which is still unwritten: it must name the
- * carrier, the publication path, and the behaviour of lagging nodes. Until D4
- * is ruled, do not pin a mainnet height here, and do not widen the head-side
- * gate on a ledger with history by any other route. The board that produced
- * that ruling asked the question as though the widening were still reverted.
- * It is not: it was re-landed behind this flag day on 2026-08-17, so what the
- * ruling governs is the mainnet arming, not whether the widened code exists.
+ * THE 2026-09-01 RULING IS SUPERSEDED FOR THIS KEY. That ruling held the
+ * mainnet arming for a post-launch activation gate (D4 in the living
+ * release-management spec) that would name a carrier, a publication path and
+ * the behaviour of lagging nodes. The 2026-09-09 ruling supplies what D4 was
+ * to protect: a gate that is identity on the indexed history has no divergence
+ * to sequence, so there is no cutover for a lagging node to miss. What the
+ * 2026-09-01 ruling governed was the arming, never whether the widened code
+ * exists; that landed behind this flag day on 2026-08-17.
  *
  * KEYED ON THE HEAD'S OWN DOGE BLOCK INDEX (anchor_actions.block_index_doge,
  * i.e. data['BLOCK_INDEX'] at parse time), per network, never on
@@ -91,15 +96,14 @@
 
 'use strict';
 
-// Per-network activation, interpreted against the DOGE block_index the v1/v6
-// archive head landed in. Mainnet is the only INERT key; testnet and regtest are
-// armed from genesis. Changing any value here is a consensus change: read the
-// header block first.
+// Per-network activation, interpreted against the DOGE block_index the v1
+// archive head landed in. Every network is armed from genesis. Changing any value
+// here is a consensus change: read the header block first.
 const ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION = {
-    // INERT placeholder. Pinned with the class-6 height-key repair at ratification, and
-    // takes a height only from the post-launch activation gate a follow-up must define
-    // as D4 (operator ruling 2026-09-01). No mainnet height until that gate exists.
-    mainnet: 999999999,
+    // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history
+    // (0 archive chunks, measured 2026-09-09). Pinned at genesis in the same wave as the
+    // class-6 height-key repair, which this key is never moved apart from.
+    mainnet: 0,
     // Armed from genesis. Safe on a chain with history ONLY where that chain's indexer
     // state is rebuilt from the chain itself, because a rebuild recomputes every block
     // under this rule and so leaves nothing indexed under the narrower one to contradict.

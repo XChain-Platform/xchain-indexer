@@ -70,12 +70,11 @@
  * predicate is the one whose local height IS the BTC height the threshold is
  * denominated in.
  *
- * MAINNET/TESTNET ARE UNALLOCATED (null = INERT). The four sub-decisions this
- * gate encodes were pinned by the operator on 2026-08-11; naming the height was
- * explicitly left as the operator's own piece, so the build lands code-complete
- * and inert until a height is ratified. Nearby anchors in use are 961000,
- * 962500 and 969500. Arming it needs the whole fleet deployed first: a lagging
- * node keeps splitting the full escrow and forks the reward rail.
+ * EVERY NETWORK IS ARMED AT GENESIS. The four sub-decisions this gate encodes
+ * were pinned by the operator on 2026-08-11 and the height was named by the
+ * 2026-09-09 ruling: 0 attestations have ever been recorded on any mainnet
+ * chain (measured 2026-09-09), so there is no settle whose escrow split this
+ * reinterprets and the from-genesis replay witness proves the identity.
  *
  * LOCAL COPY of the canonical maps in xchain-documentation/protocol/
  * constants.js; kept value-identical by test/unit/activationConstantsParity.test.js.
@@ -97,10 +96,11 @@
 // the live explorer reports `total: 0` attestation rows EVER recorded on BTC, LTC and DOGE
 // testnet alike (/{TBTC,TLTC,TDOGE}/api/attestations, checked 2026-08-18). No settle has
 // ever happened on testnet, so there is no reward split to reinterpret and replay stays
-// byte-identical. Mainnet is untouched and still operator-owned: it HAS attestation
-// history, so pinning a height there needs its own measurement, not this one.
+// byte-identical. MAINNET was measured the same way on 2026-09-09 and armed at genesis by
+// that day's ruling: 0 attestation rows on BTC, LTC and DOGE mainnet, so no settle exists
+// there either and a from-genesis replay is the witness.
 const ATTEST_BROADCAST_FEE_ACTIVATION = {
-    mainnet: null,        // INERT placeholder: the operator owns this height (pinned 2026-08-11, unratified)
+    mainnet: 0,           // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 attestations, measured 2026-09-09)
     testnet: 0,           // ARMED at genesis (operator-ratified 2026-08-18; zero historical attestation settles, so nothing is reinterpreted)
     regtest: 0,           // ARMED at genesis on regtest so the e2e venue exercises the carve-out
 };

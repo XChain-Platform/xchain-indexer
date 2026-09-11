@@ -161,16 +161,25 @@ async function withRegtestHeight(height, fn){
 
 describe('archive invalid_archive reset: publisher scoping @regression', function(){
 
-    describe('the flag day ships inert', function(){
-        it('is off on every network at every height', function(){
-            for(const network of Object.keys(ARCHIVE_ROLLBACK_AUTHOR_SCOPE_ACTIVATION)){
-                assert.strictEqual(ARCHIVE_ROLLBACK_AUTHOR_SCOPE_ACTIVATION[network], 9999999999,
-                    network + ' must stay on the inert sentinel until an operator pins a height');
-                assert.strictEqual(isArchiveRollbackAuthorScopeActive(1000000000, network), false,
-                    network + ' must read inactive while its threshold is the inert sentinel');
-                assert.strictEqual(archiveAuthorScopeJoin(1000000000, network), '',
-                    network + ' must splice no author term while inert');
-            }
+    describe('the flag day is armed on mainnet and testnet (2026-09-09 ruling)', function(){
+        it('carries the ruled heights, and splices the author term exactly at each one', function(){
+            assert.deepStrictEqual(ARCHIVE_ROLLBACK_AUTHOR_SCOPE_ACTIVATION,
+                { mainnet: 0, testnet: 67915000, regtest: 9999999999 },
+                'a silent revert to the inert sentinel puts the whole fleet back on the unscoped reset');
+            // Mainnet is scoped from genesis: it holds 0 archive chunks (measured 2026-09-09),
+            // so the author term narrows an empty join and the reset is unchanged in effect.
+            assert.strictEqual(isArchiveRollbackAuthorScopeActive(0, 'mainnet'), true);
+            assert.ok(archiveAuthorScopeJoin(0, 'mainnet').includes('cadr.address = padr.address'),
+                'mainnet must splice the author term from genesis');
+            // Testnet has live history, so the term appears only at the flag day, not below it.
+            assert.strictEqual(isArchiveRollbackAuthorScopeActive(67914999, 'testnet'), false);
+            assert.strictEqual(archiveAuthorScopeJoin(67914999, 'testnet'), '',
+                'a testnet block below the flag day must keep the deployed unscoped reset');
+            assert.strictEqual(isArchiveRollbackAuthorScopeActive(67915000, 'testnet'), true);
+            assert.ok(archiveAuthorScopeJoin(67915000, 'testnet').includes('cadr.address = padr.address'));
+            // regtest keeps the sentinel so the flag-day-off control path below stays drivable.
+            assert.strictEqual(isArchiveRollbackAuthorScopeActive(1000000000, 'regtest'), false);
+            assert.strictEqual(archiveAuthorScopeJoin(1000000000, 'regtest'), '');
         });
 
         it('reads inactive for an unknown or omitted network and an unparseable height', function(){

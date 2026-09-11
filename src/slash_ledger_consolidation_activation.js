@@ -47,11 +47,21 @@
  * under the new rule diverges from a chain indexed under the old one.
  *
  * `null` means NOT YET PINNED and therefore inert: the legacy per-emission
- * write runs verbatim and historical replay stays byte-identical. Mainnet and
- * testnet are unpinned pending the count of EXECUTEs already carrying more
- * than one same-token slash (group slash_events by EXECUTION_INDEX, TICK_ID
- * having count > 1), which is what decides both the pin height and whether a
- * reindex is owed; regtest runs from genesis, matching
+ * write runs verbatim and historical replay stays byte-identical.
+ *
+ * MAINNET IS ARMED AT GENESIS, all three chains (operator ruling 2026-09-09).
+ * The count this arming waited on, EXECUTEs already carrying more than one
+ * same-token slash (group slash_events by EXECUTION_INDEX, TICK_ID having
+ * count > 1), was taken read-only against the live indexer databases on
+ * 2026-09-09 and is vacuous: mainnet holds 0 EXECUTEs, 0 stakes and 0 slashes,
+ * so no slash_events row exists there, the running total is never consulted,
+ * and the rule is the identity function over every mainnet block committed so
+ * far. No reindex is owed. The proof is a per-chain OLD-vs-ON replay witness,
+ * not this comment.
+ *
+ * TESTNET STAYS UNPINNED: it has been a live public ledger since 2026-09-01 and
+ * carries stake history, so the count above still has to be taken there before
+ * a height is named. regtest runs from genesis, matching
  * stake_weight_collation_activation.js.
  *
  * Indexer-only with no xchain-sync twin: xchain-sync replicates materialized
@@ -63,9 +73,13 @@
 // `null` = NOT YET PINNED = inert (legacy per-emission overwrite, byte-identical
 // replay).
 const SLASH_LEDGER_CONSOLIDATION_ACTIVATION = {
-    'BTC:mainnet':  null,
-    'LTC:mainnet':  null,
-    'DOGE:mainnet': null,
+    // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet
+    // history (0 stakes, 0 slashes on every chain, measured 2026-09-09).
+    'BTC:mainnet':  0,
+    'LTC:mainnet':  0,
+    'DOGE:mainnet': 0,
+    // Unpinned: testnet carries stake history, so its heights are pinned at
+    // flag-day assembly with the replay evidence that step requires.
     'BTC:testnet':  null,
     'LTC:testnet':  null,
     'DOGE:testnet': null,

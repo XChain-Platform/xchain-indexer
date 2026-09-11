@@ -29,15 +29,14 @@ describe('ATTEST per-block admission caps (spec §11.1) @regression', function (
 
     describe('isAttestRequestCapActive', function () {
 
-        it('is INERT on mainnet: that height is still the operator\'s', function () {
-            assert.strictEqual(arc.ATTEST_REQUEST_CAP_ACTIVATION.mainnet, null);
-            // A null threshold must read as OFF at every height. `blockIndex >= null`
-            // coerces to `>= 0`, which would arm the cap from genesis on a chain whose
-            // history was indexed without it - the exact replay fork the sentinel exists
-            // to prevent.
+        it('is ARMED at genesis on mainnet by the 2026-09-09 ruling', function () {
+            // The null sentinel guarded against arming a cap on a chain whose history was
+            // indexed without it. Mainnet has 0 attestation rows ever recorded on BTC, LTC
+            // and DOGE (measured 2026-09-09), so no block can have exceeded a cap of 10.
+            assert.strictEqual(arc.ATTEST_REQUEST_CAP_ACTIVATION.mainnet, 0);
             for (const h of [0, 1, 146500, 961000, 999999999])
-                assert.strictEqual(arc.isAttestRequestCapActive(h, 'mainnet'), false,
-                    'an unratified mainnet height must never arm at ' + h);
+                assert.strictEqual(arc.isAttestRequestCapActive(h, 'mainnet'), true,
+                    'a genesis-armed mainnet must apply the cap at ' + h);
         });
 
         it('is armed from genesis on testnet and regtest', function () {

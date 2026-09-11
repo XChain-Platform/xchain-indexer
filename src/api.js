@@ -1547,7 +1547,7 @@ async function startApi(){
         // match_batch_seq.
         //
         // Serves the crash-safety guard on the hub's archive publish path. That path
-        // broadcasts the v1/v6 head and its v2 continuation chunks BEFORE it records the
+        // broadcasts the v1 head and its v2 continuation chunks BEFORE it records the
         // batch locally, so a crash in between re-elects the same match rows on the next
         // flush under a FRESH batch seq and re-spends DOGE on a duplicate archive. Every
         // other archive read is keyed on that seq and therefore cannot see the earlier
@@ -1637,12 +1637,12 @@ async function startApi(){
         //
         // Every reward it ever carried is now DERIVED deterministically from on-chain
         // bytes. oracle_round, attest_fee and attest_bcast always were, and were rejected
-        // outright here. The per-chain anchor_<CHAIN> reward is derived from the ANCHOR
-        // v4/v5 publisher attestation at/above the anchor-reward flag-day, and
-        // anchor_archive from the ANCHOR v6 publisher attestation at/above the
-        // archive-reward flag-day. Mainnet is past both heights and both are 0 on testnet
-        // and regtest, so a staged gate here would refuse every push on every live
-        // network anyway: unreachable code guarding a key-authenticated write into a
+        // outright here. anchor_bundle is derived from the ANCHOR v0 bundle's publisher
+        // attestation and anchor_archive from the ANCHOR v1 archive head's, on the parse
+        // path itself; the retired per-chain anchor_<CHAIN> leg derived the same way from
+        // a wire that no longer parses. Mainnet is past both reward flag-days and both are
+        // 0 on testnet and regtest, so a staged gate here would refuse every push on every
+        // live network anyway: unreachable code guarding a key-authenticated write into a
         // COLLECT-spendable table.
         //
         // The write path is DELETED rather than gated, which is the decisive close of the

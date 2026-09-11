@@ -25,9 +25,11 @@
  * exists to protect. Operator decision 2026-08-15 (option a): count them.
  *
  * WHAT THIS SUITE PINS, in the order the rule can break:
- *   - the REGISTRATION: a time-keyed change, genesis-active on testnet and regtest,
- *     mainnet on the UNARMED sentinel, and the sentinel still a sentinel. It is
- *     deliberately NOT folded into BATCH_ISSUANCE_LIMITS, which is already armed;
+ *   - the REGISTRATION: a time-keyed change, genesis-active on EVERY network.
+ *     Mainnet was armed at 0 by the 2026-09-09 ruling, on the measurement that it
+ *     holds zero EXECUTEs and zero contracts, so there is no emission for the budget
+ *     to count. It stays a SEPARATE entry from BATCH_ISSUANCE_LIMITS, which is armed
+ *     at a real mainnet instant and may never be edited to carry a second rule;
  *   - the RULE at its choke point (issue.js): one top-level tick per budget, dotted
  *     children exempt, caret ticks never exempt, genesis exempt, gate-off identity;
  *   - the PROPAGATION seams, which is where a rule with one counter really dies: the
@@ -81,29 +83,34 @@ describe('EMISSION_ISSUANCE_LIMITS gate registration @regression @tier1', functi
         assert.ok(pcFor('regtest').isDefined(GATE), GATE + ' must be registered');
     });
 
-    it('is genesis-active on regtest and testnet', async function () {
-        for(const network of ['regtest', 'testnet']){
+    it('is genesis-active on every network, mainnet included', async function () {
+        for(const network of ['regtest', 'testnet', 'mainnet']){
             const pc = pcFor(network);
             assert.strictEqual(await pc.isEnabled(GATE, 1), true, network + ' must be genesis-active');
         }
     });
 
-    it('mainnet sits on the UNARMED sentinel, and the sentinel is still a sentinel', function () {
-        // An armed-looking real date here means somebody armed a consensus tightening
-        // without the replay evidence, which is exactly the act the flag exists to prevent.
-        assert.strictEqual(ProtocolChanges.EMISSION_ISSUANCE_LIMITS_MAINNET_TIME, UNARMED_SENTINEL);
-        assert.ok(ProtocolChanges.EMISSION_ISSUANCE_LIMITS_MAINNET_TIME > YEAR_2100,
-            'a real instant here is an arming, not a registration');
+    it('mainnet is armed at exactly 0, the 2026-09-09 genesis arm', function () {
+        // 0 means "the budget always applied", which a from-genesis replay reproduces
+        // because mainnet has no EXECUTE to emit an ISSUE in the first place. Any other
+        // past value would be a tightening at an instant the fleet never observed, and a
+        // future value would be a flag day the measurement says nothing needs.
+        assert.strictEqual(ProtocolChanges.EMISSION_ISSUANCE_LIMITS_MAINNET_TIME, 0);
+        assert.notStrictEqual(ProtocolChanges.EMISSION_ISSUANCE_LIMITS_MAINNET_TIME, UNARMED_SENTINEL);
+        assert.ok(ProtocolChanges.EMISSION_ISSUANCE_LIMITS_MAINNET_TIME < YEAR_2100,
+            'a far-future value here reads as an unarmed sentinel');
     });
 
-    it('is NOT folded into BATCH_ISSUANCE_LIMITS, which is already armed', function () {
-        // Widening an armed flag would apply a new consensus rule past a boundary nodes
-        // have already deployed for, forking the ones still on pre-arm code.
+    it('is still its OWN entry, never folded into the armed BATCH_ISSUANCE_LIMITS', function () {
+        // The two now differ in the other direction (0 against a real mainnet instant),
+        // but the reason for two entries is unchanged: editing an armed instant would
+        // apply a new consensus rule past a boundary nodes already deployed for.
         assert.notStrictEqual(
             ProtocolChanges.EMISSION_ISSUANCE_LIMITS_MAINNET_TIME,
             ProtocolChanges.BATCH_ISSUANCE_LIMITS_MAINNET_TIME);
-        assert.ok(ProtocolChanges.BATCH_ISSUANCE_LIMITS_MAINNET_TIME < YEAR_2100,
-            'the sibling is armed; this assertion is the reason the new gate is separate');
+        assert.ok(ProtocolChanges.BATCH_ISSUANCE_LIMITS_MAINNET_TIME > 0,
+            'the sibling keeps its armed instant; that is why this gate is a separate entry');
+        assert.ok(ProtocolChanges.BATCH_ISSUANCE_LIMITS_MAINNET_TIME < YEAR_2100);
     });
 
 });

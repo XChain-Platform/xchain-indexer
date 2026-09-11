@@ -14,11 +14,12 @@
  * test/unit/dispenser_oracle_price_activation.test.js
  *
  * Mode B create-time effective-oracle-price flag-day. The predicate is pinned
- * both sides of the gate, and mainnet is pinned to the UNARMED sentinel: the
- * dispenser-family cohort anchor (1786060800) is already past, and a
- * create-acceptance tightening on a retroactive boundary forks a from-genesis
- * replay. Arming is an operator act, so a change of this value is expected to
- * fail here and be re-pinned deliberately.
+ * both sides of the gate, and mainnet is pinned ARMED AT GENESIS by the
+ * 2026-09-09 operator ruling: mainnet carries 0 dispensers and 0 dispenses
+ * (measured 2026-09-09), so a create-acceptance tightening at height 0 has no
+ * create to re-judge and forks no from-genesis replay. Moving this value is an
+ * operator act, so a change is expected to fail here and be re-pinned
+ * deliberately.
  *
  * The behavior the gate arms is pinned below: the precondition is a validity
  * rule that must run on a create carrying an ORACLE_ADDRESS whatever it escrows,
@@ -40,11 +41,15 @@ const Dispenser = require('../../src/actions/dispenser.js');
 
 describe('dispenser Mode B oracle-price activation predicate @regression @tier1', function () {
 
-    it('mainnet is UNARMED on the house sentinel, never the passed cohort anchor', function () {
-        assert.strictEqual(DISPENSER_ORACLE_PRICE_ACTIVATION.mainnet, 9999999999);
-        assert.notStrictEqual(DISPENSER_ORACLE_PRICE_ACTIVATION.mainnet, 1786060800);
-        assert.strictEqual(isDispenserOraclePriceActive(1786060800, 'mainnet'), false);
-        assert.strictEqual(isDispenserOraclePriceActive(9999999998, 'mainnet'), false);
+    it('mainnet is ARMED AT GENESIS by the 2026-09-09 ruling, never a sentinel', function () {
+        assert.strictEqual(DISPENSER_ORACLE_PRICE_ACTIVATION.mainnet, 0);
+        // The GoLiveGate readback reads either sentinel as "still unarmed", so a
+        // regression back to one is a launch blocker, not a cosmetic diff.
+        assert.notStrictEqual(DISPENSER_ORACLE_PRICE_ACTIVATION.mainnet, 9999999999);
+        assert.notStrictEqual(DISPENSER_ORACLE_PRICE_ACTIVATION.mainnet, 999999999);
+        assert.strictEqual(isDispenserOraclePriceActive(0, 'mainnet'), true);
+        assert.strictEqual(isDispenserOraclePriceActive(1, 'mainnet'), true);
+        assert.strictEqual(isDispenserOraclePriceActive(1786060800, 'mainnet'), true);
         assert.strictEqual(isDispenserOraclePriceActive(9999999999, 'mainnet'), true);
     });
 

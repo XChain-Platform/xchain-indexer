@@ -55,9 +55,15 @@ describe('Dispenser amount positivity @regression @tier2', function () {
 
     describe('activation module', function () {
 
-        it('mainnet is UNARMED on the house sentinel', function () {
-            assert.strictEqual(activation.DISPENSER_AMOUNT_POSITIVITY_ACTIVATION.mainnet, 9999999999);
-            assert.strictEqual(activation.isDispenserAmountPositivityActive(BLOCK_TIME, 'mainnet'), false);
+        it('mainnet is ARMED AT GENESIS by the 2026-09-09 ruling', function () {
+            // 0 dispensers and 0 dispenses on mainnet (measured 2026-09-09), so both
+            // enforcement points are identity over the indexed history.
+            assert.strictEqual(activation.DISPENSER_AMOUNT_POSITIVITY_ACTIVATION.mainnet, 0);
+            // Either sentinel reads back as "still unarmed" at the GoLiveGate.
+            assert.notStrictEqual(activation.DISPENSER_AMOUNT_POSITIVITY_ACTIVATION.mainnet, 9999999999);
+            assert.notStrictEqual(activation.DISPENSER_AMOUNT_POSITIVITY_ACTIVATION.mainnet, 999999999);
+            assert.strictEqual(activation.isDispenserAmountPositivityActive(0, 'mainnet'), true);
+            assert.strictEqual(activation.isDispenserAmountPositivityActive(BLOCK_TIME, 'mainnet'), true);
         });
 
         it('testnet and regtest run from genesis', function () {

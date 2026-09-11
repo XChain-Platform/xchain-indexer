@@ -164,13 +164,29 @@ describe('recovery-restored rewards claim their ORIGINAL derive block @regressio
     });
 
     it('below the derive flag-day the stamp stays NULL and the address hook still lands it', async function () {
-        // mainnet's derive activation is the inert null placeholder: no BTC-side row was ever
-        // minted by the derive path there, so the legacy behaviour must be byte-identical.
+        // Below the flag-day no BTC-side row was ever minted by the derive path, so the
+        // legacy behaviour must be byte-identical. Every shipped network arms at genesis
+        // since the 2026-09-09 ruling, so the below-the-gate venue is pinned here and the
+        // shipped value restored: the subject is the pre-flag-day stamp, not the arming.
+        const shipped = ar.ANCHOR_REWARD_DERIVE_ACTIVATION.mainnet;
+        ar.ANCHOR_REWARD_DERIVE_ACTIVATION.mainnet = 900000;
+        try {
+            const db = makeDb({ network: 'mainnet', staged: [{ block_index: 800000 }] });
+            await db._maybeApplyPendingRewards(SOURCE, 5, 12345);
+            assert.strictEqual(db.rewards.length, 1, 'the pre-flag-day row lands at the address hook, as before');
+            assert.strictEqual(db.rewards[0].derive_block_index, null, 'no derive stamp below the flag-day');
+            assert.strictEqual(db.stagedRows[0].applied_block, 12345);
+        } finally { ar.ANCHOR_REWARD_DERIVE_ACTIVATION.mainnet = shipped; }
+    });
+
+    it('on a genesis-armed mainnet the address hook can no longer be the trigger (2026-09-09)', async function () {
+        // Armed at 0, so an earn block at 800000 is above the flag-day and the row must
+        // wait for the due sweep at earn + maturity instead of landing at the intern hook.
+        assert.strictEqual(ar.ANCHOR_REWARD_DERIVE_ACTIVATION.mainnet, 0);
         const db = makeDb({ network: 'mainnet', staged: [{ block_index: 800000 }] });
         await db._maybeApplyPendingRewards(SOURCE, 5, 12345);
-        assert.strictEqual(db.rewards.length, 1, 'the pre-flag-day row lands at the address hook, as before');
-        assert.strictEqual(db.rewards[0].derive_block_index, null, 'no derive stamp below the flag-day');
-        assert.strictEqual(db.stagedRows[0].applied_block, 12345);
+        assert.strictEqual(db.rewards.length, 0, 'nothing may be credited before the derive height');
+        assert.strictEqual(db.stagedRows[0].applied, 0, 'the row stays staged for the due sweep');
     });
 
     it('an unknown/absent network is treated as inert (fail-closed to the legacy stamp)', async function () {
@@ -229,20 +245,39 @@ describe('recovery-restored rewards claim their ORIGINAL derive block @regressio
         // The delete above is only half of it. rollback.js must also re-arm the staging row,
         // or the reward is gone from this node for good while the live fleet re-derives it.
         // The floor drops by exactly one maturity window on an armed network.
-        assert.strictEqual(ar.restoredRewardRearmFloor(800000 + MATURITY, 'regtest'), 800000);
-        assert.strictEqual(ar.restoredRewardRearmFloor(800000 + MATURITY, 'testnet'), 800000);
+        // mainnet joined the armed networks on 2026-09-09, so it drops by a window too.
+        for (const net of ['regtest', 'testnet', 'mainnet'])
+            assert.strictEqual(ar.restoredRewardRearmFloor(800000 + MATURITY, net), 800000, net);
         // Clamped at the flag-day and at 0, never above the reorg height.
         assert.strictEqual(ar.restoredRewardRearmFloor(10, 'regtest'), 0);
+        // Clamped at a NON-ZERO flag-day: rows below it carry no derive stamp and can only
+        // be taken by the earn-block delete. No shipped network carries a non-zero derive
+        // height since the genesis arm, so one is pinned here and the shipped value restored.
+        const shipped = ar.ANCHOR_REWARD_DERIVE_ACTIVATION.mainnet;
+        ar.ANCHOR_REWARD_DERIVE_ACTIVATION.mainnet = 799900;
+        try {
+            assert.strictEqual(ar.restoredRewardRearmFloor(800000, 'mainnet'), 799900,
+                'the floor must not sweep below the flag-day');
+        } finally { ar.ANCHOR_REWARD_DERIVE_ACTIVATION.mainnet = shipped; }
         // An inert network carries no derive stamps, so the floor stays the earn-block sweep.
-        assert.strictEqual(ar.restoredRewardRearmFloor(800000, 'mainnet'), 800000);
         assert.strictEqual(ar.restoredRewardRearmFloor(800000, 'nosuchnet'), 800000);
         assert.strictEqual(ar.restoredRewardRearmFloor('not-a-height', 'regtest'), null);
     });
 
     it('restoredRewardDeriveHeight is the one rule both the stamp and the floor read', function () {
-        assert.strictEqual(ar.restoredRewardDeriveHeight(700000, 'regtest'), 700000 + MATURITY);
-        assert.strictEqual(ar.restoredRewardDeriveHeight(700000, 'testnet'), 700000 + MATURITY);
-        assert.strictEqual(ar.restoredRewardDeriveHeight(700000, 'mainnet'), null);
+        // mainnet joined the armed networks on 2026-09-09, so it stamps like the others.
+        for (const net of ['regtest', 'testnet', 'mainnet'])
+            assert.strictEqual(ar.restoredRewardDeriveHeight(700000, net), 700000 + MATURITY, net);
+        // null wherever the derive path never minted a row: an earn block BELOW the
+        // flag-day (pinned here, since no shipped network carries a non-zero height any
+        // more), an unknown network, and an unparseable earn block.
+        const shipped = ar.ANCHOR_REWARD_DERIVE_ACTIVATION.mainnet;
+        ar.ANCHOR_REWARD_DERIVE_ACTIVATION.mainnet = 800000;
+        try {
+            assert.strictEqual(ar.restoredRewardDeriveHeight(700000, 'mainnet'), null,
+                'below the flag-day the legacy NULL stamp must stay byte-identical');
+        } finally { ar.ANCHOR_REWARD_DERIVE_ACTIVATION.mainnet = shipped; }
+        assert.strictEqual(ar.restoredRewardDeriveHeight(700000, 'nosuchnet'), null);
         assert.strictEqual(ar.restoredRewardDeriveHeight('x', 'regtest'), null);
     });
 });

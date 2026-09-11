@@ -41,7 +41,11 @@ describe('EXECUTE host-fault propagation: halt, not fabricate @regression @tier1
         const indexer = createMockIndexer({ config });
 
         const db = indexer.indexerDb;
-        db.getContract             = sinon.stub().resolves({ code: 'module.exports=function(){return 1;};', status_id: 7 });
+        // A FUNCTION-export contract carries its identity as a property on the function
+        // (spec 2.1 / R1: the manifest read takes `meta` off a function export too), which
+        // is what keeps this shape deployable at/after CONTRACT_META_REQUIRED. The EXECUTE
+        // path never re-evaluates meta, so this is fixture realism, not an assertion here.
+        db.getContract             = sinon.stub().resolves({ code: "function c(){return 1;} c.meta={name:'Host Fault',description:'Function-export contract fixture.',version:'1.0.0'}; module.exports=c;", status_id: 7 });
         db.getStatusString         = sinon.stub().resolves('valid');
         db.getTokenInfo            = sinon.stub().resolves({ TICK_ID: 1 });
         db.getAddressBalances      = sinon.stub().resolves({});

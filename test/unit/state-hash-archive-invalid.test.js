@@ -21,15 +21,17 @@
  *   (publisher-bearing, ARCHIVE_REWARD flag-day) parent was invisible to the
  *   follower's recompute: a dropped upsert diverged with no halt. Widened to the
  *   shared ARCHIVE_HEAD_VERSIONS set behind ARCHIVE_INVALID_STATE_HASH
- *   (INERT on mainnet; testnet and regtest armed from genesis).
+ *   (armed from genesis on every network: testnet by the 2026-08-11 ruling,
+ *   mainnet by the 2026-09-09 one, where the class is empty either way).
  *
  *   CHUNK-HEIGHT KEY. It scoped the completing chunk with `c.block_index`, a
  *   column NO v2 continuation row ever populates: `block_index` carries
  *   BLOCK_INDEX_CHECKPOINTED, assigned only in anchor.js `_parseCheckpoint`, and
  *   db.js binds it NULL when the key is absent. `NULL BETWEEN B AND B` is never
  *   true, so the class selected ZERO rows on every node from the day it landed.
- *   Repaired to `block_index_doge` behind ARCHIVE_INVALID_HEIGHT_KEY (every
- *   mainnet AND testnet key an INERT placeholder, regtest armed from genesis).
+ *   Repaired to `block_index_doge` behind ARCHIVE_INVALID_HEIGHT_KEY (mainnet and
+ *   regtest armed from genesis, testnet at real future flag-day heights because a
+ *   height of 0 on a chain that has already run would be retroactive).
  *
  * WHY THIS SUITE USES A REAL DATABASE. The predecessor stubbed `dbFor()` to hand
  * back fabricated rows for any SQL containing 'anchor_actions p', so the WHERE
@@ -133,7 +135,7 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
         assert.strictEqual(ARCHIVE_CHUNK_HEIGHT_COL_LEGACY, 'c.block_index');
     });
 
-    it('version gate: regtest and every testnet chain armed from genesis; mainnet keys INERT placeholders; fail-inert paths', function(){
+    it('version gate: regtest, every testnet chain AND every mainnet chain armed from genesis; fail-inert paths', function(){
         assert.strictEqual(isArchiveInvalidStateHashActive(0, 'regtest'), true, 'regtest armed at 0');
         for(const key of ['BTC:mainnet', 'LTC:mainnet', 'DOGE:mainnet', 'BTC:testnet', 'LTC:testnet', 'DOGE:testnet']){
             const h = ARCHIVE_INVALID_STATE_HASH_ACTIVATION[key];
@@ -150,41 +152,61 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
             // Still fails closed on an armed key: NaN must never read as ">= 0".
             assert.strictEqual(isArchiveInvalidStateHashActive('not-a-number', 'testnet', coin), false);
         }
-        // Mainnet keeps its placeholder; flipping it is a ratification, not a chore.
+        // Mainnet armed at genesis by the 2026-09-09 ruling. Mainnet holds 0 archive chunks
+        // (measured 2026-09-09), so the widened predicate and the legacy v1-only one select
+        // the same empty class and arming from genesis leaves the deployed preimage alone.
+        // The from-genesis replay witness is the proof; the same NaN/unknown-network
+        // fail-inert paths must survive the arming.
         for(const coin of ['BTC', 'LTC', 'DOGE']){
-            assert.strictEqual(ARCHIVE_INVALID_STATE_HASH_ACTIVATION[`${coin}:mainnet`], 999999999,
-                `${coin}:mainnet must stay an inert placeholder`);
+            assert.strictEqual(ARCHIVE_INVALID_STATE_HASH_ACTIVATION[`${coin}:mainnet`], 0,
+                `${coin}:mainnet must be armed at genesis`);
+            assert.strictEqual(isArchiveInvalidStateHashActive(0, 'mainnet', coin), true,
+                `${coin}:mainnet active at block 0`);
+            assert.strictEqual(isArchiveInvalidStateHashActive(1, 'mainnet', coin), true,
+                `${coin}:mainnet stays on above genesis`);
+            assert.strictEqual(isArchiveInvalidStateHashActive('not-a-number', 'mainnet', coin), false,
+                `${coin}:mainnet must still fail closed on an unparseable height`);
         }
-        const h = ARCHIVE_INVALID_STATE_HASH_ACTIVATION['BTC:mainnet'];
-        assert.strictEqual(isArchiveInvalidStateHashActive(h - 1, 'mainnet', 'BTC'), false, 'below threshold');
-        assert.strictEqual(isArchiveInvalidStateHashActive(h, 'mainnet', 'BTC'), true, 'at threshold');
-        assert.strictEqual(isArchiveInvalidStateHashActive(h + 1, 'mainnet'), false, 'coin-less mainnet lookup stays inert');
+        assert.strictEqual(isArchiveInvalidStateHashActive(999999999, 'mainnet'), false, 'coin-less mainnet lookup stays inert');
         assert.strictEqual(isArchiveInvalidStateHashActive(7, 'nonexistent', 'BTC'), false, 'unknown network -> off (safe)');
         assert.strictEqual(isArchiveInvalidStateHashActive(7, null, 'BTC'), false);
         assert.strictEqual(isArchiveInvalidStateHashActive('not-a-number', 'regtest'), false);
     });
 
-    it('height-key gate: regtest armed at genesis, EVERY mainnet and testnet key an inert placeholder; fail-inert paths', function(){
+    it('height-key gate: regtest and mainnet armed at genesis, testnet at real future flag days; fail-inert paths', function(){
         assert.strictEqual(ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION.regtest, 0, 'regtest armed at 0');
         assert.strictEqual(isArchiveInvalidHeightKeyActive(0, 'regtest'), true);
-        // Unlike the version gate above, testnet is NOT armed at 0: that ruling was made a
-        // day after the testnet re-genesis, and testnet has run since, so a height of 0 here
-        // would be retroactive rather than a flag day. This repair and its sibling
-        // preimage-moving consensus call ride ONE train and are pinned together.
-        for(const network of ['mainnet', 'testnet']){
-            for(const coin of ['BTC', 'LTC', 'DOGE']){
-                const key = `${coin}:${network}`;
-                assert.strictEqual(ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION[key], 999999999,
-                    `${key} must stay an inert placeholder until the flag-day train is ratified`);
-                assert.strictEqual(isArchiveInvalidHeightKeyActive(0, network, coin), false,
-                    `${key} must not be retroactively armed`);
-            }
+        // Mainnet armed at genesis by the 2026-09-09 ruling: the repair only moves the
+        // preimage where a stamped archive batch exists, and mainnet holds 0 archive chunks
+        // (measured 2026-09-09), so repaired and broken keys select the same empty class.
+        for(const coin of ['BTC', 'LTC', 'DOGE']){
+            assert.strictEqual(ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION[`${coin}:mainnet`], 0,
+                `${coin}:mainnet must be armed at genesis`);
+            assert.strictEqual(isArchiveInvalidHeightKeyActive(0, 'mainnet', coin), true,
+                `${coin}:mainnet active at block 0`);
+            assert.strictEqual(isArchiveInvalidHeightKeyActive('not-a-number', 'mainnet', coin), false,
+                `${coin}:mainnet must still fail closed on an unparseable height`);
         }
-        const h = ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION['DOGE:mainnet'];
-        assert.strictEqual(isArchiveInvalidHeightKeyActive(h - 1, 'mainnet', 'DOGE'), false, 'below threshold');
-        assert.strictEqual(isArchiveInvalidHeightKeyActive(h, 'mainnet', 'DOGE'), true, 'at threshold');
-        assert.strictEqual(isArchiveInvalidHeightKeyActive(h + 1, 'mainnet', 'DOGE'), true, 'stays on above threshold');
-        assert.strictEqual(isArchiveInvalidHeightKeyActive(h, 'mainnet'), false, 'coin-less mainnet lookup stays inert');
+        // Testnet does NOT arm at 0: it is a public chain that has run since the 2026-08-10
+        // re-genesis, so a height of 0 here would be retroactive rather than a flag day.
+        // The heights are sized above the 2026-09-09 tips (TBTC 151701, TLTC 4883295,
+        // TDOGE 67881714) so the v0.17.0 train is deployed before the earliest chain crosses.
+        const TESTNET = { BTC: 155000, LTC: 4896000, DOGE: 67915000 };
+        const TIPS_2026_09_09 = { BTC: 151701, LTC: 4883295, DOGE: 67881714 };
+        for(const coin of ['BTC', 'LTC', 'DOGE']){
+            const key = `${coin}:testnet`;
+            const h = ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION[key];
+            assert.strictEqual(h, TESTNET[coin], `${key} must carry its ruled flag-day height`);
+            assert.ok(h > TIPS_2026_09_09[coin],
+                `${key} must sit above the tip it was sized from, or the flag day is retroactive`);
+            assert.strictEqual(isArchiveInvalidHeightKeyActive(0, 'testnet', coin), false,
+                `${key} must not be retroactively armed at genesis`);
+            assert.strictEqual(isArchiveInvalidHeightKeyActive(h - 1, 'testnet', coin), false, `${key} below threshold`);
+            assert.strictEqual(isArchiveInvalidHeightKeyActive(h, 'testnet', coin), true, `${key} at threshold`);
+            assert.strictEqual(isArchiveInvalidHeightKeyActive(h + 1, 'testnet', coin), true, `${key} above threshold`);
+        }
+        assert.strictEqual(isArchiveInvalidHeightKeyActive(999999999, 'mainnet'), false, 'coin-less mainnet lookup stays inert');
+        assert.strictEqual(isArchiveInvalidHeightKeyActive(999999999, 'testnet'), false, 'coin-less testnet lookup stays inert');
         assert.strictEqual(isArchiveInvalidHeightKeyActive(7, 'nonexistent', 'DOGE'), false, 'unknown network -> off (safe)');
         assert.strictEqual(isArchiveInvalidHeightKeyActive(7, null, 'DOGE'), false);
         assert.strictEqual(isArchiveInvalidHeightKeyActive('not-a-number', 'regtest'), false, 'NaN must never read as ">= 0"');

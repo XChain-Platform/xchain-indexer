@@ -53,7 +53,9 @@ const BLK = 600;
 // size cap. DEPLOY's syntax check is skipped when the VM is unavailable, but the inline
 // CODE_ENCODING is still decoded as base64 (DEPLOY_BASE64_CODE is active from genesis on
 // regtest), so the source must be base64-encoded to assemble a valid contract row.
-const CODE_B64 = Buffer.from('module.exports={ping:function(){return "ok";}};', 'utf8').toString('base64');
+// CONTRACT_META_REQUIRED is genesis-active on regtest, so a contract that must deploy
+// `valid` (this one is deposited into and staked against) carries `meta` (spec 2.1).
+const CODE_B64 = Buffer.from("module.exports={meta:{name:'Ping',description:'Stakeable no-op used by the reorg drill.',version:'1.0.0'},ping:function(){return \"ok\";}};", 'utf8').toString('base64');
 
 async function deleteDecoderBlocksFrom(blockIndex) {
     await decoderQuery(

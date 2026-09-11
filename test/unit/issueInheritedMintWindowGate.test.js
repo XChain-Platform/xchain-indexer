@@ -159,8 +159,12 @@ describe('ISSUE_INHERITED_MINT_WINDOW gate @regression @tier2', function () {
         assert.strictEqual(data.STATUS, 'invalid: MINT_START_BLOCK < BLOCK_INDEX');
     });
 
-    it('mainnet stays on the house UNARMED sentinel until the operator names an instant', function () {
-        assert.strictEqual(ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME, 9999999999);
+    it('mainnet is armed at genesis by the 2026-09-09 ruling, not on a sentinel', function () {
+        // The loosening bites only where an inherited mint window had already opened,
+        // and mainnet holds no MINT at all (measured 2026-09-09), so no ISSUE verdict
+        // moves. 0 is the one past value a from-genesis replay reproduces exactly.
+        assert.strictEqual(ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME, 0);
+        assert.notStrictEqual(ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME, 9999999999);
     });
 
     it('testnet arm is the ratified instant, re-pinned forward to 2026-08-29T00:00:00Z', function () {

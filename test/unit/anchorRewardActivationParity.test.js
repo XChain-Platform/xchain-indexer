@@ -63,16 +63,19 @@ describe('anchor_reward_activation twin parity @regression @tier1', function () 
         assert.strictEqual(indexer.isArchiveRewardActive('not-a-number', 'mainnet'), false);
     });
 
-    // Testnet was armed at 0 by the 2026-08-11 operator ruling (applied 2026-08-14): mainnet
-    // keeps the inert null because it carries live COLLECT-spendable history, while the
-    // re-genesised testnet has no pre-flag set to diverge from and is where the relocated
-    // derive path gets exercised. Mainnet flipping off null is a RATIFICATION, never a chore,
-    // so this suite pins it.
-    it('derive-relocation gate is an inert null placeholder on mainnet, armed at 0 on testnet/regtest', function () {
-        assert.strictEqual(indexer.ANCHOR_REWARD_DERIVE_ACTIVATION.mainnet, null);
+    // Testnet was armed at 0 by the 2026-08-11 operator ruling (applied 2026-08-14) and
+    // mainnet at 0 by the 2026-09-09 ruling: mainnet carries 0 anchor reward attestations
+    // and 0 validator_rewards rows (measured 2026-09-09), so the COLLECT-spendable history
+    // the null placeholder protected does not exist. Each network's arming is a
+    // RATIFICATION, never a chore, so this suite pins the armed values.
+    it('derive-relocation gate is armed at genesis on every network', function () {
+        assert.strictEqual(indexer.ANCHOR_REWARD_DERIVE_ACTIVATION.mainnet, 0);
         assert.strictEqual(indexer.ANCHOR_REWARD_DERIVE_ACTIVATION.testnet, 0);
         assert.strictEqual(indexer.ANCHOR_REWARD_DERIVE_ACTIVATION.regtest, 0);
-        assert.strictEqual(indexer.isAnchorRewardDeriveActive(999999999, 'mainnet'), false);   // inert null
+        assert.strictEqual(indexer.isAnchorRewardDeriveActive(0, 'mainnet'), true);            // armed at genesis
+        assert.strictEqual(indexer.isAnchorRewardDeriveActive(999999999, 'mainnet'), true);
+        // Still fails closed on an unparseable height, even now that mainnet is armed at 0.
+        assert.strictEqual(indexer.isAnchorRewardDeriveActive('not-a-number', 'mainnet'), false);
         assert.strictEqual(indexer.isAnchorRewardDeriveActive(0, 'testnet'), true);            // armed at genesis
         assert.strictEqual(indexer.isAnchorRewardDeriveActive(999999999, 'testnet'), true);
         assert.strictEqual(indexer.isAnchorRewardDeriveActive(0, 'regtest'), true);

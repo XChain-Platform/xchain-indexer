@@ -66,16 +66,18 @@
  * Those rows are block-hash preimages. Below the threshold the 8 dp tally runs
  * untouched and historical replay stays byte-identical.
  *
- * MAINNET IS UNARMED, on the house sentinel (9999999999, year 2286), exactly
- * as dispenser_amount_positivity_activation and
- * consolidation_leg_amount_activation. BATCH_ISSUANCE_LIMITS armed mainnet at
- * 2026-08-16, so the defective tally is live there and an activation instant
- * in the past would re-price blocks the fleet has already committed, which is
- * the fork the gate exists to prevent. Naming the instant is a separate
- * operator act and a one-line edit here; it belongs on a coordinated fleet
- * train, alongside an audit of the token-triggered dispenses recorded since
- * that arming. testnet/regtest run from genesis, matching every
- * dispenser-family activation.
+ * MAINNET IS ARMED AT GENESIS (operator ruling 2026-09-09), alongside
+ * dispenser_amount_positivity_activation and
+ * consolidation_leg_amount_activation. An activation instant in the past
+ * re-prices committed blocks only where there are priced blocks to re-price,
+ * and the audit this arming waited on has now been taken: read-only against
+ * the live indexer databases on 2026-09-09, mainnet holds 0 dispensers and 0
+ * dispenses, so no token-triggered dispense has ever settled there and the
+ * exact tally is the identity function over every mainnet block committed so
+ * far. BATCH_ISSUANCE_LIMITS arming mainnet at 2026-08-16 exposed the
+ * defective tally but nothing exercised it. The proof is a per-chain OLD-vs-ON
+ * replay witness, not this comment. testnet/regtest run from genesis, matching
+ * every dispenser-family activation.
  *
  * Execution-path gate (action settlement), not a hashing-path change, so
  * indexer-only with no xchain-sync twin: xchain-sync replicates materialized
@@ -97,7 +99,7 @@ const DISPENSE_TALLY_LEGACY_SCALE = 8;
 // Per-network activation, interpreted against the block's consensus timestamp
 // (data['BLOCK_TIME']), matching the dispenser-family cohort.
 const DISPENSE_PAYMENT_TALLY_SCALE_ACTIVATION = {
-    mainnet: 9999999999,    // UNARMED sentinel; the instant is the operator's to name
+    mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 dispensers, 0 dispenses, measured 2026-09-09)
     testnet: 0,
     regtest: 0,
 };

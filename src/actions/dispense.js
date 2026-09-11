@@ -246,10 +246,11 @@ class Dispense {
                     //
                     // The giveAmountPositive guard is for a BALANCE dispenser carrying an
                     // empty or '0' GIVE_AMOUNT, which a format-0 create still accepts below
-                    // dispenser_give_amount_activation (mainnet still on the UNARMED
-                    // sentinel). bcdiv returns 0 on a zero divisor, so dividing there would
-                    // silently reject every such dispense as insufficient funds instead of
-                    // leaving the legacy behavior in place.
+                    // dispenser_give_amount_activation (armed at genesis on mainnet too by
+                    // the 2026-09-09 ruling, so this path is legacy-only history now).
+                    // bcdiv returns 0 on a zero divisor, so dividing there would silently
+                    // reject every such dispense as insufficient funds instead of leaving
+                    // the legacy behavior in place.
                     //
                     // An ownership dispenser is NOT that case. `dispenser` reaches this
                     // handler only from getDispenserInfo, which virtualizes GIVE_AMOUNT to
@@ -374,8 +375,9 @@ class Dispense {
             //
             // Two guards keep the rewrite byte-identical on the edges:
             //   - GIVE_AMOUNT is empty or '0' on a BALANCE dispenser created below
-            //     dispenser_give_amount_activation (mainnet still on the UNARMED
-            //     sentinel), where bcmul() coerced it to 0 so `0 > GIVE_REMAINING` was
+            //     dispenser_give_amount_activation (armed at genesis on mainnet too by
+            //     the 2026-09-09 ruling, so this is legacy-only history now), where
+            //     bcmul() coerced it to 0 so `0 > GIVE_REMAINING` was
             //     false and the loop never ran. Skip the clamp there rather than
             //     dividing by zero. An ownership dispenser is NOT that case and must
             //     not be bypassed here: getDispenserInfo virtualizes its GIVE_AMOUNT to

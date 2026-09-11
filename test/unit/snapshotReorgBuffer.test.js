@@ -98,13 +98,14 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
             assert.strictEqual(srb.buriedSnapshotBlock(3, 'regtest'), 0);
         });
 
-        it('mainnet is INERT: the declared height passes through untouched', function () {
-            // Arming changes acceptance and re-reads already-anchored artifacts, so the
-            // activation height is an operator decision. Mainnet is unratified, so every
-            // consumer must behave exactly as it did before this module existed.
-            assert.strictEqual(srb.SNAPSHOT_BURIAL_ACTIVATION.mainnet, null);
-            assert.strictEqual(srb.buriedSnapshotBlock(N, 'mainnet'), N);
-            assert.strictEqual(srb.isSnapshotBurialActive(N, 'mainnet'), false);
+        it('mainnet is ARMED at genesis by the 2026-09-09 ruling, so the declared height is buried', function () {
+            // Arming changes acceptance and re-reads already-anchored artifacts, so it was
+            // held for an operator decision. Mainnet carries 0 validators, 0 stakes and 0
+            // quorum-signed artifacts (measured 2026-09-09), so there is nothing to re-read.
+            assert.strictEqual(srb.SNAPSHOT_BURIAL_ACTIVATION.mainnet, 0);
+            assert.strictEqual(srb.buriedSnapshotBlock(N, 'mainnet'), BURIED);
+            assert.strictEqual(srb.isSnapshotBurialActive(N, 'mainnet'), true);
+            assert.strictEqual(srb.isSnapshotBurialActive(0, 'mainnet'), true);
         });
 
         it('testnet is ARMED at genesis, so burial applies from the first block', function () {

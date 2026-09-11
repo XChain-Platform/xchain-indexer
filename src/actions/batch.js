@@ -213,8 +213,8 @@ class Batch {
         // uses to set data['FORMAT'], one shared derivation rather than a second one, and
         // DEPLOY is outside normalizeSubAction's legacy VERSION injection so params[0] is
         // always the explicit version field. The asymmetry still binds for the change itself:
-        // lowering a weight is a loosening (it can only accept more), applied while the flag is
-        // unarmed on mainnet.
+        // lowering a weight is a loosening (it can only accept more), and mainnet is ARMED
+        // at genesis by the 2026-09-09 ruling, so it applies there from block 0.
         this.commandWeights['DEPLOY']  = 30;
         this.commandWeights['EXECUTE'] = 30;
         this.commandWeights['XEXEC']   = 30;

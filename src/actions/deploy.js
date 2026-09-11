@@ -39,6 +39,8 @@ const ProviderRegistry = require('../attestation/providerRegistry.js');
 const { rethrowIfInfraFault } = require('./faultGuard.js');
 const vmDeployLintPkg3 = require('../vm_deploy_lint_pkg3_activation.js');
 const vmLintGlobalAlias = require('../vm_lint_global_alias_activation.js');
+// CONTRACT_META_REQUIRED: the seven verdict strings and the meta text grammar.
+const contractMeta = require('../contract_meta.js');
 // Per-root discriminator for the ATTEST request_id / XCALL call_id preimages, shared
 // with execute.js so a constructor's emissions derive ids the same way an EXECUTE's do.
 const { resolveRootDiscriminator } = require('../batch_root_discriminator.js');
@@ -470,10 +472,21 @@ class Deploy {
             // object leg resolves through isGlobalObjectRef under this epoch. It cannot ride
             // either gate above: VM_LINT_HARDENING is already open on every network and
             // the Pkg 3 heights are in the past, so reusing either would retroactively
-            // reject contracts the chain already accepted. Mainnet is still unarmed, so
-            // this resolves false there and mainnet replay is byte-identical.
+            // reject contracts the chain already accepted. Mainnet is ARMED at genesis
+            // by the 2026-09-09 ruling (identity on the indexed mainnet history: 0
+            // contracts, 0 DEPLOY, measured 2026-09-09), so this resolves true there
+            // from block 0 and no already-accepted deploy is reinterpreted.
             let enforceLintGlobalAlias = vmLintGlobalAlias.isVmLintGlobalAliasActive(data['BLOCK_INDEX'], this.config['NETWORK'], this.config['COIN']);
-            let syntaxResult = this.actions.vm.validateSyntax(code, { enforceBannedAsync, enforceLintHardening, enforceBannedGenerator, enforceBannedWasm, enforceLintGlobalAlias });
+            // banned-rest (unmeterable rest positions) is the deploy half of
+            // REST_PATTERN_METER. Its VM twin wraps a top-level rest's source in the
+            // size-charged helper; the positions with no addressable source cannot be
+            // metered and are refused here instead. Keyed on block_TIME through
+            // protocolChanges like the two gates above, NOT on the contract-era instant:
+            // that one is in the past and reusing it would retroactively reject contracts
+            // the chain already accepted. Below the flag day the rule is dropped and the
+            // historical verdict replays byte-identically.
+            let enforceBannedRest = await this.actions.protocolChanges.isEnabled('REST_PATTERN_METER', data['BLOCK_INDEX']);
+            let syntaxResult = this.actions.vm.validateSyntax(code, { enforceBannedAsync, enforceLintHardening, enforceBannedGenerator, enforceBannedWasm, enforceLintGlobalAlias, enforceBannedRest });
             if(!syntaxResult.valid)
                 error = 'invalid: CODE_ENCODING (' + syntaxResult.error + ')';
 
@@ -504,6 +517,7 @@ class Deploy {
         let declaredPermissions = null;   // string[] | null
         let declaredMaxTakeBps  = null;   // number   | null
         let hasInitialize       = false;  // contract exports a callable constructor (DEPLOY_INIT_STRICT)
+        let declaredMeta        = null;   // { name, description, version, json } | null (CONTRACT_META_REQUIRED)
         if(!error && !heldVerdict && this.actions.vm){
             // Read the manifest under THIS DEPLOY's block context, not pre-activation defaults:
             // the verdict hashes into deploy status, so resolving the VM's activation gates from
@@ -542,6 +556,33 @@ class Deploy {
                     }
                 }
             }
+
+            /*************************************************************
+             * Contract Meta (CONTRACT_META_REQUIRED)
+             *
+             * Deliberately OUTSIDE the success/manifest guard above. A REQUIRED
+             * field cannot live inside a branch the sender chooses whether to
+             * enter: a module-level throw yields success:false and is documented
+             * as "treated as no manifest", which would let a nameless contract
+             * skip the rule entirely by throwing. evaluateContractMeta takes the
+             * raw read and judges that case as row 1.
+             *
+             * It sits AFTER the permissions and maxTakeBps branches and is
+             * assigned under !error, so a contract malformed on permissions AND
+             * meta keeps reporting today's permissions string; the verdict order
+             * is consensus and a both-bad vector pins it.
+             *
+             * The evaluation itself is UNGATED: below the flag day the verdict is
+             * discarded but a conforming value is still extracted, so a
+             * pre-activation contract that happens to carry a good meta gets its
+             * columns for free. Only the assignment to `error` is flag-gated, so a
+             * from-genesis replay below the flag day reproduces every historic
+             * status byte for byte.
+             ************************************************************/
+            let metaVerdict = contractMeta.evaluateContractMeta(manifestRead);
+            declaredMeta = metaVerdict.meta;
+            if(!error && metaVerdict.error && await this.actions.protocolChanges.isEnabled('CONTRACT_META_REQUIRED', data['BLOCK_INDEX']))
+                error = metaVerdict.error;
         }
 
         /*****************************************************************
@@ -777,6 +818,14 @@ class Deploy {
             (floatWarnings.length > 0 ? ' : FLOAT_WARNINGS=' + floatWarnings.length : '') +
             ' : ' + data['STATUS']);
 
+        // The meta columns are written ONLY for a valid deploy whose meta conforms; every
+        // other deploy stores four NULLs. createContract runs for invalid deploys too, so
+        // the write site (not the grammar) is what keeps an oversized or malformed value
+        // out of a VARCHAR(64): sql_mode is not pinned in this tree, so an oversized value
+        // is either errno 1406 and a forever-retried block on a strict node or a silent
+        // truncation on a permissive one. Same gate as createContractPermission below.
+        let storedMeta = (status === 'valid' && declaredMeta) ? declaredMeta : null;
+
         await this.indexerDb.createContract({
             ACTION_INDEX      : data['ACTION_INDEX'],
             SOURCE            : data['SOURCE'],
@@ -786,7 +835,11 @@ class Deploy {
             STATUS            : status,
             BLOCK_INDEX       : data['BLOCK_INDEX'],
             COOLDOWN_BLOCKS   : cooldownBlocks,
-            SLASH_DESTINATION : slashDestination
+            SLASH_DESTINATION : slashDestination,
+            META_NAME         : storedMeta ? storedMeta.name        : null,
+            META_DESCRIPTION  : storedMeta ? storedMeta.description : null,
+            META_VERSION      : storedMeta ? storedMeta.version     : null,
+            META_JSON         : storedMeta ? storedMeta.json        : null
         });
 
         if(constructorError)

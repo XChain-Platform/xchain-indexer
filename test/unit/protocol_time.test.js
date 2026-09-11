@@ -251,7 +251,9 @@ describe('protocol_time', () => {
             assert.ok(/createBlock\(blockToParse,\s*rawBlockTime\)/.test(src),
                 'the stored block row must carry the chain\'s own timestamp; it is also the ' +
                 'window other nodes median, so storing a derived value would compound');
-            assert.ok(/pushChainTip\([^)]*rawBlockTime\)/.test(src),
+            // rawBlockTime need not be the last argument: the chain identity (btc_chain_id)
+            // rides the same push after it, and that is transport, not a clock.
+            assert.ok(/pushChainTip\([^)]*\brawBlockTime\b[^)]*\)/.test(src),
                 'the published chain tip is compared against wall clock for freshness');
         });
 

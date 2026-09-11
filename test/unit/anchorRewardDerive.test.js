@@ -255,13 +255,33 @@ describe('anchor_reward_derive (BTC-side derivation) @regression @tier2', functi
             assert.ok(db.createValidatorReward.notCalled);
         });
 
-        it('is a no-op below the derive-relocation flag-day (inert placeholder network)', async function () {
+        it('is a no-op below the derive-relocation flag-day', async function () {
+            // Every shipped network arms at genesis (mainnet by the 2026-09-09 ruling), so
+            // the below-the-gate path is driven by pinning a real height on mainnet for the
+            // case and restoring the shipped 0. The subject is that the DOGE-side legacy
+            // path stays byte-identical below the height, not which network is armed.
+            const shipped = ar.ANCHOR_REWARD_DERIVE_ACTIVATION.mainnet;
+            ar.ANCHOR_REWARD_DERIVE_ACTIVATION.mainnet = 2000000;
+            try {
+                const keys = [makeKey()];
+                const row  = makeRow(keys, { network: 'mainnet', snapshot_block: 1000000 });
+                const db   = stubDb(keys, [row]);
+                const n    = await derive.deriveAnchorRewards(db, { COIN: 'BTC', NETWORK: 'mainnet' }, maturedAt(1000000), stubProof());
+                assert.strictEqual(n, 0, 'a snapshot below the derive height must not relocate');
+                assert.ok(db.createValidatorReward.notCalled);
+            } finally { ar.ANCHOR_REWARD_DERIVE_ACTIVATION.mainnet = shipped; }
+        });
+
+        it('derives on a genesis-armed mainnet, by the 2026-09-09 ruling', async function () {
+            // 0 anchor reward attestations and 0 validator_rewards rows on any mainnet
+            // chain (measured 2026-09-09), so relocating the derive reinterprets nothing.
+            assert.strictEqual(ar.ANCHOR_REWARD_DERIVE_ACTIVATION.mainnet, 0);
             const keys = [makeKey()];
             const row  = makeRow(keys, { network: 'mainnet', snapshot_block: 1000000 });
             const db   = stubDb(keys, [row]);
             const n    = await derive.deriveAnchorRewards(db, { COIN: 'BTC', NETWORK: 'mainnet' }, maturedAt(1000000), stubProof());
-            assert.strictEqual(n, 0, 'mainnet derive gate is an inert null placeholder');
-            assert.ok(db.createValidatorReward.notCalled);
+            assert.strictEqual(n, 1, 'the relocated derive must run on mainnet from block 0');
+            assert.ok(db.createValidatorReward.called);
         });
 
         it('derives nothing when no rows are pending (idempotent steady state)', async function () {

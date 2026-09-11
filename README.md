@@ -4,8 +4,8 @@
 # XChain Platform Indexer
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.16.0-blue" alt="Version">
-  <img src="https://img.shields.io/badge/tests-9%2C002%2B%20passing-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/version-0.16.1-blue" alt="Version">
+  <img src="https://img.shields.io/badge/tests-9%2C239%2B%20passing-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/node-%3E%3D22-green" alt="Node">
   <img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue" alt="License">
 </p>
@@ -145,8 +145,8 @@ neither source sets one, so these defaults hold on an unconfigured box:
 |---|---|
 | `npm run api` | Start the indexer and API server |
 | `bin/run-db-tiers.sh` | Run the DB-backed tiers against a throwaway MariaDB it starts and drops |
-| `npm test` | Run unit tests (~8,308 tests) |
-| `npm run test:integration` | Integration tests (~275 tests, requires MariaDB) |
+| `npm test` | Run unit tests (~8,536 tests) |
+| `npm run test:integration` | Integration tests (~284 tests, requires MariaDB) |
 | `npm run test:e2e` | End-to-end tests (43 tests, requires full stack) |
 | `npm run test:boundary` | Boundary condition tests (132 tests) |
 | `npm run test:smoke` | Smoke tests (unit + connected, 27 tests) |
@@ -160,11 +160,11 @@ neither source sets one, so these defaults hold on an unconfigured box:
 | `npm run test:mutation:report` | Mutation tests with coverage report |
 | `npm run test:perf` | All performance tests (26 tests) |
 | `npm run test:perf:regimes` | Load-regime scenarios: fast chain (DOGE) and fee spike (9 tests) |
-| `npm run test:regression` | Regression tests (tagged across all suites, 7,509 tests) |
-| `npm run test:regression:fast` | Fast regression (tier1 + tier4, unit only, 3,607 tests) |
-| `npm run test:regression:full` | Full regression suite (7,509 tests) |
-| `npm run test:nodb` | All tests that don't require a database (8,561 tests) |
-| `npm run test:full` | Complete test suite (8,906 tests) |
+| `npm run test:regression` | Regression tests (tagged across all suites, 7,698 tests) |
+| `npm run test:regression:fast` | Fast regression (tier1 + tier4, unit only, 3,729 tests) |
+| `npm run test:regression:full` | Full regression suite (7,698 tests) |
+| `npm run test:nodb` | All tests that don't require a database (8,789 tests) |
+| `npm run test:full` | Complete test suite (9,143 tests) |
 
 ### Running the DB-backed tiers
 

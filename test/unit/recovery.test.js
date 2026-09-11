@@ -353,6 +353,26 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         assert.strictEqual(db.snapshots.filter(s => s.capability === 'oracle_publish').length, 4);
     });
 
+    // An operator reads this line during an incident, so it must name the versions the
+    // query actually scanned rather than a hardcoded set that drifts when they change.
+    it('the empty-archive log names exactly ARCHIVE_HEAD_VERSIONS, never a retired wire', async function () {
+        const { ARCHIVE_HEAD_VERSIONS } = require('../../src/stateHash.js');
+        let lines = [];
+        let report = await new AnchorRecovery(memDb([], []), { log: m => lines.push(String(m)), util }).run();
+
+        assert.strictEqual(report.verified, 0);
+        let line = lines.find(l => l.includes('no archive anchors found'));
+        assert.ok(line, 'recovery logged the empty-archive line, got: ' + JSON.stringify(lines));
+        for (let v of ARCHIVE_HEAD_VERSIONS) {
+            assert.ok(line.includes('v' + v), 'names the live archive version v' + v + ': ' + line);
+        }
+        // The retired wires specifically: v6 was the tailed archive head before the restart.
+        for (let retired of [3, 4, 5, 6, 7]) {
+            assert.ok(!line.includes('v' + retired),
+                'must not send an operator hunting a retired v' + retired + ' row: ' + line);
+        }
+    });
+
     it('latest-status-wins: a later batch retracts an earlier finalized match', async function () {
         let b0 = buildBatch(0, [rawMatch('m1', 'finalized')], oracleKeys, crossKeys);
         let b1 = buildBatch(1, [rawMatch('m1', 'retracted')], oracleKeys, crossKeys);

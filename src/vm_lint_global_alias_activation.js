@@ -61,11 +61,14 @@
  * materialized action rows and never re-runs deploy validation (like
  * vm_deploy_lint_pkg3_activation.js).
  *
- * *** MAINNET IS DELIBERATELY UNARMED. *** null is the explicit unarmed sentinel: it
- * resolves to inactive at every mainnet height, so mainnet behaviour is byte-identical
- * to today until the operator ratifies concrete per-coin train heights here AND in
- * xchain-vm's LINT_GLOBAL_ALIAS_ACTIVATION, which the consensus-params suites in both
- * repos pin to equality. Arming one side alone forks the fleet.
+ * *** MAINNET IS ARMED AT GENESIS. *** The operator ruled on 2026-09-09 that a mainnet
+ * gate which is identity on the indexed mainnet history arms at genesis rather than at a
+ * train height. This one qualifies: mainnet carries 0 contracts and 0 DEPLOY actions
+ * (measured 2026-09-09), so there is no accepted deploy verdict the widened rules could
+ * retroactively reverse. A from-genesis OLD-vs-ON replay witness per chain is the proof.
+ * The height lives here AND in xchain-vm's LINT_GLOBAL_ALIAS_ACTIVATION, which the
+ * consensus-params suites in both repos pin to equality; arming one side alone forks the
+ * fleet.
  *
  ********************************************************************/
 
@@ -74,11 +77,10 @@
 // also match sloppy-mode `this` and the globalThis self-reference chain; below it they
 // resolve as they historically did (byte-identical replay).
 // MUST equal xchain-vm/src/index.js LINT_GLOBAL_ALIAS_ACTIVATION.
-// null = UNARMED, awaiting the operator's ratified per-coin train heights.
 const VM_LINT_GLOBAL_ALIAS_ACTIVATION = {
-    'BTC:mainnet':  null,
-    'LTC:mainnet':  null,
-    'DOGE:mainnet': null,
+    'BTC:mainnet':  0,   // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 contracts, 0 DEPLOY, measured 2026-09-09)
+    'LTC:mainnet':  0,
+    'DOGE:mainnet': 0,
     testnet: 0,
     regtest: 0,
 };
@@ -92,8 +94,8 @@ function _activationThreshold(network, coin){
 }
 
 // Whether the deploy-lint global-alias refinement is in effect at `blockIndex` on
-// `network` for `coin`. Below the threshold, on an unknown chain, or while the coin's
-// entry is still the unarmed null -> off (historical verdict preserved).
+// `network` for `coin`. Below the threshold, on an unknown chain, or on a null (unarmed)
+// entry -> off (historical verdict preserved).
 function isVmLintGlobalAliasActive(blockIndex, network, coin){
     let b = parseInt(blockIndex);
     if(!Number.isFinite(b)) return false;

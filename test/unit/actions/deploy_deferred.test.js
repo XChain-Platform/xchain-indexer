@@ -96,7 +96,9 @@ describe('Deferred chunked DEPLOY assembly @regression @tier2', function () {
             vm: {
                 validateSyntax:     sinon.stub().returns({ valid: true }),
                 checkFloatWarnings: sinon.stub().returns([]),
-                readManifest:       sinon.stub().resolves({ success: true, manifest: { hasInitialize: true, permissionsType: 'undefined', maxTakeBpsType: 'undefined' } }),
+                // CONTRACT_META_REQUIRED is genesis-active on regtest, so the stubbed manifest must
+                // carry a conforming meta or every deploy here reads 'meta required'.
+                readManifest:       sinon.stub().resolves({ success: true, manifest: { hasInitialize: true, permissionsType: 'undefined', maxTakeBpsType: 'undefined', metaType: 'object', metaJson: JSON.stringify({ name: 'Unit Fixture', description: 'A unit-test contract fixture.', version: '1.0.0' }), metaError: false, metaOversize: false } }),
                 execute:            sinon.stub().resolves({ success: true, gasUsed: ctorGas, stateChanges: [], stateDeletes: [], emittedActions: [] })
             }
         };
