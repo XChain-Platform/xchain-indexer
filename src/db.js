@@ -50,6 +50,7 @@ const stateKeyCollation = require('./state_key_collation_activation');
 const snapshotAgeCausality = require('./oracle_snapshot_age_causality_activation');
 const staleRoundVisibility = require('./oracle_stale_round_visibility_activation');
 const preloadCausality = require('./oracle_preload_causality_activation');
+const batchLandedFee = require('./price_fee_batch_landed_activation');
 const listEditResolution = require('./list_edit_resolution_activation');
 const caretRefStrict = require('./caret_ref_strict_activation');
 const ledgerPrecision = require('./ledger_amount_precision_activation');
@@ -17521,8 +17522,36 @@ class Database {
     // a silently outdated value. Age is measured as (blockTime − snapshot.block_timestamp),
     // both chain-derived unix seconds, so the check is deterministic across nodes and does
     // not false-trigger during historical backfill.
+    //
+    // Landed-batch bound (price_fee_batch_landed_activation.js). At/after the height
+    // the selection additionally requires the round's batch to have LANDED on chain at
+    // or before this block's time, so a hub-connected node (whose mirror holds a round
+    // a whole batch window before the batch carrying it is mined) and a chain-only node
+    // (which cannot hold that round at all until the batch lands) price the same action
+    // against the same round. Unarmed everywhere today, so the query below is
+    // byte-identical to the pre-gate one on every network.
     async getLatestPrice(coinPair, blockHeight, opts){
         this._assertPriceBarrierNotSkipped('getLatestPrice');
+        // The bound's own axis is the landing block's clock, so it needs a chain-derived
+        // block time. Armed with no such time available the read FAILS CLOSED (no price)
+        // rather than answering from the unbounded selection, which is the fork this gate
+        // closes; every consensus caller passes opts.blockTime.
+        let landedActive = batchLandedFee.isPriceFeeBatchLandedActive(
+            blockHeight, this.config['NETWORK'], this.config['COIN']);
+        let landedTime   = opts ? Number(opts.blockTime) : NaN;
+        if(landedActive && !Number.isFinite(landedTime)){
+            if(!this._batchLandedNoTimeWarned){
+                this._batchLandedNoTimeWarned = true;
+                console.warn('WARNING: getLatestPrice: the landed-batch fee bound is armed but this call ' +
+                    'supplied no chain-derived block time (opts.blockTime); refusing to price ' +
+                    coinPair + ' from the unbounded selection.');
+            }
+            return null;
+        }
+        // Empty below the height, so every query string and argument list stays
+        // byte-identical to the pre-gate one and historical replay is unchanged. The
+        // clause goes LAST in each WHERE so its argument appends last.
+        let landedBound = landedActive ? ' AND batch_block_time > 0 AND batch_block_time <= ?' : '';
         let query, args;
         if(opts && opts.selectByTime && Number.isFinite(Number(opts.blockTime))){
             // H-3 (NATIVE_FEE_PRICE_TIME_GATE): on non-reference chains the
@@ -17535,22 +17564,25 @@ class Database {
             query = `SELECT price, round_number, block_timestamp
                      FROM price_snapshots
                      WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL
-                       AND block_timestamp <= ?
+                       AND block_timestamp <= ?${landedBound}
                      ORDER BY round_number DESC LIMIT 1`;
             args = [coinPair, Number(opts.blockTime)];
+            if(landedActive) args.push(landedTime);
         } else if(blockHeight !== undefined && blockHeight !== null){
             query = `SELECT price, round_number, block_timestamp
                      FROM price_snapshots
                      WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL
-                       AND reference_block <= ?
+                       AND reference_block <= ?${landedBound}
                      ORDER BY round_number DESC LIMIT 1`;
             args = [coinPair, blockHeight];
+            if(landedActive) args.push(landedTime);
         } else {
             query = `SELECT price, round_number, block_timestamp
                      FROM price_snapshots
-                     WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL
+                     WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL${landedBound}
                      ORDER BY round_number DESC LIMIT 1`;
             args = [coinPair];
+            if(landedActive) args.push(landedTime);
         }
         // Strict read (M-17): this is a consensus input. doQuery would swallow a
         // non-transactional query error into [] - indistinguishable from "no

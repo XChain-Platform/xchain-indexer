@@ -90,6 +90,10 @@ const GATES = [
     ['price_pair_activation.js',            'PRICE_PAIR_TICKER_MAX_LEGACY'],
     ['price_pair_activation.js',            'PRICE_PAIR_TICKER_MAX_WIDE'],
     ['price_sig_tally_activation.js',       'PRICE_SIG_TALLY_ACTIVATION'],
+    // The height at which fee pricing stops selecting rounds the chain has not yet shown
+    // the node. A one-sided edit forks fee validity between a hub-connected node and a
+    // chain-only node at the boundary, which is the divergence the gate exists to close.
+    ['price_fee_batch_landed_activation.js', 'PRICE_FEE_BATCH_LANDED_ACTIVATION'],
     // The PLATFORM TRAIN gate (release-management section 13), keyed by platform version
     // rather than by feature. A one-sided edit here is worse than a one-sided feature-gate
     // edit: this map is what decides whether a node HALTS at a train boundary or applies
