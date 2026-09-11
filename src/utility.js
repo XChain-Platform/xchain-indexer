@@ -3140,7 +3140,7 @@ class Utility {
         // WHERE b1.block_index=?), processed serially to pin new-pair id assignment to iteration order.
         let markets = await db.getMarkets(block_index, false);
         for(let pair of markets){
-            let market_id = await db.createMarket(pair.tick1_id, pair.tick2_id);
+            let market_id = await db.createMarket(pair.tick1_id, pair.tick2_id, pair.coin1_id, pair.coin2_id);
             let data = await db.getMarketInfo(market_id, block_time);
             data.last_updated = block_time;
             await db.updateMarketInfo(data);

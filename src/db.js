@@ -10575,9 +10575,9 @@ class Database {
         // Orientation-free keys of the pairs already collected, so the dedupe below is a lookup
         // instead of a full rescan of `markets` per row (the old scan never broke on a hit, so
         // the cost was O(rows x pairs) on the block path). Spans every order type, matching the
-        // array it shadows. NULL tick ids are deliberately left OUT of the key set: a NULL never
-        // loose-equalled a stored Number, so the old scan pushed those rows unconditionally, and
-        // both consumers (createMarket / updateMarkets) are idempotent on the repeats.
+        // array it shadows. A tickerless (native-coin) side keys on 0, the same sentinel it is
+        // stored under, so a token/native pair dedupes like any other instead of being pushed
+        // once per order.
         let marketKeys = new Set();
         let args       = [block_index];
         let counts     = false;
@@ -10630,10 +10630,12 @@ class Database {
                 args = [block_index, 'valid'];
             }
             if(['ORDER','ORDER_MATCH'].includes(type)){
-                query = `SELECT 
+                query = `SELECT
                             o1.action_index,
                             o1.get_tick_id  as tick1_id,
-                            o1.give_tick_id as tick2_id
+                            o1.give_tick_id as tick2_id,
+                            o1.get_coin_id  as coin1_id,
+                            o1.give_coin_id as coin2_id
                         FROM
                             ` + table + ` o1
                             INNER JOIN actions        a1 ON (a1.action_index=o1.action_index)
@@ -10646,10 +10648,12 @@ class Database {
                             s1.status=?
                         ORDER BY o1.action_index ASC`;
             } else if(['ORDER_CANCEL','ORDER_EXPIRE'].includes(type)){
-                query = `SELECT 
+                query = `SELECT
                             o1.action_index,
                             o2.get_tick_id  as tick1_id,
-                            o2.give_tick_id as tick2_id
+                            o2.give_tick_id as tick2_id,
+                            o2.get_coin_id  as coin1_id,
+                            o2.give_coin_id as coin2_id
                         FROM
                             ` + table + ` o1
                             INNER JOIN orders         o2 ON (o2.action_index=o1.order_action_index)
@@ -10665,17 +10669,17 @@ class Database {
                 let results = await this.doQuery(query, args);
                 if(results.length > 0){
                     for(let row of results){
-                        // Check if this pair already exists (either orientation)
-                        let tick1_id = Number(row.tick1_id);
-                        let tick2_id = Number(row.tick2_id);
-                        // order_matches carries a NULL tick id on the native-coin side of a
-                        // COINPay match; keep those rows on the old unconditional-push path.
-                        let keyed = !this.util.isNull(row.tick1_id) && !this.util.isNull(row.tick2_id);
-                        let key   = Math.min(tick1_id, tick2_id) + ':' + Math.max(tick1_id, tick2_id);
-                        if(!keyed || !marketKeys.has(key)){
-                            if(keyed)
-                                marketKeys.add(key);
-                            markets.push({ tick1_id, tick2_id });
+                        // Check if this pair already exists (either orientation). A tickerless
+                        // side reads as 0 (Database.MARKET_NATIVE_TICK_ID), which is what the
+                        // markets row stores for it, so the key below is the stored identity.
+                        let tick1_id = Database.marketTickId(row.tick1_id);
+                        let tick2_id = Database.marketTickId(row.tick2_id);
+                        let coin1_id = Number(row.coin1_id);
+                        let coin2_id = Number(row.coin2_id);
+                        let key      = Math.min(tick1_id, tick2_id) + ':' + Math.max(tick1_id, tick2_id);
+                        if(!marketKeys.has(key)){
+                            marketKeys.add(key);
+                            markets.push({ tick1_id, tick2_id, coin1_id, coin2_id });
                         }
                     }
                 }
@@ -10684,38 +10688,72 @@ class Database {
         return markets;
     }
 
-    // Get market_id for given ticker ids
-    async getMarketId(tick1_id, tick2_id){
-        let id     = null;
+    // The `markets` row for a pair in either stored orientation, or null. Carries the
+    // stored tick1_id and coin ids so a caller can tell a labelled row apart from one
+    // written before `markets` named the coin behind a tickerless side.
+    // A tickerless side is passed as Database.MARKET_NATIVE_TICK_ID (0), never NULL:
+    // `m.tick1_id=NULL` is never true in SQL, so a NULL argument here reported "no such
+    // market" for a pair that existed and createMarket() inserted a fresh row per order.
+    async getMarketRow(tick1_id, tick2_id){
         let query  = `SELECT
-                            id
+                            id,
+                            tick1_id,
+                            coin1_id,
+                            coin2_id
                         FROM
                             markets m
                         WHERE
                             (m.tick1_id=? AND m.tick2_id=?) OR
                             (m.tick1_id=? AND m.tick2_id=?)`;
-        let args = [tick1_id, tick2_id, tick2_id, tick1_id];
+        let args = [Database.marketTickId(tick1_id), Database.marketTickId(tick2_id),
+                    Database.marketTickId(tick2_id), Database.marketTickId(tick1_id)];
         let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            id = results[0].id;
-        return id;
+        return (results.length > 0) ? results[0] : null;
+    }
+
+    // Get market_id for given ticker ids
+    async getMarketId(tick1_id, tick2_id){
+        let row = await this.getMarketRow(tick1_id, tick2_id);
+        return (row) ? row.id : null;
     }
 
     // Create record in `markets` table
-    async createMarket(tick1_id, tick2_id){
-        let id = await this.getMarketId(tick1_id, tick2_id);
+    async createMarket(tick1_id, tick2_id, coin1_id, coin2_id){
+        let row = await this.getMarketRow(tick1_id, tick2_id);
+        let id  = (row) ? row.id : null;
+        let t1  = Database.marketTickId(tick1_id);
+        let t2  = Database.marketTickId(tick2_id);
+        let c1  = Number(coin1_id) || 0;
+        let c2  = Number(coin2_id) || 0;
         if(id==null){
             // ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id) makes a concurrent
             // insert of the same pair a no-op while still returning the existing
             // row's id via insertId. Combined with the UNIQUE(tick1_id, tick2_id)
             // key this prevents two rows ever being created for the same pair if
-            // two inserts race past the getMarketId check above.
-            let query = `INSERT INTO markets (tick1_id, tick2_id) values (?, ?)
-                         ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`;
-            let args  = [tick1_id, tick2_id];
+            // two inserts race past the getMarketRow check above. The coin ids ride
+            // the update clause so a row a racing insert already created is labelled
+            // too.
+            let query = `INSERT INTO markets (tick1_id, tick2_id, coin1_id, coin2_id) values (?, ?, ?, ?)
+                         ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id),
+                                                 coin1_id = VALUES(coin1_id),
+                                                 coin2_id = VALUES(coin2_id)`;
+            let args  = [t1, t2, c1, c2];
             let results = await this.doQuery(query, args);
             if(results.insertId)
                 id = Number(results.insertId);
+        } else if(c1 && c2 && (Number(row.coin1_id)===0 || Number(row.coin2_id)===0)){
+            // Self-heal. Every markets row that predates coin1_id/coin2_id carries 0 on
+            // both sides, and the INSERT above never runs for it, so without this the row
+            // stays unlabelled until an operator runs the tracked migration and the API
+            // cannot name the tickerless side of the pair. The CASE keys the two coin ids
+            // to the row's OWN orientation, because getMarketRow matches either. The WHERE
+            // repeats the guard so a concurrent heal writing the same labels is a no-op.
+            let query = `UPDATE markets
+                         SET coin1_id = CASE WHEN tick1_id=? THEN ? ELSE ? END,
+                             coin2_id = CASE WHEN tick1_id=? THEN ? ELSE ? END
+                         WHERE id=? AND (coin1_id=0 OR coin2_id=0)`;
+            let args  = [t1, c1, c2, t1, c2, c1, id];
+            await this.doQuery(query, args);
         }
         return id;
     }
@@ -10746,24 +10784,35 @@ class Database {
             time_24hr = this.util.bcsub(time_now, 86400);
         // Set the last time this info was updated to now
         data.last_updated = time_now;
-        // Lookup basic information on this market (tick, tick_id, decimals)
+        // A side's tick id as `markets` keys it. orders/order_matches store NULL where
+        // the side is the native coin, so every comparison against a markets-side id
+        // below has to translate first or it silently matches nothing.
+        const sideOf = (tick_id) => Database.marketTickId(tick_id);
+        // Lookup basic information on this market (tick, tick_id, decimals).
+        // LEFT joins throughout: a side that is the native coin has no tokens row and no
+        // index_tickers row, and an inner join on either dropped the whole market, which
+        // left its price, bid, ask and 24h stats pinned at the zeroes above.
         let query = `SELECT
                             m1.id       as market_id,
-                            t3.tick     as tick1,
-                            t1.tick_id  as tick1_id,
-                            t1.decimals as tick1_decimals,
-                            t4.tick     as tick2,
-                            t2.tick_id  as tick2_id,
-                            t2.decimals as tick2_decimals
+                            COALESCE(t3.tick, c1.coin) as tick1,
+                            m1.tick1_id as tick1_id,
+                            COALESCE(t1.decimals, ?)   as tick1_decimals,
+                            COALESCE(t4.tick, c2.coin) as tick2,
+                            m1.tick2_id as tick2_id,
+                            COALESCE(t2.decimals, ?)   as tick2_decimals,
+                            m1.coin1_id as coin1_id,
+                            m1.coin2_id as coin2_id
                         FROM
                             markets m1
-                            INNER JOIN tokens        t1 ON (t1.tick_id=m1.tick1_id)
-                            INNER JOIN tokens        t2 ON (t2.tick_id=m1.tick2_id)
-                            INNER JOIN index_tickers t3 ON (t3.id=t1.tick_id)
-                            INNER JOIN index_tickers t4 ON (t4.id=t2.tick_id)
-                        WHERE 
+                            LEFT JOIN tokens        t1 ON (t1.tick_id=m1.tick1_id)
+                            LEFT JOIN tokens        t2 ON (t2.tick_id=m1.tick2_id)
+                            LEFT JOIN index_tickers t3 ON (t3.id=m1.tick1_id)
+                            LEFT JOIN index_tickers t4 ON (t4.id=m1.tick2_id)
+                            LEFT JOIN index_coins   c1 ON (c1.id=m1.coin1_id)
+                            LEFT JOIN index_coins   c2 ON (c2.id=m1.coin2_id)
+                        WHERE
                             m1.id=?`;
-        let args  = [market_id];
+        let args  = [Database.MARKET_NATIVE_DECIMALS, Database.MARKET_NATIVE_DECIMALS, market_id];
         let results = await this.doQuery(query, args);
         if(results.length > 0){
             let row = results[0];
@@ -10771,7 +10820,30 @@ class Database {
             row.market_id = Number(row.market_id);
             row.tick1_id  = Number(row.tick1_id);
             row.tick2_id  = Number(row.tick2_id);
+            row.coin1_id  = Number(row.coin1_id) || 0;
+            row.coin2_id  = Number(row.coin2_id) || 0;
             Object.assign(data, row);
+            // The ageing sweep (getStaleMarkets) never goes through createMarket, so a
+            // pair that stopped trading before the coin columns existed has no other way
+            // back to a labelled row. Derive the two coins from the pair's own earliest
+            // order, oriented to the way the row stores its sides; updateMarketInfo
+            // persists them. Guarded on the 0, so a labelled row costs no extra query.
+            if(data.coin1_id===0 || data.coin2_id===0){
+                let coins = await this.doQuery(
+                    `SELECT o.give_tick_id, o.give_coin_id, o.get_coin_id
+                     FROM orders o
+                     WHERE o.give_coin_id=o.get_coin_id AND
+                           ((COALESCE(o.give_tick_id,0)=? AND COALESCE(o.get_tick_id,0)=?)
+                         OR (COALESCE(o.give_tick_id,0)=? AND COALESCE(o.get_tick_id,0)=?))
+                     ORDER BY o.action_index ASC
+                     LIMIT 1`,
+                    [data.tick1_id, data.tick2_id, data.tick2_id, data.tick1_id]);
+                if(coins.length > 0){
+                    let give_is_tick1 = (sideOf(coins[0].give_tick_id)===data.tick1_id);
+                    data.coin1_id = Number(give_is_tick1 ? coins[0].give_coin_id : coins[0].get_coin_id)  || 0;
+                    data.coin2_id = Number(give_is_tick1 ? coins[0].get_coin_id  : coins[0].give_coin_id) || 0;
+                }
+            }
         }
         // Lookup last trade prices
         query = `SELECT
@@ -10784,7 +10856,7 @@ class Database {
                 INNER JOIN index_statuses s1 ON (s1.id=m1.status_id)
             WHERE
                 m1.give_coin_id=m1.get_coin_id AND 
-                ((m1.give_tick_id=? AND m1.get_tick_id=?) OR (m1.give_tick_id=? AND m1.get_tick_id=?))  AND
+                ((COALESCE(m1.give_tick_id,0)=? AND COALESCE(m1.get_tick_id,0)=?) OR (COALESCE(m1.give_tick_id,0)=? AND COALESCE(m1.get_tick_id,0)=?))  AND
                 s1.status=?
             ORDER BY m1.action_index DESC 
             LIMIT 1`;
@@ -10792,8 +10864,8 @@ class Database {
         results = await this.doQuery(query, args);
         if(results.length > 0){
             let row = results[0];
-            let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
-            let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount  : row.give_amount;
+            let give_amount = (sideOf(row.give_tick_id)===data.tick1_id) ? row.give_amount : row.get_amount;
+            let get_amount  = (sideOf(row.give_tick_id)===data.tick1_id) ? row.get_amount  : row.give_amount;
             data.tick1_price = this.util.getPrice(get_amount, give_amount);
             data.tick2_price = this.util.getPrice(give_amount, get_amount);
         }
@@ -10810,7 +10882,7 @@ class Database {
                 INNER JOIN blocks         b1 ON (b1.block_index=a1.block_index)
             WHERE
                 m1.give_coin_id=m1.get_coin_id AND 
-                ((m1.give_tick_id=? AND m1.get_tick_id=?) OR (m1.give_tick_id=? AND m1.get_tick_id=?))  AND
+                ((COALESCE(m1.give_tick_id,0)=? AND COALESCE(m1.get_tick_id,0)=?) OR (COALESCE(m1.give_tick_id,0)=? AND COALESCE(m1.get_tick_id,0)=?))  AND
                 s1.status=? AND
                 b1.block_time <= ?
             ORDER BY m1.action_index DESC 
@@ -10819,8 +10891,8 @@ class Database {
         results = await this.doQuery(query, args);
         if(results.length > 0){
             let row = results[0];
-            let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
-            let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount  : row.give_amount;
+            let give_amount = (sideOf(row.give_tick_id)===data.tick1_id) ? row.give_amount : row.get_amount;
+            let get_amount  = (sideOf(row.give_tick_id)===data.tick1_id) ? row.get_amount  : row.give_amount;
             data.tick1_24hr_price = this.util.getPrice(get_amount, give_amount);
             data.tick2_24hr_price = this.util.getPrice(give_amount, get_amount);
         }
@@ -10837,7 +10909,7 @@ class Database {
                 INNER JOIN index_statuses s3 ON (s3.id=s1.status_id)
             WHERE
                 o1.give_coin_id=o1.get_coin_id AND 
-                ((o1.give_tick_id=? AND o1.get_tick_id=?) OR (o1.give_tick_id=? AND o1.get_tick_id=?))  AND
+                ((COALESCE(o1.give_tick_id,0)=? AND COALESCE(o1.get_tick_id,0)=?) OR (COALESCE(o1.give_tick_id,0)=? AND COALESCE(o1.get_tick_id,0)=?))  AND
                 s2.status=? AND
                 s3.status=? AND
                 s1.action_index = (
@@ -10855,8 +10927,8 @@ class Database {
             let tick1_bid = 0,
                 tick2_bid = 0;
             for(let row of results){
-                let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
-                let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount : row.give_amount;
+                let give_amount = (sideOf(row.give_tick_id)===data.tick1_id) ? row.give_amount : row.get_amount;
+                let get_amount  = (sideOf(row.give_tick_id)===data.tick1_id) ? row.get_amount : row.give_amount;
                 let price1      = this.util.getPrice(get_amount, give_amount);
                 let price2      = this.util.getPrice(give_amount, get_amount);
                 if(price1==0||price2==0)
@@ -10886,7 +10958,7 @@ class Database {
                 INNER JOIN index_statuses s3 ON (s3.id=s1.status_id)
             WHERE
                 o1.give_coin_id=o1.get_coin_id AND 
-                ((o1.give_tick_id=? AND o1.get_tick_id=?) OR (o1.give_tick_id=? AND o1.get_tick_id=?))  AND
+                ((COALESCE(o1.give_tick_id,0)=? AND COALESCE(o1.get_tick_id,0)=?) OR (COALESCE(o1.give_tick_id,0)=? AND COALESCE(o1.get_tick_id,0)=?))  AND
                 s2.status=? AND
                 s3.status=? AND
                 s1.action_index = (
@@ -10904,8 +10976,8 @@ class Database {
             let tick1_ask = 0,
                 tick2_ask = 0;
             for(let row of results){
-                let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
-                let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount : row.give_amount;
+                let give_amount = (sideOf(row.give_tick_id)===data.tick1_id) ? row.give_amount : row.get_amount;
+                let get_amount  = (sideOf(row.give_tick_id)===data.tick1_id) ? row.get_amount : row.give_amount;
                 let price1      = this.util.getPrice(get_amount, give_amount);
                 let price2      = this.util.getPrice(give_amount, get_amount);
                 if(price1==0||price2==0)
@@ -10933,7 +11005,7 @@ class Database {
                 INNER JOIN blocks         b1 ON (b1.block_index=a1.block_index)
             WHERE
                 m1.give_coin_id=m1.get_coin_id AND 
-                ((m1.give_tick_id=? AND m1.get_tick_id=?) OR (m1.give_tick_id=? AND m1.get_tick_id=?))  AND
+                ((COALESCE(m1.give_tick_id,0)=? AND COALESCE(m1.get_tick_id,0)=?) OR (COALESCE(m1.give_tick_id,0)=? AND COALESCE(m1.get_tick_id,0)=?))  AND
                 s1.status=? AND
                 b1.block_time >= ?
             ORDER BY m1.action_index DESC`;
@@ -10952,8 +11024,8 @@ class Database {
             let tick1_decimals = Math.max(0, Math.min(18, parseInt(data.tick1_decimals) || 0));
             let tick2_decimals = Math.max(0, Math.min(18, parseInt(data.tick2_decimals) || 0));
             for(let row of results){
-                let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
-                let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount : row.give_amount;
+                let give_amount = (sideOf(row.give_tick_id)===data.tick1_id) ? row.give_amount : row.get_amount;
+                let get_amount  = (sideOf(row.give_tick_id)===data.tick1_id) ? row.get_amount : row.give_amount;
                 let price1      = this.util.getPrice(get_amount, give_amount);
                 let price2      = this.util.getPrice(give_amount, get_amount);
                 // Set tick high/low prices
@@ -11018,7 +11090,13 @@ class Database {
         let tick2_24hr_change = data.tick2_24hr_change;
         let tick2_24hr_volume = data.tick2_24hr_volume;
         let last_updated      = data.last_updated;
-        let query = `UPDATE 
+        // Written only when getMarketInfo resolved BOTH coins. A row it could not label
+        // (no surviving order for the pair) keeps whatever it has rather than being
+        // rewritten to 0, and a caller that built `data` without them is unaffected.
+        let coin1_id          = Number(data.coin1_id) || 0;
+        let coin2_id          = Number(data.coin2_id) || 0;
+        let label             = (coin1_id > 0 && coin2_id > 0);
+        let query = `UPDATE
                         markets
                     SET
                         tick1_price=?,
@@ -11037,10 +11115,15 @@ class Database {
                         tick2_24hr_low=?,
                         tick2_24hr_change=?,
                         tick2_24hr_volume=?,
-                        last_updated=?
+                        last_updated=?` + (label ? `,
+                        coin1_id=?,
+                        coin2_id=?` : ``) + `
                     WHERE
                         id=?`;
-        let args    = [tick1_price, tick1_bid, tick1_ask, tick1_24hr_price, tick1_24hr_high, tick1_24hr_low, tick1_24hr_change, tick1_24hr_volume, tick2_price, tick2_bid, tick2_ask, tick2_24hr_price, tick2_24hr_high, tick2_24hr_low, tick2_24hr_change, tick2_24hr_volume, last_updated, market_id];
+        let args    = [tick1_price, tick1_bid, tick1_ask, tick1_24hr_price, tick1_24hr_high, tick1_24hr_low, tick1_24hr_change, tick1_24hr_volume, tick2_price, tick2_bid, tick2_ask, tick2_24hr_price, tick2_24hr_high, tick2_24hr_low, tick2_24hr_change, tick2_24hr_volume, last_updated];
+        if(label)
+            args.push(coin1_id, coin2_id);
+        args.push(market_id);
         let results = await this.doQuery(query, args);
     }
 
@@ -17745,5 +17828,27 @@ Database.migrationDeclaresDeployPrecondition = function(raw){
 // Exposed for the unit suite (and the sync-twin drift check): the weightless-row
 // guard is consensus-relevant, so it is tested directly, not only through a query.
 Database.requireStakeWeight = requireStakeWeight;
+
+// What `markets.tick1_id` / `tick2_id` hold for a side that is the native coin
+// rather than a token. NOT NULL, because MariaDB treats NULL as distinct inside a
+// UNIQUE index: a NULL-keyed side slips past uq_markets_pair, so the pair loses the
+// one-row-per-market guarantee every other pair has. index_tickers ids start at 1,
+// so 0 can never collide with a real ticker. Which coin the side actually is comes
+// from the row's coin1_id / coin2_id.
+Database.MARKET_NATIVE_TICK_ID = 0;
+
+// Decimal precision of a native-coin market side. Tokens carry their own precision
+// in `tokens.decimals`; the coin has no such row, and every chain the indexer follows
+// denominates in 1e-8 units. Only the 24h volume accumulator reads it, so a coin that
+// ever differed would misprint a display total, not a ledger amount.
+Database.MARKET_NATIVE_DECIMALS = 8;
+
+// A market side's tick id as `markets` stores it. `orders` and `order_matches`
+// carry NULL on a tickerless side; this is the one place that translation happens.
+Database.marketTickId = function(tick_id){
+    if(tick_id === null || tick_id === undefined || tick_id === '')
+        return Database.MARKET_NATIVE_TICK_ID;
+    return Number(tick_id);
+};
 
 module.exports = Database

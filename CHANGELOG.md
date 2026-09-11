@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- A market between a token and the chain's native coin keeps its row across reorgs and carries the coin it settles in, so the market API can list and price it; a manual migration restores the rows earlier reorgs removed.
+
 ## [0.17.0] - 2026-09-10
 
 ### Added

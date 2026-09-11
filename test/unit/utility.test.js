@@ -37,11 +37,12 @@ describe('Utility @regression @tier1', function () {
         }
 
         it('refreshes only the pairs touched this block (getMarkets called with update=false)', async function () {
-            const db = fakeDb([{ tick1_id: 1, tick2_id: 2 }], []);
+            const db = fakeDb([{ tick1_id: 1, tick2_id: 2, coin1_id: 3, coin2_id: 3 }], []);
             await util.processMarketUpdates(db, 100, 1700000000);
             assert.ok(db.getMarkets.calledOnceWithExactly(100, false));
             assert.strictEqual(db.createMarket.callCount, 1);
-            assert.ok(db.createMarket.calledWithExactly(1, 2));
+            // The coin ids ride along: they are what names a side that has no ticker.
+            assert.ok(db.createMarket.calledWithExactly(1, 2, 3, 3));
             assert.strictEqual(db.updateMarketInfo.callCount, 1);
         });
 

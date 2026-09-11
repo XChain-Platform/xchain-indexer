@@ -28,6 +28,10 @@ const pmsh      = require('./attestation/providerMinStakeHistory.js');
 const rgf       = require('./rollcall_gates_filter.js');
 const ProviderRegistry = require('./attestation/providerRegistry.js');
 const lifecycle = require('./tableLifecycle.js');
+// For the market-pair sentinel only. db.js requires nothing from here, so this is
+// a one-way edge; the pair key has to be the same one Database.getMarkets builds or
+// the two collectors disagree about which markets a reorg must recompute.
+const Database  = require('./db.js');
 const ar        = require('./anchor_reward_activation.js');
 const { ARCHIVE_HEAD_VERSIONS_SQL } = require('./stateHash.js');
 const { archiveAuthorScopeJoin } = require('./archive_rollback_author_scope_activation.js');
@@ -365,7 +369,9 @@ class Rollback {
                 if(['orders','order_matches'].includes(table)){
                     query = `SELECT 
                                 m.give_tick_id as tick1_id,
-                                m.get_tick_id  as tick2_id
+                                m.get_tick_id  as tick2_id,
+                                m.give_coin_id as coin1_id,
+                                m.get_coin_id  as coin2_id
                             FROM 
                                 ` + table + ` m
                             WHERE 
@@ -376,7 +382,9 @@ class Rollback {
                 if(table=='coinpay_obligations'){
                     query = `SELECT
                                 om.give_tick_id as tick1_id,
-                                om.get_tick_id  as tick2_id
+                                om.get_tick_id  as tick2_id,
+                                om.give_coin_id as coin1_id,
+                                om.get_coin_id  as coin2_id
                             FROM
                                 ` + table + ` m
                                 INNER JOIN order_matches om ON (om.action_index=m.action_index)
@@ -388,7 +396,9 @@ class Rollback {
                 if(['coinpay_expires','coinpay_statuses','coinpays'].includes(table)){
                     query = `SELECT
                                 om.give_tick_id as tick1_id,
-                                om.get_tick_id  as tick2_id
+                                om.get_tick_id  as tick2_id,
+                                om.give_coin_id as coin1_id,
+                                om.get_coin_id  as coin2_id
                             FROM
                                 ` + table + ` m
                                 INNER JOIN coinpay_obligations co ON (co.action_index=m.` + (table=='coinpay_statuses' ? 'coinpay_action_index' : 'obligation_action_index') + `)
@@ -401,7 +411,9 @@ class Rollback {
                 if(['order_cancels','order_edits','order_expires'].includes(table)){
                     query = `SELECT 
                                 o1.give_tick_id as tick1_id,
-                                o1.get_tick_id  as tick2_id
+                                o1.get_tick_id  as tick2_id,
+                                o1.give_coin_id as coin1_id,
+                                o1.get_coin_id  as coin2_id
                             FROM 
                                 ` + table + ` m
                                 INNER JOIN orders o1 ON (o1.action_index=m.order_action_index)
@@ -424,14 +436,21 @@ class Rollback {
                             this.util.addAddressTicker(row.address2, row.tick);
                         if(!this.util.isNull(row.address3))
                             this.util.addAddressTicker(row.address3, row.tick);
-                        // Build out list of DEX market pairs
-                        if(!this.util.isNull(row.tick1_id) && !this.util.isNull(row.tick2_id)){
-                            let tick1_id = Number(row.tick1_id);
-                            let tick2_id = Number(row.tick2_id);
+                        // Build out list of DEX market pairs. A tickerless (native-coin) side
+                        // reads as 0, the sentinel `markets` keys it under, so this collector
+                        // keeps exactly the pairs the block path collects (Database.getMarkets).
+                        // Dropping those rows instead left every token/native market out of the
+                        // post-reorg recompute, so its stats stayed at whatever the orphaned
+                        // range last wrote.
+                        if(!this.util.isNull(row.tick1_id) || !this.util.isNull(row.tick2_id)){
+                            let tick1_id = Database.marketTickId(row.tick1_id);
+                            let tick2_id = Database.marketTickId(row.tick2_id);
+                            let coin1_id = Number(row.coin1_id) || 0;
+                            let coin2_id = Number(row.coin2_id) || 0;
                             let key      = Math.min(tick1_id, tick2_id) + ':' + Math.max(tick1_id, tick2_id);
                             if(!marketKeys.has(key)){
                                 marketKeys.add(key);
-                                markets.push({ tick1_id, tick2_id });
+                                markets.push({ tick1_id, tick2_id, coin1_id, coin2_id });
                             }
                         }
                     }
@@ -1325,10 +1344,14 @@ class Rollback {
             //
             // A from-genesis node never created either row, so deleting any whose id no longer
             // resolves makes the reorged node match it.
+            // The 0 sentinel is exempt on both sides: it is not a dangling ticker id, it is
+            // a side that has no ticker at all (the native coin, named by coin1_id/coin2_id),
+            // and matching it here deleted every token/native market on the first reorg.
             await this.indexerDb.doQuery(
                 `DELETE FROM markets
-                 WHERE tick1_id NOT IN (SELECT id FROM index_tickers)
-                    OR tick2_id NOT IN (SELECT id FROM index_tickers)`, []);
+                 WHERE (tick1_id <> ? AND tick1_id NOT IN (SELECT id FROM index_tickers))
+                    OR (tick2_id <> ? AND tick2_id NOT IN (SELECT id FROM index_tickers))`,
+                [Database.MARKET_NATIVE_TICK_ID, Database.MARKET_NATIVE_TICK_ID]);
             await this.indexerDb.doQuery(
                 `DELETE FROM pubkeys
                  WHERE address_id NOT IN (SELECT id FROM index_addresses)`, []);
@@ -1342,16 +1365,22 @@ class Rollback {
             // to the pairs this rollback collected (`markets`), each is dropped only if NO surviving
             // orders/order_matches row references it in either orientation. markets is unhashed and
             // snapshot-replicated (no consensus reader), so this is a fresh-replay parity fix.
+            // COALESCE on the probes: the pair ids come from `markets`, where a tickerless
+            // side is 0, while orders/order_matches store NULL for it. Comparing the two
+            // directly found no survivor for any token/native pair, so the delete below
+            // dropped live markets on every reorg that touched one.
             for(let pair of markets){
                 let survives = await this.indexerDb.doQuery(
                     `SELECT 1 FROM orders o
-                        WHERE (o.give_tick_id=? AND o.get_tick_id=?) OR (o.give_tick_id=? AND o.get_tick_id=?)
+                        WHERE (COALESCE(o.give_tick_id,0)=? AND COALESCE(o.get_tick_id,0)=?)
+                           OR (COALESCE(o.give_tick_id,0)=? AND COALESCE(o.get_tick_id,0)=?)
                         LIMIT 1`,
                     [pair.tick1_id, pair.tick2_id, pair.tick2_id, pair.tick1_id]);
                 if(survives.length === 0){
                     survives = await this.indexerDb.doQuery(
                         `SELECT 1 FROM order_matches om
-                            WHERE (om.give_tick_id=? AND om.get_tick_id=?) OR (om.give_tick_id=? AND om.get_tick_id=?)
+                            WHERE (COALESCE(om.give_tick_id,0)=? AND COALESCE(om.get_tick_id,0)=?)
+                               OR (COALESCE(om.give_tick_id,0)=? AND COALESCE(om.get_tick_id,0)=?)
                             LIMIT 1`,
                         [pair.tick1_id, pair.tick2_id, pair.tick2_id, pair.tick1_id]);
                 }

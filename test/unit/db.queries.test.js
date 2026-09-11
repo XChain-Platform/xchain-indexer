@@ -827,12 +827,16 @@ describe('Database.getTokenSupplyBalance()/getTokenSupplyEscrow() @regression @t
 // getMarketInfo
 describe('Database.getMarketInfo() @regression @tier1', function () {
     // getMarketInfo issues six queries in order: market lookup, last trade, 24h-ago trade,
-    // bid orders, ask orders, 24h matches. Feed each one by call index.
+    // bid orders, ask orders, 24h matches. Feed each one by call index. A seventh, the
+    // coin-label derive, runs only when the looked-up row is still unlabelled.
     function marketDb(bids, asks, matches) {
         const db = makeDb();
         const q  = sinon.stub(db, 'doQuery');
+        // coin ids present: an already-labelled market skips the label-derive query, so
+        // the six positions below stay the six this fixture programs.
         q.onCall(0).resolves([{ market_id: 1, tick1: 'AAA', tick1_id: 10, tick1_decimals: 8,
-                                tick2: 'BBB', tick2_id: 20, tick2_decimals: 8 }]);
+                                tick2: 'BBB', tick2_id: 20, tick2_decimals: 8,
+                                coin1_id: 1, coin2_id: 1 }]);
         q.onCall(1).resolves([]);   // last trade price
         q.onCall(2).resolves([]);   // 24h-ago trade price
         q.onCall(3).resolves(bids);
@@ -876,7 +880,8 @@ describe('Database.getMarketInfo() @regression @tier1', function () {
         const db = makeDb();
         const q  = sinon.stub(db, 'doQuery');
         q.onCall(0).resolves([{ market_id: 1, tick1: 'AAA', tick1_id: 10, tick1_decimals: 0,
-                                tick2: 'BBB', tick2_id: 20, tick2_decimals: 0 }]);
+                                tick2: 'BBB', tick2_id: 20, tick2_decimals: 0,
+                                coin1_id: 1, coin2_id: 1 }]);
         q.onCall(1).resolves([]);
         q.onCall(2).resolves([]);
         q.onCall(3).resolves([]);
