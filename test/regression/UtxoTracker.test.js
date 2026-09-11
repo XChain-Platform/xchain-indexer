@@ -19,8 +19,15 @@
 // value-moving: the exact shape of a "fresh" answer (null) vs a "seen"
 // answer ({height:N}) decides who is allowed to receive. These regression
 // pins lock the answer shape so a codec/parsing drift can never quietly
-// turn a seen address into a fresh one (or vice-versa) or make a malformed
-// RPC reply throw where the action expects a clean null.
+// turn a seen address into a fresh one (or vice-versa) or move where a
+// malformed RPC reply throws versus answering a clean null.
+//
+// The fail-open hole in that contract is gated rather than simply closed: a
+// non-null reply with no numeric height read as "never seen" and GRANTED the
+// exception, which is a consensus-relevant verdict, so it flips only at/after the
+// oracle-shape flag-day (src/dispenser_freshness_shape_activation.js, mainnet
+// unarmed). Both sides are pinned here, in the unit suite and in the boundary
+// suite, and they flip together.
 
 process.env.INDEXER_COIN    = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
@@ -78,8 +85,9 @@ describe('[regression:p0] UtxoTracker DISPENSER fresh-address oracle @regression
         });
 
         it('rejects a non-numeric height as fresh (string height -> null), never coerces it', async function(){
-            // The strict typeof-number guard is the pin: a stringly-typed height like
-            // "100" must read as null (fresh), not silently coerce to a sighting.
+            // Below the oracle-shape flag-day the fail-open null is the deployed
+            // behavior and is replay-frozen: a stringly-typed height like "100" must
+            // read as null (fresh), and must never silently coerce to a sighting.
             let t = new UtxoTracker('localhost', 3005);
             global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: { height: '100' } });
             assert.strictEqual(await t.getFirstSeen('1A1zP1...'), null);
@@ -89,6 +97,75 @@ describe('[regression:p0] UtxoTracker DISPENSER fresh-address oracle @regression
             let t = new UtxoTracker('localhost', 3005);
             global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: { other: 'field' } });
             assert.strictEqual(await t.getFirstSeen('1A1zP1...'), null);
+        });
+    });
+
+    // THE FLAG-DAY FLIP (dispenser_freshness_shape_activation.js). A malformed but
+    // HTTP-successful answer was the one malformed-answer surface that granted the
+    // exception instead of denying it: transport failure, HTTP non-200 and an RPC
+    // error field all throw, and the action's catch reads a throw as not fresh. At/
+    // after the flag day a shape violation joins them, so the verdict fails closed.
+    // Only the shape moves: the null answers above and every numeric height, in
+    // range or not, answer identically on both sides of the gate.
+    describe('shape-violating answer at/after the oracle-shape flag-day (strictShape)', function(){
+        const violations = [
+            ['a stringly-typed height',        { height: '100' }],
+            ['a boolean height',               { height: true }],
+            ['a null height',                  { height: null }],
+            ['a nested-object height',         { height: { value: 100 } }],
+            ['a result with no height field',  { other: 'field' }],
+            ['a non-object result',            'seen'],
+            ['a numeric result (not a shape)', 750000],
+        ];
+        for(const [label, result] of violations){
+            it(label + ' THROWS rather than granting the fresh-address exception', async function(){
+                let t = new UtxoTracker('localhost', 3005);
+                global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: result });
+                await assert.rejects(
+                    () => t.getFirstSeen('1A1zP1...', { strictShape: true }),
+                    /UTXO tracker shape violation/
+                );
+            });
+
+            it(label + ' still answers null below the flag day (replay unchanged)', async function(){
+                let t = new UtxoTracker('localhost', 3005);
+                global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: result });
+                assert.strictEqual(await t.getFirstSeen('1A1zP1...', { strictShape: false }), null);
+            });
+        }
+
+        it('a genuinely-never-seen null answer is NOT a shape violation on either side', async function(){
+            // The gate must not turn "fresh" itself into a rejection: a null result is
+            // the tracker answering the question, not failing to.
+            let t = new UtxoTracker('localhost', 3005);
+            global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: null });
+            assert.strictEqual(await t.getFirstSeen('never', { strictShape: true }), null);
+            global.fetch = makeFetch({ jsonrpc: '2.0', id: 1 });
+            assert.strictEqual(await t.getFirstSeen('never', { strictShape: true }), null);
+        });
+
+        it('an out-of-range numeric height is unmoved by the gate (it already fails closed)', async function(){
+            // NaN/negative/fractional heights pass the typeof guard on both sides: the
+            // action compares height >= BLOCK_INDEX, which is false for NaN, so these
+            // read as NOT fresh already. Tightening them would move verdicts that were
+            // never fail-open and needs its own flag day.
+            let t = new UtxoTracker('localhost', 3005);
+            global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: { height: NaN } });
+            assert.deepStrictEqual(await t.getFirstSeen('addr', { strictShape: true }), { height: NaN });
+            global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: { height: -1 } });
+            assert.deepStrictEqual(await t.getFirstSeen('addr', { strictShape: true }), { height: -1 });
+            global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: { height: 0 } });
+            assert.deepStrictEqual(await t.getFirstSeen('genesis', { strictShape: true }), { height: 0 });
+        });
+
+        it('the strict flip is opt-in: no option object is the legacy fail-open null', async function(){
+            // Every caller that does not pass the flag keeps the deployed shape, so
+            // adding the gate cannot move a verdict on its own.
+            let t = new UtxoTracker('localhost', 3005);
+            global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: { height: '100' } });
+            assert.strictEqual(await t.getFirstSeen('1A1zP1...'), null);
+            global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: { height: '100' } });
+            assert.strictEqual(await t.getFirstSeen('1A1zP1...', {}), null);
         });
     });
 

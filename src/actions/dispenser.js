@@ -45,6 +45,7 @@
 
 const divergenceMetrics = require('../dispenserDivergenceMetrics.js');
 const dispenserFreshness = require('../dispenser_freshness_activation.js');
+const dispenserFreshnessShape = require('../dispenser_freshness_shape_activation.js');
 const dispenserCaps = require('../dispenser_caps_activation.js');
 const dispenserGiveAmount = require('../dispenser_give_amount_activation.js');
 const dispenserOraclePrice = require('../dispenser_oracle_price_activation.js');
@@ -457,7 +458,15 @@ class Dispenser {
                     isFresh = !(await this.indexerDb.hasXChainActivityBefore(data['GET_ADDRESS'], data['BLOCK_INDEX']));
                 } else if(this.utxoTracker && this.utxoTracker.enabled){
                     try {
-                        let firstSeen = await this.utxoTracker.getFirstSeen(data['GET_ADDRESS']);
+                        // Oracle-shape flag-day (see dispenser_freshness_shape_activation.js).
+                        // At/after it a non-null get_first_seen answer with no numeric height
+                        // throws and the catch below reads as not fresh; below it that answer
+                        // is the legacy null, which grants the exception. Passed in because
+                        // the gate is keyed on this chain's block_index and the client has no
+                        // block context.
+                        let strictShape = dispenserFreshnessShape.isDispenserFreshnessShapeStrict(
+                            data['BLOCK_INDEX'], this.config['NETWORK'], this.config['COIN']);
+                        let firstSeen = await this.utxoTracker.getFirstSeen(data['GET_ADDRESS'], { strictShape: strictShape });
                         isFresh = !firstSeen || firstSeen.height >= data['BLOCK_INDEX'];
                         // get_first_seen answers null both for "never appeared on chain"
                         // and for "this tracker has not indexed that far yet, or is halted
