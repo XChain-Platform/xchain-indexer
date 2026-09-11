@@ -55,6 +55,7 @@ const crypto = require('crypto');
 const { HUB_SCHEMA_VERSION } = require('./hub-schema-version');
 const swq    = require('./stake_weighted_quorum.js');
 const { isRetractionSigningActive } = require('./retraction_signing_activation.js');
+const { priceEraFloorS, isPreBatchEraFloor } = require('./price_batching_floor_activation.js');
 
 let WebSocket = null;
 try {
@@ -867,6 +868,15 @@ class HubDbSync {
         // bound is abandoned and the table re-mirrored in full rather than settled against
         // (see _notePriceMirrorFloor).
         this._priceMirrorFloorTs   = 0;
+
+        // Pre-batch era floor: the instant this network's price rail began. Blocks below
+        // it hold no eligible price round on ANY node, so both price barriers resolve
+        // immediately for them instead of waiting out a timeout that nothing can open
+        // (see price_batching_floor_activation.js). 0 = no pre-batch era recognized,
+        // which is every network as shipped and the barrier behaviour that deploys today.
+        // Resolved once here rather than per block: the map is a frozen fleet-wide
+        // constant, and both barrier paths run on every transaction-bearing block.
+        this._priceEraFloorS       = priceEraFloorS(this.network, this.coin);
 
         // Serialization chain for the WebSocket message handler. Each incoming
         // message appends its async work to this promise so that a watermark
@@ -2726,6 +2736,14 @@ class HubDbSync {
         // Nothing to wait on when sync is disabled (single-host: the local hub DB is the hub
         // itself, always current) or the target is not a finite height.
         if (!this.enabled || !Number.isFinite(blockHeight)) return Promise.resolve(this.priceSyncHeight);
+        // PRE-BATCH ERA. No price round existed on this network at this block's time, so
+        // the eligible set is empty on every node and there is nothing to wait for: the
+        // barrier resolves rather than paying its full timeout on a block no round can
+        // ever cover (the chain-only replay cost, measured 2026-09-09). This precedes
+        // _notePriceMirrorFloor deliberately - such a block reads no round at all, so it
+        // is not evidence that a bounded mirror is short, and tripping a full re-mirror on
+        // it is part of the same replay cost.
+        if (isPreBatchEraFloor(blockTime, this._priceEraFloorS)) return Promise.resolve(this.priceSyncHeight);
         // Before judging the block, judge the mirror against the block.
         this._notePriceMirrorFloor(blockTime);
         if (this._priceSyncSatisfied(blockHeight, blockTime)) return Promise.resolve(this.priceSyncHeight);
@@ -2804,6 +2822,8 @@ class HubDbSync {
     waitForPriceSyncTime(blockTime, timeoutMs) {
         blockTime = Number(blockTime);
         if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.priceSyncMaxTimestamp);
+        // PRE-BATCH ERA, same escape and same ordering as the height barrier above.
+        if (isPreBatchEraFloor(blockTime, this._priceEraFloorS)) return Promise.resolve(this.priceSyncMaxTimestamp);
         this._notePriceMirrorFloor(blockTime);            // same check as the height barrier
         if (this._priceTimeSyncSatisfied(blockTime))       return Promise.resolve(this.priceSyncMaxTimestamp);
 
