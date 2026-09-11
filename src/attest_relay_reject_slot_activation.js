@@ -67,13 +67,19 @@
  * testnet/regtest run from genesis.
  *
  * Execution-path gate (which rows an action handler persists) rather than a
- * change to how a row is hashed, so indexer-only with no xchain-sync twin:
- * xchain-sync replicates materialized rows and never runs a handler. No hub twin
- * either. The hub's already-materialized view counts a refused row, and
- * correcting it was held back only while this gate was inert, because a
- * correction ahead of the gate turns a permanent block into a broadcast this
- * indexer still drops, once per relay round. Arming here releases that hold; the
- * hub-side correction is a separate change.
+ * change to how a row is hashed, so there is no xchain-sync twin: xchain-sync
+ * replicates materialized rows and never runs a handler.
+ *
+ * THERE ARE TWO BYTE-IDENTICAL COPIES of this file, one per service:
+ * xchain-indexer/src/attest_relay_reject_slot_activation.js and
+ * xchain-hub/src/attest_relay_reject_slot_activation.js. The hub's relay driver
+ * reads its copy to decide whether a refused v0 row still answers the
+ * already-materialized view it polls. That correction was held back while the
+ * gate was inert, because a hub that ignored a refused row ahead of the arm
+ * would turn a permanent block into a broadcast this indexer still drops, once
+ * per relay round and once per fee. The arm lifts the hold, so the two halves ship
+ * together and move together: the indexer stops storing the refusal and the hub
+ * stops counting one, above the same threshold on the same network.
  *
  ********************************************************************/
 
