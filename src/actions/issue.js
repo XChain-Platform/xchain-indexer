@@ -407,7 +407,7 @@ class Issue {
         for(let name of this.fieldList['AMOUNT']){
             let value    = issue[name],
                 decimals = (name=='CALLBACK_AMOUNT') ? callback_decimals : tick_decimals;
-            if(!error && !this.util.isNull(value) && !this.util.isValidAmountFormat(decimals, value))
+            if(!error && !this.util.isNull(value) && !this.util.isValidAmountFormat(decimals, value, data['BLOCK_TIME']))
                 error = "invalid: " + name + " (format)";
         }
 

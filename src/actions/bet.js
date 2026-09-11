@@ -190,7 +190,7 @@ class Bet {
                 data['EXPIRE_AT'] = this.util.bcadd(data['DEADLINE'], data['REFUND_WINDOW'], 0);
 
             // Verify MIN_AMOUNT: optional minimum stake at the tick's DECIMALS, > 0
-            if(!error && !this.util.isNull(data['MIN_AMOUNT']) && (!this.util.isValidAmountFormat(tokenInfo['DECIMALS'], data['MIN_AMOUNT']) || !this.util.bcgt(data['MIN_AMOUNT'], 0)))
+            if(!error && !this.util.isNull(data['MIN_AMOUNT']) && (!this.util.isValidAmountFormat(tokenInfo['DECIMALS'], data['MIN_AMOUNT'], data['BLOCK_TIME']) || !this.util.bcgt(data['MIN_AMOUNT'], 0)))
                 error = 'invalid: MIN_AMOUNT (format)';
 
             // Validate LIST fields (ALLOW_LIST / BLOCK_LIST): list exists and is a
@@ -256,7 +256,7 @@ class Bet {
                 error = 'invalid: OUTCOME (range)';
 
             // AMOUNT at the feed tick's DECIMALS, strictly positive
-            if(!error && (this.util.isNull(data['AMOUNT']) || !this.util.isValidAmountFormat(feedTokenInfo['DECIMALS'], data['AMOUNT'])))
+            if(!error && (this.util.isNull(data['AMOUNT']) || !this.util.isValidAmountFormat(feedTokenInfo['DECIMALS'], data['AMOUNT'], data['BLOCK_TIME'])))
                 error = 'invalid: AMOUNT (format)';
             if(!error && !this.util.bcgt(data['AMOUNT'], 0))
                 error = 'invalid: AMOUNT (must be positive)';

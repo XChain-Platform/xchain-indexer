@@ -361,6 +361,12 @@ class Genesis {
         for(let i = 0; i < paths.length; i++){
             let name   = path.basename(paths[i]).replace(/\.[^.]*$/, '').toUpperCase();
             let amount = amounts[i];
+            // Deliberately a TWO-argument call: no blockTime, so the amount-representability
+            // gate (amount_representability_activation.js) stays inert here. This validates
+            // operator GENESIS config at boot, not a wire-submitted action against a
+            // processing block, and there is no consensus timestamp to key the gate on. A
+            // genesis config carrying an unrepresentable amount is an operator-facing boot
+            // failure to fix in the config, not a consensus acceptance question.
             if(this.util.isNull(amount) || !this.util.isValidAmountFormat(8, amount) || !this.util.bcgt(amount, 0))
                 throw new Error('GENESIS FATAL: invalid airdrop amount "' + amount + '" for bucket ' + name);
             if(names.has(name))

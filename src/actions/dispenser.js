@@ -220,14 +220,14 @@ class Dispenser {
             error = 'invalid: ORACLE_ADDRESS (format)';
 
         // Verify GIVE_AMOUNT format
-        if(!error && format==0 && !this.util.isNull(data['GIVE_AMOUNT']) && giveTokenInfo && !this.util.isValidAmountFormat(giveTokenInfo['DECIMALS'], data['GIVE_AMOUNT']))
+        if(!error && format==0 && !this.util.isNull(data['GIVE_AMOUNT']) && giveTokenInfo && !this.util.isValidAmountFormat(giveTokenInfo['DECIMALS'], data['GIVE_AMOUNT'], data['BLOCK_TIME']))
             error = "invalid: GIVE_AMOUNT (format)";
 
         // Verify GIVE_ESCROW format. Covers format 2 (edit/refill) too: a refill
         // carries GIVE_ESCROW against the existing dispenser's GIVE_TICK, and an
         // unvalidated non-numeric / over-precision value would reach bcsub and throw,
         // halting the indexer at that block.
-        if(!error && (format==0 || format==2) && !this.util.isNull(data['GIVE_ESCROW']) && giveTokenInfo && !this.util.isValidAmountFormat(giveTokenInfo['DECIMALS'], data['GIVE_ESCROW']))
+        if(!error && (format==0 || format==2) && !this.util.isNull(data['GIVE_ESCROW']) && giveTokenInfo && !this.util.isValidAmountFormat(giveTokenInfo['DECIMALS'], data['GIVE_ESCROW'], data['BLOCK_TIME']))
             error = "invalid: GIVE_ESCROW (format)";
 
         // GIVE_OWNERSHIP must be 0 or 1
@@ -270,7 +270,7 @@ class Dispenser {
             error = "invalid: GIVE_AMOUNT (required and greater than 0 when GIVE_OWNERSHIP=0)";
 
         // Verify GET_AMOUNT format
-        if(!error && format==0 && !this.util.isNull(data['GET_AMOUNT']) && getTokenInfo && !this.util.isValidAmountFormat(getTokenInfo['DECIMALS'], data['GET_AMOUNT']))
+        if(!error && format==0 && !this.util.isNull(data['GET_AMOUNT']) && getTokenInfo && !this.util.isValidAmountFormat(getTokenInfo['DECIMALS'], data['GET_AMOUNT'], data['BLOCK_TIME']))
             error = "invalid: GET_AMOUNT (format)";
 
         // Verify a NATIVE-COIN-priced GET_AMOUNT against COIN_DECIMALS, as order.js resolves
@@ -280,7 +280,7 @@ class Dispenser {
         // ungated engine accepts, so replay below the threshold stays byte-identical.
         let getAmountPositivity = dispenserAmountPositivity.isDispenserAmountPositivityActive(data['BLOCK_TIME'], this.config['NETWORK']);
         if(!error && format==0 && getAmountPositivity && this.util.isNull(data['GET_TICK']) &&
-           !this.util.isNull(data['GET_AMOUNT']) && !this.util.isValidAmountFormat(this.config['COIN_DECIMALS'], data['GET_AMOUNT']))
+           !this.util.isNull(data['GET_AMOUNT']) && !this.util.isValidAmountFormat(this.config['COIN_DECIMALS'], data['GET_AMOUNT'], data['BLOCK_TIME']))
             error = "invalid: GET_AMOUNT (format)";
 
         // Require a strictly-positive GET_AMOUNT on a dispenser that names its own price,
@@ -305,7 +305,7 @@ class Dispenser {
             error = "invalid: EXPIRATION (format)";
 
         // Validate that FIAT_AMOUNT is in 0.00 format
-        if(!error && format==0 && !this.util.isNull(data['FIAT_CODE']) && !this.util.isNull(data['FIAT_AMOUNT']) && !this.util.isValidFiatFormat(2, data['FIAT_AMOUNT']))
+        if(!error && format==0 && !this.util.isNull(data['FIAT_CODE']) && !this.util.isNull(data['FIAT_AMOUNT']) && !this.util.isValidFiatFormat(2, data['FIAT_AMOUNT'], data['BLOCK_TIME']))
             error = 'invalid: FIAT_AMOUNT (format)';
 
         // A Mode B create must name an oracle that already has an EFFECTIVE price. This is

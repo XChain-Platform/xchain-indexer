@@ -343,7 +343,7 @@ class Attest {
                 await this.indexerDb.getTickerId(this.config['GAS'])
             );
             let feeCap = Math.min(8, gasDecimals);
-            if(!this.util.isValidFiatFormat(feeCap, data['FEE_AMOUNT']))
+            if(!this.util.isValidFiatFormat(feeCap, data['FEE_AMOUNT'], data['BLOCK_TIME']))
                 error = 'invalid: FEE_AMOUNT (precision > ' + feeCap + ' dp)';
         }
 

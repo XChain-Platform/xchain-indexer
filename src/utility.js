@@ -32,6 +32,10 @@ const attestResponseMirror = require('./attest_response_mirror_activation.js');
 // of that height is this file's: above it the applier falls through an inert
 // candidate row to the next one instead of stranding the request until its deadline.
 const attestZeroConf = require('./attest_zero_conf_activation.js');
+// The amount-representability flag day. Gates the isValidAmountFormat rule that an
+// amount must denote the number the ledger credits, keyed on the processing block's
+// consensus timestamp so historical replay below the threshold is byte-identical.
+const amountRepresentability = require('./amount_representability_activation.js');
 
 // Page size the mirror applier walks its applicability read in. NOT consensus and
 // deliberately not exported: it shapes how many rows a node holds at once, never which
@@ -675,7 +679,32 @@ class Utility {
     }
 
     // Handle validating amount format
-    isValidAmountFormat(decimals, amount){
+    // @param {decimals}  int              The tick's decimal precision
+    // @param {amount}    string|number    The amount text as it arrived off the wire
+    // @param {blockTime} int   OPTIONAL. The processing block's consensus timestamp
+    //                          (data['BLOCK_TIME']). Supplying it opts the call into the
+    //                          AMOUNT-REPRESENTABILITY gate below; omitting it keeps the
+    //                          legacy text-shape behavior verbatim. Consensus call sites
+    //                          MUST pass it. Non-consensus callers (the SDK's client-side
+    //                          pre-checks, genesis distribution replay) deliberately do not.
+    isValidAmountFormat(decimals, amount, blockTime){
+        //<AMOUNT-REPRESENTABILITY> an amount must denote the number that will be
+        // credited, not merely look like an amount. isNumeric() below accepts the whole
+        // JavaScript number grammar, so '5e-19' passes at 18 decimals (its "fraction" is
+        // the 4 characters 'e-19') and then bcadd credits 1e-18 - a DIFFERENT number from
+        // the one that was validated - while '1e-1' passes on an indivisible tick and
+        // credits 0, and a 43-digit integer passes but overflows the DECIMAL(60,18)
+        // aggregation the supply sums cast to. Gated per chain on the block's consensus
+        // timestamp (amount_representability_activation.js): below the threshold this is
+        // inert and historical replay is byte-identical. Placed FIRST and as an early
+        // return false so the gate can only ever reject more than the legacy body, never
+        // accept more. NOT yet mirrored in xchain-sdk/src/utility.js, on purpose: a client
+        // stricter than consensus forks the acceptance set. See the module header.
+        if(!this.isNull(blockTime) &&
+           amountRepresentability.isAmountRepresentabilityActive(blockTime, this.config['NETWORK']) &&
+           !amountRepresentability.isRepresentableAmount(decimals, this.safeToString(amount)))
+            return false;
+        //</AMOUNT-REPRESENTABILITY>
         // Reject objects that can't be safely converted to string
         if(amount !== null && amount !== undefined && typeof amount === 'object' && this.safeToString(amount) === null)
             return false;
@@ -717,8 +746,8 @@ class Utility {
     // Validate a fiat amount format. Now equivalent to isValidAmountFormat (the precision
     // cap lives there now); kept as a named alias so existing callers and the
     // attest.js FEE_AMOUNT comment remain valid.
-    isValidFiatFormat(decimals, amount){
-        let valid = this.isValidAmountFormat(decimals, amount);
+    isValidFiatFormat(decimals, amount, blockTime){
+        let valid = this.isValidAmountFormat(decimals, amount, blockTime);
         if(valid){
             let [int, sats] = String(amount).split('.');
             if(!this.isNull(sats) && String(sats).length > decimals)

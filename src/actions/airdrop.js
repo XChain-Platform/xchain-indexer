@@ -140,7 +140,7 @@ class Airdrop {
             if(!error && !tokenInfo)
                 error = 'invalid: TICK (unknown)';
 
-            if(!error && !this.util.isNull(airdrop['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], airdrop['AMOUNT']))
+            if(!error && !this.util.isNull(airdrop['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], airdrop['AMOUNT'], data['BLOCK_TIME']))
                 error = "invalid: AMOUNT (format)";
 
             if(!error && !this.util.isNull(airdrop['LIST_ACTION_INDEX']) && !this.util.isNumeric(airdrop['LIST_ACTION_INDEX']))
