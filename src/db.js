@@ -10084,7 +10084,13 @@ class Database {
         if(!rootRows.length) return null;
         let rootRow = rootRows[0];
 
-        let cpRows = await this.doQueryStrict(
+        // state_checkpoints is hub-mirrored, so it lives wherever the mirror writes: the
+        // hub-DB copy on a distributed deployment (where the ledger database's copy of the
+        // table exists but stays empty) and this database only on a single-host one. The
+        // ledger connection is the wrong place to ask on every standing indexer, and an
+        // origin indexer asked there can never produce a proof, which stalls every in leg
+        // on the destination's proof barrier. Same handle the proof client reads through.
+        let cpRows = await this._mirrorDb().doQueryStrict(
             `SELECT checkpoint_seq, snapshot_block, state_root, state_root_version
              FROM state_checkpoints WHERE chain=? AND network=? AND block_index=? LIMIT 1`,
             [chain, network, height]);

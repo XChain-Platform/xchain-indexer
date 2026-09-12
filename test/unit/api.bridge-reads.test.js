@@ -192,7 +192,13 @@ describe('db.getBridgeEscrowProof, driven through CHK.verifyEscrowAgainstCheckpo
     const ESCROW_ADDR = 'mfbtcbridgedogeXXXXXXXXXXXXXUXTr4m'; // coins/BTC.js regtest ADDRESS.BRIDGE_DOGE
     const BALANCE = '12.5';
 
-    async function buildEnvelope(){
+    // `distributed: true` models the deployment every standing indexer runs: the hub
+    // mirror lives in its own database (indexer.hubDb), so the ledger connection's copy
+    // of state_checkpoints is EMPTY and only the mirror handle can answer for it. The
+    // ledger stub refuses that query outright so a read on the wrong connection cannot
+    // pass by accident, which is exactly how the original read passed this fixture.
+    async function buildEnvelope(opts){
+        const distributed = !!(opts && opts.distributed);
         const memStore = new SC.MemoryNodeStore();
         const smt      = new SC.PersistentSMT(memStore);
         const key      = M.balanceKey(CHAIN, NETWORK, ESCROW_ADDR, TICK);
@@ -203,8 +209,12 @@ describe('db.getBridgeEscrowProof, driven through CHK.verifyEscrowAgainstCheckpo
         const stateRoot    = M.toHex(M.stateRoot(subRoots));
         const SUB = require('../../src/state_subtree_activation.js');
         const version = SUB.stateRootVersion(HEIGHT, NETWORK, CHAIN);
+        const checkpointRow = { checkpoint_seq: 7, snapshot_block: HEIGHT, state_root: stateRoot, state_root_version: version };
 
         const db = newDb();
+        const mirror = { doQueryStrict: sinon.stub().callsFake(async (query) =>
+            /FROM\s+state_checkpoints/i.test(query) ? [checkpointRow] : []) };
+        if(distributed) db.indexer = { hubDb: mirror };
         sinon.stub(db, 'doQueryStrict').callsFake(async (query, args) => {
             if(/FROM\s+state_tree_nodes/i.test(query)){
                 const row = await memStore.get(args[0]);
@@ -212,15 +222,26 @@ describe('db.getBridgeEscrowProof, driven through CHK.verifyEscrowAgainstCheckpo
             }
             if(/FROM\s+state_tree_roots/i.test(query))
                 return [{ balances_root: balancesRoot, stakes_root: stakesRoot, contract_state_root: null }];
-            if(/FROM\s+state_checkpoints/i.test(query))
-                return [{ checkpoint_seq: 7, snapshot_block: HEIGHT, state_root: stateRoot, state_root_version: version }];
+            if(/FROM\s+state_checkpoints/i.test(query)){
+                if(distributed) throw new Error('state_checkpoints was read on the LEDGER connection; it is hub-mirrored');
+                return [checkpointRow];
+            }
             // the credits/debits balance-at-block subquery
             return [{ cr: BALANCE, dr: '0' }];
         });
 
         const envelope = await db.getBridgeEscrowProof(ESCROW_ADDR, TICK, HEIGHT);
-        return envelope;
+        return distributed ? { envelope, mirror } : envelope;
     }
+
+    it('reads the checkpoint through the hub-mirror handle on a distributed deployment, never the ledger connection', async function(){
+        const { envelope, mirror } = await buildEnvelope({ distributed: true });
+        assert.ok(envelope, 'no envelope: the checkpoint read did not reach the mirror handle');
+        assert.strictEqual(mirror.doQueryStrict.callCount, 1, 'exactly one mirror read, the checkpoint');
+        assert.match(mirror.doQueryStrict.firstCall.args[0], /FROM\s+state_checkpoints/i);
+        assert.strictEqual(envelope.checkpoint.checkpoint_seq, 7);
+        assert.strictEqual(envelope.checkpoint.state_root_version, 1);
+    });
 
     it('produces a self-consistent envelope (real balance proven against the real persisted root)', async function(){
         const envelope = await buildEnvelope();
