@@ -20,6 +20,10 @@
  * (or null if it never has). The DISPENSER action uses it to enforce the
  * fresh-address exception against DISPENSER_PREFERENCE below the freshness
  * flag-day; that verdict is replay-frozen, and this wire shape is frozen with it.
+ * The one exception is the fail-open hole a malformed answer used to fall through:
+ * at/after the oracle-shape flag-day a non-null result with no numeric height
+ * throws instead of reading as "never seen" (see the getFirstSeen comment and
+ * dispenser_freshness_shape_activation.js).
  *
  * getFirstSeenStatus is the tracker's freshness-aware sibling: the same
  * first-seen value plus the tracker's own sync/halt view, so a null first-seen
@@ -67,12 +71,32 @@ class UtxoTracker {
     }
 
     // Return { height: N } if the address has ever appeared on chain, or null.
-    async getFirstSeen(address){
+    //
+    // `opts.strictShape` is the caller's dispenser-freshness ORACLE SHAPE flag-day
+    // verdict (dispenser_freshness_shape_activation.js), passed in rather than read
+    // here because the gate is keyed on the processing chain's block_index and this
+    // client has no block context. At/after the flag day a NON-NULL answer whose
+    // `height` is not a number throws, joining the transport / HTTP / RPC-error
+    // surfaces the caller already turns into "not fresh"; below it the answer maps
+    // to null, which the caller reads as "never appeared on chain" and grants the
+    // fresh-address exception for. The legacy default is off, so every existing
+    // caller keeps the deployed shape.
+    //
+    // Only the SHAPE violation moves. An out-of-range number (negative, fractional,
+    // NaN, Infinity) still returns verbatim on both sides of the gate: those already
+    // fail closed in the caller's `height >= BLOCK_INDEX` comparison, so tightening
+    // them would move verdicts that were never fail-open.
+    async getFirstSeen(address, opts){
+        let strictShape = !!(opts && opts.strictShape);
         let result = await this._call('get_first_seen', { address: address });
         if(result === null || result === undefined)
             return null;
-        if(typeof result.height !== 'number')
+        if(typeof result.height !== 'number'){
+            if(strictShape)
+                throw new Error('UTXO tracker shape violation: get_first_seen answered a ' +
+                    'non-null result with no numeric height (' + JSON.stringify(result) + ')');
             return null;
+        }
         return { height: result.height };
     }
 

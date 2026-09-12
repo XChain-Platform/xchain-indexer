@@ -187,3 +187,115 @@ describe('_assertPubkeyColumnIsUncompressedWide error text @regression @tier1', 
         await Database.prototype._assertPubkeyColumnIsUncompressedWide.call(dbWithColumnWidth(null));
     });
 });
+
+describe('_assertRewardUniqueKeyCarriesQualifier @regression @tier1', function () {
+
+    const QUALIFIER_FILE = '2026-08-24-validator-rewards-round-qualifier.sql';
+
+    // Minimal fake connection: the assertion reads one row of two counts off
+    // information_schema.statistics. `rows` is what that query answers.
+    function dbWithIndexShape(rows) {
+        let seenSql = null, seenParams = null;
+        return {
+            dbName: 'test_indexer',
+            transactionConnection: null,
+            seen: () => ({ sql: seenSql, params: seenParams }),
+            getConnection: async () => ({
+                query: async (sql, params) => { seenSql = sql; seenParams = params; return rows; },
+                release: async () => {}
+            })
+        };
+    }
+    const run = (db) => Database.prototype._assertRewardUniqueKeyCarriesQualifier.call(db);
+    // The live shape the assertion reads: table present, qualifier column present, a
+    // reward_unique index of `key_columns` columns, `qualifier_columns` of which is the
+    // qualifier as part of a UNIQUE index.
+    const shape = (over) => [Object.assign(
+        { reward_table: 1, qualifier_column: 1, key_columns: 5, qualifier_columns: 1 }, over)];
+
+    it('HALTS on the four-column key: the index exists and carries no qualifier', async function () {
+        // The state the migration exists to converge, and the one the drift reconciler
+        // cannot heal: the columns were ADDed at boot, reward_unique was not rebuilt, and
+        // the qualifier-aware writers would re-collapse two distinct archive rewards.
+        let message = null;
+        try { await run(dbWithIndexShape(shape({ key_columns: 4, qualifier_columns: 0 }))); }
+        catch (err) { message = err.message; }
+        assert.ok(message, 'a reward_unique without round_qualifier must fail the assertion');
+        assert.match(message, /reward_unique/);
+        assert.match(message, /round_qualifier/);
+        assert.ok(message.includes('--file ' + QUALIFIER_FILE),
+            'the halt message must name the migration to apply; got: ' + message);
+    });
+
+    it('HALTS when a same-named index carries the qualifier but is NOT unique', async function () {
+        // A non-unique reward_unique deduplicates nothing, so the qualifier sitting in it
+        // is no protection at all. The count already excludes non_unique rows; this is the
+        // behaviour that exclusion buys.
+        await assert.rejects(
+            () => run(dbWithIndexShape(shape({ key_columns: 5, qualifier_columns: 0 }))),
+            /reward_unique does not include round_qualifier/);
+    });
+
+    it('HALTS when the qualifier COLUMN is missing from an existing table (errno 1054 mid-block)', async function () {
+        let message = null;
+        try {
+            await run(dbWithIndexShape(shape({ qualifier_column: 0, key_columns: 4, qualifier_columns: 0 })));
+        } catch (err) { message = err.message; }
+        assert.ok(message, 'a table with no round_qualifier column must fail the assertion');
+        assert.match(message, /no round_qualifier column/);
+        assert.ok(message.includes('--file ' + QUALIFIER_FILE), 'got: ' + message);
+    });
+
+    it('passes on the converged five-column key', async function () {
+        await run(dbWithIndexShape(shape()));
+    });
+
+    it('passes when validator_rewards does not exist yet (fresh install)', async function () {
+        await run(dbWithIndexShape(shape({ reward_table: 0, qualifier_column: 0, key_columns: 0, qualifier_columns: 0 })));
+        await run(dbWithIndexShape([]));
+        await run(dbWithIndexShape(null));
+    });
+
+    it('passes when the table has the column but no reward_unique index to compare', async function () {
+        await run(dbWithIndexShape(shape({ key_columns: 0, qualifier_columns: 0 })));
+    });
+
+    it('passes when a count is unreadable rather than halting on an answer it cannot read', async function () {
+        await run(dbWithIndexShape(shape({ reward_table: null })));
+        await run(dbWithIndexShape(shape({ qualifier_column: null })));
+        await run(dbWithIndexShape(shape({ key_columns: null })));
+        await run(dbWithIndexShape(shape({ qualifier_columns: null })));
+        await run(dbWithIndexShape(shape({ key_columns: 'not-a-number', qualifier_columns: 0 })));
+        await run(dbWithIndexShape(shape({ qualifier_columns: 'not-a-number' })));
+    });
+
+    it('reads the live INDEX shape, unique-only, bound once on the database name', async function () {
+        // A column-level test alone would pass on exactly the database this guard exists
+        // for, so the index shape is what gates it; the column is the loud half.
+        const db = dbWithIndexShape(shape());
+        await run(db);
+        const { sql, params } = db.seen();
+        assert.match(sql, /information_schema\.statistics/i);
+        assert.match(sql, /information_schema\.columns/i);
+        assert.match(sql, /information_schema\.tables/i);
+        assert.match(sql, /index_name = 'reward_unique'/);
+        assert.match(sql, /column_name = 'round_qualifier'/);
+        assert.match(sql, /non_unique = 0/);
+        assert.strictEqual((sql.match(/\?/g) || []).length, 1);
+        assert.deepStrictEqual(params, ['test_indexer']);
+    });
+
+    it('releases the connection it took, on the halt path too', async function () {
+        let released = 0;
+        const db = {
+            dbName: 'test_indexer',
+            transactionConnection: null,
+            getConnection: async () => ({
+                query: async () => shape({ key_columns: 4, qualifier_columns: 0 }),
+                release: async () => { released++; }
+            })
+        };
+        await assert.rejects(() => run(db), /reward_unique/);
+        assert.strictEqual(released, 1, 'a halting assertion must not leak the pool connection');
+    });
+});

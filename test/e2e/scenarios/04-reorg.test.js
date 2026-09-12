@@ -41,7 +41,7 @@ describe('E2E: Blockchain Reorganization @regression @tier3', function () {
     let server, port, explorer, client;
 
     before(async function () {
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
         ({ server, port, explorer } = await startExplorer());
         client = createClient(port);

@@ -33,7 +33,7 @@ describe('02 Action Benchmarks', function () {
     const allStats = {};
 
     before(async function () {
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
     });
 

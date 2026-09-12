@@ -70,3 +70,82 @@ describe('Security: connection pool timeout configuration @regression @tier4', f
             'idleTimeout should be 60000ms');
     });
 });
+
+// An indexer whose isolated-vm binding cannot load must REFUSE AT BOOT, not start and
+// park at the first contract block. The park is data-dependent (the first contract block,
+// not the tip), so the old warn-and-continue path served a stale height hundreds of blocks
+// behind the decoder before anything looked wrong, and the 503 it answered named neither
+// the binding nor the platform mismatch behind it.
+//
+// The binding failure is simulated at the module loader: an ELF binding on a Darwin host
+// (the measured case) surfaces to require('xchain-vm') as exactly this ERR_DLOPEN_FAILED,
+// and reproducing it for real would need a foreign node_modules on the test host.
+describe('Security: VM runtime boot refusal @regression @tier4', function () {
+    const Module  = require('module');
+    const Actions = require('../../../../src/actions.js');
+    const { createMockIndexer } = require('../../../fixtures/mocks');
+
+    const actionsPath = require.resolve('../../../../src/actions.js');
+
+    function dlopenFailure() {
+        const err = new Error(
+            'dlopen(/srv/xchain-indexer/node_modules/isolated-vm/out/isolated_vm.node, 0x0001): ' +
+            "tried: '/srv/xchain-indexer/node_modules/isolated-vm/out/isolated_vm.node' " +
+            '(not a mach-o file)');
+        err.code = 'ERR_DLOPEN_FAILED';
+        return err;
+    }
+
+    /** Re-evaluate src/actions.js with require('xchain-vm') failing, then restore the cache. */
+    function actionsWithUnloadableVm(loadError) {
+        const origLoad = Module._load;
+        const saved    = require.cache[actionsPath];
+        delete require.cache[actionsPath];
+        Module._load = function (request) {
+            if (request === 'xchain-vm') throw loadError;
+            return origLoad.apply(this, arguments);
+        };
+        try {
+            return require(actionsPath);
+        } finally {
+            Module._load = origLoad;
+            delete require.cache[actionsPath];
+            if (saved) require.cache[actionsPath] = saved;   // leave the real module for later suites
+        }
+    }
+
+    function mockIndexer() {
+        const indexer = createMockIndexer();
+        indexer.protocolChanges = { isDefined: () => true, isEnabled: async () => true };
+        return indexer;
+    }
+
+    it('SEC-43: Actions construction refuses when the VM binding cannot load', function () {
+        const Broken = actionsWithUnloadableVm(dlopenFailure());
+        assert.throws(() => new Broken(mockIndexer()), /VM RUNTIME UNAVAILABLE/);
+    });
+
+    it('SEC-44: the refusal names the binding, its format and this host', function () {
+        const Broken = actionsWithUnloadableVm(dlopenFailure());
+        let message = null;
+        try { new Broken(mockIndexer()); } catch (e) { message = e.message; }
+        assert.ok(message, 'construction must not succeed');
+        assert.ok(message.includes('isolated_vm.node'), `binding not named: ${message}`);
+        assert.ok(message.includes(process.platform) && message.includes(process.arch),
+            `host platform not named: ${message}`);
+        assert.ok(message.includes('ERR_DLOPEN_FAILED'), `loader error not carried: ${message}`);
+    });
+
+    it('SEC-45: no Actions instance is produced with a null vm (the old silent-park state)', function () {
+        const Broken = actionsWithUnloadableVm(dlopenFailure());
+        let instance = null;
+        try { instance = new Broken(mockIndexer()); } catch (e) { /* expected */ }
+        assert.strictEqual(instance, null,
+            'a constructed Actions with this.vm = null is exactly the state that parks at the first contract block');
+    });
+
+    it('SEC-46: a loadable VM still constructs (the gate does not fire on a healthy host)', function () {
+        const actions = new Actions(mockIndexer());
+        assert.ok(actions.vm, 'vm must be wired when xchain-vm loads');
+    });
+});

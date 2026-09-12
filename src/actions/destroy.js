@@ -109,7 +109,7 @@ class Destroy {
             let [tick, amount, memo] = destroys[idx];
             let key = tick + '|' + memo;
             if(legAmountRule)
-                key = (ticks[tick] && !this.util.isValidAmountFormat(ticks[tick]['DECIMALS'], amount))
+                key = (ticks[tick] && !this.util.isValidAmountFormat(ticks[tick]['DECIMALS'], amount, data['BLOCK_TIME']))
                     ? 'i|' + idx
                     : 'k|' + key;
             if(!this.util.isNull(keys[key]))
@@ -169,7 +169,7 @@ class Destroy {
                 error = 'invalid: TICK (unknown)';
 
             // Verify AMOUNT format
-            if(!error && !this.util.isNull(destroy['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], destroy['AMOUNT']))
+            if(!error && !this.util.isNull(destroy['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], destroy['AMOUNT'], data['BLOCK_TIME']))
                 error = "invalid: AMOUNT (format)";
 
             // Verify SOURCE is not sleeping

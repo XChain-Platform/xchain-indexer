@@ -46,7 +46,10 @@ const crypto  = require('crypto');
 const { parseCorsOrigin } = require('../../src/corsOrigin.js');
 
 // ---- Exact copy of the gated-method sets in src/api.js (keep in sync). ------
-const WRITE_METHODS = new Set(['pushvalidatorrewards']);
+// WRITE_METHODS is empty upstream: the PUSH-ANCHOR endgame retired
+// pushvalidatorrewards, its only member, so the gated calls below are driven
+// through a federation read and the gated exec method instead.
+const WRITE_METHODS = new Set([]);
 const GATED_EXEC_METHODS = new Set(['feequotedryrun']);
 const FEDERATION_READ_METHODS = new Set([
     'getownstake', 'getactivevalidators', 'getactivestakeweights',
@@ -190,21 +193,21 @@ describe('HTTP-surface security: JSON-RPC API perimeter', function () {
                 expect: 200,
             },
             {
-                name: 'a write method (pushvalidatorrewards) is rejected 401 with no key presented',
+                name: 'a gated method (getactivevalidators) is rejected 401 with no key presented',
                 config: { apiKey: GOOD_KEY },
-                req: { body: { jsonrpc: '2.0', id: 2, method: 'pushvalidatorrewards' } },
+                req: { body: { jsonrpc: '2.0', id: 2, method: 'getactivevalidators' } },
                 expect: 401,
             },
             {
-                name: 'a write method is accepted with the correct x-api-key',
+                name: 'a gated method is accepted with the correct x-api-key',
                 config: { apiKey: GOOD_KEY },
-                req: { headers: { 'x-api-key': GOOD_KEY }, body: { jsonrpc: '2.0', id: 3, method: 'pushvalidatorrewards' } },
+                req: { headers: { 'x-api-key': GOOD_KEY }, body: { jsonrpc: '2.0', id: 3, method: 'getactivevalidators' } },
                 expect: 200,
             },
             {
-                name: 'a write method is rejected 401 with a wrong (equal-length) key',
+                name: 'a gated method is rejected 401 with a wrong (equal-length) key',
                 config: { apiKey: GOOD_KEY },
-                req: { headers: { 'x-api-key': WRONG_KEY }, body: { jsonrpc: '2.0', id: 4, method: 'pushvalidatorrewards' } },
+                req: { headers: { 'x-api-key': WRONG_KEY }, body: { jsonrpc: '2.0', id: 4, method: 'getactivevalidators' } },
                 expect: 401,
             },
             {
@@ -222,37 +225,49 @@ describe('HTTP-surface security: JSON-RPC API perimeter', function () {
             {
                 name: 'a one-element batch invoking a gated method cannot bypass the gate (array-body regression)',
                 config: { apiKey: GOOD_KEY },
-                req: { body: [{ jsonrpc: '2.0', id: 7, method: 'pushvalidatorrewards' }] },
+                req: { body: [{ jsonrpc: '2.0', id: 7, method: 'getactivevalidators' }] },
                 expect: 401,
             },
             {
                 name: 'a gated method smuggled behind an ungated one in a batch still requires the key',
                 config: { apiKey: GOOD_KEY },
-                req: { body: [{ method: 'ping' }, { method: 'pushvalidatorrewards' }] },
+                req: { body: [{ method: 'ping' }, { method: 'getactivevalidators' }] },
                 expect: 401,
             },
             {
-                name: 'method-name casing does not evade the gate (PushValidatorRewards)',
+                name: 'method-name casing does not evade the gate (GetActiveValidators)',
                 config: { apiKey: GOOD_KEY },
-                req: { body: { jsonrpc: '2.0', id: 8, method: 'PushValidatorRewards' } },
+                req: { body: { jsonrpc: '2.0', id: 8, method: 'GetActiveValidators' } },
                 expect: 401,
+            },
+            {
+                // PUSH-ANCHOR endgame: the retired rail is no longer a method at all, so
+                // the perimeter has nothing to gate. The real app answers -32601 here
+                // (test/security/http-surface/auth-gate.test.js drives that); this mirror
+                // has a permissive stand-in router, so all it can honestly assert is that
+                // the GATE no longer claims the name. Pinning it stops the name being
+                // quietly re-added to WRITE_METHODS without a handler behind it.
+                name: 'the retired pushvalidatorrewards name is not gated any more',
+                config: { apiKey: GOOD_KEY },
+                req: { body: { jsonrpc: '2.0', id: 12, method: 'pushvalidatorrewards' } },
+                expect: 200,
             },
             {
                 name: 'an SQL-injection-shaped key does not authenticate against the real key',
                 config: { apiKey: GOOD_KEY },
-                req: { headers: { 'x-api-key': "' OR '1'='1" }, body: { jsonrpc: '2.0', id: 9, method: 'pushvalidatorrewards' } },
+                req: { headers: { 'x-api-key': "' OR '1'='1" }, body: { jsonrpc: '2.0', id: 9, method: 'getactivevalidators' } },
                 expect: 401,
             },
             {
                 name: 'with no key configured the gate fails closed on a gated method (401)',
                 config: { apiKey: '', allowUnauthed: false },
-                req: { body: { jsonrpc: '2.0', id: 10, method: 'pushvalidatorrewards' } },
+                req: { body: { jsonrpc: '2.0', id: 10, method: 'getactivevalidators' } },
                 expect: 401,
             },
             {
                 name: 'the explicit keyless escape hatch (allowUnauthed) restores pass-through',
                 config: { apiKey: '', allowUnauthed: true },
-                req: { body: { jsonrpc: '2.0', id: 11, method: 'pushvalidatorrewards' } },
+                req: { body: { jsonrpc: '2.0', id: 11, method: 'getactivevalidators' } },
                 expect: 200,
             },
         ];
@@ -269,7 +284,7 @@ describe('HTTP-surface security: JSON-RPC API perimeter', function () {
     describe('error-leak: rejection bodies expose no internals', function () {
         it('a 401 body is the JSON-RPC error envelope and carries no stack frame or filesystem path', async function () {
             const server = await start({ apiKey: GOOD_KEY });
-            const res = await request(server, { body: { jsonrpc: '2.0', id: 1, method: 'pushvalidatorrewards' } });
+            const res = await request(server, { body: { jsonrpc: '2.0', id: 1, method: 'getactivevalidators' } });
             assert.strictEqual(res.status, 401);
             assert.strictEqual(res.json && res.json.error && res.json.error.code, -32001);
             assert.ok(res.json.error.message, 'error message present');
@@ -327,7 +342,7 @@ describe('HTTP-surface security: JSON-RPC API perimeter', function () {
             const server = await start({ apiKey: GOOD_KEY });
             const res = await request(server, {
                 body: {
-                    jsonrpc: '2.0', id: 1, method: 'pushvalidatorrewards',
+                    jsonrpc: '2.0', id: 1, method: 'getactivevalidators',
                     params: { address: "'; DROP TABLE validator_rewards;--", amount: { $ne: null } },
                 },
             });

@@ -174,14 +174,14 @@ class Order {
 
         // Verify GIVE_AMOUNT format (use COIN_DECIMALS for native coin, token DECIMALS for tokens)
         let giveDecimals = isNativeCoinGive ? this.config['COIN_DECIMALS'] : (giveTokenInfo ? giveTokenInfo['DECIMALS'] : 0);
-        if(!error && format==0 && !this.util.isNull(data['GIVE_AMOUNT']) && !this.util.isValidAmountFormat(giveDecimals, data['GIVE_AMOUNT']))
+        if(!error && format==0 && !this.util.isNull(data['GIVE_AMOUNT']) && !this.util.isValidAmountFormat(giveDecimals, data['GIVE_AMOUNT'], data['BLOCK_TIME']))
             error = "invalid: GIVE_AMOUNT (format)";
 
         // Verify GET_AMOUNT format (use COIN_DECIMALS for native coin, token DECIMALS for
         // tokens). Skip for cross-chain: the GET token's DECIMALS live on another COIN
         // network, so the format is validated by the xchain-hub federation, not locally.
         let getDecimals = isNativeCoinGet ? this.config['COIN_DECIMALS'] : (getTokenInfo ? getTokenInfo['DECIMALS'] : 0);
-        if(!error && format==0 && !isCrossChain && !this.util.isNull(data['GET_AMOUNT']) && !this.util.isValidAmountFormat(getDecimals, data['GET_AMOUNT']))
+        if(!error && format==0 && !isCrossChain && !this.util.isNull(data['GET_AMOUNT']) && !this.util.isValidAmountFormat(getDecimals, data['GET_AMOUNT'], data['BLOCK_TIME']))
             error = "invalid: GET_AMOUNT (format)";
 
         // Require a strictly-positive GET_AMOUNT (ORDER-AMT-1 hardening). An empty or zero

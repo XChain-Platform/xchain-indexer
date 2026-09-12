@@ -19,10 +19,15 @@ CREATE TABLE sends (
     destination_id BIGINT UNSIGNED,          -- id of record in index_addresses table
     amount         VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,              -- Amount of token in send
     memo_id        BIGINT UNSIGNED,          -- id of record in index_memos table 
-    status_id      BIGINT UNSIGNED           -- id of record in index_statuses table
+    status_id      BIGINT UNSIGNED,          -- id of record in index_statuses table
+    leg_ordinal    SMALLINT UNSIGNED NOT NULL DEFAULT 0 -- 0-based position of this leg on the wire, stamped by createSend
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
+-- A multi-send writes one row per leg under one action_index, and leg_ordinal is the
+-- only record of which leg came first: see the note in destroys.sql. The composite
+-- index serves the ordered read; the single-column index stays for the other queries.
 CREATE        INDEX action_index   ON sends (action_index);
+CREATE        INDEX action_leg     ON sends (action_index, leg_ordinal);
 CREATE        INDEX tick_id        ON sends (tick_id);
 CREATE        INDEX destination_id ON sends (destination_id);
 CREATE        INDEX status_id      ON sends (status_id);

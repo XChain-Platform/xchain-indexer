@@ -17,6 +17,11 @@
 // — zero, negative, fractional, NaN/Infinity, MAX_SAFE_INTEGER — plus the
 // malformed-but-plausible address inputs it forwards verbatim and the
 // enabled/disabled endpoint boundary in the constructor.
+//
+// The non-number cases have TWO sides since the oracle-shape flag-day: below it
+// they collapse to null (the deployed, replay-frozen fail-open), at/after it they
+// throw so the fresh-address verdict fails closed. Both are pinned here, and they
+// flip with the same pins in the unit and regression suites.
 
 process.env.INDEXER_COIN    = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
@@ -164,6 +169,58 @@ describe('UtxoTracker boundary tests @regression @tier1', function () {
 
             const r = await t.getFirstSeen('addr');
             assert.strictEqual(r, null);
+        });
+    });
+
+    // -----------------------------------------------------------------------
+    // UTX-B07b: the same non-number heights THROW at/after the oracle-shape
+    // flag-day (src/dispenser_freshness_shape_activation.js). The null above is
+    // fail-open into a consensus-relevant fresh-address verdict, so the edge moves
+    // only behind the gate, and the numeric edge drawn in B01-B06 does not move at
+    // all: those values already fail closed in the caller's height comparison.
+    // -----------------------------------------------------------------------
+    describe('UTX-B07b: non-number height → throw under strictShape', function () {
+        const cases = [
+            ['numeric string', '100'],
+            ['boolean',        true],
+            ['null',           null],
+            ['nested object',  { value: 100 }],
+        ];
+        for (const [label, height] of cases) {
+            it(`${label} height is a shape violation, not a fresh address`, async function () {
+                const t = new UtxoTracker('localhost', 3005);
+                global.fetch = makeFetch(rpc({ height }));
+
+                await assert.rejects(
+                    () => t.getFirstSeen('addr', { strictShape: true }),
+                    /UTXO tracker shape violation/,
+                );
+            });
+        }
+
+        it('a result missing the height field is a shape violation', async function () {
+            const t = new UtxoTracker('localhost', 3005);
+            global.fetch = makeFetch(rpc({ other: 'field' }));
+
+            await assert.rejects(
+                () => t.getFirstSeen('addr', { strictShape: true }),
+                /UTXO tracker shape violation/,
+            );
+        });
+
+        it('the numeric edge is unmoved: 0, negative, fractional, NaN and Infinity still pass', async function () {
+            const t = new UtxoTracker('localhost', 3005);
+            for (const height of [0, -1, 750000.5, NaN, Infinity, Number.MAX_SAFE_INTEGER]) {
+                global.fetch = makeFetch(rpc({ height }));
+                const r = await t.getFirstSeen('addr', { strictShape: true });
+                assert.deepStrictEqual(r, { height });
+            }
+        });
+
+        it('an absent result (never seen) is unmoved: still null, never a throw', async function () {
+            const t = new UtxoTracker('localhost', 3005);
+            global.fetch = makeFetch(rpc(null));
+            assert.strictEqual(await t.getFirstSeen('never', { strictShape: true }), null);
         });
     });
 

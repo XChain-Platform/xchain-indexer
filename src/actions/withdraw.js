@@ -83,7 +83,7 @@ class Withdraw {
         if(!error && !tokenInfo)
             error = 'invalid: TICK (unknown)';
 
-        if(!error && !this.util.isNull(data['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], data['AMOUNT']))
+        if(!error && !this.util.isNull(data['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], data['AMOUNT'], data['BLOCK_TIME']))
             error = 'invalid: AMOUNT (format)';
 
         if(!error && !this.util.bcgt(data['AMOUNT'], 0))

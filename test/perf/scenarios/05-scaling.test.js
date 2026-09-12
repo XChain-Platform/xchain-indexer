@@ -32,7 +32,7 @@ describe('05 Scaling Tests', function () {
     const allStats = {};
 
     before(async function () {
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
     });
 

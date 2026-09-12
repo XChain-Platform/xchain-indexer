@@ -183,7 +183,7 @@ describe('UtxoTracker', function(){
             assert.strictEqual(r, null);
         });
 
-        it('returns null when result.height is not a number (string)', async function(){
+        it('returns null when result.height is not a number (string), below the flag day', async function(){
             let t = new UtxoTracker('localhost', 3005);
             global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: { height: '100' } });
 
@@ -191,7 +191,7 @@ describe('UtxoTracker', function(){
             assert.strictEqual(r, null);
         });
 
-        it('returns null when result.height is missing', async function(){
+        it('returns null when result.height is missing, below the flag day', async function(){
             let t = new UtxoTracker('localhost', 3005);
             global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: { other: 'field' } });
 
@@ -226,6 +226,68 @@ describe('UtxoTracker', function(){
 
             let r = await t.getFirstSeen('genesis');
             assert.deepStrictEqual(r, { height: 0 });
+        });
+
+        // At/after the oracle-shape flag-day the fail-open null above becomes a
+        // throw, so a malformed-but-successful tracker reply denies the fresh-address
+        // exception instead of granting it. The caller passes the verdict in because
+        // the gate is keyed on the processing chain's block_index and this client has
+        // no block context (src/dispenser_freshness_shape_activation.js).
+        describe('strictShape (oracle-shape flag-day active)', function(){
+            it('throws when result.height is not a number (string)', async function(){
+                let t = new UtxoTracker('localhost', 3005);
+                global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: { height: '100' } });
+
+                await assert.rejects(
+                    () => t.getFirstSeen('1A1zP1...', { strictShape: true }),
+                    /UTXO tracker shape violation/
+                );
+            });
+
+            it('throws when result.height is missing', async function(){
+                let t = new UtxoTracker('localhost', 3005);
+                global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: { other: 'field' } });
+
+                await assert.rejects(
+                    () => t.getFirstSeen('1A1zP1...', { strictShape: true }),
+                    /UTXO tracker shape violation/
+                );
+            });
+
+            it('names the offending result in the error, so the tracker can be fixed', async function(){
+                let t = new UtxoTracker('localhost', 3005);
+                global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: { height: '100' } });
+
+                await assert.rejects(
+                    () => t.getFirstSeen('1A1zP1...', { strictShape: true }),
+                    /\{"height":"100"\}/
+                );
+            });
+
+            it('still returns null for a genuine never-seen answer', async function(){
+                let t = new UtxoTracker('localhost', 3005);
+                global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: null });
+
+                assert.strictEqual(await t.getFirstSeen('unknown_address', { strictShape: true }), null);
+            });
+
+            it('still returns a well-shaped sighting unchanged', async function(){
+                let t = new UtxoTracker('localhost', 3005);
+                global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: { height: 750000 } });
+
+                assert.deepStrictEqual(await t.getFirstSeen('1A1zP1...', { strictShape: true }), { height: 750000 });
+            });
+
+            it('leaves the request wire-shape alone (no new params on the RPC)', async function(){
+                let t = new UtxoTracker('localhost', 3005);
+                let stub = makeFetch({ jsonrpc: '2.0', id: 1, result: { height: 1 } });
+                global.fetch = stub;
+
+                await t.getFirstSeen('bc1qtest', { strictShape: true });
+                let body = JSON.parse(stub.firstCall.args[1].body);
+                assert.strictEqual(body.method, 'get_first_seen');
+                assert.deepStrictEqual(body.params, { address: 'bc1qtest' });
+            });
         });
     });
 

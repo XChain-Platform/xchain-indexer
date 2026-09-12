@@ -50,6 +50,7 @@ const stateKeyCollation = require('./state_key_collation_activation');
 const snapshotAgeCausality = require('./oracle_snapshot_age_causality_activation');
 const staleRoundVisibility = require('./oracle_stale_round_visibility_activation');
 const preloadCausality = require('./oracle_preload_causality_activation');
+const batchLandedFee = require('./price_fee_batch_landed_activation');
 const listEditResolution = require('./list_edit_resolution_activation');
 const caretRefStrict = require('./caret_ref_strict_activation');
 const ledgerPrecision = require('./ledger_amount_precision_activation');
@@ -133,6 +134,31 @@ function requireStakeWeight(weight, label){
     return String(weight);
 }
 
+// Compare form for two stake amounts that came from DIFFERENT producers (this node's own
+// SUM() and a hub's serialization of its own SUM()). Used ONLY by
+// verifyCapabilitySnapshotRow, never on a canonical/hashing path, where the byte form is
+// the value. A refusal has to mean "these are different numbers", not "these are the same
+// number spelled differently": '100' and '100.00' and '0100' are one weight, and refusing
+// a mirrored row over a trailing zero would blow a hole in the mirror for a formatting
+// difference. Returns null for anything non-numeric, which never equals anything (a
+// garbage amount is therefore a contradiction, not an accidental match).
+function normalizeStakeAmount(v){
+    if(v === null || v === undefined) return null;
+    let s = String(v).trim();
+    if(s === '' || !STAKE_WEIGHT_NUMERIC.test(s)) return null;
+    let neg = s[0] === '-';
+    if(s[0] === '+' || s[0] === '-') s = s.slice(1);
+    let dot  = s.indexOf('.');
+    let int  = dot === -1 ? s : s.slice(0, dot);
+    let frac = dot === -1 ? '' : s.slice(dot + 1);
+    int  = int.replace(/^0+/, '');
+    frac = frac.replace(/0+$/, '');
+    if(int === '') int = '0';
+    let out = int + (frac === '' ? '' : '.' + frac);
+    // -0 and 0 are the same weight.
+    return (neg && out !== '0') ? '-' + out : out;
+}
+
 // Tables whose highest-`id`-survivor dedupe rule is validated and safe to auto-apply at
 // startup (see dedupeForUniqueIndex: an upsert that degraded to plain INSERT appended a
 // fresh row per change, so the highest id is the live value). reconcileTableIndexes will
@@ -140,6 +166,17 @@ function requireStakeWeight(weight, label){
 // with blocking duplicates is left intact with a loud warning for a manual migration, so a
 // mis-declared UNIQUE index can never silently destroy rows on an unvalidated table.
 const AUTO_DEDUP_TABLES = new Set(['balances']);
+
+// Accumulate one undeclared-shape finding for the verifyTables summary. `store` is the
+// Map verifyTables hangs off the instance for the length of a run; it is absent outside
+// one (unit harnesses call the reconcilers directly), and then this is a no-op, so the
+// per-table warnings never depend on a collector existing.
+function recordShapeDrift(store, table, kind, items){
+    if(!store || !items || !items.length) return;
+    const entry = store.get(table) || { columns: [], indexes: [] };
+    entry[kind] = entry[kind].concat(items);
+    store.set(table, entry);
+}
 
 // Watchdog-fence context (M-16). The block loop runs each block's processing inside
 // txEpochStore.run(epoch, ...) so every DB call it makes carries the transaction epoch
@@ -475,6 +512,10 @@ class Database {
         console.log('Verifying database and tables...');
         let checked = 0;
         let created = 0;
+        // Collector for the undeclared-shape findings the two reconcilers raise, so the
+        // boot log carries ONE comparable summary per DB. Reading that line off all nine
+        // fleet indexers is the drift comparison, in place of a hand audit.
+        this.schemaShapeDrift = new Map();
         // Loop through SQL files
         for (file of files){
             if(file.indexOf('.sql') !== -1){
@@ -505,7 +546,28 @@ class Database {
         }
         await db.release();
         console.log('Database and tables verified (' + checked + ' tables, ' + created + ' created).');
+        console.log(this.schemaShapeSummary());
         return true;
+    }
+
+    // One line (plus a per-table breakdown when there is one) naming everything live that
+    // no SQL source declares. Printed at the end of verifyTables so the fleet-wide
+    // "does every indexer DB carry the same shape?" question is answered by comparing one
+    // boot line per DB rather than by a hand schema diff across nine databases.
+    schemaShapeSummary(){
+        const store = this.schemaShapeDrift;
+        if(!store || !store.size) return 'Schema shape: no undeclared columns or indexes.';
+        const lines = [];
+        let columns = 0;
+        let indexes = 0;
+        for(const [table, entry] of store){
+            const parts = [];
+            if(entry.columns.length){ columns += entry.columns.length; parts.push('columns ' + entry.columns.join(', ')); }
+            if(entry.indexes.length){ indexes += entry.indexes.length; parts.push('indexes ' + entry.indexes.map(i => i.name).join(', ')); }
+            lines.push('  ' + table + ': ' + parts.join('; '));
+        }
+        return 'SCHEMA SHAPE DRIFT: ' + store.size + ' table(s) carry ' + columns + ' undeclared column(s) and ' +
+               indexes + ' undeclared index(es); this DB does not match a fresh install of this release.\n' + lines.join('\n');
     }
 
     // Apply tracked, ordered schema migrations from src/sql/migrations/ - the changes
@@ -542,6 +604,10 @@ class Database {
         const result = await this._runMigrationsInner(opts);
         await this._assertPubkeyColumnIsUncompressedWide();
         await this._assertStakeWeightOrderingCollation();
+        // Invoked through the prototype rather than `this`: the reward-identity assertion is
+        // a fail-closed COLLECT-rail guard, and a partial object that happens not to carry
+        // the method would otherwise drop it without a word. Nothing may opt out of it.
+        await Database.prototype._assertRewardUniqueKeyCarriesQualifier.call(this);
         return result;
     }
 
@@ -858,6 +924,96 @@ class Database {
         }
     }
 
+    // Assert validator_rewards.reward_unique keys the QUALIFIED reward identity, i.e. that
+    // the index carries round_qualifier. 2026-08-24-validator-rewards-round-qualifier.sql
+    // is mode=manual and is the ONLY convergence path for that key on an aged database:
+    // both round_qualifier columns are NOT NULL with a DEFAULT, so the boot drift
+    // reconciler ADDs them, but reconcileTableIndexes never DROPs an index name already
+    // held by a differently-defined live index, so `reward_unique` stays the four-column
+    // key and only logs drift. A build carrying the qualifier-aware reward writers against
+    // that four-column key re-collapses two genuinely distinct archive anchors into one
+    // paid reward inside its own UNIQUE index, which is a COLLECT-rail divergence from its
+    // peers rather than an error anything reports. Halting at boot is the cheap end of that.
+    //
+    // BOTH halves of the qualified identity are read, because both are fatal and they fail
+    // at different moments. The KEY is the silent half (the divergence above) and the one
+    // this file is the only convergence path for. The COLUMN is the loud half: a writer
+    // naming round_qualifier against a table that has not got it is errno 1054, so the node
+    // dies MID-BLOCK instead of at boot. Neither is reported by anything else, and the
+    // index check cannot stand in for the column check - the counts come from different
+    // information_schema tables and an index carrying no qualifier says nothing about
+    // whether the column exists.
+    //
+    // non_unique = 0 is asserted, not assumed: a same-named NON-unique index carrying the
+    // qualifier would satisfy a name-and-column test while deduplicating nothing.
+    //
+    // Passes through (never halts) when validator_rewards does not exist yet, when it
+    // carries no reward_unique index at all, and when a count is unreadable: a fresh
+    // install has no table, a missing index is another contract's business, and an answer
+    // we could not read is not evidence of drift.
+    //
+    // REGISTERED in Database.STARTUP_ASSERTED_MIGRATIONS and tagged
+    // `deploy-precondition=required` in the migration's own header, which is what lets a
+    // deploy refuse before it recreates a container instead of after (see that constant).
+    async _assertRewardUniqueKeyCarriesQualifier(){
+        // Name the exact file in every halt, for the same reason the pubkey halt above
+        // does: a bare `node src/migrate.js` on an aged fleet database means "apply every
+        // pending manual migration", which is never what a scoped recovery wants.
+        const remedy = ' Run the pending migration: node src/migrate.js --file ' +
+            Database.startupAssertedMigrationFile('_assertRewardUniqueKeyCarriesQualifier');
+        let conn;
+        try {
+            conn = await this.getConnection();
+            const rows = await conn.query(
+                "WITH p AS (SELECT ? AS db) SELECT " +
+                "(SELECT COUNT(*) FROM information_schema.tables, p WHERE table_schema = p.db " +
+                "AND table_name = 'validator_rewards') AS reward_table, " +
+                "(SELECT COUNT(*) FROM information_schema.columns, p WHERE table_schema = p.db " +
+                "AND table_name = 'validator_rewards' AND column_name = 'round_qualifier') AS qualifier_column, " +
+                "(SELECT COUNT(*) FROM information_schema.statistics, p WHERE table_schema = p.db " +
+                "AND table_name = 'validator_rewards' AND index_name = 'reward_unique') AS key_columns, " +
+                "(SELECT COUNT(*) FROM information_schema.statistics, p WHERE table_schema = p.db " +
+                "AND table_name = 'validator_rewards' AND index_name = 'reward_unique' " +
+                "AND column_name = 'round_qualifier' AND non_unique = 0) AS qualifier_columns",
+                [this.dbName]
+            );
+            if(!rows || !rows.length) return;
+            const row   = rows[0] || {};
+            const count = (v) => {
+                if(v == null) return null;
+                const n = Number(v);
+                return Number.isNaN(n) ? null : n;
+            };
+            const table    = count(row.reward_table);
+            const column   = count(row.qualifier_column);
+            const keyCols  = count(row.key_columns);
+            const qualCols = count(row.qualifier_columns);
+            // An unreadable answer is not evidence of drift; leave the migration's own
+            // PENDING state as the signal rather than halting on a row we cannot parse.
+            if(table == null || column == null || keyCols == null || qualCols == null) return;
+            if(table < 1) return;                     // table absent: not created yet
+            if(column < 1){
+                throw new Error(
+                    'validator_rewards has no round_qualifier column, but this build writes rewards on the ' +
+                    'qualified identity: the first archive reward it derives fails errno 1054 mid-block.' + remedy
+                );
+            }
+            if(keyCols < 1) return;                   // no reward_unique index to compare
+            if(qualCols < 1){
+                throw new Error(
+                    'validator_rewards.reward_unique does not include round_qualifier, so this database still ' +
+                    'keys a reward on the UNQUALIFIED identity while this build derives archive rewards on the ' +
+                    'qualified one: two distinct archive anchors would collapse into one paid reward and diverge ' +
+                    'the COLLECT rail from the rest of the fleet.' + remedy
+                );
+            }
+        } finally {
+            if(conn && this.transactionConnection == null){
+                try { await conn.release(); } catch(_){}
+            }
+        }
+    }
+
     // Read a migration file's `-- xchain:migration mode=auto|manual` header tag.
     // Defaults to 'manual' when absent (conservative - unknown DDL never auto-runs).
     _migrationMode(raw){
@@ -1158,6 +1314,96 @@ class Database {
         return cols.length > 0 ? cols : null;
     }
 
+    // Parse the index declarations that live INSIDE the CREATE TABLE block: inline
+    // `PRIMARY KEY (...)` / `KEY` / `UNIQUE KEY` / `FULLTEXT KEY` clauses, plus the
+    // column-level `PRIMARY KEY` and `UNIQUE` attributes the engine turns into an index
+    // of its own. parseExpectedIndexes deliberately ignores all of these (they are
+    // created WITH the table, so there is nothing for the reconciler to re-add), but the
+    // undeclared-index detector below needs them: without them every inline KEY on every
+    // table would read as an orphan and the warning would be pure noise.
+    //
+    // Returns [{ name, columns:[...] }] with `name` null for an unnamed inline key (the
+    // engine derives its live name from the first column, so the detector falls back to
+    // matching such a key by column set).
+    parseInlineIndexes(sqlData, table){
+        sqlData = this.stripSqlLineComments(sqlData);
+        const m = sqlData.match(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?\S+\s*\(([\s\S]+?)\)\s*ENGINE/i);
+        if(!m) return [];
+        const cols = (list) => String(list).split(',')
+            .map(c => c.trim().replace(/`/g, '').split(/\s+/)[0].replace(/\(\d+\)$/, ''))
+            .filter(Boolean);
+        const out = [];
+        // Same top-level-comma split parseExpectedColumns uses, so a type's own parens
+        // (VARCHAR(250), DECIMAL(30,8)) do not shred a declaration into fragments.
+        for(let raw of m[1].split(/,(?![^()]*\))/g)){
+            const line = raw.replace(/--[^\n\r]*/g, '').trim();
+            if(!line) continue;
+            let k;
+            if((k = /^PRIMARY\s+KEY\s*\(([^)]*)\)/i.exec(line))){
+                out.push({ name: 'PRIMARY', columns: cols(k[1]) });
+            } else if((k = /^(?:UNIQUE|FULLTEXT|SPATIAL)?\s*(?:KEY|INDEX)\s+`?(\w+)`?\s*\(([^)]*)\)/i.exec(line))){
+                out.push({ name: k[1], columns: cols(k[2]) });
+            } else if((k = /^(?:UNIQUE|FULLTEXT|SPATIAL)?\s*(?:KEY|INDEX)\s*\(([^)]*)\)/i.exec(line))){
+                out.push({ name: null, columns: cols(k[1]) });
+            } else if(/^(?:CHECK|CONSTRAINT|FOREIGN)\b/i.test(line)){
+                continue;
+            } else {
+                // A column definition. Column-level PRIMARY KEY / UNIQUE each create an
+                // index the CREATE TABLE never names as a key line.
+                const name = line.split(/\s+/)[0].replace(/`/g, '');
+                if(!name) continue;
+                if(/\bPRIMARY\s+KEY\b/i.test(line)) out.push({ name: 'PRIMARY',  columns: [name] });
+                else if(/\bUNIQUE\b/i.test(line))   out.push({ name: name,       columns: [name] });
+            }
+        }
+        return out;
+    }
+
+    // Live columns that NO SQL source declares - the other half of drift detection.
+    //
+    // alterTableForDrift converges the source onto the DB (adds what is declared and
+    // missing) but has never looked the other way, so a column that exists only live is
+    // invisible on every startup: a retired column whose declaration was deleted, a
+    // mirror twin from a superseded wire, or one an operator added by hand. DOGE regtest
+    // carried 8 such signed mirror-twin columns plus a pre-fence checkpoint key - a shape
+    // no other DB in the fleet had - and nothing reported it until a manual migration
+    // backlog converged it by hand.
+    //
+    // Detection only, never a DROP: dropping a column we did not create destroys data
+    // unattended, and this is the same never-DROP posture reconcileTableIndexes already
+    // takes on its name-collision branch. Returns the live column names, in live order.
+    undeclaredLiveColumns(expected, live){
+        const declared = new Set((expected || []).map(c => String(c.name).toLowerCase()));
+        return (live || []).map(c => c.COLUMN_NAME).filter(n => !declared.has(String(n).toLowerCase()));
+    }
+
+    // Live indexes that NO SQL source declares - the index half of the same gap. An index
+    // counts as declared when either its NAME or its ordered COLUMN SET appears in the
+    // definition (standalone CREATE INDEX or an inline key), because both forms are
+    // legitimate and a renamed-but-equivalent index is the shape the reconciler already
+    // treats as present. The column-set fallback is also what covers an unnamed inline
+    // key, whose live name the engine invents.
+    //
+    // The pre-fence state_checkpoints key is the canonical case: the definition moved from
+    // (chain, network, block_index, checkpoint_seq) to the narrower (chain, network,
+    // checkpoint_seq), the reconciler added the new one, and the old wider UNIQUE key
+    // stayed live forever because nothing ever looked for indexes the source did not name.
+    undeclaredLiveIndexes(declared, byName){
+        const names = new Set();
+        const keys  = new Set();
+        for(const d of declared || []){
+            if(d.name) names.add(String(d.name).toLowerCase());
+            if(d.columns && d.columns.length) keys.add(d.columns.map(c => String(c).toLowerCase()).join(','));
+        }
+        const out = [];
+        for(const [name, info] of byName){
+            if(names.has(String(name).toLowerCase())) continue;
+            if(keys.has(info.cols.join(','))) continue;
+            out.push({ name, unique: !!info.unique, fulltext: !!info.fulltext, columns: info.cols.slice() });
+        }
+        return out;
+    }
+
     // Detect schema drift between the live table and its SQL source, and fix
     // it by ALTER. Two kinds of drift are handled:
     //   1. Missing columns - a column declared in the SQL source but absent
@@ -1289,6 +1535,17 @@ class Database {
                 await db.query('ALTER TABLE `' + table + '` MODIFY `' + exp.name + '` ' + cur.COLUMN_TYPE + collate + ' NULL');
             }
         }
+        // The other direction: columns the live table carries that the source declares
+        // nowhere. Never healed here (a DROP would destroy data unattended), but reported
+        // so a DB whose shape has diverged from a fresh install of this release says so on
+        // every boot instead of being found by a hand comparison across the fleet.
+        const undeclared = this.undeclaredLiveColumns(expected, live);
+        if(undeclared.length){
+            console.warn('Schema shape drift on ' + table + ': live column(s) ' + undeclared.join(', ') +
+                ' are declared by NO SQL source. Not auto-healed (never DROP a column we did not create); ' +
+                'converge with a dated migration via node src/migrate.js, or restore the declaration to ' + file + '.');
+            recordShapeDrift(this.schemaShapeDrift, table, 'columns', undeclared);
+        }
     }
 
     // Parse standalone `CREATE [UNIQUE] INDEX <name> ON <table> (<cols>)` statements
@@ -1334,7 +1591,9 @@ class Database {
             const data     = fs.readFileSync(dir + '/' + file, "utf8");
             const table    = file.substring(0, file.indexOf('.sql'));
             const expected = this.parseExpectedIndexes(data, table);
-            if(!expected.length) return;
+            // The live read happens even with nothing to re-add: the undeclared-index
+            // detector at the bottom runs on every table, and a table whose keys are all
+            // inline declares no standalone CREATE INDEX at all.
 
             // Live indexes -> map keyed by ordered column-set: "c1,c2" => {unique}
             const rows = await db.query(
@@ -1437,6 +1696,21 @@ class Database {
                         console.log('  ' + table + '.' + idx.name + ' still failing after dedupe - leaving as-is: ' + (e2 && e2.message));
                     }
                 }
+            }
+
+            // Indexes present live that no declaration reaches. Matched against BOTH
+            // declaration forms (standalone CREATE INDEX and the inline keys inside the
+            // CREATE TABLE block) so only a genuine orphan is reported. Detection only -
+            // the never-DROP rule that governs the name-collision branch above governs
+            // this too; converging is a dated migration's job.
+            const undeclared = this.undeclaredLiveIndexes(
+                expected.concat(this.parseInlineIndexes(data, table)), byName);
+            if(undeclared.length){
+                console.warn('Schema shape drift on ' + table + ': live index(es) ' +
+                    undeclared.map(i => (i.unique ? 'UNIQUE ' : i.fulltext ? 'FULLTEXT ' : '') + i.name + ' (' + i.columns.join(',') + ')').join('; ') +
+                    ' are declared by NO SQL source. Not auto-healed (never DROP an index we did not create); ' +
+                    'converge with a dated migration via node src/migrate.js, or restore the declaration to ' + file + '.');
+                recordShapeDrift(this.schemaShapeDrift, table, 'indexes', undeclared);
             }
         } catch(e){
             // Never abort startup over index reconciliation.
@@ -5606,9 +5880,17 @@ class Database {
                         amount=?`;
             args = [memo_id, status_id, action_index, tick_id, destination_id, amount];
         } else {
-            // INSERT record
-            query = `INSERT INTO sends (tick_id, destination_id, amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
-            args = [tick_id, destination_id, amount, memo_id, status_id, action_index];
+            // INSERT record, stamping this leg's position on the wire.
+            //
+            // The action loop settles the legs of a multi-send in broadcast order and
+            // calls this method once per leg, so "the number of legs already stored for
+            // this action" IS this leg's 0-based wire position. It is computed inside the
+            // statement (COALESCE(MAX(leg_ordinal) + 1, 0)) rather than read first and
+            // bound, so the read and the write cannot be separated. The UPDATE branch
+            // above deliberately never touches leg_ordinal: a re-parse rewrites a leg's
+            // VALUES, it does not move the leg on the wire.
+            query = `INSERT INTO sends (tick_id, destination_id, amount, memo_id, status_id, action_index, leg_ordinal) SELECT ?, ?, ?, ?, ?, ?, COALESCE(MAX(leg_ordinal) + 1, 0) FROM sends WHERE action_index=?`;
+            args = [tick_id, destination_id, amount, memo_id, status_id, action_index, action_index];
         }
         results = await this.doQuery(query, args);
     }
@@ -5923,9 +6205,12 @@ class Database {
                         memo_id<=>?`;
             args  = [amount, status_id, action_index, tick_id, memo_id];
         } else {
-            // INSERT record
-            query = `INSERT INTO destroys (tick_id, amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?)`;
-            args  = [tick_id, amount, memo_id, status_id, action_index];
+            // INSERT record, stamping this leg's position on the wire. Same rule as
+            // createSend: the ordinal is the count of legs already stored for this
+            // action, computed inside the statement, and the UPDATE branch leaves it
+            // alone so a re-parse cannot reorder an already-indexed action.
+            query = `INSERT INTO destroys (tick_id, amount, memo_id, status_id, action_index, leg_ordinal) SELECT ?, ?, ?, ?, ?, COALESCE(MAX(leg_ordinal) + 1, 0) FROM destroys WHERE action_index=?`;
+            args  = [tick_id, amount, memo_id, status_id, action_index, action_index];
         }
         results = await this.doQuery(query, args);
     }
@@ -9862,6 +10147,10 @@ class Database {
                         LIMIT 1`;
             }
             // DESTROY action
+            //
+            // A multi-destroy has one row per leg under this action_index, and this
+            // summary shows one of them: ORDER BY leg_ordinal makes that "the first leg
+            // as broadcast" instead of whichever row the engine happened to hand back.
             if(type=='DESTROY'){
                 sql = `SELECT
                             a2.action,
@@ -9886,8 +10175,11 @@ class Database {
                             INNER JOIN index_statuses     s1 ON (s1.id=d1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                             INNER JOIN index_tickers      t3 ON (t3.id=d1.tick_id)
-                        WHERE 
+                        WHERE
                             d1.action_index=?
+                        ORDER BY
+                            d1.action_index ASC,
+                            d1.leg_ordinal ASC
                         LIMIT 1`;
             }
             // DISPENSER action
@@ -10226,6 +10518,8 @@ class Database {
             }
             // SEND action
             // TODO: Revisit this code and optimize it to support Multi-sends (right now shows first send status instead of every send status as it should)
+            // Until then, "first" is at least well defined: ORDER BY leg_ordinal pins the
+            // returned leg to the first one as broadcast rather than an engine-arbitrary row.
             if(type=='SEND'){
                 sql = `SELECT
                             a2.action,
@@ -10252,9 +10546,12 @@ class Database {
                             INNER JOIN index_statuses     s2 ON (s2.id=s1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                             INNER JOIN index_tickers      t3 ON (t3.id=s1.tick_id)
-                        WHERE 
+                        WHERE
                             s1.action_index=?
-                        LIMIT 1`;                  
+                        ORDER BY
+                            s1.action_index ASC,
+                            s1.leg_ordinal ASC
+                        LIMIT 1`;
             }
             // SLEEP action
             if(type=='SLEEP'){
@@ -10575,9 +10872,9 @@ class Database {
         // Orientation-free keys of the pairs already collected, so the dedupe below is a lookup
         // instead of a full rescan of `markets` per row (the old scan never broke on a hit, so
         // the cost was O(rows x pairs) on the block path). Spans every order type, matching the
-        // array it shadows. NULL tick ids are deliberately left OUT of the key set: a NULL never
-        // loose-equalled a stored Number, so the old scan pushed those rows unconditionally, and
-        // both consumers (createMarket / updateMarkets) are idempotent on the repeats.
+        // array it shadows. A tickerless (native-coin) side keys on 0, the same sentinel it is
+        // stored under, so a token/native pair dedupes like any other instead of being pushed
+        // once per order.
         let marketKeys = new Set();
         let args       = [block_index];
         let counts     = false;
@@ -10630,10 +10927,12 @@ class Database {
                 args = [block_index, 'valid'];
             }
             if(['ORDER','ORDER_MATCH'].includes(type)){
-                query = `SELECT 
+                query = `SELECT
                             o1.action_index,
                             o1.get_tick_id  as tick1_id,
-                            o1.give_tick_id as tick2_id
+                            o1.give_tick_id as tick2_id,
+                            o1.get_coin_id  as coin1_id,
+                            o1.give_coin_id as coin2_id
                         FROM
                             ` + table + ` o1
                             INNER JOIN actions        a1 ON (a1.action_index=o1.action_index)
@@ -10646,10 +10945,12 @@ class Database {
                             s1.status=?
                         ORDER BY o1.action_index ASC`;
             } else if(['ORDER_CANCEL','ORDER_EXPIRE'].includes(type)){
-                query = `SELECT 
+                query = `SELECT
                             o1.action_index,
                             o2.get_tick_id  as tick1_id,
-                            o2.give_tick_id as tick2_id
+                            o2.give_tick_id as tick2_id,
+                            o2.get_coin_id  as coin1_id,
+                            o2.give_coin_id as coin2_id
                         FROM
                             ` + table + ` o1
                             INNER JOIN orders         o2 ON (o2.action_index=o1.order_action_index)
@@ -10665,17 +10966,17 @@ class Database {
                 let results = await this.doQuery(query, args);
                 if(results.length > 0){
                     for(let row of results){
-                        // Check if this pair already exists (either orientation)
-                        let tick1_id = Number(row.tick1_id);
-                        let tick2_id = Number(row.tick2_id);
-                        // order_matches carries a NULL tick id on the native-coin side of a
-                        // COINPay match; keep those rows on the old unconditional-push path.
-                        let keyed = !this.util.isNull(row.tick1_id) && !this.util.isNull(row.tick2_id);
-                        let key   = Math.min(tick1_id, tick2_id) + ':' + Math.max(tick1_id, tick2_id);
-                        if(!keyed || !marketKeys.has(key)){
-                            if(keyed)
-                                marketKeys.add(key);
-                            markets.push({ tick1_id, tick2_id });
+                        // Check if this pair already exists (either orientation). A tickerless
+                        // side reads as 0 (Database.MARKET_NATIVE_TICK_ID), which is what the
+                        // markets row stores for it, so the key below is the stored identity.
+                        let tick1_id = Database.marketTickId(row.tick1_id);
+                        let tick2_id = Database.marketTickId(row.tick2_id);
+                        let coin1_id = Number(row.coin1_id);
+                        let coin2_id = Number(row.coin2_id);
+                        let key      = Math.min(tick1_id, tick2_id) + ':' + Math.max(tick1_id, tick2_id);
+                        if(!marketKeys.has(key)){
+                            marketKeys.add(key);
+                            markets.push({ tick1_id, tick2_id, coin1_id, coin2_id });
                         }
                     }
                 }
@@ -10684,38 +10985,72 @@ class Database {
         return markets;
     }
 
-    // Get market_id for given ticker ids
-    async getMarketId(tick1_id, tick2_id){
-        let id     = null;
+    // The `markets` row for a pair in either stored orientation, or null. Carries the
+    // stored tick1_id and coin ids so a caller can tell a labelled row apart from one
+    // written before `markets` named the coin behind a tickerless side.
+    // A tickerless side is passed as Database.MARKET_NATIVE_TICK_ID (0), never NULL:
+    // `m.tick1_id=NULL` is never true in SQL, so a NULL argument here reported "no such
+    // market" for a pair that existed and createMarket() inserted a fresh row per order.
+    async getMarketRow(tick1_id, tick2_id){
         let query  = `SELECT
-                            id
+                            id,
+                            tick1_id,
+                            coin1_id,
+                            coin2_id
                         FROM
                             markets m
                         WHERE
                             (m.tick1_id=? AND m.tick2_id=?) OR
                             (m.tick1_id=? AND m.tick2_id=?)`;
-        let args = [tick1_id, tick2_id, tick2_id, tick1_id];
+        let args = [Database.marketTickId(tick1_id), Database.marketTickId(tick2_id),
+                    Database.marketTickId(tick2_id), Database.marketTickId(tick1_id)];
         let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            id = results[0].id;
-        return id;
+        return (results.length > 0) ? results[0] : null;
+    }
+
+    // Get market_id for given ticker ids
+    async getMarketId(tick1_id, tick2_id){
+        let row = await this.getMarketRow(tick1_id, tick2_id);
+        return (row) ? row.id : null;
     }
 
     // Create record in `markets` table
-    async createMarket(tick1_id, tick2_id){
-        let id = await this.getMarketId(tick1_id, tick2_id);
+    async createMarket(tick1_id, tick2_id, coin1_id, coin2_id){
+        let row = await this.getMarketRow(tick1_id, tick2_id);
+        let id  = (row) ? row.id : null;
+        let t1  = Database.marketTickId(tick1_id);
+        let t2  = Database.marketTickId(tick2_id);
+        let c1  = Number(coin1_id) || 0;
+        let c2  = Number(coin2_id) || 0;
         if(id==null){
             // ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id) makes a concurrent
             // insert of the same pair a no-op while still returning the existing
             // row's id via insertId. Combined with the UNIQUE(tick1_id, tick2_id)
             // key this prevents two rows ever being created for the same pair if
-            // two inserts race past the getMarketId check above.
-            let query = `INSERT INTO markets (tick1_id, tick2_id) values (?, ?)
-                         ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`;
-            let args  = [tick1_id, tick2_id];
+            // two inserts race past the getMarketRow check above. The coin ids ride
+            // the update clause so a row a racing insert already created is labelled
+            // too.
+            let query = `INSERT INTO markets (tick1_id, tick2_id, coin1_id, coin2_id) values (?, ?, ?, ?)
+                         ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id),
+                                                 coin1_id = VALUES(coin1_id),
+                                                 coin2_id = VALUES(coin2_id)`;
+            let args  = [t1, t2, c1, c2];
             let results = await this.doQuery(query, args);
             if(results.insertId)
                 id = Number(results.insertId);
+        } else if(c1 && c2 && (Number(row.coin1_id)===0 || Number(row.coin2_id)===0)){
+            // Self-heal. Every markets row that predates coin1_id/coin2_id carries 0 on
+            // both sides, and the INSERT above never runs for it, so without this the row
+            // stays unlabelled until an operator runs the tracked migration and the API
+            // cannot name the tickerless side of the pair. The CASE keys the two coin ids
+            // to the row's OWN orientation, because getMarketRow matches either. The WHERE
+            // repeats the guard so a concurrent heal writing the same labels is a no-op.
+            let query = `UPDATE markets
+                         SET coin1_id = CASE WHEN tick1_id=? THEN ? ELSE ? END,
+                             coin2_id = CASE WHEN tick1_id=? THEN ? ELSE ? END
+                         WHERE id=? AND (coin1_id=0 OR coin2_id=0)`;
+            let args  = [t1, c1, c2, t1, c2, c1, id];
+            await this.doQuery(query, args);
         }
         return id;
     }
@@ -10746,24 +11081,35 @@ class Database {
             time_24hr = this.util.bcsub(time_now, 86400);
         // Set the last time this info was updated to now
         data.last_updated = time_now;
-        // Lookup basic information on this market (tick, tick_id, decimals)
+        // A side's tick id as `markets` keys it. orders/order_matches store NULL where
+        // the side is the native coin, so every comparison against a markets-side id
+        // below has to translate first or it silently matches nothing.
+        const sideOf = (tick_id) => Database.marketTickId(tick_id);
+        // Lookup basic information on this market (tick, tick_id, decimals).
+        // LEFT joins throughout: a side that is the native coin has no tokens row and no
+        // index_tickers row, and an inner join on either dropped the whole market, which
+        // left its price, bid, ask and 24h stats pinned at the zeroes above.
         let query = `SELECT
                             m1.id       as market_id,
-                            t3.tick     as tick1,
-                            t1.tick_id  as tick1_id,
-                            t1.decimals as tick1_decimals,
-                            t4.tick     as tick2,
-                            t2.tick_id  as tick2_id,
-                            t2.decimals as tick2_decimals
+                            COALESCE(t3.tick, c1.coin) as tick1,
+                            m1.tick1_id as tick1_id,
+                            COALESCE(t1.decimals, ?)   as tick1_decimals,
+                            COALESCE(t4.tick, c2.coin) as tick2,
+                            m1.tick2_id as tick2_id,
+                            COALESCE(t2.decimals, ?)   as tick2_decimals,
+                            m1.coin1_id as coin1_id,
+                            m1.coin2_id as coin2_id
                         FROM
                             markets m1
-                            INNER JOIN tokens        t1 ON (t1.tick_id=m1.tick1_id)
-                            INNER JOIN tokens        t2 ON (t2.tick_id=m1.tick2_id)
-                            INNER JOIN index_tickers t3 ON (t3.id=t1.tick_id)
-                            INNER JOIN index_tickers t4 ON (t4.id=t2.tick_id)
-                        WHERE 
+                            LEFT JOIN tokens        t1 ON (t1.tick_id=m1.tick1_id)
+                            LEFT JOIN tokens        t2 ON (t2.tick_id=m1.tick2_id)
+                            LEFT JOIN index_tickers t3 ON (t3.id=m1.tick1_id)
+                            LEFT JOIN index_tickers t4 ON (t4.id=m1.tick2_id)
+                            LEFT JOIN index_coins   c1 ON (c1.id=m1.coin1_id)
+                            LEFT JOIN index_coins   c2 ON (c2.id=m1.coin2_id)
+                        WHERE
                             m1.id=?`;
-        let args  = [market_id];
+        let args  = [Database.MARKET_NATIVE_DECIMALS, Database.MARKET_NATIVE_DECIMALS, market_id];
         let results = await this.doQuery(query, args);
         if(results.length > 0){
             let row = results[0];
@@ -10771,7 +11117,30 @@ class Database {
             row.market_id = Number(row.market_id);
             row.tick1_id  = Number(row.tick1_id);
             row.tick2_id  = Number(row.tick2_id);
+            row.coin1_id  = Number(row.coin1_id) || 0;
+            row.coin2_id  = Number(row.coin2_id) || 0;
             Object.assign(data, row);
+            // The ageing sweep (getStaleMarkets) never goes through createMarket, so a
+            // pair that stopped trading before the coin columns existed has no other way
+            // back to a labelled row. Derive the two coins from the pair's own earliest
+            // order, oriented to the way the row stores its sides; updateMarketInfo
+            // persists them. Guarded on the 0, so a labelled row costs no extra query.
+            if(data.coin1_id===0 || data.coin2_id===0){
+                let coins = await this.doQuery(
+                    `SELECT o.give_tick_id, o.give_coin_id, o.get_coin_id
+                     FROM orders o
+                     WHERE o.give_coin_id=o.get_coin_id AND
+                           ((COALESCE(o.give_tick_id,0)=? AND COALESCE(o.get_tick_id,0)=?)
+                         OR (COALESCE(o.give_tick_id,0)=? AND COALESCE(o.get_tick_id,0)=?))
+                     ORDER BY o.action_index ASC
+                     LIMIT 1`,
+                    [data.tick1_id, data.tick2_id, data.tick2_id, data.tick1_id]);
+                if(coins.length > 0){
+                    let give_is_tick1 = (sideOf(coins[0].give_tick_id)===data.tick1_id);
+                    data.coin1_id = Number(give_is_tick1 ? coins[0].give_coin_id : coins[0].get_coin_id)  || 0;
+                    data.coin2_id = Number(give_is_tick1 ? coins[0].get_coin_id  : coins[0].give_coin_id) || 0;
+                }
+            }
         }
         // Lookup last trade prices
         query = `SELECT
@@ -10784,7 +11153,7 @@ class Database {
                 INNER JOIN index_statuses s1 ON (s1.id=m1.status_id)
             WHERE
                 m1.give_coin_id=m1.get_coin_id AND 
-                ((m1.give_tick_id=? AND m1.get_tick_id=?) OR (m1.give_tick_id=? AND m1.get_tick_id=?))  AND
+                ((COALESCE(m1.give_tick_id,0)=? AND COALESCE(m1.get_tick_id,0)=?) OR (COALESCE(m1.give_tick_id,0)=? AND COALESCE(m1.get_tick_id,0)=?))  AND
                 s1.status=?
             ORDER BY m1.action_index DESC 
             LIMIT 1`;
@@ -10792,8 +11161,8 @@ class Database {
         results = await this.doQuery(query, args);
         if(results.length > 0){
             let row = results[0];
-            let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
-            let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount  : row.give_amount;
+            let give_amount = (sideOf(row.give_tick_id)===data.tick1_id) ? row.give_amount : row.get_amount;
+            let get_amount  = (sideOf(row.give_tick_id)===data.tick1_id) ? row.get_amount  : row.give_amount;
             data.tick1_price = this.util.getPrice(get_amount, give_amount);
             data.tick2_price = this.util.getPrice(give_amount, get_amount);
         }
@@ -10810,7 +11179,7 @@ class Database {
                 INNER JOIN blocks         b1 ON (b1.block_index=a1.block_index)
             WHERE
                 m1.give_coin_id=m1.get_coin_id AND 
-                ((m1.give_tick_id=? AND m1.get_tick_id=?) OR (m1.give_tick_id=? AND m1.get_tick_id=?))  AND
+                ((COALESCE(m1.give_tick_id,0)=? AND COALESCE(m1.get_tick_id,0)=?) OR (COALESCE(m1.give_tick_id,0)=? AND COALESCE(m1.get_tick_id,0)=?))  AND
                 s1.status=? AND
                 b1.block_time <= ?
             ORDER BY m1.action_index DESC 
@@ -10819,8 +11188,8 @@ class Database {
         results = await this.doQuery(query, args);
         if(results.length > 0){
             let row = results[0];
-            let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
-            let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount  : row.give_amount;
+            let give_amount = (sideOf(row.give_tick_id)===data.tick1_id) ? row.give_amount : row.get_amount;
+            let get_amount  = (sideOf(row.give_tick_id)===data.tick1_id) ? row.get_amount  : row.give_amount;
             data.tick1_24hr_price = this.util.getPrice(get_amount, give_amount);
             data.tick2_24hr_price = this.util.getPrice(give_amount, get_amount);
         }
@@ -10837,7 +11206,7 @@ class Database {
                 INNER JOIN index_statuses s3 ON (s3.id=s1.status_id)
             WHERE
                 o1.give_coin_id=o1.get_coin_id AND 
-                ((o1.give_tick_id=? AND o1.get_tick_id=?) OR (o1.give_tick_id=? AND o1.get_tick_id=?))  AND
+                ((COALESCE(o1.give_tick_id,0)=? AND COALESCE(o1.get_tick_id,0)=?) OR (COALESCE(o1.give_tick_id,0)=? AND COALESCE(o1.get_tick_id,0)=?))  AND
                 s2.status=? AND
                 s3.status=? AND
                 s1.action_index = (
@@ -10855,8 +11224,8 @@ class Database {
             let tick1_bid = 0,
                 tick2_bid = 0;
             for(let row of results){
-                let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
-                let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount : row.give_amount;
+                let give_amount = (sideOf(row.give_tick_id)===data.tick1_id) ? row.give_amount : row.get_amount;
+                let get_amount  = (sideOf(row.give_tick_id)===data.tick1_id) ? row.get_amount : row.give_amount;
                 let price1      = this.util.getPrice(get_amount, give_amount);
                 let price2      = this.util.getPrice(give_amount, get_amount);
                 if(price1==0||price2==0)
@@ -10886,7 +11255,7 @@ class Database {
                 INNER JOIN index_statuses s3 ON (s3.id=s1.status_id)
             WHERE
                 o1.give_coin_id=o1.get_coin_id AND 
-                ((o1.give_tick_id=? AND o1.get_tick_id=?) OR (o1.give_tick_id=? AND o1.get_tick_id=?))  AND
+                ((COALESCE(o1.give_tick_id,0)=? AND COALESCE(o1.get_tick_id,0)=?) OR (COALESCE(o1.give_tick_id,0)=? AND COALESCE(o1.get_tick_id,0)=?))  AND
                 s2.status=? AND
                 s3.status=? AND
                 s1.action_index = (
@@ -10904,8 +11273,8 @@ class Database {
             let tick1_ask = 0,
                 tick2_ask = 0;
             for(let row of results){
-                let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
-                let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount : row.give_amount;
+                let give_amount = (sideOf(row.give_tick_id)===data.tick1_id) ? row.give_amount : row.get_amount;
+                let get_amount  = (sideOf(row.give_tick_id)===data.tick1_id) ? row.get_amount : row.give_amount;
                 let price1      = this.util.getPrice(get_amount, give_amount);
                 let price2      = this.util.getPrice(give_amount, get_amount);
                 if(price1==0||price2==0)
@@ -10933,7 +11302,7 @@ class Database {
                 INNER JOIN blocks         b1 ON (b1.block_index=a1.block_index)
             WHERE
                 m1.give_coin_id=m1.get_coin_id AND 
-                ((m1.give_tick_id=? AND m1.get_tick_id=?) OR (m1.give_tick_id=? AND m1.get_tick_id=?))  AND
+                ((COALESCE(m1.give_tick_id,0)=? AND COALESCE(m1.get_tick_id,0)=?) OR (COALESCE(m1.give_tick_id,0)=? AND COALESCE(m1.get_tick_id,0)=?))  AND
                 s1.status=? AND
                 b1.block_time >= ?
             ORDER BY m1.action_index DESC`;
@@ -10952,8 +11321,8 @@ class Database {
             let tick1_decimals = Math.max(0, Math.min(18, parseInt(data.tick1_decimals) || 0));
             let tick2_decimals = Math.max(0, Math.min(18, parseInt(data.tick2_decimals) || 0));
             for(let row of results){
-                let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
-                let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount : row.give_amount;
+                let give_amount = (sideOf(row.give_tick_id)===data.tick1_id) ? row.give_amount : row.get_amount;
+                let get_amount  = (sideOf(row.give_tick_id)===data.tick1_id) ? row.get_amount : row.give_amount;
                 let price1      = this.util.getPrice(get_amount, give_amount);
                 let price2      = this.util.getPrice(give_amount, get_amount);
                 // Set tick high/low prices
@@ -11018,7 +11387,13 @@ class Database {
         let tick2_24hr_change = data.tick2_24hr_change;
         let tick2_24hr_volume = data.tick2_24hr_volume;
         let last_updated      = data.last_updated;
-        let query = `UPDATE 
+        // Written only when getMarketInfo resolved BOTH coins. A row it could not label
+        // (no surviving order for the pair) keeps whatever it has rather than being
+        // rewritten to 0, and a caller that built `data` without them is unaffected.
+        let coin1_id          = Number(data.coin1_id) || 0;
+        let coin2_id          = Number(data.coin2_id) || 0;
+        let label             = (coin1_id > 0 && coin2_id > 0);
+        let query = `UPDATE
                         markets
                     SET
                         tick1_price=?,
@@ -11037,10 +11412,15 @@ class Database {
                         tick2_24hr_low=?,
                         tick2_24hr_change=?,
                         tick2_24hr_volume=?,
-                        last_updated=?
+                        last_updated=?` + (label ? `,
+                        coin1_id=?,
+                        coin2_id=?` : ``) + `
                     WHERE
                         id=?`;
-        let args    = [tick1_price, tick1_bid, tick1_ask, tick1_24hr_price, tick1_24hr_high, tick1_24hr_low, tick1_24hr_change, tick1_24hr_volume, tick2_price, tick2_bid, tick2_ask, tick2_24hr_price, tick2_24hr_high, tick2_24hr_low, tick2_24hr_change, tick2_24hr_volume, last_updated, market_id];
+        let args    = [tick1_price, tick1_bid, tick1_ask, tick1_24hr_price, tick1_24hr_high, tick1_24hr_low, tick1_24hr_change, tick1_24hr_volume, tick2_price, tick2_bid, tick2_ask, tick2_24hr_price, tick2_24hr_high, tick2_24hr_low, tick2_24hr_change, tick2_24hr_volume, last_updated];
+        if(label)
+            args.push(coin1_id, coin2_id);
+        args.push(market_id);
         let results = await this.doQuery(query, args);
     }
 
@@ -12190,11 +12570,12 @@ class Database {
     }
 
     // Create record in `reward_claims` table
-    // Create a validator reward record. Two writers:
-    //   - deterministic block processing (PRICE v0 oracle_round split, ATTEST fee
-    //     settlement) - replayable on reindex by construction
-    //   - the hub's pushvalidatorrewards RPC (anchor publish rewards) - restored
-    //     on reindex from the ANCHOR archive via recovery.js
+    // Create a validator reward record. ONE writer since the PUSH-ANCHOR endgame
+    // retired the hub's pushvalidatorrewards RPC: deterministic block processing
+    // (PRICE v0 oracle_round split, ATTEST fee settlement, and the anchor/archive
+    // publish rewards derived from the mirrored XANCPUB attestation), replayable on
+    // reindex by construction and restored from the ANCHOR archive by recovery.js.
+    // No RPC handler reaches this any more; a caller that does is a forge vector.
     // pubkeyHex: 64-char hex Ed25519 signing pubkey of the validator that earned the reward
     // roundReference: round number (oracle_round) or attestation index
     // rewardType: 'oracle_round', 'attest_fee', 'attest_bcast', 'anchor_<chain>', 'anchor_archive'
@@ -12648,11 +13029,12 @@ class Database {
     // API-path view of this DB instance: same methods, but every doQuery()
     // draws an independent pooled connection (_poolQuery) instead of routing
     // through getConnection(), which returns the open block's
-    // transactionConnection while a block is processing. Federation RPC
-    // handlers that WRITE (pushvalidatorrewards) must use this view: a push
-    // landing mid-block would otherwise join the block's ACID transaction and
-    // be rolled back on a reorg/throw AFTER the API already acked it (the hub
-    // never retries), and its statements would share the block's physical
+    // transactionConnection while a block is processing. Any federation RPC
+    // handler that WRITES must use this view. There is none today (the last one,
+    // pushvalidatorrewards, was retired), and the rule is what made that safe: a
+    // write landing mid-block would otherwise join the block's ACID transaction
+    // and be rolled back on a reorg/throw AFTER the API already acked it (the
+    // caller never retries), and its statements would share the block's physical
     // connection with commitTransaction()'s release. The view also sees only
     // COMMITTED state, so stake-source resolution never reads rows the block
     // may still roll back. Do NOT use it for anything that opens its own
@@ -12824,6 +13206,14 @@ class Database {
     // ownership: an UNSTAKE on a delegated-only key has no stake rows to deactivate, so crediting
     // the source's aggregate here would inflate balances (the cooldown sweep credits unstakes.AMOUNT
     // regardless of what was deactivated). Keep this query direct-stake-only.
+    //
+    // THREE MODES, selected by `opts` and differing only in which rows they count:
+    //   default            - active at blockIndex (activation reached, not yet deactivated)
+    //   undeactivatedOnly  - active AND not already being unstaked (UNSTAKE)
+    //   reuseBlockingOnly  - EVERY row regardless of activation state, minus the rows that
+    //                        are deactivated and past cooldown (STAKE v1 key reuse). Read as
+    //                        a boolean only; see the branch comment for why the aggregate is
+    //                        meaningless there.
     async getActiveStakeByPubkey(pubkey, blockIndex, opts){
         let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
         if(pubkey_id === null)
@@ -12842,7 +13232,36 @@ class Database {
                      WHERE s.signing_pubkey_id=? AND s.status_id=?`;
         let args = [pubkey_id, valid_id];
         if(blockIndex !== undefined && blockIndex !== null){
-            if(opts && opts.undeactivatedOnly){
+            if(opts && opts.reuseBlockingOnly){
+                // STAKE v1 KEY-REUSE path (stake_key_reuse_activation.js), and the ONLY mode
+                // here that applies no activation filter at all. It answers "is this key
+                // FREE", not "is this key active", so it must count EVERY valid stakes row
+                // the pubkey has ever held and exclude only the rows that have genuinely
+                // released it: deactivated (deactivation_block IS NOT NULL) AND past
+                // cooldown. A row that is active, pending activation, or deactivated but
+                // still inside cooldown survives the filter and so blocks the reuse.
+                //
+                // Neither existing mode can answer it. The default mode and
+                // undeactivatedOnly both carry `activation_block <= blockIndex`, which HIDES
+                // a row staked moments ago inside its ACTIVATION_DELAY_BLOCKS window, so two
+                // STAKE v1 actions on one key inside the delay would both be admitted and the
+                // key would carry two independent bonds.
+                //
+                // Cooldown is anchored on the stakes row (deactivation_block +
+                // COOLDOWN_BLOCKS) rather than joined to unstakes.cooldown_end_block: one row
+                // set, no join, no dependence on an unstakes row existing, and the resulting
+                // ACTIVATION_DELAY_BLOCKS of slack falls on the REFUSING side, which is the
+                // legacy behaviour. The rationale lives in stake_key_reuse_activation.js.
+                //
+                // EXISTENCE ONLY. The GROUP BY aggregate is meaningless in this mode: the SUM
+                // spans pending and cooled-down rows alike, so callers must read the return
+                // as a boolean and never as an amount or an owner.
+                let staking = this.config['STAKING'];
+                let cooldownBlocks = (staking && staking['COOLDOWN_BLOCKS']) ? staking['COOLDOWN_BLOCKS'] : 1000;
+                query += ' AND (s.deactivation_block IS NULL OR s.deactivation_block + ? > ?)';
+                args.push(cooldownBlocks);
+                args.push(blockIndex);
+            } else if(opts && opts.undeactivatedOnly){
                 // UNSTAKE path: only stakes not already being unstaked (deactivation_block
                 // IS NULL). A stake already deactivating from a prior UNSTAKE in the same
                 // activation-delay window stays "active" (deactivation_block is a future
@@ -13415,6 +13834,92 @@ class Database {
             // map with no stake and quietly shrink the quorum denominator S.
             weight: requireStakeWeight(r.weight, 'getCapabilitySnapshotWeights(' + capability + ')')
         }));
+    }
+
+    // Re-derive ONE hub-mirrored capability_snapshots row against this node's OWN
+    // authoritative stakes at the row's snapshot_block, and say whether the hub's
+    // claim contradicts what this chain can prove.
+    //
+    // capability_snapshots is the only mirrored table with no authentication on the
+    // wire: rows arrive over a bare SELECT and land via INSERT IGNORE, and they are the
+    // verification authority every off-BTC resolver reads (cross_chain, oracle_publish,
+    // price, attestation). The full remedy is an SMT membership proof against the BTC
+    // state_checkpoints stakes_root, which needs a new hub endpoint, a trust anchor, an
+    // activation height and a grandfathering watermark. This is the FIRST step of that
+    // ladder and nothing more: falsifiability, not coverage.
+    //
+    // Its honest limit, stated so no caller mistakes it for the proof: it protects BTC
+    // ONLY, because BTC is the one chain whose capability stakes are local and therefore
+    // the one chain that can re-derive a row without trusting anyone. It is also the one
+    // chain that does NOT read the mirror to resolve a capability (usesCapabilitySnapshot
+    // is false on BTC). What it buys is that a hub serving FORGED validator sets is
+    // caught on the BTC indexers rather than being silently mirrored everywhere.
+    //
+    // Verdict shape is anchor_proof_client.js's, deliberately:
+    //   'verified' - the row's (signing_pubkey, source, amount) matches this node's own
+    //                effective-signer set and source aggregate at snapshot_block.
+    //   'refused'  - this node CAN re-derive that block and the row contradicts it.
+    //   'unknown'  - this node cannot judge (block not reached, capability not local,
+    //                set truncated, read failed). The caller applies the row as before:
+    //                an unjudgeable row must never become a mirror hole.
+    //
+    // The local set is re-derived with minStake '0' ON PURPOSE. The hub filters its rows
+    // by its OWN authoritative MIN_STAKE, which can legitimately differ from this node's
+    // local floor, so re-deriving at the local floor would refuse honest rows the moment
+    // the two drifted. At '0' the local set is the widest superset (every source with any
+    // active stake, every effective key of it), and per-source weight is the source
+    // aggregate, which no threshold changes. So this check asks only "could this key, under
+    // this source, carry this weight here?" - a contradiction is real, and the rows the hub
+    // legitimately withheld simply are not examined. Completeness (a row the hub SHOULD
+    // have served and did not) is NOT checkable without knowing the hub's MIN_STAKE and is
+    // deliberately out of scope for this step.
+    async verifyCapabilitySnapshotRow(row){
+        if(!row) return { verdict: 'unknown', reason: 'no row' };
+        let capability = row.capability == null ? '' : String(row.capability);
+        // A chain that RESOLVES this capability from the mirror has no local stakes to
+        // re-derive from; asking it would compare the mirror against itself.
+        if(usesCapabilitySnapshot(this.config, capability))
+            return { verdict: 'unknown', reason: 'this chain resolves ' + capability + ' from the mirror' };
+        if(!this.isCapabilityConfigured(capability))
+            return { verdict: 'unknown', reason: 'capability ' + capability + ' is not configured on this node' };
+        let block = Number(row.snapshot_block);
+        if(!Number.isFinite(block) || block < 0 || Math.floor(block) !== block)
+            return { verdict: 'unknown', reason: 'unusable snapshot_block ' + String(row.snapshot_block).slice(0, 32) };
+        // Availability fence. Below our own tip the stake history at `block` is whatever
+        // we have parsed so far, which for an unreached block is nothing - refusing there
+        // would reject every honest row served ahead of our sync.
+        let tip = await this.getLatestBlockIndex();
+        if(!(Number(tip) >= block))
+            return { verdict: 'unknown', reason: 'local tip ' + tip + ' has not reached snapshot_block ' + block };
+        let local;
+        try {
+            local = await this.getStakeWeightsByCapability(capability, block, '0');
+        } catch(e) {
+            return { verdict: 'unknown', reason: 'local stake re-derivation failed: ' + (e && e.message ? e.message : e) };
+        }
+        if(!Array.isArray(local))
+            return { verdict: 'unknown', reason: 'local stake re-derivation returned no set' };
+        // A truncated set is a PARTIAL set: a row missing from it may be missing only
+        // because the cap cut it off, so no refusal can be drawn from this block.
+        if(local.truncated)
+            return { verdict: 'unknown', reason: 'local stake set truncated at block ' + block };
+        let pubkey = String(row.signing_pubkey == null ? '' : row.signing_pubkey).toLowerCase();
+        let source = String(row.source == null ? '' : row.source).toLowerCase();
+        let match = null;
+        for(let r of local){
+            if(String(r.pubkey).toLowerCase() === pubkey &&
+               String(r.source == null ? '' : r.source).toLowerCase() === source){ match = r; break; }
+        }
+        if(match === null)
+            return { verdict: 'refused',
+                     reason: 'no local stake makes ' + pubkey.slice(0, 16) + ' an effective signer for source ' +
+                             source.slice(0, 24) + ' at block ' + block };
+        if(normalizeStakeAmount(match.weight) !== normalizeStakeAmount(row.amount))
+            return { verdict: 'refused',
+                     reason: 'weight for ' + pubkey.slice(0, 16) + '/' + source.slice(0, 24) + ' at block ' + block +
+                             ' is locally ' + String(match.weight).slice(0, 32) + ', hub served ' +
+                             String(row.amount).slice(0, 32) };
+        return { verdict: 'verified' };
     }
 
     // Whether `capability` is present in this indexer's STAKING.CAPABILITIES config.
@@ -17054,8 +17559,36 @@ class Database {
     // a silently outdated value. Age is measured as (blockTime − snapshot.block_timestamp),
     // both chain-derived unix seconds, so the check is deterministic across nodes and does
     // not false-trigger during historical backfill.
+    //
+    // Landed-batch bound (price_fee_batch_landed_activation.js). At/after the height
+    // the selection additionally requires the round's batch to have LANDED on chain at
+    // or before this block's time, so a hub-connected node (whose mirror holds a round
+    // a whole batch window before the batch carrying it is mined) and a chain-only node
+    // (which cannot hold that round at all until the batch lands) price the same action
+    // against the same round. Unarmed everywhere today, so the query below is
+    // byte-identical to the pre-gate one on every network.
     async getLatestPrice(coinPair, blockHeight, opts){
         this._assertPriceBarrierNotSkipped('getLatestPrice');
+        // The bound's own axis is the landing block's clock, so it needs a chain-derived
+        // block time. Armed with no such time available the read FAILS CLOSED (no price)
+        // rather than answering from the unbounded selection, which is the fork this gate
+        // closes; every consensus caller passes opts.blockTime.
+        let landedActive = batchLandedFee.isPriceFeeBatchLandedActive(
+            blockHeight, this.config['NETWORK'], this.config['COIN']);
+        let landedTime   = opts ? Number(opts.blockTime) : NaN;
+        if(landedActive && !Number.isFinite(landedTime)){
+            if(!this._batchLandedNoTimeWarned){
+                this._batchLandedNoTimeWarned = true;
+                console.warn('WARNING: getLatestPrice: the landed-batch fee bound is armed but this call ' +
+                    'supplied no chain-derived block time (opts.blockTime); refusing to price ' +
+                    coinPair + ' from the unbounded selection.');
+            }
+            return null;
+        }
+        // Empty below the height, so every query string and argument list stays
+        // byte-identical to the pre-gate one and historical replay is unchanged. The
+        // clause goes LAST in each WHERE so its argument appends last.
+        let landedBound = landedActive ? ' AND batch_block_time > 0 AND batch_block_time <= ?' : '';
         let query, args;
         if(opts && opts.selectByTime && Number.isFinite(Number(opts.blockTime))){
             // H-3 (NATIVE_FEE_PRICE_TIME_GATE): on non-reference chains the
@@ -17068,22 +17601,25 @@ class Database {
             query = `SELECT price, round_number, block_timestamp
                      FROM price_snapshots
                      WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL
-                       AND block_timestamp <= ?
+                       AND block_timestamp <= ?${landedBound}
                      ORDER BY round_number DESC LIMIT 1`;
             args = [coinPair, Number(opts.blockTime)];
+            if(landedActive) args.push(landedTime);
         } else if(blockHeight !== undefined && blockHeight !== null){
             query = `SELECT price, round_number, block_timestamp
                      FROM price_snapshots
                      WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL
-                       AND reference_block <= ?
+                       AND reference_block <= ?${landedBound}
                      ORDER BY round_number DESC LIMIT 1`;
             args = [coinPair, blockHeight];
+            if(landedActive) args.push(landedTime);
         } else {
             query = `SELECT price, round_number, block_timestamp
                      FROM price_snapshots
-                     WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL
+                     WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL${landedBound}
                      ORDER BY round_number DESC LIMIT 1`;
             args = [coinPair];
+            if(landedActive) args.push(landedTime);
         }
         // Strict read (M-17): this is a consensus input. doQuery would swallow a
         // non-transactional query error into [] - indistinguishable from "no
@@ -17474,6 +18010,17 @@ Database.MIGRATION_CHECKSUM_REBASELINES = {
         from: '05dfd2ef7d246929a451521aa7c4c6e0f21faf019dd06f1f16384a450675267c', // orphaned blob 8a293ccf, pre-scrub
         to:   '0796c26842434c39b056e9875ba5ee7dbbcfd92d340e2899f7921e03147c5458',
     },
+    // Added the `deploy-precondition=required` header tag (and the DEPLOY PRECONDITION
+    // comment block explaining it) when the reward-identity startup assertion landed, the
+    // same retag the pubkeys widen carries above. Comment lines only: the four ALTER TABLE
+    // statements are byte-identical, verified by comparing the comment-stripped residue
+    // against the pre-tag revision rather than assumed. a0dd6d08 is the file's only
+    // committed revision, so one `from` covers every database that applied it by hand;
+    // where none has, the entry is inert.
+    '2026-08-24-validator-rewards-round-qualifier.sql': {
+        from: '069f0e73f1cb6179d0dcab361832204c96aa1cb4072454ddcd7e6a8acd2d31ab', // a0dd6d08, pre-tag
+        to:   '37ff284b7f11f248e9f52979f70e5fe8f13c9cad7a7e719b4633866e8c81dc1a',
+    },
 };
 
 // Applicability preconditions the runner evaluates against the LIVE schema before it
@@ -17620,6 +18167,14 @@ Database.MIGRATION_LEDGER_RENAMES = {
     'add_balances_composite_index.sql':                 '2026-05-30-balances-composite-index.sql',
     'unique_full_column_index_addresses.sql':           '2026-06-03-unique-full-column-index-addresses.sql',
     'add_cross_chain_matches_partial_fill_columns.sql': '2026-06-09-cross-chain-matches-partial-fill-columns.sql',
+    // v0.17.0 regtest-first rehearsal (2026-09-11): both files sorted before an
+    // already-applied migration (2026-09-08-deploy-deferred-assembly.sql), so they
+    // were renamed forward to 2026-09-11- to restore lexical=chronological order.
+    // The fleet already recorded them applied under their 2026-09-08- names, so
+    // without these entries the rename alone makes both look pending again and the
+    // auto path re-applies an ADD COLUMN that is already there.
+    '2026-09-08-contract-meta-columns.sql':      '2026-09-11-contract-meta-columns.sql',
+    '2026-09-08-cross-chain-btc-chain-id.sql':   '2026-09-11-cross-chain-btc-chain-id.sql',
 };
 
 // Pure planner for the one-time ledger rename heal. Given the names already recorded
@@ -17711,6 +18266,11 @@ Database.STARTUP_ASSERTED_MIGRATIONS = [
         file:      '2026-07-24-pubkeys-widen-uncompressed.sql',
         assertion: '_assertPubkeyColumnIsUncompressedWide',
         symptom:   'Fatal indexer error: pubkeys.pubkey holds 66 chars but VARCHAR(130) is required'
+    },
+    {
+        file:      '2026-08-24-validator-rewards-round-qualifier.sql',
+        assertion: '_assertRewardUniqueKeyCarriesQualifier',
+        symptom:   'Fatal indexer error: validator_rewards.reward_unique does not include round_qualifier'
     }
 ];
 
@@ -17745,5 +18305,27 @@ Database.migrationDeclaresDeployPrecondition = function(raw){
 // Exposed for the unit suite (and the sync-twin drift check): the weightless-row
 // guard is consensus-relevant, so it is tested directly, not only through a query.
 Database.requireStakeWeight = requireStakeWeight;
+
+// What `markets.tick1_id` / `tick2_id` hold for a side that is the native coin
+// rather than a token. NOT NULL, because MariaDB treats NULL as distinct inside a
+// UNIQUE index: a NULL-keyed side slips past uq_markets_pair, so the pair loses the
+// one-row-per-market guarantee every other pair has. index_tickers ids start at 1,
+// so 0 can never collide with a real ticker. Which coin the side actually is comes
+// from the row's coin1_id / coin2_id.
+Database.MARKET_NATIVE_TICK_ID = 0;
+
+// Decimal precision of a native-coin market side. Tokens carry their own precision
+// in `tokens.decimals`; the coin has no such row, and every chain the indexer follows
+// denominates in 1e-8 units. Only the 24h volume accumulator reads it, so a coin that
+// ever differed would misprint a display total, not a ledger amount.
+Database.MARKET_NATIVE_DECIMALS = 8;
+
+// A market side's tick id as `markets` stores it. `orders` and `order_matches`
+// carry NULL on a tickerless side; this is the one place that translation happens.
+Database.marketTickId = function(tick_id){
+    if(tick_id === null || tick_id === undefined || tick_id === '')
+        return Database.MARKET_NATIVE_TICK_ID;
+    return Number(tick_id);
+};
 
 module.exports = Database

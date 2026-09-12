@@ -18,19 +18,24 @@
  * pushvalidatorrewards was a key-authenticated JSON-RPC that wrote rows into
  * validator_rewards, which COLLECT can spend. Every reward it carried is now
  * derived from on-chain bytes instead: oracle_round / attest_fee / attest_bcast
- * during block processing, anchor_<CHAIN> from the ANCHOR v4/v5 publisher
- * attestation, anchor_archive from the ANCHOR v6 one. Mainnet is past both
- * anchor flag-days and both sit at 0 on testnet and regtest, so the staged gates
- * that used to stand in the handler refused every push on every live network.
- * The write path is now DELETED rather than gated.
+ * during block processing, anchor_<CHAIN> and anchor_bundle from the ANCHOR
+ * bundle's publisher attestation, anchor_archive from the archive head's. The
+ * write path was deleted first and the handler left standing as a refusing stub,
+ * so an un-upgraded hub read a terminal error rather than a method-not-found its
+ * push loop misread as an acceptance. The ENDGAME (this state) removes the method
+ * outright: no hub build carries a push loop or the terminal-refusal predicate
+ * any more, so the stub had no caller left to be kind to.
  *
- * What this file pins:
- *   - the refusal answers EVERY reward type, including one nobody has minted yet,
- *     and reads as terminal to the hub's push loop so a stale hub drops instead
- *     of looping against a node that will never accept;
- *   - the handler holds no write path at all, so no gate input, forged or
- *     otherwise, can reach createValidatorReward or the smallest-pubkey
- *     reconcileAnchorRewardWinner collapse.
+ * What this file pins is that the rail does not come back by accident:
+ *   - src/api.js declares no pushvalidatorrewards handler at all, so no request
+ *     body can reach createValidatorReward or the smallest-pubkey
+ *     reconcileAnchorRewardWinner collapse through an RPC;
+ *   - WRITE_METHODS does not list it, so nothing re-registers it by leaning on
+ *     the gate list as if the method still existed.
+ *
+ * The SHIPPED behaviour of the removal (ungated, and answered -32601 by the real
+ * app over HTTP) is asserted in test/security/http-surface/auth-gate.test.js,
+ * which boots src/api.js for real. These are the cheap source-shape guards.
  */
 
 'use strict';
@@ -38,111 +43,58 @@
 const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
-const { canonicalizeRewardType, rewardPushRetiredError } = require('../../src/reward-push-gate');
+const { canonicalizeRewardType } = require('../../src/reward-push-gate');
 
-// api.js is a server entrypoint and exports no controller, so the handler itself is
-// asserted the same way test/unit/api-federation-read-isolation.test.js asserts its
-// apiView routing: over the handler's own source text. The refusal it returns is
-// exercised as behaviour through rewardPushRetiredError below.
+// api.js is a server entrypoint and exports no controller, so its shape is asserted
+// the same way test/unit/api-federation-read-isolation.test.js asserts its apiView
+// routing: over the source text.
 const API_SRC = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
-const PUSH_HANDLER_SRC = (function () {
-    const start = API_SRC.indexOf('async pushvalidatorrewards(');
-    assert.notStrictEqual(start, -1, 'pushvalidatorrewards handler not found in src/api.js');
-    const end = API_SRC.indexOf('\n        // Resolve the staking source address', start);
-    assert.notStrictEqual(end, -1, 'could not bound the pushvalidatorrewards handler body');
-    return API_SRC.slice(start, end);
-})();
 
-// The hub's terminal-refusal predicate (xchain-hub RewardTracker.isTerminalPushError).
-// An error matching it stops the push immediately; anything else burns the retry budget.
-const HUB_TERMINAL_PUSH_ERROR = /is not pushable|push retired|is required|must be an array/i;
+// api.js documents its own history in prose, and the retired rail is named in
+// several of those comments on purpose. A call-site assertion therefore has to
+// read CODE, not narrative, or it fails on the very comment that records the
+// retirement. Comments are stripped crudely (no string-literal awareness), which
+// is safe here: the assertions below only ask whether an identifier survives.
+const API_CODE = API_SRC
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/^[ \t]*\/\/.*$/gm, ' ');
 
-// Every reward type the rail ever carried, plus shapes a caller can invent.
-const EVERY_PUSHED_TYPE = [
-    'anchor_BTC', 'anchor_LTC', 'anchor_DOGE', 'anchor_archive',
-    'anchor_btc', 'anchor_BtC', 'Anchor_Archive', 'ANCHOR_ARCHIVE',
-    'oracle_round', 'attest_fee', 'attest_bcast',
-    'anchor_xyz', 'anchor_btc_x', 'xanchor_btc', '', 'not a type',
-];
+describe('pushvalidatorrewards is retired outright @regression @tier1', function () {
 
-describe('pushvalidatorrewards is retired for every reward type @regression @tier1', function () {
-
-    it('refuses every reward type the rail ever carried, and every invented one', function () {
-        for (const type of EVERY_PUSHED_TYPE) {
-            const err = rewardPushRetiredError(type);
-            assert.strictEqual(typeof err, 'string', 'no reward type may resolve to an acceptance: ' + type);
-            assert.ok(err.length > 0, 'the refusal must carry a reason: ' + type);
-        }
+    it('declares no handler in src/api.js', function () {
+        assert.ok(!/\bpushvalidatorrewards\s*[(:]/i.test(API_CODE),
+            'the retired rail must not be re-registered as a JSON-RPC method');
     });
 
-    it('refuses a missing / null / non-string reward_type without throwing', function () {
-        for (const type of [undefined, null, 0, {}, [], true]) {
-            const err = rewardPushRetiredError(type);
-            assert.strictEqual(typeof err, 'string');
-            assert.ok(err.length > 0);
-        }
-        // An absent type still names itself, so an operator reading the log can tell a
-        // malformed push apart from one that named a real reward.
-        assert.match(rewardPushRetiredError(undefined), /\(unset\)/);
+    it('is not listed in WRITE_METHODS', function () {
+        const m = /const WRITE_METHODS = new Set\(\[([^\]]*)\]\)/.exec(API_SRC);
+        assert.ok(m, 'WRITE_METHODS declaration not found in src/api.js');
+        assert.ok(!/pushvalidatorrewards/.test(m[1]),
+            'a retired method left in the gate list implies a handler that no longer exists');
     });
 
-    it('reads as TERMINAL to the hub push loop, so a stale hub drops instead of looping', function () {
-        // A refusal the hub does not recognise is treated as transient and re-posted
-        // pushMaxAttempts times against a node whose answer can never change.
-        for (const type of EVERY_PUSHED_TYPE.concat([undefined, null])) {
-            assert.match(rewardPushRetiredError(type), HUB_TERMINAL_PUSH_ERROR,
-                'refusal for ' + String(type) + ' must match the hub terminal-error predicate');
-        }
+    it('leaves the write-gate list in place so a future write method lands in it', function () {
+        // The removal empties WRITE_METHODS; it must not delete the set, or the next
+        // method that mutates replicated state ships ungated by default.
+        assert.match(API_SRC, /const WRITE_METHODS = new Set\(/,
+            'the write-gate list must survive the last member leaving it');
+        assert.match(API_SRC, /WRITE_METHODS\.has\(normalized\)/,
+            'the perimeter gate must still consult the write list');
     });
 
-    it('names the reward with the spelling the derived row carries', function () {
-        // The derived winner is written as 'anchor_' + CHAIN.toUpperCase(), so a refusal
-        // logged for 'anchor_btc' should name the same reward an operator sees on the
-        // derive side rather than a second spelling of it.
-        assert.match(rewardPushRetiredError('anchor_btc'), /anchor_BTC/);
-        assert.match(rewardPushRetiredError('Anchor_Archive'), /anchor_archive/);
+    it('holds no reward-write call site anywhere in the controller surface', function () {
+        // The forge vector was an RPC body reaching either of these. The block-processing
+        // derive path lives in XChainIndexer / actions, never in api.js.
+        assert.ok(!/createValidatorReward\s*\(/.test(API_CODE),
+            'no RPC handler may mint a COLLECT-spendable validator_rewards row');
+        assert.ok(!/reconcileAnchorRewardWinner\s*\(/.test(API_CODE),
+            'no RPC handler may run the collapse that DELETES a derived reward row');
     });
 });
 
-describe('pushvalidatorrewards holds no write path @regression @tier1', function () {
-
-    it('never reaches the reward writer', function () {
-        assert.ok(!/createValidatorReward/.test(PUSH_HANDLER_SRC),
-            'the retired rail must not be able to mint a COLLECT-spendable validator_rewards row');
-    });
-
-    it('never reaches the smallest-pubkey reconcile that DELETES rows', function () {
-        // This collapse was the destructive half of the forge: a pushed row sharing a
-        // round with the derived winner deleted that winner.
-        assert.ok(!/reconcileAnchorRewardWinner/.test(PUSH_HANDLER_SRC),
-            'the retired rail must not be able to delete a derived reward row');
-    });
-
-    it('opens no database connection at all', function () {
-        assert.ok(!/apiView\(\)/.test(PUSH_HANDLER_SRC),
-            'a handler that only refuses has no reason to draw a pooled connection');
-        assert.ok(!/committedView\(/.test(PUSH_HANDLER_SRC),
-            'the committed-tip read existed only to give the archive gate a second plane');
-    });
-
-    it('answers from the refusal helper rather than re-deriving a flag-day in the handler', function () {
-        assert.ok(/rewardPushRetiredError\(\s*reward_type\s*\)/.test(PUSH_HANDLER_SRC),
-            'the handler must answer with the shared refusal, which the hub predicate is pinned against');
-        assert.ok(!/isAnchorRewardActive|isArchiveRewardActive/.test(PUSH_HANDLER_SRC),
-            'no flag-day may be consulted here: a re-introduced gate is a re-introduced admitted case');
-    });
-
-    it('is still listed as a WRITE method, so it stays key-gated', function () {
-        // The method no longer writes, but leaving it ungated would expose an
-        // unauthenticated probe of a consensus node for no gain.
-        assert.match(API_SRC, /WRITE_METHODS\s*=\s*new Set\(\[\s*'pushvalidatorrewards'/,
-            'the retired method must remain behind the API key');
-    });
-});
-
-// The reward_type canonicalization outlives the gate it was built for: the refusal
-// above names the type with it, and the uppercase-chain invariant it documents is
-// still load-bearing on the derive side (see anchorRewardCanonicalGolden.test.js).
+// The reward_type canonicalization outlives the rail it was built for: the
+// uppercase-chain invariant it states is load-bearing on the derive side
+// (see anchorRewardCanonicalGolden.test.js).
 describe('canonicalizeRewardType() naming @regression @tier1', function () {
 
     it('uppercases the chain suffix of a lowercase per-chain anchor reward', function () {
@@ -173,14 +125,12 @@ describe('canonicalizeRewardType() naming @regression @tier1', function () {
 
     it('lowercases anchor_bundle to its canonical form (ANCHOR v7)', function () {
         // The bundle reward names a LEG, not a chain, so it canonicalizes lowercase the
-        // way anchor_archive does. The refusal must spell it the way the derived row does.
+        // way anchor_archive does, and every caller spells it the way the derived row does.
         assert.strictEqual(canonicalizeRewardType('anchor_bundle'), 'anchor_bundle');
         assert.strictEqual(canonicalizeRewardType('Anchor_Bundle'), 'anchor_bundle');
         assert.strictEqual(canonicalizeRewardType('ANCHOR_BUNDLE'), 'anchor_bundle');
         // A decorated variant is not the bundle type; left alone.
         assert.strictEqual(canonicalizeRewardType('anchor_bundle_x'), 'anchor_bundle_x');
-        assert.ok(rewardPushRetiredError('ANCHOR_BUNDLE').includes('anchor_bundle'),
-            'the refusal names the type with the spelling the derived row carries');
     });
 
     it('passes non-chain reward types through verbatim (no over-normalization)', function () {

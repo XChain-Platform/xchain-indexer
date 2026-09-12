@@ -90,6 +90,26 @@ const GATES = [
     ['price_pair_activation.js',            'PRICE_PAIR_TICKER_MAX_LEGACY'],
     ['price_pair_activation.js',            'PRICE_PAIR_TICKER_MAX_WIDE'],
     ['price_sig_tally_activation.js',       'PRICE_SIG_TALLY_ACTIVATION'],
+    // The height at which fee pricing stops selecting rounds the chain has not yet shown
+    // the node. A one-sided edit forks fee validity between a hub-connected node and a
+    // chain-only node at the boundary, which is the divergence the gate exists to close.
+    ['price_fee_batch_landed_activation.js', 'PRICE_FEE_BATCH_LANDED_ACTIVATION'],
+    // The PLATFORM TRAIN gate (release-management section 13), keyed by platform version
+    // rather than by feature. A one-sided edit here is worse than a one-sided feature-gate
+    // edit: this map is what decides whether a node HALTS at a train boundary or applies
+    // the block under the old rules, so a drifted copy is a node that forks at the one
+    // boundary the mechanism exists to make safe. The twin lives in xchain-sync.
+    ['train_activation.js',                'TRAIN_ACTIVATION'],
+    // The height at which a retired signing key stops being permanently burned: below it
+    // STAKE v1 refuses any pubkey that ever held a valid stakes row, at/above it a pubkey
+    // whose every row is deactivated and past cooldown is admitted. A one-sided edit forks
+    // STAKE v1 admission, and with it the bond debit, the escrow row and capability-set
+    // membership, all of which land in hashed history.
+    ['stake_key_reuse_activation.js',      'STAKE_KEY_REUSE_ACTIVATION'],
+    // The height at which a SWEEP stops writing a zero-amount debit and credit leg for a
+    // held tick with nothing to move. Those rows are in the per-block ledger hash, so a
+    // one-sided edit forks the ledger hash at the first zero-balance sweep past the boundary.
+    ['sweep_zero_leg_activation.js',       'SWEEP_ZERO_LEG_ACTIVATION'],
     ['snapshot_reorg_buffer.js',           'SNAPSHOT_BURIAL_ACTIVATION'],
     // The burial depth that gate reads; canon claims it byte-identical to the local copies.
     ['snapshot_reorg_buffer.js',           'CANONICAL_REORG_BUFFER'],
@@ -130,6 +150,26 @@ describe('activation-gate constant parity to canonical constants.js @regression'
                 file + ' no longer exports ' + exportName + '; the parity case for it would compare ' +
                 'undefined to undefined and pass vacuously');
         }
+    });
+
+    // The train gate is the one map here whose copies must be BYTE-identical rather than
+    // merely value-identical, because the two copies are the same halt decision compiled
+    // into two services: the indexer stops applying blocks and the sync follower stops
+    // following, and the header text is what tells an operator which. Value parity to the
+    // canon is covered by the GATES case below; this is the twin half of it.
+    it('holds xchain-sync/src/train_activation.js byte-identical to this repo\'s copy', function () {
+        const here = path.resolve(__dirname, '../../src/train_activation.js');
+        const twin = path.resolve(__dirname, '../../../xchain-sync/src/train_activation.js');
+        assert.ok(fs.existsSync(here), 'the indexer train-activation gate is missing at ' + here);
+        if (!fs.existsSync(twin)) {
+            if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but the sync twin is absent at ' + twin);
+            this.skip();
+            return;
+        }
+        assert.strictEqual(fs.readFileSync(twin, 'utf8'), fs.readFileSync(here, 'utf8'),
+            'xchain-sync/src/train_activation.js has drifted from the indexer copy; the two are ' +
+            'vendored twins and a one-sided edit forks the fleet at the train boundary.');
     });
 
     // §3.2 b, D9: the indexer half of the height-ordering invariant the hub asserts at boot

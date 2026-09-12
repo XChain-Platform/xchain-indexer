@@ -36,7 +36,9 @@ const Database = require('../../src/db');
 function makeReconciler(liveColumns) {
     const queries = [];
     const ctx = { dbName: 'xchain_test', parseExpectedColumns: Database.prototype.parseExpectedColumns,
-                  stripSqlLineComments: Database.prototype.stripSqlLineComments };
+                  stripSqlLineComments: Database.prototype.stripSqlLineComments,
+                  // alterTableForDrift also reports live columns no source declares.
+                  undeclaredLiveColumns: Database.prototype.undeclaredLiveColumns };
     const db = {
         query: async (sql) => {
             queries.push(sql);

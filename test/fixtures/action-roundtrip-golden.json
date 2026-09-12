@@ -1,5 +1,5 @@
 {
-  "$schema_note": "Byte-level field-layout contract between the xchain-sdk ACTION encoder (producer) and the xchain-indexer positional parser (consumer). Each vector pins one action/version's canonical wire string. The SDK must serialize `input` to exactly `wire`; the indexer's setActionParams must parse `wire` into exactly `parsed`. Both together prove producer and consumer agree on every field's byte position. Regenerate with xchain-sdk/test/fixtures/gen-action-roundtrip-golden.js after an intentional wire-format change; a diff here is a consensus-visible wire change and must be reviewed as one.",
+  "$schema_note": "Byte-level field-layout contract between the xchain-sdk ACTION encoder (producer) and the xchain-indexer positional parser (consumer). Each vector pins one action/version's canonical wire string. The SDK must serialize `input` to exactly `wire`; the indexer's setActionParams must parse `wire` into exactly `parsed`. Both together prove producer and consumer agree on every field's byte position. Regenerate with `node xchain-sdk/test/fixtures/gen-action-roundtrip-golden.js` (running it as a script is the only thing that writes; requiring the module does nothing) after an intentional wire-format change; a diff here is a consensus-visible wire change and must be reviewed as one.",
   "authority": "Vendored byte-identical into xchain-sdk/test/fixtures/ and xchain-indexer/test/fixtures/ so each repo's unit CI pins its own half without a sibling checkout. The two copies MUST stay identical; each side's test asserts byte-identity when the sibling checkout is present.",
   "coverage_note": "Fixed-arity single-group formats only. Rest-field / repeating-group layouts (SEND v1-v3, LIST ...ITEM, EXECUTE ...PARAMS, DEPLOY ...CONSTRUCTOR_PARAMS, multi-recipient AIRDROP/DIVIDEND) are intentionally excluded: the indexer's positional setActionParams does not map them 1:1 (handlers parse those with custom logic), so they are not a clean round-trip through this codec. Includes the 2026-05 breaking-format actions (ORDER/SWAP/DISPENSER ownership flags, SWEEP escrow flags, STAKE/UNSTAKE/DELEGATE capability model) whose field insertions are exactly the byte-shift regressions this contract guards.",
   "vectors": [
@@ -299,9 +299,9 @@
       "parsed": {
         "VERSION": "0",
         "SIGNING_PUBKEY": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "AMOUNT": null,
         "TARGET_CONTRACT_INDEX": null,
-        "TICK": null,
-        "AMOUNT": null
+        "TICK": null
       }
     },
     {

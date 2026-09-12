@@ -138,7 +138,7 @@ class Send {
             let [tick, amount, destination, memo] = sends[idx];
             let key = destination + '|' + tick;
             if(legAmountRule)
-                key = (ticks[tick] && !this.util.isValidAmountFormat(ticks[tick]['DECIMALS'], amount))
+                key = (ticks[tick] && !this.util.isValidAmountFormat(ticks[tick]['DECIMALS'], amount, data['BLOCK_TIME']))
                     ? 'i|' + idx
                     : 'k|' + key;
             if(!this.util.isNull(keys[key]))
@@ -233,7 +233,7 @@ class Send {
             if(!error && !tokenInfo)
                 error = 'invalid: TICK (unknown)';
 
-            if(!error && !this.util.isNull(send['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], send['AMOUNT']))
+            if(!error && !this.util.isNull(send['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], send['AMOUNT'], data['BLOCK_TIME']))
                 error = "invalid: AMOUNT (format)";
 
             if(!error && !this.util.isNull(send['DESTINATION']) && !this.util.isCryptoAddress(send['DESTINATION']))

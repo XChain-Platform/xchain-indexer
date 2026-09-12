@@ -827,12 +827,16 @@ describe('Database.getTokenSupplyBalance()/getTokenSupplyEscrow() @regression @t
 // getMarketInfo
 describe('Database.getMarketInfo() @regression @tier1', function () {
     // getMarketInfo issues six queries in order: market lookup, last trade, 24h-ago trade,
-    // bid orders, ask orders, 24h matches. Feed each one by call index.
+    // bid orders, ask orders, 24h matches. Feed each one by call index. A seventh, the
+    // coin-label derive, runs only when the looked-up row is still unlabelled.
     function marketDb(bids, asks, matches) {
         const db = makeDb();
         const q  = sinon.stub(db, 'doQuery');
+        // coin ids present: an already-labelled market skips the label-derive query, so
+        // the six positions below stay the six this fixture programs.
         q.onCall(0).resolves([{ market_id: 1, tick1: 'AAA', tick1_id: 10, tick1_decimals: 8,
-                                tick2: 'BBB', tick2_id: 20, tick2_decimals: 8 }]);
+                                tick2: 'BBB', tick2_id: 20, tick2_decimals: 8,
+                                coin1_id: 1, coin2_id: 1 }]);
         q.onCall(1).resolves([]);   // last trade price
         q.onCall(2).resolves([]);   // 24h-ago trade price
         q.onCall(3).resolves(bids);
@@ -876,7 +880,8 @@ describe('Database.getMarketInfo() @regression @tier1', function () {
         const db = makeDb();
         const q  = sinon.stub(db, 'doQuery');
         q.onCall(0).resolves([{ market_id: 1, tick1: 'AAA', tick1_id: 10, tick1_decimals: 0,
-                                tick2: 'BBB', tick2_id: 20, tick2_decimals: 0 }]);
+                                tick2: 'BBB', tick2_id: 20, tick2_decimals: 0,
+                                coin1_id: 1, coin2_id: 1 }]);
         q.onCall(1).resolves([]);
         q.onCall(2).resolves([]);
         q.onCall(3).resolves([]);
@@ -1170,6 +1175,79 @@ describe('Database.getActiveStakeByPubkey() @regression @tier1', function () {
         // [pubkey_id, valid_id]. No revocation NOT EXISTS subquery and no activation/deactivation
         // range filter (that only fires when blockIndex is non-null).
         assert.strictEqual(args.length, 2);
+    });
+
+    // STAKE v1 key-reuse mode (src/stake_key_reuse_activation.js). These cases pin the
+    // SQL TEXT and the bind args; the verdicts that SQL produces are driven at the action
+    // layer in test/unit/actions/stake-key-reuse.test.js, and the two halves are written
+    // to be read together.
+    describe('reuseBlockingOnly mode', function () {
+
+        async function capture(blockIndex) {
+            const db = makeDb();
+            sinon.stub(db, 'getPubkeyId').resolves(3);
+            sinon.stub(db, 'getStatusId').resolves(1);
+            const q = sinon.stub(db, 'doQuery').resolves([]);
+            await db.getActiveStakeByPubkey('pk', blockIndex, { reuseBlockingOnly: true });
+            return { sql: q.firstCall.args[0], args: q.firstCall.args[1], db };
+        }
+
+        it('applies NO activation_block filter, so a pending-activation row still counts', async function () {
+            // This is the whole reason the mode exists. Both other modes carry
+            // `activation_block <= ?`, which hides a row staked inside its
+            // ACTIVATION_DELAY_BLOCKS window and would let one key carry two bonds.
+            const { sql } = await capture(500);
+            assert.ok(!/activation_block\s*<=/.test(sql),
+                'the reuse predicate must not filter on activation_block: ' + sql);
+        });
+
+        it('excludes only rows deactivated AND past cooldown', async function () {
+            const { sql } = await capture(500);
+            assert.ok(/AND \(s\.deactivation_block IS NULL OR s\.deactivation_block \+ \? > \?\)/.test(sql),
+                'expected the cooldown clause on the stakes row: ' + sql);
+        });
+
+        it('binds COOLDOWN_BLOCKS from config and then the block being parsed, in that order', async function () {
+            const { sql, args, db } = await capture(500);
+            const cooldown = db.config['STAKING']['COOLDOWN_BLOCKS'];
+            assert.ok(Number.isFinite(cooldown) && cooldown > 0, 'config must carry COOLDOWN_BLOCKS');
+            // Order matters: reversed, the clause reads deactivation_block + blockIndex >
+            // cooldown, which frees a key the instant it is deactivated.
+            assert.deepStrictEqual(args, [3, 1, cooldown, 500]);
+            // The bind order above is only meaningful against the clause above it.
+            assert.ok(sql.indexOf('s.deactivation_block + ?') < sql.indexOf('GROUP BY'));
+        });
+
+        it('does not disturb the other two modes', async function () {
+            const db = makeDb();
+            sinon.stub(db, 'getPubkeyId').resolves(3);
+            sinon.stub(db, 'getStatusId').resolves(1);
+            const q = sinon.stub(db, 'doQuery').resolves([]);
+
+            await db.getActiveStakeByPubkey('pk', 500, { undeactivatedOnly: true });
+            assert.ok(/AND s\.activation_block <= \? AND s\.deactivation_block IS NULL/.test(q.firstCall.args[0]));
+            assert.deepStrictEqual(q.firstCall.args[1], [3, 1, 500]);
+
+            await db.getActiveStakeByPubkey('pk', 500);
+            assert.ok(/AND s\.activation_block <= \? AND \(s\.deactivation_block IS NULL OR s\.deactivation_block > \?\)/
+                        .test(q.secondCall.args[0]));
+            assert.deepStrictEqual(q.secondCall.args[1], [3, 1, 500, 500]);
+        });
+
+        it('is inert without a blockIndex, so the legacy null call cannot reach it', async function () {
+            // The mode lives inside the non-null blockIndex branch. A caller that passed
+            // the flag with a null block would otherwise get a cooldown clause bound
+            // against null, which in SQL is never true and would admit every key.
+            const { args } = await (async () => {
+                const db = makeDb();
+                sinon.stub(db, 'getPubkeyId').resolves(3);
+                sinon.stub(db, 'getStatusId').resolves(1);
+                const q = sinon.stub(db, 'doQuery').resolves([]);
+                await db.getActiveStakeByPubkey('pk', null, { reuseBlockingOnly: true });
+                return { args: q.firstCall.args[1] };
+            })();
+            assert.strictEqual(args.length, 2);
+        });
     });
 
     it('does NOT resolve a delegated-only key (returns null when no direct stake row)', async function () {

@@ -34,7 +34,7 @@ describe('03 Sustained Load', function () {
     const reporter = new ReportGenerator();
 
     before(async function () {
-        await createDatabases();
+        await createDatabases(__filename);
         await createDecoderSchema();
     });
 

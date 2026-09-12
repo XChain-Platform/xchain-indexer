@@ -166,7 +166,7 @@ class Callback {
         if(!error && tokenInfo && !this.util.isNull(tokenInfo['CALLBACK_BLOCK']) && tokenInfo['CALLBACK_BLOCK'] != parseInt(tokenInfo['CALLBACK_BLOCK']))
             error = 'invalid: CALLBACK_BLOCK (format)';
 
-        if(!error && tokenInfo && !this.util.isNull(tokenInfo['CALLBACK_AMOUNT']) && !this.util.isValidAmountFormat(callbackTokenInfo['DECIMALS'], tokenInfo['CALLBACK_AMOUNT']))
+        if(!error && tokenInfo && !this.util.isNull(tokenInfo['CALLBACK_AMOUNT']) && !this.util.isValidAmountFormat(callbackTokenInfo['DECIMALS'], tokenInfo['CALLBACK_AMOUNT'], data['BLOCK_TIME']))
             error = 'invalid: CALLBACK_AMOUNT (format)';
 
         /*****************************************************************

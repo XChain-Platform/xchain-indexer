@@ -427,7 +427,7 @@ const UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME = 1790812800;
 // set is identical on both sides of the bump. The two rules this train carries,
 // CONTRACT_META_REQUIRED and REST_PATTERN_METER, both register at 0.2.0 and take
 // their own per-network instants, not this ordinal.
-const CONSENSUS_VERSION = '0.17.0';
+const CONSENSUS_VERSION = '0.18.0';
 
 // Predicate for the NATIVE_FEE_PRICE_TIME_GATE flag-day. Its ONE consumer is
 // utility.getFeeOraclePrices (query selection); nothing else in src/ consults it.

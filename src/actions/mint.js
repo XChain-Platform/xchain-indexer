@@ -112,7 +112,7 @@ class Mint {
         // FORMAT Validations
 
         // Verify AMOUNT format
-        if(!error && !this.util.isNull(data['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], data['AMOUNT']))
+        if(!error && !this.util.isNull(data['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], data['AMOUNT'], data['BLOCK_TIME']))
             error = "invalid: AMOUNT (format)";
 
         // Verify DESTINATION address format

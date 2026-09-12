@@ -128,7 +128,7 @@ class Dividend {
             error = 'invalid: DIVIDEND_TICK (unknown)';
 
         // Verify AMOUNT format valid for DIVIDEND_TICK
-        if(!error && (this.util.isNull(data['AMOUNT']) || !this.util.isValidAmountFormat(dividendTokenInfo['DECIMALS'], data['AMOUNT'])))
+        if(!error && (this.util.isNull(data['AMOUNT']) || !this.util.isValidAmountFormat(dividendTokenInfo['DECIMALS'], data['AMOUNT'], data['BLOCK_TIME'])))
             error = "invalid: AMOUNT (format)";
 
         // Verify SOURCE is not sleeping

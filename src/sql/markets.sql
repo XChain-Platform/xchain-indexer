@@ -15,7 +15,7 @@
 DROP TABLE IF EXISTS markets;
 CREATE TABLE markets (
     id                 INTEGER UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    tick1_id           BIGINT UNSIGNED,                 -- tick1 - id of record in index_tickers table
+    tick1_id           BIGINT UNSIGNED,                 -- tick1 - id of record in index_tickers table, or 0 when this side is the native coin (see coin1_id)
     tick1_price        VARCHAR(250) NOT NULL default 0, -- tick1 - last trade price
     tick1_bid          VARCHAR(250) NOT NULL default 0, -- tick1 - highest price buyers are paying
     tick1_ask          VARCHAR(250) NOT NULL default 0, -- tick1 - highest price sellers are accepting
@@ -24,7 +24,7 @@ CREATE TABLE markets (
     tick1_24hr_low     VARCHAR(250) NOT NULL default 0, -- tick1 - 24-hour low price
     tick1_24hr_change  VARCHAR(250) NOT NULL default 0, -- tick1 - 24-hour percentage change
     tick1_24hr_volume  VARCHAR(250) NOT NULL default 0, -- tick1 - 24-hour volume
-    tick2_id           BIGINT UNSIGNED,                 -- tick2 - id of record in index_tickers table
+    tick2_id           BIGINT UNSIGNED,                 -- tick2 - id of record in index_tickers table, or 0 when this side is the native coin (see coin2_id)
     tick2_price        VARCHAR(250) NOT NULL default 0, -- tick2 - last trade price
     tick2_bid          VARCHAR(250) NOT NULL default 0, -- tick2 - highest price buyers are paying
     tick2_ask          VARCHAR(250) NOT NULL default 0, -- tick2 - highest price sellers are accepting
@@ -33,11 +33,20 @@ CREATE TABLE markets (
     tick2_24hr_low     VARCHAR(250) NOT NULL default 0, -- tick2 - 24-hour low price
     tick2_24hr_change  VARCHAR(250) NOT NULL default 0, -- tick2 - 24-hour percentage change
     tick2_24hr_volume  VARCHAR(250) NOT NULL default 0, -- tick2 - 24-hour volume
-    last_updated  BIGINT UNSIGNED                       -- Last updated
+    last_updated  BIGINT UNSIGNED,                      -- Last updated
+    -- Which coin each side settles in (id of record in index_coins). A side whose
+    -- tickN_id is 0 has no token: it IS this coin, and the API labels it from here.
+    -- Declared last, and their migration anchors them here: moving them mid-table
+    -- reorders an aged database against a fresh one (sql-schema-column-parity).
+    coin1_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    coin2_id           BIGINT UNSIGNED NOT NULL DEFAULT 0
 ) ENGINE=InnoDB CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE INDEX tick1_id on markets (tick1_id);
 CREATE INDEX tick2_id on markets (tick2_id);
 -- One row per traded pair. Guarantees createMarket() can never produce two rows
 -- for the same (tick1_id, tick2_id) even if inserts race, so market_id is stable.
+-- Binds for a token/native pair too, because the native side stores 0 rather than
+-- NULL: MariaDB treats NULL as distinct inside a UNIQUE index, so a NULL-keyed side
+-- would let every insert through.
 CREATE UNIQUE INDEX uq_markets_pair on markets (tick1_id, tick2_id);

@@ -37,8 +37,10 @@
 
 const assert = require('assert');
 
-// Must match src/api.js.
-const WRITE_METHODS = new Set(['pushvalidatorrewards']);
+// Must match src/api.js. WRITE_METHODS is empty there since the PUSH-ANCHOR
+// endgame retired pushvalidatorrewards, its only member; the gated
+// representatives below are a federation read and the gated exec method.
+const WRITE_METHODS = new Set([]);
 const GATED_EXEC_METHODS = new Set(['feequotedryrun']);
 const FEDERATION_READ_METHODS = new Set([
     'getownstake', 'getactivevalidators', 'getactivestakeweights',
@@ -96,13 +98,13 @@ describe('indexer API auth: JSON-RPC batch gate', function () {
         const guard = makeGuard('secret', false);
 
         it('401s a single gated call with no key', function () {
-            const { res, nextCalled } = run(guard, { jsonrpc: '2.0', method: 'pushvalidatorrewards', id: 1 });
+            const { res, nextCalled } = run(guard, { jsonrpc: '2.0', method: 'getactivevalidators', id: 1 });
             assert.strictEqual(res.statusCode, 401);
             assert.strictEqual(nextCalled, false);
         });
 
         it('401s a gated call smuggled inside a BATCH with no key', function () {
-            const { res, nextCalled } = run(guard, [{ jsonrpc: '2.0', method: 'pushvalidatorrewards', id: 1 }]);
+            const { res, nextCalled } = run(guard, [{ jsonrpc: '2.0', method: 'getactivevalidators', id: 1 }]);
             assert.strictEqual(res.statusCode, 401);
             assert.strictEqual(nextCalled, false);
         });
@@ -118,7 +120,7 @@ describe('indexer API auth: JSON-RPC batch gate', function () {
 
         it('passes a gated batch with the correct key', function () {
             const { res, nextCalled } = run(guard,
-                [{ jsonrpc: '2.0', method: 'pushvalidatorrewards', id: 1 }],
+                [{ jsonrpc: '2.0', method: 'getactivevalidators', id: 1 }],
                 { 'x-api-key': 'secret' });
             assert.strictEqual(res.statusCode, 200);
             assert.strictEqual(nextCalled, true);

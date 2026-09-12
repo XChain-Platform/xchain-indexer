@@ -27,10 +27,14 @@
 // newest row (MAX(checkpoint_seq)), so a stale row keeps winning over everything the
 // re-page delivers.
 //
-// One case here is a PINNED LIMITATION rather than a guarantee, and it is named as such:
-// the detection is a comparison of ids, so an id space that overlaps the retired one
-// exactly is invisible to it. Writing this suite against a real database is what surfaced
-// that; the stubbed unit suite reported the same scenario as working.
+// The narrow case this suite once pinned as a LIMITATION is now a guarantee: an id space
+// that overlaps the retired one exactly is invisible to a comparison of IDS, so the mirror
+// asks a different question instead. This table is append-only and id-parity, so a hub row
+// at id N whose natural key differs from local id N is a CONTRADICTION rather than an
+// absence, and a contradiction is evidence a page window, a filter or a paging hole cannot
+// fabricate. The tests below hold both halves: the contradiction rebuilds the mirror, and
+// absence still deletes nothing. Writing this suite against a real database is what
+// surfaced the hole; the stubbed unit suite reported the same scenario as working.
 
 process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
@@ -154,27 +158,16 @@ describe('HubDbSync against a REBUILT hub database, real MariaDB @tier3', functi
             'readers take MAX(checkpoint_seq); a surviving pre-reset row keeps winning forever');
     });
 
-    // KNOWN LIMITATION, pinned deliberately so it cannot change unnoticed and so the fix
-    // that closes it flips this assertion on purpose.
+    // THE CASE THIS SUITE ONCE PINNED AS UNREACHABLE. The ceiling comparison sees a replaced
+    // id space only while the local cursor sits ABOVE what the hub advertises. Here the
+    // rebuilt hub has re-grown onto the retired ids exactly, so the two sides agree on every
+    // id and the cursor never trips - and INSERT IGNORE then drops each incoming row against
+    // the stale one holding its id.
     //
-    // The ceiling comparison detects a replaced id space only when the local cursor sits
-    // ABOVE what the hub advertises. When a rebuilt hub has re-grown far enough that its
-    // ids overlap the retired ones exactly, the two sides agree on every id and disagree
-    // only on what those ids MEAN, which no comparison of ids alone can see. Nothing then
-    // purges, and INSERT IGNORE drops each incoming row against the stale one holding its
-    // id, so the mirror keeps serving the retired rows.
-    //
-    // Narrow in practice and not the shape that was measured: a mirror re-bootstraps within
-    // seconds of reconnecting, long before a rebuilt hub grows thousands of rows, so the
-    // observed case (a large local cursor against a near-empty hub) is the detected one.
-    // A mirror holding only a handful of rows is the exposure.
-    //
-    // Closing it needs a different signal: this table is append-only and never updated, so
-    // a row the hub serves at id N whose content differs from local id N is a CONTRADICTION
-    // rather than an absence, and contradiction is evidence page contents can legitimately
-    // carry (the rule _purgeForeignNetworkRows sets is about inferring from absence, which
-    // a filtered endpoint or a paging hole can fake; neither can fabricate a conflicting row).
-    it('LIMITATION: an exactly-overlapping id space is not detectable from ids alone', async function () {
+    // What closes it is content: id 1 cannot name the stale (BTC, 11001) checkpoint locally
+    // and the hub's (BTC, 124) at the same time on a table that is append-only and never
+    // updated, so the id space is proven retired and the mirror is rebuilt.
+    it('rebuilds the mirror when the rebuilt hub re-grew onto the retired ids exactly', async function () {
         await seedPreResetMirror([1, 2, 3]);
         const before = await mirrorState();
         assert.strictEqual(before.maxSeq, 11003, 'pre-condition: the stale rows own ids 1-3');
@@ -183,10 +176,69 @@ describe('HubDbSync against a REBUILT hub database, real MariaDB @tier3', functi
         await makeSync(hubRows, 3)._bootstrapTable('state_checkpoints');
 
         const after = await mirrorState();
-        assert.deepStrictEqual(after.ids, [1, 2, 3]);
-        assert.strictEqual(after.maxSeq, 11003,
-            'cursor 3 does not sit above ceiling 3, so nothing trips and the stale rows survive; ' +
-            'when the content-contradiction detector lands, this becomes 124');
+        assert.deepStrictEqual(after.ids, [1, 2, 3], 'the mirror must hold the rebuilt hub rows');
+        assert.strictEqual(after.maxSeq, 124,
+            'readers take MAX(checkpoint_seq); a retired row surviving at an overlapping id keeps winning');
+    });
+
+    // The same shape with the ids and the drain both looking healthy: the cursor sits AT the
+    // ceiling and the drain fetches nothing, which is exactly what a level mirror looks like.
+    // The contradiction is what separates them, and the rebuilt mirror must end up byte-equal
+    // to the source rather than merely non-stale.
+    it('restores the hub rows the id-parity apply was dropping at the overlapping ids', async function () {
+        await seedPreResetMirror([1, 2, 3]);
+
+        const hubRows = [row(1, 'BTC', 124, 118), row(2, 'LTC', 124, 101), row(3, 'DOGE', 124, 102)];
+        await makeSync(hubRows, 3)._bootstrapTable('state_checkpoints');
+
+        const conn = await db.getConnection();
+        let landed;
+        try {
+            landed = await conn.query(
+                'SELECT id, chain, block_index, block_hash FROM state_checkpoints ORDER BY id ASC');
+        } finally { await conn.release(); }
+        assert.deepStrictEqual(
+            landed.map((r) => [Number(r.id), r.chain, Number(r.block_index), r.block_hash]),
+            hubRows.map((r) => [r.id, r.chain, r.block_index, r.block_hash]),
+            'every column must come from the hub row, not from the stale row that held its id');
+    });
+
+    // The other half, and the one that keeps the delete honest. ABSENCE IS NOT EVIDENCE: a
+    // page window, a filtered endpoint or a paging hole can each leave a perfectly valid
+    // local row unserved, and none of that may authorise clearing the mirror. Only a row the
+    // hub SERVED at an id the mirror holds, carrying a different natural key, can.
+    it('deletes nothing when the hub simply does not serve every id the mirror holds', async function () {
+        // The mirror agrees with the hub wherever both hold an id; the hub's page just
+        // stops short of ids 1 and 2.
+        const hubRows = [row(1, 'BTC', 11001, 3901), row(2, 'BTC', 11002, 3902), row(3, 'BTC', 11003, 3903)];
+        await seedPreResetMirror([1, 2, 3]);
+
+        const sync = new HubDbSync(db, { hubUrl: 'http://hub.test', network: NETWORK });
+        sync._readyMaxIds = { state_checkpoints: 3 };
+        sinon.stub(sync, '_httpGet').callsFake(async (p) => {
+            const since = Number(/since_id=(\d+)/.exec(p)[1]);
+            return { rows: hubRows.filter((r) => r.id > since && r.id === 3), watermark: 4242 };
+        });
+        await sync._bootstrapTable('state_checkpoints');
+
+        const after = await mirrorState();
+        assert.deepStrictEqual(after.ids, [1, 2, 3], 'an unserved id is not a retired id');
+        assert.strictEqual(after.maxSeq, 11003);
+    });
+
+    // A level, healthy mirror on a hub that never rebuilt: every shared id agrees, so the
+    // probe must find nothing and the mirror must survive untouched. This is the false-trip
+    // direction, and a detector that wipes a healthy mirror every bootstrap is worse than
+    // the defect it closes.
+    it('leaves a level mirror alone when every shared id agrees with the hub', async function () {
+        const hubRows = [row(1, 'BTC', 11001, 3901), row(2, 'BTC', 11002, 3902), row(3, 'BTC', 11003, 3903)];
+        await seedPreResetMirror([1, 2, 3]);
+
+        await makeSync(hubRows, 3)._bootstrapTable('state_checkpoints');
+
+        const after = await mirrorState();
+        assert.deepStrictEqual(after.ids, [1, 2, 3], 'a mirror that matches its source must not be rebuilt');
+        assert.strictEqual(after.maxSeq, 11003);
     });
 
     // A hub whose database was rebuilt moments ago has an EMPTY table and advertises 0.

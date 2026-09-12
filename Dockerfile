@@ -33,7 +33,9 @@ COPY ./data/genesis /XChainIndexer/data/genesis
 # to canonical in every consumer; a second copy would be a new drift surface that
 # script does not know about.
 COPY ./test/fixtures/action-manifest.json /XChainIndexer/test/fixtures/action-manifest.json
-COPY ./.en[v] /XChainIndexer/.env
+# No .env is baked in: configuration reaches the container as environment
+# (xchain-node at `docker run`, a standalone run via `--env-file .env`). An
+# optional `COPY ./.en[v]` glob here builds only under BuildKit.
 
 # Exec-form node, not `npm run api`. npm builds an npm -> sh -c -> node tree and
 # no wrapper forwards signals, so `docker stop` kills npm while node is never

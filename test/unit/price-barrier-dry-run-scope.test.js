@@ -133,21 +133,35 @@ describe('the price barrier is scoped to consensus, not to "a context exists"', 
         const srcDir  = path.join(__dirname, '..', '..', 'src');
         const optOuts = [];
 
+        // Each opt-out is identified by file plus the method that encloses it, not by a line
+        // number: a pinned line reddens on any unrelated edit above it (a boot gate added at
+        // the top of actions.js did exactly that), which taught the reflex of re-pinning the
+        // numbers instead of reading what moved. The enclosing method is what the assertion
+        // actually cares about, and it only changes when a real new caller appears.
+        const enclosingMethod = (lines, index) => {
+            for (let i = index; i >= 0; i--) {
+                const m = /^\s{4}(?:async\s+)?([A-Za-z_$][\w$]*)\s*\(/.exec(lines[i]);
+                if (m) return m[1];
+            }
+            return '(top level)';
+        };
+
         (function walk(dir) {
             for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
                 const full = path.join(dir, entry.name);
                 if (entry.isDirectory()) { walk(full); continue; }
                 if (!entry.name.endsWith('.js')) continue;
                 if (full.endsWith(path.join('src', 'db.js'))) continue; // the definition itself
-                const text = fs.readFileSync(full, 'utf8');
-                text.split('\n').forEach((line, i) => {
+                const text  = fs.readFileSync(full, 'utf8');
+                const lines = text.split('\n');
+                lines.forEach((line, i) => {
                     if (/\.runInDryRunEpoch\s*\(/.test(line))
-                        optOuts.push(path.relative(srcDir, full) + ':' + (i + 1));
+                        optOuts.push(path.relative(srcDir, full) + ':' + enclosingMethod(lines, i));
                 });
             }
         })(srcDir);
 
-        assert.deepStrictEqual(optOuts, ['actions.js:909', 'actions.js:927'],
+        assert.deepStrictEqual(optOuts, ['actions.js:_dryRunAction', 'actions.js:_dryRunAction'],
             'unexpected consensus opt-out(s), or the known two moved: ' + optOuts.join(', '));
     });
 });
