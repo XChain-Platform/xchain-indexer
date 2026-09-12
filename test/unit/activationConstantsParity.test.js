@@ -106,6 +106,10 @@ const GATES = [
     // STAKE v1 admission, and with it the bond debit, the escrow row and capability-set
     // membership, all of which land in hashed history.
     ['stake_key_reuse_activation.js',      'STAKE_KEY_REUSE_ACTIVATION'],
+    // The height at which a SWEEP stops writing a zero-amount debit and credit leg for a
+    // held tick with nothing to move. Those rows are in the per-block ledger hash, so a
+    // one-sided edit forks the ledger hash at the first zero-balance sweep past the boundary.
+    ['sweep_zero_leg_activation.js',       'SWEEP_ZERO_LEG_ACTIVATION'],
     ['snapshot_reorg_buffer.js',           'SNAPSHOT_BURIAL_ACTIVATION'],
     // The burial depth that gate reads; canon claims it byte-identical to the local copies.
     ['snapshot_reorg_buffer.js',           'CANONICAL_REORG_BUFFER'],

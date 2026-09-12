@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added the stake-key-reuse activation gate so a signing key whose every stake row is deactivated and past cooldown may STAKE v1 again, eviction and voluntary unstake alike.
 
+### Changed
+- The zero-amount SWEEP leg skip is now a flag day, SWEEP_ZERO_LEG_ACTIVATION, armed on testnet at BTC 156000, LTC 4897000 and DOGE 67920000, at genesis on regtest and inert on mainnet, so the legs already in hashed history are still written below the height.
+- The hub-mirror client sync script vendors price_batching_floor_activation.js beside hub_db_sync.js, which requires it, so a resynced consumer loads.
+
 ### Fixed
 - The price-sync height refresh now runs two single-MAX queries so each resolves from its own index instead of scanning every price_snapshots row.
 - An indexer whose isolated-vm binding cannot load now refuses at boot naming the binding and the platform mismatch, instead of parking at the first contract block.

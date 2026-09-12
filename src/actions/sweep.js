@@ -31,6 +31,8 @@
  * 
  ********************************************************************/
 
+const sweepZeroLeg = require('../sweep_zero_leg_activation.js');
+
 class Sweep {
 
     constructor(action){
@@ -461,15 +463,16 @@ class Sweep {
                     // on an unresolvable ticker); it never decides the order of resolved ticks.
                     return (cmp !== 0) ? cmp : (Number(a.tick_id) - Number(b.tick_id));
                 });
+                // A held balance can be exactly 0 (a prior sweep already moved it, or the fee
+                // debit above reduced it to nothing). Nothing moves for that tick, but the
+                // zero-amount debit and credit rows land in the hashed ledger, so skipping
+                // them is a flag day (sweep_zero_leg_activation.js): below the height the
+                // legs are written as before, at/above it the tick writes no leg.
+                let skipZeroLegs = sweepZeroLeg.isSweepZeroLegActive(data['BLOCK_INDEX'], this.config['NETWORK'], data['COIN']);
                 for(let { tick_id, tick } of settleTicks){
                     let amount = balances[tick_id];
 
-                    // A held balance can be exactly 0 (e.g. a prior sweep already moved it, or the
-                    // fee debit above reduced it to nothing). Nothing moves for that tick this run,
-                    // so write no debit/credit leg for it: a zero-amount credit is a fake row on
-                    // both the action page and the address Credits tab even though no
-                    // value changed hands.
-                    if(this.util.isNull(amount) || !this.util.bcgt(String(amount), '0')) continue;
+                    if(skipZeroLegs && (this.util.isNull(amount) || !this.util.bcgt(String(amount), '0'))) continue;
 
                     debits.push([tick,  amount, data['SOURCE']]);
                     credits.push([tick, amount, data['DESTINATION']]);

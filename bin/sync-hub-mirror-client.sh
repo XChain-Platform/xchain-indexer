@@ -10,7 +10,9 @@
 # in sync (same pattern as xchain-hub/bin/sync-coins.sh for the coin registry).
 #
 # Vendored set: the client (hub_db_sync.js), the schema-version lockstep
-# constant (hub-schema-version.js), and the mirror-table SQL twins the
+# constant (hub-schema-version.js), the dependency-free modules the client
+# requires by relative path (price_batching_floor_activation.js; a consumer
+# without them fails at require on boot), and the mirror-table SQL twins the
 # client's ensureTables() creates for consumers without their own schema
 # machinery (the explorer's copies land under src/sql/hub-mirror/ so they are
 # obviously not the explorer's own tables).
@@ -27,7 +29,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="$HERE/../src"
 ROOT="$(cd "$HERE/../.." && pwd)"
 
-CLIENT_FILES="hub_db_sync.js hub-schema-version.js"
+CLIENT_FILES="hub_db_sync.js hub-schema-version.js price_batching_floor_activation.js"
 SQL_FILES="price_snapshots.sql oracle_prices.sql cross_chain_matches.sql cross_chain_calls.sql capability_snapshots.sql state_checkpoints.sql anchor_reward_attestations.sql attestation_responses.sql"
 SERVICES="xchain-explorer"
 
