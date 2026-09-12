@@ -50,9 +50,12 @@
  * network name. Every input is block-anchored, so every node replaying the block
  * computes the same answer.
  *
- * INERT BY DEFAULT. ROLLCALL_GATES_ACTIVATION is null on mainnet and testnet
- * today, so on those networks this returns its input unchanged WITHOUT touching
- * the database. Regtest arms via XC_ROLLCALL_GATES_REGTEST_ACTIVATION.
+ * INERT WHERE UNARMED. ROLLCALL_GATES_ACTIVATION is armed on testnet (epoch
+ * 152208) and still null on mainnet, so on mainnet this returns its input
+ * unchanged WITHOUT touching the database. On an armed network it queries once,
+ * and still drops nobody until a rolled epoch at or above the height has closed
+ * at or below the buried snapshot block. Regtest arms via
+ * XC_ROLLCALL_GATES_REGTEST_ACTIVATION.
  *
  ********************************************************************/
 

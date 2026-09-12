@@ -41,7 +41,10 @@ const path   = require('path');
 
 const CONSTANTS_PATH = path.resolve(__dirname, '../../../xchain-documentation/protocol/constants.js');
 
-// module filename in src/ -> the named export it and constants.js share.
+// module filename in src/ -> the named export it and constants.js share. An optional
+// third element narrows the comparison to those keys, for the one map whose regtest
+// entry is derived from the environment rather than pinned (see rollcall_gates below):
+// a whole-map deepStrictEqual there would compare a value neither copy claims to fix.
 const GATES = [
     ['checkpoint_commitment_activation.js', 'CHECKPOINT_COMMITMENT_ACTIVATION'],
     ['cross_chain_royalty_activation.js',   'CROSS_CHAIN_ROYALTY_ACTIVATION'],
@@ -74,6 +77,15 @@ const GATES = [
     // ATTEST_RESPONSIBLE_WIDENING does below it, so a one-sided edit forks v1 signature
     // admission the same way a one-sided height edit would.
     ['attest_responsible_widening_activation.js',       'ATTEST_RESPONSIBLE_WIDENING_V2'],
+    // The ROLLCALL gates flag day, keyed on the EPOCH height rather than a request block: at
+    // or above it a ROLLCALL publishes as v1 with the GATES field, its close writes a row per
+    // verified signer, and the capability filter starts dropping a validator whose rolled list
+    // misses a gate active at the request block. A one-sided edit of the armed testnet height
+    // forks epoch admission against the hub that signed the epoch. MAINNET/TESTNET ONLY: the
+    // regtest entry is derived from XC_ROLLCALL_GATES_REGTEST_ACTIVATION at require time, and
+    // every copy's header excludes it from the parity claim, so a whole-map compare here would
+    // pin a value none of the three copies fixes.
+    ['rollcall_gates_activation.js',        'ROLLCALL_GATES_ACTIVATION', ['mainnet', 'testnet']],
     ['anchor_reward_activation.js',         'ANCHOR_REWARD_DERIVE_ACTIVATION'],
     ['anchor_activation.js',                'ANCHOR_ACTIVATION'],
     // constants.js claims the whole anchor/archive reward block is "kept byte-identical to
@@ -133,12 +145,19 @@ describe('activation-gate constant parity to canonical constants.js @regression'
     // one resolves its constant by string, so a renamed module or export would otherwise
     // surface only as a green run. This case runs either way and fails on both.
     it('resolves every gated constant from its local module, whatever the checkout state', function () {
-        assert.ok(GATES.length >= 25, 'the gate list has shrunk; a dropped entry is an unpinned flag day');
-        for (const [file, exportName] of GATES) {
+        assert.ok(GATES.length >= 28, 'the gate list has shrunk; a dropped entry is an unpinned flag day');
+        for (const [file, exportName, keys] of GATES) {
             const local = require('../../src/' + file)[exportName];
             assert.ok(local !== undefined,
                 file + ' no longer exports ' + exportName + '; the parity case for it would compare ' +
                 'undefined to undefined and pass vacuously');
+            // A narrowed row that names a key the map no longer carries would compare
+            // undefined to undefined just as vacuously, so resolve those too.
+            for (const key of keys || []) {
+                assert.ok(local !== null && typeof local === 'object' && key in local,
+                    file + ' ' + exportName + ' no longer carries the key ' + key +
+                    ' this suite compares; the narrowed parity case would pass vacuously');
+            }
         }
     });
 
@@ -191,11 +210,12 @@ describe('activation-gate constant parity to canonical constants.js @regression'
         canon = require(CONSTANTS_PATH);
     });
 
-    GATES.forEach(function ([file, exportName]) {
+    GATES.forEach(function ([file, exportName, keys]) {
+        const scope = keys ? ' (' + keys.join('/') + ' only)' : '';
         const title = canonExists
-            ? file + ' ' + exportName + ' is value-identical to xchain-documentation/protocol/constants.js'
+            ? file + ' ' + exportName + scope + ' is value-identical to xchain-documentation/protocol/constants.js'
             : 'SKIPPED: documentation checkout absent at ' + CONSTANTS_PATH + '; ' + file + ' ' +
-              exportName + ' parity not verified this run';
+              exportName + scope + ' parity not verified this run';
         (canonExists ? it : it.skip)(title, function () {
             const local = require('../../src/' + file)[exportName];
             // Presence, not shape: the list carries scalar consensus constants as well as
@@ -204,6 +224,20 @@ describe('activation-gate constant parity to canonical constants.js @regression'
             assert.ok(local !== undefined, file + ' must export ' + exportName);
             assert.ok(canon[exportName] !== undefined,
                 'constants.js must export ' + exportName + ' (the canonical authority for this gate)');
+            if (keys) {
+                // Key by key rather than by a projected object, so the failure names the
+                // network that drifted instead of printing two maps for the reader to diff.
+                for (const key of keys) {
+                    assert.ok(key in local, file + ' ' + exportName + ' must carry ' + key);
+                    assert.ok(key in canon[exportName],
+                        'constants.js ' + exportName + ' must carry ' + key);
+                    assert.deepStrictEqual(local[key], canon[exportName][key],
+                        file + ' ' + exportName + '.' + key + ' has drifted from the canonical ' +
+                        exportName + '.' + key + ' in xchain-documentation/protocol/constants.js; ' +
+                        'a one-sided flag-day edit forks consensus at the boundary.');
+                }
+                return;
+            }
             assert.deepStrictEqual(local, canon[exportName],
                 file + ' has drifted from the canonical ' + exportName + ' in ' +
                 'xchain-documentation/protocol/constants.js; a one-sided flag-day edit forks consensus at the boundary.');

@@ -1610,7 +1610,8 @@ class Attest {
         // hole in the draw. The hub receives an already-filtered set from
         // getcapabilityvalidators and rollback.js filters the same snapshot at the same
         // block, so all three derive one set. Inert (and query-free) wherever
-        // ROLLCALL_GATES_ACTIVATION is null, which is mainnet and testnet today.
+        // ROLLCALL_GATES_ACTIVATION is null, which is mainnet today; testnet is armed
+        // at epoch 152208 and filters from the first rolled epoch at or above it.
         validators = await rgf.filterByRolledGates({
             db: this.indexerDb, validators, requestBlock: blockIndex,
             network: this.config['NETWORK'], stats

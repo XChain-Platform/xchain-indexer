@@ -43,9 +43,10 @@
  * still drive the below-height (v0) behaviour as its control.
  *
  * LOCAL COPY of the canonical map in xchain-documentation/protocol/constants.js
- * and the value twin of xchain-hub/src/rollcall_gates_activation.js. The
- * mainnet and testnet heights are parity-tested; regtest is env-derived and is
- * not.
+ * and the value twin of xchain-hub/src/rollcall_gates_activation.js. The mainnet
+ * and testnet heights are held value-identical to the canonical map by
+ * test/unit/activationConstantsParity.test.js, which compares those two keys and
+ * only those; regtest is env-derived and is deliberately not compared.
  *
  ********************************************************************/
 
