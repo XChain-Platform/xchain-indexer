@@ -13206,6 +13206,14 @@ class Database {
     // ownership: an UNSTAKE on a delegated-only key has no stake rows to deactivate, so crediting
     // the source's aggregate here would inflate balances (the cooldown sweep credits unstakes.AMOUNT
     // regardless of what was deactivated). Keep this query direct-stake-only.
+    //
+    // THREE MODES, selected by `opts` and differing only in which rows they count:
+    //   default            - active at blockIndex (activation reached, not yet deactivated)
+    //   undeactivatedOnly  - active AND not already being unstaked (UNSTAKE)
+    //   reuseBlockingOnly  - EVERY row regardless of activation state, minus the rows that
+    //                        are deactivated and past cooldown (STAKE v1 key reuse). Read as
+    //                        a boolean only; see the branch comment for why the aggregate is
+    //                        meaningless there.
     async getActiveStakeByPubkey(pubkey, blockIndex, opts){
         let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
         if(pubkey_id === null)
@@ -13224,7 +13232,36 @@ class Database {
                      WHERE s.signing_pubkey_id=? AND s.status_id=?`;
         let args = [pubkey_id, valid_id];
         if(blockIndex !== undefined && blockIndex !== null){
-            if(opts && opts.undeactivatedOnly){
+            if(opts && opts.reuseBlockingOnly){
+                // STAKE v1 KEY-REUSE path (stake_key_reuse_activation.js), and the ONLY mode
+                // here that applies no activation filter at all. It answers "is this key
+                // FREE", not "is this key active", so it must count EVERY valid stakes row
+                // the pubkey has ever held and exclude only the rows that have genuinely
+                // released it: deactivated (deactivation_block IS NOT NULL) AND past
+                // cooldown. A row that is active, pending activation, or deactivated but
+                // still inside cooldown survives the filter and so blocks the reuse.
+                //
+                // Neither existing mode can answer it. The default mode and
+                // undeactivatedOnly both carry `activation_block <= blockIndex`, which HIDES
+                // a row staked moments ago inside its ACTIVATION_DELAY_BLOCKS window, so two
+                // STAKE v1 actions on one key inside the delay would both be admitted and the
+                // key would carry two independent bonds.
+                //
+                // Cooldown is anchored on the stakes row (deactivation_block +
+                // COOLDOWN_BLOCKS) rather than joined to unstakes.cooldown_end_block: one row
+                // set, no join, no dependence on an unstakes row existing, and the resulting
+                // ACTIVATION_DELAY_BLOCKS of slack falls on the REFUSING side, which is the
+                // legacy behaviour. The rationale lives in stake_key_reuse_activation.js.
+                //
+                // EXISTENCE ONLY. The GROUP BY aggregate is meaningless in this mode: the SUM
+                // spans pending and cooled-down rows alike, so callers must read the return
+                // as a boolean and never as an amount or an owner.
+                let staking = this.config['STAKING'];
+                let cooldownBlocks = (staking && staking['COOLDOWN_BLOCKS']) ? staking['COOLDOWN_BLOCKS'] : 1000;
+                query += ' AND (s.deactivation_block IS NULL OR s.deactivation_block + ? > ?)';
+                args.push(cooldownBlocks);
+                args.push(blockIndex);
+            } else if(opts && opts.undeactivatedOnly){
                 // UNSTAKE path: only stakes not already being unstaked (deactivation_block
                 // IS NULL). A stake already deactivating from a prior UNSTAKE in the same
                 // activation-delay window stays "active" (deactivation_block is a future

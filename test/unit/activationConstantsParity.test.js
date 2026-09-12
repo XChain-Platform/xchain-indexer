@@ -100,6 +100,12 @@ const GATES = [
     // the block under the old rules, so a drifted copy is a node that forks at the one
     // boundary the mechanism exists to make safe. The twin lives in xchain-sync.
     ['train_activation.js',                'TRAIN_ACTIVATION'],
+    // The height at which a retired signing key stops being permanently burned: below it
+    // STAKE v1 refuses any pubkey that ever held a valid stakes row, at/above it a pubkey
+    // whose every row is deactivated and past cooldown is admitted. A one-sided edit forks
+    // STAKE v1 admission, and with it the bond debit, the escrow row and capability-set
+    // membership, all of which land in hashed history.
+    ['stake_key_reuse_activation.js',      'STAKE_KEY_REUSE_ACTIVATION'],
     ['snapshot_reorg_buffer.js',           'SNAPSHOT_BURIAL_ACTIVATION'],
     // The burial depth that gate reads; canon claims it byte-identical to the local copies.
     ['snapshot_reorg_buffer.js',           'CANONICAL_REORG_BUFFER'],

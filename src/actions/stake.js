@@ -36,6 +36,8 @@
  *
  ********************************************************************/
 
+const stakeKeyReuse = require('../stake_key_reuse_activation.js');
+
 class Stake {
 
     constructor(action){
@@ -87,10 +89,27 @@ class Stake {
             error = 'invalid: SIGNING_PUBKEY (format)';
 
         if(!error && format === 1){
-            // v1 (new stake): pubkey must NOT already have any valid stake row
-            // (pass blockIndex=null so the activation-window doesn't hide a
-            // freshly-staked pubkey that hasn't activated yet)
-            let anyStake = await this.indexerDb.getActiveStakeByPubkey(data['SIGNING_PUBKEY'], null);
+            // v1 (new stake): the pubkey must be FREE. Which rows count as holding it is
+            // the one thing the stake-key-reuse flag day moves; the verdict string is
+            // identical on both sides, so only the admitted set changes.
+            //
+            // At/after the gate a key is free when EVERY valid stakes row it has ever held
+            // is deactivated AND past cooldown, so a key that unstaked voluntarily or that
+            // ROLLCALL evicted can stake again. Rows that are active, pending activation,
+            // or deactivated but still inside cooldown still hold it.
+            //
+            // Below the gate the legacy predicate runs byte for byte: blockIndex=null,
+            // which in db.js drops the whole activation/deactivation clause and so refuses
+            // any pubkey with a valid stakes row EVER. That null is also why the armed
+            // branch cannot simply pass the real block to the same mode: the legacy
+            // predicate's activation filter would hide a freshly-staked, not-yet-activated
+            // row, so the armed branch selects its own query mode instead
+            // (stake_key_reuse_activation.js records the whole argument).
+            let anyStake;
+            if(stakeKeyReuse.isStakeKeyReuseActive(data['BLOCK_INDEX'], this.config['NETWORK'], data['COIN']))
+                anyStake = await this.indexerDb.getActiveStakeByPubkey(data['SIGNING_PUBKEY'], data['BLOCK_INDEX'], {reuseBlockingOnly: true});
+            else
+                anyStake = await this.indexerDb.getActiveStakeByPubkey(data['SIGNING_PUBKEY'], null);
             if(anyStake)
                 error = 'invalid: SIGNING_PUBKEY (already in use)';
 

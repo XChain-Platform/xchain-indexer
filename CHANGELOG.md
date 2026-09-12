@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added the stake-key-reuse activation gate so a signing key whose every stake row is deactivated and past cooldown may STAKE v1 again, eviction and voluntary unstake alike.
+
 ### Fixed
 - The price-sync height refresh now runs two single-MAX queries so each resolves from its own index instead of scanning every price_snapshots row.
 - An indexer whose isolated-vm binding cannot load now refuses at boot naming the binding and the platform mismatch, instead of parking at the first contract block.
