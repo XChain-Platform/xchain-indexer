@@ -168,6 +168,26 @@ jobs:
           node-version: "22"
           cache: npm
 
+      # The indexer refuses to construct Actions without a loadable xchain-vm
+      # (assertVmRuntimeLoadable, so a node can never serve a height that stops
+      # at its first contract block), and this job boots a real indexer. Stage the
+      # vendored VM from its sibling BEFORE npm ci, exactly as the integration
+      # job does; without it every scenario fails at construction, which reads as
+      # a perf regression and is really a missing checkout.
+      - name: Stage the vendored xchain-vm from its canonical sibling
+        env:
+          SIBLINGS_REF: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || (github.ref == 'refs/heads/master' && 'master' || 'develop') }}
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/.."
+          rm -rf xchain-vm
+          url="https://github.com/${{ github.repository_owner }}/xchain-vm.git"
+          git clone --quiet --depth 1 --branch "$SIBLINGS_REF" "$url" xchain-vm 2>/dev/null \
+            || git clone --quiet --depth 1 "$url" xchain-vm
+          echo "sibling xchain-vm @ $(git -C xchain-vm rev-parse --abbrev-ref HEAD) $(git -C xchain-vm rev-parse --short HEAD)"
+          cd "$GITHUB_WORKSPACE"
+          npm run vendor:vm
+
       - name: Install dependencies
         run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
@@ -306,6 +326,13 @@ jobs:
         with:
           node-version: "22"
           cache: npm
+
+      # The unit suite constructs Actions, which refuses without a loadable
+      # xchain-vm; the sibling is already beside the checkout, so vendor it before
+      # npm ci the way the gate does. Without this every Actions test fails at
+      # construction and the ratchet reports a mocha failure, not a coverage drop.
+      - name: Stage the vendored xchain-vm from the checked-out sibling
+        run: npm run vendor:vm
 
       - name: Install dependencies
         run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
