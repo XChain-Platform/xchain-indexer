@@ -7,8 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-09-11
+
 ### Added
 - Added the stake-key-reuse activation gate so a signing key whose every stake row is deactivated and past cooldown may STAKE v1 again, eviction and voluntary unstake alike.
+- Amounts must denote the number the ledger credits, a plain decimal bounded by the tick's decimals and the column width, behind `AMOUNT_REPRESENTABILITY_ACTIVATION`: unarmed on mainnet and testnet, genesis on regtest.
+- PRICE actions are bounded to the range the hub accepts behind `PRICE_ZERO_VALIDITY_ACTIVATION`: testnet from 2026-10-01T00:00:00Z, mainnet unarmed, regtest genesis.
+- Native-coin fee pricing gains a landed-batch bound behind `PRICE_FEE_BATCH_LANDED_ACTIVATION`, unarmed on every network, and `price_snapshots` gains `batch_block_time` so a hub-connected node and a chain-only node price against the same round once it arms.
+- The block loop evaluates the platform-train activation gate before reading a block and halts with a durable marker when the signed release manifest requires a rule set this build does not carry; health publishes the verdict as `train_activation`.
 
 ### Changed
 - The zero-amount SWEEP leg skip is now a flag day, SWEEP_ZERO_LEG_ACTIVATION, armed on testnet at BTC 156000, LTC 4897000 and DOGE 67920000, at genesis on regtest and inert on mainnet, so the legs already in hashed history are still written below the height.
@@ -18,6 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The price-sync height refresh now runs two single-MAX queries so each resolves from its own index instead of scanning every price_snapshots row.
 - An indexer whose isolated-vm binding cannot load now refuses at boot naming the binding and the platform mismatch, instead of parking at the first contract block.
 - A market between a token and the chain's native coin keeps its row across reorgs and carries the coin it settles in, so the market API can list and price it; a manual migration restores the rows earlier reorgs removed.
+- The DISPENSER freshness check fails closed when the UTXO tracker answers a shapeless first-seen result, behind `DISPENSER_FRESHNESS_SHAPE_ACTIVATION`: mainnet unarmed, testnet and regtest genesis.
+- Both price barriers resolve immediately for a block older than the network's price rail instead of waiting out their timeout; the floor ships at 0 on every network, so nothing changes until an operator arms it.
+- Boot halts naming the pending validator-rewards round-qualifier migration when the live `reward_unique` key omits `round_qualifier`, and that migration now carries `deploy-precondition=required`.
+- Mirrored `capability_snapshots` rows are fenced behind a BTC re-derivation check, and a rebuilt hub source is detected by content contradiction on a drained bootstrap.
+- Undeclared live columns and indexes are reported at boot, warn-only and never dropped.
+- Destroys and sends carry a leg ordinal so multi-leg broadcast order survives the schema.
+- The `pushvalidatorrewards` handler is retired and `WRITE_METHODS` is empty.
+- The Docker image no longer tries to bake a `.env` file, so the build succeeds on the legacy builder and configuration reaches the container as environment only.
 
 ## [0.17.0] - 2026-09-10
 
