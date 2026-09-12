@@ -67,9 +67,15 @@
 // the escrow behind it is held against nothing. A v5 indexer must reject the v6 stream
 // until it has applied the 2026-09-12-bridge-tables migration.
 //
-// ROLL ORDER IS THE REVERSE OF THE CROSS-CHAIN PRECEDENT'S "hub first": indexers and
-// readers roll first, the hub last. A hub rolled ahead of the fleet stamps 6 on every
-// payload, and every mirror closed against a v5 indexer fails.
+// ROLL ORDER MATCHES THE CROSS-CHAIN PRECEDENT'S "hub first" (measured on the
+// regtest rail 2026-09-12). The version check is strict equality in both
+// directions, so a stale reader is not the only failure mode: a v6 explorer
+// against a standing v5 hub refused every
+// mirror row with "HubDbSync: hub schema_version 5 != local 6 for
+// price_snapshots; refusing to apply row". There is no order that avoids the
+// halt window, only which side waits, so the hub rolls FIRST and this indexer
+// follows it back to back with the explorer (regtest measured about 2.5 minutes
+// per indexer image for that window).
 const HUB_SCHEMA_VERSION = 6;
 
 module.exports = { HUB_SCHEMA_VERSION };

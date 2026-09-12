@@ -233,6 +233,20 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
         // feeds block-hashed state. If a future edit re-adds one of NON_POLLED_CONSENSUS_PARAMS
         // to the SCALAR_PARAMS/BLOB_PARAMS poll lists, the local consensus value below would be
         // overwritten by the divergent hub value and this reddens.
+        //
+        // Explicit timeout, not the file's own: this is the first require of
+        // XChainIndexer.js in the process, which pulls in xchain-vm (isolated-vm's
+        // native binding load + the bundled VM's own module graph), not a DB pool
+        // (db.js's createPool is lazy and does no I/O at require time, measured
+        // separately at ~50ms). Measured cold on 2026-09-12: 1463ms on the very
+        // first require of a fresh shell, 283-593ms once the OS file cache is warm.
+        // That first-require variance sits close enough to mocha's bare 2000ms
+        // default (this file's own .mocharc.yml timeout of 5000ms does not apply
+        // when the file is run standalone with --no-config) to flake on a slower
+        // or more loaded CI runner; mocha times out a synchronous test exceeding
+        // its budget same as an async one. Widen only this case's budget rather
+        // than the whole suite's, so a genuine hang here still reddens.
+        this.timeout(10000);
         let XChainIndexer;
         try { XChainIndexer = require('../../src/XChainIndexer.js'); }
         catch(e){ this.skip(); return; } // heavy deps (db/vm) absent in standalone CI
