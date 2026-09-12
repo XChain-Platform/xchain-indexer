@@ -81,6 +81,17 @@ const ENGINE_TAGS = {
     // them are never conflicting content for one key. ROUND_ID is the BTC
     // EPOCH_HEIGHT in decimal, VIEW is 0.
     ROLLCALL:   'XROLLCALL',
+    // Cross-chain bridge transfer records. ROUND_ID is the transfer_id, VIEW is the live
+    // PBFT view on the hub and the row's finalizing_view on an indexer. Mapped to the
+    // cross_chain capability in SLASH's ENGINE_CAPABILITY: a forged transfer record directs
+    // value, so two conflicting canonicals for one transfer_id must be slashable.
+    BRIDGE:     'XBRIDGE',
+    // Per-token policy snapshots (allow list, block list, sleep) carried from an origin row
+    // to every bridged copy. A DISTINCT tag from BRIDGE, not a reuse: the two canonicals
+    // share no field layout, and SLASH judges equivocation within one tag family, so one tag
+    // over both would make a validator that signed one transfer and one snapshot at the same
+    // round id provably equivocating. ROUND_ID is the snapshot_id.
+    POLICY:     'XPOLICY',
 };
 
 // Whether the EQUIV header is in effect for a settlement whose BTC-anchored snapshot

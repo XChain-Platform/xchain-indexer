@@ -62,6 +62,24 @@ function keyEquals(provided, expected){
     return crypto.timingSafeEqual(a, b);
 }
 
+// The XPOLICY canonical membership hash (the token bridge policy spec
+// section 5): sha256 over ALLOW|<n or ->|<addr>|...|BLOCK|<m or ->|<addr>|...|SLEEP|<0 or 1>.
+// `-` means the origin row carries no such list AT ALL, distinct from `0`, an existing but
+// empty one (D7). Addresses arrive from db.getListAtBlock already in utf8_bin ascending
+// order (D5); this function never re-sorts them, so a caller that changed that ordering
+// would move the hash here, not silently mask it.
+function bridgePolicyHash(allowList, blockList, sleeping){
+    function section(tag, list){
+        let parts = [tag, (list === null) ? '-' : String(list.length)];
+        if(list !== null)
+            for(let addr of list) parts.push(addr);
+        return parts.join('|');
+    }
+    let canonical = section('ALLOW', allowList) + '|' + section('BLOCK', blockList) +
+                    '|SLEEP|' + (sleeping ? '1' : '0');
+    return crypto.createHash('sha256').update(canonical).digest('hex');
+}
+
 dotenv.config();
 
 // Before anything else logs. The env-validation failures immediately below are
@@ -1163,6 +1181,242 @@ async function startApi(){
             } catch (err) {
                 console.error('getbets error:', err);
                 return { error: 'failed to look up bets' };
+            }
+        },
+
+        /**
+         * SEAM (no handler here; lane L15 writes getpendingbridgetransfers and
+         * getbridgetransfer). This typedef is the row shape the hub's
+         * CrossChainBridgeEngine polls for and signs, frozen up front so the read lane,
+         * the engine lane and the wallet lane cannot each invent a different field name.
+         *
+         * One row per CONFIRMED, not-yet-finalized source leg on this chain: a lock
+         * (XBRIDGE v0/v3) or a burn (XBRIDGE v1/v4). The hub confirmation-gates on
+         * (block_index, latest_block_index) and dedupes against its own bridge_transfers
+         * table, the getpendingcrosschaincalls contract below.
+         *
+         * @typedef {Object} PendingBridgeTransfer
+         * @property {'lock'|'burn'} transfer_kind - DERIVED from the source leg's version,
+         *   never a wire field: v0/v3 are locks, v1/v4 are burns
+         * @property {string} src_chain         - this chain's coin (the leg was mined here)
+         * @property {number} src_action_index  - the lock or burn action_index on this chain
+         * @property {string} src_address       - the locking or burning source address
+         * @property {string} dest_chain        - coin the credit is to land on
+         * @property {string} dest_address      - address to credit on dest_chain
+         * @property {string} tick              - the asset's NATIVE tick, never the rooted
+         *   <ORIGIN>.<NAME> form; XCHAIN for every v0/v1 leg
+         * @property {number} decimals          - the token's DECIMALS as read at the leg's
+         *   OWN block; the precision `amount` is formatted at, and signed into the record
+         * @property {string} amount            - decimal string at `decimals` fractional
+         *   digits; a string because amounts are bignumber math, never a JSON number
+         * @property {number} min_depth         - the origin row's MIN_DEPTH as stamped by
+         *   the lock at its own block, 0 when unset. The federation applies
+         *   max(coins.resolveConfirmations(src_chain, network), min_depth), so it is
+         *   raise-only. Stamped rather than re-read at poll time: a later edit of the
+         *   origin row must never make an accepted lock un-signable, nor let two followers
+         *   disagree. Nothing is signed for it
+         * @property {number} block_index       - height the source leg was mined at
+         * @property {number} confirmations     - latest_block_index - block_index + 1
+         * @property {string} tx_hash           - the source leg's transaction hash
+         */
+
+        // Pending XBRIDGE locks (v0/v3) and burns (v1/v4) on THIS chain, for the hub's
+        // CrossChainBridgeEngine poll (base spec section 12). Open read: not in
+        // WRITE_METHODS, GATED_EXEC_METHODS or FEDERATION_READ_METHODS. Returns the
+        // PendingBridgeTransfer shape above; confirmation-gating and dedup against the
+        // hub's own bridge_transfers table are the hub's job, the getpendingcrosschaincalls
+        // convention.
+        // Body: { limit?: number }
+        async getpendingbridgetransfers({limit}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            let max = Number(limit);
+            if(!Number.isFinite(max) || max <= 0) max = 100;
+            if(max > 500) max = 500;
+            // Federation READ isolation: committed-only, off the block tx.
+            let db = indexer.indexerDb.apiView();
+            try {
+                let latest = await db.getLatestBlockIndex();
+                // Source-chain reorg fence, the getpendingcrosschaincalls convention: read
+                // the generation BEFORE the rows (HUB-RETRACT-1) so a rollback that lands
+                // between the two reads cannot stamp a pre-commit orphan with the post-commit
+                // generation and let it escape the retraction fence.
+                let pushGeneration = await db.getPushGeneration(indexer.config['COIN']);
+                let rows   = await db.getPendingBridgeTransfers(max);
+                let transfers = rows.map(r => {
+                    let version = Number(r.version);
+                    // v4 stores the ROOTED <ORIGIN>.<NAME> tick (xbridges.sql); every other
+                    // version already carries the native name.
+                    let bridged = (version === 4) ? indexer.util.parseBridgedTick(r.tick) : null;
+                    let tick    = bridged ? bridged.name : r.tick;
+                    return {
+                        transfer_kind:    (version === 0 || version === 3) ? 'lock' : 'burn',
+                        src_chain:        indexer.config['COIN'],
+                        src_action_index: Number(r.action_index),
+                        src_address:      r.src_address,
+                        dest_chain:       r.dest_chain,
+                        dest_address:     r.dest_address,
+                        tick:             tick,
+                        decimals:         (r.decimals    != null) ? Number(r.decimals)   : 0,
+                        amount:           String(r.amount),
+                        min_depth:        (r.min_depth   != null) ? Number(r.min_depth)  : 0,
+                        block_index:      Number(r.block_index),
+                        confirmations:    latest - Number(r.block_index) + 1,
+                        tx_hash:          r.tx_hash,
+                        push_generation:  pushGeneration
+                    };
+                });
+                return {
+                    latest_block_index: latest,
+                    network:            indexer.config['NETWORK'],
+                    count:              transfers.length,
+                    transfers:          transfers
+                };
+            } catch (err) {
+                console.error('getpendingbridgetransfers error:', err);
+                return { error: 'failed to look up pending bridge transfers' };
+            }
+        },
+
+        // Single bridge_transfers mirror row by transfer_id: the targeted re-verification a
+        // hub follower runs before co-signing a leader's proposed row, the getcrosschaincall
+        // convention. Open read.
+        // Body: { transfer_id }
+        async getbridgetransfer({transfer_id}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            if(!transfer_id || !/^[0-9a-fA-F]{64}$/.test(String(transfer_id)))
+                return { error: 'transfer_id must be a 64-hex id' };
+            let db = indexer.indexerDb.apiView();
+            try {
+                let latest = await db.getLatestBlockIndex();
+                let row    = await db.getBridgeTransferById(String(transfer_id).toLowerCase());
+                if(!row)
+                    return { exists: false, network: indexer.config['NETWORK'], latest_block_index: latest };
+                return Object.assign({ exists: true, latest_block_index: latest }, row);
+            } catch (err) {
+                console.error('getbridgetransfer error:', err);
+                return { error: 'failed to look up bridge transfer' };
+            }
+        },
+
+        // The chain-state read getbridgeinvariant needs (base spec section 13; the hub's
+        // CrossChainBridgeEngine._readBridgeBalances is the caller). Open read. Answers for
+        // ONE tick at a time: { supply, escrow: { <COIN>: balance } }, escrow keyed by the
+        // bare coin (the hub's _escrowFor accepts either spelling).
+        // Body: { tick }
+        async getbridgebalances({tick}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            if(!tick)
+                return { error: 'tick required' };
+            let db = indexer.indexerDb.apiView();
+            try {
+                return await db.getBridgeBalances(String(tick));
+            } catch (err) {
+                console.error('getbridgebalances error:', err);
+                return { error: 'failed to look up bridge balances' };
+            }
+        },
+
+        // The D2 proof envelope (base spec section 12, D2/D70): bridge_checkpoint_check.js's
+        // header documents the exact shape and verifyEscrowAgainstCheckpoint verifies it.
+        // Producer-side only: this reports what THIS chain committed at block_index and lets
+        // the caller (lane L14's settle pass) bind its own already-verified checkpoint to it.
+        // Open read.
+        // Body: { address, tick, block_index }
+        async getbridgeescrowproof({address, tick, block_index}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            if(!address || !tick)
+                return { error: 'address and tick required' };
+            let height = Number(block_index);
+            if(!Number.isFinite(height) || !Number.isInteger(height) || height < 0)
+                return { error: 'block_index must be a non-negative integer' };
+            let db = indexer.indexerDb.apiView();
+            try {
+                let envelope = await db.getBridgeEscrowProof(String(address), String(tick), height);
+                if(!envelope)
+                    return { error: 'no provable escrow state at that block_index' };
+                return envelope;
+            } catch (err) {
+                console.error('getbridgeescrowproof error:', err);
+                return { error: 'failed to build escrow proof' };
+            }
+        },
+
+        // The origin-chain policy read (token-bridge-policy spec section 3, D3, D15): the
+        // token's policy AS OF origin_block. Open read (in no gating set). A tick with no
+        // native row on this chain (this is not its origin) answers { error } rather than
+        // throwing.
+        // Body: { tick, origin_block }
+        async gettokenpolicy({tick, origin_block}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            if(!tick)
+                return { error: 'tick required' };
+            let block = Number(origin_block);
+            if(!Number.isFinite(block) || !Number.isInteger(block) || block < 0)
+                return { error: 'origin_block must be a non-negative integer' };
+            let t  = String(tick);
+            let db = indexer.indexerDb.apiView();
+            try {
+                let info = await db.getTokenInfo(t, block);
+                if(!info)
+                    return { error: 'tick has no native row on this chain' };
+                let [allowList, blockList, sleeping] = await Promise.all([
+                    (info.ALLOW_LIST != null) ? db.getListAtBlock(info.ALLOW_LIST, block) : Promise.resolve(null),
+                    (info.BLOCK_LIST != null) ? db.getListAtBlock(info.BLOCK_LIST, block) : Promise.resolve(null),
+                    db.isTickSleepingAtBlock(t, block)
+                ]);
+                return {
+                    allow_list:   allowList,
+                    block_list:   blockList,
+                    sleeping:     !!sleeping,
+                    policy_hash:  bridgePolicyHash(allowList, blockList, !!sleeping),
+                    bridged:      Number(info.BRIDGED) === 1,
+                    origin_block: block
+                };
+            } catch (err) {
+                console.error('gettokenpolicy error:', err);
+                return { error: 'failed to look up token policy' };
+            }
+        },
+
+        // The destination-chain applied-policy read (token-bridge-policy spec section 6,
+        // D25): the current local materialized state for a bridged row, plus the applied
+        // snapshot's identity when one has landed here. Open read. A tick with no local row
+        // on this chain answers { error } rather than throwing.
+        // Body: { tick }
+        async getappliedpolicy({tick}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            if(!tick)
+                return { error: 'tick required' };
+            let t  = String(tick);
+            let db = indexer.indexerDb.apiView();
+            try {
+                let info = await db.getTokenInfo(t, null);
+                if(!info)
+                    return { error: 'tick has no local row on this chain' };
+                let latest  = await db.getLatestBlockIndex();
+                let [sleeping, applied] = await Promise.all([
+                    db.isTickSleeping(t, latest),
+                    db.getAppliedPolicySnapshot(t)
+                ]);
+                return {
+                    tick:         t,
+                    bridged:      Number(info.BRIDGED) === 1,
+                    allow_list:   (info.ALLOW_LIST != null) ? Number(info.ALLOW_LIST) : null,
+                    block_list:   (info.BLOCK_LIST != null) ? Number(info.BLOCK_LIST) : null,
+                    sleeping:     !!sleeping,
+                    policy_seq:   applied ? Number(applied.policy_seq)   : null,
+                    origin_block: applied ? Number(applied.origin_block) : null,
+                    policy_hash:  applied ? applied.policy_hash          : null
+                };
+            } catch (err) {
+                console.error('getappliedpolicy error:', err);
+                return { error: 'failed to look up applied policy' };
             }
         },
 

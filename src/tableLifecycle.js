@@ -179,6 +179,10 @@ const TABLES = [
     { table: 'order_matches', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'order_statuses', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'sends',     owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
+    // XBRIDGE action record: one row per broadcast lock/burn (v0/v1/v3/v4), keyed by
+    // action_index like every other per-action table (sends, destroys, xcalls). System-
+    // injected settle legs (v2/v5) write no row here; that side is bridge_settlements.
+    { table: 'xbridges',  owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'sleeps',    owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'swaps',     owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'swap_cancels', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
@@ -190,6 +194,12 @@ const TABLES = [
     // XCALL requests/expiries, injected XEXEC executions, processed
     // callbacks), each keyed by a rollback-able action_index.
     { table: 'cross_chain_settlements',     owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
+    // The bridge's twin of cross_chain_settlements: one row per APPLIED XBRIDGE leg or
+    // applied XPOLICY snapshot, keyed (transfer_id, kind). Same class for the same reason -
+    // the mirrored bridge_transfers / policy_snapshots row can be deleted by a later fenced
+    // retraction, so "did this chain already apply it?" has to be answered from a local,
+    // reorg-rollback-able table rather than from the mirror.
+    { table: 'bridge_settlements',          owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'cross_chain_call_executions', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'cross_chain_call_callbacks',  owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'xcalls', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror',
@@ -372,6 +382,9 @@ const TABLES = [
     { table: 'cross_chain_calls', owner: 'indexer', replication: 'hub-mirror', rollback: 'exempt', replicaRollback: 'special',
       hashed: { classes: ['quorum'], note: 'Hub-federation quorum-signed relay rows; XEXEC injection re-verifies 2f+1 sigs.' },
       note: 'Hub-mirrored XCALL relay rows; the indexer only SELECTs them. Same local pre-delete + hub-retraction-backstop model as cross_chain_matches.' },
+    { table: 'bridge_transfers', owner: 'indexer', replication: 'hub-mirror', rollback: 'exempt', replicaRollback: 'special',
+      hashed: { classes: ['quorum'], note: 'Hub-federation co-signed XBRIDGE transfer rows; the settle pass re-verifies the signature set against the cross_chain capability snapshot at snapshot_block before it credits anything.' },
+      note: 'Hub-mirrored one-sided bridge state (src_chain/src_action_index name the lock or burn leg), not produced by local block processing; the indexer only SELECTs it. Hub retraction is the unwind: _applyRetraction deletes the mirrored row under the mandatory push_generation fence. UNLIKE cross_chain_matches/calls there is as yet NO local pre-delete leg inside the CROSS-CHAIN-MIRROR-REORG-DELETE markers in rollback.js / ClientRollback.js, so the hub-blip window those markers close is still open for this table; adding it is a byte-identical twin edit in both files and is tracked outside this registry. An APPLIED leg is unwound by its bridge_settlements row instead, which is rollback \'action\'. Exempt = not a generic-list delete.' },
     { table: 'oracle_prices', owner: 'indexer', replication: 'hub-mirror', rollback: 'exempt', replicaRollback: 'special',
       hashed: { classes: [], note: 'Hub-mirrored permissionless PRICE v1 rows; consensus effects (fee quotes) re-verify against them deterministically per block.' },
       note: 'action_index here refers to the row\'s SOURCE chain, usually a different chain from the one reorging, so a blanket local-height delete would corrupt the mirror; both sides delete only rows tagged with the local chain, and source-chain reorgs converge mirror-side via the pushpricereorg rail.' },
@@ -381,6 +394,9 @@ const TABLES = [
     { table: 'state_checkpoints', owner: 'indexer', replication: 'hub-mirror', rollback: 'exempt', replicaRollback: 'exempt',
       hashed: { classes: ['quorum'], note: 'Quorum-signed checkpoints; verified against pinned validator sets by consumers.' },
       note: 'Hub-mirrored, never retracted: a reorged height is superseded by a re-broadcast row with a higher checkpoint_seq. The on-chain ANCHOR record (anchor_actions) rolls back normally as a dataTable.' },
+    { table: 'policy_snapshots', owner: 'indexer', replication: 'hub-mirror', rollback: 'exempt', replicaRollback: 'exempt',
+      hashed: { classes: ['quorum'], note: 'Quorum-signed per-token policy snapshots; the applying indexer re-verifies the signature set and recomputes policy_hash from the transport membership arrays before it materializes anything.' },
+      note: 'state_checkpoints shape, and for the same reason: append-only latest-wins per (network, origin_chain, tick), never retracted, because a superseding policy arrives as a new row at a higher policy_seq rather than as a deletion of the old one. It therefore carries NO hub_db_sync RETRACTION_COLUMNS entry (that map names a numeric source-chain action index for a range delete and this table has none). Block replay does not recreate the row, so the chain-reorg path must not delete it; the injected LIST/ISSUE/SLEEP actions the apply mints ARE rolled back normally, and the bridge_settlements row keyed kind=\'policy\' goes with them so replay re-applies the snapshot.' },
     { table: 'anchor_reward_attestations', owner: 'indexer', replication: 'hub-mirror', rollback: 'exempt', replicaRollback: 'exempt',
       hashed: { classes: [], note: 'Not hashed: transport for the XANCPUB quorum. The BTC indexer re-verifies the sigs and derives validator_rewards, which itself is not in the state-hash preimage (COLLECT-mediated only).' },
       note: 'Hub-mirrored, append-only, never retracted: written only after the XANCPUB quorum resolves for a FINALIZED checkpoint, so there is no un-finalize to retract. The derived validator_rewards row (block_index = snapshot_block) rolls back normally as a dataTable and re-derives idempotently on replay; a DOGE reorg cannot un-quorum an already-attested publish.' },

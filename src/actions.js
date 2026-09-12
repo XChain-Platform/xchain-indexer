@@ -426,6 +426,9 @@ const anchor             = require('./actions/anchor.js');
 const xcall              = require('./actions/xcall.js');
 const xexec              = require('./actions/xexec.js');
 
+// Cross-chain token bridge: XBRIDGE (v0/v3 lock, v1/v4 burn, v2/v5 mirror-injected settle)
+const xbridge            = require('./actions/xbridge.js');
+
 // Full-node possession-proof verdict (verified-validator tier)
 const nodeproof          = require('./actions/nodeproof.js');
 const rollcall           = require('./actions/rollcall.js');
@@ -557,6 +560,9 @@ class Actions {
         // XEXEC is the target-chain injection handler)
         this.actionXcall            = new xcall(this);
         this.actionXexec            = new xexec(this);
+
+        // Bridge lock/burn instance (the settle legs are applied by bridge_settle.js)
+        this.actionXbridge          = new xbridge(this);
 
         // ACTION aliases: copied from the single module-level ACTION_ALIASES source (it
         // was a hand-duplicated literal block that the 'single source of truth' comment
@@ -804,6 +810,10 @@ class Actions {
         // XEXEC (system-injected, mirror-driven target-chain execution)
         if(action=='XCALL')              await this.actionXcall.parse(params, data, error);
         if(action=='XEXEC')              await this.actionXexec.parse(params, data, error);
+
+        // Cross-chain token bridge: XBRIDGE (v0/v3 lock, v1/v4 burn; a broadcast v2/v5 is
+        // refused here, the injected settle legs are applied by bridge_settle.js)
+        if(action=='XBRIDGE')            await this.actionXbridge.parse(params, data, error);
 
         // Full-node possession-proof verdict (verified-validator tier)
         if(action=='NODEPROOF')          await this.actionNodeproof.parse(params, data, error);

@@ -264,7 +264,7 @@ describe('Block Discovery and Sync @regression @tier3', function () {
         // Fee era: the ISSUE below needs gas
         await seedGas(seeder, { blockIndex: 799, addresses: [ADDR1, ADDR2, ADDR3] });
         await seeder.seedBlock(800, BASE_TIME, [
-            { source: ADDR1, data: 'ISSUE|0|ETA|1000|100|0|Eta token' }
+            { source: ADDR1, data: 'ISSUE|0|ETAX|1000|100|0|Eta token' }
         ]);
 
         const count = await processBlocks(indexer);

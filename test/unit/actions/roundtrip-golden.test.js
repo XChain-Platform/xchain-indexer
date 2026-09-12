@@ -66,6 +66,42 @@ function loadHandlerFormats() {
 const util    = new Utility();
 const FORMATS = loadHandlerFormats();
 
+// ── Fields added to an action's canonical field map AFTER this golden was cut ──────────
+//
+// WHY A MAP LIKE THIS EXISTS AT ALL. setActionParams positions the wire params through the
+// format template for THIS version, then walks getFormatFieldList(formats) - the UNION of
+// every version's field names - and writes null for each member the version does not carry.
+// So a field introduced by a NEW format version appears, as null, in the parse output of
+// every OLD version too. That is not drift: it is how the parser has always kept the stored
+// object free of `undefined`, and the golden's own vectors record the last such event (the
+// format-6 controller fields CONTROLLER, ACTION_CLASS, COOLDOWN_BLOCKS and UNBIND sit as
+// nulls inside the v0 and v1 maps below).
+//
+// ISSUE FORMAT 7 (the token-bridge opt-in) is the next one, and it was checked rather than
+// assumed: HEAD's issue.js and this build's were both driven over a real v0 wire, a real v1
+// wire and a legacy bare ISSUE, and every pre-existing key came back byte-identical in value
+// with nothing removed - only BRIDGE_CHAINS, MIN_DEPTH and LOCK_BRIDGE added, each null. A
+// v0 or v1 ISSUE therefore parses and hashes exactly as it did (the three names reach no
+// guard: every format-7 refusal is behind `format === 7` and TOKEN_BRIDGE_ACTIVATION, and
+// the two fieldList['LOCK'] loops skip a null value), so this is a union widening and not a
+// fork, and the golden vectors stay as they are.
+//
+// THE ADDITION IS SPELLED OUT BY HAND, never read back from the handler under test: an
+// expectation derived from the code it checks would pass no matter what the code did. Every
+// other key still has to match the vector exactly, and each key here has to arrive with
+// exactly the value written here. The two vendored golden copies (this repo and xchain-sdk)
+// stay byte-identical because neither is touched; when they are next re-cut together with
+// format 7 present, the entry below collapses to an empty object.
+const POST_GOLDEN_UNION_FIELDS = Object.freeze({
+    ISSUE: Object.freeze({ BRIDGE_CHAINS: null, MIN_DEPTH: null, LOCK_BRIDGE: null }),
+});
+
+// The field map a vector's wire must parse into: the golden's own map plus the union fields
+// added after it was cut.
+function expectedParsed(vec) {
+    return Object.assign({}, vec.parsed, POST_GOLDEN_UNION_FIELDS[vec.action] || {});
+}
+
 // Mirror XChainIndexer.processTransaction's parse path for a single wire string.
 function indexerParse(wire) {
     const fmts = FORMATS[String(wire).split('|')[0].toLowerCase()];
@@ -106,7 +142,7 @@ describe('Action round-trip golden – indexer parser byte-layout contract', fun
                 const parsed = indexerParse(vec.wire);
                 assert.strictEqual(parsed.action, vec.action, `${vec.label} action`);
                 assert.strictEqual(String(parsed.format), String(vec.version), `${vec.label} format version`);
-                assert.deepStrictEqual(parsed.data, vec.parsed, `${vec.label} parser layout drifted`);
+                assert.deepStrictEqual(parsed.data, expectedParsed(vec), `${vec.label} parser layout drifted`);
             });
         }
     });
@@ -138,11 +174,87 @@ describe('Action round-trip golden – indexer parser byte-layout contract', fun
                 const res = makeActions().createAction({ action: vec.action, params: vec.input });
                 assert.strictEqual(res.actionString, vec.wire, `${vec.label}: SDK encoder wire drifted from golden`);
                 const parsed = indexerParse(res.actionString);
-                assert.deepStrictEqual(parsed.data, vec.parsed, `${vec.label}: round-trip parse mismatch`);
+                assert.deepStrictEqual(parsed.data, expectedParsed(vec), `${vec.label}: round-trip parse mismatch`);
                 // Round-trip identity: what the SDK put in, the indexer reads out.
                 for (const k of Object.keys(res.fields))
                     assert.strictEqual(String(parsed.data[k]), String(res.fields[k]), `${vec.label} field ${k} did not round-trip`);
             });
         }
     });
+});
+
+// ── Pre-format-7 replay pin ────────────────────────────────────────────────────────────
+//
+// The map above says a v0 or v1 ISSUE gained three null keys and nothing else. This block
+// is what makes that a claim the suite can lose rather than a comment: the two maps are the
+// PRE-CHANGE golden, copied verbatim out of the commit before ISSUE format 7 existed
+// (`git show HEAD:test/fixtures/action-roundtrip-golden.json` at 2026-09-12), and they are
+// frozen here so no later edit to the fixture can quietly re-baseline them.
+//
+// What is asserted is the consensus-relevant half: every field a pre-format-7 node produced
+// for these two wires, this build produces byte-identically, and the ONLY difference in the
+// whole object is the three named additions, each null. A format-7 definition that reused a
+// field position, renamed one, or made a bridge field carry a value on a v0 parse fails here
+// even if the fixture were re-cut to match it.
+const PRE_FORMAT7_ISSUE = Object.freeze([
+    {
+        label: 'ISSUE full v0',
+        wire:  'ISSUE|0|GOLDTOKEN|21000000|1000|8|gold token|1000|||1|||||||||||||||hello',
+        parsed: Object.freeze({
+            VERSION: '0', TICK: 'GOLDTOKEN', MAX_SUPPLY: '21000000', MAX_MINT: '1000',
+            DECIMALS: '8', DESCRIPTION: 'gold token', MINT_SUPPLY: '1000', TRANSFER: null,
+            TRANSFER_SUPPLY: null, LOCK_MAX_SUPPLY: '1', LOCK_MAX_MINT: null,
+            LOCK_DESCRIPTION: null, LOCK_SLEEP: null, LOCK_CALLBACK: null, CALLBACK_BLOCK: null,
+            CALLBACK_TICK: null, CALLBACK_AMOUNT: null, ALLOW_LIST: null, BLOCK_LIST: null,
+            MINT_ADDRESS_MAX: null, MINT_START_BLOCK: null, MINT_STOP_BLOCK: null,
+            LOCK_MINT: null, LOCK_MINT_SUPPLY: null, MEMO: 'hello', CONTROLLER: null,
+            ACTION_CLASS: null, COOLDOWN_BLOCKS: null, UNBIND: null,
+        }),
+    },
+    {
+        label: 'ISSUE brief v1',
+        wire:  'ISSUE|1|BRRR|brrr desc|m',
+        parsed: Object.freeze({
+            VERSION: '1', TICK: 'BRRR', DESCRIPTION: 'brrr desc', MEMO: 'm', MAX_SUPPLY: null,
+            MAX_MINT: null, DECIMALS: null, MINT_SUPPLY: null, TRANSFER: null,
+            TRANSFER_SUPPLY: null, LOCK_MAX_SUPPLY: null, LOCK_MAX_MINT: null,
+            LOCK_DESCRIPTION: null, LOCK_SLEEP: null, LOCK_CALLBACK: null, CALLBACK_BLOCK: null,
+            CALLBACK_TICK: null, CALLBACK_AMOUNT: null, ALLOW_LIST: null, BLOCK_LIST: null,
+            MINT_ADDRESS_MAX: null, MINT_START_BLOCK: null, MINT_STOP_BLOCK: null,
+            LOCK_MINT: null, LOCK_MINT_SUPPLY: null, CONTROLLER: null, ACTION_CLASS: null,
+            COOLDOWN_BLOCKS: null, UNBIND: null,
+        }),
+    },
+]);
+
+// The three names ISSUE format 7 introduced, and the only keys this build may add to a
+// pre-format-7 ISSUE parse.
+const FORMAT7_ADDED_FIELDS = Object.freeze(['BRIDGE_CHAINS', 'MIN_DEPTH', 'LOCK_BRIDGE']);
+
+describe('ISSUE v0/v1 parse is byte-identical to the pre-format-7 build @regression @consensus', function () {
+
+    for (const vec of PRE_FORMAT7_ISSUE) {
+
+        it(`${vec.label}: every pre-format-7 field parses to the same value`, function () {
+            const parsed = indexerParse(vec.wire).data;
+            for (const [field, value] of Object.entries(vec.parsed))
+                assert.strictEqual(parsed[field], value,
+                    `${vec.label}: field ${field} moved from ${JSON.stringify(value)} to ${JSON.stringify(parsed[field])}`);
+        });
+
+        it(`${vec.label}: adds exactly the three format-7 names, each null`, function () {
+            const parsed = indexerParse(vec.wire).data;
+            const added  = Object.keys(parsed).filter((k) => !(k in vec.parsed));
+            assert.deepStrictEqual(added.slice().sort(), FORMAT7_ADDED_FIELDS.slice().sort(),
+                `${vec.label}: unexpected additions to the canonical field map`);
+            for (const field of added)
+                assert.strictEqual(parsed[field], null, `${vec.label}: ${field} must parse as null on a v${parsed.VERSION} wire`);
+        });
+
+        it(`${vec.label}: drops no field the pre-format-7 build produced`, function () {
+            const parsed = indexerParse(vec.wire).data;
+            const missing = Object.keys(vec.parsed).filter((k) => !(k in parsed));
+            assert.deepStrictEqual(missing, [], `${vec.label}: fields disappeared from the canonical map`);
+        });
+    }
 });

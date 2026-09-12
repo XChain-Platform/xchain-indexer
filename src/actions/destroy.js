@@ -168,6 +168,28 @@ class Destroy {
             if(!error && !tokenInfo)
                 error = 'invalid: TICK (unknown)';
 
+            // ── Bridge supply-path closures ───────────────────────────────────────────────
+            //
+            // DESTROY lowers a token's SUPPLY with no counterpart anywhere else, which is
+            // exactly the wrong verb for a supply that is the shadow of an escrow balance
+            // held on another chain. Burned here, the escrow on the origin chain would be
+            // stranded forever and the bridge invariant (escrow >= supply) would read a
+            // permanent surplus nobody can redeem. Both refusals name the action that DOES
+            // have a counterpart leg: XBRIDGE v1 for XCHAIN, v4 for a bridged copy.
+            //
+            // UNCONDITIONAL, not activation-keyed (base spec D62). Neither refusal can move a
+            // historical verdict: no off-BTC XCHAIN row exists to destroy (every broadcast
+            // ISSUE of the gas tick off BTC is refused), and no `<ORIGIN>.<NAME>` row can
+            // exist before the bridge creates one, because the parent gate refuses any child
+            // of a coin root that does not exist and the roots are measured absent on every
+            // live chain. An unconditional rule also cannot be mis-ordered against the block
+            // at which the bridge first creates such a row.
+            if(!error && String(destroy['TICK']).toUpperCase()==String(this.config['GAS']).toUpperCase() && this.config['COIN']!='BTC')
+                error = 'invalid: TICK (use XBRIDGE v1)';
+
+            if(!error && this.util.parseBridgedTick(destroy['TICK']))
+                error = 'invalid: TICK (use XBRIDGE v4)';
+
             // Verify AMOUNT format
             if(!error && !this.util.isNull(destroy['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], destroy['AMOUNT'], data['BLOCK_TIME']))
                 error = "invalid: AMOUNT (format)";

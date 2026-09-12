@@ -35,7 +35,14 @@
 // and canonicalizeHashAddress; the indexer unit suite asserts this map matches
 // src/configs/*.js so config edits can never silently drift the consensus map.
 
-const ROLE_FIELDS = ['BURN', 'GAS', 'DONATE1', 'DONATE2', 'REWARD'];
+// BRIDGE_<COIN> joins the hashed roles for the same reason REWARD is here: the
+// XBRIDGE escrow is an ordinary balance at a per-chain address, so a v0/v3 lock
+// credits a chain-specific string into the ledger delta and the same action would
+// otherwise hash differently on BTC than on DOGE. Adding a role moves no historical
+// hash: these addresses are new and hold nothing below XCHAIN_BRIDGE_ACTIVATION, so
+// no pre-activation ledger row can match one (base spec D10).
+const ROLE_FIELDS = ['BURN', 'GAS', 'DONATE1', 'DONATE2', 'REWARD',
+                     'BRIDGE_BTC', 'BRIDGE_LTC', 'BRIDGE_DOGE'];
 const COINS       = ['BTC', 'LTC', 'DOGE'];
 const NETWORKS    = ['mainnet', 'testnet', 'regtest'];
 

@@ -209,9 +209,9 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
         await seedGas(seeder, { blockIndex: 399, addresses: [ADDR1, ADDR2, ADDR3] });
 
         // Phase 1: three blocks
-        await seeder.seedBlock(400, T0,           [{ source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|CLR|500000|500|0|Clear test' }]);
-        await seeder.seedBlock(401, T0 + BLK,     [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|CLR|500' }]);
-        await seeder.seedBlock(402, T0 + BLK * 2, [{ source: ADDR1, destination: ADDR2, amount: '0', data: 'SEND|0|CLR|250|' + ADDR2 }]);
+        await seeder.seedBlock(400, T0,           [{ source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|CLRX|500000|500|0|Clear test' }]);
+        await seeder.seedBlock(401, T0 + BLK,     [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|CLRX|500' }]);
+        await seeder.seedBlock(402, T0 + BLK * 2, [{ source: ADDR1, destination: ADDR2, amount: '0', data: 'SEND|0|CLRX|250|' + ADDR2 }]);
 
         let indexer = await initIndexer();
         await processBlocks(indexer);
@@ -223,19 +223,19 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
         // then seeds a completely different block 400
         await seeder.seedReorgEvent([400]);
         await deleteDecoderBlocksFrom(400);
-        await seeder.seedBlock(400, T0, [{ source: ADDR2, destination: null, amount: '0', data: 'ISSUE|0|NEW|100000|100|0|New token' }]);
+        await seeder.seedBlock(400, T0, [{ source: ADDR2, destination: null, amount: '0', data: 'ISSUE|0|NEWX|100000|100|0|New token' }]);
 
         // Phase 3
         indexer = await initIndexer();
         await processBlocks(indexer);
         await destroyIndexer(indexer);
 
-        // Phase 4: CLR token should be gone; NEW token exists; only 1 block
-        const clrToken = await helpers.getToken(indexerQuery, 'CLR');
-        assert.strictEqual(clrToken, null, 'CLR token should not exist after full reorg');
+        // Phase 4: CLRX token should be gone; NEWX token exists; only 1 block
+        const clrToken = await helpers.getToken(indexerQuery, 'CLRX');
+        assert.strictEqual(clrToken, null, 'CLRX token should not exist after full reorg');
 
-        const newToken = await helpers.getToken(indexerQuery, 'NEW');
-        assert.ok(newToken !== null, 'NEW token should exist after reorg replacement');
+        const newToken = await helpers.getToken(indexerQuery, 'NEWX');
+        assert.ok(newToken !== null, 'NEWX token should exist after reorg replacement');
 
         await helpers.assertBlockCount(indexerQuery, 2);
     });
@@ -249,12 +249,12 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
         await seedGas(seeder, { blockIndex: 499, addresses: [ADDR1, ADDR2, ADDR3] });
 
         // Phase 1
-        await seeder.seedBlock(500, T0,           [{ source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|SAN|2000000|500|0|Sanity check' }]);
-        await seeder.seedBlock(501, T0 + BLK,     [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|SAN|500' }]);
+        await seeder.seedBlock(500, T0,           [{ source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|SANX|2000000|500|0|Sanity check' }]);
+        await seeder.seedBlock(501, T0 + BLK,     [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|SANX|500' }]);
         await seeder.seedBlock(502, T0 + BLK * 2, [
-            { source: ADDR1, destination: ADDR2, amount: '0', data: 'SEND|0|SAN|100|' + ADDR2 },
+            { source: ADDR1, destination: ADDR2, amount: '0', data: 'SEND|0|SANX|100|' + ADDR2 },
         ]);
-        await seeder.seedBlock(503, T0 + BLK * 3, [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|SAN|300' }]);
+        await seeder.seedBlock(503, T0 + BLK * 3, [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|SANX|300' }]);
 
         let indexer = await initIndexer();
         await processBlocks(indexer);
@@ -263,8 +263,8 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
         // Phase 2: reorg at 502, remove the SEND
         await seeder.seedReorgEvent([502]);
         await deleteDecoderBlocksFrom(502);
-        await seeder.seedBlock(502, T0 + BLK * 2, [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|SAN|200' }]);
-        await seeder.seedBlock(503, T0 + BLK * 3, [{ source: ADDR1, destination: ADDR3, amount: '0', data: 'SEND|0|SAN|50|' + ADDR3 }]);
+        await seeder.seedBlock(502, T0 + BLK * 2, [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|SANX|200' }]);
+        await seeder.seedBlock(503, T0 + BLK * 3, [{ source: ADDR1, destination: ADDR3, amount: '0', data: 'SEND|0|SANX|50|' + ADDR3 }]);
 
         // Phase 3
         indexer = await initIndexer();
@@ -272,12 +272,12 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
         await destroyIndexer(indexer);
 
         // Phase 4: supply = 500 + 200 = 700; ADDR1 = 700-50 = 650, ADDR3 = 50
-        await helpers.assertTokenSupply(indexerQuery, 'SAN', '700');
-        await helpers.assertBalance(indexerQuery, ADDR1, 'SAN', '650');
-        await helpers.assertBalance(indexerQuery, ADDR3, 'SAN', '50');
+        await helpers.assertTokenSupply(indexerQuery, 'SANX', '700');
+        await helpers.assertBalance(indexerQuery, ADDR1, 'SANX', '650');
+        await helpers.assertBalance(indexerQuery, ADDR3, 'SANX', '50');
 
         // Full sanity check: ledger consistency
-        await helpers.assertSanity(indexerQuery, 'SAN');
+        await helpers.assertSanity(indexerQuery, 'SANX');
     });
 
     // -----------------------------------------------------------------------
@@ -324,10 +324,10 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
         await seedGas(seeder, { blockIndex: 699, addresses: [ADDR1, ADDR2, ADDR3] });
 
         // Phase 1: four blocks
-        await seeder.seedBlock(700, T0,           [{ source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|DBL|1000000|1000|0|Double reorg' }]);
-        await seeder.seedBlock(701, T0 + BLK,     [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|DBL|1000' }]);
-        await seeder.seedBlock(702, T0 + BLK * 2, [{ source: ADDR1, destination: ADDR2, amount: '0', data: 'SEND|0|DBL|500|' + ADDR2 }]);
-        await seeder.seedBlock(703, T0 + BLK * 3, [{ source: ADDR2, destination: ADDR3, amount: '0', data: 'SEND|0|DBL|200|' + ADDR3 }]);
+        await seeder.seedBlock(700, T0,           [{ source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|DBLX|1000000|1000|0|Double reorg' }]);
+        await seeder.seedBlock(701, T0 + BLK,     [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|DBLX|1000' }]);
+        await seeder.seedBlock(702, T0 + BLK * 2, [{ source: ADDR1, destination: ADDR2, amount: '0', data: 'SEND|0|DBLX|500|' + ADDR2 }]);
+        await seeder.seedBlock(703, T0 + BLK * 3, [{ source: ADDR2, destination: ADDR3, amount: '0', data: 'SEND|0|DBLX|200|' + ADDR3 }]);
 
         let indexer = await initIndexer();
         await processBlocks(indexer);
@@ -336,31 +336,31 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
         // FIRST reorg at 702
         await seeder.seedReorgEvent([702]);
         await deleteDecoderBlocksFrom(702);
-        await seeder.seedBlock(702, T0 + BLK * 2, [{ source: ADDR1, destination: ADDR2, amount: '0', data: 'SEND|0|DBL|300|' + ADDR2 }]);
-        await seeder.seedBlock(703, T0 + BLK * 3, [{ source: ADDR2, destination: ADDR3, amount: '0', data: 'SEND|0|DBL|150|' + ADDR3 }]);
+        await seeder.seedBlock(702, T0 + BLK * 2, [{ source: ADDR1, destination: ADDR2, amount: '0', data: 'SEND|0|DBLX|300|' + ADDR2 }]);
+        await seeder.seedBlock(703, T0 + BLK * 3, [{ source: ADDR2, destination: ADDR3, amount: '0', data: 'SEND|0|DBLX|150|' + ADDR3 }]);
 
         indexer = await initIndexer();
         await processBlocks(indexer);
         await destroyIndexer(indexer);
 
         // After first reorg: ADDR1=700, ADDR2=150, ADDR3=150
-        await helpers.assertBalance(indexerQuery, ADDR1, 'DBL', '700');
-        await helpers.assertBalance(indexerQuery, ADDR2, 'DBL', '150');
-        await helpers.assertBalance(indexerQuery, ADDR3, 'DBL', '150');
+        await helpers.assertBalance(indexerQuery, ADDR1, 'DBLX', '700');
+        await helpers.assertBalance(indexerQuery, ADDR2, 'DBLX', '150');
+        await helpers.assertBalance(indexerQuery, ADDR3, 'DBLX', '150');
 
         // SECOND reorg at 703: undo the last SEND
         await seeder.seedReorgEvent([703]);
         await deleteDecoderBlocksFrom(703);
-        await seeder.seedBlock(703, T0 + BLK * 3, [{ source: ADDR1, destination: ADDR3, amount: '0', data: 'SEND|0|DBL|700|' + ADDR3 }]);
+        await seeder.seedBlock(703, T0 + BLK * 3, [{ source: ADDR1, destination: ADDR3, amount: '0', data: 'SEND|0|DBLX|700|' + ADDR3 }]);
 
         indexer = await initIndexer();
         await processBlocks(indexer);
         await destroyIndexer(indexer);
 
         // After second reorg: ADDR1 sent all 700 to ADDR3
-        await helpers.assertBalance(indexerQuery, ADDR1, 'DBL', null); // zero balance (row removed)
-        await helpers.assertBalance(indexerQuery, ADDR2, 'DBL', '300'); // unchanged from post-first-reorg
-        await helpers.assertBalance(indexerQuery, ADDR3, 'DBL', '700');
+        await helpers.assertBalance(indexerQuery, ADDR1, 'DBLX', null); // zero balance (row removed)
+        await helpers.assertBalance(indexerQuery, ADDR2, 'DBLX', '300'); // unchanged from post-first-reorg
+        await helpers.assertBalance(indexerQuery, ADDR3, 'DBLX', '700');
     });
 
     // -----------------------------------------------------------------------

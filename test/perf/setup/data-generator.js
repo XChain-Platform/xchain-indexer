@@ -12,6 +12,7 @@
 
 const crypto = require('crypto');
 const DecoderSeeder = require('../../integration/setup/decoder-seeder');
+const { registerSystemGas } = require('../../integration/setup/gas-seeder');
 
 // 34-char GAS address for BTC regtest
 const GAS_ADDR = 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
@@ -68,15 +69,27 @@ class DataGenerator extends DecoderSeeder {
         const t = baseTime;
         const addrs = this.state.addresses;
 
-        // Block 1: Issue XCHAIN from GAS address
-        await this.seedBlock(block++, t, [
-            { source: GAS_ADDR, data: `ISSUE|0|${TICK_GAS}|999999999|999999999|0` }
-        ]);
+        if ((process.env.INDEXER_COIN || 'BTC') === 'BTC') {
+            // Block 1: Issue XCHAIN from GAS address
+            await this.seedBlock(block++, t, [
+                { source: GAS_ADDR, data: `ISSUE|0|${TICK_GAS}|999999999|999999999|0` }
+            ]);
 
-        // Block 2: Mint XCHAIN to GAS address
-        await this.seedBlock(block++, t + 600, [
-            { source: GAS_ADDR, data: `MINT|0|${TICK_GAS}|999999999` }
-        ]);
+            // Block 2: Mint XCHAIN to GAS address
+            await this.seedBlock(block++, t + 600, [
+                { source: GAS_ADDR, data: `MINT|0|${TICK_GAS}|999999999` }
+            ]);
+        } else {
+            // Off BTC a broadcast ISSUE of XCHAIN is refused (the gas tick is minted on
+            // BTC only), so the funder is credited the way the bridge does it: the row
+            // is injected and the balance arrives as an XBRIDGE in-leg credit when the
+            // block loop reaches block 1 (integration/setup/gas-seeder.js). Sized under
+            // the injected row's 100000000 cap. Block 2 stays empty so the block count
+            // matches the BTC bootstrap.
+            await this.seedBlock(block, t, []);
+            registerSystemGas(block++, { addresses: [GAS_ADDR], amount: '90000000' });
+            await this.seedBlock(block++, t + 600, []);
+        }
 
         // Block 3: Send XCHAIN to all test addresses (100000 each)
         const gasSends = addrs.map(addr => ({

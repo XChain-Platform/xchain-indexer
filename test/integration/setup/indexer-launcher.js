@@ -21,6 +21,7 @@
  */
 
 const { getConnectionParams, activeFileKey, fileKey } = require('./db-connection');
+const { applySystemGas } = require('./gas-seeder');
 
 // Instances handed out by initIndexer() and not yet destroyed, each against the
 // test file whose schemas were active when it was made. Ownership matters:
@@ -207,6 +208,11 @@ async function processBlocks(indexer) {
             // effective validator-signed cross-chain match. No-op for scenarios without
             // cross_chain_matches rows; scenario 26 injects signed matches directly.
             await indexer.util.processCrossChainSettlements(indexer.actions, indexer.indexerDb, lastIndexerBlock, blockTime);
+            // The fixture's stand-in for the XBRIDGE settle pass, at the pass's pinned
+            // position (XChainIndexer.start: after the cross-chain DEX settlement). Off
+            // BTC the gas preamble arrives here as bridge-shaped credits, because a
+            // broadcast ISSUE of XCHAIN is refused there; see gas-seeder.js.
+            await applySystemGas(indexer, lastIndexerBlock, blockTime);
             await indexer.util.processCancellations(indexer.actions, indexer.indexerDb, lastIndexerBlock, blockTime);
             // Mirror production: clear the per-block VM compilation cache after the last
             // pass that can execute contract code and BEFORE createBlock, so nothing

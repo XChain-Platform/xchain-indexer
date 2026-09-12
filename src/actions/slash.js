@@ -100,6 +100,17 @@ const ENGINE_CAPABILITY = {
     // round and a batch at one BTC anchor can never share an equiv key.
     [eq.ENGINE_TAGS.ORACLE_BATCH]: 'price',
     [eq.ENGINE_TAGS.ATTEST]:     'attestation',
+    // The bridge and the token-policy engines are signed by the SAME cross_chain set the DEX
+    // and XCALL are, under the same locked snapshot, so they burn the same bond. They are in
+    // this map because a forgery in either DIRECTS VALUE: an XBRIDGE canonical mints units on
+    // a destination chain, and an XPOLICY canonical decides who may move a bridged row's
+    // units at all. A tag absent from this map is namespacing only and is NOT a slashable
+    // family (XNODEPROOF and ROLLCALL are deliberately absent for that reason), which for
+    // these two would leave the one class of equivocation that moves money unpunished.
+    // Distinct tags, so a validator that signs one transfer and one policy snapshot in the
+    // same round can never collide on an equivocation key.
+    [eq.ENGINE_TAGS.BRIDGE]:     'cross_chain',
+    [eq.ENGINE_TAGS.POLICY]:     'cross_chain',
     [eq.ENGINE_TAGS.CONFIG]:     CONFIG_CAPABILITY,
 };
 
@@ -396,6 +407,15 @@ class Slash {
             [eq.ENGINE_TAGS.DEX]:        2,   // XMATCH|match_id|snapshot_block|...
             [eq.ENGINE_TAGS.XCALL]:      3,   // XCALL|DISPATCH|call_id|snapshot_block|...  (RESULT: same index)
             [eq.ENGINE_TAGS.CHECKPOINT]: 9,   // XCHECKPOINT|chain|network|block_index|block_hash|ledger|actions|contract|checkpoint_seq|snapshot_block[|batch_seq..]
+            // The bridge pair. WITHOUT these two rows the ENGINE_CAPABILITY entries above are
+            // inert: a well-formed bridge equivocation proof maps to cross_chain, then falls
+            // through to 'invalid: ENGINE_TAG (no snapshot_block rule)' and burns nothing,
+            // which is the one outcome "a bridge forgery directs value, so it must be
+            // slashable" was meant to rule out. Each carries the height in-content at index 2
+            // and each is a SINGLE content family, so neither needs the family discriminator
+            // the CHECKPOINT and ATTEST legs below carry.
+            [eq.ENGINE_TAGS.BRIDGE]:     2,   // XBRIDGE|transfer_id|snapshot_block|tick|...
+            [eq.ENGINE_TAGS.POLICY]:     2,   // XPOLICY|snapshot_id|snapshot_block|origin_chain|...
             [eq.ENGINE_TAGS.CONFIG]:     0,   // XCONFIG content = snapshot_block|config_digest (Phase-A amendment: block carried in-content so config equivocation is slashable)
         };
         if(FIELD[engineTag] !== undefined){

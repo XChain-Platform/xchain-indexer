@@ -84,7 +84,16 @@ class Sleep {
         // in callback.js). Without it the owner can permanently freeze a token they promised never to
         // pause (SLEEP|1|-1|TICK -> isTickSleeping forever), stranding every holder's balance. Gated
         // (tightens validity): flips fleet-wide at one coordinated block; pre-launch chains at genesis.
-        if(!error && data['TYPE']=='TICK' && tokenInfo && tokenInfo['LOCK_SLEEP']==1
+        //
+        // IS_GENESIS IS EXEMPT (policy spec D10). A bridged copy is created with LOCK_SLEEP
+        // set, so nobody can ever sleep the copy by hand - but policy inheritance has to be
+        // able to materialize the ORIGIN's sleep state onto that copy, and it does so with an
+        // injected SLEEP format 1 routed through processTransaction(tx, true). Without this
+        // term the copy's own lock would refuse the inheritance it exists to receive. No
+        // broadcast action ever carries the flag, so no historical verdict moves, and the
+        // owner check above passes on its own because the bridge role address IS the copy's
+        // owner.
+        if(!error && data['TYPE']=='TICK' && !data['IS_GENESIS'] && tokenInfo && tokenInfo['LOCK_SLEEP']==1
            && await this.actions.protocolChanges.isEnabled('SLEEP_RESPECTS_LOCK_SLEEP', data['BLOCK_INDEX']))
             error = 'invalid: LOCK_SLEEP';
 

@@ -190,10 +190,10 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
             // Fee era: the ISSUE below needs gas
             await seedGas(seeder, { blockIndex: 99, addresses: [ADDR1, ADDR2, ADDR3] });
             await seeder.seedBlock(100, T0, [
-                { source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|DET|200000|200|0|Determinism', txHash: 'a'.repeat(56) + '00000001' },
+                { source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|DETX|200000|200|0|Determinism', txHash: 'a'.repeat(56) + '00000001' },
             ]);
             await seeder.seedBlock(101, T0 + BLK, [
-                { source: ADDR1, destination: null, amount: '0', data: 'MINT|0|DET|200', txHash: 'a'.repeat(56) + '00000002' },
+                { source: ADDR1, destination: null, amount: '0', data: 'MINT|0|DETX|200', txHash: 'a'.repeat(56) + '00000002' },
             ]);
 
             const indexer = await initIndexer();

@@ -24,7 +24,11 @@ const COINS    = ['BTC', 'LTC', 'DOGE'];
 const NETWORKS = ['mainnet', 'testnet', 'regtest'];
 // Roles that legitimately have NO ledger-delta presence are excluded from the
 // hashed map on purpose; FEE_DESTINATION is native-fee-only and env-overridable.
-const HASHED_ROLES = ['BURN', 'GAS', 'DONATE1', 'DONATE2', 'REWARD'];
+// BRIDGE_<COIN> is one hashed role per OTHER coin: the XBRIDGE escrow is an
+// ordinary per-chain balance, so without canonicalization the same bridge action
+// would hash differently on BTC than on DOGE.
+const HASHED_ROLES = ['BURN', 'GAS', 'DONATE1', 'DONATE2', 'REWARD',
+                      'BRIDGE_BTC', 'BRIDGE_LTC', 'BRIDGE_DOGE'];
 
 describe('protocolAddressRoles (consensus hash canonicalization)', function () {
 

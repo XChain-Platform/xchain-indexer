@@ -123,6 +123,28 @@ module.exports = {
                 DONATE2:         '1Donate2LkbBrsanwCVRPWZCXAqQcvcqGz', // Community Development
                 FEE_DESTINATION: '1FeesxM9LTEjBYVTkynK6jfDBgvksuh2WL', // native-fee destination (regtest-only env override; ignored on mainnet/testnet)
                 REWARD:          '1RewardsRQTXMAytLt4bBQvPEscKsSEXt',  // validator reward pool (COLLECT)
+                // Cross-chain bridge escrow, one per DESTINATION coin. An XBRIDGE lock
+                // credits the balance here and the destination chain mints against it, so
+                // this address IS the backing for every unit of that asset on the other
+                // chain. Keyless by construction, exactly like BURN above, which is what
+                // makes the escrow unspendable without a bespoke table.
+                //
+                // The readable text lives in the base58 STRING ONLY, never in the decoded
+                // bytes. Measured 2026-09-12 by base58check-decoding the shipped literals:
+                // '17BridgeLtcXChainXXXXXXXXXXa5uRRy' is version byte 0x00 plus hash160
+                // 012b8f14947cc310298e6b49b68ea24e2bbdcbc0, checksum valid, and those 20
+                // bytes are not ASCII; BURN above decodes the same way, to hash160
+                // 05b63ec8f5f45c95801e38f4fd8305e57b75c151. The trailing X run is padding
+                // that carries the string out to a 25-byte payload and lets the last few
+                // characters land a valid checksum.
+                //
+                // What actually makes them unspendable: the hash160 is whatever the chosen
+                // string happened to decode to, so no key ever produced it.
+                // Paying out of one needs a public key K with RIPEMD160(SHA256(K)) equal to
+                // those exact 20 bytes, which is a 160-bit preimage search on HASH160, not a
+                // lost-key problem. Pinned by xchain-indexer/test/unit/bridgeEscrowKeylessness.test.js.
+                BRIDGE_LTC:      '17BridgeLtcXChainXXXXXXXXXXa5uRRy',
+                BRIDGE_DOGE:     '17BridgeDogeXChainXXXXXXXXXVuqXcv',
                 EXPLORER:        '1Donate3GBGSZzzrS9U9gUgURYKscAE6Yn', // display-only donation; not read by indexer
             },
             // Genesis ledger bootstrap pin (Counterparty name carry-forward).
@@ -185,6 +207,11 @@ module.exports = {
                 DONATE2:         'myBbbZ4t7BPoyNcT4sHtFwZDuiyYGDXLQM',
                 FEE_DESTINATION: 'mfees5QurRs5BHXofdGpTG5pXB6uC6R8RU',
                 REWARD:          'mrewards4RQFYoZ5yEv4xr12PzfjDYViks',
+                // Bridge escrow, see mainnet above. testnet and regtest share the
+                // literal because they share the pubKeyHash byte, the same way BURN
+                // already does; the network is what separates the two ledgers.
+                BRIDGE_LTC:      'mfbtcbridgeLtcXXXXXXXXXXXXXXVPqpoV',
+                BRIDGE_DOGE:     'mfbtcbridgedogeXXXXXXXXXXXXXUXTr4m',
                 EXPLORER:        'n1jbLKMrhvFae7NwTj37ZtkN4uPy29o9aM',
             },
             // Testnet launches CLEAN (genesis disabled, like LTC); namespace open.
@@ -230,6 +257,9 @@ module.exports = {
                 DONATE2:         'mkQd27aJSqsQ666z1Q4MLFmd3Ybqzy3TNw',
                 FEE_DESTINATION: 'mfeesX6rLE6V3WPg9tsbL2fHNS7E4rDAim',
                 REWARD:          'mrewardshQqD1ptkEBZGjPDF77L5uKJQmk',
+                // Bridge escrow, the testnet literals (same pubKeyHash byte).
+                BRIDGE_LTC:      'mfbtcbridgeLtcXXXXXXXXXXXXXXVPqpoV',
+                BRIDGE_DOGE:     'mfbtcbridgedogeXXXXXXXXXXXXXUXTr4m',
                 EXPLORER:        'mrDH7rA2ZmGoh4Qx5guhDBJbZotUd6XyVH',
             },
             // Regtest genesis is env-driven so the e2e harness can point it at a
@@ -304,6 +334,16 @@ module.exports = {
         SWEEP_PER_ITEM:        100,
         CALLBACK_BASE:         5000,
         CALLBACK_PER_RECIPIENT: 100,
+        // XBRIDGE lock (v0, v3) and burn (v1, v4). One flat price for every user
+        // format: the work is one debit plus one credit or one supply move, and the
+        // validator federation's signing cost does not scale with the amount. Sized at
+        // SWEEP_BASE, for the same reason SWEEP_BASE exists: on LTC and DOGE the fee
+        // must be a real native-coin output, so the smallest possible bridge action has
+        // to buy one above the chain's dust threshold on its own. The mirror-injected
+        // settle formats (v2, v5) pay nothing, the CROSS_SETTLE precedent. ISSUE format
+        // 7 (bridgeability opt-in) adds no key: it is an owner edit of an existing row
+        // and the issuance fee is first-issuance only.
+        XBRIDGE_BASE:          5000,
         // BET (parimutuel betting, spec decision F): feed creation is duration-
         // metered like ORDER/SWAP/DISPENSER expiration (same free window via
         // UNIFIED_EXPIRATION_FEE_FREE_DAYS) but under its OWN per-day key so the

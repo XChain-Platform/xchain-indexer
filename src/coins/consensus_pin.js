@@ -77,16 +77,28 @@ module.exports = {
         // the new values together, and a straggler fail-closes on verifyConsensusPin()
         // at boot rather than forking. CONSENSUS_CONFIG_PIN.mainnet above stays null
         // regardless (Phase 6 arms that separate pin).
+        // REGENERATED 2026-09-12 (XChain bridge, base and token): every network
+        // block gains the ADDRESS.BRIDGE_<COIN> escrow roles (two per coin, one per
+        // other chain) and GAS_SCHEDULE gains XBRIDGE_BASE. consensusSubset() hashes
+        // the address map and the gas schedule WHOLE, so both edits move every hash by
+        // construction regardless of where XCHAIN_BRIDGE_ACTIVATION stands, and the
+        // same one-wave rollout rule as every regeneration above applies in full: every
+        // service bundling these ships the new values together, and a straggler
+        // fail-closes on verifyConsensusPin() at boot rather than forking. The escrow
+        // addresses themselves are inert until the activation (nothing credits them
+        // below it), so no pre-activation block hash moves; the pin moves because the
+        // BUNDLE changed, which is exactly what the pin is for.
+        // CONSENSUS_CONFIG_PIN.mainnet above stays null (Phase 6 arms that pin).
         testnet: {
-            BTC:  'd3c66a4fb288b2666a2a4fad85200bbeac162bb36fed8a3eddcfc7b2d4d48070',
-            LTC:  'ae94a951a838e64f9c36e503b978d9b9ad5ea74f7b443465baaabca8f675ea0d',
-            DOGE: 'b90aec4381b0ad32caba078706c8fb244cbe267390e41668fa063d9e64fb60e6',
+            BTC:  'fcff7c1f46a8f7a75ddb7e1e4fb30f9e0c72d72f307a75a9d9357ffad29452c0',
+            LTC:  '57373962a5c562f8ceb98fceb482c586741ecf8dd6335965c76f9b8e61a4eb87',
+            DOGE: '5276c0a0fb161bbfd4e8b0acaabf38751dded4370ecce86455c57eb5de0e9bb2',
         },
 
         regtest: {
-            BTC:  '29976bd33cad1842320c57acdc849250646adea765f70a0ae5dad3f201f7d5d7',
-            LTC:  'bca62db9f59a6f7566620b086380c10fffac08dabe99f00a4fcc7cd038e46146',
-            DOGE: '816632e9f6647e726042282c37789ae8d924e8d4a1b2995ddde8d6a54a0bba54',
+            BTC:  '63ee757834f6f815045321090fd89b446e784f442e3e7abf84b8c0fb3b479324',
+            LTC:  'ab30c1d1fd444ca3dca1a9ec855bd587422e87d5e5e5e6b6f9ddadd1d2fb587d',
+            DOGE: '34f8dafeff36f7c8ca3b327c3c915251e78e64448742860620522a92a69368a0',
         },
     },
 };

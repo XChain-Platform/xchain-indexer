@@ -74,6 +74,11 @@ module.exports = {
                 DONATE2:         'DDonate2o3Sg4phybp92oFpkmv8S9ZhGSV', // Community Development
                 FEE_DESTINATION: 'DFeesjvoMoVqd9UDuwDSAxzHMF5xZFgeG9', // native-fee destination (regtest-only env override; ignored on mainnet/testnet)
                 REWARD:          'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX', // structural only; COLLECT/XCHAIN are BTC-only
+                // Cross-chain bridge escrow, one per DESTINATION coin, and under R3
+                // (any chain is an origin) it also owns every row bridged FROM that
+                // chain onto this one. Keyless by construction, like BURN above.
+                BRIDGE_BTC:      'D5dogebridgebtcXXXXXXXXXXXXXVAFQt9',
+                BRIDGE_LTC:      'D5dogebridgeLtcXXXXXXXXXXXXXUVFLyn',
                 EXPLORER:        'DDonate3FCoUgi1bxW5r9c2p75uKTLw9qE', // display-only donation
             },
             // Dogeparty name-ownership injected at the DOGE mainnet start block.
@@ -128,6 +133,11 @@ module.exports = {
                 DONATE2:         'ndonate2wev8vKDgvd1DHhtJtvkRbn2usJ',
                 FEE_DESTINATION: 'nfeesoodkv5UTFXcDeKcUU95QHFiK2Ggo7',
                 REWARD:          'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+                // Bridge escrow, see mainnet above. Dogecoin testnet and regtest use
+                // DIFFERENT pubKeyHash bytes (0x71 vs 0x6f), so unlike BTC and LTC the
+                // two networks carry different literals here.
+                BRIDGE_BTC:      'nUdogebridgebtcXXXXXXXXXXXXXWUG2kx',
+                BRIDGE_LTC:      'nUdogebridgeLtcXXXXXXXXXXXXXTsEz6W',
                 EXPLORER:        'ndonate3xHD56SnmmSxbjX7UMSPfN7XmVA',
             },
             // Testnet launches CLEAN (genesis disabled); namespace stays open.
@@ -171,6 +181,9 @@ module.exports = {
                 DONATE2:         'mmXU8RU7q3BUsyT66rtw1H6P7B2ZZd9c5Y',
                 FEE_DESTINATION: 'mfees5pa2HwNBonk5vG23aDWkN9fuDJib4',
                 REWARD:          'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+                // Bridge escrow, regtest encoding (pubKeyHash 0x6f, not testnet's 0x71).
+                BRIDGE_BTC:      'mfdogebridgebtcXXXXXXXXXXXXXZ3agHN',
+                BRIDGE_LTC:      'mfdogebridgeLtcXXXXXXXXXXXXXXb2E4n',
                 EXPLORER:        'n1AvTJLLSA1NHamHd5KFj9mRn6BEcwnVbf',
             },
             genesis: {
@@ -238,6 +251,16 @@ module.exports = {
         SWEEP_PER_ITEM:        100,
         CALLBACK_BASE:         5000,
         CALLBACK_PER_RECIPIENT: 100,
+        // XBRIDGE lock (v0, v3) and burn (v1, v4). One flat price for every user
+        // format: the work is one debit plus one credit or one supply move, and the
+        // validator federation's signing cost does not scale with the amount. Sized at
+        // SWEEP_BASE, for the same reason SWEEP_BASE exists: on LTC and DOGE the fee
+        // must be a real native-coin output, so the smallest possible bridge action has
+        // to buy one above the chain's dust threshold on its own. The mirror-injected
+        // settle formats (v2, v5) pay nothing, the CROSS_SETTLE precedent. ISSUE format
+        // 7 (bridgeability opt-in) adds no key: it is an owner edit of an existing row
+        // and the issuance fee is first-issuance only.
+        XBRIDGE_BASE:          5000,
         // BET (parimutuel betting, spec decision F): feed creation is duration-
         // metered like ORDER/SWAP/DISPENSER expiration (same free window via
         // UNIFIED_EXPIRATION_FEE_FREE_DAYS) but under its OWN per-day key so the

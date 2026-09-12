@@ -36,6 +36,11 @@
  *
  ********************************************************************/
 
+// The flag day at which a LIST format 1 must come from the address that created
+// the list. Standalone height-keyed module rather than a protocol_changes entry, because the
+// SDK and the wallet read the same map when they decide whether to offer an edit form.
+const listOwnerActivation = require('../list_owner_activation.js');
+
 class List {
 
     constructor(action){
@@ -65,6 +70,20 @@ class List {
 
         // Define array of edit types (1=Add, 2=Remove)
         this.editTypes = [1,2];
+    }
+
+    // Every bridge role address configured for THIS chain. Policy inheritance materializes
+    // an origin token's list onto a bridged copy as an ordinary local LIST owned by this
+    // chain's ADDRESS.BRIDGE_<ORIGIN>, one per origin chain, so the set is read off the coin
+    // bundle by role-name prefix rather than named coin by coin here. An unconfigured chain
+    // yields an empty set and the guard below is inert, which is the pre-bridge behaviour.
+    bridgeRoleAddresses(){
+        let addresses = this.config['ADDRESS'] || {};
+        let roles     = [];
+        for(let role in addresses)
+            if(String(role).indexOf('BRIDGE_') === 0 && addresses[role])
+                roles.push(addresses[role]);
+        return roles;
     }
 
     async parse(params, data, error){
@@ -121,6 +140,52 @@ class List {
             list = await this.indexerDb.getList(data['LIST_ACTION_INDEX'], data['BLOCK_INDEX']);
         }
 
+        // ── Who may EDIT this list (two rules, one read) ──────────────────────────────────
+        //
+        // Both rules judge the ROOT CREATE's source, never the last edit's: the authority
+        // over an edit chain belongs to the address that created the list, and reading the
+        // newest edit would let the first unauthorized edit launder authority for every edit
+        // after it. Resolved here rather than leaning on the normalization above, which is
+        // itself flag-gated.
+        //
+        // Injected edits are exempt through IS_GENESIS: policy inheritance rewrites the
+        // copy's membership from a signed snapshot through processTransaction(tx, true), and
+        // the bridge role address that owns the list holds no key to broadcast with.
+        if(!error && format==1 && !data['IS_GENESIS']){
+
+            let bridgeRoles = this.bridgeRoleAddresses();
+            let ownerCheck  = listOwnerActivation.isListOwnerCheckActive(data['BLOCK_INDEX'], this.config['NETWORK']);
+
+            // Spend no read when neither rule can fire: a chain with no bridge role address
+            // configured holds no bridge-owned list, and below LIST_OWNER_ACTIVATION the
+            // editor is compared to nobody. This also keeps the resolution the edit-chain
+            // flag day governs untouched, since the root resolved here is a LOCAL value and
+            // the stored LIST_ACTION_INDEX is still whatever that flag day decided above.
+            if(bridgeRoles.length || ownerCheck){
+
+                let rootIndex  = await this.indexerDb.getListRootIndex(data['LIST_ACTION_INDEX']);
+                let listSource = await this.indexerDb.getListSource(rootIndex);
+
+                // BRIDGE-OWNED LISTS. A materialized policy list on a bridged copy is the
+                // issuer's policy carried from the origin chain and signed by the federation;
+                // the destination chain must never let a broadcast rewrite it, or any address
+                // could edit an issuer's allow or block list on every chain holding a copy.
+                // Unconditional, not activation-keyed: no bridge-owned list can exist before
+                // the first snapshot applies, so no historical edit changes status on replay.
+                if(listSource && bridgeRoles.indexOf(listSource) !== -1)
+                    error = 'invalid: LIST_ACTION_INDEX (bridge-owned)';
+
+                // THE GENERAL OWNER CHECK. LIST edits had no owner check anywhere on
+                // the platform: any address could edit any issuer's list, and those lists gate
+                // SEND, ORDER, DISPENSER, AIRDROP, DIVIDEND, BET and SWAP on every listed
+                // token. Flag gated because it re-verdicts historical third-party edits, which
+                // the unconditional rule above cannot: below LIST_OWNER_ACTIVATION every edit
+                // is judged exactly as it was, so a from-genesis replay is byte-identical.
+                if(!error && ownerCheck && listSource && listSource != data['SOURCE'])
+                    error = 'invalid: LIST_ACTION_INDEX (not owner)';
+            }
+        }
+
         // General Validations
 
         // Verify SOURCE is not sleeping
@@ -158,8 +223,21 @@ class List {
                             status = 'invalid: TICK (unknown)';
                     }
 
-                    // Verify ADDRESS
-                    if(data['TYPE']==2 && !this.util.isCryptoAddress(item))
+                    // Verify ADDRESS.
+                    //
+                    // ANY-COIN ITEMS at/above TOKEN_POLICY_INHERITANCE_ACTIVATION: a bridged
+                    // copy inherits ONE list from its origin row, so that list has to be able
+                    // to name holders on every chain a copy lives on. isAnyCoinAddress loops
+                    // the existing coin-and-network-aware validator over COINS rather than
+                    // introducing a second address validator. Below the flag it is the
+                    // one-argument call this line has always made.
+                    //
+                    // The widening is hash-visible, which is why it is gated at all: an
+                    // admitted item writes a list_items row and that table is hashed DERIVED.
+                    // The ACTION's own status never moved either way (a bad item is recorded
+                    // in list_items_invalid and the LIST stays valid), so only the membership
+                    // is at stake.
+                    if(data['TYPE']==2 && !this.indexerDb.isAnyCoinAddress(item, data['BLOCK_INDEX']))
                         status = 'invalid: ADDRESS (format)';
 
                     // Add item and status to edits array

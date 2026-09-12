@@ -110,6 +110,39 @@ const GATES = [
     // held tick with nothing to move. Those rows are in the per-block ledger hash, so a
     // one-sided edit forks the ledger hash at the first zero-balance sweep past the boundary.
     ['sweep_zero_leg_activation.js',       'SWEEP_ZERO_LEG_ACTIVATION'],
+    // The XCHAIN bridge flag day. A one-sided edit forks the bridge at the boundary in the
+    // worst direction available: the destination chain mints from a transfer record the
+    // source chain's copy says was never legal to sign, or refuses one it did sign.
+    ['xchain_bridge_activation.js',        'XCHAIN_BRIDGE_ACTIVATION'],
+    // The general token-bridge flag day (XBRIDGE v3/v4/v5, ISSUE format 7). Same fork
+    // surface, plus the ordering invariant asserted separately below.
+    ['token_bridge_activation.js',         'TOKEN_BRIDGE_ACTIVATION'],
+    // The policy-inheritance flag day. It decides whether a mirrored policy_snapshots row is
+    // applied at all, so a one-sided edit has one destination enforcing an issuer's block list
+    // on a bridged copy while another still admits the transfer, from the same signed row.
+    // Both ordering invariants it owes are asserted separately below.
+    ['token_policy_activation.js',         'TOKEN_POLICY_INHERITANCE_ACTIVATION'],
+    // The LIST owner check. It re-verdicts every historical third-party LIST edit,
+    // and list_items is a hashed DERIVED table, so a one-sided edit forks the chain at the
+    // boundary in the most ordinary traffic there is.
+    ['list_owner_activation.js',           'LIST_OWNER_ACTIVATION'],
+    // Not activation MAPS but the consensus constants the bridge and policy passes read: the
+    // per-block caps decide WHICH rows land in WHICH block (an action-index change, so a hash
+    // change), and XPOLICY_MAX_MEMBERS decides which opt-in is refused. A one-sided edit to any
+    // of the three diverges two nodes running the same flag day.
+    ['protocol/constants.js',              'XBRIDGE_MAX_PER_BLOCK'],
+    ['protocol/constants.js',              'XPOLICY_MAX_PER_BLOCK'],
+    ['protocol/constants.js',              'XPOLICY_MAX_MEMBERS'],
+    // The tick-namespace flag day (R8). It re-verdicts nothing below itself, but at
+    // the boundary it decides whether an ISSUE of a short or listed name is 'invalid: TICK
+    // (length)' / 'invalid: TICK (reserved)' or a live token row, so a one-sided height edit
+    // has one node holding a root the next node just sold.
+    ['tick_namespace_activation.js',       'TICK_NAMESPACE_ACTIVATION'],
+    // Not an activation MAP but the reserved SET that gate reads, and the list equality is the
+    // point: membership decides a verdict, so a name present on one side and absent on the
+    // other forks the chain the first time anyone issues it. deepStrictEqual over the array
+    // pins ORDER too, which a set comparison would let drift silently.
+    ['reservedRoots.js',                   'RESERVED_FUTURE_ROOTS'],
     ['snapshot_reorg_buffer.js',           'SNAPSHOT_BURIAL_ACTIVATION'],
     // The burial depth that gate reads; canon claims it byte-identical to the local copies.
     ['snapshot_reorg_buffer.js',           'CANONICAL_REORG_BUFFER'],
@@ -193,6 +226,133 @@ describe('activation-gate constant parity to canonical constants.js @regression'
                 'ATTEST_ZERO_CONF_ACTIVATION.' + net + ' (' + zc[net] + ') is below max(mirror ' +
                 mirror[net] + ', widening ' + widening[net] + ')');
         }
+    });
+
+    // Token-bridge spec section 8, D25: the general formats ride the XCHAIN bridge's engine,
+    // its mirrored bridge_transfers table and its settle pass, so v3 can never be legal on a
+    // network where v0 is not. Read straight off the canon, not off the local copies, so a
+    // canon that itself violated the rule is caught. Runs over every network the canon
+    // declares rather than a hardcoded list; the not-vacuous check pins today's live case.
+    it('holds TOKEN_BRIDGE_ACTIVATION >= XCHAIN_BRIDGE_ACTIVATION over the canonical constants.js', function () {
+        if (!canonExists) { this.skip(); return; }
+        const token  = canon.TOKEN_BRIDGE_ACTIVATION;
+        const bridge = canon.XCHAIN_BRIDGE_ACTIVATION;
+        assert.ok(token && bridge, 'constants.js must export both bridge activation maps');
+        const nets = Object.keys(token).filter(net => token[net] !== null && token[net] !== undefined);
+        assert.ok(nets.includes('regtest'), 'not vacuous: regtest must be armed at this milestone');
+        for (const net of nets) {
+            assert.ok(bridge[net] !== null && bridge[net] !== undefined,
+                'TOKEN_BRIDGE_ACTIVATION.' + net + ' is armed but XCHAIN_BRIDGE_ACTIVATION.' + net + ' is not');
+            assert.ok(token[net] >= bridge[net],
+                'TOKEN_BRIDGE_ACTIVATION.' + net + ' (' + token[net] + ') is below XCHAIN_BRIDGE_ACTIVATION.' +
+                net + ' (' + bridge[net] + '); a train arming v3 with no engine behind it admits locks ' +
+                'nothing can finalize');
+        }
+    });
+
+    // Policy spec section 9, D28, invariant one of two: inheritance cannot arm before the
+    // token bridge, because there are no bridged copies for a policy to bind until v3 locks
+    // are legal, and a snapshot signed with nothing to apply it to is a row every destination
+    // carries forward forever. Read off the canon, not the local copies, so a canon that
+    // itself violated the rule is caught. Every network the canon declares, never a hardcoded
+    // list; the not-vacuous check pins today's live case.
+    it('holds TOKEN_POLICY_INHERITANCE_ACTIVATION >= TOKEN_BRIDGE_ACTIVATION over the canonical constants.js', function () {
+        if (!canonExists) { this.skip(); return; }
+        const policy = canon.TOKEN_POLICY_INHERITANCE_ACTIVATION;
+        const token  = canon.TOKEN_BRIDGE_ACTIVATION;
+        assert.ok(policy && token, 'constants.js must export both the policy and the token-bridge activation maps');
+        const nets = Object.keys(policy).filter(net => policy[net] !== null && policy[net] !== undefined);
+        assert.ok(nets.includes('regtest'), 'not vacuous: regtest must be armed at this milestone');
+        for (const net of nets) {
+            assert.ok(token[net] !== null && token[net] !== undefined,
+                'TOKEN_POLICY_INHERITANCE_ACTIVATION.' + net + ' is armed but TOKEN_BRIDGE_ACTIVATION.' + net + ' is not');
+            assert.ok(policy[net] >= token[net],
+                'TOKEN_POLICY_INHERITANCE_ACTIVATION.' + net + ' (' + policy[net] + ') is below TOKEN_BRIDGE_ACTIVATION.' +
+                net + ' (' + token[net] + '); a train arming inheritance with no bridged copies to bind signs ' +
+                'snapshots nothing can apply');
+        }
+    });
+
+    // Invariant two of two: the snapshot read resolves a list AS OF origin_block by walking
+    // the edit chain (getListAtBlock), and below LIST_EDIT_RESOLUTION_ACTIVATION the legacy
+    // create-index read runs instead, so the membership the federation would sign is not the
+    // membership the origin chain enforced. That map is indexer-local and keyed
+    // '<COIN>:<network>' with a bare network fallback, so every chain key is checked against
+    // its network's single policy height; the policy map comes off the canon.
+    it('holds TOKEN_POLICY_INHERITANCE_ACTIVATION >= LIST_EDIT_RESOLUTION_ACTIVATION for every chain key', function () {
+        if (!canonExists) { this.skip(); return; }
+        const policy = canon.TOKEN_POLICY_INHERITANCE_ACTIVATION;
+        const lists  = require('../../src/list_edit_resolution_activation.js').LIST_EDIT_RESOLUTION_ACTIVATION;
+        assert.ok(policy && lists, 'both maps must resolve');
+        let compared = 0;
+        for (const key of Object.keys(lists)) {
+            const listHeight = lists[key];
+            if (listHeight === null || listHeight === undefined) continue;
+            // 'BTC:mainnet' -> mainnet; a bare 'regtest' key is its own network.
+            const net = key.indexOf(':') >= 0 ? key.slice(key.indexOf(':') + 1) : key;
+            const here = policy[net];
+            if (here === null || here === undefined) continue;
+            compared++;
+            assert.ok(here >= listHeight,
+                'TOKEN_POLICY_INHERITANCE_ACTIVATION.' + net + ' (' + here + ') is below ' +
+                'LIST_EDIT_RESOLUTION_ACTIVATION.' + key + ' (' + listHeight + '); getListAtBlock would fall back ' +
+                'to the legacy create-index read and the federation would sign a membership the chain never held');
+        }
+        assert.ok(compared >= 4, 'not vacuous: expected at least the three mainnet chain keys plus regtest, compared ' + compared);
+    });
+
+    // Token spec section 3, R8: the namespace is deliberately NOT keyed on the bridge's own
+    // height, because the bridge arms only after the base spec's D2 checkpoint cross-check
+    // while the namespace has to close BEFORE anyone squats, not after. Sizing it after the
+    // bridge would leave a window in which foreign assets are being rooted on this chain and
+    // the roots they need are still purchasable, which is the one ordering that defeats the
+    // reservation. Read off the canon so a canon that itself violated the rule is caught.
+    it('holds TICK_NAMESPACE_ACTIVATION <= TOKEN_BRIDGE_ACTIVATION over the canonical constants.js', function () {
+        if (!canonExists) { this.skip(); return; }
+        const ns    = canon.TICK_NAMESPACE_ACTIVATION;
+        const token = canon.TOKEN_BRIDGE_ACTIVATION;
+        assert.ok(ns && token, 'constants.js must export both the namespace and the token-bridge maps');
+        const nets = Object.keys(token).filter(net => token[net] !== null && token[net] !== undefined);
+        assert.ok(nets.includes('regtest'), 'not vacuous: regtest must be armed at this milestone');
+        for (const net of nets) {
+            assert.ok(ns[net] !== null && ns[net] !== undefined,
+                'TOKEN_BRIDGE_ACTIVATION.' + net + ' is armed but TICK_NAMESPACE_ACTIVATION.' + net + ' is not');
+            assert.ok(ns[net] <= token[net],
+                'TICK_NAMESPACE_ACTIVATION.' + net + ' (' + ns[net] + ') is above TOKEN_BRIDGE_ACTIVATION.' +
+                net + ' (' + token[net] + '); the bridge would be rooting foreign assets while the roots ' +
+                'they need are still on sale');
+        }
+    });
+
+    // The shape of the reserved list itself, asserted on the LOCAL copy so it runs without the
+    // documentation sibling. The parity case above proves the two copies match; this proves the
+    // thing they match is usable as a case-folded membership test at all. A lower-case or
+    // duplicated entry would not throw anywhere, it would just quietly fail to reserve a chain.
+    it('holds RESERVED_FUTURE_ROOTS frozen, upper-case and duplicate-free at the surveyed width', function () {
+        const roots = require('../../src/reservedRoots.js').RESERVED_FUTURE_ROOTS;
+        assert.ok(Array.isArray(roots), 'RESERVED_FUTURE_ROOTS must be an array');
+        assert.ok(Object.isFrozen(roots), 'RESERVED_FUTURE_ROOTS must be frozen; a reserved set a caller can push to is not a rule');
+        // 47 measured free on 2026-09-11 plus the 6 squatted in the mainnet genesis manifests.
+        assert.strictEqual(roots.length, 53, 'the surveyed list is 47 free names plus 6 reclaimed ones');
+        for (const t of roots) {
+            assert.ok(/^[A-Z]{2,}$/.test(t), 'reserved root ' + JSON.stringify(t) + ' is not an upper-case ticker; ' +
+                'the guard folds the candidate up, so a lower-case entry can never match');
+        }
+        assert.strictEqual(new Set(roots).size, roots.length, 'RESERVED_FUTURE_ROOTS carries a duplicate');
+    });
+
+    // The membership test the ISSUE guard will call, driven rather than described: it is the
+    // case fold that matters (every tick lookup is LOWER(tick), so an exact-case test would
+    // leave 'eth' free to take the row getTokenInfo('ETH') returns).
+    it('refuses a listed root in any case and admits an unlisted one', function () {
+        const { isReservedFutureRoot } = require('../../src/reservedRoots.js');
+        assert.strictEqual(isReservedFutureRoot('ETH'), true);
+        assert.strictEqual(isReservedFutureRoot('eth'), true);
+        assert.strictEqual(isReservedFutureRoot('EtH'), true);
+        assert.strictEqual(isReservedFutureRoot('NEAR'), true);
+        assert.strictEqual(isReservedFutureRoot('ABCD'), false);
+        assert.strictEqual(isReservedFutureRoot('ETHX'), false, 'membership is exact, never a prefix');
+        assert.strictEqual(isReservedFutureRoot(null), false, 'a non-string fails closed rather than throwing in a verdict path');
     });
 
     let canon = null;

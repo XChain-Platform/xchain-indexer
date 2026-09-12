@@ -181,6 +181,44 @@ const ATTEST_MAX_EXPIRIES_PER_BLOCK = 25;
 // reinterprets 0 already-indexed cross-settle blocks, measured 2026-09-09).
 const CROSS_SETTLE_MAX_PER_BLOCK = 25;
 
+// ── Cross-chain bridge (xchain-bridge spec section 8, D5) ───────────────────
+// How many finalized bridge_transfers rows the XBRIDGE settle pass may apply per
+// DESTINATION CHAIN per block. Overflow carries forward in (snapshot_block,
+// transfer_id) order and is never dropped, the XCALL and CROSS_SETTLE discipline.
+//
+// UNGATED, unlike CROSS_SETTLE_MAX_PER_BLOCK above, and the difference is not a
+// preference: that cap re-sliced history a chain had already indexed, so it needed
+// its own flag day. This one ships INSIDE XCHAIN_BRIDGE_ACTIVATION. No chain has
+// ever applied an XBRIDGE settle leg below that height, so there is no history for
+// the cap to reinterpret and a second activation read would only add a way for the
+// two heights to disagree.
+const XBRIDGE_MAX_PER_BLOCK = 25;
+
+// ── Token-policy inheritance (xchain-token-bridge-policy spec, D22, R2) ─────
+// How many finalized policy_snapshots rows the pass may apply per block per chain,
+// at the head of the XBRIDGE pass and before any in-leg at that block. Lower than
+// the transfer cap because one snapshot is up to six injected actions (two list
+// creates or edits per list, an ISSUE 5 and a SLEEP), each rewriting a full
+// membership, where one transfer is a single credit. Overflow carries forward in
+// (snapshot_block, snapshot_id) order across ticks and policy_seq order within a
+// tick, never dropped.
+const XPOLICY_MAX_PER_BLOCK = 5;
+
+// Ceiling on the membership of a list a bridged token may carry (R2, RULED a
+// 2026-09-11). No cap existed anywhere before this: LIST items are variadic and the
+// only bound was MAX_ACTION_DATA_LENGTH on ONE action, while every edit persists a
+// complete membership snapshot, so a list grows without limit across edits. Every
+// policy snapshot carries the FULL membership as transport and every destination
+// rewrites it into list_items on apply, so the origin's list length is write
+// amplification on every chain holding a copy.
+//
+// Enforced in two places, neither of them a hash input: ISSUE format 7 with a
+// non-empty BRIDGE_CHAINS is refused when either list is larger, and the hub
+// declines to sign a snapshot over a larger membership (the previous snapshot stays
+// in force and the watch raises WARN). Nothing depends on the number in a hash, so a
+// later flag day can raise it.
+const XPOLICY_MAX_MEMBERS = 10000;
+
 // ── Token-gated content (PC-29) ─────────────────────────────────────────────
 // Fixed fractional scale for comparing FILE.GATE_MIN_AMOUNT thresholds against a
 // holder's balance. The wallet scales both sides to this many fractional digits
@@ -465,6 +503,9 @@ module.exports = {
     XCALL_RESULT_ORPHAN_GRACE_SECONDS,
     ATTEST_MAX_EXPIRIES_PER_BLOCK,
     CROSS_SETTLE_MAX_PER_BLOCK,
+    XBRIDGE_MAX_PER_BLOCK,
+    XPOLICY_MAX_PER_BLOCK,
+    XPOLICY_MAX_MEMBERS,
     THRESHOLD_SCALE,
     STAKE_WEIGHTED_QUORUM_ACTIVATION,
     EQUIV_HEADER_ACTIVATION,

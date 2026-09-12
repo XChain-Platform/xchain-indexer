@@ -80,15 +80,37 @@ describe('Multi-chain action processing @regression @tier1', function () {
         // the former env-placeholder route now fails closed at startup on LTC/DOGE
         // (src/config.js FEE_DESTINATION guard).
         const results = {};
+        const gasOrigin = {};
         for (const coin of COINS) {
             results[coin] = await withCoin(coin, 'regtest', async ({ seeder, indexer }) => {
-                // Fee era: A1's ISSUE/MINT/SEND and A2's balance row all cost gas
+                // Fee era: A1's ISSUE/MINT/SEND and A2's balance row all cost gas. The
+                // preamble is chain-shaped by protocol: a broadcast ISSUE + MINT on BTC,
+                // bridge in-leg credits on LTC/DOGE (gas-seeder.js), so the gas that
+                // funds the corpus arrives the way it does on a real chain.
                 await seedGas(seeder, { addresses: [A1, A2] });
                 await seeder.seedBlock(100, T,        [{ source: A1, data: 'ISSUE|0|MCTOK|100000|1000|0|multi-chain token' }]);
                 await seeder.seedBlock(101, T + 600,  [{ source: A1, data: 'MINT|0|MCTOK|500' }]);
                 await seeder.seedBlock(102, T + 1200, [{ source: A1, destination: A2, data: 'SEND|0|MCTOK|200|' + A2 }]);
                 await processBlocks(indexer);
                 const tok = await getToken(indexerQuery, 'MCTOK');
+                gasOrigin[coin] = {
+                    // A valid broadcast ISSUE of the gas tick: allowed on BTC only.
+                    broadcastIssues: Number((await indexerQuery(
+                        `SELECT COUNT(*) AS n FROM issues i
+                         INNER JOIN index_tickers  t ON t.id = i.tick_id
+                         INNER JOIN index_statuses s ON s.id = i.status_id
+                         INNER JOIN actions        a ON a.action_index = i.action_index
+                         INNER JOIN transactions  tx ON tx.tx_index = a.tx_index
+                         INNER JOIN index_transactions h ON h.id = tx.tx_hash_id
+                         WHERE t.tick = 'XCHAIN' AND s.status = 'valid' AND h.hash NOT LIKE 'XBRIDGE-%'`))[0].n),
+                    // Credits minted by an XBRIDGE v2 in-leg: the only source off BTC.
+                    bridgeCredits: Number((await indexerQuery(
+                        `SELECT COUNT(*) AS n FROM credits c
+                         INNER JOIN actions       a ON a.action_index = c.action_index
+                         INNER JOIN index_actions ia ON ia.id = a.action_id
+                         INNER JOIN index_tickers  t ON t.id = c.tick_id
+                         WHERE ia.action = 'XBRIDGE' AND t.tick = 'XCHAIN'`))[0].n),
+                };
                 return {
                     supply: tok ? tok.supply : null,
                     balA1: await balanceOf(A1, 'MCTOK'),
@@ -102,6 +124,12 @@ describe('Multi-chain action processing @regression @tier1', function () {
         // XCHAIN gas balance left after fees; fee math must not depend on the chain).
         assert.deepStrictEqual(results.LTC,  results.BTC, 'LTC ledger differs from BTC for identical input');
         assert.deepStrictEqual(results.DOGE, results.BTC, 'DOGE ledger differs from BTC for identical input');
+        // And the gas itself came from where the protocol lets it come from: minted by
+        // broadcast on BTC, bridged in on every other chain. Balances alone would not
+        // show a preamble that had been accepted off BTC.
+        assert.deepStrictEqual(gasOrigin.BTC,  { broadcastIssues: 1, bridgeCredits: 0 }, 'BTC gas must be a broadcast ISSUE');
+        assert.deepStrictEqual(gasOrigin.LTC,  { broadcastIssues: 0, bridgeCredits: 2 }, 'LTC gas must arrive through XBRIDGE v2 credits');
+        assert.deepStrictEqual(gasOrigin.DOGE, { broadcastIssues: 0, bridgeCredits: 2 }, 'DOGE gas must arrive through XBRIDGE v2 credits');
         // And the lifecycle actually did something (SEND moved 200 to A2).
         assert.strictEqual(results.BTC.balA2, '200', 'expected 200 MCTOK sent to A2');
         assert.ok(results.BTC.gasA1, 'A1 should hold a residual XCHAIN gas balance');

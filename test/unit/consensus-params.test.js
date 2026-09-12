@@ -53,6 +53,13 @@ const GOLDEN_GAS_SCHEDULE = {
     SWEEP_PER_ITEM:     100,
     CALLBACK_BASE:      5000,
     CALLBACK_PER_RECIPIENT: 100,
+    // XBRIDGE: one flat price for every USER format (v0/v3 lock, v1/v4 burn); the
+    // mirror-injected settle formats pay nothing, the CROSS_SETTLE precedent. Sized
+    // at SWEEP_BASE for the SWEEP_BASE reason: on LTC and DOGE the protocol fee must
+    // be a real native-coin output, so the smallest bridge action has to buy an
+    // above-dust one on its own. GAS_SCHEDULE is hashed whole by the coins registry,
+    // so adding this key regenerated consensus_pin in the same change.
+    XBRIDGE_BASE:       5000,
     VM_EXECUTE_BASE:    1000,
     VM_GUARD_GAS_CEILING: 200000,
     VM_DEPLOY_BASE:     100000,

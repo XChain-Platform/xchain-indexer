@@ -57,6 +57,11 @@ const ledgerPrecision = require('./ledger_amount_precision_activation');
 const dispenserSendCompare = require('./dispenser_send_amount_compare_activation');
 const stakeWeightCollation = require('./stake_weight_collation_activation');
 const slashGrid = require('./slash_grid_activation');
+// Token-policy inheritance: the flag day at which a LIST type-2 item, and the address-sleep
+// read that shares its validator, are judged against EVERY supported coin instead of only
+// this chain's. One issuer list has to be able to hold BTC, LTC and DOGE addresses, because
+// the policy on the origin row is the policy every bridged copy inherits.
+const tokenPolicyActivation = require('./token_policy_activation');
 // Per-block cap on the ATTEST deadline-expiry sweep. Vendored
 // byte-identical from xchain-documentation/protocol/constants.js, same convention
 // as the XCALL_MAX_CALLS_PER_BLOCK sibling it mirrors.
@@ -69,6 +74,18 @@ const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS,
         ARCHIVE_ANCHOR_BY_CONTENT_SQL, selectArchiveHeadRow,
         dedupeArchiveChunks } = require('./anchor-action-query');
 const { rethrowIfInfraFault } = require('./actions/faultGuard');
+// getbridgeescrowproof (base spec section 12, D2/D70): the proof-producing read shares
+// the SAME key/leaf derivation and the SAME persistent, content-addressed SMT the block
+// path commits, never a rebuilt in-memory tree, so a proof this method hands out can only
+// ever match what was actually committed.
+const bridgeMerkle = require('./merkle.js');
+const bridgeStateCommitment = require('./stateCommitment.js');
+// state_root_version is a DERIVED-per-height quantity (api.js getblockhashes is the ONLY
+// place it is MINTED), never the static merkle.STATE_ROOT_VERSION constant: a static
+// comparison refuses every checkpoint cut once a sub-tree slot arms. getBridgeEscrowProof
+// re-derives it here as a guard against handing out an envelope built from a stale or
+// mis-migrated state_checkpoints row.
+const bridgeStateSubtree = require('./state_subtree_activation.js');
 // The ATTEST batch wire versions, taken from the codec rather than written as literals
 // here, so the chunk read and the parser cannot disagree about which versions are chunks.
 const abw = require('./attest_batch_wire.js');
@@ -608,6 +625,9 @@ class Database {
         // a fail-closed COLLECT-rail guard, and a partial object that happens not to carry
         // the method would otherwise drop it without a word. Nothing may opt out of it.
         await Database.prototype._assertRewardUniqueKeyCarriesQualifier.call(this);
+        // Same fail-closed rule as the reward assertion above: invoked through the prototype
+        // so a partial object cannot silently drop the bridge-table check.
+        await Database.prototype._assertBridgeTablesPresent.call(this);
         return result;
     }
 
@@ -1007,6 +1027,58 @@ class Database {
                     'the COLLECT rail from the rest of the fleet.' + remedy
                 );
             }
+        } finally {
+            if(conn && this.transactionConnection == null){
+                try { await conn.release(); } catch(_){}
+            }
+        }
+    }
+
+    // Assert the three bridge tables exist: bridge_transfers and policy_snapshots (the
+    // hub-mirrored, quorum-signed rows the XBRIDGE and XPOLICY passes apply from) and
+    // bridge_settlements (the local idempotency and rollback record for every applied leg).
+    //
+    // WHAT GOES WRONG WITHOUT THEM, and why it is worse than a missing column: the mirror
+    // ingest for a table this database cannot write fails by OMISSION. Nothing errors; the
+    // bridge barrier simply never opens, and this chain stops applying transfers whose
+    // source legs have already debited on the other side. An indexer in that state looks
+    // healthy and is silently half of a broken bridge.
+    //
+    // REGISTERED in Database.STARTUP_ASSERTED_MIGRATIONS and tagged
+    // `deploy-precondition=required` in 2026-09-12-bridge-tables.sql's own header, which is
+    // what lets a deploy refuse before it recreates a container instead of after. This
+    // assertion is the second line: on a database that boots at all, verifyTables() creates
+    // a missing table from src/sql/ first, so the halt fires only where that path did not
+    // run or could not (a scoped rollout, an operator-managed schema, a replica converged by
+    // replaying migrations alone).
+    //
+    // Passes through (never halts) when a count is unreadable: an answer we could not read
+    // is not evidence of a missing table, the same convention as the two assertions above.
+    async _assertBridgeTablesPresent(){
+        const REQUIRED = ['bridge_transfers', 'bridge_settlements', 'policy_snapshots'];
+        // Name the exact file in the halt: a bare `node src/migrate.js` on an aged fleet
+        // database means "apply every pending manual migration", which is never what a
+        // scoped recovery wants.
+        const remedy = ' Run the pending migration: node src/migrate.js --file ' +
+            Database.startupAssertedMigrationFile('_assertBridgeTablesPresent');
+        let conn;
+        try {
+            conn = await this.getConnection();
+            const rows = await conn.query(
+                "SELECT table_name AS name FROM information_schema.tables WHERE table_schema = ? " +
+                "AND table_name IN ('bridge_transfers', 'bridge_settlements', 'policy_snapshots')",
+                [this.dbName]
+            );
+            if(!rows) return;                       // unreadable answer: not evidence of drift
+            const live    = new Set((rows || []).map(r => String(r.name || '').toLowerCase()));
+            const missing = REQUIRED.filter(t => !live.has(t));
+            if(!missing.length) return;
+            throw new Error(
+                'the bridge tables ' + missing.join(', ') + ' are absent, but this build applies ' +
+                'hub-mirrored bridge rows: the mirror for a table this database cannot write fails ' +
+                'by omission, so the bridge barrier never opens and transfers whose source leg has ' +
+                'already debited on the other chain are never applied here.' + remedy
+            );
         } finally {
             if(conn && this.transactionConnection == null){
                 try { await conn.release(); } catch(_){}
@@ -4152,13 +4224,17 @@ class Database {
                             i.mint_stop_block,
                             i.allow_list,
                             i.block_list,
+                            i.bridge_chains,
+                            i.min_depth,
+                            i.lock_bridge,
                             i.action_index,
                             t1.block_index,
                             t2.tick,
-                            t3.tick as callback_tick,            
+                            t3.tick as callback_tick,
                             a2.address as owner,
-                            a3.address as transfer
-                        FROM 
+                            a3.address as transfer,
+                            tk.bridged as bridged
+                        FROM
                             issues i
                             INNER JOIN actions            a1 ON (a1.action_index=i.action_index)
                             INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
@@ -4167,6 +4243,7 @@ class Database {
                             INNER JOIN index_statuses     s1 ON (s1.id=i.status_id)
                             LEFT  JOIN index_addresses    a3 ON (a3.id=i.transfer_id)
                             LEFT  JOIN index_tickers      t3 ON (t3.id=i.callback_tick_id)
+                            LEFT  JOIN tokens             tk ON (tk.tick_id=i.tick_id)
                         WHERE
                             s1.status='valid' AND
                             i.tick_id=?` + sql + `
@@ -4202,6 +4279,14 @@ class Database {
                     arr['CALLBACK_AMOUNT']   = row.callback_amount;
                     arr['ALLOW_LIST']        = row.allow_list;
                     arr['BLOCK_LIST']        = row.block_list;
+                    // Token-bridge opt-in (ISSUE format 7). Replayed from `issues` exactly like
+                    // the mint window and the other locks: an EMPTY field inherits the prior
+                    // value (which is why "no destination chains" needs the '-' sentinel and
+                    // cannot be spelled as an empty field), and LOCK_BRIDGE gets the shared
+                    // cannot-unset treatment below for free because its key starts with 'LOCK_'.
+                    arr['BRIDGE_CHAINS']     = row.bridge_chains;
+                    arr['MIN_DEPTH']         = row.min_depth;
+                    arr['LOCK_BRIDGE']       = row.lock_bridge;
                     arr['MINT_ADDRESS_MAX']  = row.mint_address_max;
                     arr['MINT_START_BLOCK']  = row.mint_start_block;
                     arr['MINT_STOP_BLOCK']   = row.mint_stop_block;
@@ -4226,11 +4311,18 @@ class Database {
                         data[key] = value;
                     }
                 }
+                // The `bridged` bit is NOT an issues field and is not replayed: it is a
+                // tokens-table bit the first applied XBRIDGE v3 lock sets and nothing clears
+                // in milestone 1, so it is current state read straight off the row rather
+                // than folded across the issue history. Taken outside the loop above so the
+                // empty-means-unchanged and lock rules there cannot touch it, and normalized
+                // to 0/1 so a caller can compare it without knowing the column type.
+                data['BRIDGED'] = (Number(results[0].bridged) === 1) ? 1 : 0;
             }
         }
         // Get token supply at the given action_index
         if(data)
-            data['SUPPLY'] = await this.getTokenSupply(tick, block_index, action_index); 
+            data['SUPPLY'] = await this.getTokenSupply(tick, block_index, action_index);
         return data;
     }
 
@@ -4639,6 +4731,72 @@ class Database {
         return list;
     }
 
+    // "As of a block" variant of getList (the token bridge policy spec
+    // section 3, D3). getList/getListHeadIndex answer CURRENT state (ORDER BY
+    // action_index DESC LIMIT 1, no bound), which is wrong for gettokenpolicy reading a
+    // token's policy at a past origin_block: the head must be bounded to the last action
+    // index AT that block, not this chain's own tip. Read-path only: this never enters
+    // isActionAllowed, so no consensus verdict moves.
+    // @param {action_index}  integer  ACTION_INDEX of a LIST (as pinned by consumers)
+    // @param {block_index}   integer  the height to resolve the list's membership AS OF
+    async getListAtBlock(action_index, block_index){
+        let type = await this.getListType(action_index);
+        let list = [];
+        if(type){
+            let root     = await this.getListRootIndex(action_index);
+            let resolved = root;
+            // Same activation gate as getList: below it (or with no block context) the
+            // legacy create-index membership stands, which is already immutable and needs
+            // no bound.
+            if(this.isListEditResolutionActive(block_index)){
+                let headQuery = `SELECT
+                                    l.action_index
+                                FROM
+                                    lists l
+                                    INNER JOIN index_statuses s ON (s.id=l.status_id)
+                                    INNER JOIN actions        a ON (a.action_index=l.action_index)
+                                WHERE
+                                    l.list_action_index=?
+                                    AND s.status='valid'
+                                    AND a.block_index<=?
+                                ORDER BY l.action_index DESC
+                                LIMIT 1`;
+                let headRows = await this.doQuery(headQuery, [root, block_index]);
+                resolved = (headRows.length > 0) ? headRows[0]['action_index'] : root;
+            }
+            let query = '';
+            let args  = [resolved];
+            // Same deterministic total order as getList (see its comment for why the
+            // BINARY collation is load-bearing there); harmless repetition here since this
+            // read never feeds a hash.
+            if(type==1){
+                query = `SELECT
+                            t.tick as item
+                        FROM
+                            list_items l
+                            INNER JOIN index_tickers t ON (l.item_id=t.id)
+                        WHERE
+                            l.action_index=?
+                        ORDER BY t.tick COLLATE utf8mb4_bin ASC`;
+            }
+            if(type==2){
+                query = `SELECT
+                            a.address as item
+                        FROM
+                            list_items l
+                            INNER JOIN index_addresses a ON (l.item_id=a.id)
+                        WHERE
+                            l.action_index=?
+                        ORDER BY a.address COLLATE utf8_bin ASC`;
+            }
+            let results = await this.doQuery(query, args);
+            if(results.length > 0)
+                for(let row of results)
+                    list.push(row['item']);
+        }
+        return list;
+    }
+
     // Create record in `lists` table
     async createList(data){
         data                  = this.normalizeDataValues(data);
@@ -4728,6 +4886,13 @@ class Database {
         let callback_amount    = data['CALLBACK_AMOUNT'];
         let allow_list         = data['ALLOW_LIST'];
         let block_list         = data['BLOCK_LIST'];
+        // Token-bridge opt-in fields, stored as RAW WIRE STRINGS exactly as ISSUE carried
+        // them. That is what makes "empty means unchanged" true on this table: getTokenInfo
+        // replays the issues rows and skips an empty field, and a typed/NOT NULL column
+        // could not express "the action did not carry this field at all".
+        let bridge_chains      = data['BRIDGE_CHAINS'];
+        let min_depth          = data['MIN_DEPTH'];
+        let lock_bridge        = data['LOCK_BRIDGE'];
         let callback_tick_id   = await this.createTicker(data['CALLBACK_TICK']);
         let tick_id            = await this.createTicker(data['TICK']);
         let transfer_id        = await this.createAddress(data['TRANSFER']);
@@ -4769,6 +4934,9 @@ class Database {
                         mint_address_max=?,
                         mint_start_block=?,
                         mint_stop_block=?,
+                        bridge_chains=?,
+                        min_depth=?,
+                        lock_bridge=?,
                         memo_id=?,
                         status_id=?
                     WHERE
@@ -4799,12 +4967,15 @@ class Database {
                         mint_address_max,
                         mint_start_block,
                         mint_stop_block,
+                        bridge_chains,
+                        min_depth,
+                        lock_bridge,
                         memo_id,
                         status_id,
                         action_index
-                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        args    = [tick_id, max_supply, max_mint, decimals, description, mint_supply, transfer_id, transfer_supply_id, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint, lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, memo_id, status_id, action_index ];
+        args    = [tick_id, max_supply, max_mint, decimals, description, mint_supply, transfer_id, transfer_supply_id, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint, lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, bridge_chains, min_depth, lock_bridge, memo_id, status_id, action_index ];
         results = await this.doQuery(query, args);
     }
 
@@ -4822,6 +4993,16 @@ class Database {
         let allow_list         = (!this.util.isNull(data['ALLOW_LIST']) &&           this.util.isNumeric(data['ALLOW_LIST'])) ? parseInt(data['ALLOW_LIST']) : null;
         let block_list         = (!this.util.isNull(data['BLOCK_LIST']) &&           this.util.isNumeric(data['BLOCK_LIST'])) ? parseInt(data['BLOCK_LIST']) : null;
         let decimals           = (!this.util.isNull(data['DECIMALS']) &&             this.util.isNumeric(data['DECIMALS'])) ? parseInt(data['DECIMALS']) : 0;
+        // Token-bridge opt-in, PARSED state (the issues row above keeps the raw wire text).
+        // The '-' sentinel is the wire spelling of "no destination chains" and lands here as
+        // NULL, so this column always reads as the effective destination list: empty means
+        // not bridgeable, which is what the explorer, the wallet and the hub's poll want.
+        // MIN_DEPTH is raise-only, so an absent value is NULL and the federation falls back
+        // to the platform confirmation depth. `bridged` is deliberately NOT written here: it
+        // is set by the first applied XBRIDGE v3 lock and no ISSUE may set or clear it.
+        let bridge_chains      = (!this.util.isNull(data['BRIDGE_CHAINS']) && String(data['BRIDGE_CHAINS']) !== '-') ? String(data['BRIDGE_CHAINS']) : null;
+        let min_depth          = (!this.util.isNull(data['MIN_DEPTH']) &&            this.util.isNumeric(data['MIN_DEPTH'])) ? parseInt(data['MIN_DEPTH']) : null;
+        let lock_bridge        = (data['LOCK_BRIDGE']==1) ? 1 : 0;
         // Force any amount values to the correct decimal precision
         if(this.util.isNumeric(decimals) && decimals >= this.config.MIN_TOKEN_DECIMALS && decimals <= this.config.MAX_TOKEN_DECIMALS){
             max_supply         = this.util.bcformat(max_supply, decimals);
@@ -4881,12 +5062,15 @@ class Database {
                         mint_address_max=?,
                         mint_start_block=?,
                         mint_stop_block=?,
+                        bridge_chains=?,
+                        min_depth=?,
+                        lock_bridge=?,
                         supply=?,
                         owner_id=?,
                         last_action_index=?
                     WHERE
                         tick_id=?`;
-            args = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint,lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, action_index, tick_id];
+            args = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint,lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, bridge_chains, min_depth, lock_bridge, supply, owner_id, action_index, tick_id];
         } else {
             // INSERT record
             query = `INSERT INTO tokens (
@@ -4909,13 +5093,16 @@ class Database {
                         mint_address_max,
                         mint_start_block,
                         mint_stop_block,
+                        bridge_chains,
+                        min_depth,
+                        lock_bridge,
                         supply,
                         owner_id,
                         action_index,
                         last_action_index,
                         tick_id
-                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-            args    = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint,lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, action_index, action_index, tick_id];
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            args    = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint,lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, bridge_chains, min_depth, lock_bridge, supply, owner_id, action_index, action_index, tick_id];
         }
         results = await this.doQuery(query, args);
 
@@ -5361,10 +5548,59 @@ class Database {
         return false;
     }
 
+    // Is `address` well-formed for THIS chain, or - at/above
+    // TOKEN_POLICY_INHERITANCE_ACTIVATION - for ANY coin the platform supports on this
+    // network? A loop over the existing coin-and-network-aware validator, never a new
+    // validator, so the address rules stay in one place.
+    //
+    // WHY THE WIDENING EXISTS: a bridged copy inherits ONE list from its origin row, so that
+    // list has to be able to name holders on every chain a copy lives on. Below the flag the
+    // one-argument call resolves to this chain's coin and a foreign-format address is simply
+    // not an address here, which is the historical rule and stays byte-identical on replay.
+    //
+    // Prefix sharing makes some strings valid on more than one chain (regtest BTC, LTC and
+    // DOGE all use p2pkh 0x6f / p2sh 0xc4). That is harmless in both consumers: membership
+    // matching is exact string equality, so a string valid on two chains is simply that
+    // string on both.
+    // @param {address}      string   address to judge
+    // @param {block_index}  integer  block being processed; gates the widening
+    isAnyCoinAddress(address, block_index){
+        if(this.util.isCryptoAddress(address))
+            return true;
+        if(!tokenPolicyActivation.isTokenPolicyInheritanceActive(block_index, this.config['NETWORK']))
+            return false;
+        for(let coin of (this.config['COINS'] || []))
+            if(this.util.isCryptoAddress(address, coin, this.config['NETWORK']))
+                return true;
+        return false;
+    }
+
+    // Resolve the SOURCE address of a LIST action (the address that broadcast it). Used by
+    // list.js for the two edit-authorization rules: the unconditional refusal of a broadcast
+    // edit of a bridge-owned list, and the flag-gated owner check that requires an editor to
+    // be the address that created the list. Returns null when the action is not a LIST or
+    // its source cannot be resolved, which both callers treat as "no claim proven".
+    // @param {action_index}  integer  ACTION_INDEX of a LIST create or edit
+    async getListSource(action_index){
+        if(this.util.isNull(action_index) || !this.util.isNumeric(action_index))
+            return null;
+        let query = `SELECT
+                        a2.address AS address
+                    FROM
+                        lists l
+                        INNER JOIN actions         a1 ON (a1.action_index=l.action_index)
+                        INNER JOIN index_addresses a2 ON (a2.id=a1.source_id)
+                    WHERE
+                        l.action_index=?
+                    LIMIT 1`;
+        let results = await this.doQuery(query, [action_index]);
+        return (results.length > 0) ? results[0]['address'] : null;
+    }
+
     // Validate if ADDRESS is in SLEEP mode
     async isAddressSleeping(address, block_index){
         let sleep = false;
-        if(!this.util.isNull(address) && this.util.isCryptoAddress(address) && !this.util.isNull(block_index) && this.util.isNumeric(block_index)){
+        if(!this.util.isNull(address) && this.isAnyCoinAddress(address, block_index) && !this.util.isNull(block_index) && this.util.isNumeric(block_index)){
             let id    = await this.createAddress(address);
             let query = `SELECT 
                             s1.resume_block 
@@ -5409,6 +5645,42 @@ class Database {
                             s1.action_index DESC
                         LIMIT 1`;
             let args = [2, id, 'valid'];
+            let results = await this.doQuery(query, args);
+            if(results.length > 0){
+                let resume_block = Number(results[0].resume_block);
+                if(resume_block ==  -1 || resume_block > block_index)
+                    sleep = true;
+            }
+        }
+        return sleep;
+    }
+
+    // "As of a block" variant of isTickSleeping (the token bridge policy spec
+    // section 3, D3). The current read takes the NEWEST valid sleep row with no bound on
+    // when it was mined, which is right for judging an action being processed right now
+    // (nothing after it can exist yet) but wrong for gettokenpolicy reading the sleep state
+    // at a past origin_block: a sleep row mined AFTER that height must not be seen. Bounds
+    // the sleep row the same way getListAtBlock bounds the list head. Read-path only,
+    // never enters isActionAllowed.
+    async isTickSleepingAtBlock(tick, block_index){
+        let sleep = false;
+        if(!this.util.isNull(tick) && !this.util.isNull(block_index) && this.util.isNumeric(block_index)){
+            let id    = await this.createTicker(tick);
+            let query = `SELECT
+                            s1.resume_block
+                        FROM
+                            sleeps s1
+                            INNER JOIN actions        a1 ON (a1.action_index=s1.action_index)
+                            INNER JOIN index_statuses s2 ON (s2.id=s1.status_id)
+                        WHERE
+                            s1.type=? AND
+                            s1.tick_id=? AND
+                            s2.status=? AND
+                            a1.block_index<=?
+                        ORDER BY
+                            s1.action_index DESC
+                        LIMIT 1`;
+            let args = [2, id, 'valid', block_index];
             let results = await this.doQuery(query, args);
             if(results.length > 0){
                 let resume_block = Number(results[0].resume_block);
@@ -9524,6 +9796,369 @@ class Database {
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             [action_index, match.match_id, local_action_index, block_index,
              match.a_chain, Number(match.a_action_index), match.b_chain, Number(match.b_action_index)]);
+    }
+
+    // ── Cross-chain bridge action records (XBRIDGE) ─────────────────────────────
+
+    /**
+     * Persist one user-broadcast XBRIDGE action (v0 lock XCHAIN, v1 burn XCHAIN, v3 lock a
+     * token, v4 burn a bridged copy) in `xbridges`, valid or refused, the way createSend
+     * records a SEND. The system-injected settle legs (v2, v5) never reach here: they are
+     * applied from a mirrored bridge_transfers row and recorded in `bridge_settlements`.
+     *
+     * WHY THE ROW EXISTS. The hub's CrossChainBridgeEngine polls this chain for confirmed
+     * locks and burns to sign into a transfer record; `getpendingbridgetransfers` reads
+     * this table, so without the row a lock debits the source here and is never signed
+     * anywhere. A refused action keeps its row, carrying the verdict in status_id, so the
+     * record says what the action asked for.
+     *
+     * ONE ROW PER ACTION, and the exists-check is keyed on action_index alone: unlike a
+     * multi-SEND or multi-DESTROY, an XBRIDGE carries exactly one tick and one destination,
+     * so there are no legs to separate. A re-parse of the same block (a rollback and
+     * reindex) updates that row in place instead of duplicating it.
+     *
+     * THE TICK IS DERIVED THE WAY THE HANDLER DERIVES IT, not read off the wire clone: v0
+     * and v1 move the GAS tick by construction (the wire carries no TICK field for them),
+     * v3 and v4 carry it. Keyed on the version rather than on "TICK is empty" so a v3 whose
+     * TICK field is missing records as the tickless action it was, never as an XCHAIN one.
+     *
+     * @param {Object} data - the handler's raw wire clone plus the fields the lock stamps.
+     *                        Reads ACTION_INDEX, FORMAT, TICK (v3/v4), DEST_CHAIN,
+     *                        DEST_ADDRESS (v0/v3) or BTC_ADDRESS (v1) or ORIGIN_ADDRESS
+     *                        (v4), AMOUNT, DECIMALS, MIN_DEPTH, MEMO, STATUS, BLOCK_INDEX
+     * @returns {Promise<void>}
+     */
+    async createXbridge(data){
+        data                = this.normalizeDataValues(data);
+        // Numeric-or-NULL, the normalization every other wire-derived integer column gets:
+        // an action refused 'invalid: VERSION (unknown)' can carry no version at all, and a
+        // NaN bound to a TINYINT throws under STRICT_TRANS_TABLES, which wedges the block
+        // loop instead of recording the refusal (the 2026-07-05 DEPOSIT|0|null class).
+        let version         = (!this.util.isNull(data['FORMAT']) && this.util.isNumeric(data['FORMAT'])) ? parseInt(data['FORMAT']) : null;
+        // v0 and v1 are the GAS tick by construction; v3 and v4 name it on the wire.
+        let tick            = (version === 0 || version === 1) ? this.config['GAS'] : data['TICK'];
+        // The one destination field this version actually carries. A lock names an address
+        // on DEST_COIN, a v1 burn names a BTC address, a v4 burn names an address on the
+        // bridged row's origin chain; all three are "where the value lands", so they share
+        // one column rather than three mutually-null ones.
+        let destination     = (version === 1) ? data['BTC_ADDRESS']
+                            : (version === 4) ? data['ORIGIN_ADDRESS']
+                            :                   data['DEST_ADDRESS'];
+        let tick_id         = await this.createTicker(tick);
+        let dest_address_id = await this.createAddress(destination);
+        let memo_id         = await this.createMemo(data['MEMO']);
+        let status_id       = await this.createStatus(data['STATUS']);
+        let action_index    = data['ACTION_INDEX'];
+        let dest_chain      = this.util.isNull(data['DEST_CHAIN']) ? null : String(data['DEST_CHAIN']);
+        let amount          = data['AMOUNT'];
+        // DECIMALS and MIN_DEPTH are stamped by the apply path only, so a refusal that
+        // never reached the token read leaves them NULL rather than 0: "not known" and
+        // "the issuer set none" are different answers and the hub treats them differently.
+        let decimals        = (!this.util.isNull(data['DECIMALS']) && this.util.isNumeric(data['DECIMALS'])) ? parseInt(data['DECIMALS']) : null;
+        let min_depth       = (!this.util.isNull(data['MIN_DEPTH']) && this.util.isNumeric(data['MIN_DEPTH'])) ? parseInt(data['MIN_DEPTH']) : null;
+        let block_index     = data['BLOCK_INDEX'];
+        // Check if record already exists for this action
+        let query   = "SELECT action_index FROM xbridges WHERE action_index=? LIMIT 1";
+        let results = await this.doQuery(query, [action_index]);
+        let args    = [];
+        if(results.length > 0){
+            // UPDATE record (a re-parse of the same block, after a rollback)
+            query = `UPDATE
+                        xbridges
+                    SET
+                        version=?,
+                        tick_id=?,
+                        dest_chain=?,
+                        dest_address_id=?,
+                        amount=?,
+                        decimals=?,
+                        min_depth=?,
+                        memo_id=?,
+                        status_id=?,
+                        block_index=?
+                    WHERE
+                        action_index=?`;
+            args  = [version, tick_id, dest_chain, dest_address_id, amount, decimals, min_depth, memo_id, status_id, block_index, action_index];
+        } else {
+            // INSERT record
+            query = `INSERT INTO xbridges (version, tick_id, dest_chain, dest_address_id, amount, decimals, min_depth, memo_id, status_id, block_index, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            args  = [version, tick_id, dest_chain, dest_address_id, amount, decimals, min_depth, memo_id, status_id, block_index, action_index];
+        }
+        await this.doQuery(query, args);
+    }
+
+    /**
+     * Set a native token row's `bridged` bit, the way setTokenEscrow sets
+     * escrow_action_index: a targeted UPDATE rather than a field of the createToken
+     * derivation. createToken rebuilds `tokens` from the `issues` rows and no ISSUE may
+     * set or clear this bit, so it has no derivation to ride.
+     *
+     * Set by the FIRST applied XBRIDGE v3 lock and never cleared in milestone 1 (token
+     * spec section 8): emptying BRIDGE_CHAINS after bridging must not reopen policy
+     * binding while copies are outstanding on another chain. `bridged=0` in the WHERE
+     * makes the write a no-op for every later lock of the same tick.
+     *
+     * `block_index` is the applying block. It is not stored: the bit carries no height
+     * because nothing in milestone 1 reads "when", and a reorg of the first lock
+     * deliberately leaves the bit set (the conservative direction, since the copies it
+     * refuses policy binding for may still exist on the destination chain).
+     *
+     * @param {string} tick        - the NATIVE tick being locked (never the rooted form)
+     * @param {number} block_index - the block the lock applied at; logged, not stored
+     * @returns {Promise<void>}
+     */
+    async setTokenBridged(tick, block_index){
+        let tick_id = await this.createTicker(tick);
+        if(tick_id === null)
+            return;
+        let query = "UPDATE tokens SET bridged=1 WHERE tick_id=? AND bridged=0";
+        let res   = await this.doQuery(query, [tick_id]);
+        // One line per token, ever, because the WHERE excludes an already-set bit.
+        if(res && res.affectedRows)
+            console.log('\t Token ' + tick + ' marked bridged at block ' + block_index);
+    }
+
+    // Pending XBRIDGE locks (v0/v3) and burns (v1/v4) for the federation relay
+    // (getpendingbridgetransfers RPC, base spec section 12). One row per VALID,
+    // not-yet-finalized source leg mined on THIS chain; the hub confirmation-gates on
+    // (block_index, latest_block_index) and dedupes against its own bridge_transfers
+    // table, exactly as getPendingCrossChainCallRequests leaves both to the hub side.
+    // A refused action keeps its xbridges row (status carries the verdict) but is never
+    // signed, so only 'valid' rows are read here.
+    async getPendingBridgeTransfers(limit){
+        return await this.doQuery(
+            `SELECT
+                x.action_index, x.version, x.block_index, x.amount, x.decimals, x.min_depth,
+                x.dest_chain, t.tick AS tick, da.address AS dest_address, sa.address AS src_address,
+                it.hash AS tx_hash
+             FROM
+                xbridges x
+                INNER JOIN actions            a  ON (a.action_index=x.action_index)
+                INNER JOIN index_statuses     s  ON (s.id=x.status_id)
+                INNER JOIN index_tickers      t  ON (t.id=x.tick_id)
+                INNER JOIN index_addresses    da ON (da.id=x.dest_address_id)
+                INNER JOIN index_addresses    sa ON (sa.id=a.source_id)
+                INNER JOIN transactions       tx ON (tx.tx_index=a.tx_index)
+                INNER JOIN index_transactions it ON (it.id=tx.tx_hash_id)
+             WHERE
+                s.status='valid' AND x.version IN (0,1,3,4)
+             ORDER BY
+                x.action_index ASC
+             LIMIT ?`,
+            [limit]);
+    }
+
+    // Single bridge_transfers mirror row by transfer_id: the targeted re-verification a
+    // hub follower runs before co-signing a leader's proposed row (field-for-field,
+    // against its OWN view of the mirror), the getcrosschaincall precedent.
+    async getBridgeTransferById(transfer_id){
+        let rows = await this.doQuery(
+            `SELECT
+                transfer_id, snapshot_block, network, src_chain, src_action_index, src_address,
+                dest_chain, dest_address, tick, decimals, amount, effective_time, finalizing_view,
+                status, push_generation, btc_chain_id
+             FROM
+                bridge_transfers
+             WHERE
+                transfer_id=?
+             LIMIT 1`,
+            [transfer_id]);
+        return (rows.length > 0) ? rows[0] : null;
+    }
+
+    // Chain-state half of getbridgeinvariant (getbridgebalances RPC, base spec section 13;
+    // CrossChainBridgeEngine._readBridgeBalances is the caller): the tick's supply on THIS
+    // chain plus the balance held at every ADDRESS.BRIDGE_<COIN> role address this chain's
+    // own config carries.
+    //
+    // supply prefers the native `tokens.supply` row when one exists here: on the origin
+    // chain that is every unit ever minted, circulating plus escrowed (base spec section 13),
+    // which is what the MAX_SUPPLY cap binds against. A tick with no native row on this
+    // chain is a bridged copy with no ISSUE history here, so supply falls back to the
+    // ledger-wide net (SUM(credits)-SUM(debits) over every address on this chain), the
+    // "shadow of its escrow" the base spec names for a foreign chain's holding.
+    //
+    // escrow is keyed by the BARE coin (never the BRIDGE_ prefix): the hub's _escrowFor
+    // accepts either spelling, and this is the form the seam pins.
+    async getBridgeBalances(tick){
+        let t      = String(tick);
+        let native = await this.doQuery(
+            `SELECT tk.supply FROM tokens tk INNER JOIN index_tickers ti ON (ti.id=tk.tick_id) WHERE ti.tick=? LIMIT 1`,
+            [t]);
+        let supply;
+        if(native.length > 0 && !this.util.isNull(native[0].supply)){
+            supply = String(native[0].supply);
+        } else {
+            let rows = await this.doQuery(
+                `SELECT
+                    (SELECT COALESCE(SUM(CAST(c.amount AS DECIMAL(60,18))),0) FROM credits c
+                        INNER JOIN index_tickers ti ON (ti.id=c.tick_id) WHERE ti.tick=?) AS cr,
+                    (SELECT COALESCE(SUM(CAST(d.amount AS DECIMAL(60,18))),0) FROM debits d
+                        INNER JOIN index_tickers ti ON (ti.id=d.tick_id) WHERE ti.tick=?) AS dr`,
+                [t, t]);
+            let cr = rows.length ? String(rows[0].cr) : '0';
+            let dr = rows.length ? String(rows[0].dr) : '0';
+            supply = this.util.bcstr(this.util.bcsub(cr, dr, 18));
+        }
+        let escrow    = {};
+        let addresses = (this.config && this.config['ADDRESS']) || {};
+        for(let role of Object.keys(addresses)){
+            if(role.substr(0, 7) !== 'BRIDGE_') continue;
+            let coin = role.substr(7);
+            let addr = addresses[role];
+            let rows = await this.doQuery(
+                `SELECT
+                    (SELECT COALESCE(SUM(CAST(c.amount AS DECIMAL(60,18))),0) FROM credits c
+                        INNER JOIN index_addresses ad ON (ad.id=c.address_id)
+                        INNER JOIN index_tickers   ti ON (ti.id=c.tick_id)
+                        WHERE ad.address=? AND ti.tick=?) AS cr,
+                    (SELECT COALESCE(SUM(CAST(d.amount AS DECIMAL(60,18))),0) FROM debits d
+                        INNER JOIN index_addresses ad ON (ad.id=d.address_id)
+                        INNER JOIN index_tickers   ti ON (ti.id=d.tick_id)
+                        WHERE ad.address=? AND ti.tick=?) AS dr`,
+                [addr, t, addr, t]);
+            let cr = rows.length ? String(rows[0].cr) : '0';
+            let dr = rows.length ? String(rows[0].dr) : '0';
+            escrow[coin] = this.util.bcstr(this.util.bcsub(cr, dr, 18));
+        }
+        return { supply: supply, escrow: escrow };
+    }
+
+    // Applied XPOLICY snapshot metadata for a tick on THIS chain (getappliedpolicy RPC,
+    // token-bridge-policy spec section 6, D25): the highest policy_seq this chain has
+    // already MATERIALIZED, read as the join of the local idempotency record
+    // (bridge_settlements, kind='policy') against the mirrored policy_snapshots row it
+    // names. No row means no snapshot has applied here yet, which is not an error: a
+    // bridged copy can exist before its first snapshot lands (the in-leg barrier gates on
+    // it, the read does not).
+    async getAppliedPolicySnapshot(tick){
+        let rows = await this.doQuery(
+            `SELECT ps.policy_seq, ps.origin_block, ps.policy_hash
+             FROM
+                bridge_settlements bs
+                INNER JOIN policy_snapshots ps ON (ps.snapshot_id=bs.transfer_id)
+             WHERE
+                bs.kind='policy' AND ps.tick=? AND ps.network=?
+             ORDER BY
+                ps.policy_seq DESC, ps.id DESC
+             LIMIT 1`,
+            [String(tick), this.config['NETWORK']]);
+        return (rows.length > 0) ? rows[0] : null;
+    }
+
+    /**
+     * The D2 proof envelope (getbridgeescrowproof RPC), the shape bridge_checkpoint_check.js's
+     * header documents and verifyEscrowAgainstCheckpoint verifies. Producer-side only: this
+     * never chooses or verifies a checkpoint's signatures (the caller's obligation, per that
+     * module's header), it only reports what THIS chain committed at `block_index` and lets
+     * the caller bind its own already-verified checkpoint to it.
+     *
+     * sub_roots and the checkpoint identity both come from this chain's own committed
+     * history at EXACTLY block_index: a height with no roots or no signed checkpoint yet
+     * produces no proof at all, never an approximation from the nearest neighbour.
+     *
+     * The balance is read as of block_index (bounded through the actions join, never the
+     * current ledger), then PROVEN against the persisted balances_root through the SAME
+     * content-addressed store (state_tree_nodes) the block path writes -- never a rebuilt
+     * in-memory tree, which could silently diverge from what was actually committed. The
+     * computed balance and the persisted leaf are cross-checked before anything is returned:
+     * a mismatch (drift, an unindexed reorg window, a pruned node) fails closed to null
+     * rather than handing out an unverifiable proof.
+     *
+     * @param {string} address     - the escrow address being proven
+     * @param {string} tick        - the native tick (never the rooted form)
+     * @param {number} block_index - the height to prove the balance AT
+     * @returns {Promise<Object|null>} the envelope, or null when it cannot be produced
+     */
+    async getBridgeEscrowProof(address, tick, block_index){
+        let chain   = this.config['COIN'];
+        let network = this.config['NETWORK'];
+        let height  = Number(block_index);
+        if(!Number.isFinite(height) || !Number.isInteger(height) || height < 0)
+            return null;
+
+        let rootRows = await this.doQueryStrict(
+            `SELECT balances_root, stakes_root, contract_state_root
+             FROM state_tree_roots WHERE chain=? AND network=? AND block_index=? LIMIT 1`,
+            [chain, network, height]);
+        if(!rootRows.length) return null;
+        let rootRow = rootRows[0];
+
+        let cpRows = await this.doQueryStrict(
+            `SELECT checkpoint_seq, snapshot_block, state_root, state_root_version
+             FROM state_checkpoints WHERE chain=? AND network=? AND block_index=? LIMIT 1`,
+            [chain, network, height]);
+        if(!cpRows.length) return null;
+        let cp = cpRows[0];
+
+        // Fail closed rather than hand out an envelope built from a stale or mis-migrated
+        // checkpoint row: the STAMPED version relayed below must already agree with what
+        // this node's own maps derive at the checkpoint's own height, or this producer has
+        // nothing trustworthy to offer. The consumer (bridge_checkpoint_check.js) repeats
+        // this exact derivation independently against the STAMPED value it receives; this
+        // guard never substitutes the derived value for the stamped one -- doing that would
+        // make the consumer's own version check vacuous (it would always agree with itself)
+        // and silently drop the one binding that catches a checkpoint whose signed version
+        // disagrees with its own sub-root leaf set.
+        let derivedVersion = bridgeStateSubtree.stateRootVersion(height, network, chain);
+        if(derivedVersion === null || Number(cp.state_root_version) !== derivedVersion)
+            return null;
+
+        let balRows = await this.doQueryStrict(
+            `SELECT
+                (SELECT COALESCE(SUM(CAST(c.amount AS DECIMAL(60,18))),0) FROM credits c
+                    INNER JOIN actions         ac ON (ac.action_index=c.action_index)
+                    INNER JOIN index_addresses ad ON (ad.id=c.address_id)
+                    INNER JOIN index_tickers   ti ON (ti.id=c.tick_id)
+                    WHERE ad.address=? AND ti.tick=? AND ac.block_index<=?) AS cr,
+                (SELECT COALESCE(SUM(CAST(d.amount AS DECIMAL(60,18))),0) FROM debits d
+                    INNER JOIN actions         ac ON (ac.action_index=d.action_index)
+                    INNER JOIN index_addresses ad ON (ad.id=d.address_id)
+                    INNER JOIN index_tickers   ti ON (ti.id=d.tick_id)
+                    WHERE ad.address=? AND ti.tick=? AND ac.block_index<=?) AS dr`,
+            [address, tick, height, address, tick, height]);
+        let cr      = balRows.length ? String(balRows[0].cr) : '0';
+        let dr      = balRows.length ? String(balRows[0].dr) : '0';
+        let balance = this.util.bcstr(this.util.bcsub(cr, dr, 18));
+
+        let key   = bridgeMerkle.balanceKey(chain, network, address, tick);
+        let smt   = new bridgeStateCommitment.PersistentSMT(new bridgeStateCommitment.DbNodeStore(this));
+        let proof = await smt.prove(rootRow.balances_root, key);
+
+        // Self-check: the leaf the persistent tree actually holds at this key must match
+        // the ledger balance just computed (delete-on-zero means a zero balance proves as
+        // ABSENCE, never a zero-valued leaf), or the two have drifted and no proof is
+        // producible.
+        let expectLeaf = this.util.bcgt(balance, '0') ? bridgeMerkle.toHex(bridgeMerkle.amountLeaf(balance)) : null;
+        if(expectLeaf !== proof.leaf_value)
+            return null;
+
+        let subRoots = {
+            balances_root: rootRow.balances_root,
+            stakes_root:   rootRow.stakes_root
+        };
+        if(!this.util.isNull(rootRow.contract_state_root))
+            subRoots.contract_state_root = rootRow.contract_state_root;
+
+        return {
+            chain:       chain,
+            network:     network,
+            block_index: height,
+            sub_roots:   subRoots,
+            address:     address,
+            tick:        tick,
+            balance:     balance,
+            balance_proof: { siblings: proof.siblings },
+            checkpoint: {
+                chain:              chain,
+                network:            network,
+                block_index:        height,
+                checkpoint_seq:     Number(cp.checkpoint_seq),
+                snapshot_block:     Number(cp.snapshot_block),
+                state_root:         cp.state_root,
+                state_root_version: Number(cp.state_root_version)
+            }
+        };
     }
 
     // ── Cross-chain contract calls (XCALL) ──────────────────────────────────────
@@ -18271,6 +18906,11 @@ Database.STARTUP_ASSERTED_MIGRATIONS = [
         file:      '2026-08-24-validator-rewards-round-qualifier.sql',
         assertion: '_assertRewardUniqueKeyCarriesQualifier',
         symptom:   'Fatal indexer error: validator_rewards.reward_unique does not include round_qualifier'
+    },
+    {
+        file:      '2026-09-12-bridge-tables.sql',
+        assertion: '_assertBridgeTablesPresent',
+        symptom:   'Fatal indexer error: the bridge tables bridge_transfers, bridge_settlements, policy_snapshots are absent'
     }
 ];
 

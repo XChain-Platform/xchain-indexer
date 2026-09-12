@@ -38,6 +38,24 @@ const stripComments = Database.prototype.stripSqlLineComments.bind({});
 const destructiveOf = Database.prototype._destructiveAutoStatement.bind(Database.prototype);
 const statementsOf  = (raw) => Database.prototype.splitSqlStatements.call(Database.prototype, raw);
 
+// runMigrations() makes four fail-closed schema assertions on every normal return, and each
+// one asks the live schema a question the fake connections below have to answer. The pubkey
+// width, the stake-weight collation and the reward-key assertions all read
+// information_schema.columns/statistics and pass through on an empty answer, because an
+// absent column is a fresh install rather than drift - which is why a bare fake conn that
+// returns [] has always satisfied them. _assertBridgeTablesPresent reads
+// information_schema.TABLES, where an empty answer is NOT ambiguous: zero rows means the
+// three tables really are gone, and halting is the whole point of the guard.
+//
+// So the harnesses below seed the probe the same way makeDb() seeds the migrated pubkey
+// width: they are testing the migration RUNNER against a deliberately bare ledger, not the
+// schema contract, and a runner test must not be the thing that decides whether a node may
+// boot without the bridge tables. The production assertion is left exactly as written; the
+// halt it exists for is pinned by its own describe block at the end of this file.
+const BRIDGE_TABLES_PROBE = /information_schema\.tables[\s\S]*bridge_transfers/i;
+const BRIDGE_TABLE_ROWS   = Object.freeze(['bridge_transfers', 'bridge_settlements', 'policy_snapshots']);
+const bridgeTablesPresent = () => BRIDGE_TABLE_ROWS.map((name) => ({ name }));
+
 describe('Database._migrationMode() @regression @tier1', function () {
 
     it('reads mode=auto from the header tag', function () {
@@ -275,6 +293,8 @@ describe('v0.17.0 migration rename: contract-meta-columns + cross-chain-btc-chai
                 if (/SELECT name, checksum FROM schema_migrations/i.test(sql)) {
                     return Array.from(ledger, ([name, checksum]) => ({ name, checksum }));
                 }
+                // Bare-ledger harness, live-schema question: see BRIDGE_TABLES_PROBE above.
+                if (BRIDGE_TABLES_PROBE.test(sql)) return bridgeTablesPresent();
                 if (/CREATE TABLE IF NOT EXISTS schema_migrations/i.test(sql)) return {};
                 if (/^(UPDATE|INSERT|CREATE|ALTER|DROP)/i.test(sql.trim())) { updates.push({ sql, params }); return {}; }
                 return [];
@@ -949,6 +969,8 @@ describe('runMigrations() checksum heal branch @regression @tier1', function () 
                 if (/SELECT name, checksum FROM schema_migrations/i.test(sql)) {
                     return Array.from(ledger, ([name, checksum]) => ({ name, checksum }));
                 }
+                // Bare-ledger harness, live-schema question: see BRIDGE_TABLES_PROBE above.
+                if (BRIDGE_TABLES_PROBE.test(sql)) return bridgeTablesPresent();
                 // The ledger's own CREATE TABLE IF NOT EXISTS runs on every call; it is
                 // setup, not a write the runner decided to make, so it is not recorded.
                 if (/CREATE TABLE IF NOT EXISTS schema_migrations/i.test(sql)) return {};
@@ -1210,6 +1232,8 @@ describe('runMigrations() --file / opts.only scoping @regression @tier1', functi
                     const widened = executed.some(s => /ALTER TABLE pubkeys\s+MODIFY pubkey VARCHAR\(130\)/i.test(s));
                     return [{ len: (preRunLen !== null && !widened) ? preRunLen : pubkeyLen }];
                 }
+                // Bare-ledger harness, live-schema question: see BRIDGE_TABLES_PROBE above.
+                if (BRIDGE_TABLES_PROBE.test(sql)) return bridgeTablesPresent();
                 if (/^INSERT INTO schema_migrations/i.test(sql.trim())) { applied.push(params[0]); return []; }
                 if (/^UPDATE schema_migrations/i.test(sql.trim()))                 return [];
                 executed.push(sql);
@@ -1307,6 +1331,8 @@ describe('runMigrations() pubkey-width assertion @regression @tier1', function (
                 if (/SELECT name, checksum FROM schema_migrations/i.test(sql))    return [];
                 if (/information_schema\.columns/i.test(sql))
                     return (pubkeyLen === null) ? [] : [{ len: pubkeyLen }];
+                // Bare-ledger harness, live-schema question: see BRIDGE_TABLES_PROBE above.
+                if (BRIDGE_TABLES_PROBE.test(sql)) return bridgeTablesPresent();
                 return [];
             },
             async release() {},
@@ -1346,5 +1372,80 @@ describe('runMigrations() pubkey-width assertion @regression @tier1', function (
 
     it('stays silent when the column is absent (table not created yet)', async function () {
         await quietly(() => makeDb(null, { emptyDir: true }).runMigrations({}));
+    });
+});
+
+// Post-run schema contract for the three bridge tables (2026-09-12-bridge-tables.sql,
+// mode=manual deploy-precondition=required). This is the case the harnesses above seed
+// their way past, so it is the one that has to hold: without it a node boots, looks
+// healthy, and silently never applies a mirrored transfer whose source leg has already
+// debited on the other chain, because the mirror ingest for a table this database cannot
+// write fails by OMISSION rather than by error.
+describe('runMigrations() bridge-tables assertion @regression @tier1', function () {
+
+    // `present` is the list of bridge tables information_schema reports. null answers the
+    // probe with a non-array (the unreadable case), which must pass through rather than halt.
+    function makeDb(present) {
+        const conn = {
+            async query(sql) {
+                if (/GET_LOCK/i.test(sql))                                     return [{ l: '1' }];
+                if (/RELEASE_LOCK/i.test(sql))                                 return [];
+                if (/SELECT name, checksum FROM schema_migrations/i.test(sql)) return [];
+                if (BRIDGE_TABLES_PROBE.test(sql))
+                    return (present === null) ? null : present.map((name) => ({ name }));
+                return [];
+            },
+            async release() {},
+        };
+        const db = Object.create(Database.prototype);
+        db.dbName = 'fake_indexer';
+        db.transactionConnection = null;
+        db.getConnection = async () => conn;
+        db._ensureMigrationsLedger = async () => {};
+        // A lock-skip returns early from the inner body; the wrapper must still assert.
+        db._runMigrationsInner = async () => ({ applied: [], pending: [], lockSkipped: true });
+        return db;
+    }
+
+    async function quietly(fn) {
+        const realLog = console.log, realWarn = console.warn;
+        console.log = console.warn = () => {};
+        try { return await fn(); }
+        finally { console.log = realLog; console.warn = realWarn; }
+    }
+
+    it('halts naming the migration file when every bridge table is absent', async function () {
+        await assert.rejects(
+            () => quietly(() => makeDb([]).runMigrations({})),
+            /bridge_transfers, bridge_settlements, policy_snapshots are absent[\s\S]*node src\/migrate\.js --file 2026-09-12-bridge-tables\.sql/);
+    });
+
+    // A partially migrated database is the shape a scoped --file rollout actually leaves,
+    // and it is the one an operator most needs named precisely: the halt lists only what is
+    // missing, so the remedy is not "re-run everything and hope".
+    it('halts naming ONLY the missing table when the schema is half migrated', async function () {
+        await assert.rejects(
+            () => quietly(() => makeDb(['bridge_transfers', 'policy_snapshots']).runMigrations({})),
+            /the bridge tables bridge_settlements are absent/);
+        await assert.rejects(
+            () => quietly(() => makeDb(['bridge_transfers']).runMigrations({})),
+            /the bridge tables bridge_settlements, policy_snapshots are absent/);
+    });
+
+    it('passes on a fully migrated schema', async function () {
+        await quietly(() => makeDb([...BRIDGE_TABLE_ROWS]).runMigrations({}));
+    });
+
+    // information_schema reports table names in whatever case the server stores them
+    // (lower_case_table_names differs by platform), and a case-folded comparison is what
+    // keeps a correctly migrated node off the halt path.
+    it('accepts the names case-folded', async function () {
+        await quietly(() => makeDb(['BRIDGE_TRANSFERS', 'Bridge_Settlements', 'POLICY_snapshots']).runMigrations({}));
+    });
+
+    // An answer we could not read is not evidence of a missing table, the same convention
+    // the pubkey and reward assertions follow.
+    it('passes through on an unreadable answer', async function () {
+        await quietly(() => makeDb(null).runMigrations({}));
     });
 });

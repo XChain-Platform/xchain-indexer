@@ -35,6 +35,25 @@ const Database = require('../../src/db');
 
 const FILE = '2026-07-24-pubkeys-widen-uncompressed.sql';
 
+// runMigrations() makes four fail-closed schema assertions on every normal return, and each
+// asks the live schema a question the fake connections below have to answer. The pubkey
+// width, the stake-weight collation and the reward-key assertions all read
+// information_schema.columns/statistics and pass through on an empty answer, because an
+// absent column is a fresh install rather than drift - which is why a bare fake conn that
+// returns [] has always satisfied them. _assertBridgeTablesPresent reads
+// information_schema.TABLES, where an empty answer is NOT ambiguous: zero rows means the
+// three tables really are gone, and halting is the whole point of the guard.
+//
+// So the harnesses below seed that one probe, exactly as the sibling runner suite does
+// (test/unit/migration-runner.test.js): these cases drive the runner's PRECONDITION branch
+// against a deliberately bare schema, and a precondition test must not be the thing that
+// decides whether a node may boot without the bridge tables. The production assertion is
+// left exactly as written; its halt is pinned by its own describe block in
+// test/unit/migration-runner.test.js.
+const BRIDGE_TABLES_PROBE = /information_schema\.tables[\s\S]*bridge_transfers/i;
+const BRIDGE_TABLE_ROWS   = Object.freeze(['bridge_transfers', 'bridge_settlements', 'policy_snapshots']);
+const bridgeTablesPresent = () => BRIDGE_TABLE_ROWS.map((name) => ({ name }));
+
 describe('Database.MIGRATION_PRECONDITIONS[pubkeys widen] @regression @tier1', function () {
 
     const pre = Database.MIGRATION_PRECONDITIONS[FILE];
@@ -380,6 +399,8 @@ describe('runMigrations() precondition baseline branch @regression @tier1', func
                 if (/SELECT name, checksum FROM schema_migrations/i.test(sql)) {
                     return Array.from(ledger, ([name, checksum]) => ({ name, checksum }));
                 }
+                // Bare-schema harness, live-schema question: see BRIDGE_TABLES_PROBE above.
+                if (BRIDGE_TABLES_PROBE.test(sql)) return bridgeTablesPresent();
                 if (/CREATE TABLE IF NOT EXISTS schema_migrations/i.test(sql)) return {};
                 if (/CHARACTER_MAXIMUM_LENGTH/i.test(sql)) return [{ len: pubkeyLen }];
                 if (/^INSERT INTO schema_migrations/i.test(sql.trim())) { inserts.push(params); return {}; }
@@ -482,6 +503,8 @@ describe('runMigrations() precondition baseline branch, round_qualifier @regress
                 if (/SELECT name, checksum FROM schema_migrations/i.test(sql)) {
                     return Array.from(ledger, ([name, checksum]) => ({ name, checksum }));
                 }
+                // Bare-schema harness, live-schema question: see BRIDGE_TABLES_PROBE above.
+                if (BRIDGE_TABLES_PROBE.test(sql)) return bridgeTablesPresent();
                 if (/CREATE TABLE IF NOT EXISTS schema_migrations/i.test(sql)) return {};
                 // Ordered BEFORE the precondition matcher: both queries mention
                 // round_qualifier and information_schema, and only this one asks for the

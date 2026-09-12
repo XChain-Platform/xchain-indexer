@@ -30,7 +30,7 @@ SRC="$HERE/../src"
 ROOT="$(cd "$HERE/../.." && pwd)"
 
 CLIENT_FILES="hub_db_sync.js hub-schema-version.js price_batching_floor_activation.js"
-SQL_FILES="price_snapshots.sql oracle_prices.sql cross_chain_matches.sql cross_chain_calls.sql capability_snapshots.sql state_checkpoints.sql anchor_reward_attestations.sql attestation_responses.sql"
+SQL_FILES="price_snapshots.sql oracle_prices.sql cross_chain_matches.sql cross_chain_calls.sql capability_snapshots.sql state_checkpoints.sql anchor_reward_attestations.sql attestation_responses.sql bridge_transfers.sql policy_snapshots.sql"
 SERVICES="xchain-explorer"
 
 CHECK=0

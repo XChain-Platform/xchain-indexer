@@ -40,6 +40,7 @@ const { HUB_SYNC_WATERMARK_GRACE_S, resolveWatermarkGrace,
         HUB_SYNC_BARRIER_HOLD_CEILING_S, resolveBarrierHoldCeilingMs } = require('./hub_db_sync.js');
 const anchorRewardDerive = require('./anchor_reward_derive.js');
 const AnchorProofClient  = require('./anchor_proof_client.js');
+const bridgeSettle       = require('./bridge_settle.js');
 const rollcallClose      = require('./rollcall_close.js');
 const { RollcallProofClient } = require('./rollcall_proof_client.js');
 const HubPushQueue = require('./hub_push_queue.js');
@@ -1411,6 +1412,44 @@ class XChainIndexer {
                     }
                 }
 
+                // Bridge transfer sync barrier: wait until the local bridge_transfers mirror
+                // has caught up to this block's time, so every operator of this chain mints
+                // the same bridged credits at the same block. A transfer's apply assigns an
+                // action index, so a node that applied a smaller set at this height would
+                // commit different actions_hash and ledger_hash for a block its peers agree
+                // on. No-op when sync is disabled or the mirror holds no transfers.
+                if(this.hubDbSync){
+                    try {
+                        await this.hubDbSync.waitForBridgeSync(blockTime, this.priceSyncTimeoutMs);
+                    } catch(err){
+                        console.warn('Deferring block ' + blockToParse + ' (bridge transfer sync): ', err);
+                        this.stallReason = 'bridge_sync_barrier';
+                        // bridgeWatermarkGraceS, never the match or call grace: the bridge
+                        // engine is a third producer with its own effective_time stamping rule,
+                        // and sharing another table's grace couples two producers' timing, the
+                        // documented mistake the call barrier was split out to end.
+                        this.stallClearsAt = this._barrierClearsAt(blockTime, 'bridgeWatermarkGraceS');
+                        break;
+                    }
+                }
+
+                // Policy snapshot sync barrier: its own barrier and not a reuse of the bridge
+                // one, because policy_snapshots is keyed on origin_chain alone (a snapshot
+                // names no destination, so there is no (src, dest) pair to scope by) and
+                // carries its own watermark grace. The snapshots materialize membership that
+                // GATES the credits the bridge pass then applies, so a stale policy mirror
+                // would let one node admit a transfer another node's membership refuses.
+                if(this.hubDbSync){
+                    try {
+                        await this.hubDbSync.waitForPolicySync(blockTime, this.priceSyncTimeoutMs);
+                    } catch(err){
+                        console.warn('Deferring block ' + blockToParse + ' (policy snapshot sync): ', err);
+                        this.stallReason = 'policy_sync_barrier';
+                        this.stallClearsAt = this._barrierClearsAt(blockTime, 'policyWatermarkGraceS');
+                        break;
+                    }
+                }
+
                 // Direct-hub-DB call-presence barrier: the sync barriers above only run with a
                 // HubDbSync mirror. In single-host / direct-hub-DB mode (hubDb set, no sync) the
                 // indexer reads the hub's MariaDB directly, but "the hub DB is current" does NOT
@@ -1573,6 +1612,34 @@ class XChainIndexer {
                         // Settle this chain's leg of any effective cross-chain DEX matches
                         // (validator-signed, mirror-delivered; verified inside CROSS_SETTLE)
                         await this.util.processCrossChainSettlements(this.actions, this.indexerDb, blockToParse, blockTime);
+
+                        // XBRIDGE settle pass: materialize any hub-mirrored token policy
+                        // snapshot and then apply this chain's leg of every effective,
+                        // unapplied bridge transfer (the injected XBRIDGE v2 / v5 legs).
+                        //
+                        // THE POSITION IS PINNED AND IS NOT A STYLE CHOICE. It assigns action
+                        // indexes, so it is consensus-visible, and sitting here - after the
+                        // cross-chain DEX settlement and before the cross-chain call pass -
+                        // is what makes a bridged credit bound at block B spendable at B+1 on
+                        // every node and never at B. Moving it moves every later action index
+                        // in the block. Runs behind the bridge and policy sync barriers above
+                        // (themselves behind the snapshot barrier), so the mirror rows and the
+                        // capability rows the quorum is verified against are already present.
+                        //
+                        // Throws BridgeProofUnavailableError when the D2 escrow cross-check
+                        // cannot be supplied a proof yet; the catch below defers the block
+                        // rather than letting an absence read as a refusal.
+                        await bridgeSettle.processBridgeSettlePass({
+                            actions:    this.actions,
+                            indexerDb:  this.indexerDb,
+                            util:       this.util,
+                            mapper:     this.mapper,
+                            config:     this.config,
+                            coin:       this.config['COIN'],
+                            network:    this.config['NETWORK'],
+                            blockIndex: blockToParse,
+                            blockTime:  blockTime
+                        });
 
                         // Cross-chain contract calls: inject executions for dispatches
                         // targeting this chain, deliver result callbacks for requests it
@@ -1816,6 +1883,22 @@ class XChainIndexer {
                             this.config['BLOCK_CHECK_INTERVAL'] + 'ms.');
                         this.stallReason = 'anchor_reward_proof_unavailable';
                         this.stallClearsAt = null;          // clears when DOGE visibility returns, not on a clock
+                    } else if(error && error.name === 'BridgeProofUnavailableError'){
+                        // The D2 escrow cross-check could not be handed a proof from HERE: no
+                        // quorum-established checkpoint at or after the transfer's
+                        // snapshot_block is held locally, or the origin chain's indexer served
+                        // none. That is a property of THIS node's mirror and network, not of
+                        // the row, so it must never read as ok:false - a node that is merely
+                        // behind would then decide, permanently, that a legitimate transfer is
+                        // forged, and mint nothing where its peers mint. Defer and retry, the
+                        // way the sync barriers above defer, with the barrier-shaped stall
+                        // reason so /status classifies it as mirror lag rather than a wedge.
+                        console.warn('BRIDGE ESCROW PROOF UNAVAILABLE at block ' + lastIndexerBlock + ': ' +
+                            (error && error.message) + ' Deferring the block (not committing; an ' +
+                            'unproven mint is exactly what D2 exists to stop). Retrying after ' +
+                            this.config['BLOCK_CHECK_INTERVAL'] + 'ms.');
+                        this.stallReason = 'bridge_proof_barrier';
+                        this.stallClearsAt = null;          // clears when the checkpoint arrives, not on a clock
                     } else if(error && error.name === 'RollcallProofUnavailableError'){
                         // A ROLLCALL epoch could not be decided from HERE. Closing it anyway
                         // would take the worst possible reading of silence: an unreachable or

@@ -200,9 +200,12 @@ describe('List @regression @tier3', function () {
             await handler.parse(params, data, null);
 
             assert.strictEqual(data['STATUS'], 'valid');
-            assert.ok(!indexer.indexerDb.getListRootIndex.called,
-                'no normalization below the activation height');
+            // The flag day governs the STORED parent, not whether a root is ever resolved:
+            // the edit-authorization rules (bridge-owned lists, the owner check) walk
+            // to the root for their own read at every height and never write it back.
             assert.strictEqual(Number(data['LIST_ACTION_INDEX']), 7, 'the wire value is stored verbatim');
+            assert.strictEqual(Number(indexer.indexerDb.getList.getCall(0).args[0]), 7,
+                'the membership read must use the un-normalized wire value below the flag');
         });
 
         it('a REMOVE writes the spliced membership, dropping the removed item', async function () {

@@ -79,15 +79,15 @@ describe('VM ledger-read loader: buildVmBalancesAndTokenInfo @regression @tier2'
         // Fee era: ISSUE + SEND draw gas from the issuer's XCHAIN balance.
         await seedGas(seeder, { addresses: [ADDR1, ADDR2] });
 
-        // ISSUE TOK (decimals 8) minting 1000 to ADDR1, then SEND 300 to ADDR2.
+        // ISSUE TOKX (decimals 8) minting 1000 to ADDR1, then SEND 300 to ADDR2.
         // ISSUE|0|TICK|MAX_SUPPLY|MAX_MINT|DECIMALS|DESCRIPTION|MINT_SUPPLY
         await seeder.seedBlock(100, T0, [
             { source: ADDR1, destination: null, amount: '0',
-              data: 'ISSUE|0|TOK|1000|1000|8|vm balance reader token|1000' },
+              data: 'ISSUE|0|TOKX|1000|1000|8|vm balance reader token|1000' },
         ]);
         await seeder.seedBlock(101, T0 + BLK, [
             { source: ADDR1, destination: ADDR2, amount: '0',
-              data: 'SEND|0|TOK|300|' + ADDR2 },
+              data: 'SEND|0|TOKX|300|' + ADDR2 },
         ]);
 
         const indexer = await initIndexer();
@@ -104,18 +104,18 @@ describe('VM ledger-read loader: buildVmBalancesAndTokenInfo @regression @tier2'
 
             assert.ok(post.balances[ADDR1], 'ADDR1 bucket present');
             assert.ok(post.balances[ADDR2], 'ADDR2 bucket present');
-            assert.strictEqual(Number(post.balances[ADDR1].TOK), 700, 'ADDR1 holds 700 TOK');
-            assert.strictEqual(Number(post.balances[ADDR2].TOK), 300, 'ADDR2 holds 300 TOK');
+            assert.strictEqual(Number(post.balances[ADDR1].TOKX), 700, 'ADDR1 holds 700 TOKX');
+            assert.strictEqual(Number(post.balances[ADDR2].TOKX), 300, 'ADDR2 holds 300 TOKX');
 
             // tokenInfo is symbol-keyed and carries the metadata a contract reads.
-            assert.ok(post.tokenInfo.TOK, 'tokenInfo[TOK] present');
-            assert.strictEqual(post.tokenInfo.TOK.TICK, 'TOK', 'tokenInfo carries the symbol');
-            assert.strictEqual(Number(post.tokenInfo.TOK.DECIMALS), 8, 'decimals round-trip');
+            assert.ok(post.tokenInfo.TOKX, 'tokenInfo[TOKX] present');
+            assert.strictEqual(post.tokenInfo.TOKX.TICK, 'TOKX', 'tokenInfo carries the symbol');
+            assert.strictEqual(Number(post.tokenInfo.TOKX.DECIMALS), 8, 'decimals round-trip');
 
             // ---- 2. PRE-ACTION BOUND: at the SEND's own index the credit is unseen ----
             const atSend = await db.buildVmBalancesAndTokenInfo([ADDR2], 200, sendIdx);
             assert.ok(atSend.balances[ADDR2], 'ADDR2 bucket present even when empty');
-            assert.strictEqual(atSend.balances[ADDR2].TOK, undefined,
+            assert.strictEqual(atSend.balances[ADDR2].TOKX, undefined,
                 'action_index < sendIdx must EXCLUDE the SEND credit (pre-action state)');
 
             // ---- 3. Unknown address resolves to an empty bucket (gateway -> null) ----
@@ -125,7 +125,7 @@ describe('VM ledger-read loader: buildVmBalancesAndTokenInfo @regression @tier2'
 
             // ---- 4. Null entries are skipped, not crashed on ----
             const withNull = await db.buildVmBalancesAndTokenInfo([null, ADDR1, undefined], 200, HIGH_ACTION);
-            assert.strictEqual(Number(withNull.balances[ADDR1].TOK), 700, 'null/undefined addresses skipped');
+            assert.strictEqual(Number(withNull.balances[ADDR1].TOKX), 700, 'null/undefined addresses skipped');
         } finally {
             await destroyIndexer(indexer);
         }

@@ -39,11 +39,13 @@
  *     would reject fee-bearing actions absent fee outputs, and the env-
  *     placeholder route now fails closed at startup on those chains).
  *
- * Exactly FOUR per-chain artifacts remain, all normalized (not ignored)
+ * Exactly FIVE per-chain artifacts remain, all normalized (not ignored)
  * before comparison; anything else that differs is a chain-dependence bug:
  *   1. transactions.data stores the raw ACTION string, which contains the
  *      run's coin literal (ORDER/DISPENSER give+get fields).
- *   2. index_coins holds that same literal as the deduped coin row.
+ *   2. index_coins holds that same literal as the deduped coin row, and so does
+ *      bridge_settlements.dest_chain for the gas preamble (artifact 5): a settled
+ *      leg records the chain the credit landed on.
  *   3. index_addresses holds the chain's own special addresses (the ISSUE
  *      fee is credited to the per-coin DONATE1 constant from config.ADDRESS).
  *      Their POSITIONS (ids) must still match; referencing rows compare raw.
@@ -57,6 +59,18 @@
  *      index_transactions and the cross-coin value assertion is dropped; the
  *      ledger/actions/contract hashes resolve every id to a canonical string
  *      and so stay fully compared across coins.
+ *   5. the gas preamble. XCHAIN is minted on BTC only and reaches LTC/DOGE
+ *      solely through an XBRIDGE in-leg, so a broadcast ISSUE + MINT preamble
+ *      is refused off BTC and the prerequisite of "identical input" cannot be
+ *      met by identical decoder rows. This suite therefore seeds the preamble
+ *      in the bridge in-leg shape on EVERY chain (gas-seeder.js `system`),
+ *      BTC included, where that leg is synthetic: the corpus is what is
+ *      compared, and its prerequisite is made identical by construction. The
+ *      one residue is the injected row's synthetic tx hash, which carries the
+ *      coin literal by design (genesis.js _syntheticIssueTx) and is normalized
+ *      by value like artifact 4; the hash preimages never fold a tx hash, so
+ *      the hash-chain comparison stays whole. 10-determinism-baseline pins the
+ *      broadcast preamble on BTC, so BTC history itself is still covered.
  *
  * NOTE: this parity holds only in the UNIFIED_FEES era (active since 2.0.0).
  * The pre-2.0.0 LEGACY fee constants are per-coin BY DESIGN (BTC issuance
@@ -72,7 +86,7 @@ const {
     indexerQuery, createDatabases, createDecoderSchema, closeAll,
 } = require('../setup/db-connection');
 const { COINS, withCoin, processBlocks } = require('../setup/multi-chain');
-const { seedGas, GAS_FUNDER } = require('../setup/gas-seeder');
+const { seedGas, BRIDGE_TX_PREFIX } = require('../setup/gas-seeder');
 const { assertStateInvariants } = require('../setup/state-invariants');
 const { readHashChain, assertHashChainsEqual, captureDbState,
         assertCapturedStatesEqual } = require('../setup/equivalence');
@@ -124,10 +138,11 @@ describe('14 – Multi-chain full-state parity @regression @tier1', function () 
     const states = {};
     const chains = {};
 
-    // Normalize the four documented per-chain artifacts (see header) so the
+    // Normalize the five documented per-chain artifacts (see header) so the
     // remaining comparison is exhaustive. `stateHashes` is this run's set of
-    // per-block state-hash strings, read from the hash chain before capture.
-    function normalizeState(state, coin, specialAddresses, stateHashes) {
+    // per-block state-hash strings, read from the hash chain before capture;
+    // `gasTxHashes` the synthetic tx hashes the gas preamble injected.
+    function normalizeState(state, coin, specialAddresses, stateHashes, gasTxHashes) {
         const out = { ...state };
         // Re-sort each transformed table: captures are sorted canonical
         // strings, and replacement can change the order.
@@ -135,11 +150,11 @@ describe('14 – Multi-chain full-state parity @regression @tier1', function () 
             s.split('|' + coin + '|').join('|<COIN>|')).sort();
         out.index_coins = state.index_coins.map(s =>
             s.replace('"' + coin + '"', '"<COIN>"')).sort();
+        out.bridge_settlements = (state.bridge_settlements || []).map(s =>
+            s.replace('"dest_chain":"' + coin + '"', '"dest_chain":"<COIN>"')).sort();
         out.index_addresses = state.index_addresses.map(s => {
-            // The harness's gas-bootstrap funder happens to BE the BTC
-            // regtest GAS address: normalize it FIRST so the BTC run does
-            // not collapse it into <GAS> while other coins keep it raw.
-            s = s.replace('"' + GAS_FUNDER + '"', '"<GAS_FUNDER>"');
+            // The injected gas row is owned by the chain's own GAS address, which
+            // the special-address pass below folds into <GAS> on every coin alike.
             for (const [key, addr] of Object.entries(specialAddresses)) {
                 s = s.replace('"' + addr + '"', '"<' + key + '>"');
             }
@@ -151,13 +166,25 @@ describe('14 – Multi-chain full-state parity @regression @tier1', function () 
         // still compared byte-wise (that is the part that must match across coins) while
         // the coin-bound digest itself is not. Only state hashes are rewritten: the
         // ledger/actions/contract hash rows in the same table stay raw.
+        // Artifact 5 rides the same rule: the gas preamble's synthetic tx hash carries
+        // the coin literal, so its VALUE is normalized and its position kept.
         out.index_transactions = state.index_transactions.map(s => {
             for (const h of stateHashes) {
                 if (s.includes('"' + h + '"')) return s.split('"' + h + '"').join('"<STATE_HASH>"');
             }
+            for (const h of gasTxHashes) {
+                if (s.includes('"' + h + '"')) return s.split('"' + h + '"').join('"<GAS_TX_HASH>"');
+            }
             return s;
         }).sort();
         return out;
+    }
+
+    // The synthetic tx hashes the bridge-shaped gas preamble injected on this run.
+    async function injectedGasTxHashes() {
+        const rows = await indexerQuery(
+            'SELECT hash FROM index_transactions WHERE hash LIKE ?', [BRIDGE_TX_PREFIX + '%']);
+        return rows.map(r => String(r.hash));
     }
 
     before(async function () {
@@ -167,7 +194,9 @@ describe('14 – Multi-chain full-state parity @regression @tier1', function () 
         for (const coin of COINS) {
             // xchainFeeMode pins every coin to the xchain-balance fee path (see header).
             await withCoin(coin, 'regtest', async ({ seeder, indexer }) => {
-                await seedGas(seeder, { addresses: [ADDR1, ADDR2, ADDR3] });
+                // Artifact 5 (header): the bridge in-leg shape on every chain, so the
+                // corpus starts from an identical ledger on all three.
+                await seedGas(seeder, { addresses: [ADDR1, ADDR2, ADDR3], system: true });
                 for (const b of corpus(coin)) await seeder.seedBlock(b.block, b.time, b.txs);
                 const processed = await processBlocks(indexer);
                 assert.strictEqual(processed, CORPUS_BLOCKS,
@@ -179,7 +208,8 @@ describe('14 – Multi-chain full-state parity @regression @tier1', function () 
                 states[coin] = normalizeState(
                     await captureDbState(indexerQuery), coin,
                     (indexer.config && indexer.config.ADDRESS) || {},
-                    new Set(chains[coin].map(b => b.state).filter(Boolean)));
+                    new Set(chains[coin].map(b => b.state).filter(Boolean)),
+                    await injectedGasTxHashes());
             }, { xchainFeeMode: true });
         }
     });
@@ -199,11 +229,11 @@ describe('14 – Multi-chain full-state parity @regression @tier1', function () 
         }
     });
 
-    it('LTC full state is byte-identical to BTC (modulo the 4 normalized artifacts)', function () {
+    it('LTC full state is byte-identical to BTC (modulo the 5 normalized artifacts)', function () {
         assertCapturedStatesEqual(states.BTC, states.LTC, { labelA: 'BTC', labelB: 'LTC' });
     });
 
-    it('DOGE full state is byte-identical to BTC (modulo the 4 normalized artifacts)', function () {
+    it('DOGE full state is byte-identical to BTC (modulo the 5 normalized artifacts)', function () {
         assertCapturedStatesEqual(states.BTC, states.DOGE, { labelA: 'BTC', labelB: 'DOGE' });
     });
 

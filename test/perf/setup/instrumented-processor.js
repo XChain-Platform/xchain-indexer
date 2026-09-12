@@ -21,6 +21,8 @@
  * this file must be updated to match.
  */
 
+const { applySystemGas } = require('../../integration/setup/gas-seeder');
+
 /**
  * Process all pending blocks with per-phase timing instrumentation.
  *
@@ -92,6 +94,11 @@ async function processBlocksInstrumented(indexer, collector) {
             t = process.hrtime.bigint();
             await indexer.util.processExpirations(indexer.actions, indexer.indexerDb, lastIndexerBlock, blockTime);
             phases.expirations = Number(process.hrtime.bigint() - t) / 1e6;
+
+            // The fixture's stand-in for the XBRIDGE settle pass (see processBlocks and
+            // gas-seeder.js): off BTC the bootstrap gas arrives here as bridge-shaped
+            // credits. Bootstrap blocks only, so it is not timed as a phase.
+            await applySystemGas(indexer, lastIndexerBlock, blockTime);
 
             // Phase: cancellations
             t = process.hrtime.bigint();

@@ -123,6 +123,10 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
             SLEEP: 'quotable',
             STAKE: 'quotable', SWAP: 'quotable', SWEEP: 'quotable', UNSTAKE: 'quotable',
             VOTE: 'quotable', WITHDRAW: 'quotable',
+            // A user-broadcast lock or burn stages an ordinary XBRIDGE_BASE fee and runs no
+            // caller code, so the public feequote may dry-run it; the injected settle legs
+            // (v2, v5) are refused before any fee is staged and pay none.
+            XBRIDGE: 'quotable',
         };
 
         it('(a1) every dispatched action carries an explicit expected fee-quote class', function () {
@@ -217,6 +221,9 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
             SEND: false, SLASH: false,
             SLEEP: false, STAKE: false, SWAP: false, SWAP_EXPIRE: false, SWAP_MATCH: false,
             SWEEP: false, UNSTAKE: false, WITHDRAW: false,
+            // XBRIDGE reaches no VM: a lock is a debit plus an escrow credit, a burn is a
+            // debit, and neither injects an EXECUTE the way ATTEST, VOTE and XCALL do.
+            XBRIDGE: false,
         };
 
         it('(f1) every dispatched action carries an explicit batch-probe decision', function () {

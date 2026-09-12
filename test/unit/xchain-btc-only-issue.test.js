@@ -16,9 +16,18 @@
  * XCHAIN is BTC-only. The gas token exists as a real, balance-bearing token
  * only on the BTC ledger; on DOGE/LTC fees settle in native coin (XCHAIN is
  * only a unit of account for sizing), so XCHAIN is never created there. issue.js
- * rejects an XCHAIN ISSUE with 'invalid: TICK (BTC-only)' on any non-BTC chain
- * (regtest is exempt so the e2e harness can self-seed play-money gas). ISSUE of
- * XCHAIN remains GAS-only on every chain; this test isolates the chain gate.
+ * rejects an XCHAIN ISSUE with 'invalid: TICK (BTC-only)' on any non-BTC chain.
+ * ISSUE of XCHAIN remains GAS-only on every chain; this test isolates the chain gate.
+ *
+ * THE REGTEST EXEMPTION IS GONE (xchain-bridge spec section 4, D62). Once the
+ * bridge exists, every XCHAIN unit off BTC is the shadow of an escrow balance held
+ * on BTC, so the only thing that may create supply there is the mirror's XBRIDGE v2
+ * in-leg. The refusal is unconditional off BTC from every source including the GAS
+ * address, on every network including regtest, and it is NOT keyed on
+ * XCHAIN_BRIDGE_ACTIVATION: no off-BTC XCHAIN history exists to replay. The e2e
+ * harness's play-money self-seed moves to a GAS-key ISSUE on BTC regtest plus an
+ * XBRIDGE v0 lock. The system-injected creation of the off-BTC row is exempt
+ * through IS_GENESIS and is covered by test/unit/issue-bridge-optin.test.js.
  ********************************************************************/
 
 process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
@@ -102,7 +111,11 @@ describe('XCHAIN BTC-only ISSUE gate @regression @security', function () {
         assert.notStrictEqual(await runXchainIssue({ coin: 'BTC', network: 'mainnet' }), 'invalid: TICK (BTC-only)');
     });
 
-    it('exempts regtest so e2e can self-seed gas on DOGE regtest', async function () {
-        assert.notStrictEqual(await runXchainIssue({ coin: 'DOGE', network: 'regtest' }), 'invalid: TICK (BTC-only)');
+    it('refuses on DOGE regtest too: the closure is unconditional off BTC (D62)', async function () {
+        assert.strictEqual(await runXchainIssue({ coin: 'DOGE', network: 'regtest' }), 'invalid: TICK (BTC-only)');
+    });
+
+    it('still allows the play-money self-seed on BTC regtest', async function () {
+        assert.notStrictEqual(await runXchainIssue({ coin: 'BTC', network: 'regtest' }), 'invalid: TICK (BTC-only)');
     });
 });

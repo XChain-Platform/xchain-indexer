@@ -99,7 +99,7 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
             'the fence refuses only on positive evidence, never on ignorance of this chain');
     });
 
-    it('fences only the three cross-chain tables', async function () {
+    it('fences only the cross-chain tables', async function () {
         const { sync, seen } = makeSync({ columns: ['id', 'network', 'btc_chain_id'] });
         await sync.setExpectedBtcChainId(CHAIN_NEW, 'local');
         await sync._applyRow('state_checkpoints', { id: 1, network: 'regtest', btc_chain_id: CHAIN_OLD });
@@ -130,10 +130,11 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
             'the drain must not count refused rows as mirrored');
     });
 
-    it('keeps the three cross-chain tables off the batch path, which has no per-row verdict', async function () {
+    it('keeps every cross-chain table off the batch path, which has no per-row verdict', async function () {
         const { sync } = makeSync({});
         await sync.setExpectedBtcChainId(CHAIN_NEW, 'local');
-        for (const table of ['cross_chain_matches', 'cross_chain_calls', 'capability_snapshots']) {
+        for (const table of ['cross_chain_matches', 'cross_chain_calls', 'capability_snapshots',
+                             'bridge_transfers', 'policy_snapshots']) {
             assert.strictEqual(await sync._applyRowsBatched(table, [matchRow(1, CHAIN_OLD), matchRow(2, CHAIN_OLD)]),
                 false, table + ' must fall to the per-row path where the fence runs');
         }
@@ -143,7 +144,8 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
 
     it('learns the id from the snapshot envelope while bootstrapping each cross-chain table', async function () {
         sinon.stub(console, 'log');
-        for (const table of ['cross_chain_matches', 'cross_chain_calls', 'capability_snapshots']) {
+        for (const table of ['cross_chain_matches', 'cross_chain_calls', 'capability_snapshots',
+                             'bridge_transfers', 'policy_snapshots']) {
             const { sync } = makeSync({});
             stubHub(sync, [], CHAIN_NEW);
             await sync._bootstrapTable(table);
@@ -203,7 +205,7 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
         assert.match(httpGet.firstCall.args[0], /^\/hub-db\/snapshot\/capability_snapshots\?since_id=0&limit=1$/);
         assert.strictEqual(sync._expectedBtcChainId, CHAIN_NEW, 'the hub restated its identity; the mirror follows');
         assert.strictEqual(inserts(seen).length, 1, 'the row applies once the mirror is on its chain');
-        assert.strictEqual(chainDels(seen).length, 3, 'adopting a new chain purges the previous chain\'s rows');
+        assert.strictEqual(chainDels(seen).length, 5, 'adopting a new chain purges the previous chain\'s rows');
     });
 
     it('refuses a live row the hub does not vouch for, and re-probes only once per id', async function () {
@@ -242,7 +244,7 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
 
     // ── The purge on an expectation change ───────────────────────────────────────
 
-    it('purges the previous chain\'s rows from all three tables and reports the counts', async function () {
+    it('purges the previous chain\'s rows from all five tables and reports the counts', async function () {
         const warn = sinon.stub(console, 'warn');
         sinon.stub(console, 'log');
         const { sync, seen } = makeSync({ deleted: 3 });
@@ -255,10 +257,13 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
         assert.deepStrictEqual(dels.map((q) => q.sql), [
             'DELETE FROM cross_chain_matches WHERE btc_chain_id IS NOT NULL AND btc_chain_id <> ?',
             'DELETE FROM cross_chain_calls WHERE btc_chain_id IS NOT NULL AND btc_chain_id <> ?',
-            'DELETE FROM capability_snapshots WHERE btc_chain_id IS NOT NULL AND btc_chain_id <> ?'
+            'DELETE FROM capability_snapshots WHERE btc_chain_id IS NOT NULL AND btc_chain_id <> ?',
+            'DELETE FROM bridge_transfers WHERE btc_chain_id IS NOT NULL AND btc_chain_id <> ?',
+            'DELETE FROM policy_snapshots WHERE btc_chain_id IS NOT NULL AND btc_chain_id <> ?'
         ]);
         assert.ok(dels.every((q) => q.args[0] === CHAIN_NEW), 'the predicate keeps THIS chain, and NULLs stay');
-        for (const table of ['cross_chain_matches', 'cross_chain_calls', 'capability_snapshots'])
+        for (const table of ['cross_chain_matches', 'cross_chain_calls', 'capability_snapshots',
+                             'bridge_transfers', 'policy_snapshots'])
             assert.ok(lines(warn).includes('HubDbSync: purged 3 ' + table + ' row(s) from chain ' + CHAIN_OLD),
                 'the purge of ' + table + ' must be reported with its count and the chain it cleared');
         assert.strictEqual(seen.sql.filter((q) => /^SELECT MAX\(effective_time\) AS ts FROM cross_chain_matches/.test(q.sql)).length, 1,
@@ -273,7 +278,7 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
 
         await sync.setExpectedBtcChainId(CHAIN_NEW, 'local');
 
-        assert.strictEqual(chainDels(seen).length, 3,
+        assert.strictEqual(chainDels(seen).length, 5,
             'rows mirrored before block 1 existed carry a foreign id no later delivery re-offers');
     });
 

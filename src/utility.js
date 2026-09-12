@@ -1062,6 +1062,40 @@ class Utility {
         return /^C:[A-Z]+:[0-9]+$/.test(String(address));
     }
 
+    // Split a bridged token's rooted tick into its origin chain and its native name.
+    // A bridged copy is named `<ORIGIN>.<NAME>` on every destination chain (the origin-rooted
+    // namespace), so `BTC.PEPECASH` read on DOGE is PEPECASH, native to BTC. Returns
+    // { origin, name }, else null when any of these fails:
+    //   - the tick carries EXACTLY one dot, so a dotted native name (`BTC.PEPE.CASH`) never
+    //     parses as a bridged row; milestone 1 refuses those at lock time instead,
+    //   - the prefix names a supported coin (config COINS),
+    //   - that coin is NOT this chain's coin, because a row rooted at the local coin is a
+    //     subasset of the local reserved root, never a bridged copy.
+    // The prefix is compared case-folded and `origin` comes back as the coin's canonical
+    // upper-case symbol: every ticker lookup is LOWER(tick), so a burn naming `btc.pepecash`
+    // reaches the same row as `BTC.PEPECASH` and must reach the same verdict. `name` is
+    // returned verbatim, because that is the string the caller looks the row up by. `coin`
+    // defaults to the configured chain, the isCryptoAddress convention above.
+    parseBridgedTick(tick, coin){
+        if(this.isNull(tick))
+            return null;
+        let parts = String(tick).split('.');
+        if(parts.length !== 2)
+            return null;
+        let prefix = parts[0].toUpperCase();
+        let name   = parts[1];
+        // An empty name denotes no row at all: MIN_TICK_LENGTH is 1, so `BTC.` is not a token.
+        if(name === '')
+            return null;
+        let coins = this.config['COINS'] || [];
+        if(!coins.includes(prefix))
+            return null;
+        let local = String((coin) ? coin : this.config['COIN']).toUpperCase();
+        if(prefix === local)
+            return null;
+        return { origin: prefix, name: name };
+    }
+
     // Handle adding a ticker to the addreses
     addAddressTicker(address, tick){
         let type = typeof tick;
@@ -1188,6 +1222,27 @@ class Utility {
             throw new Error('GAS_SCHEDULE.VM_GUARD_GAS_CEILING missing or invalid (expected a positive integer, got ' + JSON.stringify(raw) + ')');
         }
         return val;
+    }
+
+    // Is the controller-guard gas ceiling reserved against SOURCE's GAS balance on THIS chain?
+    //
+    // Reserving an XCHAIN balance is a BTC-only rule today, but nothing states it: off BTC the
+    // reservation is skipped only because getTokenInfo('XCHAIN') returns null there, so the
+    // caller passes gasInfo = null and the comparison below never runs. The XCHAIN bridge
+    // creates a real XCHAIN row on LTC and DOGE the first time a transfer settles there, and
+    // from that block gasInfo is non-null: a controller-guarded ORDER, SEND or DISPENSER from
+    // a source holding no XCHAIN would flip from valid to 'invalid: insufficient funds (guard
+    // gas)' at the block the row appears, with no flag day naming the change. Key the rule on
+    // the coin instead of on the row's existence, so the row can be created without moving one
+    // verdict: the reservation is BTC-only until milestone 2's XCHAIN_FEE_MODE_ALL_CHAINS flag
+    // day widens XCHAIN-balance fees to every chain, and this predicate is the one line that
+    // widens with it. Off BTC this is byte-identical to the behaviour before the bridge, so no
+    // replayed verdict moves on any chain and no pre-activation hash moves.
+    // COIN resolution mirrors detectFeePaymentMode: the process config first, the action's own
+    // stamped COIN as the fallback.
+    isGuardGasReserved(data){
+        let coin = this.config['COIN'] || (data && data['COIN']);
+        return coin === 'BTC';
     }
 
     // Calculate Transaction fee using unified gas schedule (per-recipient)
@@ -2088,9 +2143,11 @@ class Utility {
             return { error: null, guardFee: 0, payoutLegs: null };
         // Reserve the guard gas ceiling against SOURCE's GAS balance (caller-pays-for-attempt) so a
         // cheap/denied guard can never drive GAS negative; the metered fee is billed by the caller.
+        // isGuardGasReserved keys the reservation on the CHAIN, not on whether an XCHAIN row
+        // happens to exist here, so the bridge creating that row off BTC moves no verdict.
         let guardCeiling = this.resolveGuardGasCeiling(db.config);
         let maxGuardFee  = this.bcmul(guardCeiling, db.config['GAS_PRICE'], 8);
-        if(opts.gasInfo && this.bcgt(maxGuardFee, 0) && !this.hasBalance(opts.gasBalances, opts.gasInfo['TICK_ID'], maxGuardFee))
+        if(this.isGuardGasReserved(data) && opts.gasInfo && this.bcgt(maxGuardFee, 0) && !this.hasBalance(opts.gasBalances, opts.gasInfo['TICK_ID'], maxGuardFee))
             return { error: 'insufficient funds (guard gas)', guardFee: 0, payoutLegs: null };
         let guard = await actions.actionExecute.runControllerGuard({
             actionType:      opts.actionType,

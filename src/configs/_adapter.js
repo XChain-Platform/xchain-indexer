@@ -58,6 +58,17 @@ function toIndexerConfig(tick, network){
         REWARD:          c.addresses.REWARD,
     };
 
+    // Cross-chain bridge escrow roles, one per OTHER coin: ADDRESS.BRIDGE_<COIN> is
+    // where an XBRIDGE lock parks the balance that backs the destination chain's
+    // copy, and on a non-BTC chain it also owns every row bridged in from <COIN>.
+    // Derived from the bundle rather than listed, so onboarding a chain adds no line
+    // here; a bundle that predates the roles simply contributes nothing.
+    for(const other of coins.ALLOWED_COINS){
+        if(other === tick) continue;
+        const role = 'BRIDGE_' + other;
+        if(c.addresses[role]) config['ADDRESS'][role] = c.addresses[role];
+    }
+
     // BTC-only consensus blocks (absent on LTC/DOGE, matching the legacy files).
     if(c.CONFIG_SLASH) config['CONFIG_SLASH'] = c.CONFIG_SLASH;
     if(c.FULLNODE)     config['FULLNODE']     = c.FULLNODE;

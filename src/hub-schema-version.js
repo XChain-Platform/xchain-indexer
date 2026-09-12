@@ -56,6 +56,20 @@
 // finalized at all, so the request it is waiting on times out instead of
 // resolving. A v4 indexer must reject the v5 stream until it has applied the
 // 2026-09-03-attestation-responses migration.
-const HUB_SCHEMA_VERSION = 5;
+//
+// v6: the mirror set gained bridge_transfers and policy_snapshots (CROSS_CHAIN_TABLES in
+// hub_db_sync.js). bridge_transfers carries the cross_chain quorum's signed transfer
+// record, from which this indexer injects the XBRIDGE settle leg that credits a
+// destination address and moves that chain's supply; policy_snapshots carries the signed
+// origin-token policy the destination materializes onto a bridged copy. A v5 indexer does
+// not merely miss rows here: without bridge_transfers the bridge barrier never opens, so a
+// transfer whose source leg has ALREADY debited on the other chain is never applied, and
+// the escrow behind it is held against nothing. A v5 indexer must reject the v6 stream
+// until it has applied the 2026-09-12-bridge-tables migration.
+//
+// ROLL ORDER IS THE REVERSE OF THE CROSS-CHAIN PRECEDENT'S "hub first": indexers and
+// readers roll first, the hub last. A hub rolled ahead of the fleet stamps 6 on every
+// payload, and every mirror closed against a v5 indexer fails.
+const HUB_SCHEMA_VERSION = 6;
 
 module.exports = { HUB_SCHEMA_VERSION };

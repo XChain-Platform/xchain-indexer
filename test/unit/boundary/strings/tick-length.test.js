@@ -75,11 +75,39 @@ describe('Tick name boundary tests @regression @tier3', function () {
 
     afterEach(function () { sinon.restore(); });
 
-    it('STR-01: TICK at minimum length (1 char) is valid', async function () {
+    // STR-01 pins the minimum-length boundary at 1 char below the flag. R8 moves the
+    // floor for a NEW top-level CREATE to 4 chars, activation-keyed
+    // (TICK_NAMESPACE_ACTIVATION, regtest 0). The boundary still needs both a
+    // below-the-flag reading (the old floor never moved, mainnet sits at the
+    // 9999999999 sentinel) and an at-or-above reading pinned at its NEW position:
+    // ABCD (4 chars) is the minimum that now passes, ABC (3 chars) is refused.
+    it('STR-01: TICK at minimum length (1 char) is valid below the namespace flag (mainnet sentinel)', async function () {
+        indexer.config.NETWORK = 'mainnet';
         const params = makeIssueParams({ TICK: 'A' });
         const data   = createBaseData({ ACTION: 'ISSUE', FORMAT: 0, BLOCK_INDEX: 100 });
         await handler.parse(params, data, null);
         assert.strictEqual(data.STATUS, 'valid', `expected valid but got: ${data.STATUS}`);
+    });
+
+    it('STR-01: TICK at the old minimum length (1 char) is refused at/above the namespace flag', async function () {
+        const params = makeIssueParams({ TICK: 'A' });
+        const data   = createBaseData({ ACTION: 'ISSUE', FORMAT: 0, BLOCK_INDEX: 100 });
+        await handler.parse(params, data, null);
+        assert.strictEqual(data.STATUS, 'invalid: TICK (length)', `expected invalid: TICK (length) but got: ${data.STATUS}`);
+    });
+
+    it('STR-01: TICK at the NEW minimum length (4 chars, ABCD) is valid at/above the namespace flag', async function () {
+        const params = makeIssueParams({ TICK: 'ABCD' });
+        const data   = createBaseData({ ACTION: 'ISSUE', FORMAT: 0, BLOCK_INDEX: 100 });
+        await handler.parse(params, data, null);
+        assert.strictEqual(data.STATUS, 'valid', `expected valid but got: ${data.STATUS}`);
+    });
+
+    it('STR-01: TICK just below the NEW minimum length (3 chars, ABC) is refused at/above the namespace flag', async function () {
+        const params = makeIssueParams({ TICK: 'ABC' });
+        const data   = createBaseData({ ACTION: 'ISSUE', FORMAT: 0, BLOCK_INDEX: 100 });
+        await handler.parse(params, data, null);
+        assert.strictEqual(data.STATUS, 'invalid: TICK (length)', `expected invalid: TICK (length) but got: ${data.STATUS}`);
     });
 
     it('STR-02: TICK at maximum length (250 chars) is valid', async function () {

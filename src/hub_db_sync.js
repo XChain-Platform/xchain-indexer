@@ -70,7 +70,29 @@ try {
 // attacker-supplied column name.
 const RETRACTION_COLUMNS = {
     price_snapshots: 'source_action_index',
-    oracle_prices:   'action_index'
+    oracle_prices:   'action_index',
+    // bridge_transfers is ONE-SIDED: a transfer is retracted when the single source leg
+    // (the v0 lock or the v1 burn named by src_chain/src_action_index) is reorged away, so
+    // one column names the range. cross_chain_matches is two-sided and has its own branch
+    // in _applyRetraction; this table does not need one.
+    //
+    // policy_snapshots deliberately has NO entry here, and the omission is the decision:
+    // a superseding policy arrives as a NEW row at a higher policy_seq, never as a
+    // deletion, and this map names a numeric source-chain action index that table does
+    // not carry. Absent from the map, _applyRetraction skips any deletion event naming it.
+    bridge_transfers: 'src_action_index'
+};
+
+// The source-chain column for a mirrored table whose retraction range is keyed by
+// something other than `source_chain`. bridge_transfers spells its source leg
+// src_chain/src_action_index (the DDL's own names, chosen so `direction` is derived and
+// never stored), so the generic DELETE has to read the pair off the table rather than
+// assume the older spelling: a hard-coded `source_chain` here is errno 1054, which the
+// retraction path would swallow as an unappliable event and leave the retracted row
+// mirrored forever. Kept local, like RETRACTION_COLUMNS, so no column name ever comes
+// from the wire. A table absent from this map keeps `source_chain`.
+const RETRACTION_CHAIN_COLUMNS = {
+    bridge_transfers: 'src_chain'
 };
 
 // ── Watermark grace margins: frozen protocol constants (/ Package 12) ──
@@ -143,6 +165,23 @@ const HUB_SYNC_WATERMARK_GRACE_S = Object.freeze({
     // moves which nodes may advance past a block a response binds at), so it moves fleet-wide
     // or not at all.
     attestResponse: 120,
+    // Finalized XBRIDGE transfers (bridge_transfers). Its own entry rather than a share of
+    // match's, for the reason the call entry above records: sharing a grace couples this
+    // barrier to another producer's stamping rule, and the bridge engine does not stamp
+    // like the DEX engine. A bridge row's effective_time is now + relayMarginFloorS(dest_chain)
+    // (240 to 2400 s ahead of finalization, with the follower refusing to co-sign outside
+    // 60 to 3600 s), so the row is broadcast well BEFORE the time it applies at and this
+    // value only has to cover ordinary stream lag, exactly like the call barrier. Changing
+    // this NUMBER is a protocol change (it moves which nodes may advance past a block a
+    // transfer binds at), so it moves fleet-wide or not at all.
+    bridge: 120,
+    // Finalized XPOLICY snapshots (policy_snapshots). Own entry for the same reason again,
+    // and the producer differs a third way: a policy row's effective_time is the MAX relay
+    // floor over every chain holding a copy of the tick, so it runs further ahead than a
+    // bridge row and is NOT monotonic across policy_seq (apply order is by seq, never by
+    // time). Neither property is something this grace should absorb: the grace covers only
+    // "the mirror has not been told yet", and the ordering rule lives in the apply pass.
+    policy: 120,
 });
 
 // Resolve one grace margin. `frozen` is the pinned protocol constant; `envKey`
@@ -369,7 +408,18 @@ function coerceMirrorValue(v, columnType) {
 // (either order leg); cross_chain_calls retracts on its source-chain request;
 // both handled specially in _applyRetraction; capability_snapshots are
 // immutable history and never retracted.
-const CROSS_CHAIN_TABLES = ['cross_chain_matches', 'cross_chain_calls', 'capability_snapshots'];
+//
+// bridge_transfers and policy_snapshots join the list because membership buys exactly the
+// two things a federation-signed mirrored table needs and nothing else: _refuseForeignChainRow
+// fences their btc_chain_id (both DDLs carry the column, and a regtest venue that re-genesises
+// its Bitcoin chain otherwise keeps serving dead-chain transfers to every fresh indexer), and
+// _applyRetraction treats a deletion naming them as quorum-class, so it demands the
+// push_generation fence and the 2f+1 co-signature set instead of accepting a bare wire event.
+// Membership also puts them in the bootstrap concat loop below, ahead of the one heavy table.
+// bridge_transfers additionally gets the RETRACTION_COLUMNS pair above; policy_snapshots is
+// never retracted, so a deletion event naming it is skipped rather than applied.
+const CROSS_CHAIN_TABLES = ['cross_chain_matches', 'cross_chain_calls', 'capability_snapshots',
+                            'bridge_transfers', 'policy_snapshots'];
 
 // Tables that must re-page from since_id=0 on EVERY bootstrap. A cursor of
 // since_id = MAX(local id) is INSERT-shaped: it can only deliver rows with a NEW id,
@@ -395,6 +445,18 @@ const CROSS_CHAIN_TABLES = ['cross_chain_matches', 'cross_chain_calls', 'capabil
 // IGNORE drops a real row without an error, leaving a permanent mirror hole (#2270). The
 // natural key (network, request_id) dedupes the re-page, and a missed response here is a
 // permanent fork rather than a lag, so the O(table) re-page per bootstrap is cheap.
+//
+// bridge_transfers and policy_snapshots are deliberately NOT here, and the omission rests on
+// the two properties this list actually tests for. Neither is upgraded in place on the hub:
+// a bridge transfer's terms are fixed by the signed canonical the round closed on, and a
+// changed policy is a NEW row at the next policy_seq rather than an edit of the old one, so
+// there is no in-place upgrade a since_id cursor could miss. And neither strips its wire id
+// in _applyRow (they keep hub-id parity like cross_chain_matches/calls, which is what makes
+// since_id = MAX(local id) a real position in the followed hub's id space). What a re-page
+// could not re-serve for either is a RETRACTION, and that is why bridge_transfers rides the
+// quorum-class fence in _applyRetraction rather than a re-page, while policy_snapshots is
+// never retracted at all. Both tables are small (one row per transfer, one per policy edit),
+// so the cost was not the deciding argument in either direction.
 const FULL_REPAGE_TABLES = ['capability_snapshots', 'price_snapshots', 'cross_chain_calls', 'cross_chain_matches',
                             'attestation_responses'];
 
@@ -420,6 +482,14 @@ const FULL_REPAGE_TABLES = ['capability_snapshots', 'price_snapshots', 'cross_ch
 // that removes the request simply leaves nothing for it to bind to (spec §4.5). It is a
 // NATURAL-KEY mirror on (network, request_id) rather than an id-parity one, unlike the two
 // above; see the id strip in _applyRow and the FULL_REPAGE_TABLES entry that follows from it.
+//
+// bridge_transfers and policy_snapshots are deliberately NOT here either, even though
+// policy_snapshots is otherwise shaped like state_checkpoints. Membership of THIS list means
+// one thing operationally: the table rides the global streamWatermark instead of a per-table
+// watermark (see mirrorStatus), which is only correct for tables no block-loop barrier gates
+// on. Both of these gate one: waitForBridgeSync and waitForPolicySync each cache their own
+// MAX(effective_time), scoped to the chains that can apply the row, so each reports that
+// scalar rather than the global watermark.
 const HUB_STATE_TABLES = ['state_checkpoints', 'anchor_reward_attestations', 'attestation_responses'];
 
 // Tables whose local id N and hub id N are THE SAME ROW, and whose rows are never updated
@@ -677,6 +747,25 @@ class HubDbSync {
         this.callBootstrapped  = false;
         this._callWaiters      = [];
 
+        // Highest effective_time present in the local bridge_transfers copy, scoped to the
+        // transfers THIS chain can act on (source or destination leg). The XBRIDGE settle
+        // pass uses waitForBridgeSync(block_time) so an indexer never mints a bridged credit
+        // until its transfer mirror has caught up to that block's time; otherwise two
+        // operators of the same destination chain would apply one transfer at different
+        // blocks and fork that chain's ledger. Same NULL-is-valid semantics and watermark
+        // escape as the match and call barriers.
+        this.bridgeSyncTimestamp = null;
+        this.bridgeBootstrapped  = false;
+        this._bridgeWaiters      = [];
+
+        // Highest effective_time present in the local policy_snapshots copy, scoped to the
+        // snapshots this chain can act on. Keyed on origin_chain alone, NOT on a
+        // source/destination pair: a policy row targets every chain holding a copy of the
+        // tick and names no destination, so there is nothing to scope the far side by.
+        this.policySyncTimestamp = null;
+        this.policyBootstrapped  = false;
+        this._policyWaiters      = [];
+
         // Coin this indexer settles for (e.g. 'LTC'). Used to scope the snapshot-presence
         // barrier to matches this chain will actually settle. See waitForSnapshotSync.
         this.coin = options.coin || null;
@@ -798,6 +887,10 @@ class HubDbSync {
         // a different table.
         this.attestResponseWatermarkGraceS = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.attestResponse, 'HUB_SYNC_ATTEST_RESPONSE_GRACE_S', this.network);
         this._attestResponseWaiters = [];                  // pending waitForAttestationResponseSync() resolvers
+        // The two bridge-family barriers. Each resolves its OWN frozen entry, so neither can
+        // be retuned by moving another table's knob (see HUB_SYNC_WATERMARK_GRACE_S).
+        this.bridgeWatermarkGraceS = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.bridge, 'HUB_SYNC_BRIDGE_GRACE_S', this.network);
+        this.policyWatermarkGraceS = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.policy, 'HUB_SYNC_POLICY_GRACE_S', this.network);
 
         // Named ceiling on a mirror-barrier hold. Held here as well as on the
         // indexer because requestResync() rate-limits itself by the same value: one forced
@@ -965,6 +1058,8 @@ class HubDbSync {
         this._releaseOracleWaiters();
         this._releaseMatchWaiters();
         this._releaseCallWaiters();
+        this._releaseBridgeWaiters();
+        this._releasePolicyWaiters();
         this._releaseAnchorAttestWaiters();
         this._releaseAttestResponseWaiters();
     }
@@ -1248,6 +1343,8 @@ class HubDbSync {
         // cached scalar (_snapshotSyncSatisfied); nothing in-memory to report.
         tables.capability_snapshots = null;
         tables.price_snapshots      = this.priceSyncMaxTimestamp;
+        tables.bridge_transfers     = this.bridgeSyncTimestamp;
+        tables.policy_snapshots     = this.policySyncTimestamp;
         return {
             configured: true,
             connected: !!this.ws,
@@ -1852,6 +1949,8 @@ class HubDbSync {
             if (table === 'oracle_prices')       await this._refreshOracleSyncTimestamp(true);
             if (table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp(true);
             if (table === 'cross_chain_calls')   await this._refreshCallSyncTimestamp(true);
+            if (table === 'bridge_transfers')    await this._refreshBridgeSyncTimestamp(true);
+            if (table === 'policy_snapshots')    await this._refreshPolicySyncTimestamp(true);
             // A new match/call (new required snapshot_block) or an arriving snapshot can change
             // snapshot-presence: re-evaluate the snapshot barrier on any cross-chain table.
             if (CROSS_CHAIN_TABLES.indexOf(table) !== -1) await this._releaseSnapshotWaiters();
@@ -2197,7 +2296,7 @@ class HubDbSync {
     async _purgeForeignChainIdRows(previous) {
         let expected = this._expectedBtcChainId;
         if (!expected) return 0;
-        let total = 0, refreshMatches = false, refreshCalls = false;
+        let total = 0, refreshMatches = false, refreshCalls = false, refreshBridge = false, refreshPolicy = false;
         for (let table of CROSS_CHAIN_TABLES) {
             let result;
             try {
@@ -2223,13 +2322,17 @@ class HubDbSync {
                 (previous ? ('chain ' + previous) : 'another chain'));
             if (table === 'cross_chain_matches') refreshMatches = true;
             if (table === 'cross_chain_calls')   refreshCalls   = true;
+            if (table === 'bridge_transfers')    refreshBridge  = true;
+            if (table === 'policy_snapshots')    refreshPolicy  = true;
         }
-        // The two settlement barriers cache MAX(effective_time) over these tables, so a
+        // Every one of these barriers caches MAX(effective_time) over its table, so a
         // purge that removed the row holding the maximum must re-read it exactly as a
         // retraction does; a cached scalar left high opens a barrier over rows that are gone.
         try {
             if (refreshMatches) await this._refreshMatchSyncTimestamp();
             if (refreshCalls)   await this._refreshCallSyncTimestamp();
+            if (refreshBridge)  await this._refreshBridgeSyncTimestamp();
+            if (refreshPolicy)  await this._refreshPolicySyncTimestamp();
             if (refreshMatches || refreshCalls) await this._releaseSnapshotWaiters();
         } catch (e) {
             console.warn('HubDbSync: could not refresh the sync barriers after a foreign-chain purge:', e);
@@ -2636,6 +2739,8 @@ class HubDbSync {
         try { await this._refreshOracleSyncTimestamp(); } catch (e) { /* internally guarded */ }
         try { await this._refreshMatchSyncTimestamp(); }  catch (e) { /* internally guarded */ }
         try { await this._refreshCallSyncTimestamp(); }   catch (e) { /* internally guarded */ }
+        try { await this._refreshBridgeSyncTimestamp(); } catch (e) { /* internally guarded */ }
+        try { await this._refreshPolicySyncTimestamp(); } catch (e) { /* internally guarded */ }
         try { await this._releaseSnapshotWaiters(); }     catch (e) { /* internally guarded */ }
     }
 
@@ -3398,7 +3503,13 @@ class HubDbSync {
         //    an unfenced event is either a pre-5308 relic or a fabricated wipe. The
         //    same applies to ANY table's retraction claiming a reorg of OUR OWN chain
         //    when we can check (our own retractions are always fenced).
-        let quorumClass = (event.table === 'cross_chain_calls' || event.table === 'cross_chain_matches');
+        // bridge_transfers joins the quorum class: its rows are federation-co-signed and a
+        // deletion mints value out of existence on the destination chain the same way a
+        // forged match would, so an unfenced or unsigned deletion must be refused rather
+        // than applied. policy_snapshots is absent because it is never retracted at all
+        // (no RETRACTION_COLUMNS entry, so the generic path below skips it).
+        let quorumClass = (event.table === 'cross_chain_calls' || event.table === 'cross_chain_matches' ||
+                           event.table === 'bridge_transfers');
         let ownChain = !!(this.coin && event.source_chain === this.coin && this.getOwnRollbackGeneration);
         if ((quorumClass || ownChain) && !fenced) {
             console.error('HubDbSync: refusing UNFENCED retraction of ' + event.table +
@@ -3497,13 +3608,21 @@ class HubDbSync {
         }
         let column = RETRACTION_COLUMNS[event.table];
         if (!column) return;                                   // unknown table, skip
-        let query = 'DELETE FROM ' + event.table + ' WHERE source_chain = ? AND ' + column + ' >= ?' +
+        let chainColumn = RETRACTION_CHAIN_COLUMNS[event.table] || 'source_chain';
+        let query = 'DELETE FROM ' + event.table + ' WHERE ' + chainColumn + ' = ? AND ' + column + ' >= ?' +
             (bounded ? ' AND ' + column + ' <= ?' : '') +
             (fenced ? ' AND push_generation <= ?' : '');
         let args = [event.source_chain, from];
         if (bounded) args.push(to);
         if (fenced) args.push(gen);
         await this.hubDb.doQuery(query, args);
+        // bridge_transfers gates a block-loop barrier on a cached MAX(effective_time), so a
+        // retraction that removed the row holding the maximum has to re-read it here; a
+        // scalar left high would open the bridge barrier over transfers that are gone.
+        // The two tables above this line refresh inside their own branches for the same
+        // reason, and neither remaining generic table (oracle_prices, price_snapshots) is
+        // reached by a deletion without its own refresh at the caller.
+        if (event.table === 'bridge_transfers') await this._refreshBridgeSyncTimestamp();
     }
 
     // Verify a quorum-class retraction's co-signature set. The event
@@ -3734,6 +3853,177 @@ class HubDbSync {
                                  blockTime + ' (call mirror at ' + this.callSyncTimestamp + ')'));
             }, ms);
             this._callWaiters.push(waiter);
+        });
+    }
+
+    // ── XBRIDGE transfer sync barrier (mirrors the match/call barriers exactly) ──
+
+    async _refreshBridgeSyncTimestamp(armBootstrap = this._bootstrapDrained) {
+        let ts = null;
+        try {
+            // Scope the watermark to transfers that touch THIS coin on either leg, the same
+            // rule the match and call barriers apply and for the same reason: the hub
+            // broadcasts every finalized transfer to every mirror, so a global
+            // MAX(effective_time) could be bumped past this block's time by a transfer
+            // between two other chains. The barrier would then open before every transfer
+            // this chain must apply at that block is local, and two operators of this chain
+            // would mint the same bridged credit at divergent blocks and fork.
+            //
+            // Both legs are scoped, not just dest_chain: the source chain reads its own
+            // escrow and burn state out of the same mirror for the invariant, and an
+            // out-leg's source is named by src_chain.
+            let where = "WHERE status = 'finalized'";
+            let args  = [];
+            if (this.coin) { where += " AND (src_chain = ? OR dest_chain = ?)"; args = [this.coin, this.coin]; }
+            let rows = await this.hubDb.doQuery(
+                "SELECT MAX(effective_time) AS ts FROM bridge_transfers " + where, args);
+            if (rows.length > 0 && rows[0].ts !== null) ts = Number(rows[0].ts);
+        } catch (e) {
+            return;                                             // table not ready yet
+        }
+        this.bridgeSyncTimestamp = ts;
+        // Arm only under a full bootstrap drain; reconnect / live-row refreshes default
+        // armBootstrap to _bootstrapDrained so they cannot arm the NULL fast path from a
+        // holed mirror and fork (#1788).
+        if (armBootstrap) this.bridgeBootstrapped = true;
+        this._releaseBridgeWaiters();
+    }
+
+    _bridgeSyncSatisfied(blockTime) {
+        if (this.bridgeBootstrapped && this.bridgeSyncTimestamp === null) return true;
+        if (this.bridgeSyncTimestamp !== null && this.bridgeSyncTimestamp >= blockTime) return true;
+        // Stream watermark escape: a transfer is broadcast the moment the hub finalizes it,
+        // and its effective_time is stamped FORWARD (now + the destination's relay margin
+        // floor), so a watermark past this block's time plus the grace means every transfer
+        // effective at or before it is already local. Without this the FIRST bridge transfer
+        // anywhere would freeze every replica until the next one arrived (the #1984 class).
+        //
+        // Uses bridgeWatermarkGraceS, never the match or call grace: the bridge engine is a
+        // third producer with its own stamping rule, and sharing a grace is the documented
+        // mistake the call barrier was split out to end.
+        if (this.bridgeBootstrapped && this.streamWatermark >= blockTime + this.bridgeWatermarkGraceS) return true;
+        return false;
+    }
+
+    _releaseBridgeWaiters() {
+        if (this._bridgeWaiters.length === 0) return;
+        let stillWaiting = [];
+        for (let w of this._bridgeWaiters) {
+            if (this._bridgeSyncSatisfied(w.ts)) {
+                clearTimeout(w.timer);
+                w.resolve(this.bridgeSyncTimestamp);
+            } else {
+                stillWaiting.push(w);
+            }
+        }
+        this._bridgeWaiters = stillWaiting;
+    }
+
+    // Block-processing barrier for the XBRIDGE settle pass. Resolves once the local
+    // bridge_transfers copy holds every transfer effective at or before this block's time,
+    // so every operator of this chain mints the same bridged credits at the same block.
+    // Rejects after timeoutMs so the caller can DEFER the block and retry; never mint
+    // against a stale transfer mirror.
+    waitForBridgeSync(blockTime, timeoutMs) {
+        blockTime = Number(blockTime);
+        if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.bridgeSyncTimestamp);
+        if (this._bridgeSyncSatisfied(blockTime))          return Promise.resolve(this.bridgeSyncTimestamp);
+
+        let ms = parseInt(timeoutMs);
+        if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
+        return new Promise((resolve, reject) => {
+            let waiter = { ts: blockTime, resolve: resolve, timer: null };
+            waiter.timer = setTimeout(async () => {
+                // Self-heal before giving up, same as the match and call barriers: a missed
+                // refresh on a stream/reconnect edge can leave bridgeSyncTimestamp stale
+                // behind a mirror that is actually current. _refreshBridgeSyncTimestamp
+                // resolves and clears this waiter via _releaseBridgeWaiters if so.
+                try { await this._refreshBridgeSyncTimestamp(); } catch (e) { /* fall through to reject */ }
+                if (this._bridgeSyncSatisfied(blockTime)) return;  // already resolved by the refresh
+                this._bridgeWaiters = this._bridgeWaiters.filter(w => w !== waiter);
+                reject(new Error('bridge sync barrier timed out after ' + ms + 'ms waiting for block_time ' +
+                                 blockTime + ' (bridge mirror at ' + this.bridgeSyncTimestamp + ')'));
+            }, ms);
+            this._bridgeWaiters.push(waiter);
+        });
+    }
+
+    // ── XPOLICY snapshot sync barrier (the bridge barrier, keyed on origin_chain) ──
+
+    async _refreshPolicySyncTimestamp(armBootstrap = this._bootstrapDrained) {
+        let ts = null;
+        try {
+            // Scoped on origin_chain ALONE, and that is the one place this barrier departs
+            // from the bridge barrier above. A policy snapshot names no destination: it is
+            // the origin issuer's membership lists, and every chain holding a copy of the
+            // tick applies it. There is therefore no dest_chain to scope by, and the only
+            // rows this chain can ignore are the ones it originates itself (it already holds
+            // that policy natively, from the local LIST/ISSUE/SLEEP actions, and re-applying
+            // a mirrored copy of its own state would inject actions on the origin chain).
+            let where = "WHERE status = 'finalized'";
+            let args  = [];
+            if (this.coin) { where += " AND origin_chain <> ?"; args = [this.coin]; }
+            let rows = await this.hubDb.doQuery(
+                "SELECT MAX(effective_time) AS ts FROM policy_snapshots " + where, args);
+            if (rows.length > 0 && rows[0].ts !== null) ts = Number(rows[0].ts);
+        } catch (e) {
+            return;                                             // table not ready yet
+        }
+        this.policySyncTimestamp = ts;
+        if (armBootstrap) this.policyBootstrapped = true;
+        this._releasePolicyWaiters();
+    }
+
+    _policySyncSatisfied(blockTime) {
+        if (this.policyBootstrapped && this.policySyncTimestamp === null) return true;
+        if (this.policySyncTimestamp !== null && this.policySyncTimestamp >= blockTime) return true;
+        // Stream watermark escape, exactly as above. Note the cached scalar is a MAX over a
+        // column that is NOT monotonic across policy_seq: a later seq can carry an EARLIER
+        // effective_time, because the stamp is the max relay floor over the chains holding
+        // copies and that set changes. That is safe here and is why the ordering rule lives
+        // in the apply pass instead: this barrier only ever answers "has the mirror been
+        // told everything effective by now", and a seq whose stamp is earlier than one
+        // already mirrored is, by that question, already covered.
+        if (this.policyBootstrapped && this.streamWatermark >= blockTime + this.policyWatermarkGraceS) return true;
+        return false;
+    }
+
+    _releasePolicyWaiters() {
+        if (this._policyWaiters.length === 0) return;
+        let stillWaiting = [];
+        for (let w of this._policyWaiters) {
+            if (this._policySyncSatisfied(w.ts)) {
+                clearTimeout(w.timer);
+                w.resolve(this.policySyncTimestamp);
+            } else {
+                stillWaiting.push(w);
+            }
+        }
+        this._policyWaiters = stillWaiting;
+    }
+
+    // Block-processing barrier for the policy-snapshot apply pass. Resolves once the local
+    // policy_snapshots copy holds every snapshot effective at or before this block's time,
+    // so every operator of this chain materializes the same membership at the same block.
+    // Rejects after timeoutMs so the caller can DEFER the block and retry; never materialize
+    // a token policy against a stale snapshot mirror.
+    waitForPolicySync(blockTime, timeoutMs) {
+        blockTime = Number(blockTime);
+        if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.policySyncTimestamp);
+        if (this._policySyncSatisfied(blockTime))          return Promise.resolve(this.policySyncTimestamp);
+
+        let ms = parseInt(timeoutMs);
+        if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
+        return new Promise((resolve, reject) => {
+            let waiter = { ts: blockTime, resolve: resolve, timer: null };
+            waiter.timer = setTimeout(async () => {
+                try { await this._refreshPolicySyncTimestamp(); } catch (e) { /* fall through to reject */ }
+                if (this._policySyncSatisfied(blockTime)) return;  // already resolved by the refresh
+                this._policyWaiters = this._policyWaiters.filter(w => w !== waiter);
+                reject(new Error('policy sync barrier timed out after ' + ms + 'ms waiting for block_time ' +
+                                 blockTime + ' (policy mirror at ' + this.policySyncTimestamp + ')'));
+            }, ms);
+            this._policyWaiters.push(waiter);
         });
     }
 
@@ -4016,6 +4306,8 @@ class HubDbSync {
             if (event.table === 'oracle_prices')       await this._refreshOracleSyncTimestamp();
             if (event.table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp();
             if (event.table === 'cross_chain_calls')   await this._refreshCallSyncTimestamp();
+            if (event.table === 'bridge_transfers')    await this._refreshBridgeSyncTimestamp();
+            if (event.table === 'policy_snapshots')    await this._refreshPolicySyncTimestamp();
             if (CROSS_CHAIN_TABLES.indexOf(event.table) !== -1) await this._releaseSnapshotWaiters();
         } else if (event.type === 'row:deleted' && event.table) {
             await this._applyRetraction(event);
@@ -4023,6 +4315,9 @@ class HubDbSync {
             if (event.table === 'oracle_prices')       await this._refreshOracleSyncTimestamp();
             if (event.table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp();
             if (event.table === 'cross_chain_calls')   await this._refreshCallSyncTimestamp();
+            // bridge_transfers refreshes inside _applyRetraction (the only path that can
+            // delete one), so it is deliberately not repeated here; policy_snapshots is
+            // never retracted at all.
             if (event.table === 'cross_chain_matches' || event.table === 'cross_chain_calls') await this._releaseSnapshotWaiters();
         }
     }
