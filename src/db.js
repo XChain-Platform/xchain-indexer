@@ -18810,6 +18810,14 @@ Database.MIGRATION_LEDGER_RENAMES = {
     // auto path re-applies an ADD COLUMN that is already there.
     '2026-09-08-contract-meta-columns.sql':      '2026-09-11-contract-meta-columns.sql',
     '2026-09-08-cross-chain-btc-chain-id.sql':   '2026-09-11-cross-chain-btc-chain-id.sql',
+    // The leg-ordinal migration was authored and committed alongside the two renames
+    // just above but was itself left undated-forward: it sorted before
+    // 2026-09-11-cross-chain-btc-chain-id.sql, which the fleet had already applied by
+    // the time this file merged, so every boot logged a backdating warning and applied
+    // it out of its dated position. Renamed past every migration in the tree today so
+    // it cannot land behind a frontier again; the fleet already recorded it applied
+    // under the old name, so the re-key is required, not optional.
+    '2026-09-09-destroys-sends-leg-ordinal.sql': '2026-09-13-destroys-sends-leg-ordinal.sql',
 };
 
 // Pure planner for the one-time ledger rename heal. Given the names already recorded

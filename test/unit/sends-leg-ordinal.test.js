@@ -39,7 +39,7 @@ const Utility           = require('../../src/utility');
 const Database          = require('../../src/db');
 
 const SQL_DIR = path.join(__dirname, '..', '..', 'src', 'sql');
-const MIG     = path.join(SQL_DIR, 'migrations', '2026-09-09-destroys-sends-leg-ordinal.sql');
+const MIG     = path.join(SQL_DIR, 'migrations', '2026-09-13-destroys-sends-leg-ordinal.sql');
 
 // Split a SELECT/VALUES expression list on its TOP-LEVEL commas, so
 // `COALESCE(MAX(leg_ordinal) + 1, 0)` stays one expression.
