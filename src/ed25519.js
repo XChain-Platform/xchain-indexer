@@ -60,11 +60,13 @@ function verify(payload, sigHex, pubkeyHex) {
 // EQUIV ROUND_ID is the BTC height (the real activation anchor), not the wall-clock
 // round counter; the round counter stays in the signed JSON for round identity.
 function buildPriceV0Payload(round, timestamp, pairs, network, btcBlockHeight) {
-    let sortedPairs = [...pairs].sort((a, b) => {
-        if (a.pair < b.pair) return -1;
-        if (a.pair > b.pair) return 1;
-        return 0;
-    });
+    let sortedPairs = pairs
+        .map(p => ({ pair: p.coinPair || p.pair, price: String(p.price) }))
+        .sort((a, b) => {
+            if (a.pair < b.pair) return -1;
+            if (a.pair > b.pair) return 1;
+            return 0;
+        });
     let raw = JSON.stringify({
         round:            parseInt(round),
         timestamp:        parseInt(timestamp),
