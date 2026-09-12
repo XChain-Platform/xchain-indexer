@@ -37,19 +37,23 @@
  * REAL DB pipeline from a genesis reindex - this does.
  *
  * Drives the path end-to-end through the REAL indexer against a real DB:
- *   1. STAKE four validators above full_node MIN_STAKE (2000). V1+V2 share staking
- *      source A1 (so a source with two signers stays one source); V3 from A2, V4 from A3.
- *   2. Two challenge epochs of REAL Ed25519 NODEPROOF verdicts. V1,V2,V3 pass BOTH
+ *   1. STAKE five validators above full_node MIN_STAKE (2000). V1+V2 share staking
+ *      source A1 (so a source with two signers stays one source); V3 from A2, V4 from A3,
+ *      V5 from A4. V5 then UNSTAKEs, so its stake deactivates INSIDE the second epoch's
+ *      buried snapshot window: still a claimant at the height the hub locked the
+ *      claimant set at, gone by the raw epoch and by the verdict block.
+ *   2. Two challenge epochs of REAL Ed25519 NODEPROOF verdicts. V1,V2,V3,V5 pass BOTH
  *      epochs; V4 passes only ONE (pass-rate 50% < 70%).
  *      challenge_id = sha256(network:epoch:ledger_hash:target) - re-derived from the
  *      indexer's own stored epoch ledger hash, so the corpus is a deterministic
  *      function of earlier on-chain state (the property under test).
- *   3. A REAL signed PRICE batch that all four sign and that the indexer accepts as
+ *   3. A REAL signed PRICE batch that V1-V4 sign and that the indexer accepts as
  *      valid, landing on BTC where the retired derivation would have paid out.
  *   4. Assert (a) the participation the gate reads accrued per SOURCE, not per signer,
- *      (b) the valid batch wrote zero validator_rewards rows, and (c) the reward rows
- *      AND the chained consensus block hashes are BYTE-IDENTICAL when re-derived from a
- *      clean DB (determinism = no fork).
+ *      (b) an epoch is credited to a staking source that was a claimant at the BURIED
+ *      height even though its stake is gone by the raw epoch, (c) the valid batch wrote
+ *      zero validator_rewards rows, and (d) the reward rows AND the chained consensus
+ *      block hashes are BYTE-IDENTICAL when re-derived from a clean DB (no fork).
  *
  * The FULLNODE_REWARD_SHARE knob below is kept deliberately non-zero: a zero share would
  * make the zero-reward pin vacuous by disabling a split that no longer exists anyway.
@@ -98,13 +102,27 @@ const FUNDER = 'mgash6jYSKAR3Q5HPpDgNX2BYr18q9N6GQ'; // holds the bootstrap supp
 const A1     = 'mq7tVfobimRUPxPNnyd5mKn11SVmTiLxtu'; // funds V1 + V2 (shared source)
 const A2     = 'n4nbVcRRR5sEHyp2VYuLUvCyDmQmBoonoK'; // funds V3
 const A3     = 'mvuKWKvgzrkxh8QgNZ91vMBZUKN5BFYmo3'; // funds V4
+const A4     = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD'; // funds V5 (unstakes inside the buried window)
 const T = 1700000000;
 
 const STAKE_AMT = '2500.00000000';   // > full_node MIN_STAKE (2000) and > price MIN_STAKE (1000)
-const EPOCHS    = [110, 115];         // multiples of CHALLENGE_INTERVAL (5), past activation (107)
+// Multiples of CHALLENGE_INTERVAL (5). Both epochs sit far enough above the stake
+// activation blocks (106 and 107 = stake block + ACTIVATION_DELAY_BLOCKS) that the
+// BURIED heights the attribution resolves at, epoch - CANONICAL_REORG_BUFFER = 114 and
+// 119, are past activation too. Epochs at 110/115 would bury to 104/109 and put the
+// first epoch BELOW activation, which is a fixture artifact, not a finding: it credits
+// nobody for that epoch and every per-source count comes back one short.
+const EPOCHS    = [120, 125];
+const REORG_BUF = 6;                  // CANONICAL_REORG_BUFFER (snapshot_reorg_buffer.js)
 const DEPTH     = 2;                  // FULLNODE_CONFIRM_DEPTH
-const V110_BLK  = 117, V115_BLK = 118;  // verdict blocks (within VERDICT_ACCEPT_WINDOW of each epoch)
-const PRICE_BLK = 120;                // PRICE batch block, and the batch's own BTC anchor
+const STAKE_BLK = 101;                // V5's stake block (activation 107)
+const UNSTAKE_BLK = 115;              // V5 unstakes here, so its stake deactivates at 121:
+                                      // inside (125 - 6, 125], i.e. active at the buried
+                                      // height the hub locked its claimant set at, gone by
+                                      // the raw epoch and by the verdict block
+const FILL_BLK  = 126;                // trivial tx so the decoder tip clears both epochs
+const V120_BLK  = 127, V125_BLK = 128;  // verdict blocks (within VERDICT_ACCEPT_WINDOW of each epoch)
+const PRICE_BLK = 130;                // PRICE batch block, and the batch's own BTC anchor
 const ROUND     = 1;                  // single-round window, so FIRST_ROUND == LAST_ROUND
 
 // Deterministic Ed25519 identity: { privateKey (KeyObject), pub (raw 64-hex, lowercase) }.
@@ -162,7 +180,7 @@ function buildPriceBatchWire(round, timestamp, pairs, signers, btcHeight) {
 describe('Integration: full-node participation determinism and the batch zero-reward rule @regression @tier1', function () {
     this.timeout(180000);
 
-    let V1, V2, V3, V4, verifiers, firstRun;
+    let V1, V2, V3, V4, V5, verifiers, firstRun;
 
     // One clean-DB run: seed gas + stake + (derived) NODEPROOF verdicts + a signed PRICE
     // batch, drive the REAL indexer, and read back the reward rows + consensus hash chain.
@@ -177,31 +195,46 @@ describe('Integration: full-node participation determinism and the batch zero-re
             { source: A1,     data: 'MINT|0|XCHAIN|12000' },
             { source: A2,     data: 'MINT|0|XCHAIN|8000'  },
             { source: A3,     data: 'MINT|0|XCHAIN|8000'  },
+            { source: A4,     data: 'MINT|0|XCHAIN|8000'  },
         ]);
-        // Blocks 100/101 - stake the four validators (V1+V2 share source A1).
+        // Blocks 100/101 - stake the five validators (V1+V2 share source A1).
         await seeder.seedBlock(100, T, [
             { source: A1, data: 'STAKE|1|' + STAKE_AMT + '|' + V1.pub },
             { source: A1, data: 'STAKE|1|' + STAKE_AMT + '|' + V2.pub },
         ]);
-        await seeder.seedBlock(101, T + 600, [
+        await seeder.seedBlock(STAKE_BLK, T + 600, [
             { source: A2, data: 'STAKE|1|' + STAKE_AMT + '|' + V3.pub },
             { source: A3, data: 'STAKE|1|' + STAKE_AMT + '|' + V4.pub },
+            { source: A4, data: 'STAKE|1|' + STAKE_AMT + '|' + V5.pub },
         ]);
-        // Block 116 - a trivial tx so the decoder tip ≥ 116; blocks 102–115 (incl. the two
-        // epoch heights) are processed as empty blocks and each gets a stored ledger hash.
-        await seeder.seedBlock(116, T + 1200, [
+        // Block 115 - V5 unstakes. The stake rows deactivate at 115 + 6 = 121, which is
+        // inside the second epoch's buried window (119, 125]: V5 is a full_node at the
+        // height the hub locked its claimant universe at, so the hub challenges it and a
+        // quorum attests it, but it holds no active stake at the raw epoch or at the
+        // verdict block. Reading either of those heights loses the epoch for source A4.
+        await seeder.seedBlock(UNSTAKE_BLK, T + 900, [
+            { source: A4, data: 'UNSTAKE|0|' + V5.pub },
+        ]);
+        // A trivial tx so the decoder tip clears both epochs; the blocks between (incl.
+        // the two epoch heights) are processed as empty blocks and each gets a stored
+        // ledger hash.
+        await seeder.seedBlock(FILL_BLK, T + 1200, [
             { source: A1, destination: A2, data: 'SEND|0|XCHAIN|0.00000001|' + A2 },
         ]);
 
         const indexer = await initIndexer();
         try {
-            // Phase A - process through 116 so the epoch ledger hashes exist.
+            // Phase A - process through the filler block so the epoch ledger hashes exist.
             await processBlocks(indexer);
 
             // Phase B - derive each epoch's challenge from its stored ledger hash, build +
-            // sign the NODEPROOF verdicts. V1,V2,V3 pass both epochs; V4 passes only 110.
-            const passByEpoch = { 110: [V1, V2, V3, V4], 115: [V1, V2, V3] };
-            const verdictBlk  = { 110: V110_BLK, 115: V115_BLK };
+            // sign the NODEPROOF verdicts. V1,V2,V3 pass both epochs; V4 passes only the
+            // first (pass rate 50% < 70%); V5 passes both, having unstaked in between.
+            const passByEpoch = {
+                [EPOCHS[0]]: [V1, V2, V3, V4, V5],
+                [EPOCHS[1]]: [V1, V2, V3, V5],
+            };
+            const verdictBlk  = { [EPOCHS[0]]: V120_BLK, [EPOCHS[1]]: V125_BLK };
             for (const epoch of EPOCHS) {
                 const hashes = await indexer.indexerDb.getStoredBlockHashes(epoch);
                 assert.ok(hashes && hashes.ledger_hash, 'epoch ' + epoch + ' must have a stored ledger hash');
@@ -264,7 +297,7 @@ describe('Integration: full-node participation determinism and the batch zero-re
         // random - the indexer's FULLNODE_GENESIS_VERIFIERS must name them). Regenerate
         // until V1<V2 lexically so the per-source representative is deterministically V1.
         do { V1 = genKey(); V2 = genKey(); } while (!(V1.pub < V2.pub));
-        V3 = genKey(); V4 = genKey();
+        V3 = genKey(); V4 = genKey(); V5 = genKey();
         verifiers = [V1, V2, V3];   // genesis verifiers (quorum = floor(2*3/3)+1 = 3)
 
         // Scope the FULLNODE knobs + genesis verifiers to this suite only.
@@ -295,6 +328,27 @@ describe('Integration: full-node participation determinism and the batch zero-re
         assert.strictEqual(part.get(A1), 2, 'source A1 (V1+V2) passed both epochs');
         assert.strictEqual(part.get(A2), 2, 'source A2 (V3) passed both epochs');
         assert.strictEqual(part.get(A3), 1, 'source A3 (V4) passed only one epoch (50% < 70%)');
+    });
+
+    // The attribution height, stated as behaviour. V5 was a full_node at 119, the height
+    // the producing hub locks its claimant universe at for epoch 125 (every
+    // CapabilitySnapshot read subtracts CANONICAL_REORG_BUFFER), so the hub challenged it
+    // and the quorum attested it; its stake then deactivated at 121, before the raw epoch
+    // and well before the verdict block. Both attribution reads have to resolve at the
+    // buried height for the row to exist: the capability GATE in the handler and the
+    // SOURCE resolution in the writer. Resolve either one at the raw epoch or at the
+    // verdict block and source A4 comes back with one epoch instead of two, silently, for
+    // participation the federation already signed off on.
+    it('credits an epoch whose staker unstaked inside the buried snapshot window', function () {
+        const part = new Map(firstRun.participation.map(p => [p.source, p.epochs]));
+        assert.strictEqual(EPOCHS[1] - REORG_BUF, 119,
+            'the buried height this case turns on must be what the fixture assumes');
+        assert.strictEqual(part.get(A4), 2,
+            'source A4 (V5) was a claimant at the buried height for BOTH epochs and must be credited for both');
+        // And the row is booked to the staking source, not dropped to some other address
+        // or left sourceless: A4 appears exactly once in the per-source rollup.
+        assert.strictEqual(firstRun.participation.filter(p => p.source === A4).length, 1,
+            'V5 participation must roll up under its own staking source');
     });
 
     it('a VALID BTC-landed PRICE batch writes ZERO validator_rewards rows', function () {

@@ -14650,17 +14650,28 @@ class Database {
     // to have answered the possession challenge for `epochHeight`. Resolves the
     // staking source the same way createValidatorReward does. Idempotent on
     // (epoch_height, signing_pubkey) so a replayed/duplicate verdict is a no-op.
-    async createNodeProofVerification(pubkeyHex, challengeId, epochHeight, targetHeight, actionIndex, blockIndex){
+    //
+    // `setBlock` is the height the SOURCE resolves at and defaults to `blockIndex`
+    // (the verdict's own block) so every other caller is byte-unchanged. The
+    // NODEPROOF handler passes the height the producing hub locked its claimant
+    // universe at, because the two questions have different answers: a node whose
+    // stake deactivated between that lock and the verdict was legitimately
+    // challenged and quorum-attested, yet resolving its source at the verdict block
+    // finds no active stake and silently drops the row. The recorded `block_index`
+    // stays the verdict block either way, so the row still says where it landed.
+    async createNodeProofVerification(pubkeyHex, challengeId, epochHeight, targetHeight, actionIndex, blockIndex, setBlock){
         let pubkey_id = await this.getPubkeyId(String(pubkeyHex).toLowerCase());
         if(pubkey_id === null){
             console.warn('createNodeProofVerification: unknown pubkey ' + pubkeyHex);
             return false;
         }
-        // Source = the staking address active at this block, strict active-row
-        // resolution matching createValidatorReward + the ANCHOR archive/recovery.
-        let source_id = await this._resolveActiveStakeSourceId(pubkey_id, blockIndex);
+        // Source = the staking address active at the set-resolution block, strict
+        // active-row resolution matching createValidatorReward + the ANCHOR
+        // archive/recovery.
+        let sourceBlock = (setBlock === undefined || setBlock === null) ? blockIndex : setBlock;
+        let source_id = await this._resolveActiveStakeSourceId(pubkey_id, sourceBlock);
         if(source_id === null || source_id === undefined){
-            console.warn('createNodeProofVerification: no active stake or delegation for pubkey ' + pubkeyHex + ' at block ' + blockIndex);
+            console.warn('createNodeProofVerification: no active stake or delegation for pubkey ' + pubkeyHex + ' at block ' + sourceBlock);
             return false;
         }
         let query = `INSERT IGNORE INTO full_node_verifications

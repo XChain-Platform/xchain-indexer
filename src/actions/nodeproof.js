@@ -33,6 +33,7 @@
 const crypto  = require('crypto');
 const ed25519 = require('../ed25519.js');
 const eq      = require('../equivocation_header.js');
+const srb     = require('../snapshot_reorg_buffer.js');
 
 class NodeProof {
 
@@ -154,7 +155,31 @@ class NodeProof {
         // Determine the eligible verifier universe at the epoch block: already-
         // verified full nodes plus the configured genesis verifiers (the bootstrap
         // trust anchor). Quorum = floor(2V/3)+1. V==0 → nobody can vouch yet.
+        //
+        // TWO PLANES, and only the attribution plane buries. `snapshotBlock` is the
+        // DECLARED height: it sizes the quorum divisor and drives the EQUIV flag-day
+        // gate below, and it stays RAW because the producing hub also resolves its
+        // eligible-verifier set at the raw epoch (FullNodeChallengeRound
+        // `_eligibleVerifiers`). Burying it here alone would make an upgraded verifier
+        // accept bytes the rest of the fleet rejects, so that half moves only with the
+        // hub, in its own flag day.
         let snapshotBlock = epochHeight;
+        // `setBlock` is where PARTICIPATION ATTRIBUTION resolves, and it buries, because
+        // the hub locked the CLAIMANT universe there: every CapabilitySnapshot read
+        // subtracts the canonical reorg buffer (`_buriedBlockIndex`), so the nodes the
+        // hub challenges for this epoch are the full_node set at
+        // epochHeight - CANONICAL_REORG_BUFFER. Crediting at the raw epoch dropped the
+        // verification row for a node whose stake deactivated inside
+        // (epochHeight - buffer, epochHeight]: the hub challenged it, it answered, a
+        // quorum attested it, and the staking source silently lost the epoch anyway.
+        // Row existence feeds getVerifiedFullNodeSet, which the eligible-verifier set
+        // above and the hub's getfullnodeverifiers RPC both read at RAW heights a proof
+        // window later, so a burial-only credit becomes an eligible verifier and moves
+        // the quorum divisor: upgraded and un-upgraded indexers diverge on acceptance
+        // there, not just on attribution. Safe only because the flag day arms at genesis
+        // on every network with no quorum-signed history to reinterpret, which is what
+        // makes this gate load-bearing rather than decorative.
+        let setBlock      = srb.buriedSnapshotBlock(epochHeight, this.config['NETWORK']);
         let validSigners  = 0;
         if(!error){
             let eligible = await this._eligibleVerifierSet(snapshotBlock);
@@ -204,20 +229,24 @@ class NodeProof {
                     ' : ' + data['STATUS']);
 
         // Record one verification row per PASS pubkey that actually holds the
-        // full_node capability at the epoch block (a verdict can't verify a
+        // full_node capability at the set-resolution block (a verdict can't verify a
         // non-staker). Idempotent on (epoch_height, signing_pubkey).
         if(!error){
             // One batched capability read for the whole PASS list, same fallback rule
-            // as _eligibleVerifierSet: a truncated read re-probes per pubkey.
-            let capRows = await this.indexerDb.getValidatorsByCapability('full_node', snapshotBlock);
+            // as _eligibleVerifierSet: a truncated read re-probes per pubkey. Resolves
+            // at the buried setBlock, the height the hub locked its claimant universe
+            // at, and the row's source is resolved at that same height (the two must
+            // agree: a gate that admits a node whose source resolution then finds no
+            // active stake drops the row just as silently as a raw-epoch gate does).
+            let capRows = await this.indexerDb.getValidatorsByCapability('full_node', setBlock);
             let capSet  = (capRows && capRows.truncated === true)
                         ? null
                         : new Set((capRows || []).map(v => String(v.pubkey).toLowerCase()));
             for(let pk of passList){
-                if(capSet ? !capSet.has(pk) : !await this.indexerDb.hasCapability(pk, 'full_node', snapshotBlock))
+                if(capSet ? !capSet.has(pk) : !await this.indexerDb.hasCapability(pk, 'full_node', setBlock))
                     continue;
                 await this.indexerDb.createNodeProofVerification(
-                    pk, challengeId, epochHeight, targetHeight, data['ACTION_INDEX'], blockIndex
+                    pk, challengeId, epochHeight, targetHeight, data['ACTION_INDEX'], blockIndex, setBlock
                 );
             }
         }

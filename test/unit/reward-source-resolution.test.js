@@ -141,4 +141,35 @@ describe('reward writers resolve source strictly (recovery byte-identity)', func
         assert.ok(insertCall, 'expected an INSERT into full_node_verifications');
         assert.strictEqual(insertCall.args[1][5], 77);
     });
+
+    it('createNodeProofVerification resolves the source at setBlock, falling back to blockIndex', async function () {
+        // The NODEPROOF handler passes the buried height the producing hub locked its
+        // claimant universe at, so a node whose stake deactivated between that lock and
+        // the verdict still resolves a source instead of silently losing the epoch. Every
+        // other caller omits the 7th arg and must keep resolving at the verdict block.
+        // The recorded block_index is the verdict block either way.
+        async function resolveBlocks(setBlock) {
+            const doQuery = sinon.stub().callsFake(function (sql) {
+                if (/FROM stakes/.test(sql))             return Promise.resolve([{ source_id: 77 }]);
+                if (/full_node_verifications/.test(sql)) return Promise.resolve({ affectedRows: 1 });
+                return Promise.resolve([]);
+            });
+            const db   = makeDb({ doQuery });
+            const args = [PUB, 'chal', 100, 120, 5, 850000];
+            if (setBlock !== undefined) args.push(setBlock);
+            const ok = await db.createNodeProofVerification.apply(db, args);
+            assert.strictEqual(ok, true);
+            const resolveCall = doQuery.getCalls().find(c => /FROM stakes/.test(c.args[0]));
+            const insertCall  = doQuery.getCalls()
+                .find(c => /full_node_verifications/.test(c.args[0]) && /INSERT/i.test(c.args[0]));
+            // _resolveActiveStakeSourceId threads the block into every positional slot
+            // but the two status ids, so the whole set pins the height it asked about.
+            return { source: resolveCall.args[1][2], recorded: insertCall.args[1][6] };
+        }
+
+        assert.deepStrictEqual(await resolveBlocks(849994), { source: 849994, recorded: 850000 });
+        assert.deepStrictEqual(await resolveBlocks(undefined), { source: 850000, recorded: 850000 });
+        // An explicit null is the same absent-value case, not a block 0 lookup.
+        assert.deepStrictEqual(await resolveBlocks(null), { source: 850000, recorded: 850000 });
+    });
 });

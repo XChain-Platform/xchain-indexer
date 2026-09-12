@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- A NODEPROOF verdict now credits participation at the buried height the hub locked its claimant set at, so a source whose stake deactivated inside the reorg-buffer window keeps the epoch it answered; the eligible-verifier set and quorum divisor stay at the raw epoch, matching the hub.
 - The PRICE v0 payload builder now accepts a coinPair-keyed pair the same as a pair-keyed one, matching the hub's v0 payload builders byte for byte.
 - The leg-ordinal migration is renamed past every later migration in the tree so it no longer applies out of its dated position and no longer logs a backdating warning at boot.
 
