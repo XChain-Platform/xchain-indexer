@@ -349,6 +349,81 @@ function restoredRewardRearmFloor(reorgBlock, network){
     return Math.max(0, Math.min(h, Math.max(h - ANCHOR_REWARD_MIRROR_MATURITY, Number(threshold))));
 }
 
+// ---------------------------------------------------------------------------
+// The anchor-attest barrier's maturity horizon
+// ---------------------------------------------------------------------------
+//
+// The anchor-attest member is the one place the mirror-barrier family's height rule is
+// measurably WORSE than the clock it replaces, because the hub cannot advance that rail's
+// height watermark past a snapshot whose deferred reward-attest entry is still queued and
+// that queue's TTL is 6 h. So this member keeps its own maturity-horizon bound BESIDE the
+// height rule rather than being superseded by it, and the min() at the call site is what
+// guarantees the barrier can only ever open EARLIER than it does today, never later.
+//
+// The derive pass at block B reads exactly the rows with snapshot_block <= B -
+// ANCHOR_REWARD_MIRROR_MATURITY. Every such row was written no later than
+// time(snapshot_block) + the hub's arrival lag, so a watermark at or past
+// horizonTime + ANCHOR_ATTEST_ARRIVAL_MARGIN_S certifies this node holds every row that
+// pass will read, which is the completeness property in full.
+//
+// BYTE-IDENTICAL across xchain-{hub,indexer}/src/anchor_reward_activation.js and value-
+// identical to xchain-documentation/protocol/constants.js, held by the activation-constants parity
+// suite. Both values are hashed into the consensus-rules digest (SHARED_GATES), so a
+// one-sided edit surfaces as a rules mismatch rather than as silent drift.
+
+// The arming seam is SHARED with the mirror-admission family deliberately: one venue lever
+// (XC_MIRROR_ADMISSION_ACTIVATION) arms both flag days, so a regtest drill cannot end up
+// with the admission axis armed and the horizon axis inert and still be called a drill.
+const { resolveMirrorAdmissionRegtest } = require('./mirror_admission_activation.js');
+
+// Sized against the hub's whole MEASURED write-lag envelope, not the DOGE burial alone. The
+// envelope is about 15 h: up to 6 BTC blocks of checkpoint age at flush (~1 h), the
+// publisher's deferred-write queue TTL of 6 h, a receiver hub's re-proof through that SAME
+// queue for up to 6 h more, and ~2 h of raw-stamp skew on the networks that are off
+// median-time-past.
+//
+// 64800 s covers that envelope with 3 h of headroom and still opens 6 h before a nominal
+// 144-block span, so a +2 h stamp is absorbed entirely. The earlier 21600 s figure was sized
+// on the DOGE burial alone and sat BELOW the publisher's own 6 h queue TTL, so it was
+// corrected by measurement. A 144-block stretch shorter than 18 h is a three-sigma event and
+// falls back to today's wait through the min(), which is the right way for a fail-closed
+// gate to fail. Changing this value moves the block a barrier opens at, so it is frozen with
+// the activation map below and a change needs its own flag-day.
+const ANCHOR_ATTEST_ARRIVAL_MARGIN_S = 64800;   // 18 h
+
+// Per NETWORK, not per (coin, network), because this member is BTC-only by its call-site
+// guard and a second key would be dead weight. Nothing hashed moves across this height: two
+// nodes on either side derive the identical set at the identical height and differ only in
+// WHEN they get there. The height exists because a rolling deploy would otherwise leave the
+// early-opening node alone in carrying a weaker completeness guarantee, and one map removes
+// that window.
+const ANCHOR_ATTEST_BARRIER_ACTIVATION = Object.freeze({
+    mainnet: null,        // INERT under the 2026-08-29 mainnet write hold
+    testnet: null,        // SIZED AT THE CUT from the measured tip plus the roll window
+    regtest: resolveMirrorAdmissionRegtest(process.env),   // shares the family's arming seam so one venue lever arms both
+});
+
+/**
+ * Whether the maturity-horizon barrier is ARMED for `network` at BTC height `height`.
+ *
+ * The Number.isFinite guard is on the THRESHOLD and it comes first, which is the whole
+ * discipline: `0 >= null` is true in JavaScript, so a bare `height >= MAP[network]` would
+ * arm every inert network at height 0 and open the barrier on a node that was never meant to
+ * carry the new rule. An unknown network reads undefined here and is inert for the same
+ * reason, and an unreadable height never arms a flag day.
+ *
+ * @param {string} network mainnet|testnet|regtest
+ * @param {number|string} height the BTC height being evaluated
+ * @returns {boolean}
+ */
+function isAnchorAttestBarrierHorizonActive(network, height){
+    let threshold = ANCHOR_ATTEST_BARRIER_ACTIVATION[network];
+    if(!Number.isFinite(threshold)) return false;
+    let h = parseInt(height);
+    if(!Number.isFinite(h)) return false;
+    return h >= threshold;
+}
+
 module.exports = {
     ANCHOR_REWARD_ACTIVATION,
     ANCHOR_REWARD_AMOUNT,
@@ -362,5 +437,8 @@ module.exports = {
     ANCHOR_REWARD_DOGE_MIN_CONFIRMATIONS,
     anchorRewardDeriveHeight,
     restoredRewardDeriveHeight,
-    restoredRewardRearmFloor
+    restoredRewardRearmFloor,
+    ANCHOR_ATTEST_ARRIVAL_MARGIN_S,
+    ANCHOR_ATTEST_BARRIER_ACTIVATION,
+    isAnchorAttestBarrierHorizonActive
 };

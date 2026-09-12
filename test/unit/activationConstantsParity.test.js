@@ -146,6 +146,34 @@ const GATES = [
     ['snapshot_reorg_buffer.js',           'SNAPSHOT_BURIAL_ACTIVATION'],
     // The burial depth that gate reads; canon claims it byte-identical to the local copies.
     ['snapshot_reorg_buffer.js',           'CANONICAL_REORG_BUFFER'],
+    // The time-keyed mirror barrier family. Both activation maps: the PRODUCER height decides
+    // when a hub starts stamping a signed admission map into the canonical, the CONSUMER height
+    // decides when an indexer starts binding rows by that map instead of by
+    // effective_time <= t(B). A one-sided edit to either forks the family in the worst
+    // direction the design has: one node binds a mirrored row at a block another node does not,
+    // from the same signed bytes, and the invariant that every producer height sits strictly
+    // below its consumer height for the same key is only checkable if both copies agree.
+    ['mirror_admission_activation.js',     'MIRROR_ADMISSION_ACTIVATION'],
+    ['mirror_admission_activation.js',     'MIRROR_ADMISSION_CONSUMER_ACTIVATION'],
+    // Not activation MAPS but the consensus constants the same gate reads. The margins decide
+    // WHICH BLOCK a row is admissible at exactly as the heights decide when the rule applies:
+    // a drifted ADMIT_MARGIN_BLOCKS has a producer stamping a height its peers would refuse,
+    // and a drifted ADMIT_MAX_FUTURE_BLOCKS has a follower rejecting an honest row. The
+    // per-chain shape of the max map is the part that must not flatten (BTC 6 vs DOGE 60).
+    ['mirror_admission_activation.js',     'ADMIT_MARGIN_BLOCKS'],
+    ['mirror_admission_activation.js',     'ADMIT_MIN_FUTURE_BLOCKS'],
+    ['mirror_admission_activation.js',     'ADMIT_MAX_FUTURE_BLOCKS'],
+    // The regtest arming seam itself. The env NAME and the armed HEIGHT are what let one venue
+    // lever arm the whole family; a drifted name means the lever silently arms one side only,
+    // which is precisely the split a drill exists to rehearse and must never be its default.
+    ['mirror_admission_activation.js',     'MIRROR_ADMISSION_REGTEST_ENV'],
+    ['mirror_admission_activation.js',     'MIRROR_ADMISSION_REGTEST_ARMED_HEIGHT'],
+    // The family's anchor-attest member (anchor-attest-barrier-future-block.md section 8). The
+    // margin is a LEDGER-adjacent input in the same sense as ANCHOR_REWARD_MIRROR_MATURITY: it
+    // decides the block at which the barrier opens, so two nodes applying different values
+    // certify completeness at different heights for the identical mirror.
+    ['anchor_reward_activation.js',        'ANCHOR_ATTEST_ARRIVAL_MARGIN_S'],
+    ['anchor_reward_activation.js',        'ANCHOR_ATTEST_BARRIER_ACTIVATION'],
 ];
 
 // What this suite does about the canonical checkout, isolated from fs and from mocha's
@@ -188,7 +216,7 @@ describe('activation-gate constant parity to canonical constants.js @regression'
     // one resolves its constant by string, so a renamed module or export would otherwise
     // surface only as a green run. This case runs either way and fails on both.
     it('resolves every gated constant from its local module, whatever the checkout state', function () {
-        assert.ok(GATES.length >= 25, 'the gate list has shrunk; a dropped entry is an unpinned flag day');
+        assert.ok(GATES.length >= 47, 'the gate list has shrunk; a dropped entry is an unpinned flag day');
         for (const [file, exportName] of GATES) {
             const local = require('../../src/' + file)[exportName];
             assert.ok(local !== undefined,

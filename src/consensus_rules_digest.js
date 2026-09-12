@@ -90,7 +90,20 @@ const SHARED_GATES = [
     // COIN-KEYED ('<COIN>:<network>' with the bare network key as fallback), the first
     // shared gate of that shape: XBRIDGE arms one height per chain because TBTC, TLTC and
     // TDOGE tips differ by orders of magnitude. activeGatesAt resolves both forms below.
-    ['xchain_bridge_activation',                ['XCHAIN_BRIDGE_ACTIVATION']]
+    ['xchain_bridge_activation',                ['XCHAIN_BRIDGE_ACTIVATION']],
+    // The time-keyed mirror barrier family. Registered here where the parent spec's own
+    // anchor-attest gate declined to be, and the reason is the hub's side of the rule: that
+    // gate was indexer-only, so the hub evaluated neither of its constants and a shared entry
+    // would have been dead weight. The hub evaluates all three of THIS family's rules (the
+    // follower admission bound, the producer era gate and the admission stamp it signs), so an
+    // upgraded hub MUST report a rules mismatch against un-upgraded peers during the deploy
+    // wave rather than silently signing rows their consumers bind at a different block.
+    // Appended at the END: an insertion mid-list reorders the preimage of everything after it.
+    ['mirror_admission_activation',             ['MIRROR_ADMISSION_ACTIVATION', 'MIRROR_ADMISSION_CONSUMER_ACTIVATION', 'ADMIT_MARGIN_BLOCKS', 'ADMIT_MIN_FUTURE_BLOCKS', 'ADMIT_MAX_FUTURE_BLOCKS']],
+    // The family's anchor-attest member: the maturity-horizon height and the arrival margin it
+    // reads. A second entry for anchor_reward_activation rather than an edit of its entry
+    // above, for the same preimage-ordering reason.
+    ['anchor_reward_activation',                ['ANCHOR_ATTEST_BARRIER_ACTIVATION', 'ANCHOR_ATTEST_ARRIVAL_MARGIN_S']]
 ];
 
 // A per-network height at or above this value is a far-future placeholder, not an
