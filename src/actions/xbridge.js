@@ -79,9 +79,10 @@ const tokenBridgeActivation  = require('../token_bridge_activation.js');
 const USER_VERSIONS     = [0, 1, 3, 4];
 const INJECTED_VERSIONS = [2, 5];
 
-// v0/v1/v2 are the XCHAIN bridge and gate on XCHAIN_BRIDGE_ACTIVATION; v3/v4/v5 are the
-// general token bridge and gate on TOKEN_BRIDGE_ACTIVATION. The parity test pins
-// TOKEN >= XCHAIN per network, so a chain can never admit v3 without an engine behind it.
+// v0/v1/v2 are the XCHAIN bridge and gate on XCHAIN_BRIDGE_ACTIVATION (keyed
+// '<COIN>:<network>'); v3/v4/v5 are the general token bridge and gate on
+// TOKEN_BRIDGE_ACTIVATION (network-keyed). The parity test pins TOKEN >= XCHAIN for every
+// chain key, so a chain can never admit v3 without an engine behind it.
 const TOKEN_VERSIONS    = [3, 4, 5];
 
 // Platform-wide verdicts this handler REUSES rather than minting a bridge-specific twin.
@@ -121,7 +122,7 @@ const FEE_INSUFFICIENT   = 'invalid: insufficient funds (FEE)';
  */
 const VERDICTS = {
     // Shared gates (base spec D6).
-    BEFORE_ACTIVATION:   'invalid: XBRIDGE before activation',        // below XCHAIN_BRIDGE_ACTIVATION / TOKEN_BRIDGE_ACTIVATION for this network
+    BEFORE_ACTIVATION:   'invalid: XBRIDGE before activation',        // below XCHAIN_BRIDGE_ACTIVATION for this CHAIN (coin-keyed) / TOKEN_BRIDGE_ACTIVATION for this network
     UNKNOWN_VERSION:     'invalid: VERSION (unknown)',                // a version byte outside 0-5; a KNOWN version below its gate is BEFORE_ACTIVATION instead
     BTC_ONLY:            'invalid: XBRIDGE (BTC only)',               // v0 broadcast on any chain other than BTC; the literal the five BTC-only handlers share
     V1_NOT_ON_BTC:       'invalid: XBRIDGE v1 is not valid on BTC',   // v1 broadcast on BTC (the inverse-chain shape anchor.js uses)
@@ -225,8 +226,9 @@ class XBridge {
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        // The handler context every method below shares. `coin` is this chain's coin and
-        // decides BTC_ONLY versus V1_NOT_ON_BTC; `network` keys both activation maps.
+        // The handler context every method below shares. `coin` is this chain's coin: it
+        // decides BTC_ONLY versus V1_NOT_ON_BTC and, with `network`, keys the XCHAIN
+        // activation map ('<COIN>:<network>'); the token map is network-keyed.
         // `credits` / `debits` are the ledger plan applyLock / applyBurn fill in, so the
         // two apply methods can stay pure verdict functions from the caller's side.
         let ctx = {
@@ -524,8 +526,9 @@ class XBridge {
      *                        the parsed wire fields; never mutated by this method
      * @param {Object} ctx  - handler context: { coin, network, blockIndex, blockTime,
      *                        isGenesis }. `coin` is this chain's coin, which decides
-     *                        BTC_ONLY versus V1_NOT_ON_BTC; `network` keys both activation
-     *                        maps
+     *                        BTC_ONLY versus V1_NOT_ON_BTC and, with `network`, keys the
+     *                        XCHAIN activation map ('<COIN>:<network>', bare network as the
+     *                        fallback); the token map is network-keyed and ignores the coin
      * @returns {{valid: boolean, verdict: (string|null)}} verdict is one of
      *          VERDICTS.BEFORE_ACTIVATION, UNKNOWN_VERSION, BTC_ONLY, V1_NOT_ON_BTC,
      *          V2_SYSTEM_INJECTED, V5_SYSTEM_INJECTED, or null when the format passes
@@ -546,9 +549,13 @@ class XBridge {
         // unchanged on every chain. It runs before the chain and injected-version rules so
         // that a pre-activation chain gives ONE answer for the whole action rather than a
         // per-version taxonomy of a feature that is not live yet.
+        //
+        // The XCHAIN map is keyed '<COIN>:<network>', so the coin goes with the height: BTC,
+        // LTC and DOGE reach the bridge at three different heights on one network, and
+        // passing the network alone would judge a DOGE block against a BTC number.
         let active = (TOKEN_VERSIONS.indexOf(format) !== -1)
             ? tokenBridgeActivation.isTokenBridgeActive(ctx.blockIndex, ctx.network)
-            : xchainBridgeActivation.isXchainBridgeActive(ctx.blockIndex, ctx.network);
+            : xchainBridgeActivation.isXchainBridgeActive(ctx.blockIndex, ctx.network, ctx.coin);
         if(!active)
             return { valid: false, verdict: VERDICTS.BEFORE_ACTIVATION };
 

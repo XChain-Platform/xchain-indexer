@@ -632,10 +632,11 @@ class ProtocolChanges {
         // XBRIDGE: cross-chain lock/burn/settle, one action across six versions
         // (v0/v1 lock/burn XCHAIN, v2 settle XCHAIN, v3/v4 lock/burn a token,
         // v5 settle a token). Registered at all-zero columns like every other
-        // action: the real per-network HEIGHT gates are XCHAIN_BRIDGE_ACTIVATION
-        // (v0-v2, xchain_bridge_activation.js) and TOKEN_BRIDGE_ACTIVATION
-        // (v3-v5, token_bridge_activation.js), not this registry, so mainnet
-        // stays inert here until those are armed.
+        // action: the real HEIGHT gates are XCHAIN_BRIDGE_ACTIVATION (v0-v2,
+        // xchain_bridge_activation.js, keyed '<COIN>:<network>' because the three
+        // chains arm at three heights) and TOKEN_BRIDGE_ACTIVATION (v3-v5,
+        // token_bridge_activation.js, keyed per network), not this registry, so
+        // mainnet stays inert here until those are armed.
         // (See xchain-documentation/protocol/actions/xbridge.md)
         this.addChange('XBRIDGE',            '0.2.0',0,0,0,0,0,0);
 

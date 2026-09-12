@@ -26,6 +26,7 @@ const { createMockDb, createBaseData, createTokenInfo } = require('../../fixture
 const Utility  = require('../../../src/utility.js');
 const configjs = require('../../../src/config.js');
 const XBridge  = require('../../../src/actions/xbridge.js');
+const { XCHAIN_BRIDGE_ACTIVATION } = require('../../../src/xchain_bridge_activation.js');
 
 // Regtest p2pkh version byte is 0x6f on BTC, LTC and DOGE alike, so one regtest address
 // validates on every chain the rail runs; the tests that care about a WRONG network use
@@ -167,6 +168,42 @@ describe('XBRIDGE action handler @regression @tier3', function(){
                 assert.strictEqual(indexerDb.getTokenInfo.callCount, 0, 'v' + format + ' read a token');
                 assert.strictEqual(indexerDb.createXbridge.callCount, 1);
             }
+        });
+
+        // Row 28: XCHAIN_BRIDGE_ACTIVATION is keyed '<COIN>:<network>' because the three
+        // chains reach the flag day at three heights, so the handler has to hand the map its
+        // OWN coin. The shipped map answers the same for every coin on every network (0 on
+        // regtest, the sentinel elsewhere), which is exactly the shape a coin-blind call
+        // would also produce, so this case writes a chain-specific regtest slot for its own
+        // duration and drives the real handler against it: DOGE must refuse at a height BTC
+        // is admitted at, on one network, through nothing but ctx.coin.
+        it('keys the activation on the chain being parsed, not on the network alone', async function(){
+            XCHAIN_BRIDGE_ACTIVATION['DOGE:regtest'] = 500;
+            try {
+                let doge = makeHandler({ coin: 'DOGE', network: 'regtest' });
+                let dogeData = makeData(1, 'DOGE', { BLOCK_INDEX: 100 });
+                await doge.handler.parse(['1', DEST, '1', ''], dogeData, null);
+                assert.strictEqual(dogeData['STATUS'], 'invalid: XBRIDGE before activation',
+                    'a DOGE block below the DOGE slot must refuse');
+
+                // Same network, same height, a chain the DOGE slot says nothing about.
+                let btc = makeHandler({ coin: 'BTC', network: 'regtest' });
+                let btcData = makeData(0, 'BTC', { BLOCK_INDEX: 100 });
+                await btc.handler.parse(['0', 'DOGE', DEST, '1', ''], btcData, null);
+                assert.notStrictEqual(btcData['STATUS'], 'invalid: XBRIDGE before activation',
+                    'BTC inherits the bare regtest key (0) and must still be armed at the same height');
+
+                // And the DOGE chain crosses at its own number, not at BTC's.
+                let dogeAt = makeHandler({ coin: 'DOGE', network: 'regtest' });
+                let dogeAtData = makeData(1, 'DOGE', { BLOCK_INDEX: 500 });
+                await dogeAt.handler.parse(['1', DEST, '1', ''], dogeAtData, null);
+                assert.notStrictEqual(dogeAtData['STATUS'], 'invalid: XBRIDGE before activation',
+                    'a DOGE block at the DOGE slot must be admitted past the activation gate');
+            } finally {
+                delete XCHAIN_BRIDGE_ACTIVATION['DOGE:regtest'];
+            }
+            assert.strictEqual(XCHAIN_BRIDGE_ACTIVATION['DOGE:regtest'], undefined,
+                'the shipped map must be left exactly as it ships');
         });
 
         it('refuses a v0 lock off BTC', async function(){

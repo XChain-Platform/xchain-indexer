@@ -151,6 +151,18 @@ const GATES = [
 // What this suite does about the canonical checkout, isolated from fs and from mocha's
 // own skip machinery so both branches are directly assertable. The suite cannot delete a
 // sibling repo to reach the absent branch, so the branch is tested here instead.
+// The threshold a chain identified by `key` actually reads out of `map`: the exact key when
+// the map declares one, otherwise the bare network half of a '<COIN>:<network>' key. This is
+// the same fallback xchain_bridge_activation._activationThreshold and
+// stake_key_reuse_activation._activationThreshold implement, restated here because the
+// ordering invariants below compare two maps that are keyed at DIFFERENT granularities and a
+// bare-key-only comparison would silently stop covering the coin-keyed slots.
+function resolveChainKey(map, key) {
+    if (map[key] !== undefined) return map[key];
+    const net = key.indexOf(':') >= 0 ? key.slice(key.indexOf(':') + 1) : key;
+    return map[net];
+}
+
 function resolveCanonSource(canonExists, requireSiblings) {
     if (canonExists) return { status: 'checked' };
     if (requireSiblings)
@@ -230,24 +242,38 @@ describe('activation-gate constant parity to canonical constants.js @regression'
 
     // Token-bridge spec section 8, D25: the general formats ride the XCHAIN bridge's engine,
     // its mirrored bridge_transfers table and its settle pass, so v3 can never be legal on a
-    // network where v0 is not. Read straight off the canon, not off the local copies, so a
-    // canon that itself violated the rule is caught. Runs over every network the canon
-    // declares rather than a hardcoded list; the not-vacuous check pins today's live case.
-    it('holds TOKEN_BRIDGE_ACTIVATION >= XCHAIN_BRIDGE_ACTIVATION over the canonical constants.js', function () {
+    // chain where v0 is not. Read straight off the canon, not off the local copies, so a
+    // canon that itself violated the rule is caught.
+    //
+    // PER CHAIN KEY, not per network (row 28). XCHAIN_BRIDGE_ACTIVATION is keyed
+    // '<COIN>:<network>' with a bare network fallback while TOKEN_BRIDGE_ACTIVATION is still
+    // network-keyed, so comparing the bare keys alone would leave every coin-keyed bridge
+    // height unchecked the moment the arming train writes one. The union of both maps' keys
+    // is walked and each side is resolved through the SAME fallback the predicates use, so a
+    // 'DOGE:testnet' bridge height is compared against the height a DOGE testnet chain
+    // actually reads out of the token map.
+    it('holds TOKEN_BRIDGE_ACTIVATION >= XCHAIN_BRIDGE_ACTIVATION for every chain key', function () {
         if (!canonExists) { this.skip(); return; }
         const token  = canon.TOKEN_BRIDGE_ACTIVATION;
         const bridge = canon.XCHAIN_BRIDGE_ACTIVATION;
         assert.ok(token && bridge, 'constants.js must export both bridge activation maps');
-        const nets = Object.keys(token).filter(net => token[net] !== null && token[net] !== undefined);
-        assert.ok(nets.includes('regtest'), 'not vacuous: regtest must be armed at this milestone');
-        for (const net of nets) {
-            assert.ok(bridge[net] !== null && bridge[net] !== undefined,
-                'TOKEN_BRIDGE_ACTIVATION.' + net + ' is armed but XCHAIN_BRIDGE_ACTIVATION.' + net + ' is not');
-            assert.ok(token[net] >= bridge[net],
-                'TOKEN_BRIDGE_ACTIVATION.' + net + ' (' + token[net] + ') is below XCHAIN_BRIDGE_ACTIVATION.' +
-                net + ' (' + bridge[net] + '); a train arming v3 with no engine behind it admits locks ' +
+        const keys = [...new Set([...Object.keys(token), ...Object.keys(bridge)])];
+        const compared = [];
+        for (const key of keys) {
+            const here  = resolveChainKey(token, key);
+            const there = resolveChainKey(bridge, key);
+            if (here === null || here === undefined) continue;
+            assert.ok(there !== null && there !== undefined,
+                'TOKEN_BRIDGE_ACTIVATION resolves ' + key + ' but XCHAIN_BRIDGE_ACTIVATION does not');
+            compared.push(key);
+            assert.ok(here >= there,
+                'TOKEN_BRIDGE_ACTIVATION for ' + key + ' (' + here + ') is below XCHAIN_BRIDGE_ACTIVATION for ' +
+                key + ' (' + there + '); a train arming v3 with no engine behind it admits locks ' +
                 'nothing can finalize');
         }
+        assert.ok(compared.includes('regtest'), 'not vacuous: regtest must be armed at this milestone');
+        assert.ok(compared.some(k => k.indexOf(':') >= 0),
+            'not vacuous: the coin-keyed slots must be compared, not just the bare network keys');
     });
 
     // Policy spec section 9, D28, invariant one of two: inheritance cannot arm before the
