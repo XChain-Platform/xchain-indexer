@@ -9931,9 +9931,69 @@ class Database {
     // table, exactly as getPendingCrossChainCallRequests leaves both to the hub side.
     // A refused action keeps its xbridges row (status carries the verdict) but is never
     // signed, so only 'valid' rows are read here.
+    //
+    // "Not yet finalized" is decided against this indexer's MIRRORED bridge_transfers
+    // copy: a leg whose transfer the federation already signed (a mirror row with
+    // src_chain = this coin and src_action_index = the leg, in any status but
+    // 'retracted') has left flight and is excluded. Without the exclusion the read fed
+    // every leg the chain had ever carried, so the hub's in_flight term summed the whole
+    // bridge history (getbridgeinvariant read a permanent deficit on a healthy bridge)
+    // and, once the chain had carried `limit` finalized legs, the ascending LIMIT never
+    // reached a new lock at all: the bridge would have silently stopped on that chain.
+    // A RETRACTED transfer (its source leg reorged) must NOT exclude the leg, or a lock
+    // re-mined at the same action_index could never be re-signed.
+    //
+    // The mirror may be a SEPARATE connection (_mirrorDb, a node following a remote hub
+    // database), so the exclusion cannot always be one join. Same connection: NOT EXISTS
+    // inside the statement, so the LIMIT counts only rows still in flight. Separate
+    // mirror: the local legs are paged by keyset and the mirror is asked which of each
+    // page it already holds, until `limit` in-flight rows are collected or the local
+    // rows run out. Both paths return the same rows, order and LIMIT semantics (the
+    // getEffectiveUnprocessedCallResults split, for the same reason). The mirror is read
+    // through doQueryStrict: doQuery collapses a query error into [], which here would
+    // read as "nothing finalized" and quietly feed the whole history again.
     async getPendingBridgeTransfers(limit){
-        return await this.doQuery(
-            `SELECT
+        let coin   = this.config['COIN'];
+        let mirror = this._mirrorDb();
+        if(mirror === this){
+            return await this.doQuery(
+                this._pendingBridgeTransfersSql(
+                    `AND NOT EXISTS (
+                    SELECT 1 FROM bridge_transfers bt
+                    WHERE bt.src_chain=? AND bt.src_action_index=x.action_index AND bt.status<>'retracted')`),
+                [coin, limit]);
+        }
+        let cap    = Number(limit);
+        let out    = [];
+        let cursor = -1;   // keyset: every page reads x.action_index > cursor
+        while(out.length < cap){
+            let page = await this.doQuery(this._pendingBridgeTransfersSql('AND x.action_index > ?'), [cursor, cap]);
+            if(page.length === 0) break;
+            let ids  = page.map(r => r.action_index);
+            let held = await mirror.doQueryStrict(
+                `SELECT src_action_index FROM bridge_transfers
+                 WHERE src_chain=? AND status<>'retracted' AND src_action_index IN (${ids.map(() => '?').join(',')})`,
+                [coin].concat(ids));
+            // Compared as strings: the two handles may hand BIGINT columns back as number
+            // or as bigint depending on their own driver options.
+            let heldSet = new Set(held.map(r => String(r.src_action_index)));
+            for(let row of page){
+                if(heldSet.has(String(row.action_index))) continue;
+                out.push(row);
+                if(out.length >= cap) break;
+            }
+            if(page.length < cap) break;
+            cursor = page[page.length - 1].action_index;
+        }
+        return out;
+    }
+
+    // The pending-leg SELECT shared by both paths of getPendingBridgeTransfers, so the
+    // columns, joins, verdict filter and ordering the RPC handler maps stay one text.
+    // `extraWhere` is the path's own predicate (the NOT EXISTS exclusion, or the keyset
+    // cursor) and carries no caller input; its placeholders bind ahead of the LIMIT.
+    _pendingBridgeTransfersSql(extraWhere){
+        return `SELECT
                 x.action_index, x.version, x.block_index, x.amount, x.decimals, x.min_depth,
                 x.dest_chain, t.tick AS tick, da.address AS dest_address, sa.address AS src_address,
                 it.hash AS tx_hash
@@ -9948,17 +10008,19 @@ class Database {
                 INNER JOIN index_transactions it ON (it.id=tx.tx_hash_id)
              WHERE
                 s.status='valid' AND x.version IN (0,1,3,4)
+                ${extraWhere}
              ORDER BY
                 x.action_index ASC
-             LIMIT ?`,
-            [limit]);
+             LIMIT ?`;
     }
 
     // Single bridge_transfers mirror row by transfer_id: the targeted re-verification a
     // hub follower runs before co-signing a leader's proposed row (field-for-field,
-    // against its OWN view of the mirror), the getcrosschaincall precedent.
+    // against its OWN view of the mirror), the getcrosschaincall precedent. Read through
+    // the mirror handle: on a node whose hub copy lives in a separate database the
+    // ledger connection holds no bridge_transfers rows at all.
     async getBridgeTransferById(transfer_id){
-        let rows = await this.doQuery(
+        let rows = await this._mirrorDb().doQuery(
             `SELECT
                 transfer_id, snapshot_block, network, src_chain, src_action_index, src_address,
                 dest_chain, dest_address, tick, decimals, amount, effective_time, finalizing_view,

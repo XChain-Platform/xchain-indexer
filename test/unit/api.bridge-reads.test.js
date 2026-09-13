@@ -112,7 +112,11 @@ describe('bridge reads are registered open (base spec D44) @regression @tier1', 
 // ── db.getPendingBridgeTransfers ─────────────────────────────────────────────
 
 describe('db.getPendingBridgeTransfers @regression @tier1', function(){
-    it('reads only valid v0/v1/v3/v4 xbridges rows, joined for every PendingBridgeTransfer field', async function(){
+    // The WHERE-clause behaviour (finalized legs excluded, retracted ones kept, LIMIT
+    // counted after the exclusion) runs on a real SQL engine in
+    // db.pending-bridge-transfers.test.js; this stub test pins the statement shape the
+    // single-host path issues and the argument order it binds.
+    it('reads only valid v0/v1/v3/v4 xbridges rows not held finalized in bridge_transfers, joined for every PendingBridgeTransfer field', async function(){
         const db = newDb();
         const rows = [{
             action_index: 501, version: 3, block_index: 120, amount: '10.5', decimals: 8,
@@ -122,7 +126,11 @@ describe('db.getPendingBridgeTransfers @regression @tier1', function(){
         sinon.stub(db, 'doQuery').callsFake(async (query, args) => {
             assert.match(query, /FROM\s+xbridges x/i);
             assert.match(query, /status='valid'\s+AND\s+x\.version\s+IN\s*\(0,1,3,4\)/i);
-            assert.deepStrictEqual(args, [50]);
+            assert.match(query, /NOT EXISTS\s*\(\s*SELECT 1 FROM bridge_transfers bt/i);
+            assert.match(query, /bt\.src_chain=\?\s+AND\s+bt\.src_action_index=x\.action_index\s+AND\s+bt\.status<>'retracted'/i);
+            assert.match(query, /ORDER BY\s+x\.action_index ASC\s+LIMIT \?/i);
+            // this chain's coin binds the src_chain placeholder, the cap binds LIMIT
+            assert.deepStrictEqual(args, ['BTC', 50]);
             return rows;
         });
         const out = await db.getPendingBridgeTransfers(50);

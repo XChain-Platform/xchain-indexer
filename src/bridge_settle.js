@@ -428,11 +428,60 @@ async function recordSettlement(indexerDb, actionIndex, id, kind, blockIndex, ro
 
 // One log line per refusal or deferral, naming the id and the reason, which is the single line
 // both specs ask for. Deliberately not an exception: a refused row is ordinary operation.
+//
+// TWO CLASSES, split by whether a later pass can change the outcome. A DEFERRAL (a row not yet
+// due, a capability snapshot not yet mirrored, a policy seq gap or leg carried forward) is meant
+// to be re-examined every pass, so each of its lines is a fresh, true statement about that pass
+// and it keeps calling _log/_warn directly. A TERMINAL refusal (a bad signature, a foreign
+// network or chain id, an escrow that would go negative, a second settlement for one source leg)
+// names a fact about the ROW that does not change from one pass to the next, so a row sitting
+// refused in the due set would otherwise re-log the same event every pass forever; that is what
+// storms the log and is what AT4's "exactly one refusal" rules out. Terminal call sites use
+// _warnOnce below instead of _warn.
 function _log(kind, id, message){
     console.log('\t ' + kind + ' : ' + String(id).substring(0, 16) + '... : ' + message);
 }
 function _warn(kind, id, message){
     console.warn('\t ' + kind + ' : ' + String(id).substring(0, 16) + '... : ' + message);
+}
+
+// Per-process memo of the last TERMINAL refusal reason logged for (kind, id), so a row that sits
+// refused in the due set logs once instead of once per settle pass. Keyed on the log label
+// ('XBRIDGE' or 'XPOLICY') rather than on the settlements table's 'transfer'/'policy' kind so a
+// transfer id and a snapshot id that happen to collide in the id column (spec section 6) never
+// collide here either. Bounded so a long-running indexer cannot grow this without limit: past
+// the cap, inserting a brand-new id evicts the oldest entry first (a plain FIFO over insertion
+// order), which only costs one extra line for an id that has not refused in a very long while,
+// never a suppressed one.
+const REFUSAL_MEMO_CAP = 5000;
+const _refusalMemo = new Map();
+
+// True the first time (kind, id) refuses, and true again only when the reason for that id
+// CHANGES (a genuinely new refusal); false when it repeats. `reason` is the SETTLE_REASON
+// constant, never the fully formatted message, so two refusals in the same class with different
+// incidental detail (a different escrow address, a different quorum count) still count as one
+// refusal and do not re-log.
+function _shouldLogRefusal(kind, id, reason){
+    const key = kind + '' + String(id);
+    if(_refusalMemo.get(key) === reason) return false;
+    if(!_refusalMemo.has(key) && _refusalMemo.size >= REFUSAL_MEMO_CAP){
+        const oldestKey = _refusalMemo.keys().next().value;
+        _refusalMemo.delete(oldestKey);
+    }
+    _refusalMemo.set(key, reason);
+    return true;
+}
+
+// A terminal refusal: warn once per (kind, id) unless the reason changes. Byte-identical to a
+// plain _warn call on the FIRST occurrence, which is what the rail suite greps the log for.
+function _warnOnce(kind, id, reason, message){
+    if(_shouldLogRefusal(kind, id, reason)) _warn(kind, id, message);
+}
+
+// Test-only: forget every memoized refusal, so a unit test can run one id through the settle
+// pass more than once and observe it as a fresh process would.
+function resetRefusalMemo(){
+    _refusalMemo.clear();
 }
 
 /**
@@ -561,7 +610,8 @@ async function applyBridgeTransfer(row, ctx){
     // block_time, never by arrival order, a wall clock or the hub's AUTO_INCREMENT. Two nodes
     // replaying the same chain and the same mirror therefore refuse the same row.
     if(await isSourceLegSettled(db, srcChain, srcIndex)){
-        _warn('XBRIDGE', id, SETTLE_REASON.SRC_LEG_APPLIED + ' (' + srcChain + ':' + srcIndex + ') : skipping');
+        _warnOnce('XBRIDGE', id, SETTLE_REASON.SRC_LEG_APPLIED,
+                  SETTLE_REASON.SRC_LEG_APPLIED + ' (' + srcChain + ':' + srcIndex + ') : skipping');
         return out(false, SETTLE_REASON.SRC_LEG_APPLIED);
     }
 
@@ -585,7 +635,8 @@ async function applyBridgeTransfer(row, ctx){
         return out(false, SETTLE_REASON.SNAPSHOT_ABSENT);
     }
     if(!quorum.met){
-        _warn('XBRIDGE', id, SETTLE_REASON.QUORUM + ' (' + quorum.valid + '/' + quorum.total + ') : skipping');
+        _warnOnce('XBRIDGE', id, SETTLE_REASON.QUORUM,
+                  SETTLE_REASON.QUORUM + ' (' + quorum.valid + '/' + quorum.total + ') : skipping');
         return out(false, SETTLE_REASON.QUORUM);
     }
 
@@ -595,7 +646,8 @@ async function applyBridgeTransfer(row, ctx){
     // over), so there is no branch here that could be gated wrong. ok:false applies NOTHING.
     const cross = verifyEscrowAgainstCheckpoint(row, ctx);
     if(!cross.ok){
-        _warn('XBRIDGE', id, SETTLE_REASON.ESCROW_PROOF + ': ' + cross.reason + ' : skipping');
+        _warnOnce('XBRIDGE', id, SETTLE_REASON.ESCROW_PROOF,
+                  SETTLE_REASON.ESCROW_PROOF + ': ' + cross.reason + ' : skipping');
         return out(false, SETTLE_REASON.ESCROW_PROOF);
     }
 
@@ -642,7 +694,8 @@ async function applyBridgeTransfer(row, ctx){
             const made = await genesis.injectBridgedToken(
                 { origin: srcChain, name: tick, decimals: decimals, owner: owner }, injectCtx);
             if(!made.ok){
-                _warn('XBRIDGE', id, SETTLE_REASON.TOKEN_ROW + ': ' + made.reason + ' : skipping');
+                _warnOnce('XBRIDGE', id, SETTLE_REASON.TOKEN_ROW,
+                          SETTLE_REASON.TOKEN_ROW + ': ' + made.reason + ' : skipping');
                 return out(false, SETTLE_REASON.TOKEN_ROW);
             }
             localTick = made.tick;
@@ -667,7 +720,8 @@ async function applyBridgeTransfer(row, ctx){
         // nothing here, because the local ledger IS the authority on a local balance.
         const balances = await db.getAddressBalances(escrow, null, ctx.blockIndex);
         if(!util.hasBalance(balances, info['TICK_ID'], amount)){
-            _warn('XBRIDGE', id, SETTLE_REASON.ESCROW_SHORT + ' at ' + escrow + ' : skipping');
+            _warnOnce('XBRIDGE', id, SETTLE_REASON.ESCROW_SHORT,
+                      SETTLE_REASON.ESCROW_SHORT + ' at ' + escrow + ' : skipping');
             return out(false, SETTLE_REASON.ESCROW_SHORT);
         }
         debits.push([localTick, amount, escrow]);
@@ -811,18 +865,19 @@ async function applyPolicySnapshot(row, ctx){
     const allow = parseMembership(row.allow_list);
     const block = parseMembership(row.block_list);
     if(allow === false || block === false){
-        _warn('XPOLICY', id, SETTLE_REASON.POLICY_HASH + ' (membership transport is not a JSON array) : terminal');
+        _warnOnce('XPOLICY', id, SETTLE_REASON.POLICY_HASH,
+                  SETTLE_REASON.POLICY_HASH + ' (membership transport is not a JSON array) : terminal');
         return out(false, SETTLE_REASON.POLICY_HASH, true);
     }
     // Order is VERIFIED, never repaired (D13). Re-sorting here would silently accept a row
     // whose hash the fleet computed over a different byte string.
     if(!verifyMembershipOrder(allow) || !verifyMembershipOrder(block)){
-        _warn('XPOLICY', id, SETTLE_REASON.POLICY_ORDER + ' : terminal');
+        _warnOnce('XPOLICY', id, SETTLE_REASON.POLICY_ORDER, SETTLE_REASON.POLICY_ORDER + ' : terminal');
         return out(false, SETTLE_REASON.POLICY_ORDER, true);
     }
     const sleeping = !!_int(row.sleeping);
     if(policyHash(allow, block, sleeping) !== String(row.policy_hash || '').toLowerCase()){
-        _warn('XPOLICY', id, SETTLE_REASON.POLICY_HASH + ' : terminal');
+        _warnOnce('XPOLICY', id, SETTLE_REASON.POLICY_HASH, SETTLE_REASON.POLICY_HASH + ' : terminal');
         return out(false, SETTLE_REASON.POLICY_HASH, true);
     }
 
@@ -833,7 +888,8 @@ async function applyPolicySnapshot(row, ctx){
         return out(false, SETTLE_REASON.SNAPSHOT_ABSENT, false);
     }
     if(!quorum.met){
-        _warn('XPOLICY', id, SETTLE_REASON.QUORUM + ' (' + quorum.valid + '/' + quorum.total + ') : terminal');
+        _warnOnce('XPOLICY', id, SETTLE_REASON.QUORUM,
+                  SETTLE_REASON.QUORUM + ' (' + quorum.valid + '/' + quorum.total + ') : terminal');
         return out(false, SETTLE_REASON.QUORUM, true);
     }
 
@@ -1245,6 +1301,11 @@ module.exports = {
     isSettled,
     isSourceLegSettled,
     recordSettlement,
+    resetRefusalMemo,
+    // Test-only access to the refusal memo, so the bound and the dedupe rule can be driven
+    // directly rather than by forcing 5000 real quorum verifications through applyBridgeTransfer.
+    _shouldLogRefusalForTest: _shouldLogRefusal,
+    _refusalMemoSizeForTest: () => _refusalMemo.size,
     SETTLE_REASON,
     POLICY_LEG_ORDINAL,
     POLICY_TX_PREFIX,
