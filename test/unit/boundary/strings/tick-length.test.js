@@ -16,6 +16,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 
+// Relative path from test/unit/boundary/strings/ to fixtures and src
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../fixtures/mocks');
 const Issue = require('../../../../src/actions/issue.js');
 

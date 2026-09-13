@@ -49,8 +49,10 @@ const { createMockIndexer } = require('../fixtures/mocks');
 const Rollback              = require('../../src/rollback.js');
 const lifecycle             = require('../../src/tableLifecycle.js');
 
+// ---------------------------------------------------------------------------
 // The universe: every table the indexer creates, straight from src/sql/.
 // Mirrors db.js verifyTables() exactly (all *.sql, name = filename minus .sql).
+// ---------------------------------------------------------------------------
 const SQL_DIR = path.join(__dirname, '../../src/sql');
 const UNIVERSE = fs.readdirSync(SQL_DIR)
     .filter(f => f.endsWith('.sql'))
@@ -71,6 +73,8 @@ const ORPHAN_SWEEPS = lifecycle.ORPHAN_SWEEPS;
 // registry ('lookup' rollback mode) and cross-checked structurally below.
 const LOOKUP_TABLES = new Set(lifecycle.tablesWhere(t => t.rollback === 'lookup'));
 const isLookupTable = (t) => LOOKUP_TABLES.has(t);
+
+// ---------------------------------------------------------------------------
 
 describe('Rollback coverage guard @regression', function () {
     let rollback;

@@ -15,6 +15,10 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 
+// ---------------------------------------------------------------------------
+// Suite: database name validation
+// ---------------------------------------------------------------------------
+
 describe('Security: database name validation @regression @tier4', function () {
     const validNamePattern = /^[A-Za-z0-9_]+$/;
 
@@ -42,6 +46,10 @@ describe('Security: database name validation @regression @tier4', function () {
         assert.strictEqual(validNamePattern.test("XChain'Indexer"), false);
     });
 });
+
+// ---------------------------------------------------------------------------
+// Suite: connection pool hardening
+// ---------------------------------------------------------------------------
 
 describe('Security: connection pool timeout configuration @regression @tier4', function () {
     const Database = require('../../../../src/db');

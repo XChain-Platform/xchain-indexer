@@ -26,6 +26,8 @@ describe('Mapper @regression @tier3', function () {
         indexer.util.resetLists();
     });
 
+    // ─── Address mappings ─────────────────────────────────────────────
+
     it('creates address mapping for a tracked address', async function () {
         indexer.util.addAddressTicker('1AddrAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
         const data = createBaseData({ ACTION: 'SEND', ACTION_INDEX: 1, STATUS: 'valid' });
@@ -43,6 +45,8 @@ describe('Mapper @regression @tier3', function () {
         assert.deepStrictEqual(addressCalls[0][2], ['1AddrAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', '1AddrBBBBBBBBBBBBBBBBBBBBBBBBBBBB']);
     });
 
+    // ─── Tick mappings ────────────────────────────────────────────────
+
     it('creates tick mapping for a tracked ticker', async function () {
         indexer.util.addAddressTicker('1AddrAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', 'TEST');
         const data = createBaseData({ ACTION: 'SEND', ACTION_INDEX: 1, STATUS: 'valid' });
@@ -59,7 +63,10 @@ describe('Mapper @regression @tier3', function () {
         assert.deepStrictEqual(tickCalls[0][2], ['TICK1', 'TICK2']);
     });
 
+    // ─── No duplicate mappings ────────────────────────────────────────
+
     it('does not include duplicate addresses in the batched call', async function () {
+        // Adding the same address twice should only produce one mapping
         indexer.util.addAddressTicker('1AddrAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', 'TICK1');
         indexer.util.addAddressTicker('1AddrAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', 'TICK2');
         const data = createBaseData({ ACTION: 'SEND', ACTION_INDEX: 1, STATUS: 'valid' });
@@ -70,6 +77,7 @@ describe('Mapper @regression @tier3', function () {
     });
 
     it('does not include duplicate ticks in the batched call', async function () {
+        // Adding the same tick for two different addresses should only produce one tick mapping
         indexer.util.addAddressTicker('1AddrAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', 'SAME_TICK');
         indexer.util.addAddressTicker('1AddrBBBBBBBBBBBBBBBBBBBBBBBBBBBB', 'SAME_TICK');
         const data = createBaseData({ ACTION: 'SEND', ACTION_INDEX: 1, STATUS: 'valid' });
@@ -97,6 +105,8 @@ describe('Mapper @regression @tier3', function () {
         assert.ok(indexer.indexerDb.createActionMappings.calledWith(1, 'tick', []));
         assert.ok(indexer.indexerDb.createActionMapping.notCalled);
     });
+
+    // ─── LINK FILE→TICK mapping ───────────────────────────────────────
 
     it('creates FILE→TICK mapping for valid LINK when owner matches', async function () {
         const FILE_INDEX  = 5;
@@ -165,6 +175,8 @@ describe('Mapper @regression @tier3', function () {
         assert.ok(indexer.indexerDb.createFileMapping.notCalled);
     });
 
+    // ─── LINK branch coverage ─────────────────────────────────────────────
+
     it('does NOT resolve a leg whose COIN is not the local network', async function () {
         const OWNER_ADDR = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
         // COIN1 is LTC (not the local BTC) → action1 short-circuits to false, no mapping.
@@ -187,6 +199,8 @@ describe('Mapper @regression @tier3', function () {
         const FILE_INDEX  = 7;
         const ISSUE_INDEX = 8;
         const OWNER_ADDR  = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+        // action1 = ISSUE, action2 = FILE; exercises the second arm of the FILE/ISSUE
+        // detection and the reversed tick/index ternaries.
         indexer.indexerDb.getActionData.callsFake(async (actionIndex) => {
             if (actionIndex == ISSUE_INDEX) return { action: 'ISSUE', action_index: ISSUE_INDEX, tick: 'REVTOK' };
             if (actionIndex == FILE_INDEX)  return { action: 'FILE',  action_index: FILE_INDEX,  tick: null };

@@ -160,6 +160,7 @@ function memDb(v1s, v2s, opts) {
                                anchor_txid: params[params.length - 1] });
                 return [];
             }
+            // ── cross_chain_calls (XCALL relay rows; keyed on call_id + phase) ──
             if (sql.startsWith('SELECT call_id FROM cross_chain_calls'))
                 return calls.filter(r => r.call_id === params[0] && r.phase === params[1]).map(r => ({ call_id: r.call_id }));
             if (sql.startsWith('UPDATE cross_chain_calls SET status')) {
@@ -180,6 +181,7 @@ function memDb(v1s, v2s, opts) {
                 return [];
             }
             if (sql.startsWith('INSERT INTO cross_chain_calls')) {
+                // finalizing_view is the last bound value (after validator_signatures).
                 calls.push({ id: params[0], call_id: params[1], phase: params[2],
                              effective_time: params[14], status: params[15],
                              validator_signatures: params[18], finalizing_view: params[params.length - 1] });
@@ -609,6 +611,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
 
     it('--verify-stakes kills a fabricated validator set with no on-chain stakes', async function () {
         let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
+        // All keys staked → passes. One cross_chain key unstaked → batch rejected.
         let allStaked = oracleKeys.concat(crossKeys).map(k => k.pubkey);
         let okReport = await new AnchorRecovery(memDb([v1], []), Object.assign({ btcDb: btcDbStub(allStaked), verifyStakes: true }, quiet)).run();
         assert.strictEqual(okReport.verified, 1);
@@ -1035,6 +1038,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         });
     });
 
+    // ── Anchor-publish reward restore (BTC indexer DB) ──────────────────────
     describe('archived rewards', function () {
 
         function reward(overrides) {
@@ -1223,6 +1227,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         });
     });
 
+    // ── XCALL relay-row restore (cross_chain_calls; the XCALL recoverability leg) ──
     describe('archived XCALL relay rows', function () {
 
         it('round-trips both phases: a DISPATCH and a RESULT row rebuild', async function () {

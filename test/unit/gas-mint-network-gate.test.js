@@ -27,6 +27,9 @@
  * on any Node version.
  ********************************************************************/
 
+// The Utility constructor loads the indexer config from env. The gate under test
+// reads the per-case action.config we inject below, not this : these just satisfy
+// the constructor so Utility's bignumber/format helpers are available.
 process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
@@ -37,11 +40,14 @@ const Utility = require('../../src/utility.js');
 const GAS_ADDR = 'mgassdEpzH2AuKGK9W5FZh8drWYKrpXk6D'; // matches configs/BTC.js testnet GAS address shape
 const DEV_ADDR = 'mDevAddrXXXXXXXXXXXXXXXXXXXXXXXXXXX';
 
+// Build a Mint handler wired to the real utility and a benign stubbed DB, then
+// run parse() for a single MINT and return the resulting STATUS.
 async function runMint({ network, source, amount, tick, mintStartBlock = 0, blockIndex = 100,
                          maxMint = 100000, supply = 0 }){
 
     const util = new Utility();
 
+    // The only util method that touches the DB on the valid path : stub to a no-op.
     util.processTransactionLedgerChanges = async () => {};
 
     // An unlocked, open-mint token mirroring the XCHAIN genesis: 8 decimals, a
@@ -66,6 +72,8 @@ async function runMint({ network, source, amount, tick, mintStartBlock = 0, bloc
         createMint:                  async (m) => { captured.status = m['STATUS']; },
         updateBalances:              async () => {},
         updateTokens:                async () => {},
+        // Controller-guard context (mint.js now consults a `mint`-class controller). No controller
+        // bound in this gas-mint test → a null tickId short-circuits the guard helper immediately.
         getAddressBalances:                  async () => [],
         getTickerId:                         async () => null,
         getEffectiveTokenControllerForGuard: async () => null

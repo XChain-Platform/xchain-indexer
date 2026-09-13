@@ -97,6 +97,7 @@ describe('Database.slashContractStake() mid-cooldown double-count guard @regress
 
         // Exactly 100 slashed, entirely from contract_unstakes (Pass 2). Not double-counted.
         assert.strictEqual(String(slashed.total), '100');
+        // No UPDATE to contract_stakes (the phantom copy is never touched); the cooldown row is.
         assert.ok(!calls.some(c => /UPDATE\s+contract_stakes/i.test(c.sql)),
             'must NOT slash the deactivated contract_stakes phantom (that copy is refunded by the sweep)');
         assert.ok(calls.some(c => /UPDATE\s+contract_unstakes/i.test(c.sql)),

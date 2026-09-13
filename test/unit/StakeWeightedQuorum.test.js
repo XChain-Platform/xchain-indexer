@@ -157,6 +157,7 @@ describe('stake_weighted_quorum (indexer)', function () {
         });
     });
 
+    // ── §3.7 property tests ──────────────────────────────────────────────────
     // Adversarial, determinism, and delegation invariants. The determinism block
     // runs every fixture through BOTH the indexer predicate (this bcmath) AND the
     // hub predicate (its own independent bcmath) and asserts an identical decision.
