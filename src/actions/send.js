@@ -336,8 +336,8 @@ class Send {
             if(!error){
                 let packs = gatedPacks[send['TICK']] || [];
                 if(packs.length > 0){
-                    // PC-29 rule 3-5: the handoff is now CONDITIONAL. Previously ANY gated FILE
-                    // on a tick made EVERY send of it require a handoff; now a pack only compels
+                    // PC-29 rule 3-5: the handoff is CONDITIONAL. A gated FILE on a tick does
+                    // NOT make every send of it require a handoff; a pack only compels
                     // one when the recipient will actually end up able to unlock it, judged on
                     // POST-SEND balance (pre-send balance + everything this action sends them),
                     // since a recipient who already holds enough crosses the threshold on any

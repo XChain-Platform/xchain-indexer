@@ -25,7 +25,7 @@ const ReportGenerator = require('../setup/report-generator');
 // ---------------------------------------------------------------------------
 // WHY THIS FILE HAS NO WALL-CLOCK DEADLINE
 //
-// It used to carry `this.timeout(300000)` from the day the perf suite was written,
+// It carried `this.timeout(300000)` from the day the perf suite was written,
 // and on 2026-07-29 the heavy scenario blew through it and was read as a possible
 // throughput regression. Measured on the reference venue (, throwaway
 // tmpfs MariaDB 11.4, Node v22.22.3, otherwise idle) the heavy scenario finishes in
