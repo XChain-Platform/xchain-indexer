@@ -143,7 +143,7 @@ describe('touched-set guard @regression', function(){
     });
 });
 
-// ---- the leaf-presence half, driven
+// ---- the leaf-presence half, driven ---------------------------------
 
 const CHAIN   = 'LTC';        // LTC keeps the BTC-only stakes path out, and neither
 const NETWORK = 'regtest';    // contract_state_root nor the escrow leaf arms here

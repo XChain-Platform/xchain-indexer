@@ -69,11 +69,11 @@ class File {
         // (spec §5.5): FILE validity never inspects rawData content, so an indexer
         // that has never heard of this field produces identical verdicts and
         // identical state, and parsing it changes nothing about what is valid.
-        // Validating it would let
-        // an indexer that rejects a malformed value fork VALIDITY against
-        // neighbours that ignore unknown trailing fields (as shipped indexers do),
-        // so unknown/invalid codes must stay inert here and degrade to serve-raw
-        // at the reader.
+        // COMPRESSION therefore MUST NOT be validated: an indexer that rejected a
+        // malformed value would fork VALIDITY against neighbours that ignore unknown
+        // trailing fields (as shipped indexers do), which is the one consensus break
+        // this field is defined to be incapable of causing. Unknown or invalid codes
+        // stay inert here and degrade to serve-raw at the reader.
         //
         // There is also deliberately no gated_files/files column for it: serve
         // paths derive COMPRESSION from the stored ACTION STRING at serve time

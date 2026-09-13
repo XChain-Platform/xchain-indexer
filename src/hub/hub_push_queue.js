@@ -154,8 +154,8 @@ class HubPushQueue {
             // no lifecycle: the throttle below is what keeps it off every 30s tick.
             await this.pruneFailed();
             // The due-time predicate is pushed into SQL (db.js getPendingHubPushes) so
-            // parked-in-backoff rows no longer occupy the LIMIT batch slots (they used to
-            // cause head-of-line blocking). Pass the SAME backoff params used below by
+            // parked-in-backoff rows no longer occupy the LIMIT batch slots, which is what
+            // caused head-of-line blocking. Pass the SAME backoff params used below by
             // _isDue, which stays as a cheap belt-and-braces re-check.
             let rows = await this.indexerDb.getPendingHubPushes(this.batchSize, {
                 baseBackoffMs: this.baseBackoffMs,

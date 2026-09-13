@@ -71,6 +71,7 @@ class Mapper {
         await this.indexerDb.createActionMappings(action_index, 'address', mapped.address);
         await this.indexerDb.createActionMappings(action_index, 'tick', mapped.tick);
 
+        // Handle creating link mappings.
         // TODO: Add support for verifying links across multiple COIN networks in xchain-hub
         if(action=='LINK' && status=='valid'){
             // Get information on the actions if it is on the local COIN network
