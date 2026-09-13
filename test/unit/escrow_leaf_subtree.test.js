@@ -27,8 +27,8 @@
  * leafHash(canonicalAmount('0')) instead forks the twins on the first fully
  * filled order, which is why the parent spec makes delete-on-zero normative.
  *
- * TWIN PAIR: kept BYTE-IDENTICAL with xchain-sync/test/unit/escrow_leaf_subtree.test.js
- * and locked equal by the cross-repo loop in rollback_coverage.test.js.
+ * TWIN PAIR: kept BYTE-IDENTICAL with xchain-sync/test/unit/escrowLeafSubtree.test.js
+ * and locked equal by the cross-repo loop in rollback-coverage.test.js.
  *
  ********************************************************************/
 
@@ -340,7 +340,7 @@ describe('XCHAIN_ESC locked leaf: the §7 shadow thread @regression', function()
     // read on top.
     function shadowDb(priors){
         const db = new FakeDb();
-        // Patch _run, not doQuery: the module reads strictly now (M-17), and
+        // Patch run, not doQuery: the module reads strictly now (M-17), and
         // overriding the soft reader would leave the shadow prior-row read
         // unstubbed while quietly passing.
         const orig = db.run.bind(db);
@@ -385,7 +385,7 @@ describe('XCHAIN_ESC locked leaf: the §7 shadow thread @regression', function()
         prior = await ESC.applyEscrowLeaves(db, smt, prior, CHAIN, NETWORK, 499);
 
         const priors = {}; priors[499] = prior;
-        // Patch _run, not doQuery: the module reads strictly now (M-17), and
+        // Patch run, not doQuery: the module reads strictly now (M-17), and
         // overriding the soft reader would leave the shadow prior-row read
         // unstubbed while quietly passing.
         const orig = db.run.bind(db);

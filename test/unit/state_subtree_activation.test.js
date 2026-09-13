@@ -26,10 +26,10 @@
  * sub-root through. A gate that can never open would pass every inertness test.
  *
  * TWIN PAIR: xchain-indexer/test/unit/state_subtree_activation.test.js and
- * xchain-sync/test/unit/state_subtree_activation.test.js are kept BYTE-IDENTICAL
- * (both repos resolve the same relative src paths, and the gate and assembler
+ * xchain-sync/test/unit/stateSubtreeActivation.test.js are kept BYTE-IDENTICAL
+ * apart from the src/<feature>/ depth of their requires (the gate and assembler
  * they cover are themselves byte-identical twins). Locked equal by the cross-repo
- * twin loop in xchain-sync/test/unit/rollback_coverage.test.js.
+ * twin loop in xchain-sync/test/unit/rollback-coverage.test.js.
  *
  ********************************************************************/
 
