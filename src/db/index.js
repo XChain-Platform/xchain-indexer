@@ -5588,48 +5588,6 @@ class Database {
         results = await this.doQuery(query, args);
     }
 
-    // Create/Update record in `callbacks` table
-    async createCallback(data){
-        data                 = this.normalizeDataValues(data);
-        let tick_id          = await this.createTicker(data['TICK']);
-        let callback_tick_id = await this.createTicker(data['CALLBACK_TICK']);
-        let memo_id          = await this.createMemo(data['MEMO']);
-        let status_id        = await this.createStatus(data['STATUS']);
-        let action_index     = data['ACTION_INDEX'];
-        let callback_amount  = data['CALLBACK_AMOUNT'];
-        // Check if record already exists for this callback
-        let query = `SELECT
-                        action_index
-                    FROM
-                        callbacks
-                    WHERE
-                        action_index=?`; 
-        let args = [action_index];
-        let exists = false;
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
-        if(exists){
-            // UPDATE record
-            query = `UPDATE
-                        callbacks
-                    SET
-                        tick_id=?,
-                        callback_tick_id=?,
-                        callback_amount=?,
-                        memo_id=?,
-                        status_id=?
-                    WHERE 
-                        action_index=?`;
-
-        } else {
-            // INSERT record
-            query = `INSERT INTO callbacks (tick_id, callback_tick_id, callback_amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
-        }
-        args    = [tick_id, callback_tick_id, callback_amount, memo_id, status_id,  action_index];
-        results = await this.doQuery(query, args);
-    }
-
     // Lookup a record in the `index_mime_types` table and return record id
     async getMimeTypeId(type){
         let id    = null;
@@ -16084,6 +16042,7 @@ for(const mixin of [
     require('./blocks.js'),
     require('./bridges.js'),
     require('./broadcasts.js'),
+    require('./callbacks.js'),
 ]){
     const descriptors = Object.getOwnPropertyDescriptors(mixin);
     for(const key of Reflect.ownKeys(descriptors)) descriptors[key].enumerable = false;
