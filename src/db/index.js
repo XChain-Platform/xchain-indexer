@@ -4757,72 +4757,6 @@ class Database {
         results = await this.doQuery(query, args);
     }
 
-    // Read the fee row a handler staged for an action (createFeeRecord above). The feequote
-    // dry-run calls this INSIDE its still-open forced-rollback transaction to extract the
-    // handler-computed XCHAIN-denominated fee before the rollback discards the row; `amount`
-    // is XCHAIN-denominated in every payment mode (mode 1 records the native output separately
-    // in native_coin_amount). Returns null when the handler recorded no fee (zero-fee action,
-    // or it rejected before fee processing).
-    async getFeeRecord(actionIndex){
-        if(this.util.isNull(actionIndex))
-            return null;
-        let query   = `SELECT amount, gas_cost, gas_price, xchain_amount, payment_mode FROM fees WHERE action_index=?`;
-        let results = await this.doQuery(query, [actionIndex]);
-        return (results && results.length > 0) ? results[0] : null;
-    }
-
-    // Create/Update record in `fees` table
-    async createFeeRecord(data){
-        data               = this.normalizeDataValues(data);
-        let tick_id        = await this.createTicker(data['TICK']);
-        let destination_id = await this.createAddress(data['DESTINATION']);
-        let action_index   = data['ACTION_INDEX'];
-        let amount         = data['AMOUNT'];
-        let method         = data['METHOD'];
-        // Unified gas fields (default to legacy values if not present)
-        let gas_cost           = data['GAS_COST'] || 0;
-        let gas_price          = data['GAS_PRICE'] || '0';
-        let xchain_amount      = data['XCHAIN_AMOUNT'] || amount || '0';
-        let payment_mode       = data['PAYMENT_MODE'] || 2;
-        let fee_preference     = data['FEE_PREFERENCE'] || method || 2;
-        let fee_version        = data['FEE_VERSION'] || 1;
-        // Native coin fields (Track B - null for XCHAIN balance payments)
-        let native_coin_amount = data['NATIVE_COIN_AMOUNT'] || null;
-        let native_coin        = data['NATIVE_COIN'] || null;
-        let oracle_round       = data['ORACLE_ROUND'] || null;
-        // Check if record already exists
-        let query = `SELECT action_index FROM fees WHERE action_index=?`;
-        let args = [action_index];
-        let exists = false;
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
-        if(exists){
-            query = `UPDATE fees SET
-                        tick_id=?, destination_id=?, amount=?, method=?,
-                        gas_cost=?, gas_price=?, xchain_amount=?,
-                        payment_mode=?, fee_preference=?, fee_version=?,
-                        native_coin_amount=?, native_coin=?, oracle_round=?
-                    WHERE action_index=?`;
-            args = [tick_id, destination_id, amount, method,
-                    gas_cost, gas_price, xchain_amount,
-                    payment_mode, fee_preference, fee_version,
-                    native_coin_amount, native_coin, oracle_round, action_index];
-        } else {
-            query = `INSERT INTO fees
-                        (tick_id, destination_id, amount, method,
-                         gas_cost, gas_price, xchain_amount,
-                         payment_mode, fee_preference, fee_version,
-                         native_coin_amount, native_coin, oracle_round, action_index)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-            args = [tick_id, destination_id, amount, method,
-                    gas_cost, gas_price, xchain_amount,
-                    payment_mode, fee_preference, fee_version,
-                    native_coin_amount, native_coin, oracle_round, action_index];
-        }
-        results = await this.doQuery(query, args);
-    }
-
     // Get tokens owned by a given address. Ticks whose ownership is currently
     // escrowed by an open ORDER/SWAP/DISPENSER (escrow_action_index set) are in
     // protocol custody, not in the address's ownership records, so they are
@@ -12241,6 +12175,7 @@ for(const mixin of [
     require('./dividends.js'),
     require('./escrows.js'),
     require('./events.js'),
+    require('./fees.js'),
 ]){
     const descriptors = Object.getOwnPropertyDescriptors(mixin);
     for(const key of Reflect.ownKeys(descriptors)) descriptors[key].enumerable = false;
