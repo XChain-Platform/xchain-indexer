@@ -11,7 +11,7 @@
  * legal@dankest.llc.
  *
  **********************************************************************
- * test/regression/mariadb-runtime-floor.regression.test.js
+ * test/regression/mariadb_runtime_floor_regression.test.js
  *
  * The Node floor the ESM-only mariadb driver imposes.
  *

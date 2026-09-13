@@ -31,7 +31,7 @@
  *     the gate list as if the method still existed.
  *
  * The SHIPPED behaviour of the removal (ungated, and answered -32601 by the real
- * app over HTTP) is asserted in test/security/http-surface/auth-gate.test.js,
+ * app over HTTP) is asserted in test/security/http-surface/auth_gate.test.js,
  * which boots src/api.js for real. These are the cheap source-shape guards.
  */
 

@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// test/regression/UtxoTracker.test.js
+// test/regression/utxo_tracker.test.js
 //
 // INCIDENT: XC-DISP-FRESH (DISPENSER fresh-address exception oracle).
 //
