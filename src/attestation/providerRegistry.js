@@ -23,14 +23,17 @@
  * governance/operator config block (`config.ATTESTATION.PROVIDERS`), the same
  * pattern used for STAKING.CAPABILITIES[*].MIN_STAKE: DEFAULTS are the shipped
  * floor, and any config-added/tuned provider takes effect only through a
- * coordinated rollout every node applies in lockstep, so behavior stays
- * consensus-safe with no config block present.
+ * coordinated rollout every node applies in lockstep. When no config block is
+ * present (the shipping state today) the effective set is byte-identical to
+ * DEFAULTS, so this stays a no-op consensus-wise until governance registers a
+ * provider.
  *
- * A fully dynamic on-chain governance load (reading provider configs whose
- * activation is block-anchored, like the llm approved_models ladder, spec §16
- * Phase 6) is deferred: it needs a deterministic, block-anchored config read so
- * a mid-history provider change replays identically. Until that lands, this
- * DEFAULTS-plus-static-config overlay is the consensus-safe seam.
+ * A fully dynamic on-chain governance load (reading ATTESTATION_PROVIDER:{id}
+ * configs whose activation is block-anchored, like the llm approved_models
+ * ladder, spec §16 Phase 6) is deferred: it needs a deterministic,
+ * block-anchored config read so a mid-history provider change replays
+ * identically. Until that lands, this DEFAULTS-plus-static-config overlay is
+ * the consensus-safe seam.
  *
  ********************************************************************/
 
@@ -148,6 +151,7 @@ class ProviderRegistry {
         return Number(payloadByteLength) <= Number(p.max_request_bytes);
     }
 
+    // Validate a deadline against the provider's deadline_window_blocks.
     // Caller passes (currentBlock, deadlineBlock); checks 0 < (deadlineBlock - currentBlock) <= window.
     isDeadlineAllowed(providerId, currentBlock, deadlineBlock) {
         let p = this.providers[providerId];

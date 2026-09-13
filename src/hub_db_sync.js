@@ -969,7 +969,7 @@ class HubDbSync {
         // watermarks (MAX(effective_at)/MAX(effective_time)) could not make that
         // distinction: the first sparse row armed the barrier and the tip deferred
         // forever until the NEXT row arrived (review items #1984/#1986, live-repro'd
-        // on the / testbed 2026-06-09).
+        // on the origin-host/test-host testbed 2026-06-09).
         //
         // Grace margins (seconds) cover rows whose effective time can precede their
         // insertion into the stream: oracle first-publishes are effective at their
@@ -3646,7 +3646,7 @@ class HubDbSync {
         //      IDENTICAL match_id and CrossChainDexEngine._insertMatchRow revives the row
         //      with THIS round's effective_time / finalizing_view / validator_signatures,
         //      then re-broadcasts it. A mirror that missed either half - disconnected over
-        // the deletion, or the receive-side guards legitimately refused
+        //      the deletion, or the receive-side guards legitimately refused
         //      an unfenced/unsigned retraction - kept the pre-reorg row, and an anchor_txid-
         //      only ODKU could NEVER converge it: neither the live re-broadcast nor the
         //      FULL_REPAGE bootstrap (which re-delivers the row through this same path)
