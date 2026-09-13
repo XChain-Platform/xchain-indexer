@@ -3095,54 +3095,6 @@ class Database {
         return data;
     }
 
-    // Create/Update record in `sweeps` table
-    async createSweep(data){
-        data               = this.normalizeDataValues(data);
-        let tick_id        = await this.createTicker(data['TICK']);
-        let destination_id = await this.createAddress(data['DESTINATION']);
-        let memo_id        = await this.createMemo(data['MEMO']);
-        let status_id      = await this.createStatus(data['STATUS']);
-        let action_index   = data['ACTION_INDEX'];
-        let balances       = data['BALANCES'];
-        let ownerships     = data['OWNERSHIPS'];
-        let orders         = data['ORDERS'];
-        let swaps          = data['SWAPS'];
-        let dispensers     = data['DISPENSERS'];
-        // Check if record already exists for this sweep
-        let query = `SELECT
-                        action_index
-                    FROM
-                        sweeps
-                    WHERE
-                        action_index=?`;
-        let args = [action_index];
-        let exists = false;
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
-        if(exists){
-            // UPDATE record
-            query = `UPDATE
-                        sweeps
-                    SET
-                        destination_id=?,
-                        balances=?,
-                        ownerships=?,
-                        orders=?,
-                        swaps=?,
-                        dispensers=?,
-                        memo_id=?,
-                        status_id=?
-                    WHERE
-                        action_index=?`;
-        } else {
-            // INSERT record
-            query = `INSERT INTO sweeps (destination_id, balances, ownerships, orders, swaps, dispensers, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-        }
-        args    = [destination_id, balances, ownerships, orders, swaps, dispensers, memo_id, status_id, action_index];
-        results = await this.doQuery(query, args);
-    }
-
     // Record a VOTE v3 delegation set/clear as an append-only event row. A null
     // delegate (blank DELEGATE_TO) is a clear; the latest row per (tick, delegator)
     // wins at read time (getActiveDelegations), so there is nothing to mutate and
@@ -5577,6 +5529,7 @@ for(const mixin of [
     require('./sleeps.js'),
     require('./stakes.js'),
     require('./swaps.js'),
+    require('./sweeps.js'),
 ]){
     const descriptors = Object.getOwnPropertyDescriptors(mixin);
     for(const key of Reflect.ownKeys(descriptors)) descriptors[key].enumerable = false;
