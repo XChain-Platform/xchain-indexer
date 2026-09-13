@@ -3763,6 +3763,7 @@ const MIXIN_FILES = [
     './slashes.js',
     './sleeps.js',
     './stakes.js',
+    './state_tree.js',
     './swaps.js',
     './sweeps.js',
     './tokens.js',

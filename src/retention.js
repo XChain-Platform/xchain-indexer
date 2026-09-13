@@ -97,18 +97,12 @@ function parseRetentionConfig(env){
 // reorg still has its fork-point root to build forward on.
 //   { tip, cutoff, prunableCount }   cutoff = highest block_index that WOULD prune
 // tip === null means the table is empty (pre-activation): nothing to do.
-async function planStateRootPrune(query, chain, network, rootKeepBlocks){
-    const tipRows = await query(
-        'SELECT MAX(block_index) AS tip FROM state_tree_roots WHERE chain=? AND network=?',
-        [chain, network]);
-    const tip = (tipRows.length && tipRows[0].tip != null) ? Number(tipRows[0].tip) : null;
+async function planStateRootPrune(db, chain, network, rootKeepBlocks){
+    const tip = await db.getStateTreeRootTip(chain, network);
     if(tip === null) return { tip: null, cutoff: null, prunableCount: 0 };
     const cutoff = tip - rootKeepBlocks;   // prune rows with block_index <= cutoff
     if(cutoff < 0) return { tip, cutoff: null, prunableCount: 0 };
-    const cntRows = await query(
-        'SELECT COUNT(*) AS c FROM state_tree_roots WHERE chain=? AND network=? AND block_index <= ?',
-        [chain, network, cutoff]);
-    const prunableCount = cntRows.length ? Number(cntRows[0].c) : 0;
+    const prunableCount = await db.countStateTreeRootsAtOrBelow(chain, network, cutoff);
     return { tip, cutoff, prunableCount };
 }
 
@@ -117,42 +111,26 @@ async function planStateRootPrune(query, chain, network, rootKeepBlocks){
 // never affects incremental forward processing (which only reads the PRIOR root),
 // it only narrows the set of historical roots the SPV proof server can serve.
 // Node rows are untouched here; they are reclaimed in phase 2.
-async function pruneStateRoots(query, chain, network, cfg){
+async function pruneStateRoots(db, chain, network, cfg){
     if(!cfg || !cfg.enabled) return { skipped: true, deleted: 0 };
-    const plan = await planStateRootPrune(query, chain, network, cfg.rootKeepBlocks);
+    const plan = await planStateRootPrune(db, chain, network, cfg.rootKeepBlocks);
     if(plan.tip === null || plan.cutoff === null || plan.prunableCount === 0)
         return { skipped: false, deleted: 0, tip: plan.tip, cutoff: plan.cutoff };
-    const result = await query(
-        'DELETE FROM state_tree_roots WHERE chain=? AND network=? AND block_index <= ?',
-        [chain, network, plan.cutoff]);
-    const deleted = result && result.affectedRows ? Number(result.affectedRows) : 0;
+    const deleted = await db.deleteStateTreeRootsAtOrBelow(chain, network, plan.cutoff);
     return { skipped: false, deleted, tip: plan.tip, cutoff: plan.cutoff };
 }
 
 // Build the reachable-node set from the UNION of every RETAINED state_tree_roots
-// row's balances_root + stakes_root + contract_state_root. Identical skip rules
-// to stateCommitment.reportOrphanStats. Returns { nodes: Map, reachable: Set }.
-//
-// EVERY committed sub-root MUST appear in this union, and unlike the
-// reportOrphanStats copy that is not an accuracy concern: phase 2 DELETES the
-// nodes this set does not reach. A sub-root missing here means the pruner
-// reclaims nodes the tree still references, and the next incremental _descend
-// reads those missing rows as an EMPTY SUBTREE rather than failing, so the chain
-// keeps running and silently commits a forked root. Adding a slot to
-// merkle.STATE_SUBTREES without adding it here is therefore a data-loss bug that
-// only fires once the slot is armed AND the retention window rolls past it.
-// contract_state_root is NULL on every inert row and IS NOT NULL drops those, so
-// the union is unchanged until a chain arms the slot.
-async function computeReachable(query, chain, network){
-    const rows = await query('SELECT node_hash, left_hash, right_hash FROM state_tree_nodes', []);
+// row's balances_root + stakes_root + contract_state_root (db.state_tree mixin,
+// which is where the union's completeness argument now lives with its SQL).
+// Identical skip rules to stateCommitment.reportOrphanStats.
+// Returns { nodes: Map, reachable: Set }.
+async function computeReachable(db, chain, network){
+    const rows = await db.readAllStateTreeNodes();
     const nodes = new Map();
     for(const r of rows) nodes.set(r.node_hash, { l: r.left_hash, r: r.right_hash });
 
-    const rootRows = await query(
-        'SELECT DISTINCT balances_root AS r FROM state_tree_roots WHERE chain=? AND network=? ' +
-        'UNION SELECT DISTINCT stakes_root AS r FROM state_tree_roots WHERE chain=? AND network=? ' +
-        'UNION SELECT DISTINCT contract_state_root AS r FROM state_tree_roots WHERE chain=? AND network=? AND contract_state_root IS NOT NULL',
-        [chain, network, chain, network, chain, network]);
+    const rootRows = await db.getRetainedStateSubtreeRoots(chain, network);
 
     const reachable = new Set();
     const stack = [];
@@ -189,16 +167,15 @@ async function computeReachable(query, chain, network){
 // memory before the guard is ever reached. Counting under the same
 // runExclusive mutex keeps the count and any subsequent load consistent; the
 // nodes.size check below stays as a redundant net.
-async function reclaimOrphanNodes(query, chain, network, cfg, opts){
+async function reclaimOrphanNodes(db, chain, network, cfg, opts){
     opts = opts || {};
     if(!cfg || !cfg.nodeReclaimEnabled) return { skipped: true, reason: 'disabled', deleted: 0 };
 
     const doWork = async () => {
-        const cntRows = await query('SELECT COUNT(*) AS c FROM state_tree_nodes', []);
-        const preCount = cntRows && cntRows.length ? Number(cntRows[0].c) : 0;
+        const preCount = await db.countStateTreeNodes();
         if(preCount > cfg.maxNodes)
             return { skipped: true, reason: 'too_many_nodes', totalNodes: preCount, deleted: 0 };
-        const { nodes, reachable } = await computeReachable(query, chain, network);
+        const { nodes, reachable } = await computeReachable(db, chain, network);
         if(nodes.size > cfg.maxNodes)
             return { skipped: true, reason: 'too_many_nodes', totalNodes: nodes.size, deleted: 0 };
         const orphans = [];
@@ -208,13 +185,8 @@ async function reclaimOrphanNodes(query, chain, network, cfg, opts){
         if(opts.dryRun) return Object.assign(base, { dryRun: true, deleted: 0, orphans });
         let deleted = 0;
         const BATCH = 500;
-        for(let i = 0; i < orphans.length; i += BATCH){
-            const chunk = orphans.slice(i, i + BATCH);
-            const placeholders = chunk.map(() => '?').join(',');
-            const result = await query(
-                'DELETE FROM state_tree_nodes WHERE node_hash IN (' + placeholders + ')', chunk);
-            deleted += result && result.affectedRows ? Number(result.affectedRows) : 0;
-        }
+        for(let i = 0; i < orphans.length; i += BATCH)
+            deleted += await db.deleteStateTreeNodesByHash(orphans.slice(i, i + BATCH));
         return Object.assign(base, { deleted });
     };
 
@@ -225,12 +197,12 @@ async function reclaimOrphanNodes(query, chain, network, cfg, opts){
 // One full sweep: phase 1 then phase 2. Node reclaim runs only when opted in AND
 // after roots are pruned (so freshly-orphaned nodes are actually collectable).
 // The whole sweep is a no-op object when the policy is off.
-async function runSweep(query, chain, network, cfg, opts){
+async function runSweep(db, chain, network, cfg, opts){
     opts = opts || {};
     if(!cfg || !cfg.enabled) return { enabled: false };
-    const roots = await pruneStateRoots(query, chain, network, cfg);
+    const roots = await pruneStateRoots(db, chain, network, cfg);
     let nodesResult = { skipped: true, reason: 'disabled', deleted: 0 };
-    if(cfg.nodeReclaimEnabled) nodesResult = await reclaimOrphanNodes(query, chain, network, cfg, opts);
+    if(cfg.nodeReclaimEnabled) nodesResult = await reclaimOrphanNodes(db, chain, network, cfg, opts);
     return { enabled: true, roots, nodes: nodesResult };
 }
 

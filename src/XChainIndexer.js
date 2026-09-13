@@ -2658,8 +2658,7 @@ class XChainIndexer {
             this._stateRetentionRunning = true;
             try {
                 const result = await retention.runSweep(
-                    (sql, args) => this.indexerDb._poolQuery(sql, args),
-                    this.config['COIN'], this.config['NETWORK'], cfg,
+                    this.indexerDb, this.config['COIN'], this.config['NETWORK'], cfg,
                     { runExclusive });
                 const rootsDeleted = result.roots && result.roots.deleted ? result.roots.deleted : 0;
                 const nodesDeleted = result.nodes && result.nodes.deleted ? result.nodes.deleted : 0;

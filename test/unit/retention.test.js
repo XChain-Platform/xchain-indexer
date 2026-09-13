@@ -24,6 +24,7 @@
 const assert = require('assert');
 const M = require('../../src/merkle.js');
 const R = require('../../src/retention.js');
+const stateTreeMixin = require('../../src/db/state_tree.js');
 
 const EMPTY = M.toHex(M.EMPTY[256]);   // an EMPTY subtree constant (skipped by the mark)
 const A = 'a'.repeat(64);   // new tip root's balances_root
@@ -49,7 +50,12 @@ function makeDb(){
         ],
         calls: []
     };
-    db.query = async (sql, args) => {
+    // The sweep reaches the store through the db/state_tree mixin, and that mixin runs
+    // every statement on _poolQuery rather than doQuery, so THIS is the method the double
+    // has to answer. Binding the real mixin methods over it keeps the fake honest: the SQL
+    // matched below is the SQL that ships, and a mixin that reached for doQuery instead
+    // (and so joined the block's open transaction) would find nothing here and throw.
+    db._poolQuery = async (sql, args) => {
         db.calls.push(sql);
         if(sql.includes('MAX(block_index)')){
             const vals = db.roots.map(r => r.block_index);
@@ -92,6 +98,8 @@ function makeDb(){
         }
         throw new Error('unexpected query: ' + sql);
     };
+    for(const m of Reflect.ownKeys(stateTreeMixin))
+        db[m] = stateTreeMixin[m].bind(db);
     return db;
 }
 
@@ -131,7 +139,7 @@ describe('retention: config gating (default off)', () => {
 describe('retention: phase-1 root prune', () => {
     it('planner reports the prunable window without deleting', async () => {
         const db = makeDb();
-        const plan = await R.planStateRootPrune(db.query, 'BTC', 'regtest', 50);
+        const plan = await R.planStateRootPrune(db, 'BTC', 'regtest', 50);
         assert.strictEqual(plan.tip, 100);
         assert.strictEqual(plan.cutoff, 50);       // keep > tip-50 = keep >50, prune <=50
         assert.strictEqual(plan.prunableCount, 1); // block 10
@@ -141,14 +149,14 @@ describe('retention: phase-1 root prune', () => {
     it('planner is a no-op on an empty table', async () => {
         const db = makeDb();
         db.roots = [];
-        const plan = await R.planStateRootPrune(db.query, 'BTC', 'regtest', 50);
+        const plan = await R.planStateRootPrune(db, 'BTC', 'regtest', 50);
         assert.strictEqual(plan.tip, null);
         assert.strictEqual(plan.prunableCount, 0);
     });
 
     it('planner prunes nothing when the window covers the whole chain', async () => {
         const db = makeDb();
-        const plan = await R.planStateRootPrune(db.query, 'BTC', 'regtest', 500);
+        const plan = await R.planStateRootPrune(db, 'BTC', 'regtest', 500);
         assert.strictEqual(plan.cutoff, null);     // tip-500 < 0
         assert.strictEqual(plan.prunableCount, 0);
     });
@@ -156,7 +164,7 @@ describe('retention: phase-1 root prune', () => {
     it('executor drops roots older than the window, keeps the tip', async () => {
         const db = makeDb();
         const cfg = R.parseRetentionConfig({ STATE_ROOT_RETENTION_BLOCKS: '50' });
-        const res = await R.pruneStateRoots(db.query, 'BTC', 'regtest', cfg);
+        const res = await R.pruneStateRoots(db, 'BTC', 'regtest', cfg);
         assert.strictEqual(res.deleted, 1);
         assert.deepStrictEqual(db.roots.map(r => r.block_index), [100]);
     });
@@ -164,7 +172,7 @@ describe('retention: phase-1 root prune', () => {
     it('executor is inert when the policy is off', async () => {
         const db = makeDb();
         const cfg = R.parseRetentionConfig({});
-        const res = await R.pruneStateRoots(db.query, 'BTC', 'regtest', cfg);
+        const res = await R.pruneStateRoots(db, 'BTC', 'regtest', cfg);
         assert.strictEqual(res.skipped, true);
         assert.strictEqual(res.deleted, 0);
         assert.strictEqual(db.roots.length, 2);
@@ -174,7 +182,7 @@ describe('retention: phase-1 root prune', () => {
 describe('retention: phase-2 orphan reachability + reclaim', () => {
     it('computeReachable marks the union of all current roots', async () => {
         const db = makeDb();  // both roots present: A,B (from A) and C,D,B (from C)
-        const { nodes, reachable } = await R.computeReachable(db.query, 'BTC', 'regtest');
+        const { nodes, reachable } = await R.computeReachable(db, 'BTC', 'regtest');
         assert.strictEqual(nodes.size, 4);
         assert.strictEqual(reachable.size, 4);   // A,B,C,D all reachable
     });
@@ -184,7 +192,7 @@ describe('retention: phase-2 orphan reachability + reclaim', () => {
         // Simulate post phase-1: only the tip root (A) survives.
         db.roots = db.roots.filter(r => r.block_index === 100);
         const cfg = R.parseRetentionConfig({ STATE_ROOT_RETENTION_BLOCKS: '50', STATE_NODE_RECLAIM: '1' });
-        const res = await R.reclaimOrphanNodes(db.query, 'BTC', 'regtest', cfg, { dryRun: true });
+        const res = await R.reclaimOrphanNodes(db, 'BTC', 'regtest', cfg, { dryRun: true });
         assert.strictEqual(res.dryRun, true);
         assert.strictEqual(res.deleted, 0);
         assert.strictEqual(res.orphanCount, 2);              // C and D
@@ -196,7 +204,7 @@ describe('retention: phase-2 orphan reachability + reclaim', () => {
         const db = makeDb();
         db.roots = db.roots.filter(r => r.block_index === 100);  // only tip A survives
         const cfg = R.parseRetentionConfig({ STATE_ROOT_RETENTION_BLOCKS: '50', STATE_NODE_RECLAIM: '1' });
-        const res = await R.reclaimOrphanNodes(db.query, 'BTC', 'regtest', cfg);
+        const res = await R.reclaimOrphanNodes(db, 'BTC', 'regtest', cfg);
         assert.strictEqual(res.deleted, 2);
         const survivors = db.nodes.map(n => n.node_hash).sort();
         assert.deepStrictEqual(survivors, [A, B].sort());
@@ -223,7 +231,7 @@ describe('retention: phase-2 orphan reachability + reclaim', () => {
         db.roots[0].contract_state_root = E;
 
         const cfg = R.parseRetentionConfig({ STATE_ROOT_RETENTION_BLOCKS: '50', STATE_NODE_RECLAIM: '1' });
-        const res = await R.reclaimOrphanNodes(db.query, 'BTC', 'regtest', cfg);
+        const res = await R.reclaimOrphanNodes(db, 'BTC', 'regtest', cfg);
 
         const survivors = db.nodes.map(n => n.node_hash);
         assert.ok(survivors.includes(E), 'the armed contract_state_root itself must survive');
@@ -234,7 +242,7 @@ describe('retention: phase-2 orphan reachability + reclaim', () => {
     it('is inert when node reclaim is not opted in', async () => {
         const db = makeDb();
         const cfg = R.parseRetentionConfig({ STATE_ROOT_RETENTION_BLOCKS: '50' });  // phase 1 only
-        const res = await R.reclaimOrphanNodes(db.query, 'BTC', 'regtest', cfg);
+        const res = await R.reclaimOrphanNodes(db, 'BTC', 'regtest', cfg);
         assert.strictEqual(res.skipped, true);
         assert.strictEqual(db.nodes.length, 4);
     });
@@ -244,7 +252,7 @@ describe('retention: phase-2 orphan reachability + reclaim', () => {
         const cfg = R.parseRetentionConfig({
             STATE_ROOT_RETENTION_BLOCKS: '50', STATE_NODE_RECLAIM: '1', STATE_TREE_METRIC_MAX_NODES: '3'
         });
-        const res = await R.reclaimOrphanNodes(db.query, 'BTC', 'regtest', cfg);
+        const res = await R.reclaimOrphanNodes(db, 'BTC', 'regtest', cfg);
         assert.strictEqual(res.skipped, true);
         assert.strictEqual(res.reason, 'too_many_nodes');
         assert.strictEqual(db.nodes.length, 4);   // nothing deleted
@@ -271,7 +279,7 @@ describe('retention: runExclusive serialization', () => {
                 return out;
             } finally { held = false; }
         };
-        const res = await R.reclaimOrphanNodes(db.query, 'BTC', 'regtest', cfg, { runExclusive });
+        const res = await R.reclaimOrphanNodes(db, 'BTC', 'regtest', cfg, { runExclusive });
         assert.strictEqual(res.deleted, 2);
         assert.strictEqual(heldDuringWork, true);
         assert.strictEqual(held, false);   // released afterward
@@ -282,7 +290,7 @@ describe('retention: full sweep', () => {
     it('is a no-op object when the policy is off', async () => {
         const db = makeDb();
         const cfg = R.parseRetentionConfig({});
-        const res = await R.runSweep(db.query, 'BTC', 'regtest', cfg);
+        const res = await R.runSweep(db, 'BTC', 'regtest', cfg);
         assert.strictEqual(res.enabled, false);
         assert.strictEqual(db.roots.length, 2);
         assert.strictEqual(db.nodes.length, 4);
@@ -291,7 +299,7 @@ describe('retention: full sweep', () => {
     it('phase-1 only leaves nodes intact', async () => {
         const db = makeDb();
         const cfg = R.parseRetentionConfig({ STATE_ROOT_RETENTION_BLOCKS: '50' });
-        const res = await R.runSweep(db.query, 'BTC', 'regtest', cfg);
+        const res = await R.runSweep(db, 'BTC', 'regtest', cfg);
         assert.strictEqual(res.roots.deleted, 1);
         assert.strictEqual(res.nodes.skipped, true);
         assert.deepStrictEqual(db.roots.map(r => r.block_index), [100]);
@@ -301,7 +309,7 @@ describe('retention: full sweep', () => {
     it('prunes roots THEN reclaims the freshly-orphaned nodes, in order', async () => {
         const db = makeDb();
         const cfg = R.parseRetentionConfig({ STATE_ROOT_RETENTION_BLOCKS: '50', STATE_NODE_RECLAIM: '1' });
-        const res = await R.runSweep(db.query, 'BTC', 'regtest', cfg);
+        const res = await R.runSweep(db, 'BTC', 'regtest', cfg);
         assert.strictEqual(res.roots.deleted, 1);
         assert.strictEqual(res.nodes.deleted, 2);
         assert.deepStrictEqual(db.roots.map(r => r.block_index), [100]);
