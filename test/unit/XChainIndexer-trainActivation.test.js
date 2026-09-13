@@ -187,16 +187,26 @@ function fakeIndexer(opts){
         _trainActivationHaltLogTick: 0,
         _trainActivationRequired: o.required,
         queries,
-        indexerDb: {
-            doQuery: async (sql, params) => {
-                queries.push([sql, params]);
-                if (/^SELECT id FROM events/.test(sql)) return o.existingMarker ? [{ id: 7 }] : [];
-                return { affectedRows: 1 };
-            }
-        },
+        indexerDb: trainEventsDb(queries, o),
         _resolveTrainActivationRequirement: XChainIndexer.prototype._resolveTrainActivationRequirement,
         _recordTrainActivationHalt: XChainIndexer.prototype._recordTrainActivationHalt
     };
+}
+
+// The marker read and write are the real events mixin methods over a recording doQuery,
+// so the queries array below still captures the SQL the shipped methods issue.
+function trainEventsDb(queries, o){
+    const db = {
+        doQuery: async (sql, params) => {
+            queries.push([sql, params]);
+            if (/^SELECT id FROM events/.test(sql)) return o.existingMarker ? [{ id: 7 }] : [];
+            return { affectedRows: 1 };
+        }
+    };
+    const eventsMixin = require('../../src/db/events');
+    db.getLatestTrainActivationHaltEvent = eventsMixin.getLatestTrainActivationHaltEvent.bind(db);
+    db.recordTrainActivationHaltEvent    = eventsMixin.recordTrainActivationHaltEvent.bind(db);
+    return db;
 }
 
 const check = (self, block) => XChainIndexer.prototype._checkTrainActivation.call(self, block);

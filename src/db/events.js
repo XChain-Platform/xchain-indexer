@@ -298,4 +298,20 @@ module.exports = {
         return stats;
     },
 
+
+    // The most recent durable TRAIN_ACTIVATION_HALT marker, or an empty list when the halt
+    // has never been recorded. The caller writes the marker only once, so this is what
+    // makes the write idempotent across restarts.
+    async getLatestTrainActivationHaltEvent(){
+        return await this.doQuery(
+            "SELECT id FROM events WHERE code='TRAIN_ACTIVATION_HALT' ORDER BY id DESC LIMIT 1");
+    },
+
+    // Write that marker. events.data is a VARCHAR(250), so the caller passes the
+    // machine-readable fields already serialized and truncated, never the prose reason.
+    async recordTrainActivationHaltEvent(payload){
+        await this.doQuery(
+            "INSERT INTO events (time, code, data) values (now(), 'TRAIN_ACTIVATION_HALT', ?)", [payload]);
+    },
+
 };

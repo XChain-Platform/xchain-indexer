@@ -70,7 +70,7 @@ function ctx(opts){
         // The probe reads through doQueryStrict, which is what keeps the "query error means
         // NOT covered" catch reachable: doQuery swallows a non-transactional fault into [],
         // and the barrier would read that empty result as "nothing to wait on".
-        hubDb: opts.noHubDb ? null : { doQuery, doQueryStrict: doQuery },
+        hubDb: opts.noHubDb ? null : hubDbWithRealReads({ doQuery, doQueryStrict: doQuery }),
         callPresenceTimeoutMs: opts.timeoutMs != null ? opts.timeoutMs : 10000,
         // Left undefined by default so the barrier's fallback to the frozen constant is
         // what most tests exercise; start() sets it on a real indexer.
@@ -82,6 +82,16 @@ function ctx(opts){
         _doQuery: doQuery,
         _sleep: sleepSpy
     };
+}
+
+// The two hub reads the barrier makes are real db mixin methods bound over the stubbed
+// connection, so the SQL and argument assertions below still read what the shipped methods
+// issue, and the strict-read contract above is still the one under test.
+function hubDbWithRealReads(hubDb){
+    hubDb.getHubCrossChainCallCoverage =
+        require('../../src/db/cross_chain').getHubCrossChainCallCoverage.bind(hubDb);
+    hubDb.getHubConfigParam = require('../../src/db/misc').getHubConfigParam.bind(hubDb);
+    return hubDb;
 }
 
 const run = (self, blockTime) =>

@@ -225,4 +225,35 @@ module.exports = {
         return map;
     },
 
+
+    // A persisted admission watermark from the HUB's configs table: the floor height the hub
+    // has published for one module and parameter. Strict, for the same reason the coverage
+    // read above is: an empty answer and a hub fault must not look alike to a barrier.
+    async getHubConfigParam(coin, network, module, paramName){
+        return await this.doQueryStrict(
+            "SELECT param_value FROM configs " +
+            "WHERE coin = ? AND network = ? AND module = ? AND param_name = ?",
+            [coin, network, module, paramName]);
+    },
+
+    // Does the decoder's schema_migrations ledger exist in this schema? A missing ledger
+    // means the decoder has never finished a first boot, which otherwise surfaces only as
+    // opaque per-block JOIN errors.
+    async countDecoderSchemaMigrationsTable(schemaName){
+        return await this.doQuery(
+            "SELECT COUNT(*) AS cnt FROM information_schema.tables " +
+            "WHERE table_schema = ? AND table_name = 'schema_migrations'",
+            [schemaName]);
+    },
+
+    // The same probe for the decoder's transactions table, which is the one every block
+    // JOIN needs. Present schema_migrations with an absent transactions table is the
+    // signature of a partially applied decoder schema.
+    async countDecoderTransactionsTable(schemaName){
+        return await this.doQuery(
+            "SELECT COUNT(*) AS cnt FROM information_schema.tables " +
+            "WHERE table_schema = ? AND table_name = 'transactions'",
+            [schemaName]);
+    },
+
 };

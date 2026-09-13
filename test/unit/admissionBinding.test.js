@@ -772,7 +772,16 @@ describe('admission binding: the direct-hub-DB call-presence member', function (
             return typeof o.rows === 'function' ? o.rows(sql, args) : (o.rows || []);
         });
         const self = {
-            hubDb: o.noHubDb ? null : { doQuery, doQueryStrict: doQuery },
+            // Real db mixin reads bound over the stubbed connection, so the SQL and argument
+            // assertions further down still read what the shipped methods issue.
+            hubDb: o.noHubDb ? null : Object.assign({ doQuery, doQueryStrict: doQuery }, {
+                getHubCrossChainCallCoverage(chain){
+                    return require('../../src/db/cross_chain').getHubCrossChainCallCoverage.call(this, chain);
+                },
+                getHubConfigParam(coin, network, module, paramName){
+                    return require('../../src/db/misc').getHubConfigParam.call(this, coin, network, module, paramName);
+                }
+            }),
             config: o.noConfig ? undefined : { COIN: o.coin || 'BTC', NETWORK: NETWORK },
             callPresenceTimeoutMs: o.timeoutMs != null ? o.timeoutMs : 40,
             directCallGraceS: o.graceS,

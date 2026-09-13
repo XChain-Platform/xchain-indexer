@@ -250,4 +250,21 @@ module.exports = {
             [action_index, String(call_id).toLowerCase(), result_status, block_index]);
     },
 
+
+    // The cross-chain call mirror watermark, read off the HUB's own database. Returns the
+    // highest finalized effective_time plus the hub's clock, taken in ONE statement on ONE
+    // connection: the barrier that consumes this compares the two, and reading the clock
+    // separately would let the skew between two readings decide a consensus barrier.
+    // A chain narrows the scan to calls that touch it; without one the watermark is global.
+    async getHubCrossChainCallCoverage(chain){
+        let coverageSql = "SELECT MAX(effective_time) AS ts, UNIX_TIMESTAMP() AS hub_now " +
+                          "FROM cross_chain_calls WHERE status = 'finalized'" +
+                          (chain ? " AND (target_chain = ? OR source_chain = ?)" : "");
+        let coverageArgs = chain ? [chain, chain] : [];
+        // doQueryStrict, never doQuery: this runs on the hub connection, which holds no
+        // transaction, so doQuery would collapse a hub fault to [] and the caller would read
+        // that as "nothing to wait on" and clear the very barrier it exists to hold.
+        return await this.doQueryStrict(coverageSql, coverageArgs);
+    },
+
 };

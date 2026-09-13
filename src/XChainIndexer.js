@@ -802,10 +802,6 @@ class XChainIndexer {
         // (C27), because a unit test and an operator's grep match on it.
         let heightTail = (floor) => ' (admission height cross_chain_calls.' + (chain === '' ? 'unknown' : chain) +
                                     ' at ' + (floor === null ? 'none' : floor) + ', needs ' + target + ')';
-        let coverageSql = "SELECT MAX(effective_time) AS ts, UNIX_TIMESTAMP() AS hub_now " +
-                          "FROM cross_chain_calls WHERE status = 'finalized'" +
-                          (chain ? " AND (target_chain = ? OR source_chain = ?)" : "");
-        let coverageArgs = chain ? [chain, chain] : [];
         // Grace for the hub-clock escape below. Resolved at startup (start()); the frozen
         // constant is the fallback so a hand-built caller (unit tests) and any future path
         // that skips start() still gets the protocol value rather than NaN, which would make
@@ -832,11 +828,9 @@ class XChainIndexer {
                     // THE HEIGHT FORM. Covered when the persisted floor for (cross_chain_calls,
                     // this chain) has reached B - margin. No clock, no escape: the only thing
                     // that holds this is a watermark that has not advanced, which is mirror lag.
-                    let rows = await this.hubDb.doQueryStrict(
-                        "SELECT param_value FROM configs " +
-                        "WHERE coin = ? AND network = ? AND module = ? AND param_name = ?",
-                        ['xchain', String(this.config['NETWORK'] || ''), 'admission_watermark',
-                         'cross_chain_calls.' + chain]);
+                    let rows = await this.hubDb.getHubConfigParam(
+                        'xchain', String(this.config['NETWORK'] || ''), 'admission_watermark',
+                        'cross_chain_calls.' + chain);
                     lastFloor = null;
                     if(chain !== '' && rows && rows.length > 0 && rows[0].param_value !== null && rows[0].param_value !== undefined){
                         let raw = String(rows[0].param_value).trim();
@@ -848,7 +842,7 @@ class XChainIndexer {
                 // watermark, so the escape below compares two readings taken at one instant from
                 // one clock. Reading the hub's clock separately (or substituting this node's)
                 // would let skew between them decide a consensus barrier.
-                let rows = await this.hubDb.doQueryStrict(coverageSql, coverageArgs);
+                let rows = await this.hubDb.getHubCrossChainCallCoverage(chain);
                 if(rows.length === 0 || rows[0].ts === null){
                     covered = true;                         // no finalized rows: nothing to wait on
                 } else {
@@ -1097,20 +1091,12 @@ class XChainIndexer {
         // this check. Log a clear diagnostic so a partially-upgraded or race-start deploy
         // is distinguishable from a real fault.
         try {
-            let migRows = await this.decoderDb.doQuery(
-                "SELECT COUNT(*) AS cnt FROM information_schema.tables " +
-                "WHERE table_schema = ? AND table_name = 'schema_migrations'",
-                [this.decoderDbName]
-            );
+            let migRows = await this.decoderDb.countDecoderSchemaMigrationsTable(this.decoderDbName);
             if(!migRows || migRows[0].cnt === 0){
                 console.warn('Decoder DB ' + this.decoderDbName + ': schema_migrations table not found. ' +
                     'Decoder has not completed first boot. Block processing will retry until decoder is ready.');
             } else {
-                let txRows = await this.decoderDb.doQuery(
-                    "SELECT COUNT(*) AS cnt FROM information_schema.tables " +
-                    "WHERE table_schema = ? AND table_name = 'transactions'",
-                    [this.decoderDbName]
-                );
+                let txRows = await this.decoderDb.countDecoderTransactionsTable(this.decoderDbName);
                 if(!txRows || txRows[0].cnt === 0){
                     console.warn('Decoder DB ' + this.decoderDbName + ': transactions table not found. ' +
                         'Decoder schema may be partially applied. Block processing will retry until decoder is ready.');
@@ -2378,8 +2364,7 @@ class XChainIndexer {
     async _recordTrainActivationHalt(blockToParse, verdict){
         if(!this.indexerDb || typeof this.indexerDb.doQuery !== 'function') return;
         try {
-            let existing = await this.indexerDb.doQuery(
-                "SELECT id FROM events WHERE code='TRAIN_ACTIVATION_HALT' ORDER BY id DESC LIMIT 1");
+            let existing = await this.indexerDb.getLatestTrainActivationHaltEvent();
             if(Array.isArray(existing) && existing.length > 0) return;
             let payload = JSON.stringify({
                 requiredRuleSet:  verdict.requiredRuleSet || null,
@@ -2387,8 +2372,7 @@ class XChainIndexer {
                 network:          verdict.network || null,
                 haltedAtBlock:    blockToParse
             }).slice(0, 250);
-            await this.indexerDb.doQuery(
-                "INSERT INTO events (time, code, data) values (now(), 'TRAIN_ACTIVATION_HALT', ?)", [payload]);
+            await this.indexerDb.recordTrainActivationHaltEvent(payload);
         } catch(e){
             console.warn('XChainIndexer: could not record the TRAIN_ACTIVATION_HALT marker (' +
                 (e && e.message) + '); the halt still holds.');
