@@ -12334,39 +12334,39 @@
       "fileCount": 8,
       "titleCount": 122,
       "files": {
-        "test/fuzz/suites/tier1-batch.fuzz.js": "1370b620a6b5279a",
-        "test/fuzz/suites/tier1-math.fuzz.js": "bcc26344b37fdc2f",
-        "test/fuzz/suites/tier1-normalize.fuzz.js": "773b07a37d8745d7",
-        "test/fuzz/suites/tier1-parsing.fuzz.js": "53b6b00d6c6a586e",
-        "test/fuzz/suites/tier1-validation.fuzz.js": "311bc22d541bf998",
-        "test/fuzz/suites/tier2-lifecycle.fuzz.js": "f24123d1170e4aea",
-        "test/fuzz/suites/tier2-ticks.fuzz.js": "f7bb18be88befd47",
-        "test/fuzz/suites/tier3-state.fuzz.js": "300630d3e2aa9532"
+        "test/fuzz/suites/tier1_batch.fuzz.js": "1370b620a6b5279a",
+        "test/fuzz/suites/tier1_math.fuzz.js": "bcc26344b37fdc2f",
+        "test/fuzz/suites/tier1_normalize.fuzz.js": "773b07a37d8745d7",
+        "test/fuzz/suites/tier1_parsing.fuzz.js": "53b6b00d6c6a586e",
+        "test/fuzz/suites/tier1_validation.fuzz.js": "311bc22d541bf998",
+        "test/fuzz/suites/tier2_lifecycle.fuzz.js": "f24123d1170e4aea",
+        "test/fuzz/suites/tier2_ticks.fuzz.js": "f7bb18be88befd47",
+        "test/fuzz/suites/tier3_state.fuzz.js": "300630d3e2aa9532"
       }
     },
     "test:fuzz:full": {
       "fileCount": 8,
       "titleCount": 122,
       "files": {
-        "test/fuzz/suites/tier1-batch.fuzz.js": "1370b620a6b5279a",
-        "test/fuzz/suites/tier1-math.fuzz.js": "bcc26344b37fdc2f",
-        "test/fuzz/suites/tier1-normalize.fuzz.js": "773b07a37d8745d7",
-        "test/fuzz/suites/tier1-parsing.fuzz.js": "53b6b00d6c6a586e",
-        "test/fuzz/suites/tier1-validation.fuzz.js": "311bc22d541bf998",
-        "test/fuzz/suites/tier2-lifecycle.fuzz.js": "f24123d1170e4aea",
-        "test/fuzz/suites/tier2-ticks.fuzz.js": "f7bb18be88befd47",
-        "test/fuzz/suites/tier3-state.fuzz.js": "300630d3e2aa9532"
+        "test/fuzz/suites/tier1_batch.fuzz.js": "1370b620a6b5279a",
+        "test/fuzz/suites/tier1_math.fuzz.js": "bcc26344b37fdc2f",
+        "test/fuzz/suites/tier1_normalize.fuzz.js": "773b07a37d8745d7",
+        "test/fuzz/suites/tier1_parsing.fuzz.js": "53b6b00d6c6a586e",
+        "test/fuzz/suites/tier1_validation.fuzz.js": "311bc22d541bf998",
+        "test/fuzz/suites/tier2_lifecycle.fuzz.js": "f24123d1170e4aea",
+        "test/fuzz/suites/tier2_ticks.fuzz.js": "f7bb18be88befd47",
+        "test/fuzz/suites/tier3_state.fuzz.js": "300630d3e2aa9532"
       }
     },
     "test:fuzz:quick": {
       "fileCount": 5,
       "titleCount": 84,
       "files": {
-        "test/fuzz/suites/tier1-batch.fuzz.js": "1370b620a6b5279a",
-        "test/fuzz/suites/tier1-math.fuzz.js": "bcc26344b37fdc2f",
-        "test/fuzz/suites/tier1-normalize.fuzz.js": "773b07a37d8745d7",
-        "test/fuzz/suites/tier1-parsing.fuzz.js": "53b6b00d6c6a586e",
-        "test/fuzz/suites/tier1-validation.fuzz.js": "311bc22d541bf998"
+        "test/fuzz/suites/tier1_batch.fuzz.js": "1370b620a6b5279a",
+        "test/fuzz/suites/tier1_math.fuzz.js": "bcc26344b37fdc2f",
+        "test/fuzz/suites/tier1_normalize.fuzz.js": "773b07a37d8745d7",
+        "test/fuzz/suites/tier1_parsing.fuzz.js": "53b6b00d6c6a586e",
+        "test/fuzz/suites/tier1_validation.fuzz.js": "311bc22d541bf998"
       }
     },
     "test:integration": {
