@@ -5694,52 +5694,6 @@ class Database {
         return escrows;
     }
 
-    // Create/Update record in `airdrops` table
-    async createAirdrop(data){
-        data                  = this.normalizeDataValues(data);
-        let tick_id           = await this.createTicker(data['TICK']);
-        let memo_id           = await this.createMemo(data['MEMO']);
-        let status_id         = await this.createStatus(data['STATUS']);
-        let action_index      = data['ACTION_INDEX'];
-        let amount            = data['AMOUNT'];
-        let list_action_index = (!this.util.isNumeric(data['LIST_ACTION_INDEX'])) ? null : data['LIST_ACTION_INDEX'];
-        // Check if record already exists for this airdrop
-        let query = `SELECT
-                        action_index
-                    FROM
-                        airdrops
-                    WHERE
-                        tick_id=? AND
-                        memo_id=? AND
-                        list_action_index=? AND
-                        amount=? AND
-                        action_index=?`;
-        let args  = [tick_id, memo_id, list_action_index, amount, action_index];
-        let exists = false;
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
-        // Define list of arguments for sql insert/update
-        if(exists){
-            // UPDATE record
-            query = `UPDATE
-                        airdrops
-                    SET
-                        tick_id=?,
-                        list_action_index=?,
-                        amount=?,
-                        memo_id=?,
-                        status_id=?
-                    WHERE
-                        action_index=?`;
-        } else {
-            // INSERT record
-            query = `INSERT INTO airdrops (tick_id, list_action_index, amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
-        }
-        args    = [tick_id, list_action_index, amount, memo_id, status_id, action_index];
-        results = await this.doQuery(query, args);
-    }
-
     // Read the fee row a handler staged for an action (createFeeRecord above). The feequote
     // dry-run calls this INSIDE its still-open forced-rollback transaction to extract the
     // handler-computed XCHAIN-denominated fee before the rollback discards the row; `amount`
@@ -18428,6 +18382,7 @@ Database.marketTickId = function(tick_id){
 for(const mixin of [
     require('./actions.js'),
     require('./addresses.js'),
+    require('./airdrops.js'),
 ]){
     const descriptors = Object.getOwnPropertyDescriptors(mixin);
     for(const key of Reflect.ownKeys(descriptors)) descriptors[key].enumerable = false;
