@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- The PRICE v0 verifier rebuilds the round's per-chain admission map from the canonical behind the mirror-admission activation, byte-matching the hub's two builders.  
+- The admission canonical encoder moved into the activation twin, so the hub and every indexer build the signed field from one definition per repo.
+
 ### Fixed
 - A NODEPROOF verdict now credits participation at the buried height the hub locked its claimant set at, so a source whose stake deactivated inside the reorg-buffer window keeps the epoch it answered; the eligible-verifier set and quorum divisor stay at the raw epoch, matching the hub.
 - The PRICE v0 payload builder now accepts a coinPair-keyed pair the same as a pair-keyed one, matching the hub's v0 payload builders byte for byte.

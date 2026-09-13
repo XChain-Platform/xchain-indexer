@@ -245,6 +245,44 @@ describe('activation-gate constant parity to canonical constants.js @regression'
             'vendored twins and a one-sided edit forks the fleet at the train boundary.');
     });
 
+    // mirror_admission_activation.js is the second module whose copies must be BYTE-identical
+    // rather than value-identical, and the reason is sharper than the train gate's: since the
+    // price rail joined the family the module carries the admission canonical ENCODER as well
+    // as the heights. The hub SIGNS those bytes and this repo REBUILDS them to verify, and no
+    // value-parity suite anywhere can compare two copies of a FUNCTION: they would both resolve,
+    // both be callable, and disagree only on the bytes a quorum already signed. A byte compare is
+    // the only check that sees an encoder edit landed on one side of the boundary.
+    it('holds xchain-hub/src/mirror_admission_activation.js byte-identical to this repo\'s copy', function () {
+        const here = path.resolve(__dirname, '../../src/mirror_admission_activation.js');
+        const twin = path.resolve(__dirname, '../../../xchain-hub/src/mirror_admission_activation.js');
+        assert.ok(fs.existsSync(here), 'the indexer admission activation module is missing at ' + here);
+        if (!fs.existsSync(twin)) {
+            if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but the hub twin is absent at ' + twin);
+            this.skip();
+            return;
+        }
+        assert.strictEqual(fs.readFileSync(twin, 'utf8'), fs.readFileSync(here, 'utf8'),
+            'xchain-hub/src/mirror_admission_activation.js has drifted from the indexer copy; the two ' +
+            'are byte-identical twins carrying the admission heights AND the canonical encoder, so a ' +
+            'one-sided edit makes every signed admission field unverifiable on the other side.');
+    });
+
+    // The exported surface of that module, asserted on the LOCAL copy so it runs without the
+    // hub sibling: the byte compare above proves the copies match, and this proves the thing
+    // they match still carries the encoder the verifier calls. A rename would otherwise leave
+    // every canonical rebuild throwing at runtime with both parity cases green.
+    it('exports the admission canonical encoder and its era gate, callable and injective', function () {
+        const m = require('../../src/mirror_admission_activation.js');
+        for (const name of ['encodeAdmitBlocks', 'decodeAdmitBlocks', 'isAdmissionEra', 'admissionCanonicalField'])
+            assert.strictEqual(typeof m[name], 'function', 'mirror_admission_activation must export ' + name);
+        assert.strictEqual(m.encodeAdmitBlocks({ DOGE: 23, BTC: 1 }), 'BTC:1,DOGE:23');
+        assert.deepStrictEqual(m.decodeAdmitBlocks('BTC:1,DOGE:23'), { BTC: 1, DOGE: 23 });
+        assert.strictEqual(m.decodeAdmitBlocks('DOGE:23,BTC:1'), null, 'the decoder admits one spelling only');
+        // mainnet is inert in this train, so this is the legacy side of the era gate: no field.
+        assert.strictEqual(m.admissionCanonicalField('PARITY', 'mainnet', 1, null), '');
+    });
+
     // §3.2 b, D9: the indexer half of the height-ordering invariant the hub asserts at boot
     // (attest_zero_conf_activation.assertZeroConfOrdering). Read straight off the canon, not
     // off the local copies, so this case would catch a canon that itself violated the rule.

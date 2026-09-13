@@ -22,6 +22,7 @@
 
 const crypto = require('crypto');
 const eq     = require('./equivocation_header.js');
+const adm    = require('./mirror_admission_activation.js');
 
 // ASN.1 DER prefix for Ed25519 SPKI (SubjectPublicKeyInfo), 12 bytes
 const SPKI_ED25519_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
@@ -59,7 +60,14 @@ function verify(payload, sigHex, pubkeyHex) {
 // EQUIV header on the IDENTICAL BTC height every other engine uses. The
 // EQUIV ROUND_ID is the BTC height (the real activation anchor), not the wall-clock
 // round counter; the round counter stays in the signed JSON for round identity.
-function buildPriceV0Payload(round, timestamp, pairs, network, btcBlockHeight) {
+//
+// `admitBlocks` is the round's admission map, the per-chain heights at which the round
+// becomes readable: chain codes in ASCII order, each CODE:digits under the canonical
+// integer spelling rule, joined by a comma and appended after a pipe. It must be the map
+// the producer signed (parsed off the round being verified), never one rebuilt from this
+// indexer's own view, or the bytes rebuilt here are not the bytes a validator signed.
+// Omitted is the LEGACY round, which is every round below the activation.
+function buildPriceV0Payload(round, timestamp, pairs, network, btcBlockHeight, admitBlocks) {
     let sortedPairs = pairs
         .map(p => ({ pair: p.coinPair || p.pair, price: String(p.price) }))
         .sort((a, b) => {
@@ -73,6 +81,12 @@ function buildPriceV0Payload(round, timestamp, pairs, network, btcBlockHeight) {
         btc_block_height: parseInt(btcBlockHeight),
         pairs:            sortedPairs
     });
+    // The admission map, height-gated on the round's OWN BTC anchor and never on this
+    // indexer's height, so the era for a round is fixed when it is signed and the two eras
+    // can never share a signature. Refuses in BOTH directions. Appended to the body BEFORE
+    // the EQUIV wrapper, the same position every other rail puts it in, so the wrapper
+    // stays a pure function of the bytes it wraps.
+    raw += adm.admissionCanonicalField('buildPriceV0Payload', network, btcBlockHeight, admitBlocks);
     // EQUIV header: gated on the round's BTC block HEIGHT + network, identical to
     // every other engine and to the hub, so all services flip on the same anchor.
     // XORACLE has no view change -> VIEW=0. Below the flag-day, the bare JSON

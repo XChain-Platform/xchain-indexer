@@ -103,7 +103,19 @@ const SHARED_GATES = [
     // The family's anchor-attest member: the maturity-horizon height and the arrival margin it
     // reads. A second entry for anchor_reward_activation rather than an edit of its entry
     // above, for the same preimage-ordering reason.
-    ['anchor_reward_activation',                ['ANCHOR_ATTEST_BARRIER_ACTIVATION', 'ANCHOR_ATTEST_ARRIVAL_MARGIN_S']]
+    ['anchor_reward_activation',                ['ANCHOR_ATTEST_BARRIER_ACTIVATION', 'ANCHOR_ATTEST_ARRIVAL_MARGIN_S']],
+    // The admission canonical ENCODER and its era gate, which moved into that module when the
+    // price rail joined the family: the hub signs the admission field and every indexer
+    // rebuilds it, so two builds spelling one map differently is a fork rather than a stall.
+    // Registered because the BYTES a price round is signed over move at the activation, so an
+    // upgraded build must report a rules mismatch against un-upgraded peers during the deploy
+    // wave. What these rows can and cannot see: a function canonicalizes to `undefined` and a
+    // regex to '{}', so they alarm on PRESENCE and never on a changed function BODY; the body
+    // is held by the byte compare of the two copies of the module, which is a test rather than
+    // a digest row. A SECOND entry for the module at the END rather than names added to its
+    // entry above, because an insertion mid-list shifts the preimage of every gate after it.
+    ['mirror_admission_activation',             ['CHAIN_CODE_RE', 'CANONICAL_HEIGHT_RE', 'encodeAdmitBlocks',
+                                                 'decodeAdmitBlocks', 'isAdmissionEra', 'admissionCanonicalField']]
 ];
 
 // A per-network height at or above this value is a far-future placeholder, not an
