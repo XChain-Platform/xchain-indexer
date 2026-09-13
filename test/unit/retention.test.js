@@ -55,7 +55,7 @@ function makeDb(){
     // has to answer. Binding the real mixin methods over it keeps the fake honest: the SQL
     // matched below is the SQL that ships, and a mixin that reached for doQuery instead
     // (and so joined the block's open transaction) would find nothing here and throw.
-    db._poolQuery = async (sql, args) => {
+    db.poolQuery = async (sql, args) => {
         db.calls.push(sql);
         if(sql.includes('MAX(block_index)')){
             const vals = db.roots.map(r => r.block_index);

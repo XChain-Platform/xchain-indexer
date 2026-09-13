@@ -158,7 +158,7 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
     });
 
     it('rebuilds affected rows to match a fresh aggregation from the source tables', async function () {
-        await rollback._recomputeAttestationValidatorStats(N);
+        await rollback.recomputeAttestationValidatorStats(N);
 
         const result = dump();
 
@@ -193,7 +193,7 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
             [`${pkB}|${PROV}`]: { fulfilled_count: 3, missed_count: 0 },
         };
 
-        await rollback._recomputeAttestationValidatorStats(N);
+        await rollback.recomputeAttestationValidatorStats(N);
         const result = dump();
 
         for (const key of Object.keys(expected)) {
@@ -213,7 +213,7 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
         // (now-corrupted) capability/stake-weight lookups.
         expiredReqs[0].responsible_set_json = JSON.stringify([pkA]);
 
-        await rollback._recomputeAttestationValidatorStats(N);
+        await rollback.recomputeAttestationValidatorStats(N);
         const result = dump();
 
         assert.strictEqual(indexer.indexerDb.getStakeWeightsByCapability.notCalled, true,
@@ -228,7 +228,7 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
     it('ATT-RECOMP-1: falls back to the live re-derive when responsible_set_json is malformed', async function () {
         expiredReqs[0].responsible_set_json = '{not-json';
 
-        await rollback._recomputeAttestationValidatorStats(N);
+        await rollback.recomputeAttestationValidatorStats(N);
         const result = dump();
 
         // A corrupt/legacy value must not throw and must not drop the miss: it re-derives.
@@ -263,7 +263,7 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
         indexer.indexerDb.getValidatorsByCapability = sinon.stub().callsFake(async (cap, height) =>
             (Number(height) <= buried) ? [{ pubkey: pkA }] : [{ pubkey: pkB }]);
 
-        await rollback._recomputeAttestationValidatorStats(N);
+        await rollback.recomputeAttestationValidatorStats(N);
         const result = dump();
 
         const call = indexer.indexerDb.getStakeWeightsByCapability.getCall(0)
@@ -283,7 +283,7 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
         for (const r of statsStore.values()) r.last_updated_block = N - 5;
         const before = dump();
 
-        await rollback._recomputeAttestationValidatorStats(N);
+        await rollback.recomputeAttestationValidatorStats(N);
 
         assert.deepStrictEqual(dump(), before,
             'with nothing touched at/after N the stats table must be left unchanged');

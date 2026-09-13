@@ -120,7 +120,7 @@ describe('guard gas reservation: keyed on the chain, not on the XCHAIN row @regr
         it('refuses on BTC when the source cannot cover the guard gas ceiling', async function(){
             const cfg  = configFor('BTC');
             const util = new Utility(cfg);
-            const res  = await util._invokeController(actionsStub(GUARD_ALLOW), dbFor(cfg), 5, opts(), { actionClass: 'trade', subject: 'token TOK' });
+            const res  = await util.invokeController(actionsStub(GUARD_ALLOW), dbFor(cfg), 5, opts(), { actionClass: 'trade', subject: 'token TOK' });
             assert.strictEqual(res.error, 'insufficient funds (guard gas)');
             assert.strictEqual(res.guardFee, 0);
         });
@@ -128,7 +128,7 @@ describe('guard gas reservation: keyed on the chain, not on the XCHAIN row @regr
         it('does not refuse on DOGE once the XCHAIN row exists and the source holds none', async function(){
             const cfg  = configFor('DOGE');
             const util = new Utility(cfg);
-            const res  = await util._invokeController(actionsStub(GUARD_ALLOW), dbFor(cfg), 5, opts(), { actionClass: 'trade', subject: 'token TOK' });
+            const res  = await util.invokeController(actionsStub(GUARD_ALLOW), dbFor(cfg), 5, opts(), { actionClass: 'trade', subject: 'token TOK' });
             assert.strictEqual(res.error, null, 'the reservation is BTC-only, so the DOGE guard still runs');
             // 1000 gas billed at the regtest GAS_PRICE of 0.00001. guardFee is a
             // bignumber (bcmul), so compare through the same arithmetic the handlers use.
@@ -142,7 +142,7 @@ describe('guard gas reservation: keyed on the chain, not on the XCHAIN row @regr
             const ceiling  = util.resolveGuardGasCeiling(cfg);
             const maxFee   = util.bcmul(ceiling, cfg['GAS_PRICE'], 8);
             const justShy  = util.bcsub(maxFee, '0.00000001', 8);
-            const res = await util._invokeController(actionsStub(GUARD_ALLOW), dbFor(cfg), 5,
+            const res = await util.invokeController(actionsStub(GUARD_ALLOW), dbFor(cfg), 5,
                 opts({ gasBalances: { 7: justShy } }), { actionClass: 'trade', subject: 'token TOK' });
             assert.strictEqual(res.error, 'insufficient funds (guard gas)');
         });
@@ -151,7 +151,7 @@ describe('guard gas reservation: keyed on the chain, not on the XCHAIN row @regr
             const cfg  = configFor('BTC');
             const util = new Utility(cfg);
             const maxFee = util.bcmul(util.resolveGuardGasCeiling(cfg), cfg['GAS_PRICE'], 8);
-            const res = await util._invokeController(actionsStub(GUARD_ALLOW), dbFor(cfg), 5,
+            const res = await util.invokeController(actionsStub(GUARD_ALLOW), dbFor(cfg), 5,
                 opts({ gasBalances: { 7: maxFee } }), { actionClass: 'trade', subject: 'token TOK' });
             assert.strictEqual(res.error, null);
         });
@@ -163,7 +163,7 @@ describe('guard gas reservation: keyed on the chain, not on the XCHAIN row @regr
             for(const coin of ['BTC', 'DOGE']){
                 const cfg  = configFor(coin);
                 const util = new Utility(cfg);
-                const res  = await util._invokeController(actionsStub(deny), dbFor(cfg), 5,
+                const res  = await util.invokeController(actionsStub(deny), dbFor(cfg), 5,
                     opts({ gasBalances: { 7: '999' } }), { actionClass: 'trade', subject: 'token TOK' });
                 assert.strictEqual(res.error, 'denied by policy', coin + ': a guard DENY still refuses');
             }

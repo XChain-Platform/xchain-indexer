@@ -51,7 +51,7 @@ describe('genesis gas-token replay pin (bridge row-4 helper) @regression', funct
 
     it('_injectGasToken synthesizes the pre-refactor transaction byte for byte on BTC', async function () {
         const h = harness('BTC');
-        await h.genesis._injectGasToken('BTC-gas-address', 800000, 1700000000);
+        await h.genesis.injectGasToken('BTC-gas-address', 800000, 1700000000);
         assert.strictEqual(h.sent.length, 1, 'exactly one injected transaction');
         assert.strictEqual(h.sent[0].isGenesis, true, 'routed with the genesis flag (stamps IS_GENESIS)');
         assert.deepStrictEqual(h.sent[0].tx, {
@@ -90,7 +90,7 @@ describe('genesis gas-token replay pin (bridge row-4 helper) @regression', funct
         // The obligation D66 states: the XCHAIN row the bridge creates off BTC is the row
         // genesis writes on BTC, with only the coin differing in the hash prefix.
         const viaGenesis = harness('DOGE');
-        await viaGenesis.genesis._injectGasToken('DOGE-gas-address', 10, 20);
+        await viaGenesis.genesis.injectGasToken('DOGE-gas-address', 10, 20);
         const viaBridge = harness('DOGE');
         await viaBridge.genesis.injectProtocolToken(viaBridge.genesis.gasTokenParams('DOGE-gas-address'), {
             blockIndex: 10, blockTime: 20, txHashPrefix: 'GENESIS-'
@@ -115,7 +115,7 @@ describe('genesis gas-token replay pin (bridge row-4 helper) @regression', funct
         let reads = 0;
         h.genesis.indexerDb.getTickerId  = async () => { reads++; return null; };
         h.genesis.indexerDb.getTokenInfo = async () => { reads++; return false; };
-        await h.genesis._injectGasToken('BTC-gas-address', 800000, 1700000000);
+        await h.genesis.injectGasToken('BTC-gas-address', 800000, 1700000000);
         assert.strictEqual(reads, 0);
         assert.strictEqual(h.sent.length, 1, 'and the row is still injected');
     });

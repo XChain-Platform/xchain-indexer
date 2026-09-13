@@ -111,7 +111,7 @@ class Anchor {
     // Canonical signing string: MUST byte-match the hub's
     // StateCheckpointEngine.canonicalCheckpoint (+ the archive extension for v1)
     // and the SDK CheckpointVerifier.
-    _canonical(d){
+    canonical(d){
         let base = ['XCHECKPOINT', d['CHAIN'], d['NETWORK'], String(d['BLOCK_INDEX_CHECKPOINTED']),
                     d['BLOCK_HASH'], d['LEDGER_HASH'], d['ACTIONS_HASH'], d['CONTRACT_HASH'],
                     String(d['CHECKPOINT_SEQ']), String(d['SNAPSHOT_BLOCK'])].join('|');
@@ -163,7 +163,7 @@ class Anchor {
     // prefix gives the attestation its OWN equivocation family, so a validator that signs both
     // the checkpoint root canonical and this reward attestation in the same round is never
     // falsely slashable (same R-4 reasoning as the checkpoint/archive roundId split above).
-    _rewardCanonical(d){
+    rewardCanonical(d){
         // Archive leg (v1): the attested tuple is the anchor_archive reward, keyed on
         // MATCH_BATCH_SEQ (the archive round number) with the frozen ARCHIVE amount. MUST
         // byte-match the hub's StateAnchorPublisher._archiveAttestationCanonical. The
@@ -224,14 +224,14 @@ class Anchor {
         // Dispatch by family. An unparseable version still lands on a body parser (carrying
         // the error), and the archive-head parser is the fall-through, so a rejected action
         // is recorded rather than dropped.
-        if(format === 2) return await this._parseContinuation(params, data, error);
-        if(format === 0) return await this._parseBundle(params, data, error);
-        return await this._parseCheckpoint(params, data, error, format);
+        if(format === 2) return await this.parseContinuation(params, data, error);
+        if(format === 0) return await this.parseBundle(params, data, error);
+        return await this.parseCheckpoint(params, data, error, format);
     }
 
     // ANCHOR v1: the archive head (a checkpoint wrapper carrying the match archive plus
     // the publisher-attestation tail).
-    async _parseCheckpoint(params, data, error, format){
+    async parseCheckpoint(params, data, error, format){
 
         data['CHAIN']                   = String(params[1] || '').toUpperCase();
         data['NETWORK']                 = String(params[2] || '');
@@ -370,7 +370,7 @@ class Anchor {
         // v1 archive integrity (single-chunk batches verify inline; chunked batches verify
         // at reassembly when the last v2 arrives)
         if(!error && Number(data['TOTAL_CHUNKS']) === 1){
-            let crc = this._archiveCrc(data['ARCHIVE_B64']);
+            let crc = this.archiveCrc(data['ARCHIVE_B64']);
             if(crc === null)                          error = 'invalid: ARCHIVE_B64 (not gzip)';
             else if(crc !== data['BATCH_CRC32'])      error = 'invalid: BATCH_CRC32 (archive mismatch)';
         }
@@ -395,7 +395,7 @@ class Anchor {
                 // Store as 'unverified'; recovery re-verifies from archived snapshots.
                 data['STATUS'] = 'unverified';
             } else {
-                let canonical = this._canonical(data);
+                let canonical = this.canonical(data);
                 snapPubkeys = new Set(validators.map(v => String(v.pubkey).toLowerCase()));
                 let validSigners = [], seen = new Set();
                 for(let s of sigs){
@@ -434,7 +434,7 @@ class Anchor {
         // rail stays single-winner fleet-wide. Reward type anchor_archive,
         // round = MATCH_BATCH_SEQ.
         if(!error && format === 1 && snapPubkeys && oracleN > 0){
-            let rewardCanonical = this._rewardCanonical(data);
+            let rewardCanonical = this.rewardCanonical(data);
             let attSigners = [], attSeen = new Set();
             for(let s of publisherSigs){
                 let pk = String(s.pubkey || '').toLowerCase();
@@ -549,13 +549,13 @@ class Anchor {
            Number(data['TOTAL_CHUNKS']) > 1){
             // At/after the publisher-scoped-archive flag day, the head reassembles its OWN
             // publisher's chunks. Below it, the canonical-head rule (whatever it selects) is kept.
-            let scope = await this._archiveAuthorScope(data['MATCH_BATCH_SEQ'], data['SOURCE']);
+            let scope = await this.archiveAuthorScope(data['MATCH_BATCH_SEQ'], data['SOURCE']);
             let chunks = await this.indexerDb.getAnchorChunks(Number(data['MATCH_BATCH_SEQ']), scope);
             let ordered = aaq.archiveChunkCoverage(chunks, Number(data['TOTAL_CHUNKS']));
             if(ordered){
                 let b64 = String(data['ARCHIVE_B64'] || '');
                 for(let c of ordered) b64 += c.archive_b64;
-                let crc = this._archiveCrc(b64);
+                let crc = this.archiveCrc(b64);
                 if(crc === null || crc !== String(data['BATCH_CRC32'])){
                     console.warn("\t ANCHOR v" + format + " : batch " + data['MATCH_BATCH_SEQ'] + ' head-side reassembly CRC mismatch, flagging invalid_archive');
                     diag.noteAnchorFailed({
@@ -596,7 +596,7 @@ class Anchor {
     // denormalized network, publisher and publisher_attestations. The PK is
     // (action_index, section_index), so rollback's generic `action_index >= ?` delete
     // still drops a bundle's rows together.
-    async _parseBundle(params, data, error){
+    async parseBundle(params, data, error){
 
         data['NETWORK']        = String(params[1] || '');
         data['SNAPSHOT_BLOCK'] = params[2];
@@ -646,7 +646,7 @@ class Anchor {
                     BLOCK_MERKLE_ROOT:         String(params[cursor + 10] || '').toLowerCase(),
                     BLOCK_MERKLE_VERSION:      params[cursor + 11]
                 };
-                let reason = this._validateSectionShape(s, seenChains);
+                let reason = this.validateSectionShape(s, seenChains);
                 if(reason){ error = 'invalid: SECTION ' + i + ' ' + reason; break; }
                 seenChains.add(s.CHAIN);
 
@@ -751,7 +751,7 @@ class Anchor {
         if(!error && !data['STATUS']){
             for(let s of sections){
                 let set = await oracleSetFor(s.SNAPSHOT_BLOCK, s.NETWORK);
-                let canonical = this._canonical(s);
+                let canonical = this.canonical(s);
                 let validSigners = [], seen = new Set();
                 for(let sig of s.SIGS){
                     let pk = String(sig.pubkey || '').toLowerCase();
@@ -782,7 +782,7 @@ class Anchor {
         // A degraded or forged attestation never fails the anchor, exactly as on the
         // archive leg: the sections still record 'valid', only the reward is skipped.
         if(!error && bundleSet && bundleSet.oracleN > 0){
-            let rewardCanonical = this._rewardCanonical(data);
+            let rewardCanonical = this.rewardCanonical(data);
             let attSigners = [], attSeen = new Set();
             for(let s of publisherSigs){
                 let pk = String(s.pubkey || '').toLowerCase();
@@ -870,7 +870,7 @@ class Anchor {
     // claimed, which is why this is called in wire order and why the guard lives here
     // rather than in a post-pass: the reason has to name the LATER section, the one that
     // is the duplicate.
-    _validateSectionShape(s, seenChains){
+    validateSectionShape(s, seenChains){
         if(ALLOWED_CHAINS.indexOf(s.CHAIN) === -1) return 'CHAIN (unknown)';
         // D39: one chain, one section. The hub's selector groups by (chain, network) and
         // can only ever produce one row per chain per bundle, so a repeat is malformed or
@@ -909,7 +909,7 @@ class Anchor {
     // rule. No head at all means no batch to scope, hence null. The height is
     // block_index_doge (where the ANCHOR landed), never block_index (the CHECKPOINTED
     // height on the checkpointed chain, a different chain's scale entirely).
-    async _archiveAuthorScope(batchSeq, source){
+    async archiveAuthorScope(batchSeq, source){
         let canonical = await this.indexerDb.getAnchorV1ByBatchSeq(Number(batchSeq));
         if(!canonical) return null;
         if(!abas.isArchiveBatchAuthorActive(Number(canonical.block_index_doge), this.config['NETWORK'])) return null;
@@ -917,7 +917,7 @@ class Anchor {
     }
 
     // ANCHOR v2: archive continuation chunk (authenticated by its parent v1)
-    async _parseContinuation(params, data, error){
+    async parseContinuation(params, data, error){
 
         data['MATCH_BATCH_SEQ'] = params[1];
         data['CHUNK_INDEX']     = params[2];
@@ -1032,7 +1032,7 @@ class Anchor {
             if(ordered){
                 let b64 = String(parent.archive_b64 || '');
                 for(let c of ordered) b64 += c.archive_b64;
-                let crc = this._archiveCrc(b64);
+                let crc = this.archiveCrc(b64);
                 if(crc === null || crc !== String(parent.batch_crc32)){
                     console.warn("\t ANCHOR v2 : batch " + data['MATCH_BATCH_SEQ'] + ' reassembly CRC mismatch, flagging invalid_archive');
                     diag.noteAnchorFailed({
@@ -1052,7 +1052,7 @@ class Anchor {
     }
 
     // CRC32 (hex) of the decompressed archive; null when the blob isn't valid gzip.
-    _archiveCrc(b64){
+    archiveCrc(b64){
         let json;
         // Bound the decompressed output: ARCHIVE_B64 is attacker-supplied, freely
         // broadcastable on-chain data decompressed here BEFORE any signature/quorum
@@ -1060,10 +1060,10 @@ class Anchor {
         // RangeError past the cap and the catch below rejects the archive as invalid.
         try { json = zlib.gunzipSync(Buffer.from(String(b64), 'base64url'), { maxOutputLength: 16 * 1024 * 1024 }).toString('utf8'); }
         catch(e){ return null; }
-        let n = zlib.crc32 ? zlib.crc32(Buffer.from(json, 'utf8')) : this._crc32Fallback(Buffer.from(json, 'utf8'));
+        let n = zlib.crc32 ? zlib.crc32(Buffer.from(json, 'utf8')) : this.crc32Fallback(Buffer.from(json, 'utf8'));
         return (n >>> 0).toString(16).padStart(8, '0');
     }
-    _crc32Fallback(buf){
+    crc32Fallback(buf){
         let c, crc = 0xFFFFFFFF;
         for(let i = 0; i < buf.length; i++){
             c = (crc ^ buf[i]) & 0xFF;

@@ -117,7 +117,7 @@ describe('execContext (injected-execution TX_HASH seam) @regression @tier2', fun
 
         it('post-flag-day the injected context carries the ATTESTEXPCB synthetic TX_HASH', async function () {
             makeHandler(true);
-            await handler._injectExpiredCallback(request, expireData);
+            await handler.injectExpiredCallback(request, expireData);
             const ctx = executeStub.parse.firstCall.args[1];
             assert.strictEqual(ctx.TX_HASH,
                 sha256hex('ATTESTEXPCB:' + indexer.config['NETWORK'] + ':' + indexer.config['CHAIN'] + ':' + request.request_id));
@@ -128,7 +128,7 @@ describe('execContext (injected-execution TX_HASH seam) @regression @tier2', fun
 
         it('pre-flag-day the legacy hashless context is preserved byte-identically', async function () {
             makeHandler(false);
-            await handler._injectExpiredCallback(request, expireData);
+            await handler.injectExpiredCallback(request, expireData);
             const ctx = executeStub.parse.firstCall.args[1];
             assert.ok(!('TX_HASH' in ctx), 'pre-activation context must stay hashless (replay safety)');
         });
@@ -165,7 +165,7 @@ describe('execContext (injected-execution TX_HASH seam) @regression @tier2', fun
 
         it('post-flag-day the injected context carries the VOTECB synthetic TX_HASH', async function () {
             makeHandler(true);
-            await handler._injectCallbackExecute(poll, data, result);
+            await handler.injectCallbackExecute(poll, data, result);
             const ctx = executeStub.parse.firstCall.args[1];
             assert.strictEqual(ctx.TX_HASH,
                 sha256hex('VOTECB:' + indexer.config['NETWORK'] + ':' + indexer.config['CHAIN'] + ':' + poll.action_index));
@@ -176,7 +176,7 @@ describe('execContext (injected-execution TX_HASH seam) @regression @tier2', fun
 
         it('pre-flag-day the legacy hashless context is preserved byte-identically', async function () {
             makeHandler(false);
-            await handler._injectCallbackExecute(poll, data, result);
+            await handler.injectCallbackExecute(poll, data, result);
             const ctx = executeStub.parse.firstCall.args[1];
             assert.ok(!('TX_HASH' in ctx), 'pre-activation context must stay hashless (replay safety)');
         });
@@ -201,7 +201,7 @@ describe('execContext (injected-execution TX_HASH seam) @regression @tier2', fun
                 callback_params_json: '[]', target_chain: 'LTC', cross_hops: 1,
             };
             const contextData = { BLOCK_INDEX: 140, BLOCK_TIME: 1700000700, ACTION_INDEX: 99 };
-            await handler._injectCallback(request, contextData, 'ok', 'payload');
+            await handler.injectCallback(request, contextData, 'ok', 'payload');
             const ctx = executeStub.parse.firstCall.args[1];
             // The exact legacy inline expression, char for char: a drift here forks live chains.
             const legacy = crypto.createHash('sha256').update(

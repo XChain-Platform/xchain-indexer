@@ -127,7 +127,7 @@ class HubPushQueue {
 
     // A pending row is due when enough time has elapsed since its last attempt,
     // per the exponential-backoff schedule. Rows never tried are immediately due.
-    _isDue(row, now){
+    isDue(row, now){
         if(!row.last_attempted_at) return true;
         let last    = new Date(row.last_attempted_at).getTime();
         let attempts = Number(row.attempts) || 0;
@@ -151,7 +151,7 @@ class HubPushQueue {
             // Sweep aged terminal rows before fetching. It rides the existing drain
             // timer rather than owning one, so it inherits start/stop/pause and adds
             // no lifecycle: the throttle below is what keeps it off every 30s tick.
-            await this._pruneFailed();
+            await this.pruneFailed();
             // The due-time predicate is pushed into SQL (db.js getPendingHubPushes) so
             // parked-in-backoff rows no longer occupy the LIMIT batch slots (they used to
             // cause head-of-line blocking). Pass the SAME backoff params used below by
@@ -163,8 +163,8 @@ class HubPushQueue {
             if(!rows || rows.length === 0) return;
             let now = Date.now();
             for(let row of rows){
-                if(!this._isDue(row, now)) continue;
-                await this._attempt(row);
+                if(!this.isDue(row, now)) continue;
+                await this.attempt(row);
                 // A 429 stops the batch where it stands. The remaining rows are still
                 // pending and still due, so the next tick past the hold picks them up
                 // unchanged; pushing them now would only deepen the throttle.
@@ -182,7 +182,7 @@ class HubPushQueue {
     // housekeeping miss, not a delivery failure, and the next tick retries. The
     // typeof guard keeps minimal test doubles (indexerDb stubs without the method)
     // working. Returns the number of rows removed, 0 when it did not run.
-    async _pruneFailed(){
+    async pruneFailed(){
         if(!(this.failedRetentionSec > 0)) return 0;
         let now = Date.now();
         if(now - this._lastPruneMs < this.pruneIntervalMs) return 0;
@@ -223,7 +223,7 @@ class HubPushQueue {
         return { pending, failed, pendingOldestAgeSec };
     }
 
-    async _attempt(row){
+    async attempt(row){
         let payload;
         try {
             payload = (typeof row.payload === 'string') ? JSON.parse(row.payload) : row.payload;

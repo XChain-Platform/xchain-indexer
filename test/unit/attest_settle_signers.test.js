@@ -127,7 +127,7 @@ describe('ATTEST fee settle: pay the verified signers above the zero-conf height
             { pubkey: PUBKEY_A, sig: SIG(1) },
             { pubkey: PUBKEY_B, sig: SIG(2) },
         ]);
-        await handler._settleRequestFee(makeRequest(), settleData(sigs), 'fulfilled');
+        await handler.settleRequestFee(makeRequest(), settleData(sigs), 'fulfilled');
 
         const rewards = feeRewards();
         assert.strictEqual(rewards.length, 3, 'the fourth responsible member never signed and is not paid');
@@ -146,7 +146,7 @@ describe('ATTEST fee settle: pay the verified signers above the zero-conf height
             { pubkey: PUBKEY_B,               sig: SIG(2) },
             { pubkey: PUBKEY_A,               sig: SIG(1) },
         ]);
-        await handler._settleRequestFee(makeRequest(), settleData(sigs), 'fulfilled');
+        await handler.settleRequestFee(makeRequest(), settleData(sigs), 'fulfilled');
 
         const rewards = feeRewards();
         assert.deepStrictEqual(rewards.map(r => r.pubkey), [PUBKEY_A, PUBKEY_B],
@@ -164,7 +164,7 @@ describe('ATTEST fee settle: pay the verified signers above the zero-conf height
             { pubkey: PUBKEY_B, sig: SIG(2) },
             { pubkey: PUBKEY_C, sig: SIG(3) },
         ]);
-        await handler._settleRequestFee(
+        await handler.settleRequestFee(
             makeRequest({ block_index: TESTNET_BELOW_ZC, deadline_block: TESTNET_BELOW_ZC + 100 }),
             settleData(sigs, { BLOCK_INDEX: TESTNET_BELOW_ZC + 5 }),
             'fulfilled'
@@ -181,7 +181,7 @@ describe('ATTEST fee settle: pay the verified signers above the zero-conf height
         const warn = sinon.stub(console, 'warn');
         // The v4 relay path stores null here on purpose (its signatures are relay
         // signatures, not the attestation quorum), and it settles through this routine.
-        await handler._settleRequestFee(makeRequest(), settleData(null), 'fulfilled');
+        await handler.settleRequestFee(makeRequest(), settleData(null), 'fulfilled');
 
         const rewards = feeRewards();
         assert.strictEqual(rewards.length, 4, 'fallback pays the recomputed responsible set');
@@ -194,20 +194,20 @@ describe('ATTEST fee settle: pay the verified signers above the zero-conf height
 
     it('above the height with an unparseable signature column: same deterministic fallback', async function () {
         sinon.stub(console, 'warn');
-        await handler._settleRequestFee(makeRequest(), settleData('{not json'), 'fulfilled');
+        await handler.settleRequestFee(makeRequest(), settleData('{not json'), 'fulfilled');
         assert.strictEqual(feeRewards().length, 4);
     });
 
     it('above the height with an empty signature array: same deterministic fallback', async function () {
         sinon.stub(console, 'warn');
-        await handler._settleRequestFee(makeRequest(), settleData('[]'), 'fulfilled');
+        await handler.settleRequestFee(makeRequest(), settleData('[]'), 'fulfilled');
         assert.strictEqual(feeRewards().length, 4);
     });
 
     for (const status of ['errored', 'expired']) {
         it("terminal '" + status + "' above the height still refunds the payer and pays nobody", async function () {
             const sigs = JSON.stringify([{ pubkey: PUBKEY_A, sig: SIG(1) }]);
-            await handler._settleRequestFee(makeRequest(), settleData(sigs), status);
+            await handler.settleRequestFee(makeRequest(), settleData(sigs), status);
 
             assert.strictEqual(indexer.indexerDb.createValidatorReward.callCount, 0,
                 'a request that was never fulfilled pays no signer, D72');

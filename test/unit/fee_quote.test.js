@@ -63,17 +63,17 @@ function makeCtx(util, indexerDb, { dryRun, base64CodeEra = true } = {}){
         _calls:    calls,
         // DEPLOY_BASE64_CODE is the only flag-day the quote path reads (inline code decode).
         protocolChanges: { isEnabled: async (name) => (name === 'DEPLOY_BASE64_CODE' ? base64CodeEra : true) },
-        _nativeFeeMandatory:     Actions.prototype._nativeFeeMandatory,
-        _decodeDeployCodeBytes:  Actions.prototype._decodeDeployCodeBytes,
-        _staticProtocolFee:      Actions.prototype._staticProtocolFee,
-        _staticFeeQuote:         Actions.prototype._staticFeeQuote,
-        _dryRunAction: async (args) => {
+        nativeFeeMandatory:     Actions.prototype.nativeFeeMandatory,
+        decodeDeployCodeBytes:  Actions.prototype.decodeDeployCodeBytes,
+        staticProtocolFee:      Actions.prototype.staticProtocolFee,
+        staticFeeQuote:         Actions.prototype.staticFeeQuote,
+        dryRunAction: async (args) => {
             calls.dryRuns++;
             calls.dryRunArgs = args;
             if(dryRun && dryRun.throws) throw new Error('engine boom');
             return Object.assign({ blockIndex: 100, blockTime: 1000, status: 'valid', error: null, xchainFee: '1.00000000' }, dryRun || {});
         },
-        _priceFeeQuote:  Actions.prototype._priceFeeQuote,
+        priceFeeQuote:  Actions.prototype.priceFeeQuote,
         computeFeeQuote: Actions.prototype.computeFeeQuote
     };
     return { ctx, calls };
@@ -168,7 +168,7 @@ describe('native coin fee quote @regression @tier1', function () {
         it('prices 1.0 XCHAIN at the band midpoint (2000 sats) with band bounds', async function () {
             let util = makeUtil('BTC', FEE_DEST);
             let { ctx } = makeCtx(util, makeDb({ prices: BTC_PRICES }));
-            let q = await ctx._priceFeeQuote.call(ctx, { blockIndex: 100 }, '1.00000000', undefined);
+            let q = await ctx.priceFeeQuote.call(ctx, { blockIndex: 100 }, '1.00000000', undefined);
             assert.strictEqual(q.valid, true);
             assert.strictEqual(q.xchainFee, '1.00000000');
             assert.strictEqual(q.requiredFeeNative, '0.00002000');
@@ -182,7 +182,7 @@ describe('native coin fee quote @regression @tier1', function () {
             let util = makeUtil('BTC', FEE_DEST);
             // No prices seeded: a zero fee must not need them.
             let { ctx } = makeCtx(util, makeDb());
-            let q = await ctx._priceFeeQuote.call(ctx, {}, '0', undefined);
+            let q = await ctx.priceFeeQuote.call(ctx, {}, '0', undefined);
             assert.strictEqual(q.valid, true);
             assert.strictEqual(q.requiredFeeSats, 0);
             assert.strictEqual(q.requiredFeeNative, '0.00000000');
@@ -191,9 +191,9 @@ describe('native coin fee quote @regression @tier1', function () {
         it('judges a proposed output: accepts at exactly min, rejects just below', async function () {
             let util = makeUtil('BTC', FEE_DEST);
             let { ctx } = makeCtx(util, makeDb({ prices: BTC_PRICES }));
-            let ok = await ctx._priceFeeQuote.call(ctx, { blockIndex: 100 }, '1.0', 1900);
+            let ok = await ctx.priceFeeQuote.call(ctx, { blockIndex: 100 }, '1.0', 1900);
             assert.strictEqual(ok.valid, true);
-            let bad = await ctx._priceFeeQuote.call(ctx, { blockIndex: 100 }, '1.0', 1899);
+            let bad = await ctx.priceFeeQuote.call(ctx, { blockIndex: 100 }, '1.0', 1899);
             assert.strictEqual(bad.valid, false);
             assert.ok(/too small/.test(bad.error), bad.error);
         });
@@ -201,7 +201,7 @@ describe('native coin fee quote @regression @tier1', function () {
         it('missing/stale price => valid:false with the price error', async function () {
             let util = makeUtil('BTC', FEE_DEST);
             let { ctx } = makeCtx(util, makeDb({ prices: { 'XCHAIN/USD': '1.0' } }));
-            let q = await ctx._priceFeeQuote.call(ctx, { blockIndex: 100 }, '1.0', undefined);
+            let q = await ctx.priceFeeQuote.call(ctx, { blockIndex: 100 }, '1.0', undefined);
             assert.strictEqual(q.valid, false);
             assert.ok(/missing or stale/.test(q.error), q.error);
         });
@@ -253,7 +253,7 @@ describe('native coin fee quote @regression @tier1', function () {
             util.config['NETWORK'] = 'mainnet';
             let { db, seen } = makePriceDb(dogeRows(AHEAD_TIP));
             let ctx = ctxFor(util, db);
-            let q = await ctx._priceFeeQuote.call(ctx, { blockIndex: 100, blockTime: AHEAD_TIP }, '1.00000000', undefined);
+            let q = await ctx.priceFeeQuote.call(ctx, { blockIndex: 100, blockTime: AHEAD_TIP }, '1.00000000', undefined);
             assert.ok(!q.error, q.error);
             assert.strictEqual(q.valid, true);
             assert.strictEqual(q.oracleRound, 9);
@@ -288,7 +288,7 @@ describe('native coin fee quote @regression @tier1', function () {
                 { pair: 'XCHAIN/USD', price: '1.00000000',     round: 4, ts: tipTime, refBlock: 100 }
             ]);
             let ctx = ctxFor(util, db);
-            let q = await ctx._priceFeeQuote.call(ctx, { blockIndex: 100, blockTime: tipTime }, '1.00000000', undefined);
+            let q = await ctx.priceFeeQuote.call(ctx, { blockIndex: 100, blockTime: tipTime }, '1.00000000', undefined);
             assert.strictEqual(q.valid, true, q.error);
             assert.strictEqual(q.requiredFeeSats, 2000);
             assert.strictEqual(seen.opts[0].blockTime, tipTime);
@@ -306,7 +306,7 @@ describe('native coin fee quote @regression @tier1', function () {
                 { pair: 'XCHAIN/USD', price: '1.00000000',     round: 4, ts: nowEpoch - 60, refBlock: 100 }
             ]);
             let ctx = ctxFor(util, db);
-            let q = await ctx._priceFeeQuote.call(ctx, { blockIndex: 100 }, '1.00000000', undefined);
+            let q = await ctx.priceFeeQuote.call(ctx, { blockIndex: 100 }, '1.00000000', undefined);
             assert.strictEqual(q.valid, true, q.error);
             assert.ok(Math.abs(seen.opts[0].blockTime - nowEpoch) <= 5, 'wall-clock fallback, got ' + seen.opts[0].blockTime);
         });
@@ -392,8 +392,8 @@ describe('native coin fee quote @regression @tier1', function () {
         function ctxFor(util, db){
             return {
                 config: util.config, util: util, indexerDb: db,
-                _nativeFeeMandatory: Actions.prototype._nativeFeeMandatory,
-                _priceFeeQuote:      Actions.prototype._priceFeeQuote
+                nativeFeeMandatory: Actions.prototype.nativeFeeMandatory,
+                priceFeeQuote:      Actions.prototype.priceFeeQuote
             };
         }
     });

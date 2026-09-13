@@ -619,7 +619,7 @@ describe('Database reorg identity detection @regression @tier1', function () {
     it('apiView() routes doQuery AND doQueryStrict through _poolQuery, never getConnection (REORG-1)', async function () {
         const poolCalls = [];
         const stub = Object.assign(Object.create(Database.prototype), {
-            _poolQuery: (q) => { poolCalls.push(q); return Promise.resolve([]); },
+            poolQuery: (q) => { poolCalls.push(q); return Promise.resolve([]); },
             getConnection: () => { throw new Error('apiView must never call getConnection (would adopt a foreign transaction)'); },
         });
         const view = stub.apiView();

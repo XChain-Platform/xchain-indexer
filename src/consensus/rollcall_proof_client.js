@@ -132,7 +132,7 @@ class RollcallProofClient {
 
         let result;
         try {
-            result = await this._rpc('getrollcallsigners', {
+            result = await this.rpc('getrollcallsigners', {
                 network:        network,
                 epoch_height:   epochHeight,
                 max_block_time: maxBlockTime,
@@ -216,7 +216,7 @@ class RollcallProofClient {
     }
 
     // JSON-RPC over the node http/https core modules, matching AnchorProofClient.
-    _rpc(method, params){
+    rpc(method, params){
         return new Promise((resolve, reject) => {
             let parsed  = url.parse(this.url);
             let isHttps = parsed.protocol === 'https:';

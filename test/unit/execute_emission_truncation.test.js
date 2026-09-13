@@ -99,7 +99,7 @@ describe('Emission amount truncation (item 5346) @regression @tier1', function()
         it('SEND quantity is rounded to the tick decimals, matching bcadd', async function(){
             const ex = makeExecute({ TKN:true, __d:8 });
             const params = { tick:'TKN', destination:'addr', quantity:'3.333333333333333' };
-            await ex._truncateEmissionAmounts('SEND', params);
+            await ex.truncateEmissionAmounts('SEND', params);
             assert.strictEqual(params.quantity, String(util.bcadd('3.333333333333333', 0, 8)));
             assert.strictEqual(params.quantity, '3.33333333');
         });
@@ -107,7 +107,7 @@ describe('Emission amount truncation (item 5346) @regression @tier1', function()
         it('non-divisible tick (decimals 0) collapses to an integer', async function(){
             const ex = makeExecute({ TKN:true, __d:0 });
             const params = { tick:'TKN', destination:'addr', quantity:'5.9999999' };
-            await ex._truncateEmissionAmounts('SEND', params);
+            await ex.truncateEmissionAmounts('SEND', params);
             assert.strictEqual(params.quantity, String(util.bcadd('5.9999999', 0, 0)));
         });
 
@@ -115,7 +115,7 @@ describe('Emission amount truncation (item 5346) @regression @tier1', function()
             // giveTick and getTick both resolve; both use the stubbed decimals (4 here).
             const ex = makeExecute({ A:true, B:true, __d:4 });
             const params = { giveTick:'A', giveAmount:'1.123456789', getTick:'B', getAmount:'2.987654321' };
-            await ex._truncateEmissionAmounts('ORDER', params);
+            await ex.truncateEmissionAmounts('ORDER', params);
             assert.strictEqual(params.giveAmount, String(util.bcadd('1.123456789', 0, 4)));
             assert.strictEqual(params.getAmount,  String(util.bcadd('2.987654321', 0, 4)));
         });
@@ -123,7 +123,7 @@ describe('Emission amount truncation (item 5346) @regression @tier1', function()
         it('ISSUE uses its inline declared decimals (tick not in issues table yet)', async function(){
             const ex = makeExecute({ __d:99 }); // getTickerId would return null; declared path is used
             const params = { tick:'NEW', decimals:'2', maxSupply:'1000.12345', mintSupply:'10.999' };
-            await ex._truncateEmissionAmounts('ISSUE', params);
+            await ex.truncateEmissionAmounts('ISSUE', params);
             assert.strictEqual(params.maxSupply,  String(util.bcadd('1000.12345', 0, 2)));
             assert.strictEqual(params.mintSupply, String(util.bcadd('10.999', 0, 2)));
         });
@@ -137,7 +137,7 @@ describe('Emission amount truncation (item 5346) @regression @tier1', function()
             };
             const ex = new Execute({ config:{ GAS:'XCHAIN' }, decoderDb:{}, indexerDb, util, mapper:{} });
             const params = { tick:'TKN', deposit:'1.234567891234', gasEscrow:'0.999999999' };
-            await ex._truncateEmissionAmounts('VOTE', params);
+            await ex.truncateEmissionAmounts('VOTE', params);
             assert.strictEqual(params.deposit,   String(util.bcadd('1.234567891234', 0, 8)));
             assert.strictEqual(params.gasEscrow, String(util.bcadd('0.999999999', 0, 8)));
         });
@@ -146,7 +146,7 @@ describe('Emission amount truncation (item 5346) @regression @tier1', function()
             // giveTick A is known; getTick FOREIGN is not (getTickerId -> null).
             const ex = makeExecute({ A:true, __d:8 });
             const params = { giveTick:'A', giveAmount:'1.123456789', getTick:'FOREIGN', getAmount:'9.999999999' };
-            await ex._truncateEmissionAmounts('ORDER', params);
+            await ex.truncateEmissionAmounts('ORDER', params);
             assert.strictEqual(params.giveAmount, String(util.bcadd('1.123456789', 0, 8)));
             assert.strictEqual(params.getAmount, '9.999999999', 'foreign-tick leg must be left as-is');
         });
@@ -154,7 +154,7 @@ describe('Emission amount truncation (item 5346) @regression @tier1', function()
         it('skips null/empty amount fields', async function(){
             const ex = makeExecute({ TKN:true, __d:8 });
             const params = { tick:'TKN', destination:'addr', quantity:'' };
-            await ex._truncateEmissionAmounts('SEND', params);
+            await ex.truncateEmissionAmounts('SEND', params);
             assert.strictEqual(params.quantity, '');
         });
 
@@ -162,7 +162,7 @@ describe('Emission amount truncation (item 5346) @regression @tier1', function()
             const ex = makeExecute({ __d:8 });
             const params = { method:'foo' };
             const before = JSON.stringify(params);
-            await ex._truncateEmissionAmounts('XCALL', params);
+            await ex.truncateEmissionAmounts('XCALL', params);
             assert.strictEqual(JSON.stringify(params), before);
         });
     });

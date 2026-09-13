@@ -66,7 +66,7 @@ class Stake {
 
         // v3 = contract-targeted stake; dispatch to its own handler (separate machinery)
         if(!error && format === 3){
-            return await this._parseContractStake(params, data, error);
+            return await this.parseContractStake(params, data, error);
         }
 
         // Extract params (v1/v2 capability staking)
@@ -228,7 +228,7 @@ class Stake {
 
     // STAKE v3: contract-targeted stake. Separate machinery from v1/v2 capability
     // staking; writes to contract_stakes table and supports any token (not just XCHAIN).
-    async _parseContractStake(params, data, error){
+    async parseContractStake(params, data, error){
 
         // Extract params
         data['AMOUNT']                = params[1];

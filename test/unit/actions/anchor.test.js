@@ -408,7 +408,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         let d = { FORMAT: 0, NETWORK: 'regtest', SNAPSHOT_BLOCK: 100, PUBLISHER: PUBKEY_A };
         let raw = ['XANCPUB', 'anchor_bundle', '100', '100', PUBKEY_A, '10.00000000'].join('|');
         let expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, 'XANCPUB|bundle|regtest|100', 0, raw);
-        assert.strictEqual(handler._rewardCanonical(d), expected);
+        assert.strictEqual(handler.rewardCanonical(d), expected);
         // The content slash.js reads sits after the '||' separator; field 3 is the block.
         assert.strictEqual(expected.split('||')[1].split('|')[3], '100');
     });
@@ -587,7 +587,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         };
         let raw = ['XANCPUB', 'anchor_archive', '3', '100', PUBKEY_A, '10.00000000'].join('|');
         let expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, 'XANCPUB|archive|regtest|3|100', 0, raw);
-        assert.strictEqual(handler._rewardCanonical(d), expected);
+        assert.strictEqual(handler.rewardCanonical(d), expected);
     });
 
     it('v1 replay guard: a match_batch_seq below the recorded max is stale', async function () {

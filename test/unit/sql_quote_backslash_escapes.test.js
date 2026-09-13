@@ -37,9 +37,9 @@ const Database = require('../../src/db');
 // Same binding technique migration_runner.test.js uses: the walkers are pure, so
 // bind them to the prototype rather than standing up a live Database.
 const stripComments = Database.prototype.stripSqlLineComments.bind({});
-const destructiveOf = Database.prototype._destructiveAutoStatement.bind(Database.prototype);
+const destructiveOf = Database.prototype.destructiveAutoStatement.bind(Database.prototype);
 const statementsOf  = (raw) => Database.prototype.splitSqlStatements.call(Database.prototype, raw);
-const isIdRepair    = Database.prototype._isIdRepairUpdate.bind(Database.prototype);
+const isIdRepair    = Database.prototype.isIdRepairUpdate.bind(Database.prototype);
 
 // Build the literal backslash out of a charCode so no layer of source escaping can
 // quietly turn `\'` into `\\'` and make the test assert a different string than the

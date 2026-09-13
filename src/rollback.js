@@ -246,7 +246,7 @@ class Rollback {
         // longer exists locally by the time it is sent.
         let unlandedAttestBatches = [];
         if(firstActionIndex !== null && this.hubClient && this.hubClient.enabled)
-            unlandedAttestBatches = await this._collectUnlandedAttestBatches(firstActionIndex);
+            unlandedAttestBatches = await this.collectUnlandedAttestBatches(firstActionIndex);
 
         // Handle looking up data for any action_indexes in the rollback
         if(firstActionIndex !== null){
@@ -475,7 +475,7 @@ class Rollback {
             // on block_index / cooldown_end_block, so it is a no-op when nothing matured. Seeds the
             // affected source addresses/ticks into the util lists captured above so the unconditional
             // updateBalances/updateTokens below recompute them.
-            await this._reverseCooldownMaturities(block_index);
+            await this.reverseCooldownMaturities(block_index);
 
             // Delete contract_emissions first (references contract_executions)
             if(firstActionIndex !== null){
@@ -1538,7 +1538,7 @@ class Rollback {
             // rows whose most-recent touch is in the orphaned range and rebuild them
             // from the surviving signatures + expired-request records, matching what
             // a from-genesis replay to block_index-1 would produce.
-            await this._recomputeAttestationValidatorStats(block_index);
+            await this.recomputeAttestationValidatorStats(block_index);
 
             // DEBUG : Full balances and token updates
             // await this.indexerDb.updateBalances(true, true);
@@ -1796,7 +1796,7 @@ class Rollback {
     // outside the transaction, where doQuery collapses a transient DB fault into an empty
     // result, which here is indistinguishable from "no batch was un-landed" and would
     // silently skip a retraction the reorg is never retried to re-issue.
-    async _collectUnlandedAttestBatches(firstActionIndex){
+    async collectUnlandedAttestBatches(firstActionIndex){
         let query = `SELECT DISTINCT
                         LOWER(h.request_id)     AS batch_key,
                         h.action_index          AS action_index,
@@ -1848,7 +1848,7 @@ class Rollback {
     // rollback transaction, BEFORE the blockTables delete and BEFORE updateBalances/updateTokens (the
     // seeded addresses/ticks feed the unconditional recompute via the live util lists). No-op when no
     // maturity landed in the range (every predicate is keyed on block_index / cooldown_end_block).
-    async _reverseCooldownMaturities(block_index){
+    async reverseCooldownMaturities(block_index){
         let completedStatusId = await this.indexerDb.getStatusId('completed');
         let validStatusId     = await this.indexerDb.getStatusId('valid');
         if(completedStatusId === null || validStatusId === null)
@@ -1915,7 +1915,7 @@ class Rollback {
     // every row whose last touch is in the orphaned range and rebuild those exact
     // pairs from the surviving ledger. Runs inside the rollback transaction (after
     // the data/block deletes), so every query below sees only post-rollback rows.
-    async _recomputeAttestationValidatorStats(block_index){
+    async recomputeAttestationValidatorStats(block_index){
         // Pairs whose counters may include orphaned increments: any row last
         // touched at/after block_index. Increments stamp last_updated_block with
         // the touch block and blocks advance monotonically, so a pair touched in
@@ -2091,7 +2091,7 @@ class Rollback {
                 // per-block validator cache above: two requests at the same block against
                 // different providers filter that one snapshot differently. Resolve it here
                 // and let _responsibleSet apply it, keeping the cache provider-agnostic.
-                responsible = this._responsibleSet(String(req.request_id), cached.validators, Number(req.redundancy), cached.weighted,
+                responsible = this.responsibleSet(String(req.request_id), cached.validators, Number(req.redundancy), cached.weighted,
                                                    this.providerRegistry.getMinStake(String(req.provider_id), Number(req.block_index), this.config['NETWORK']));
             }
             let provider    = String(req.provider_id);
@@ -2136,7 +2136,7 @@ class Rollback {
     // fails the recompute closed to an empty set the same way the live path does, so a
     // reorg cannot charge missed_count to validators the live expiry never held
     // responsible.
-    _responsibleSet(requestId, validators, redundancy, weighted, minStake){
+    responsibleSet(requestId, validators, redundancy, weighted, minStake){
         if(!validators || validators.length === 0)
             return [];
         if(weighted){

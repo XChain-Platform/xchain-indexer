@@ -51,8 +51,8 @@ function makeCtx(util, { base64CodeEra = true } = {}){
         config:                 util.config,
         util:                   util,
         protocolChanges:        { isEnabled: async (n) => (n === 'DEPLOY_BASE64_CODE' ? base64CodeEra : true) },
-        _decodeDeployCodeBytes: Actions.prototype._decodeDeployCodeBytes,
-        _staticProtocolFee:     Actions.prototype._staticProtocolFee
+        decodeDeployCodeBytes: Actions.prototype.decodeDeployCodeBytes,
+        staticProtocolFee:     Actions.prototype.staticProtocolFee
     };
 }
 
@@ -142,7 +142,7 @@ describe('static fee quote <-> handler acceptance fee parity @regression @tier1'
             it('quote == acceptance fee for ' + f.what, async function () {
                 let util  = makeUtil();
                 let ctx   = makeCtx(util);
-                let quote = await ctx._staticProtocolFee.call(ctx, f.action, f.params, 100);
+                let quote = await ctx.staticProtocolFee.call(ctx, f.action, f.params, 100);
                 assert.ok(quote && !quote.error, 'expected a sized quote, got ' + JSON.stringify(quote));
                 assert.strictEqual(quote.gasCost, f.handler(util),
                     'the quoted gas cost must equal what the handler would charge');
@@ -158,7 +158,7 @@ describe('static fee quote <-> handler acceptance fee parity @regression @tier1'
         it('the pre-activation hex era bills the same byte count', async function () {
             let util  = makeUtil();
             let ctx   = makeCtx(util, { base64CodeEra: false });
-            let quote = await ctx._staticProtocolFee.call(ctx, 'DEPLOY', ['0', '78', '500000', ''], 100);
+            let quote = await ctx.staticProtocolFee.call(ctx, 'DEPLOY', ['0', '78', '500000', ''], 100);
             assert.strictEqual(quote.gasCost, util.vmGasCost(SCHEDULE, 'DEPLOY_INLINE', 1),
                 "hex '78' is the same 1 byte of source the handler would measure");
         });

@@ -40,7 +40,7 @@ function realManifestHash(){
 // A client whose transport is replaced by a canned reply (or a thrown error).
 function clientWith(reply, opts){
     let c = new RollcallProofClient(CONFIG, Object.assign({ url: 'http://doge.invalid/' }, opts || {}));
-    c._rpc = async () => {
+    c.rpc = async () => {
         if(reply instanceof Error) throw reply;
         return reply;
     };
@@ -149,7 +149,7 @@ describe('rollcall_proof_client', function () {
         // Decided: second call must not re-ask.
         let calls = 0;
         let c = new RollcallProofClient(CONFIG, { url: 'http://doge.invalid/' });
-        c._rpc = async () => { calls++; return goodReply(); };
+        c.rpc = async () => { calls++; return goodReply(); };
         await c.fetchSigners(ask);
         await c.fetchSigners(ask);
         assert.strictEqual(calls, 1, 'a decided answer should be memoized');
@@ -157,7 +157,7 @@ describe('rollcall_proof_client', function () {
         // Unknown: it is exactly the state expected to change, so it must be re-asked.
         let calls2 = 0;
         let c2 = new RollcallProofClient(CONFIG, { url: 'http://doge.invalid/' });
-        c2._rpc = async () => { calls2++; return goodReply({ hcut: null }); };
+        c2.rpc = async () => { calls2++; return goodReply({ hcut: null }); };
         await c2.fetchSigners(ask);
         await c2.fetchSigners(ask);
         assert.strictEqual(calls2, 2, 'an unknown must NOT be memoized');
@@ -177,7 +177,7 @@ describe('rollcall_proof_client', function () {
             c.calls = 0;
             // The tip is stamped past every window end these cases ask about, so a deferral
             // can never stand in for the memo behaviour under test.
-            c._rpc = async () => { c.calls++; return goodReply({ hcut: c.calls === 1 ? 50 : 60,
+            c.rpc = async () => { c.calls++; return goodReply({ hcut: c.calls === 1 ? 50 : 60,
                                                                 tip_block_index: 60 + MATURITY,
                                                                 tip_block_time:  MAXT + 2000 }); };
             return c;

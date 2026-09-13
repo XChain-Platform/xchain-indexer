@@ -94,7 +94,7 @@ function makeXcall(opts) {
 
     const xcall = new Xcall(indexer);
     if (opts.quorum)
-        sinon.stub(xcall, '_verifyResultQuorum').resolves(opts.quorum);
+        sinon.stub(xcall, 'verifyResultQuorum').resolves(opts.quorum);
     return { xcall, indexer };
 }
 

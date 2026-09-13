@@ -206,7 +206,7 @@ function makeCtx(opts){
     });
     const db = bindSettlementReads({
         config: config,
-        _mirrorDb: () => mirror,
+        mirrorDb: () => mirror,
         doQuery: async (sql, args) => {
             // The source-leg uniqueness read, keyed on (src_chain, src_action_index). Answered
             // before the id-keyed branch below, which would otherwise swallow it on LIMIT 1 and
@@ -756,7 +756,7 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
             const { ctx } = makeCtx({ coin: 'DOGE' });
             // Both sources answer empty, which is exactly "this node holds none yet".
             ctx.indexerDb.doQuery = async () => [];
-            ctx.indexerDb._mirrorDb = () => bindSettlementReads({ doQuery: async () => [] });
+            ctx.indexerDb.mirrorDb = () => bindSettlementReads({ doQuery: async () => [] });
             await assert.rejects(() => BS.fetchProofForTransfer(row, ctx), (err) => {
                 assert.strictEqual(err.name, 'BridgeProofUnavailableError');
                 assert.strictEqual(err.stallReason, PC.BRIDGE_PROOF_BARRIER);
@@ -793,7 +793,7 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
         function selectorCtx(anchorRows, mirrorRows){
             const { ctx } = makeCtx({ coin: 'DOGE' });
             ctx.indexerDb.doQuery = async (sql) => (/FROM anchor_actions/.test(sql) ? anchorRows : []);
-            ctx.indexerDb._mirrorDb = () => bindSettlementReads({ doQuery: async () => mirrorRows });
+            ctx.indexerDb.mirrorDb = () => bindSettlementReads({ doQuery: async () => mirrorRows });
             // The two reads are the real db mixin methods over those stubs, not stubs of their
             // own, so the anchor leg still has to issue SQL naming anchor_actions to see a row
             // and the mirrored leg still has to route through _mirrorDb() to see one.
@@ -920,15 +920,15 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
             // Without a field entry this returns 'invalid: ENGINE_TAG (no snapshot_block rule)'
             // and the capability mapping above would be inert: a real forgery would burn nothing.
             assert.deepStrictEqual(
-                await s._resolveSlot(eq.ENGINE_TAGS.BRIDGE, 'a'.repeat(64),
+                await s.resolveSlot(eq.ENGINE_TAGS.BRIDGE, 'a'.repeat(64),
                                      'XBRIDGE|a|1200|X', 'XBRIDGE|a|1200|Y', false),
                 { snapshotBlock: SNAPSHOT });
             assert.deepStrictEqual(
-                await s._resolveSlot(eq.ENGINE_TAGS.POLICY, 'd'.repeat(64),
+                await s.resolveSlot(eq.ENGINE_TAGS.POLICY, 'd'.repeat(64),
                                      'XPOLICY|d|1200|X', 'XPOLICY|d|1200|Y', false),
                 { snapshotBlock: SNAPSHOT });
             // The two contents must agree on the height, or the pair names no shared slot.
-            const mismatched = await s._resolveSlot(eq.ENGINE_TAGS.BRIDGE, 'a'.repeat(64),
+            const mismatched = await s.resolveSlot(eq.ENGINE_TAGS.BRIDGE, 'a'.repeat(64),
                                                     'XBRIDGE|a|1200|X', 'XBRIDGE|a|1300|Y', false);
             assert.ok(mismatched.error, 'a height mismatch must not resolve a slot');
         });
@@ -952,7 +952,7 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
         it('runs policy snapshots at the HEAD, before any transfer leg', async function(){
             const order = [];
             const { ctx } = makeCtx({ coin: 'DOGE' });
-            ctx.indexerDb._mirrorDb = () => bindSettlementReads({ doQuery: async (sql) => {
+            ctx.indexerDb.mirrorDb = () => bindSettlementReads({ doQuery: async (sql) => {
                 order.push(/policy_snapshots/.test(sql) ? 'policy' : 'transfer');
                 return [];
             }});

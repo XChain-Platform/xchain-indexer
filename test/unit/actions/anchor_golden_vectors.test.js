@@ -257,7 +257,7 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
         // The bytes the attestation quorum signed, six positional fields with
         // round_reference repeated as the snapshot block (D22).
         const eq = require('../../../src/equivocation_header.js');
-        const canonical = handler._rewardCanonical(data);
+        const canonical = handler.rewardCanonical(data);
         const expected  = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT,
             'XANCPUB|bundle|' + BUNDLE.network + '|' + BUNDLE.snapshot_block, 0,
             ['XANCPUB', 'anchor_bundle', String(BUNDLE.snapshot_block), String(BUNDLE.snapshot_block),
@@ -270,7 +270,7 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
         await parseV0();
         const eq = require('../../../src/equivocation_header.js');
         for (const row of writtenRows()) {
-            const canonical = handler._canonical(row);
+            const canonical = handler.canonical(row);
             const base = ['XCHECKPOINT', row['CHAIN'], BUNDLE.network, String(row['BLOCK_INDEX_CHECKPOINTED']),
                           row['BLOCK_HASH'], row['LEDGER_HASH'], row['ACTIONS_HASH'], row['CONTRACT_HASH'],
                           String(row['CHECKPOINT_SEQ']), String(row['SNAPSHOT_BLOCK']),

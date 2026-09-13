@@ -100,7 +100,7 @@ function hubDbWithRealReads(hubDb){
 }
 
 const run = (self, blockTime) =>
-    XChainIndexer.prototype._waitForDirectCallPresence.call(self, blockTime);
+    XChainIndexer.prototype.waitForDirectCallPresence.call(self, blockTime);
 
 describe('XChainIndexer._waitForDirectCallPresence (direct-hub-DB call barrier)', function(){
 
@@ -333,7 +333,7 @@ describe('XChainIndexer._waitForDirectCallPresence (direct-hub-DB call barrier)'
 
     describe('_directCallBarrierClearsAt (health verdict)', function(){
         const clearsAt = (self, bt, height) =>
-            XChainIndexer.prototype._directCallBarrierClearsAt.call(self, bt, height);
+            XChainIndexer.prototype.directCallBarrierClearsAt.call(self, bt, height);
 
         it('keeps the clock verdict below the admission activation when handed a height', function(){
             // Inert on every network in this train unless the regtest env arms it; the armed
@@ -341,7 +341,7 @@ describe('XChainIndexer._waitForDirectCallPresence (direct-hub-DB call barrier)'
             const bt = NOW_S() + 3600;
             const self = ctx({ graceS: 120 });
             self.config = { COIN: 'BTC', NETWORK: 'mainnet' };
-            self._mirrorAdmissionActiveAt = XChainIndexer.prototype._mirrorAdmissionActiveAt;
+            self.mirrorAdmissionActiveAt = XChainIndexer.prototype.mirrorAdmissionActiveAt;
             assert.strictEqual(clearsAt(self, bt, 812000), (bt + 120) * 1000);
         });
 

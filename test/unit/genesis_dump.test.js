@@ -176,13 +176,13 @@ describe('GenesisDump._scalar @regression', function () {
 
     it('passes representable values through unchanged', function () {
         const g = gd();
-        assert.strictEqual(g._scalar(undefined), null);
-        assert.strictEqual(g._scalar(null), null);
-        assert.strictEqual(g._scalar(42), 42);
-        assert.strictEqual(g._scalar('abc'), 'abc');
-        assert.strictEqual(g._scalar(0n), 0);
-        assert.strictEqual(g._scalar(BigInt(Number.MAX_SAFE_INTEGER)), Number.MAX_SAFE_INTEGER);
-        assert.strictEqual(g._scalar(-BigInt(Number.MAX_SAFE_INTEGER)), -Number.MAX_SAFE_INTEGER);
+        assert.strictEqual(g.scalar(undefined), null);
+        assert.strictEqual(g.scalar(null), null);
+        assert.strictEqual(g.scalar(42), 42);
+        assert.strictEqual(g.scalar('abc'), 'abc');
+        assert.strictEqual(g.scalar(0n), 0);
+        assert.strictEqual(g.scalar(BigInt(Number.MAX_SAFE_INTEGER)), Number.MAX_SAFE_INTEGER);
+        assert.strictEqual(g.scalar(-BigInt(Number.MAX_SAFE_INTEGER)), -Number.MAX_SAFE_INTEGER);
     });
 
     it('throws rather than silently rounding a BigInt past 2^53-1', function () {
@@ -191,7 +191,7 @@ describe('GenesisDump._scalar @regression', function () {
         // Number(tooBig) rounds to a nearby double instead of failing, which is
         // exactly the silent corruption the guard exists to stop.
         assert.notStrictEqual(Number(tooBig).toString(), tooBig.toString());
-        assert.throws(() => g._scalar(tooBig), RangeError);
-        assert.throws(() => g._scalar(-tooBig), RangeError);
+        assert.throws(() => g.scalar(tooBig), RangeError);
+        assert.throws(() => g.scalar(-tooBig), RangeError);
     });
 });

@@ -143,7 +143,7 @@ module.exports = {
             //   2. the height it may first appear at (the due gate below).
             // NULL below the derive flag-day: no BTC-side row was minted by the derive path
             // there, so the legacy stamp stays byte-identical.
-            let deriveBlock = this._restoredRewardDeriveBlock(r.block_index);
+            let deriveBlock = this.restoredRewardDeriveBlock(r.block_index);
             if(deriveBlock !== null && appliedBlock !== null && appliedBlock < deriveBlock)
                 continue;   // still maturing; the per-block due sweep lands it at deriveBlock
             let pubkey_id = await this.getOrCreatePubkeyId(String(r.validator_pubkey).toLowerCase());

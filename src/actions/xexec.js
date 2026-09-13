@@ -75,12 +75,12 @@ class Xexec {
     // Canonical signing string for the dispatch phase. MUST byte-match the hub's
     // CrossChainCallEngine._canonicalMatch (dispatch branch) and the archive
     // verifier (StateAnchorPublisher._callCanonical).
-    _canonical(c){
+    canonical(c){
         let raw = [
             'XCALL', 'DISPATCH', c.call_id, String(c.snapshot_block), c.network || '',
             c.source_chain, String(c.source_action_index), String(c.source_contract_index),
             c.target_chain, String(c.target_contract_index),
-            c.method, this._sha256(String(c.params_json == null ? '' : c.params_json)),
+            c.method, this.sha256(String(c.params_json == null ? '' : c.params_json)),
             String(c.gas_limit), String(c.cross_hops), String(c.effective_time)
         ].join('|');
         // The admission map the hub signed, rebuilt from the mirrored row's admit_block_*
@@ -98,7 +98,7 @@ class Xexec {
         return raw;
     }
 
-    _sha256(s){
+    sha256(s){
         return crypto.createHash('sha256').update(s, 'utf8').digest('hex');
     }
 
@@ -146,7 +146,7 @@ class Xexec {
         try { sigs = JSON.parse(c.validator_signatures || '[]'); }
         catch(_) { sigs = []; }
 
-        let canonical = this._canonical(c);
+        let canonical = this.canonical(c);
         let snapPubkeys = new Set(validators.map(v => String(v.pubkey).toLowerCase()));
         let validSigners = [], seen = new Set();
         for(let s of sigs){
@@ -219,7 +219,7 @@ class Xexec {
             FEE_PAYER:    'C:' + String(c.source_chain) + ':' + String(c.source_contract_index),
             BLOCK_INDEX:  data['BLOCK_INDEX'],
             BLOCK_TIME:   data['BLOCK_TIME'],
-            TX_HASH:      this._sha256('XCALL:' + String(c.network) + ':' + String(coin) + ':' + String(c.call_id)),
+            TX_HASH:      this.sha256('XCALL:' + String(c.network) + ':' + String(coin) + ':' + String(c.call_id)),
             FORMAT:       0,
             IS_EMISSION:  true,
             EMITTER:      data['ACTION_INDEX'],
@@ -265,7 +265,7 @@ class Xexec {
             } else {
                 // The run failed: roll back any partial effects; the failure is the result.
                 await this.indexerDb.rollbackToSavepoint(savepoint);
-                resultStatus = this._mapFailureStatus(status, executionData['VM_ERROR_MESSAGE']);
+                resultStatus = this.mapFailureStatus(status, executionData['VM_ERROR_MESSAGE']);
             }
         } catch(e){
             await this.indexerDb.rollbackToSavepoint(savepoint);
@@ -298,7 +298,7 @@ class Xexec {
 
     // Map an EXECUTE handler status to the relayed result status vocabulary.
     // MUST stay deterministic: every operator derives the identical mapping.
-    _mapFailureStatus(status, errorMessage){
+    mapFailureStatus(status, errorMessage){
         // The crossCallable allowlist violation throws the fixed marker from the
         // contract wrapper (see xchain-vm CONTRACT_WRAPPER). Checked across ALL
         // failure families because a plain wrapper throw classifies as 'failed'.

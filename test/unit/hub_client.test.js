@@ -185,14 +185,14 @@ describe('HubClient', function(){
     describe('pushChainTip()', function(){
         it('returns immediately without calling _call when not enabled', async function(){
             let c = new HubClient('', '');
-            let callStub = sinon.stub(c, '_call').resolves({});
+            let callStub = sinon.stub(c, 'call').resolves({});
             await c.pushChainTip('BTC', 'mainnet', 800000, 1700000000);
             assert.strictEqual(callStub.callCount, 0);
         });
 
         it('calls _call with pushchaintip and correct payload', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            let callStub = sinon.stub(c, '_call').resolves({});
+            let callStub = sinon.stub(c, 'call').resolves({});
             await c.pushChainTip('BTC', 'regtest', 100, 1700000000);
             assert.strictEqual(callStub.calledOnce, true);
             assert.strictEqual(callStub.firstCall.args[0], 'pushchaintip');
@@ -205,7 +205,7 @@ describe('HubClient', function(){
 
         it('swallows (does not re-throw) a _call rejection', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            sinon.stub(c, '_call').rejects(new Error('hub down'));
+            sinon.stub(c, 'call').rejects(new Error('hub down'));
             // Must NOT throw
             await assert.doesNotReject(() => c.pushChainTip('BTC', 'mainnet', 1, 1));
         });
@@ -217,7 +217,7 @@ describe('HubClient', function(){
     describe('pushPriceRound()', function(){
         it('returns immediately without calling _call when not enabled', async function(){
             let c = new HubClient('', '');
-            let callStub = sinon.stub(c, '_call').resolves({});
+            let callStub = sinon.stub(c, 'call').resolves({});
             let result = await c.pushPriceRound({ round: 1 });
             assert.strictEqual(callStub.callCount, 0);
             assert.strictEqual(result, undefined);
@@ -225,7 +225,7 @@ describe('HubClient', function(){
 
         it('calls _call with pushpriceround and passes roundData', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            let callStub = sinon.stub(c, '_call').resolves({ ok: true });
+            let callStub = sinon.stub(c, 'call').resolves({ ok: true });
             let roundData = { round: 5, coin: 'BTC', price: '64000' };
             let result = await c.pushPriceRound(roundData);
             assert.strictEqual(callStub.calledOnce, true);
@@ -236,7 +236,7 @@ describe('HubClient', function(){
 
         it('propagates rejection from _call (not swallowed)', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            sinon.stub(c, '_call').rejects(new Error('rpc error'));
+            sinon.stub(c, 'call').rejects(new Error('rpc error'));
             await assert.rejects(() => c.pushPriceRound({}), /rpc error/);
         });
     });
@@ -247,7 +247,7 @@ describe('HubClient', function(){
     describe('pushOraclePrice()', function(){
         it('returns immediately without calling _call when not enabled', async function(){
             let c = new HubClient('', '');
-            let callStub = sinon.stub(c, '_call').resolves({});
+            let callStub = sinon.stub(c, 'call').resolves({});
             let result = await c.pushOraclePrice({ price: '100' });
             assert.strictEqual(callStub.callCount, 0);
             assert.strictEqual(result, undefined);
@@ -255,7 +255,7 @@ describe('HubClient', function(){
 
         it('calls _call with pushoracleprice and passes priceData', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            let callStub = sinon.stub(c, '_call').resolves({ ok: true });
+            let callStub = sinon.stub(c, 'call').resolves({ ok: true });
             let priceData = { tick: 'AAA', price: '1.50' };
             let result = await c.pushOraclePrice(priceData);
             assert.strictEqual(callStub.calledOnce, true);
@@ -266,7 +266,7 @@ describe('HubClient', function(){
 
         it('propagates rejection from _call', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            sinon.stub(c, '_call').rejects(new Error('oracle rpc error'));
+            sinon.stub(c, 'call').rejects(new Error('oracle rpc error'));
             await assert.rejects(() => c.pushOraclePrice({}), /oracle rpc error/);
         });
     });
@@ -290,7 +290,7 @@ describe('HubClient', function(){
         for(const [label, result] of TRANSIENT){
             it('throws on ' + label + ' so the durable row is retried, not deleted', async function(){
                 let c = new HubClient('http://hub.example.com', '');
-                sinon.stub(c, '_call').resolves(result);
+                sinon.stub(c, 'call').resolves(result);
                 await assert.rejects(() => c.pushOraclePrice({ value: '1' }), /hub rejected pushoracleprice/);
                 await assert.rejects(() => c.pushPriceRound({ round: 1 }),    /hub rejected pushpriceround/);
             });
@@ -309,7 +309,7 @@ describe('HubClient', function(){
         for(const [label, result] of TERMINAL){
             it('resolves on terminal rejection "' + label + '" so the row is dropped, not retried forever', async function(){
                 let c = new HubClient('http://hub.example.com', '');
-                sinon.stub(c, '_call').resolves(result);
+                sinon.stub(c, 'call').resolves(result);
                 assert.deepStrictEqual(await c.pushOraclePrice({ value: '1' }), result);
                 assert.deepStrictEqual(await c.pushPriceRound({ round: 1 }), result);
             });
@@ -317,13 +317,13 @@ describe('HubClient', function(){
 
         it('resolves an accepted push untouched', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            sinon.stub(c, '_call').resolves({ accepted: true });
+            sinon.stub(c, 'call').resolves({ accepted: true });
             assert.deepStrictEqual(await c.pushOraclePrice({ value: '1' }), { accepted: true });
         });
 
         it('carries the reason on the thrown error for the queue log', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            sinon.stub(c, '_call').resolves({ accepted: false, reason: 'db error' });
+            sinon.stub(c, 'call').resolves({ accepted: false, reason: 'db error' });
             await assert.rejects(() => c.pushOraclePrice({}), (err) => {
                 assert.strictEqual(err.hubRejection, 'db error');
                 return true;
@@ -332,13 +332,13 @@ describe('HubClient', function(){
 
         it('throws on a retraction the hub could not apply (retractions retry forever)', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            sinon.stub(c, '_call').resolves({ error: 'error retracting prices' });
+            sinon.stub(c, 'call').resolves({ error: 'error retracting prices' });
             await assert.rejects(() => c.retractPriceRange('BTC', 10), /hub rejected pushpricereorg/);
         });
 
         it('resolves a successful retraction result untouched', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            sinon.stub(c, '_call').resolves({ retracted: { price_snapshots: 2, oracle_prices: 0 } });
+            sinon.stub(c, 'call').resolves({ retracted: { price_snapshots: 2, oracle_prices: 0 } });
             assert.deepStrictEqual(await c.retractPriceRange('BTC', 10),
                 { retracted: { price_snapshots: 2, oracle_prices: 0 } });
         });
@@ -350,7 +350,7 @@ describe('HubClient', function(){
     describe('retractPriceRange()', function(){
         it('returns immediately without calling _call when not enabled', async function(){
             let c = new HubClient('', '');
-            let callStub = sinon.stub(c, '_call').resolves({});
+            let callStub = sinon.stub(c, 'call').resolves({});
             let result = await c.retractPriceRange('BTC', 42);
             assert.strictEqual(callStub.callCount, 0);
             assert.strictEqual(result, undefined);
@@ -358,7 +358,7 @@ describe('HubClient', function(){
 
         it('calls _call with pushpricereorg and correct payload', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            let callStub = sinon.stub(c, '_call').resolves({});
+            let callStub = sinon.stub(c, 'call').resolves({});
             await c.retractPriceRange('LTC', 999);
             assert.strictEqual(callStub.calledOnce, true);
             assert.strictEqual(callStub.firstCall.args[0], 'pushpricereorg');
@@ -372,7 +372,7 @@ describe('HubClient', function(){
 
         it('threads to_action_index + retraction_generation into the payload when given (items 5296/5308)', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            let callStub = sinon.stub(c, '_call').resolves({});
+            let callStub = sinon.stub(c, 'call').resolves({});
             await c.retractPriceRange('BTC', 50, 75, 5);
             let payload = callStub.firstCall.args[1];
             assert.strictEqual(payload.from_action_index, 50);
@@ -382,7 +382,7 @@ describe('HubClient', function(){
 
         it('threads retraction_generation on an open-ended (live) retraction (to=null)', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            let callStub = sinon.stub(c, '_call').resolves({});
+            let callStub = sinon.stub(c, 'call').resolves({});
             await c.retractPriceRange('BTC', 50, null, 7);
             let payload = callStub.firstCall.args[1];
             assert.ok(!('to_action_index' in payload), 'no closed-range bound');
@@ -391,7 +391,7 @@ describe('HubClient', function(){
 
         it('propagates rejection from _call', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            sinon.stub(c, '_call').rejects(new Error('reorg error'));
+            sinon.stub(c, 'call').rejects(new Error('reorg error'));
             await assert.rejects(() => c.retractPriceRange('BTC', 1), /reorg error/);
         });
     });
@@ -402,7 +402,7 @@ describe('HubClient', function(){
     describe('retractXcallRange()', function(){
         it('returns immediately without calling _call when not enabled', async function(){
             let c = new HubClient('', '');
-            let callStub = sinon.stub(c, '_call').resolves({});
+            let callStub = sinon.stub(c, 'call').resolves({});
             let result = await c.retractXcallRange('BTC', 42);
             assert.strictEqual(callStub.callCount, 0);
             assert.strictEqual(result, undefined);
@@ -410,7 +410,7 @@ describe('HubClient', function(){
 
         it('calls _call with pushxcallreorg and correct payload', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            let callStub = sinon.stub(c, '_call').resolves({});
+            let callStub = sinon.stub(c, 'call').resolves({});
             await c.retractXcallRange('LTC', 999);
             assert.strictEqual(callStub.calledOnce, true);
             assert.strictEqual(callStub.firstCall.args[0], 'pushxcallreorg');
@@ -421,7 +421,7 @@ describe('HubClient', function(){
 
         it('propagates rejection from _call', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            sinon.stub(c, '_call').rejects(new Error('xcall reorg error'));
+            sinon.stub(c, 'call').rejects(new Error('xcall reorg error'));
             await assert.rejects(() => c.retractXcallRange('BTC', 1), /xcall reorg error/);
         });
     });
@@ -432,7 +432,7 @@ describe('HubClient', function(){
     describe('retractMatchRange()', function(){
         it('returns immediately without calling _call when not enabled', async function(){
             let c = new HubClient('', '');
-            let callStub = sinon.stub(c, '_call').resolves({});
+            let callStub = sinon.stub(c, 'call').resolves({});
             let result = await c.retractMatchRange('BTC', 42);
             assert.strictEqual(callStub.callCount, 0);
             assert.strictEqual(result, undefined);
@@ -440,7 +440,7 @@ describe('HubClient', function(){
 
         it('calls _call with pushdexreorg and correct payload', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            let callStub = sinon.stub(c, '_call').resolves({});
+            let callStub = sinon.stub(c, 'call').resolves({});
             await c.retractMatchRange('LTC', 999);
             assert.strictEqual(callStub.calledOnce, true);
             assert.strictEqual(callStub.firstCall.args[0], 'pushdexreorg');
@@ -451,7 +451,7 @@ describe('HubClient', function(){
 
         it('propagates rejection from _call', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            sinon.stub(c, '_call').rejects(new Error('dex reorg error'));
+            sinon.stub(c, 'call').rejects(new Error('dex reorg error'));
             await assert.rejects(() => c.retractMatchRange('BTC', 1), /dex reorg error/);
         });
     });
@@ -459,7 +459,7 @@ describe('HubClient', function(){
     describe('pushPriceBatch()', function(){
         it('returns immediately without calling _call when not enabled', async function(){
             let c = new HubClient('', '');
-            let callStub = sinon.stub(c, '_call').resolves({});
+            let callStub = sinon.stub(c, 'call').resolves({});
             let result = await c.pushPriceBatch({ first_round: 1, last_round: 6 });
             assert.strictEqual(callStub.callCount, 0);
             assert.strictEqual(result, undefined);
@@ -467,7 +467,7 @@ describe('HubClient', function(){
 
         it('calls _call with pushpricebatch and passes batchData verbatim', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            let callStub = sinon.stub(c, '_call').resolves({ ok: true });
+            let callStub = sinon.stub(c, 'call').resolves({ ok: true });
             let batchData = {
                 source_chain:     'BTC',
                 first_round:      1,
@@ -489,13 +489,13 @@ describe('HubClient', function(){
 
         it('propagates rejection from _call (not swallowed)', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            sinon.stub(c, '_call').rejects(new Error('rpc error'));
+            sinon.stub(c, 'call').rejects(new Error('rpc error'));
             await assert.rejects(() => c.pushPriceBatch({}), /rpc error/);
         });
 
         it('throws on a transient hub rejection so the durable row is retried, not deleted', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            sinon.stub(c, '_call').resolves({ accepted: false, reason: 'validator snapshot unavailable' });
+            sinon.stub(c, 'call').resolves({ accepted: false, reason: 'validator snapshot unavailable' });
             await assert.rejects(() => c.pushPriceBatch({ first_round: 1, last_round: 6 }),
                 /hub rejected pushpricebatch/);
         });
@@ -503,7 +503,7 @@ describe('HubClient', function(){
         it('resolves on a terminal hub rejection so the row is dropped, not retried forever', async function(){
             let c = new HubClient('http://hub.example.com', '');
             let result = { accepted: false, reason: 'duplicate' };
-            sinon.stub(c, '_call').resolves(result);
+            sinon.stub(c, 'call').resolves(result);
             assert.deepStrictEqual(await c.pushPriceBatch({ first_round: 1, last_round: 6 }), result);
         });
     });
@@ -522,7 +522,7 @@ describe('HubClient', function(){
             }));
             sinon.stub(http, 'request').callsFake(stub);
 
-            let result = await c._call('testmethod', { foo: 'bar' });
+            let result = await c.call('testmethod', { foo: 'bar' });
             assert.deepStrictEqual(result, { status: 'ok' });
         });
 
@@ -533,7 +533,7 @@ describe('HubClient', function(){
             }));
             let httpsStub = sinon.stub(https, 'request').callsFake(stub);
 
-            let result = await c._call('ping', {});
+            let result = await c.call('ping', {});
             assert.strictEqual(httpsStub.calledOnce, true);
             assert.deepStrictEqual(result, { ok: true });
         });
@@ -545,7 +545,7 @@ describe('HubClient', function(){
             }));
             sinon.stub(http, 'request').callsFake(stub);
 
-            await c._call('ping', {});
+            await c.call('ping', {});
             let opts = stub.firstCall.args[0];
             assert.strictEqual(opts.headers['x-api-key'], 'supersecret');
         });
@@ -557,7 +557,7 @@ describe('HubClient', function(){
             }));
             sinon.stub(http, 'request').callsFake(stub);
 
-            await c._call('ping', {});
+            await c.call('ping', {});
             let opts = stub.firstCall.args[0];
             assert.strictEqual(opts.headers['x-api-key'], undefined);
         });
@@ -569,7 +569,7 @@ describe('HubClient', function(){
             }));
             sinon.stub(http, 'request').callsFake(stub);
 
-            await assert.rejects(() => c._call('ping', {}), /Invalid Request/);
+            await assert.rejects(() => c.call('ping', {}), /Invalid Request/);
         });
 
         it('rejects with JSON parse error when response body is not valid JSON', async function(){
@@ -577,7 +577,7 @@ describe('HubClient', function(){
             let { stub } = buildHttpStub('not-json-at-all');
             sinon.stub(http, 'request').callsFake(stub);
 
-            await assert.rejects(() => c._call('ping', {}), /Invalid JSON response/);
+            await assert.rejects(() => c.call('ping', {}), /Invalid JSON response/);
         });
 
         it('rejects when req emits an error event', async function(){
@@ -592,7 +592,7 @@ describe('HubClient', function(){
                 return fakeReq;
             });
 
-            await assert.rejects(() => c._call('ping', {}), /ECONNREFUSED/);
+            await assert.rejects(() => c.call('ping', {}), /ECONNREFUSED/);
         });
 
         it('calls req.write with the serialized JSON body', async function(){
@@ -602,7 +602,7 @@ describe('HubClient', function(){
             }));
             sinon.stub(http, 'request').callsFake(stub);
 
-            await c._call('myMethod', { a: 1 });
+            await c.call('myMethod', { a: 1 });
             assert.strictEqual(fakeReq.write.calledOnce, true);
             let written = JSON.parse(fakeReq.write.firstCall.args[0]);
             assert.strictEqual(written.method, 'myMethod');
@@ -615,7 +615,7 @@ describe('HubClient', function(){
             let { stub } = buildHttpStub(JSON.stringify({ jsonrpc:'2.0', id:1, result:{} }));
             sinon.stub(http, 'request').callsFake(stub);
 
-            await c._call('ping', {});
+            await c.call('ping', {});
             let opts = stub.firstCall.args[0];
             assert.strictEqual(opts.port, 80);
         });
@@ -625,7 +625,7 @@ describe('HubClient', function(){
             let { stub } = buildHttpStub(JSON.stringify({ jsonrpc:'2.0', id:1, result:{} }));
             sinon.stub(https, 'request').callsFake(stub);
 
-            await c._call('ping', {});
+            await c.call('ping', {});
             let opts = stub.firstCall.args[0];
             assert.strictEqual(opts.port, 443);
         });
@@ -645,7 +645,7 @@ describe('HubClient', function(){
                 return fakeReq;
             });
 
-            await assert.rejects(() => c._call('ping', {}), /Request timeout/);
+            await assert.rejects(() => c.call('ping', {}), /Request timeout/);
             assert.strictEqual(fakeReq.destroy.calledOnce, true);
             let destroyArg = fakeReq.destroy.firstCall.args[0];
             assert.match(destroyArg.message, /Request timeout/);

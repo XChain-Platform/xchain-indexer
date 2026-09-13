@@ -29,13 +29,13 @@ const path   = require('path');
 const Database = require('../../src/db');
 
 // _migrationMode is a pure string function : bind it to a bare object.
-const modeOf = Database.prototype._migrationMode.bind({});
+const modeOf = Database.prototype.migrationMode.bind({});
 
 // Destructive-DDL guard helpers: same comment-strip + quote-aware split runMigrations uses.
 // Bind to the prototype so _destructiveAutoStatement can reach _isIdRepairUpdate and
 // splitSqlStatements can reach stripSqlLineComments (both pure, no instance state).
 const stripComments = Database.prototype.stripSqlLineComments.bind({});
-const destructiveOf = Database.prototype._destructiveAutoStatement.bind(Database.prototype);
+const destructiveOf = Database.prototype.destructiveAutoStatement.bind(Database.prototype);
 const statementsOf  = (raw) => Database.prototype.splitSqlStatements.call(Database.prototype, raw);
 
 // runMigrations() makes four fail-closed schema assertions on every normal return, and each
@@ -305,16 +305,16 @@ describe('v0.17.0 migration rename: contract-meta-columns + cross-chain-btc-chai
             dbName: 'test_indexer',
             transactionConnection: null,
             getConnection: async () => conn,
-            _ensureMigrationsLedger: Database.prototype._ensureMigrationsLedger,
-            _runMigrationsInner: Database.prototype._runMigrationsInner,
-            _assertPubkeyColumnIsUncompressedWide: Database.prototype._assertPubkeyColumnIsUncompressedWide,
-            _assertStakeWeightOrderingCollation: Database.prototype._assertStakeWeightOrderingCollation,
-            _migrationMode: Database.prototype._migrationMode,
-            _migrationPreconditionSkip: Database.prototype._migrationPreconditionSkip,
+            ensureMigrationsLedger: Database.prototype.ensureMigrationsLedger,
+            runMigrationsInner: Database.prototype.runMigrationsInner,
+            assertPubkeyColumnIsUncompressedWide: Database.prototype.assertPubkeyColumnIsUncompressedWide,
+            assertStakeWeightOrderingCollation: Database.prototype.assertStakeWeightOrderingCollation,
+            migrationMode: Database.prototype.migrationMode,
+            migrationPreconditionSkip: Database.prototype.migrationPreconditionSkip,
             splitSqlStatements: Database.prototype.splitSqlStatements,
             stripSqlLineComments: Database.prototype.stripSqlLineComments,
-            _destructiveAutoStatement: Database.prototype._destructiveAutoStatement,
-            _isIdRepairUpdate: Database.prototype._isIdRepairUpdate,
+            destructiveAutoStatement: Database.prototype.destructiveAutoStatement,
+            isIdRepairUpdate: Database.prototype.isIdRepairUpdate,
         };
         const realLog = console.log, realErr = console.error, realWarn = console.warn;
         console.log = console.error = console.warn = (...a) => { logged.push(a.join(' ')); };
@@ -427,16 +427,16 @@ describe('leg-ordinal migration rename: destroys-sends-leg-ordinal @regression @
             dbName: 'test_indexer',
             transactionConnection: null,
             getConnection: async () => conn,
-            _ensureMigrationsLedger: Database.prototype._ensureMigrationsLedger,
-            _runMigrationsInner: Database.prototype._runMigrationsInner,
-            _assertPubkeyColumnIsUncompressedWide: Database.prototype._assertPubkeyColumnIsUncompressedWide,
-            _assertStakeWeightOrderingCollation: Database.prototype._assertStakeWeightOrderingCollation,
-            _migrationMode: Database.prototype._migrationMode,
-            _migrationPreconditionSkip: Database.prototype._migrationPreconditionSkip,
+            ensureMigrationsLedger: Database.prototype.ensureMigrationsLedger,
+            runMigrationsInner: Database.prototype.runMigrationsInner,
+            assertPubkeyColumnIsUncompressedWide: Database.prototype.assertPubkeyColumnIsUncompressedWide,
+            assertStakeWeightOrderingCollation: Database.prototype.assertStakeWeightOrderingCollation,
+            migrationMode: Database.prototype.migrationMode,
+            migrationPreconditionSkip: Database.prototype.migrationPreconditionSkip,
             splitSqlStatements: Database.prototype.splitSqlStatements,
             stripSqlLineComments: Database.prototype.stripSqlLineComments,
-            _destructiveAutoStatement: Database.prototype._destructiveAutoStatement,
-            _isIdRepairUpdate: Database.prototype._isIdRepairUpdate,
+            destructiveAutoStatement: Database.prototype.destructiveAutoStatement,
+            isIdRepairUpdate: Database.prototype.isIdRepairUpdate,
         };
         const realLog = console.log, realErr = console.error, realWarn = console.warn;
         console.log = console.error = console.warn = (...a) => { logged.push(a.join(' ')); };
@@ -1129,16 +1129,16 @@ describe('runMigrations() checksum heal branch @regression @tier1', function () 
             dbName: 'test_indexer',
             transactionConnection: null,
             getConnection: async () => conn,
-            _ensureMigrationsLedger: Database.prototype._ensureMigrationsLedger,
-            _runMigrationsInner: Database.prototype._runMigrationsInner,
-            _assertPubkeyColumnIsUncompressedWide: Database.prototype._assertPubkeyColumnIsUncompressedWide,
-            _assertStakeWeightOrderingCollation: Database.prototype._assertStakeWeightOrderingCollation,
-            _migrationMode: Database.prototype._migrationMode,
-            _migrationPreconditionSkip: Database.prototype._migrationPreconditionSkip,
+            ensureMigrationsLedger: Database.prototype.ensureMigrationsLedger,
+            runMigrationsInner: Database.prototype.runMigrationsInner,
+            assertPubkeyColumnIsUncompressedWide: Database.prototype.assertPubkeyColumnIsUncompressedWide,
+            assertStakeWeightOrderingCollation: Database.prototype.assertStakeWeightOrderingCollation,
+            migrationMode: Database.prototype.migrationMode,
+            migrationPreconditionSkip: Database.prototype.migrationPreconditionSkip,
             splitSqlStatements: Database.prototype.splitSqlStatements,
             stripSqlLineComments: Database.prototype.stripSqlLineComments,
-            _destructiveAutoStatement: Database.prototype._destructiveAutoStatement,
-            _isIdRepairUpdate: Database.prototype._isIdRepairUpdate,
+            destructiveAutoStatement: Database.prototype.destructiveAutoStatement,
+            isIdRepairUpdate: Database.prototype.isIdRepairUpdate,
         };
         const realLog = console.log, realErr = console.error, realWarn = console.warn;
         console.log = console.error = console.warn = (...a) => { logged.push(a.join(' ')); };
@@ -1253,19 +1253,19 @@ describe('runMigrations() backdated-migration guard @regression @tier1', functio
             dbName: 'test_indexer',
             transactionConnection: null,
             getConnection: async () => conn,
-            _ensureMigrationsLedger: async () => {},
-            _runMigrationsInner: Database.prototype._runMigrationsInner,
-            _migrationMode: Database.prototype._migrationMode,
-            _migrationPreconditionSkip: Database.prototype._migrationPreconditionSkip,
+            ensureMigrationsLedger: async () => {},
+            runMigrationsInner: Database.prototype.runMigrationsInner,
+            migrationMode: Database.prototype.migrationMode,
+            migrationPreconditionSkip: Database.prototype.migrationPreconditionSkip,
             splitSqlStatements: Database.prototype.splitSqlStatements,
             stripSqlLineComments: Database.prototype.stripSqlLineComments,
-            _destructiveAutoStatement: Database.prototype._destructiveAutoStatement,
-            _isIdRepairUpdate: Database.prototype._isIdRepairUpdate,
+            destructiveAutoStatement: Database.prototype.destructiveAutoStatement,
+            isIdRepairUpdate: Database.prototype.isIdRepairUpdate,
         };
         const realLog = console.log, realErr = console.error, realWarn = console.warn;
         console.log = console.error = console.warn = (...a) => { logged.push(a.join(' ')); };
         try {
-            const r = await Database.prototype._runMigrationsInner.call(db, opts || {});
+            const r = await Database.prototype.runMigrationsInner.call(db, opts || {});
             return { logged, applied, result: r, threw: null };
         } catch (err) {
             return { logged, applied, result: null, threw: err };
@@ -1391,7 +1391,7 @@ describe('runMigrations() --file / opts.only scoping @regression @tier1', functi
         db.dbName = 'fake_indexer';
         db.transactionConnection = null;
         db.getConnection = async () => conn;
-        db._ensureMigrationsLedger = async () => {};
+        db.ensureMigrationsLedger = async () => {};
         return { db, applied, executed };
     }
 
@@ -1487,9 +1487,9 @@ describe('runMigrations() pubkey-width assertion @regression @tier1', function (
         db.dbName = 'fake_indexer';
         db.transactionConnection = null;
         db.getConnection = async () => conn;
-        db._ensureMigrationsLedger = async () => {};
+        db.ensureMigrationsLedger = async () => {};
         // A lock-skip returns early from the inner body; the wrapper must still assert.
-        if (emptyDir) db._runMigrationsInner = async () => ({ applied: [], pending: [], lockSkipped: true });
+        if (emptyDir) db.runMigrationsInner = async () => ({ applied: [], pending: [], lockSkipped: true });
         return db;
     }
 
@@ -1547,9 +1547,9 @@ describe('runMigrations() bridge-tables assertion @regression @tier1', function 
         db.dbName = 'fake_indexer';
         db.transactionConnection = null;
         db.getConnection = async () => conn;
-        db._ensureMigrationsLedger = async () => {};
+        db.ensureMigrationsLedger = async () => {};
         // A lock-skip returns early from the inner body; the wrapper must still assert.
-        db._runMigrationsInner = async () => ({ applied: [], pending: [], lockSkipped: true });
+        db.runMigrationsInner = async () => ({ applied: [], pending: [], lockSkipped: true });
         return db;
     }
 

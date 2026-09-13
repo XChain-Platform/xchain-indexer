@@ -236,9 +236,9 @@ function indexerTwins(h) {
     const mk = () => ({ config: {}, decoderDb: null, indexerDb: null, util: null, mapper: null });
     const settle = new h.Settle(mk()), xexec = new h.Xexec(mk()), xcall = new h.Xcall(mk());
     return {
-        match:    (r) => settle._canonical(r),
-        dispatch: (r) => xexec._canonical(r),
-        result:   (r) => xcall._resultCanonical(r),
+        match:    (r) => settle.canonical(r),
+        dispatch: (r) => xexec.canonical(r),
+        result:   (r) => xcall.resultCanonical(r),
         transfer: (r) => h.BS.transferCanonical(r),
         policy:   (r) => h.BS.policyCanonical(r)
     };
@@ -247,7 +247,7 @@ function indexerTwins(h) {
 // The hub builders, driven on a stub `this` carrying only what each canonical reads.
 function hubBuilders(h) {
     const C = h.hub.Call.prototype;
-    const callThis = { _sha256: C._sha256, _roundId: C._roundId };
+    const callThis = { sha256: C.sha256, _roundId: C._roundId };
     return {
         match:    (r) => h.hub.Dex.prototype._canonicalMatch.call({}, r, r.finalizing_view),
         dispatch: (r) => h.hub.Call.prototype._canonicalMatch.call(callThis, r, r.finalizing_view),
@@ -542,7 +542,7 @@ describe('admission binding: the mirrored selects issue the C33 form above the a
 
                 it('below the activation at B=' + B + ' the bridge selects are byte-identical to the pre-train statements', async function () {
                     const captured = [];
-                    const ctx = { indexerDb: { _mirrorDb: () => bindSettlementReads({ doQuery: async (sql, args) => { captured.push({ sql, args }); return []; } }),
+                    const ctx = { indexerDb: { mirrorDb: () => bindSettlementReads({ doQuery: async (sql, args) => { captured.push({ sql, args }); return []; } }),
                                                doQuery: async () => [] },
                                   coin: 'DOGE', network: NETWORK, blockIndex: B, blockTime: T };
                     await h.BS.dueBridgeTransfers(ctx);
@@ -603,7 +603,7 @@ describe('admission binding: the mirrored selects issue the C33 form above the a
 
                 it('above the activation at B=' + B + ' the bridge selects take the C33 form, the policy select with no chain clause', async function () {
                     const captured = [];
-                    const ctx = { indexerDb: { _mirrorDb: () => bindSettlementReads({ doQuery: async (sql, args) => { captured.push({ sql, args }); return []; } }),
+                    const ctx = { indexerDb: { mirrorDb: () => bindSettlementReads({ doQuery: async (sql, args) => { captured.push({ sql, args }); return []; } }),
                                                doQuery: async () => [] },
                                   coin: 'DOGE', network: NETWORK, blockIndex: B, blockTime: T };
                     await h.BS.dueBridgeTransfers(ctx);
@@ -618,7 +618,7 @@ describe('admission binding: the mirrored selects issue the C33 form above the a
 
                 it('bridge_settle and db.js spell the clause identically for the same column', function () {
                     const { db } = stubDb(h, 'DOGE');
-                    const fromDb = db._mirrorBindClause(T, B);
+                    const fromDb = db.mirrorBindClause(T, B);
                     const fromBs = h.BS.mirrorBindClause({ coin: 'DOGE', network: NETWORK, blockIndex: B, blockTime: T });
                     assert.deepStrictEqual(fromBs, fromDb);
                     assert.strictEqual(fromDb.sql, c33('admit_block_doge'));
@@ -797,13 +797,13 @@ describe('admission binding: the direct-hub-DB call-presence member', function (
             callPresenceTimeoutMs: o.timeoutMs != null ? o.timeoutMs : 40,
             directCallGraceS: o.graceS,
             util: { sleep: (ms) => sleep(ms), throwError: (msg) => { throw new Error(msg); } },
-            _mirrorAdmissionActiveAt: h.Indexer.prototype._mirrorAdmissionActiveAt,
+            mirrorAdmissionActiveAt: h.Indexer.prototype.mirrorAdmissionActiveAt,
             captured
         };
         return self;
     }
-    const run      = (h, self, bt, B) => h.Indexer.prototype._waitForDirectCallPresence.call(self, bt, B);
-    const clearsAt = (h, self, bt, B) => h.Indexer.prototype._directCallBarrierClearsAt.call(self, bt, B);
+    const run      = (h, self, bt, B) => h.Indexer.prototype.waitForDirectCallPresence.call(self, bt, B);
+    const clearsAt = (h, self, bt, B) => h.Indexer.prototype.directCallBarrierClearsAt.call(self, bt, B);
     const floorRow = (v) => [{ param_value: v }];
 
     for (const arm of ARMS) {
@@ -842,7 +842,7 @@ describe('admission binding: the direct-hub-DB call-presence member', function (
             it('the one-argument shape stays inert and never touches config (the pre-train harness)', async function () {
                 const bt = NOW_S() + 3600;
                 const self = ctx(h, { rows: [{ ts: bt, hub_now: NOW_S() }], noConfig: true });
-                delete self._mirrorAdmissionActiveAt;
+                delete self.mirrorAdmissionActiveAt;
                 await run(h, self, bt);
                 assert.strictEqual(self.captured[0].sql, COVERAGE_SQL.replace(" AND (target_chain = ? OR source_chain = ?)", ''),
                     'no coin configured: the unscoped superset');

@@ -63,7 +63,7 @@ const UTF8MB4_BYTES_PER_CHAR = 4;
 
 // The real runner's own parsers, not re-implementations: mode detection and statement
 // splitting must not be able to drift from what actually decides an unattended apply.
-const migrationMode = (raw) => Database.prototype._migrationMode.call(null, raw);
+const migrationMode = (raw) => Database.prototype.migrationMode.call(null, raw);
 const splitStatements = (raw) => Database.prototype.splitSqlStatements.call(
     { stripSqlLineComments: Database.prototype.stripSqlLineComments }, raw);
 

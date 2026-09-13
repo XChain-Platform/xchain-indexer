@@ -2098,7 +2098,7 @@ class Utility {
         // Record that this tick's controller was consulted this action (PTLC completeness assertion).
         if(!data['_GUARDED_TICKS']) data['_GUARDED_TICKS'] = {};
         data['_GUARDED_TICKS'][String(opts.tick)] = true;
-        return this._invokeController(actions, db, Number(effective.contract_index), opts,
+        return this.invokeController(actions, db, Number(effective.contract_index), opts,
             { actionClass: actionClass, subject: 'token ' + String(opts.tick) });
     }
 
@@ -2114,7 +2114,7 @@ class Utility {
         // Most-specific-wins: a class-specific binding overrides the catch-all 'all' binding.
         let effective = await db.getEffectiveAddressControllerForGuard(addressId, opts.actionClass, opts.data['BLOCK_INDEX'], opts.data['ACTION_INDEX']);
         if(!effective) return none;
-        return this._invokeController(actions, db, Number(effective.contract_index), opts,
+        return this.invokeController(actions, db, Number(effective.contract_index), opts,
             { actionClass: opts.actionClass, subject: 'address ' + String(opts.address) });
     }
 
@@ -2122,7 +2122,7 @@ class Utility {
     // against SOURCE, the VM guard run (fail-closed in runControllerGuard), and the fee derivation.
     // `binding` describes what bound the controller (class + subject) and is used ONLY to name the
     // cause in the guard-inert refusal below; it never influences enforcement.
-    async _invokeController(actions, db, controllerIndex, opts, binding){
+    async invokeController(actions, db, controllerIndex, opts, binding){
         let data = opts.data;
         // Activation gate (single shared chokepoint for both token- and address-controller
         // guards). Until the CONTROLLER_GUARD flag-day the guard is a strict no-op on every

@@ -63,7 +63,7 @@ describe('XChainIndexer._priceMirrorHorizon @regression @tier2', function () {
         let indexer = makeIndexer(500, null, { 500: BLOCK_TIME });
         indexer.config['FIAT_DISPENSER_PRICE_WINDOW'] = 3600;
 
-        assert.strictEqual(await indexer._priceMirrorHorizon(),
+        assert.strictEqual(await indexer.priceMirrorHorizon(),
             BLOCK_TIME - (2 * 3600) - 86400);
     });
 
@@ -71,7 +71,7 @@ describe('XChainIndexer._priceMirrorHorizon @regression @tier2', function () {
         let indexer = makeIndexer(500, null, { 500: BLOCK_TIME });
         delete indexer.config['FIAT_DISPENSER_PRICE_WINDOW'];
 
-        assert.strictEqual(await indexer._priceMirrorHorizon(),
+        assert.strictEqual(await indexer.priceMirrorHorizon(),
             BLOCK_TIME - (2 * 86400) - 86400);
     });
 
@@ -82,25 +82,25 @@ describe('XChainIndexer._priceMirrorHorizon @regression @tier2', function () {
         let indexer = makeIndexer(null, 12, { 12: 1500000000 });
         indexer.config['FIAT_DISPENSER_PRICE_WINDOW'] = 86400;
 
-        assert.strictEqual(await indexer._priceMirrorHorizon(),
+        assert.strictEqual(await indexer.priceMirrorHorizon(),
             1500000000 - (2 * 86400) - 86400);
     });
 
     it('answers null when no chain has any blocks yet', async function () {
         let indexer = makeIndexer(null, null, {});
-        assert.strictEqual(await indexer._priceMirrorHorizon(), null);
+        assert.strictEqual(await indexer.priceMirrorHorizon(), null);
     });
 
     it('answers null when the anchor block has no readable time', async function () {
         // getRawBlockTime returns the `false` sentinel for a block it cannot resolve.
         let indexer = makeIndexer(500, null, {});
-        assert.strictEqual(await indexer._priceMirrorHorizon(), null);
+        assert.strictEqual(await indexer.priceMirrorHorizon(), null);
     });
 
     it('answers null rather than throwing when a read faults', async function () {
         let indexer = makeIndexer(500, null, { 500: BLOCK_TIME });
         indexer.indexerDb.getRawBlockTime = sinon.stub().rejects(new Error('lock wait timeout'));
 
-        assert.strictEqual(await indexer._priceMirrorHorizon(), null);
+        assert.strictEqual(await indexer.priceMirrorHorizon(), null);
     });
 });

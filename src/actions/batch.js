@@ -243,7 +243,7 @@ class Batch {
         //    seat here.
         //  - SEND / ISSUE / SWEEP / DEPLOY use bespoke parsing (repeating recipients,
         //    variable-length constructor params), which is exactly why actions/index.js's
-        //    _setActionParamHandler omits them. ISSUE is priced here by its own dedicated
+        //    setActionParamHandler omits them. ISSUE is priced here by its own dedicated
         //    path (nominalIssueFee), not positionally.
         this.durationFeeActions = ['ORDER', 'SWAP', 'DISPENSER'];
 
@@ -500,7 +500,7 @@ class Batch {
     //
     // The EXPIRATION POSITION is read out of the HANDLER'S OWN format string rather than
     // hardcoded (it is index 10 for ORDER/SWAP and 13 for DISPENSER today), through the same
-    // actions/index.js seam - _setActionParamHandler - that already exists to say which handlers have
+    // actions/index.js seam - setActionParamHandler - that already exists to say which handlers have
     // a fixed positional layout. A format string that gains or loses a field therefore moves
     // this pre-check with it instead of silently mispricing. If the seam is absent (a partial
     // test double, an older Actions), the answer is null: unpriceable, no collapse.

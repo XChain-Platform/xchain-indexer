@@ -354,7 +354,7 @@ module.exports = {
                  ORDER BY action_index ASC`,
                 [Number(d.target_contract_index), d.source_id, d.tick_id, valid_id, d.signing_pubkey_id]);
             for(let row of stakeRows)
-                applied.push(await this._rotateContractStakeKey('contract_stakes', row, d.action_index, d.signing_pubkey_id, block));
+                applied.push(await this.rotateContractStakeKey('contract_stakes', row, d.action_index, d.signing_pubkey_id, block));
             let unstakeRows = await this.doQuery(
                 `SELECT action_index, signing_pubkey_id FROM contract_unstakes
                  WHERE target_contract_index=? AND source_id=? AND tick_id=?
@@ -363,7 +363,7 @@ module.exports = {
                  ORDER BY action_index ASC`,
                 [Number(d.target_contract_index), d.source_id, d.tick_id, ...unstakeStatusIds, d.signing_pubkey_id]);
             for(let row of unstakeRows)
-                applied.push(await this._rotateContractStakeKey('contract_unstakes', row, d.action_index, d.signing_pubkey_id, block));
+                applied.push(await this.rotateContractStakeKey('contract_unstakes', row, d.action_index, d.signing_pubkey_id, block));
         }
 
         // 2. Revert pass: rows whose slot no longer has a governing delegation but that still
@@ -398,7 +398,7 @@ module.exports = {
                 if(governedSlots.has(slot)) continue;
                 if(String(row.current_pubkey_id) === String(row.original_pubkey_id)) continue;
                 if(await this._contractPubkeyClaimedElsewhere(row.original_pubkey_id, row, valid_id)) continue;
-                applied.push(await this._rotateContractStakeKey(spec.table,
+                applied.push(await this.rotateContractStakeKey(spec.table,
                     { action_index: row.stake_action_index, signing_pubkey_id: row.current_pubkey_id },
                     row.delegation_action_index, row.original_pubkey_id, block));
             }

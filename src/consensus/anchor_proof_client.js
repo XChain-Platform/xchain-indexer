@@ -186,12 +186,12 @@ class AnchorProofClient {
     // to 'unknown'. `after` is the exclusive action_index page cursor; null/undefined asks
     // for the first page, which is the only request an indexer predating pagination
     // understands (it ignores the unknown param and answers the first page anyway).
-    async _fetch(txid, after){
+    async fetch(txid, after){
         if(!this.url) return null;
         try {
             let params = { txid: txid };
             if(after !== null && after !== undefined) params.after_action_index = after;
-            let result = await this._rpc('getanchorconfirmations', params);
+            let result = await this.rpc('getanchorconfirmations', params);
             if(!result || result.error || !Array.isArray(result.anchors)) return null;
             return result;
         } catch(e){
@@ -203,7 +203,7 @@ class AnchorProofClient {
     // JSON-RPC over the node http/https core modules, matching HubClient._call. The
     // indexer deliberately carries no HTTP client dependency, and this read is on the
     // block-processing path, so it does not get to add one.
-    _rpc(method, params){
+    rpc(method, params){
         return new Promise((resolve, reject) => {
             let parsed  = url.parse(this.url);
             let isHttps = parsed.protocol === 'https:';
@@ -255,7 +255,7 @@ class AnchorProofClient {
         if(!/^[0-9a-f]{64}$/.test(txid)) return 'rejected';
         if(!this.url) return 'unknown';                       // fail closed: defer, never pay unproven
 
-        let memoKey = this._memoKey(txid, e);
+        let memoKey = this.memoKey(txid, e);
         if(this._memo.has(memoKey)) return this._memo.get(memoKey);
 
         // WALK EVERY PAGE BEFORE JUDGING. getanchorconfirmations bounds its answer at
@@ -277,7 +277,7 @@ class AnchorProofClient {
         let after   = null;
         let walking = true;
         for(let page = 0; walking && page < MAX_ANCHOR_PAGES; page++){
-            let result = await this._fetch(txid, after);
+            let result = await this.fetch(txid, after);
             if(!result) return 'unknown';
             if(page === 0 && (!result.exists || result.anchors.length === 0)){
                 // The DOGE indexer has no such transaction. That is NOT proof it will never
@@ -308,7 +308,7 @@ class AnchorProofClient {
             return 'unknown';
         }
 
-        let verdict = this._judge(anchors, e);
+        let verdict = this.judge(anchors, e);
         if(verdict !== 'unknown') this._memo.set(memoKey, verdict);
         return verdict;
     }
@@ -325,7 +325,7 @@ class AnchorProofClient {
     // miss each other. A field added to _judge must be added here too. _judge's chain term needs
     // no entry of its own, and neither does the reward FAMILY or the round term it selects:
     // all three are derived from rewardType, which is already a term here.
-    _memoKey(txid, e){
+    memoKey(txid, e){
         return [txid,
                 String(e.rewardType),
                 Number(e.roundReference),
@@ -337,7 +337,7 @@ class AnchorProofClient {
 
     // Bind the anchors a txid carries to the reward tuple. Pure, so the whole binding rule
     // is unit-testable without a DOGE indexer.
-    _judge(anchors, e){
+    judge(anchors, e){
         let minConf   = Number(e.minConfirmations);
         let network   = String(e.network || '');
         let publisher = String(e.publisher || '').toLowerCase();

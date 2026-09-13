@@ -166,7 +166,7 @@ describe('VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1', fun
             indexer.indexerDb.isActionAllowed.resolves(false);
             indexer.indexerDb.getPoll = sinon.stub().resolves(null); // no-op path is enough
             const data = baseData({ FORMAT: 2, IS_SYNTHETIC: true, POLL_REF: 100 });
-            await handler._parseFinalize(data, null);
+            await handler.parseFinalize(data, null);
             assert.ok(indexer.indexerDb.isActionAllowed.notCalled, 'a synthetic finalize must stay exempt');
         });
     });

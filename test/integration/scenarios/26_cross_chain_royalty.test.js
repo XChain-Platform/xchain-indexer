@@ -247,13 +247,13 @@ describe('Cross-chain royalty: create-side gate + signed-legs settlement (real D
         // (a) Tamper control: sign WITH legs, store WITHOUT them → the canonical no longer
         // matches the signature, so the settlement pass must refuse to settle.
         const tampered = makeRow('a'.repeat(64), A_LEGS);
-        const tamperedSig = crypto.sign(null, Buffer.from(settleCanon._canonical(tampered), 'utf8'), v.privateKey).toString('hex');
+        const tamperedSig = crypto.sign(null, Buffer.from(settleCanon.canonical(tampered), 'utf8'), v.privateKey).toString('hex');
         tampered.a_payout_legs = null;             // strip AFTER signing
         await insertMatch(tampered, [{ pubkey: v.pubkey, sig: tamperedSig }]);
 
         // (b) The honest match: signed over the legs-bearing canonical, stored intact.
         const honest = makeRow('b'.repeat(64), A_LEGS);
-        const honestSig = crypto.sign(null, Buffer.from(settleCanon._canonical(honest), 'utf8'), v.privateKey).toString('hex');
+        const honestSig = crypto.sign(null, Buffer.from(settleCanon.canonical(honest), 'utf8'), v.privateKey).toString('hex');
         await insertMatch(honest, [{ pubkey: v.pubkey, sig: honestSig }]);
 
         // Any next block triggers the settlement pass.

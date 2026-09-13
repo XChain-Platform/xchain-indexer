@@ -264,7 +264,7 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
             ACTIVATION_DELAY_BLOCKS: 999,
             STAKING: { ACTIVATION_DELAY_BLOCKS: 999, COOLDOWN_BLOCKS: 1 }
         }}}};
-        XChainIndexer.prototype._mergeHubParams.call(stub, hubAttempt);
+        XChainIndexer.prototype.mergeHubParams.call(stub, hubAttempt);
         assert.strictEqual(stub.config.EXPIRATION_FEE_PER_DAY, '0.00547945', 'EXPIRATION_FEE_PER_DAY was live-polled');
         assert.strictEqual(stub.config.STAKING.ACTIVATION_DELAY_BLOCKS, 6, 'STAKING.ACTIVATION_DELAY_BLOCKS was live-polled');
         assert.strictEqual(stub.config.STAKING.COOLDOWN_BLOCKS, 1000, 'STAKING.COOLDOWN_BLOCKS was live-polled');

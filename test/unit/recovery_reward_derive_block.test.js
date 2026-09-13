@@ -95,10 +95,10 @@ function makeDb({ network = 'regtest', staged = [], addressBlock = 1 } = {}) {
             return [];
         },
         _probeRecoveryPending:          Database.prototype._probeRecoveryPending,
-        _restoredRewardDeriveBlock:     Database.prototype._restoredRewardDeriveBlock,
+        restoredRewardDeriveBlock:     Database.prototype.restoredRewardDeriveBlock,
         _applyPendingRewardsForAddress: Database.prototype._applyPendingRewardsForAddress,
         _applyPendingRewardsDueAtBlock: Database.prototype._applyPendingRewardsDueAtBlock,
-        _maybeApplyPendingRewards:      Database.prototype._maybeApplyPendingRewards
+        maybeApplyPendingRewards:      Database.prototype.maybeApplyPendingRewards
     };
     return db;
 }
@@ -138,7 +138,7 @@ describe('recovery-restored rewards claim their ORIGINAL derive block @regressio
         // The source address is interned at or before its own STAKE, hence at or below the
         // earn block, hence a whole maturity window below the derive height: the intern
         // hook can never be the trigger for a derive-era row.
-        await db._maybeApplyPendingRewards(SOURCE, 5, 12345);
+        await db.maybeApplyPendingRewards(SOURCE, 5, 12345);
         assert.strictEqual(db.rewards.length, 0, 'nothing may be credited before the derive height');
         assert.strictEqual(db.stagedRows[0].applied, 0, 'the row stays staged for the due sweep');
     });
@@ -172,7 +172,7 @@ describe('recovery-restored rewards claim their ORIGINAL derive block @regressio
         ar.ANCHOR_REWARD_DERIVE_ACTIVATION.mainnet = 900000;
         try {
             const db = makeDb({ network: 'mainnet', staged: [{ block_index: 800000 }] });
-            await db._maybeApplyPendingRewards(SOURCE, 5, 12345);
+            await db.maybeApplyPendingRewards(SOURCE, 5, 12345);
             assert.strictEqual(db.rewards.length, 1, 'the pre-flag-day row lands at the address hook, as before');
             assert.strictEqual(db.rewards[0].derive_block_index, null, 'no derive stamp below the flag-day');
             assert.strictEqual(db.stagedRows[0].applied_block, 12345);
@@ -184,14 +184,14 @@ describe('recovery-restored rewards claim their ORIGINAL derive block @regressio
         // wait for the due sweep at earn + maturity instead of landing at the intern hook.
         assert.strictEqual(ar.ANCHOR_REWARD_DERIVE_ACTIVATION.mainnet, 0);
         const db = makeDb({ network: 'mainnet', staged: [{ block_index: 800000 }] });
-        await db._maybeApplyPendingRewards(SOURCE, 5, 12345);
+        await db.maybeApplyPendingRewards(SOURCE, 5, 12345);
         assert.strictEqual(db.rewards.length, 0, 'nothing may be credited before the derive height');
         assert.strictEqual(db.stagedRows[0].applied, 0, 'the row stays staged for the due sweep');
     });
 
     it('an unknown/absent network is treated as inert (fail-closed to the legacy stamp)', async function () {
         const db = makeDb({ network: '', staged: [{ block_index: 800000 }] });
-        await db._maybeApplyPendingRewards(SOURCE, 5, 900);
+        await db.maybeApplyPendingRewards(SOURCE, 5, 900);
         assert.strictEqual(db.rewards.length, 1);
         assert.strictEqual(db.rewards[0].derive_block_index, null);
     });

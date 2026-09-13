@@ -71,15 +71,15 @@ function makeQuoteCtx({ dryRunThrows = null } = {}){
             get: () => null,
             set: () => { calls.memoSets++; }
         },
-        _dryRunAction: async (args) => {
+        dryRunAction: async (args) => {
             calls.dryRuns++;
             calls.dryRunArgs = args;
             if(dryRunThrows) throw dryRunThrows();
             return { blockIndex: 100, blockTime: 1000, status: 'valid', error: null, xchainFee: '0', sourceFeeBalance: null };
         },
-        _nativeFeeMandatory: Actions.prototype._nativeFeeMandatory,
-        _priceFeeQuote:      Actions.prototype._priceFeeQuote,
-        _staticFeeQuote:     Actions.prototype._staticFeeQuote,
+        nativeFeeMandatory: Actions.prototype.nativeFeeMandatory,
+        priceFeeQuote:      Actions.prototype.priceFeeQuote,
+        staticFeeQuote:     Actions.prototype.staticFeeQuote,
         computeFeeQuote:     Actions.prototype.computeFeeQuote,
         computePreflight:    Actions.prototype.computePreflight
     };
@@ -92,36 +92,36 @@ describe('fee-quote transaction-lock budget', function () {
 
         it('takes a free lock immediately even with a budget', async function () {
             let db = makeLock();
-            await db._acquireTxLock(50);
+            await db.acquireTxLock(50);
             assert.strictEqual(db._txLock.locked, true);
         });
 
         it('resolves normally when the holder releases inside the budget', async function () {
             let db = makeLock();
-            await db._acquireTxLock();                       // holder
-            let waiting = db._acquireTxLock(1000);
-            sleep(10).then(() => db._releaseTxLock());
+            await db.acquireTxLock();                       // holder
+            let waiting = db.acquireTxLock(1000);
+            sleep(10).then(() => db.releaseTxLock());
             await waiting;                                    // must not reject
         });
 
         it('rejects TX_LOCK_BUSY when the holder keeps the lock past the budget', async function () {
             let db = makeLock();
-            await db._acquireTxLock();                       // holder never releases
+            await db.acquireTxLock();                       // holder never releases
             let started = Date.now();
             await assert.rejects(
-                () => db._acquireTxLock(30),
+                () => db.acquireTxLock(30),
                 (e) => e.code === 'TX_LOCK_BUSY' && /transaction lock busy/.test(e.message));
             assert.ok(Date.now() - started < 1000, 'gave up in the budget, not in block-time');
         });
 
         it('an unbounded waiter still waits (the block loop must never give up)', async function () {
             let db = makeLock();
-            await db._acquireTxLock();
+            await db.acquireTxLock();
             let settled = false;
-            let waiting = db._acquireTxLock().then(() => { settled = true; });
+            let waiting = db.acquireTxLock().then(() => { settled = true; });
             await sleep(60);
             assert.strictEqual(settled, false, 'no budget means no give-up');
-            db._releaseTxLock();
+            db.releaseTxLock();
             await waiting;
             assert.strictEqual(settled, true);
         });
@@ -131,12 +131,12 @@ describe('fee-quote transaction-lock budget', function () {
         // nothing left to release it, wedging block processing permanently.
         it('a release skips a timed-out waiter and grants the next live one', async function () {
             let db = makeLock();
-            await db._acquireTxLock();
-            let gaveUp = db._acquireTxLock(20).then(() => 'granted', (e) => e.code);
+            await db.acquireTxLock();
+            let gaveUp = db.acquireTxLock(20).then(() => 'granted', (e) => e.code);
             let live   = false;
-            let second = db._acquireTxLock().then(() => { live = true; });
+            let second = db.acquireTxLock().then(() => { live = true; });
             assert.strictEqual(await gaveUp, 'TX_LOCK_BUSY');
-            db._releaseTxLock();
+            db.releaseTxLock();
             await second;
             assert.strictEqual(live, true, 'the live waiter got the lock');
             assert.strictEqual(db._txLock.locked, true, 'lock is held by the live waiter');
@@ -144,12 +144,12 @@ describe('fee-quote transaction-lock budget', function () {
 
         it('a release with only dead waiters leaves the lock FREE, not stranded', async function () {
             let db = makeLock();
-            await db._acquireTxLock();
-            let gaveUp = db._acquireTxLock(20).then(() => 'granted', (e) => e.code);
+            await db.acquireTxLock();
+            let gaveUp = db.acquireTxLock(20).then(() => 'granted', (e) => e.code);
             assert.strictEqual(await gaveUp, 'TX_LOCK_BUSY');
-            db._releaseTxLock();
+            db.releaseTxLock();
             assert.strictEqual(db._txLock.locked, false, 'mutex released, not held by a ghost');
-            await db._acquireTxLock(50);                       // a fresh caller can take it
+            await db.acquireTxLock(50);                       // a fresh caller can take it
             assert.strictEqual(db._txLock.locked, true);
         });
     });
@@ -178,7 +178,7 @@ describe('fee-quote transaction-lock budget', function () {
                     getFeeRecord:        async () => ({ amount: '1.00000000' })
                 },
                 processTransaction: async () => ({ STATUS: 'valid', ACTION_INDEX: 5 }),
-                _dryRunAction: Actions.prototype._dryRunAction
+                dryRunAction: Actions.prototype.dryRunAction
             };
             ctx.config['BLOCK_PROCESS_TIMEOUT'] = 300000;
             return { ctx, calls };
@@ -186,20 +186,20 @@ describe('fee-quote transaction-lock budget', function () {
 
         it('forwards acquireTimeoutMs to beginTransaction', async function () {
             let { ctx, calls } = makeDryRunCtx();
-            await ctx._dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'T'], source: 's', timeoutMs: 300000, acquireTimeoutMs: 1234 });
+            await ctx.dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'T'], source: 's', timeoutMs: 300000, acquireTimeoutMs: 1234 });
             assert.deepStrictEqual(calls.beginOpts, { acquireTimeoutMs: 1234 });
         });
 
         it('leaves acquireTimeoutMs undefined when the caller sets none (block-loop parity)', async function () {
             let { ctx, calls } = makeDryRunCtx();
-            await ctx._dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'T'], source: 's', timeoutMs: 300000 });
+            await ctx.dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'T'], source: 's', timeoutMs: 300000 });
             assert.deepStrictEqual(calls.beginOpts, { acquireTimeoutMs: undefined });
         });
 
         it('a give-up opens no transaction, so it never rolls one back', async function () {
             let { ctx, calls } = makeDryRunCtx({ acquireRejects: true });
             await assert.rejects(
-                () => ctx._dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'T'], source: 's', timeoutMs: 300000, acquireTimeoutMs: 10 }),
+                () => ctx.dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'T'], source: 's', timeoutMs: 300000, acquireTimeoutMs: 10 }),
                 (e) => e.code === 'TX_LOCK_BUSY');
             assert.strictEqual(calls.rollback, 0, 'no rollback for a transaction that never opened');
         });

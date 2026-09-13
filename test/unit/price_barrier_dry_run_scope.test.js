@@ -71,7 +71,7 @@ describe('the price barrier is scoped to consensus, not to "a context exists"', 
     it('1. fires inside a BLOCK-LOOP context when the block skipped the barrier', () => {
         const db  = stubDb();
         const err = capture(() =>
-            db.runInTxEpoch(7, () => db._assertPriceBarrierNotSkipped('getLatestPrice')));
+            db.runInTxEpoch(7, () => db.assertPriceBarrierNotSkipped('getLatestPrice')));
 
         assert.ok(err, 'the backstop must still defer a real block that read an uncovered mirror');
         assert.strictEqual(err.code, 'PRICE_BARRIER_DEFERRED',
@@ -84,7 +84,7 @@ describe('the price barrier is scoped to consensus, not to "a context exists"', 
     it('2. does NOT fire inside a DRY-RUN context, and writes no block-loop state', () => {
         const db  = stubDb();
         const err = capture(() =>
-            db.runInDryRunEpoch(7, () => db._assertPriceBarrierNotSkipped('getLatestPrice')));
+            db.runInDryRunEpoch(7, () => db.assertPriceBarrierNotSkipped('getLatestPrice')));
 
         assert.strictEqual(err, null,
             'a fee-quote dry run commits nothing, so an uncovered mirror read is harmless here; '
@@ -95,21 +95,21 @@ describe('the price barrier is scoped to consensus, not to "a context exists"', 
 
     it('3. does NOT fire with no context at all (API / healthcheck read)', () => {
         const db = stubDb();
-        assert.strictEqual(capture(() => db._assertPriceBarrierNotSkipped('getLatestPrice')), null);
+        assert.strictEqual(capture(() => db.assertPriceBarrierNotSkipped('getLatestPrice')), null);
         assert.strictEqual(db.indexer.priceBarrierForceBlock, null);
     });
 
     it('4. does NOT fire in a block-loop context when the block took the barrier', () => {
         const db = stubDb({ barrierSkipped: false });
         assert.strictEqual(
-            capture(() => db.runInTxEpoch(7, () => db._assertPriceBarrierNotSkipped('getLatestPrice'))),
+            capture(() => db.runInTxEpoch(7, () => db.assertPriceBarrierNotSkipped('getLatestPrice'))),
             null);
         assert.strictEqual(db.indexer.priceBarrierForceBlock, null);
     });
 
     it('5. M-16 is unweakened: a stale epoch inside a DRY-RUN context still fences', () => {
         const db  = stubDb({ epoch: 9 });
-        const err = capture(() => db.runInDryRunEpoch(7, () => db._assertTxNotFenced()));
+        const err = capture(() => db.runInDryRunEpoch(7, () => db.assertTxNotFenced()));
 
         assert.ok(err, 'the dry run installs its context precisely to get this fence');
         assert.match(err.message, /transaction fenced \(M-16\)/);
@@ -117,7 +117,7 @@ describe('the price barrier is scoped to consensus, not to "a context exists"', 
 
     it('6. M-16 is unweakened: a stale epoch inside a BLOCK-LOOP context still fences', () => {
         const db  = stubDb({ epoch: 9 });
-        const err = capture(() => db.runInTxEpoch(7, () => db._assertTxNotFenced()));
+        const err = capture(() => db.runInTxEpoch(7, () => db.assertTxNotFenced()));
 
         assert.ok(err);
         assert.match(err.message, /transaction fenced \(M-16\)/);

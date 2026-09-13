@@ -119,7 +119,7 @@ function makeCtx(opts){
 
     const db = bindSettlementReads({
         config: config,
-        _mirrorDb: () => bindSettlementReads({ doQuery: async (sql, args) => {
+        mirrorDb: () => bindSettlementReads({ doQuery: async (sql, args) => {
             if(!/policy_snapshots/.test(sql)) return [];
             // The earlier-seq probe is a narrow query; the fake applies its predicate so the
             // gap case exercises the real filter rather than the whole mirror.

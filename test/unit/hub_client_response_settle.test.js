@@ -82,7 +82,7 @@ describe('HubClient response-lifecycle settling', function(){
             setTimeout(() => res.socket.destroy(), 20);
         });
         let c = new HubClient(hub.url, '');
-        let outcome = await settledWithin(c._call('ping', {}), 3000);
+        let outcome = await settledWithin(c.call('ping', {}), 3000);
         assert.notStrictEqual(outcome, 'pending', 'the truncated response left _call pending');
         assert.notStrictEqual(outcome, 'resolved', 'a truncated body must not read as a result');
         assert.match(outcome.message, /before the body was complete|hub response error/);
@@ -99,7 +99,7 @@ describe('HubClient response-lifecycle settling', function(){
         });
         let c = new HubClient(hub.url, '');
         c.callDeadlineMs = 800;
-        let outcome = await settledWithin(c._call('ping', {}), 4000);
+        let outcome = await settledWithin(c.call('ping', {}), 4000);
         clearInterval(ticker);
         assert.notStrictEqual(outcome, 'pending', 'a drip-fed body outlived the deadline');
         assert.match(outcome.message, /exceeded its 800ms deadline/);
@@ -111,7 +111,7 @@ describe('HubClient response-lifecycle settling', function(){
             res.end(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { ok: true } }));
         });
         let c = new HubClient(hub.url, '');
-        assert.deepStrictEqual(await c._call('ping', {}), { ok: true });
+        assert.deepStrictEqual(await c.call('ping', {}), { ok: true });
     });
 
     it('leaves the push queue drainable after a truncated hub response', async function(){

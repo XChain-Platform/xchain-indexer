@@ -79,9 +79,9 @@ class Price {
             error = 'invalid: VERSION (unknown)';
 
         if(format === 0)
-            return this._parseV0(params, data, error);
+            return this.parseV0(params, data, error);
         if(format === 1)
-            return this._parseV1(params, data, error);
+            return this.parseV1(params, data, error);
 
         // Unknown format: still record it (as invalid) rather than dropping it silently
         data['VERSION']           = format;
@@ -107,7 +107,7 @@ class Price {
     // does, so it paid nothing in practice and is not reproduced here. Paying the elected
     // publisher alone would misprice every other validator's participation; a real
     // participation rail is tracked separately. A zero-validator_rewards test pins this.
-    async _parseV0(params, data, error){
+    async parseV0(params, data, error){
         data['VERSION'] = 0;
 
         // 1. DECOMPRESSION, before anything else.
@@ -472,7 +472,7 @@ class Price {
     // Parse PRICE v1: user TOKEN/FIAT oracle price.
     // Records the action and pushes to hub for cross-chain aggregation.
     // The 24-hour lock window is not yet enforced.
-    async _parseV1(params, data, error){
+    async parseV1(params, data, error){
         data['VERSION'] = 1;
 
         // Extract fields

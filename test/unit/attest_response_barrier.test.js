@@ -202,7 +202,7 @@ describe('attest_response_sync_barrier defer site @regression @tier1', function 
                         : Promise.resolve(1);
                 }
             },
-            _barrierClearsAt(blockTime, graceField) {
+            barrierClearsAt(blockTime, graceField) {
                 this.clearsAtField = graceField;
                 const g = Number(this.hubDbSync[graceField]);
                 return (blockTime + (Number.isFinite(g) ? g : 0)) * 1000;
@@ -211,11 +211,11 @@ describe('attest_response_sync_barrier defer site @regression @tier1', function 
             // answer the height-aware wrapper the barrier now calls. Inert here:
             // this fake never arms, so the wrapper always defers to the clock form
             // it was written against.
-            _mirrorAdmissionActiveAt() { return false; },
-            _barrierClearsAtHeightAware(blockTime, graceField, height) {
-                return this._mirrorAdmissionActiveAt(height)
+            mirrorAdmissionActiveAt() { return false; },
+            barrierClearsAtHeightAware(blockTime, graceField, height) {
+                return this.mirrorAdmissionActiveAt(height)
                     ? null
-                    : this._barrierClearsAt(blockTime, graceField);
+                    : this.barrierClearsAt(blockTime, graceField);
             }
         };
     }

@@ -60,15 +60,15 @@ class CountingStore {
         this.batchSizes = [];
     }
     async get(h){ return this.map.has(h) ? this.map.get(h) : null; }
-    _set(h, l, r){
+    set(h, l, r){
         this.rowsWritten++;
         if(!this.map.has(h)) this.map.set(h, { left_hash: l, right_hash: r });
     }
-    async put(h, l, r){ this.putCalls++; this._set(h, l, r); }
+    async put(h, l, r){ this.putCalls++; this.set(h, l, r); }
     async putMany(nodes){
         this.putManyCalls++;
         this.batchSizes.push(nodes.length);
-        for(const n of nodes) this._set(n.hash, n.left, n.right);
+        for(const n of nodes) this.set(n.hash, n.left, n.right);
     }
     get writeCalls(){ return this.putCalls + this.putManyCalls; }
 }

@@ -86,7 +86,7 @@ describe('HubPushQueue starvation fix (MariaDB integration) @regression @tier1',
     });
 
     beforeEach(async function () {
-        await db._poolQuery('DELETE FROM pending_hub_pushes', []);
+        await db.poolQuery('DELETE FROM pending_hub_pushes', []);
     });
 
     it('fetches a newer due row even with 50+ older rows parked in backoff (head-of-line blocking)', async function () {
@@ -95,7 +95,7 @@ describe('HubPushQueue starvation fix (MariaDB integration) @regression @tier1',
         // These occupy ids 1..55, all older than the due row below.
         const PARKED = 55;
         for (let i = 0; i < PARKED; i++) {
-            await db._poolQuery(
+            await db.poolQuery(
                 `INSERT INTO pending_hub_pushes (push_type, action_index, payload, attempts, last_attempted_at, status)
                  VALUES (?, ?, ?, ?, NOW(), 'pending')`,
                 ['price_round', i, JSON.stringify({ round: i }), 9]   // attempts=9 -> backoff capped at max (600s)
@@ -104,7 +104,7 @@ describe('HubPushQueue starvation fix (MariaDB integration) @regression @tier1',
 
         // One newer row that has never been attempted (NULL last_attempted_at),
         // therefore immediately due, but its id falls well beyond the oldest 50.
-        const dueInsert = await db._poolQuery(
+        const dueInsert = await db.poolQuery(
             `INSERT INTO pending_hub_pushes (push_type, action_index, payload, attempts, last_attempted_at, status)
              VALUES (?, ?, ?, 0, NULL, 'pending')`,
             ['price_round', 99999, JSON.stringify({ round: 99999 })]
@@ -131,7 +131,7 @@ describe('HubPushQueue starvation fix (MariaDB integration) @regression @tier1',
     it('still returns parked rows once their backoff window has actually elapsed', async function () {
         // A row attempted long enough ago (11 minutes, past the 600s/10min max
         // backoff cap) must be treated as due regardless of its attempt count.
-        await db._poolQuery(
+        await db.poolQuery(
             `INSERT INTO pending_hub_pushes (push_type, action_index, payload, attempts, last_attempted_at, status)
              VALUES (?, ?, ?, ?, DATE_SUB(NOW(), INTERVAL 11 MINUTE), 'pending')`,
             ['price_round', 1, JSON.stringify({ round: 1 }), 20]
@@ -142,7 +142,7 @@ describe('HubPushQueue starvation fix (MariaDB integration) @regression @tier1',
     });
 
     it('excludes a row whose backoff window has not yet elapsed', async function () {
-        await db._poolQuery(
+        await db.poolQuery(
             `INSERT INTO pending_hub_pushes (push_type, action_index, payload, attempts, last_attempted_at, status)
              VALUES (?, ?, ?, ?, NOW(), 'pending')`,
             ['price_round', 1, JSON.stringify({ round: 1 }), 1]   // attempts=1 -> 30s backoff, just attempted

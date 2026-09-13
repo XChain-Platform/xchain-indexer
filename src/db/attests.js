@@ -806,11 +806,11 @@ module.exports = {
     async getMirroredAttestationResponses(network, requestIds, blockTime, blockHeight){
         let ids = (requestIds || []).map(id => String(id || '').toLowerCase()).filter(id => id.length > 0);
         if(ids.length === 0) return [];
-        let mirror = this._mirrorDb();
+        let mirror = this.mirrorDb();
         let out    = [];
         const CHUNK = 500;
-        let bind      = this._mirrorBindClause(Number(blockTime), blockHeight, null, 'admit_block_btc');
-        let admitCols = this._mirrorAdmissionActiveAt(blockHeight) ? ', admit_block_btc' : '';
+        let bind      = this.mirrorBindClause(Number(blockTime), blockHeight, null, 'admit_block_btc');
+        let admitCols = this.mirrorAdmissionActiveAt(blockHeight) ? ', admit_block_btc' : '';
         for(let i = 0; i < ids.length; i += CHUNK){
             let chunk        = ids.slice(i, i + CHUNK);
             let placeholders = chunk.map(() => '?').join(',');

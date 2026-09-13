@@ -49,7 +49,7 @@ class NodeProof {
         this.formats[0] = 'VERSION|CHALLENGE_ID|EPOCH_HEIGHT|PASS_COUNT|PASS_PK...|SIG_COUNT|PUBKEY|SIG|...';
     }
 
-    _fnConfig(){
+    fnConfig(){
         return this.config['FULLNODE'] || {};
     }
 
@@ -58,11 +58,11 @@ class NodeProof {
         let format = data['FORMAT'];
         if(!error && (format === null || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
-        if(format === 0) return await this._parseVerdict(params, data, error);
+        if(format === 0) return await this.parseVerdict(params, data, error);
     }
 
     // NODEPROOF v0: quorum-signed verdict over who answered the epoch's challenge.
-    async _parseVerdict(params, data, error){
+    async parseVerdict(params, data, error){
 
         // BTC-only: capability staking + oracle-round rewards are BTC-only, so the
         // proof and its verified set live on BTC. Other chains receive the rows via
@@ -70,7 +70,7 @@ class NodeProof {
         if(!error && this.config['COIN'] !== 'BTC')
             error = 'invalid: NODEPROOF is BTC-only';
 
-        let fn        = this._fnConfig();
+        let fn        = this.fnConfig();
         let interval  = parseInt(fn['CHALLENGE_INTERVAL_BLOCKS'])     || 0;
         let depth     = parseInt(fn['CONFIRM_DEPTH'])                 || 0;
         let acceptWin = parseInt(fn['VERDICT_ACCEPT_WINDOW_BLOCKS'])  || 0;
@@ -182,7 +182,7 @@ class NodeProof {
         let setBlock      = srb.buriedSnapshotBlock(epochHeight, this.config['NETWORK']);
         let validSigners  = 0;
         if(!error){
-            let eligible = await this._eligibleVerifierSet(snapshotBlock);
+            let eligible = await this.eligibleVerifierSet(snapshotBlock);
             if(eligible.size === 0){
                 error = 'invalid: no eligible verifiers at epoch (feature dormant)';
             } else {
@@ -257,9 +257,9 @@ class NodeProof {
     // Eligible verifier universe at `blockIndex`: previously-verified full nodes
     // (passed proof in window AND live full_node stake) ∪ configured genesis
     // verifiers. Deterministic: depends only on earlier on-chain verdicts + config.
-    async _eligibleVerifierSet(blockIndex){
+    async eligibleVerifierSet(blockIndex){
         let set = new Set();
-        let genesis = this._fnConfig()['GENESIS_VERIFIERS'] || [];
+        let genesis = this.fnConfig()['GENESIS_VERIFIERS'] || [];
         for(let pk of genesis){
             if(/^[0-9a-fA-F]{64}$/.test(String(pk)))
                 set.add(String(pk).toLowerCase());

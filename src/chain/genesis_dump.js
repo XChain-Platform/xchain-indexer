@@ -69,7 +69,7 @@ class GenesisDump {
     // script after a CSV inject, BEFORE createBlock, so the dump is pure inject output.
     async write(file){
         let genesisBlock = Number(this.config['GENESIS_BLOCK']);
-        let expectedHashes = await this._blockHashes(genesisBlock);
+        let expectedHashes = await this.blockHashes(genesisBlock);
 
         // Discover the non-empty, non-excluded tables to carry.
         let tables = [];
@@ -111,7 +111,7 @@ class GenesisDump {
             // tx_index) so the read's ORDER BY 1 yields the same byte stream every time.
             let rows = await this.db.readAllRowsByFirstColumn(t, cols);
             for(let row of rows)
-                await writeLine({ r: cols.map(c => this._scalar(row[c])) });
+                await writeLine({ r: cols.map(c => this.scalar(row[c])) });
         }
 
         await new Promise((res, rej) => { gzip.end(); out.on('finish', res); out.on('error', rej); });
@@ -137,7 +137,7 @@ class GenesisDump {
         // rolling back. Unpinned dev/regtest dumps (no pin) skip this gate and
         // rely on the post-import block-hash recompute as their only check.
         if(!this.util.isNull(pinned)){
-            let fileHash = await this._hashFile(file);
+            let fileHash = await this.hashFile(file);
             if(fileHash !== String(pinned).toLowerCase()){
                 console.error('GENESIS FATAL: dump content hash mismatch for ' + file +
                     ' (expected ' + pinned + ', got ' + fileHash + '). Halting.');
@@ -151,7 +151,7 @@ class GenesisDump {
         const flush = async () => {
             if(curTable === null || batch.length === 0)
                 return;
-            await this._insertBatch(curTable, curCols, batch);
+            await this.insertBatch(curTable, curCols, batch);
             rowsImported += batch.length;
             batch = [];
         };
@@ -170,11 +170,11 @@ class GenesisDump {
                 // can't be parameterized), so validate their shape before use.
                 // Every real indexer identifier is a bare [A-Za-z0-9_] name; a
                 // backtick/space/paren/semicolon is an injection attempt.
-                this._assertIdentifier(obj.t);
+                this.assertIdentifier(obj.t);
                 if(!Array.isArray(obj.cols) || obj.cols.length === 0)
                     throw new Error('Genesis dump table header missing columns: ' + obj.t);
                 for(let c of obj.cols)
-                    this._assertIdentifier(c);
+                    this.assertIdentifier(c);
                 curTable = obj.t; curCols = obj.cols;
                 continue;
             }
@@ -201,7 +201,7 @@ class GenesisDump {
         // Load-integrity + consensus check: recompute the genesis block hashes from the
         // imported rows and require they equal what the dump recorded. Catches a truncated
         // or partial import and any drift between the dump and this node's hasher.
-        let got = await this._blockHashes(meta.genesisBlock);
+        let got = await this.blockHashes(meta.genesisBlock);
         for(let k of ['ledger', 'actions', 'state', 'contracts']){
             if(got[k] !== meta.expectedHashes[k]){
                 console.error('GENESIS FATAL: imported ' + k + ' hash ' + got[k] +
@@ -220,7 +220,7 @@ class GenesisDump {
     // `write()` contentHash / pinned GENESIS_DUMP_HASH without parsing the dump.
     // (A verify pass and a later import pass read the file twice; a live disk
     // swap between them is out of scope, matching the local one-shot threat model.)
-    async _hashFile(file){
+    async hashFile(file){
         let hash   = crypto.createHash('sha256');
         let stream = fs.createReadStream(file).pipe(zlib.createGunzip());
         for await (let chunk of stream)
@@ -231,7 +231,7 @@ class GenesisDump {
     // Reject any table/column identifier from the (untrusted) dump that is not a
     // bare [A-Za-z0-9_] name. Identifiers are interpolated into SQL and cannot be
     // parameterized, so shape validation is the guard against identifier injection.
-    _assertIdentifier(name){
+    assertIdentifier(name){
         if(typeof name !== 'string' || !/^[A-Za-z0-9_]+$/.test(name))
             throw new Error('Genesis dump has an invalid SQL identifier: ' + JSON.stringify(name));
     }
@@ -239,7 +239,7 @@ class GenesisDump {
     // Recompute the four genesis block hashes as plain strings (the shape stored in
     // the dump). Works pre-createBlock since getBlockHashes derives from the block's
     // own rows, not the blocks row.
-    async _blockHashes(genesisBlock){
+    async blockHashes(genesisBlock){
         let h = await this.db.getBlockHashes(genesisBlock);
         return { ledger: h.ledger.hash, actions: h.actions.hash, state: h.state.hash, contracts: h.contracts.hash };
     }
@@ -248,10 +248,10 @@ class GenesisDump {
     // column identifiers cannot be, so re-assert their shape here with the dump's own
     // message (read() already validates, but a caller reaching this directly must not get
     // past the shape check). The db method asserts again at the SQL-building site.
-    async _insertBatch(table, cols, rows){
-        this._assertIdentifier(table);
+    async insertBatch(table, cols, rows){
+        this.assertIdentifier(table);
         for(let c of cols)
-            this._assertIdentifier(c);
+            this.assertIdentifier(c);
         await this.db.insertRowsIntoTable(table, cols, rows);
     }
 
@@ -267,7 +267,7 @@ class GenesisDump {
     // change the artifact's shape and invalidate the pin); the throw is the
     // encoder's parseSatoshiAmount / utility.js bcfloor fail-fast, and it fires
     // in the offline generator, never on a node's import path.
-    _scalar(v){
+    scalar(v){
         if(v === undefined || v === null) return null;
         if(typeof v === 'bigint'){
             if(v > BigInt(Number.MAX_SAFE_INTEGER) || v < -BigInt(Number.MAX_SAFE_INTEGER))

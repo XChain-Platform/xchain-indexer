@@ -188,8 +188,8 @@ function fakeIndexer(opts){
         _trainActivationRequired: o.required,
         queries,
         indexerDb: trainEventsDb(queries, o),
-        _resolveTrainActivationRequirement: XChainIndexer.prototype._resolveTrainActivationRequirement,
-        _recordTrainActivationHalt: XChainIndexer.prototype._recordTrainActivationHalt
+        resolveTrainActivationRequirement: XChainIndexer.prototype.resolveTrainActivationRequirement,
+        recordTrainActivationHalt: XChainIndexer.prototype.recordTrainActivationHalt
     };
 }
 
@@ -209,7 +209,7 @@ function trainEventsDb(queries, o){
     return db;
 }
 
-const check = (self, block) => XChainIndexer.prototype._checkTrainActivation.call(self, block);
+const check = (self, block) => XChainIndexer.prototype.checkTrainActivation.call(self, block);
 
 describe('train activation: the indexer pre-apply gate @regression', function () {
 
@@ -284,7 +284,7 @@ describe('train activation: the indexer pre-apply gate @regression', function ()
 
     it('halts when the gate itself throws, rather than waving the block through', function () {
         const self = fakeIndexer({});
-        self._resolveTrainActivationRequirement = () => { throw new Error('boom'); };
+        self.resolveTrainActivationRequirement = () => { throw new Error('boom'); };
         return check(self, 1).then((stop) => {
             assert.strictEqual(stop, true);
             assert.match(self.trainActivation.reason, /failed to evaluate/);

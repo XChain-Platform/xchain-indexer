@@ -202,7 +202,7 @@ describe('backfill migration file contract @regression @tier1', function () {
 
     it('is tagged mode=manual so it can never auto-apply at fleet startup', function () {
         const Database = require('../../src/db');
-        assert.strictEqual(Database.prototype._migrationMode.call({}, raw), 'manual');
+        assert.strictEqual(Database.prototype.migrationMode.call({}, raw), 'manual');
     });
 
     it('is not a deploy precondition - no code asserts it at boot', function () {

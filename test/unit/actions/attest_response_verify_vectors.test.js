@@ -575,7 +575,7 @@ describe('ATTEST v1 response verification: captured byte vectors @regression @ti
                 network:           'regtest',
                 indexerDb:         indexer.indexerDb,
                 protocolChanges:   handler.actions.protocolChanges,
-                computeResponsibleSet: handler._computeResponsibleSet.bind(handler),
+                computeResponsibleSet: handler.computeResponsibleSet.bind(handler),
                 ...overrides,
             };
         }

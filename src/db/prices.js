@@ -112,7 +112,7 @@ module.exports = {
     // unix seconds, so every node replaying the block computes the same result and
     // historical backfill is never falsely flagged stale. maxAgeSeconds <= 0 disables the guard.
     async getOracleDataForVM(blockIndex, blockTime, maxAgeSeconds){
-        this._assertPriceBarrierNotSkipped('getOracleDataForVM');
+        this.assertPriceBarrierNotSkipped('getOracleDataForVM');
         let self = this;
         let refTime = parseInt(blockTime);
         let maxAge  = parseInt(maxAgeSeconds);
@@ -350,7 +350,7 @@ module.exports = {
     // against the same round. Unarmed everywhere today, so the query below is
     // byte-identical to the pre-gate one on every network.
     async getLatestPrice(coinPair, blockHeight, opts){
-        this._assertPriceBarrierNotSkipped('getLatestPrice');
+        this.assertPriceBarrierNotSkipped('getLatestPrice');
         // The bound's own axis is the landing block's clock, so it needs a chain-derived
         // block time. Armed with no such time available the read FAILS CLOSED (no price)
         // rather than answering from the unbounded selection, which is the fork this gate
@@ -432,7 +432,7 @@ module.exports = {
     // gated by blockTime so two nodes processing the same block see the same price.
     // The 24-hour lock window is enforced by `effective_at` - only prices whose effective_at <= blockTime are returned.
     async getOraclePrice(sourceAddress, coin, tick, fiat, blockTime){
-        this._assertPriceBarrierNotSkipped('getOraclePrice');
+        this.assertPriceBarrierNotSkipped('getOraclePrice');
         let query = `SELECT id, source_address, source_chain, coin, tick, fiat, value, fee, memo,
                             block_time, effective_at, action_index
                      FROM oracle_prices
@@ -469,7 +469,7 @@ module.exports = {
     // Get oracle prices for a (sourceAddress, coin, tick, fiat) within a time range (newest-first)
     // Used by reverseOraclePriceMatch for FIAT dispenser settlement.
     async getOraclePricesInTimeRange(sourceAddress, coin, tick, fiat, startTime, endTime){
-        this._assertPriceBarrierNotSkipped('getOraclePricesInTimeRange');
+        this.assertPriceBarrierNotSkipped('getOraclePricesInTimeRange');
         let query = `SELECT value, block_time, effective_at, action_index
                      FROM oracle_prices
                      WHERE source_address = ? AND coin = ? AND tick = ? AND fiat = ?
@@ -489,7 +489,7 @@ module.exports = {
 
     // Get finalized prices for a coin pair within a time range (newest-first)
     async getPricesInTimeRange(coinPair, startTime, endTime){
-        this._assertPriceBarrierNotSkipped('getPricesInTimeRange');
+        this.assertPriceBarrierNotSkipped('getPricesInTimeRange');
         let query = `SELECT price, round_number, block_timestamp
                      FROM price_snapshots
                      WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL

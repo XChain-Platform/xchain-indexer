@@ -161,7 +161,7 @@ class DataGenerator extends DecoderSeeder {
         for (let i = 0; i < count; i++) {
             const blockIdx = startBlock + i;
             const blockTime = baseTime + (i * spacing);
-            const txs = this._buildTxsForProfile(profile, txsPerBlock, blockIdx, blockTime);
+            const txs = this.buildTxsForProfile(profile, txsPerBlock, blockIdx, blockTime);
             if (opts.bulk) pending.push({ blockIndex: blockIdx, blockTime, txs });
             else          await this.seedBlock(blockIdx, blockTime, txs);
         }
@@ -234,9 +234,9 @@ class DataGenerator extends DecoderSeeder {
             }
         }
 
-        await this._insertRows('blocks', ['block_index', 'block_time'], blockRows, chunkSize);
-        await this._insertRows('index_transactions', ['id', 'hash'], hashRows, chunkSize);
-        await this._insertRows('transactions',
+        await this.insertRows('blocks', ['block_index', 'block_time'], blockRows, chunkSize);
+        await this.insertRows('index_transactions', ['id', 'hash'], hashRows, chunkSize);
+        await this.insertRows('transactions',
             ['tx_index', 'tx_hash_id', 'block_index', 'source_id', 'destination_id', 'amount', 'data'],
             txRows, chunkSize);
     }
@@ -291,7 +291,7 @@ class DataGenerator extends DecoderSeeder {
      * @returns {string[]}
      */
     generateAddresses(count, seedPrefix = 'xchain-perf-wide') {
-        const util = this._utility();
+        const util = this.utility();
         const out = [];
         for (let i = 0; i < count; i++) {
             const hash160 = crypto.createHash('sha256').update(seedPrefix + ':' + i).digest().subarray(0, 20);
@@ -301,23 +301,23 @@ class DataGenerator extends DecoderSeeder {
         return out;
     }
 
-    _buildTxsForProfile(profile, txsPerBlock, blockIdx, blockTime) {
+    buildTxsForProfile(profile, txsPerBlock, blockIdx, blockTime) {
         if (txsPerBlock === 0) return [];
         switch (profile) {
-            case 'send-only':    return this._profileSendOnly(txsPerBlock, blockIdx);
-            case 'normal':       return this._profileNormal(txsPerBlock, blockIdx);
-            case 'token-launch': return this._profileTokenLaunch(txsPerBlock, blockIdx);
-            case 'heavy-dex':    return this._profileHeavyDex(txsPerBlock, blockIdx, blockTime);
-            case 'standing-orders': return this._profileStandingOrders(txsPerBlock, blockIdx, blockTime);
-            case 'mixed-heavy':  return this._profileMixedHeavy(txsPerBlock, blockIdx, blockTime);
-            case 'fee-spike':    return this._profileFeeSpike(txsPerBlock, blockIdx);
-            default:             return this._profileSendOnly(txsPerBlock, blockIdx);
+            case 'send-only':    return this.profileSendOnly(txsPerBlock, blockIdx);
+            case 'normal':       return this.profileNormal(txsPerBlock, blockIdx);
+            case 'token-launch': return this.profileTokenLaunch(txsPerBlock, blockIdx);
+            case 'heavy-dex':    return this.profileHeavyDex(txsPerBlock, blockIdx, blockTime);
+            case 'standing-orders': return this.profileStandingOrders(txsPerBlock, blockIdx, blockTime);
+            case 'mixed-heavy':  return this.profileMixedHeavy(txsPerBlock, blockIdx, blockTime);
+            case 'fee-spike':    return this.profileFeeSpike(txsPerBlock, blockIdx);
+            default:             return this.profileSendOnly(txsPerBlock, blockIdx);
         }
     }
 
     // --- Profiles ---
 
-    _profileSendOnly(count, blockIdx) {
+    profileSendOnly(count, blockIdx) {
         const txs = [];
         const addrs = this.state.addresses;
         for (let i = 0; i < count; i++) {
@@ -328,7 +328,7 @@ class DataGenerator extends DecoderSeeder {
         return txs;
     }
 
-    _profileNormal(count, blockIdx) {
+    profileNormal(count, blockIdx) {
         const txs = [];
         const addrs = this.state.addresses;
         for (let i = 0; i < count; i++) {
@@ -346,7 +346,7 @@ class DataGenerator extends DecoderSeeder {
                 txs.push({ source: minter, data: `MINT|0|${tick}|10` });
             } else if (r < 0.9) {
                 // ISSUE a new token
-                const tick = this._nextTick(blockIdx, i);
+                const tick = this.nextTick(blockIdx, i);
                 txs.push({ source: addrs[i % addrs.length], data: `ISSUE|0|${tick}|100000|1000|0` });
             } else {
                 // DESTROY
@@ -357,14 +357,14 @@ class DataGenerator extends DecoderSeeder {
         return txs;
     }
 
-    _profileTokenLaunch(count, blockIdx) {
+    profileTokenLaunch(count, blockIdx) {
         const txs = [];
         const addrs = this.state.addresses;
         // Half ISSUE, half MINT of those same tokens
         const issueCount = Math.ceil(count / 2);
         const ticks = [];
         for (let i = 0; i < issueCount; i++) {
-            const tick = this._nextTick(blockIdx, i);
+            const tick = this.nextTick(blockIdx, i);
             ticks.push(tick);
             txs.push({ source: addrs[i % addrs.length], data: `ISSUE|0|${tick}|100000|1000|0` });
         }
@@ -376,7 +376,7 @@ class DataGenerator extends DecoderSeeder {
         return txs;
     }
 
-    _profileHeavyDex(count, blockIdx, blockTime) {
+    profileHeavyDex(count, blockIdx, blockTime) {
         const txs = [];
         const addrs = this.state.addresses;
         const expiry = blockTime + 90 * 86400; // 90 days, within fee-free window
@@ -408,7 +408,7 @@ class DataGenerator extends DecoderSeeder {
      * currently parse as invalid (GET_COIN lands on the wrong field) and never reach the
      * order book. Kept separate here so 07 is not built on that latent gap.
      */
-    _profileStandingOrders(count, blockIdx, blockTime) {
+    profileStandingOrders(count, blockIdx, blockTime) {
         const txs = [];
         const addrs = this.state.addresses;
         // Sources that actually hold TOKENA after bootstrap: addrs[0] (bulk) plus
@@ -429,7 +429,7 @@ class DataGenerator extends DecoderSeeder {
         return txs;
     }
 
-    _profileMixedHeavy(count, blockIdx, blockTime) {
+    profileMixedHeavy(count, blockIdx, blockTime) {
         const txs = [];
         const addrs = this.state.addresses;
         const expiry = blockTime + 90 * 86400;
@@ -447,7 +447,7 @@ class DataGenerator extends DecoderSeeder {
                 txs.push({ source: minter, data: `MINT|0|${tick}|10` });
             } else if (r < 0.60) {
                 // ISSUE
-                const tick = this._nextTick(blockIdx, i);
+                const tick = this.nextTick(blockIdx, i);
                 txs.push({ source: from, data: `ISSUE|0|${tick}|100000|1000|0` });
             } else if (r < 0.70) {
                 // ORDER
@@ -482,7 +482,7 @@ class DataGenerator extends DecoderSeeder {
      * it sends and no balance drains over a long run. One send in ten moves gas rather
      * than the token, matching holders scrambling to reposition fee funds during a spike.
      */
-    _profileFeeSpike(count, blockIdx) {
+    profileFeeSpike(count, blockIdx) {
         const pool = this.state.wideAddresses.length ? this.state.wideAddresses : this.state.addresses;
         const txs = [];
         for (let i = 0; i < count; i++) {
@@ -497,7 +497,7 @@ class DataGenerator extends DecoderSeeder {
     // --- Helpers ---
 
     /** Chunked multi-row INSERT. `rows` is an array of value arrays matching `columns`. */
-    async _insertRows(table, columns, rows, chunkSize = BULK_CHUNK_SIZE) {
+    async insertRows(table, columns, rows, chunkSize = BULK_CHUNK_SIZE) {
         const placeholder = '(' + columns.map(() => '?').join(',') + ')';
         for (let i = 0; i < rows.length; i += chunkSize) {
             const slice = rows.slice(i, i + chunkSize);
@@ -509,7 +509,7 @@ class DataGenerator extends DecoderSeeder {
     }
 
     /** Lazily built Utility, borrowed only for its base58check encoder. */
-    _utility() {
+    utility() {
         if (!this._util) {
             const Utility = require('../../../src/utility.js');
             const config  = require('../../../src/config.js');
@@ -518,12 +518,12 @@ class DataGenerator extends DecoderSeeder {
         return this._util;
     }
 
-    _nextTick(blockIdx, txIdx) {
+    nextTick(blockIdx, txIdx) {
         this.state.nextTick++;
         return 'P' + String(this.state.nextTick).padStart(7, '0');
     }
 
-    _randomAddr() {
+    randomAddr() {
         const addrs = this.state.addresses;
         return addrs[Math.floor(Math.random() * addrs.length)];
     }

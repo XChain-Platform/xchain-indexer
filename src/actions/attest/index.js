@@ -242,7 +242,7 @@ class Attest {
     // guard chain above decides that), and ROOT_ACTION_INDEX must stay the raw
     // string, never Number()-coerced, because a BATCH subcommand root is the
     // composite "<TX_VOUT>.<position>".
-    _requestIdPreimageValues(data){
+    requestIdPreimageValues(data){
         return REQUEST_ID_PREIMAGE_FIELDS.map((f) => String(data[f]));
     }
 
@@ -253,7 +253,7 @@ class Attest {
         if(!error && (format === null || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
 
-        if(format === 0) return await this._parseRequest(params, data, error);
+        if(format === 0) return await this.parseRequest(params, data, error);
         // A hub-mirror-applied response is a v1 too: same version, same row shape, same
         // effects, no transaction. It is dispatched apart from the chain path because
         // there is no wire to parse (the artifact arrives as a mirrored row, already
@@ -262,17 +262,17 @@ class Attest {
         // on the applier's own synthesized action. The marker is set only by
         // utility.processAttestationResponses.
         if(format === 1 && data['IS_SYNTHETIC'] && data['MIRROR_RESPONSE'])
-            return await this._applyMirroredResponse(data);
-        if(format === 1) return await this._parseResponse(params, data, error);
-        if(format === 2) return await this._parseExpire(params, data, error);
-        if(format === 3) return await this._parseRelayRequest(params, data, error);
-        if(format === 4) return await this._parseRelayResponse(params, data, error);
-        if(format === abw.ATTEST_BATCH_HEAD_VERSION)         return await this._parseBatchHead(params, data, error);
-        if(format === abw.ATTEST_BATCH_CONTINUATION_VERSION) return await this._parseBatchContinuation(params, data, error);
+            return await this.applyMirroredResponse(data);
+        if(format === 1) return await this.parseResponse(params, data, error);
+        if(format === 2) return await this.parseExpire(params, data, error);
+        if(format === 3) return await this.parseRelayRequest(params, data, error);
+        if(format === 4) return await this.parseRelayResponse(params, data, error);
+        if(format === abw.ATTEST_BATCH_HEAD_VERSION)         return await this.parseBatchHead(params, data, error);
+        if(format === abw.ATTEST_BATCH_CONTINUATION_VERSION) return await this.parseBatchContinuation(params, data, error);
     }
 
     // ATTEST v0: Request (VM emission only)
-    async _parseRequest(params, data, error){
+    async parseRequest(params, data, error){
 
         // VM-emission-only: reject anything user-initiated.
         // execute.processEmission sets IS_EMISSION=true when synthesizing the action.
@@ -391,7 +391,7 @@ class Attest {
             } else if(!data['TX_HASH']){
                 error = 'invalid: TX_HASH (required for request_id derivation)';
             } else {
-                let preimage = this._requestIdPreimageValues(data).join(':');
+                let preimage = this.requestIdPreimageValues(data).join(':');
                 let expected = crypto.createHash('sha256').update(preimage).digest('hex');
                 if(expected !== String(data['REQUEST_ID']).toLowerCase())
                     error = 'invalid: REQUEST_ID (does not match deterministic derivation)';
@@ -453,7 +453,7 @@ class Attest {
             // The rules-aware filter (spec §7.4) reports how many keys it removed
             // through this out-parameter; nothing else about the call moves.
             let gatesStats = {};
-            admissionSet = await this._computeResponsibleSet(
+            admissionSet = await this.computeResponsibleSet(
                 String(data['REQUEST_ID'] || '').toLowerCase(), data['REDUNDANCY'], data['BLOCK_INDEX'], data['PROVIDER_ID'],
                 undefined, gatesStats);
             let neededSlots = Math.max(1, Number(data['REDUNDANCY']) || 1);
@@ -559,7 +559,7 @@ class Attest {
         // use, evaluated at the request's own block_index (the set the recompute keys on).
         // (Reuses the admission-gate set when the gate already computed it.)
         if(data['REQUEST_STATUS'] === 'pending'){
-            let responsibleSet = admissionSet !== null ? admissionSet : await this._computeResponsibleSet(
+            let responsibleSet = admissionSet !== null ? admissionSet : await this.computeResponsibleSet(
                 String(data['REQUEST_ID'] || '').toLowerCase(), data['REDUNDANCY'], data['BLOCK_INDEX'], data['PROVIDER_ID']);
             data['RESPONSIBLE_SET_JSON'] = JSON.stringify(responsibleSet);
         }
@@ -586,7 +586,7 @@ class Attest {
     }
 
     // ATTEST v1: Response (validator broadcast)
-    async _parseResponse(params, data, error){
+    async parseResponse(params, data, error){
 
         // Extract fixed-position fields. RESPONSE_PAYLOAD travels as base64
         // (binary-safe, no embedded `|` chars). We decode to bytes for
@@ -710,7 +710,7 @@ class Attest {
             network:         this.config['NETWORK'],
             indexerDb:       this.indexerDb,
             protocolChanges: this.actions.protocolChanges,
-            computeResponsibleSet: this._computeResponsibleSet.bind(this),
+            computeResponsibleSet: this.computeResponsibleSet.bind(this),
         });
         error            = verdict.error;
         let validSigs    = verdict.validSigs;
@@ -776,7 +776,7 @@ class Attest {
                 // Fee disposition (E1). Release/refund rows are written at THIS
                 // v1 action_index, so a reorg of the v1 removes them generically
                 // and the v0 escrow (earlier action_index) survives intact.
-                await this._settleRequestFee(request, data, newRequestStatus);
+                await this.settleRequestFee(request, data, newRequestStatus);
 
                 // A relay-materialized request (v3) carries the ORIGIN chain it
                 // came from. Its contract lives there, not here, so BTC must not try to
@@ -785,7 +785,7 @@ class Attest {
                 // callback. Self-gating: only a v3, which is itself flag-day gated, can
                 // produce a row whose origin_chain differs from this coin, so no separate
                 // activation check is needed and pre-activation replay is untouched.
-                if(this._isForeignOrigin(request)){
+                if(this.isForeignOrigin(request)){
                     console.log("\t ATTEST v1 : id=" + String(requestId).substring(0,16) + '...' +
                                 ' : origin=' + request.origin_chain + ', callback deferred to the relay leg');
                     await this.mapper.createMappings(data);
@@ -795,7 +795,7 @@ class Attest {
                 // Inject the callback EXECUTE. Wrapped in a savepoint so a failing callback
                 // does NOT roll back the response row.
                 try {
-                    let callbackActionIndex = await this._injectCallbackExecute(request, data);
+                    let callbackActionIndex = await this.injectCallbackExecute(request, data);
                     if(callbackActionIndex)
                         await this.indexerDb.setAttestationResponseCallbackIndex(data['ACTION_INDEX'], callbackActionIndex);
                 } catch(e){
@@ -846,7 +846,7 @@ class Attest {
     // Every skip reason is a deterministic function of the row and of local state, so
     // every node skips the same row for the same reason; a skip is logged once, and the
     // row stays in the mirror for audit and for the on-chain batch.
-    async _applyMirroredResponse(data){
+    async applyMirroredResponse(data){
         let row       = data['MIRROR_RESPONSE'];
         let request   = data['MIRROR_REQUEST'];
         let requestId = String((row && row.request_id) || '').toLowerCase();
@@ -932,7 +932,7 @@ class Attest {
             network:         this.config['NETWORK'],
             indexerDb:       this.indexerDb,
             protocolChanges: this.actions.protocolChanges,
-            computeResponsibleSet: this._computeResponsibleSet.bind(this),
+            computeResponsibleSet: this.computeResponsibleSet.bind(this),
         });
         if(verdict.error)
             return skip(verdict.error);
@@ -995,12 +995,12 @@ class Attest {
 
         // Fee disposition at THIS synthesized action's index, so a reorg of the applying
         // block removes the settle rows generically while the v0 escrow survives.
-        await this._settleRequestFee(request, data, newRequestStatus);
+        await this.settleRequestFee(request, data, newRequestStatus);
 
         // A relay-materialized request's contract lives on the origin chain; the response
         // goes back as a v4 and the callback fires there (the same guard the chain path
         // has, for the same reason).
-        if(this._isForeignOrigin(request)){
+        if(this.isForeignOrigin(request)){
             console.log("\t ATTEST mirror : id=" + requestId.substring(0,16) + '...' +
                         ' : origin=' + request.origin_chain + ', callback deferred to the relay leg');
             await this.mapper.createMappings(data);
@@ -1008,7 +1008,7 @@ class Attest {
         }
 
         try {
-            let callbackActionIndex = await this._injectCallbackExecute(request, data);
+            let callbackActionIndex = await this.injectCallbackExecute(request, data);
             if(callbackActionIndex)
                 await this.indexerDb.setAttestationResponseCallbackIndex(data['ACTION_INDEX'], callbackActionIndex);
         } catch(e){
@@ -1022,7 +1022,7 @@ class Attest {
     }
 
     // ATTEST v2: Expire (system-synthesized)
-    async _parseExpire(params, data, error){
+    async parseExpire(params, data, error){
 
         // System-synthesized only. The decoder accepts ATTEST in VALID_ACTION_NAMES but the
         // user-broadcast path can't legitimately produce v2; guard against accidental
@@ -1063,11 +1063,11 @@ class Attest {
         await this.indexerDb.updateAttestationRequestStatus(requestId, 'expired', data['BLOCK_INDEX']);
 
         // Refund the request fee (E1); never reached the responsible set's quorum.
-        await this._settleRequestFee(request, data, 'expired');
+        await this.settleRequestFee(request, data, 'expired');
 
         // Mark missed_count on each responsible validator (deterministic by SHA256(request_id || pubkey))
         try {
-            let responsible = await this._computeResponsibleSet(
+            let responsible = await this.computeResponsibleSet(
                 requestId, request.redundancy, Number(request.block_index), request.provider_id
             );
             for(let pk of responsible){
@@ -1089,8 +1089,8 @@ class Attest {
         // chain's own copy of the request expires on its own deadline and fires the
         // contract's expired callback there.
         try {
-            if(!this._isForeignOrigin(request))
-                await this._injectExpiredCallback(request, data);
+            if(!this.isForeignOrigin(request))
+                await this.injectExpiredCallback(request, data);
         } catch(e){
             // Same infra-fault gate as the response-path callback above (consensus/fault_guard.js).
             rethrowIfInfraFault(e);
@@ -1128,7 +1128,7 @@ class Attest {
     // every node picks the same head whatever order the wires arrived in. The scope is the
     // AUTHOR's, never the key's alone, because a key-wide pick would let a junk head
     // squatting a window deny the honest publisher outright.
-    async _parseBatchHead(params, data, error){
+    async parseBatchHead(params, data, error){
 
         // DOGE-plane guard. Stored as a verdict rather than hard-returned like the relay
         // legs, because a batch is publisher-broadcast on a known rail: one landing on
@@ -1158,8 +1158,8 @@ class Attest {
             // after the author partition, because a batch key is a hash over the window it
             // names, so anyone can derive it and file wires under it ahead of the honest
             // publisher. The JS filter stays as a harmless second pass.
-            mine = this._authoredBy(await this.indexerDb.getAttestBatchChunks(head.batchKey, author), author);
-            if(this._canonicalBatchHead(mine))
+            mine = this.authoredBy(await this.indexerDb.getAttestBatchChunks(head.batchKey, author), author);
+            if(this.canonicalBatchHead(mine))
                 error = 'invalid: BATCH_KEY (this publisher already has a head for the window)';
         }
 
@@ -1181,14 +1181,14 @@ class Attest {
         }
 
         if(!error && batch){
-            let quorum = await this._verifyBatchQuorum(batch);
+            let quorum = await this.verifyBatchQuorum(batch);
             if(!quorum.ok) error = quorum.error;
         }
 
         data['REQUEST_ID'] = head && head.ok ? head.batchKey : '';
         data['VERSION']    = abw.ATTEST_BATCH_HEAD_VERSION;
         data['STATUS']     = error || 'valid';
-        this._stampBatchColumns(data, head, 0);
+        this.stampBatchColumns(data, head, 0);
 
         console.log("\t ATTEST v5 : batch=" + String(data['REQUEST_ID']).substring(0,16) + '...' +
                     (head && head.ok ? ' : window=' + head.windowStart + '-' + head.windowEnd +
@@ -1206,7 +1206,7 @@ class Attest {
         // itself, so this push is the chain-only rebuild road and not an optimisation.
         if(!error && batch && this.hubClient && this.hubClient.enabled){
             let pushGeneration = await this.indexerDb.getPushGeneration(data['COIN']);
-            let payload = this._buildBatchHubPush(batch, data, pushGeneration, data['ACTION_INDEX']);
+            let payload = this.buildBatchHubPush(batch, data, pushGeneration, data['ACTION_INDEX']);
             let pushId  = await this.indexerDb.enqueueHubPushTx('attest_batch', payload);
             this.indexerDb.stageHubPush({ id: pushId, pushType: 'attest_batch', payload });
         }
@@ -1231,7 +1231,7 @@ class Attest {
     // nor contribute bytes to its reassembly. Without that scope the first wire into a slot
     // owned it, so a junk chunk denied the window and a well-formed one for another
     // encoding forced the honest head `invalid`.
-    async _parseBatchContinuation(params, data, error){
+    async parseBatchContinuation(params, data, error){
 
         if(!error && String(this.config['COIN']) !== BATCH_CHAIN)
             error = 'invalid: ATTEST v6 (batches ride the ' + BATCH_CHAIN + ' rail)';
@@ -1249,9 +1249,9 @@ class Attest {
         let stored = [], headRow = null;
         if(!error){
             let chunkAuthor = String(data['SOURCE'] || '');
-            stored  = this._authoredBy(await this.indexerDb.getAttestBatchChunks(chunk.batchKey, chunkAuthor),
+            stored  = this.authoredBy(await this.indexerDb.getAttestBatchChunks(chunk.batchKey, chunkAuthor),
                                        chunkAuthor);
-            headRow = this._canonicalBatchHead(stored);
+            headRow = this.canonicalBatchHead(stored);
         }
 
         // Geometry must agree with the head that owns the batch. Both fields are signed
@@ -1272,7 +1272,7 @@ class Attest {
         data['REQUEST_ID'] = chunk && chunk.ok ? chunk.batchKey : '';
         data['VERSION']    = abw.ATTEST_BATCH_CONTINUATION_VERSION;
         data['STATUS']     = error || 'valid';
-        this._stampBatchColumns(data, chunk, chunk && chunk.ok ? chunk.chunkIndex : null);
+        this.stampBatchColumns(data, chunk, chunk && chunk.ok ? chunk.chunkIndex : null);
 
         console.log("\t ATTEST v6 : batch=" + String(data['REQUEST_ID']).substring(0,16) + '...' +
                     (chunk && chunk.ok ? ' : chunk=' + chunk.chunkIndex + '/' + chunk.totalChunks : '') +
@@ -1281,7 +1281,7 @@ class Attest {
         await this.indexerDb.createAttestationBatchAction(data);
 
         if(!error && headRow)
-            await this._absorbCompletedBatch(headRow, stored, chunk, data);
+            await this.absorbCompletedBatch(headRow, stored, chunk, data);
 
         await this.mapper.createMappings(data);
     }
@@ -1294,7 +1294,7 @@ class Attest {
     // @param {Object} data the landing action
     // @param {Object} parsed the parsed head or continuation (null/failed leaves every column NULL)
     // @param {number} chunkIndex this wire's slot: 0 for a head, its own index for a continuation
-    _stampBatchColumns(data, parsed, chunkIndex){
+    stampBatchColumns(data, parsed, chunkIndex){
         if(!parsed || parsed.ok !== true) return;
         data['BATCH_CRC32']  = parsed.batchCrc32;
         data['TOTAL_CHUNKS'] = parsed.totalChunks;
@@ -1321,7 +1321,7 @@ class Attest {
     // `source` comes from actions.source_id, the only authenticated identity a chain wire
     // carries. An unresolvable author scopes to NOTHING rather than to everything, which
     // fails closed: such a publisher's multi-chunk batch simply never assembles.
-    _authoredBy(rows, author){
+    authoredBy(rows, author){
         let scope = String(author || '');
         if(scope.length === 0) return [];
         return (rows || []).filter(r => String(r.source || '') === scope);
@@ -1335,7 +1335,7 @@ class Attest {
     // ordering. It is what makes a publisher's second head for a window a duplicate that
     // absorbs nothing rather than a second delivery of one window, and it is the row a
     // continuation authenticates its geometry against.
-    _canonicalBatchHead(rows){
+    canonicalBatchHead(rows){
         let heads = (rows || []).filter(r => Number(r.version) === abw.ATTEST_BATCH_HEAD_VERSION &&
                                              Number(r.chunk_index) === 0);
         if(heads.length === 0) return null;
@@ -1348,7 +1348,7 @@ class Attest {
     // The network is this node's own rather than a stored column: a head declaring another
     // network is refused before it is ever recorded valid, and only valid rows reach here,
     // so the two cannot disagree. One network per database is what makes that hold.
-    _headFromRow(row){
+    headFromRow(row){
         return {
             ok:             true,
             batchKey:       String(row.request_id),
@@ -1382,8 +1382,8 @@ class Attest {
     // happened to close it), while the block and time are the completing action's because
     // that is the action whose rollback un-lands the delivery and the stamp any hub keying
     // on time needs.
-    async _absorbCompletedBatch(headRow, stored, chunk, data){
-        let head   = this._headFromRow(headRow);
+    async absorbCompletedBatch(headRow, stored, chunk, data){
+        let head   = this.headFromRow(headRow);
         let chunks = stored.concat([{
             chunk_index:  chunk.chunkIndex,
             chunk_b64:    chunk.chunkB64,
@@ -1395,7 +1395,7 @@ class Attest {
         let failure   = assembled.ok ? null : assembled.status;
         let batch     = assembled.ok ? assembled.batch : null;
         if(batch){
-            let quorum = await this._verifyBatchQuorum(batch);
+            let quorum = await this.verifyBatchQuorum(batch);
             if(!quorum.ok) failure = quorum.error;
         }
 
@@ -1414,7 +1414,7 @@ class Attest {
         // reason: this push is the chain-only rebuild road, not an optimisation.
         if(this.hubClient && this.hubClient.enabled){
             let pushGeneration = await this.indexerDb.getPushGeneration(data['COIN']);
-            let payload = this._buildBatchHubPush(batch, data, pushGeneration, Number(headRow.action_index));
+            let payload = this.buildBatchHubPush(batch, data, pushGeneration, Number(headRow.action_index));
             // The QUEUE ROW is keyed on THIS action, never on the head the payload names.
             // pending_hub_pushes.action_index is the reorg purge key (rollback deletes every
             // row at or above the orphaned range) and the action that lands this delivery is
@@ -1447,7 +1447,7 @@ class Attest {
     // @param {number} pushGeneration the source-chain reorg fence
     // @param {number} headActionIndex the batch head's action index
     // @returns {Object} the pushattestbatch payload
-    _buildBatchHubPush(batch, data, pushGeneration, headActionIndex){
+    buildBatchHubPush(batch, data, pushGeneration, headActionIndex){
         return {
             source_chain:     data['COIN'],
             network:          batch.network,
@@ -1478,7 +1478,7 @@ class Attest {
     // verifies, so a garbage signature carrying a qualified validator's pubkey cannot be
     // ordered ahead of the real one to consume its slot. This wire has no pre-flag-day
     // history to preserve, so that rule is unconditional here rather than gated.
-    async _verifyBatchQuorum(batch){
+    async verifyBatchQuorum(batch){
         let anchor    = Number(batch.btc_block_height);
         let network   = this.config['NETWORK'];
         let canonical = abw.buildAttestBatchCanonical(batch);
@@ -1557,7 +1557,7 @@ class Attest {
     // admission caller can tell "the snapshot was always this small" from "the rules
     // filter shrank it", which are two different rejection literals (D61). The return
     // shape is untouched, so every existing caller passes nothing and is unaffected.
-    async _computeResponsibleSet(requestId, redundancy, blockIndex, providerId, widen, stats){
+    async computeResponsibleSet(requestId, redundancy, blockIndex, providerId, widen, stats){
         // The SWQ gate is BTC-ANCHORED, so only evaluate it where `blockIndex`
         // actually is a BTC height.
         //
@@ -1626,7 +1626,7 @@ class Attest {
         // the hub does; every key of a source carries the source's aggregate weight, so
         // this removes whole sources and the source-dedupe below is unaffected by it.
         if(weighted){
-            validators = this._providerFloorFilter(validators, providerId, blockIndex);
+            validators = this.providerFloorFilter(validators, providerId, blockIndex);
             if(validators.length === 0) return [];
         }
         let withHash = validators.map(v => {
@@ -1667,7 +1667,7 @@ class Attest {
     // The floor resolves at the DECLARED block (the raw `blockIndex`), not the buried
     // one: a governance activation height is a cutover, and burying a cutover is its own
     // fork, the same reasoning the SWQ gate itself is evaluated on the declared height.
-    _providerFloorFilter(validators, providerId, blockIndex){
+    providerFloorFilter(validators, providerId, blockIndex){
         let pid = (providerId === null || providerId === undefined) ? '' : String(providerId);
         let floor = pid ? this.providerRegistry.getMinStake(pid, blockIndex, this.config['NETWORK']) : null;
         if(floor === null){
@@ -1688,12 +1688,12 @@ class Attest {
     // because executing a callback against a foreign contract_index is meaningless
     // locally. A native request has origin_chain NULL; an origin-side relay row has
     // origin_chain equal to this coin, so both answer false.
-    _isForeignOrigin(request){
+    isForeignOrigin(request){
         let origin = request && request.origin_chain;
         return Boolean(origin) && String(origin) !== String(this.config['COIN']);
     }
 
-    _sha256(s){
+    sha256(s){
         return crypto.createHash('sha256').update(String(s), 'utf8').digest('hex');
     }
 
@@ -1704,16 +1704,16 @@ class Attest {
     // around it at/above the flag-day. ROUND_ID folds the phase in so the request
     // and response legs of one request_id can never collide in the equivocation
     // detector's key space.
-    _relayRequestCanonical(f){
+    relayRequestCanonical(f){
         let raw = [
             'ATTEST', 'RELAY_REQUEST', String(f.requestId), String(f.snapshotBlock), String(f.network),
             String(f.originChain), String(f.originActionIndex), String(f.providerId),
-            this._sha256(f.requestPayload == null ? '' : f.requestPayload),
+            this.sha256(f.requestPayload == null ? '' : f.requestPayload),
             String(f.redundancy), String(f.deadlineBlocks)
         ].join('|');
         if(eq.isEquivHeaderActive(f.snapshotBlock, f.network))
             return eq.buildEquivCanonical(eq.ENGINE_TAGS.ATTEST,
-                this._sha256('ATTESTRELAY|request|' + String(f.requestId)), 0, raw);
+                this.sha256('ATTESTRELAY|request|' + String(f.requestId)), 0, raw);
         return raw;
     }
 
@@ -1721,7 +1721,7 @@ class Attest {
     // canonical above; the response body is folded in as its sha256 so the signed
     // bytes stay bounded no matter how large the attested payload is, exactly as
     // the v1 canonical does.
-    _relayResponseCanonical(f){
+    relayResponseCanonical(f){
         let raw = [
             'ATTEST', 'RELAY_RESPONSE', String(f.requestId), String(f.snapshotBlock), String(f.network),
             String(f.originChain), String(f.homeResponseActionIndex), String(f.providerId),
@@ -1729,14 +1729,14 @@ class Attest {
         ].join('|');
         if(eq.isEquivHeaderActive(f.snapshotBlock, f.network))
             return eq.buildEquivCanonical(eq.ENGINE_TAGS.ATTEST,
-                this._sha256('ATTESTRELAY|response|' + String(f.requestId)), 0, raw);
+                this.sha256('ATTESTRELAY|response|' + String(f.requestId)), 0, raw);
         return raw;
     }
 
     // Parse the trailing SIG_COUNT|PUBKEY|SIG|... tail both relay legs share.
     // Returns null on any structural fault so the caller can reject the action
     // rather than silently proceed with a short signature list.
-    _parseRelaySigs(params, offset){
+    parseRelaySigs(params, offset){
         let count = parseInt(params[offset]);
         if(!Number.isFinite(count) || count < 1) return null;
         let sigs = [];
@@ -1759,7 +1759,7 @@ class Attest {
     // pubkeys are marked seen only AFTER their signature verifies, so a
     // garbage-then-valid pair for one qualified validator cannot suppress the real
     // signature and under-count a quorate relay.
-    async _verifyRelayQuorum(canonical, sigs, snapshotBlock, network){
+    async verifyRelayQuorum(canonical, sigs, snapshotBlock, network){
         // Same declared-vs-resolved split as the v1 path above. The wire
         // carries the RAW snapshot_block, but AttestationRelay resolved its cross_chain
         // signer set through CapabilitySnapshot, which buries by CANONICAL_REORG_BUFFER,
@@ -1805,7 +1805,7 @@ class Attest {
     // path fulfills it, and the deadline sweep expires it. Only the callback is
     // suppressed (the contract is not on this chain); the response relays back
     // as a v4 instead.
-    async _parseRelayRequest(params, data, error){
+    async parseRelayRequest(params, data, error){
 
         // Home-chain-only leg. Written as a hard return rather than a stored
         // 'invalid' row so a v3 that strays onto an origin chain is treated exactly
@@ -1877,7 +1877,7 @@ class Attest {
         if(!error && (!Number.isFinite(snapshotBlock) || snapshotBlock < 0 || snapshotBlock > parseInt(data['BLOCK_INDEX'])))
             error = 'invalid: SNAPSHOT_BLOCK (must be a past or current block on this chain)';
 
-        let sigs = error ? [] : this._parseRelaySigs(params, 9);
+        let sigs = error ? [] : this.parseRelaySigs(params, 9);
         if(!error && sigs === null)
             error = 'invalid: SIG_COUNT (malformed signature list)';
 
@@ -1918,12 +1918,12 @@ class Attest {
             error = 'invalid: ORIGIN_ACTION_INDEX (relay identity already materialized on this chain)';
 
         if(!error){
-            let canonical = this._relayRequestCanonical({
+            let canonical = this.relayRequestCanonical({
                 requestId, snapshotBlock, network: this.config['NETWORK'],
                 originChain, originActionIndex: originAction, providerId,
                 requestPayload, redundancy, deadlineBlocks
             });
-            let quorum = await this._verifyRelayQuorum(canonical, sigs, snapshotBlock, this.config['NETWORK']);
+            let quorum = await this.verifyRelayQuorum(canonical, sigs, snapshotBlock, this.config['NETWORK']);
             if(!quorum.ok)
                 error = 'invalid: cross_chain quorum (' + quorum.detail + ')';
         }
@@ -1964,7 +1964,7 @@ class Attest {
         // determinism check that reads it back) resolves exactly as it would for a
         // natively emitted request.
         if(data['REQUEST_STATUS'] === 'pending'){
-            let responsibleSet = await this._computeResponsibleSet(requestId, redundancy, data['BLOCK_INDEX'], providerId);
+            let responsibleSet = await this.computeResponsibleSet(requestId, redundancy, data['BLOCK_INDEX'], providerId);
             data['RESPONSIBLE_SET_JSON'] = JSON.stringify(responsibleSet);
         }
 
@@ -1988,7 +1988,7 @@ class Attest {
     // emitted on. The origin indexer verifies the SAME cross_chain quorum rail the
     // XCALL result leg uses, against the BTC-anchored snapshot, then closes its own
     // pending request and fires the contract callback.
-    async _parseRelayResponse(params, data, error){
+    async parseRelayResponse(params, data, error){
 
         // Never valid on the home chain: a home-chain request is fulfilled by a v1
         // in place and has nothing to relay to itself.
@@ -2036,7 +2036,7 @@ class Attest {
         let responsePayload = responseBodyBytes.toString('utf8');
         let responseHash    = crypto.createHash('sha256').update(responseBodyBytes).digest('hex');
 
-        let sigs = error ? [] : this._parseRelaySigs(params, 7);
+        let sigs = error ? [] : this.parseRelaySigs(params, 7);
         if(!error && sigs === null)
             error = 'invalid: SIG_COUNT (malformed signature list)';
 
@@ -2056,14 +2056,14 @@ class Attest {
         }
 
         if(!error){
-            let canonical = this._relayResponseCanonical({
+            let canonical = this.relayResponseCanonical({
                 requestId, snapshotBlock, network: this.config['NETWORK'],
                 originChain: String(this.config['COIN']),
                 homeResponseActionIndex: homeResponseIdx,
                 providerId: String(request.provider_id), responseHash,
                 status: responseStatus, meta
             });
-            let quorum = await this._verifyRelayQuorum(canonical, sigs, snapshotBlock, this.config['NETWORK']);
+            let quorum = await this.verifyRelayQuorum(canonical, sigs, snapshotBlock, this.config['NETWORK']);
             if(!quorum.ok)
                 error = 'invalid: cross_chain quorum (' + quorum.detail + ')';
         }
@@ -2104,13 +2104,13 @@ class Attest {
             // per-validator reward row is written; paying the BTC-staked validators
             // out of an origin-chain pool is Phase 3 economics work, not something
             // this relay leg needs to solve.
-            await this._settleRequestFee(request, data, newRequestStatus);
+            await this.settleRequestFee(request, data, newRequestStatus);
 
             // Fire the contract callback here, on the chain the contract lives on.
             // Same savepoint discipline as the v1 path: a failing callback must not
             // roll back the response row.
             try {
-                let callbackActionIndex = await this._injectRelayCallback(request, data);
+                let callbackActionIndex = await this.injectRelayCallback(request, data);
                 if(callbackActionIndex)
                     await this.indexerDb.setAttestationResponseCallbackIndex(data['ACTION_INDEX'], callbackActionIndex);
             } catch(e){
@@ -2127,10 +2127,10 @@ class Attest {
     // the local expiry path does, so a contract cannot tell whether its attestation
     // was serviced locally or across chains, which is the property that makes the
     // relay transparent to contract authors.
-    async _injectRelayCallback(request, responseData){
+    async injectRelayCallback(request, responseData){
         if(String(responseData['RESPONSE_STATUS']) === 'ok')
-            return await this._injectCallbackExecute(request, responseData);
-        return await this._injectExpiredCallback(request, responseData);
+            return await this.injectCallbackExecute(request, responseData);
+        return await this.injectExpiredCallback(request, responseData);
     }
 
     // Settle the request fee escrowed at v0 (E1 paid attestations). Runs at the
@@ -2156,7 +2156,7 @@ class Attest {
     //                          unchanged, since the paid set is a subset.
     //   'errored'/'expired'  → escrow → refund to FEE_PAYER.
     // Feeless requests (fee_amount NULL/0) are a no-op.
-    async _settleRequestFee(request, data, terminalStatus){
+    async settleRequestFee(request, data, terminalStatus){
         let feeAmount = String((request && request.fee_amount) || '0');
         if(!this.util.bcgt(feeAmount, '0')) return;
 
@@ -2181,7 +2181,7 @@ class Attest {
             // Same widened set the v1 verify filter admitted signatures from, and for the
             // same reason: a validator the ladder let sign must be in the split it earned a
             // share of. `data` is the v1 action, so its BLOCK_INDEX is the response height.
-            let responsible = await this._computeResponsibleSet(
+            let responsible = await this.computeResponsibleSet(
                 String(request.request_id), request.redundancy, Number(request.block_index), request.provider_id,
                 wid.widenSlots(data['BLOCK_INDEX'], Number(request.block_index),
                                request.deadline_block, this.config['NETWORK'])
@@ -2197,7 +2197,7 @@ class Attest {
             // moves with this.
             let paid = responsible;
             if(zc.isZeroConfActive(Number(request.block_index), this.config['NETWORK']))
-                paid = this._signerPaySet(request, data, responsible);
+                paid = this.signerPaySet(request, data, responsible);
 
             let broadcastFee = '0';
             if(responsible.length > 0){
@@ -2214,7 +2214,7 @@ class Attest {
                 // already paid a miner rather than rewarding the work the split pays for.
                 // Below the gate it is '0' and the split sees the whole fee, byte-identically
                 // to the pre-flag-day ledger. See attest_broadcast_fee_activation.js.
-                broadcastFee = await this._broadcastFeeReimbursement(request, data, responsible, feeAmount, feeCap);
+                broadcastFee = await this.broadcastFeeReimbursement(request, data, responsible, feeAmount, feeCap);
                 // Below the gate (and on any request that reimburses nothing) the escrow is
                 // handed to the split UNTOUCHED rather than round-tripped through bcsub: a
                 // parse-valid FEE_AMOUNT already sits on the feeCap grid, but bcsub renders at
@@ -2280,7 +2280,7 @@ class Attest {
     // quorum, :2010), and so does any row whose signature list failed to parse: those
     // fall back to the recomputed responsible set and say so (D90). The fallback is a
     // pure function of the same row and local state, so every node takes it together.
-    _signerPaySet(request, data, responsible){
+    signerPaySet(request, data, responsible){
         let raw    = data ? data['VALIDATOR_SIGNATURES'] : null;
         let parsed = null;
         if(Array.isArray(raw)) parsed = raw;
@@ -2333,7 +2333,7 @@ class Attest {
     //   `feeCap`      GAS decimals cap, min(8, gasDecimals). The reimbursement is
     //                 floored onto the same decimal grid the split uses, so
     //                 reimbursement + N*share can never exceed the escrow by a ULP.
-    async _broadcastFeeReimbursement(request, data, responsible, feeAmount, feeCap){
+    async broadcastFeeReimbursement(request, data, responsible, feeAmount, feeCap){
         if(!responsible || responsible.length === 0) return '0';
 
         // RETIRED at and above the response-mirror flag day. Nobody broadcasts a
@@ -2400,7 +2400,7 @@ class Attest {
     }
 
     // Synthesize an EXECUTE that runs the contract's callback method (v1 response path).
-    async _injectCallbackExecute(request, responseData){
+    async injectCallbackExecute(request, responseData){
         if(!this.actions.actionExecute) return null;
 
         let callbackParams = [];
@@ -2481,7 +2481,7 @@ class Attest {
     }
 
     // Synthesize an EXECUTE that invokes the callback method with status='expired' and empty response payload.
-    async _injectExpiredCallback(request, expireData){
+    async injectExpiredCallback(request, expireData){
         if(!this.actions.actionExecute) return null;
 
         let callbackParams = [];

@@ -124,7 +124,7 @@ class Xcall {
     // Stringified call_id preimage values, in CALL_ID_PREIMAGE_FIELDS order.
     // NETWORK and COIN come from node config (uniform across the fleet); the rest
     // are chain data, so every node derives the same bytes.
-    _callIdPreimageValues(data){
+    callIdPreimageValues(data){
         const src = {
             NETWORK:           this.config['NETWORK'],
             COIN:              this.config['COIN'],
@@ -145,12 +145,12 @@ class Xcall {
         if(!error && (format === null || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
 
-        if(format === 0) return await this._parseRequest(params, data, error);
-        if(format === 2) return await this._parseExpire(params, data, error);
+        if(format === 0) return await this.parseRequest(params, data, error);
+        if(format === 2) return await this.parseExpire(params, data, error);
     }
 
     // XCALL v0: Request (VM emission only)
-    async _parseRequest(params, data, error){
+    async parseRequest(params, data, error){
 
         // VM-emission-only: reject anything user-initiated.
         if(!error && !data['IS_EMISSION'])
@@ -280,7 +280,7 @@ class Xcall {
                 // one declared list; the joined bytes are identical to the former
                 // hand-written concatenation (NETWORK:COIN:TX_HASH:ROOT_ACTION_INDEX:
                 // CONTRACT_INDEX:EMITTER_PATH:EMITTER_POSITION:TARGET_CHAIN).
-                let values   = this._callIdPreimageValues(data);
+                let values   = this.callIdPreimageValues(data);
                 let preimage = values.join(':');
                 let expected = crypto.createHash('sha256').update(preimage).digest('hex');
                 if(expected !== String(data['CALL_ID']).toLowerCase())
@@ -306,7 +306,7 @@ class Xcall {
     }
 
     // XCALL v2: Expire (system-synthesized)
-    async _parseExpire(params, data, error){
+    async parseExpire(params, data, error){
 
         // System-synthesized only; guard against accidental synthesis from a user tx.
         if(!data['IS_SYNTHETIC']){
@@ -344,7 +344,7 @@ class Xcall {
 
         // Synthesize the callback EXECUTE so the contract can clean up (status='expired').
         try {
-            await this._injectCallback(request, data, 'expired', '');
+            await this.injectCallback(request, data, 'expired', '');
         } catch(e){
             // An infra fault (VM host down, DB driver errno) is not a callback outcome:
             // halt so the block retries, instead of committing a locally-dropped
@@ -358,7 +358,7 @@ class Xcall {
 
     // Canonical signing string for the result phase; MUST byte-match the hub's
     // CrossChainCallEngine._canonicalMatch (result branch) and the archive verifier.
-    _resultCanonical(r){
+    resultCanonical(r){
         let raw = [
             'XCALL', 'RESULT', r.call_id, String(r.snapshot_block), r.network || '',
             r.target_chain, String(r.result_status || ''),
@@ -387,7 +387,7 @@ class Xcall {
     //   { synced:true, quorumMet, N, validSigners } - snapshot present; quorum verdict
     // Shared by processResult (delivery) and resultSuppressesExpiry (the deadline
     // gate) so the two can never drift on what counts as a deliverable result.
-    async _verifyResultQuorum(r){
+    async verifyResultQuorum(r){
         let snapshotBlock = Number(r.snapshot_block);
         let weighted = swq.isStakeWeightedQuorumActive(snapshotBlock, r.network);
         let validators = weighted
@@ -400,7 +400,7 @@ class Xcall {
         try { sigs = JSON.parse(r.validator_signatures || '[]'); }
         catch(_) { sigs = []; }
 
-        let canonical = this._resultCanonical(r);
+        let canonical = this.resultCanonical(r);
         let snapPubkeys = new Set(validators.map(v => String(v.pubkey).toLowerCase()));
         let validSigners = [], seen = new Set();
         for(let s of sigs){
@@ -443,7 +443,7 @@ class Xcall {
         let request = await this.indexerDb.getCrossChainCallRequestById(String(r.call_id || '').toLowerCase());
         if(!request) return false;
         if(String(request.target_chain) !== String(r.target_chain)) return false;
-        let q = await this._verifyResultQuorum(r);
+        let q = await this.verifyResultQuorum(r);
         // Snapshot not synced yet → the result will deliver once mirrored; keep the
         // request alive (defer expiry), matching processResult's deferral. Otherwise
         // suppress only on a verified quorum.
@@ -476,7 +476,7 @@ class Xcall {
     // A row deferred because the capability snapshot is not mirrored yet never reaches
     // here (processResult returns earlier): that row is still expected to deliver, and
     // resultSuppressesExpiry keeps its request alive to receive it.
-    _resultAgedOut(r, request, data){
+    resultAgedOut(r, request, data){
         if(request){
             let deadline = parseInt(request.deadline_block);
             let block    = parseInt(data['BLOCK_INDEX']);
@@ -515,10 +515,10 @@ class Xcall {
     // It delivers NO callback: the requesting contract, if it exists at all, hears the
     // 'expired' outcome from the deadline path, which is the only outcome a chain that
     // never saw the request can agree on.
-    async _retireUndeliverableResult(r, data, callId, request, reason){
+    async retireUndeliverableResult(r, data, callId, request, reason){
         if(!(await this.actions.protocolChanges.isEnabled(ORPHAN_RETIREMENT_GATE, data['BLOCK_INDEX'])))
             return false;
-        if(!this._resultAgedOut(r, request, data))
+        if(!this.resultAgedOut(r, request, data))
             return false;
 
         // Mint the retirement's own action_index (the rollback anchor). Minted only once
@@ -556,18 +556,18 @@ class Xcall {
         // routing: a forged result for someone else's call_id can never deliver.
         let request = await this.indexerDb.getCrossChainCallRequestById(callId);
         if(!request){
-            if(await this._retireUndeliverableResult(r, data, callId, null, 'no_request')) return;
+            if(await this.retireUndeliverableResult(r, data, callId, null, 'no_request')) return;
             console.warn("\t XCALL result : id=" + callId.substring(0,16) + '... : no matching local request, skipping');
             return;
         }
         if(String(request.target_chain) !== String(r.target_chain)){
-            if(await this._retireUndeliverableResult(r, data, callId, request, 'routing')) return;
+            if(await this.retireUndeliverableResult(r, data, callId, request, 'routing')) return;
             console.warn("\t XCALL result : id=" + callId.substring(0,16) + '... : target_chain mismatch, skipping');
             return;
         }
 
         // Verify the cross_chain quorum over the result canonical.
-        let q = await this._verifyResultQuorum(r);
+        let q = await this.verifyResultQuorum(r);
         if(!q.synced){
             // Snapshot not mirrored yet; defer (the barriers front-stop this; see xexec.js).
             console.log("\t XCALL result : id=" + callId.substring(0,16) + '... : capability snapshot not synced, deferring');
@@ -575,7 +575,7 @@ class Xcall {
         }
         let N = q.N, validSigners = q.validSigners;
         if(!q.quorumMet){
-            if(await this._retireUndeliverableResult(r, data, callId, request, 'no_quorum')) return;
+            if(await this.retireUndeliverableResult(r, data, callId, request, 'no_quorum')) return;
             console.warn("\t XCALL result : id=" + callId.substring(0,16) + '... : insufficient ' + (q.weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + N + ')') + ', skipping');
             return;
         }
@@ -612,7 +612,7 @@ class Xcall {
 
         // Inject the callback; a failing callback does NOT roll back the bookkeeping.
         try {
-            let callbackActionIndex = await this._injectCallback(request, data, resultStatus, resultPayload);
+            let callbackActionIndex = await this.injectCallback(request, data, resultStatus, resultPayload);
             if(callbackActionIndex)
                 await this.indexerDb.setCrossChainCallCallbackIndex(callId, callbackActionIndex);
         } catch(e){
@@ -635,7 +635,7 @@ class Xcall {
     // back the result/expiry bookkeeping. Returns the callback EXECUTE's action_index.
     //
     // Callback signature: callbackMethod(call_id, target_chain, status, return_payload, ...callbackParams)
-    async _injectCallback(request, contextData, resultStatus, resultPayload){
+    async injectCallback(request, contextData, resultStatus, resultPayload){
         if(!this.actions.actionExecute) return null;
 
         // Callback ceiling: read from the gas schedule so it stays in sync with

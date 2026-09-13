@@ -158,7 +158,7 @@ function migrationWidens() {
     const seen = new Map();
     for (const file of fs.readdirSync(MIG_DIR).filter(f => f.endsWith('.sql')).sort()) {
         const raw = stripComments(fs.readFileSync(path.join(MIG_DIR, file), 'utf8'));
-        const mode = Database.prototype._migrationMode.call({}, fs.readFileSync(path.join(MIG_DIR, file), 'utf8'));
+        const mode = Database.prototype.migrationMode.call({}, fs.readFileSync(path.join(MIG_DIR, file), 'utf8'));
         for (const stmt of raw.split(';')) {
             const t = /ALTER\s+TABLE\s+`?(\w+)`?/i.exec(stmt);
             if (!t) continue;
@@ -241,13 +241,13 @@ describe('the grammar-constrained raw wire columns hold a 4-byte character @regr
             fs.readFileSync(path.join(MIG_DIR, file), 'utf8'));
 
         assert.strictEqual(
-            Database.prototype._destructiveAutoStatement.call(db, statementsOf('2026-09-02-utf8mb4-raw-wire-fields.sql')),
+            Database.prototype.destructiveAutoStatement.call(db, statementsOf('2026-09-02-utf8mb4-raw-wire-fields.sql')),
             null,
             'the mode=auto raw-wire-field widen contains DDL the classifier refuses to run unattended; ' +
             'runMigrations would throw at startup on every indexer');
 
         assert.ok(
-            Database.prototype._destructiveAutoStatement.call(db, statementsOf('2026-09-02-utf8mb4-raw-wire-fields-not-null.sql')),
+            Database.prototype.destructiveAutoStatement.call(db, statementsOf('2026-09-02-utf8mb4-raw-wire-fields-not-null.sql')),
             'the NOT NULL half is auto-eligible after all, so splitting it into a mode=manual file leaves ' +
             'contracts.code wedged until an operator runs it for no reason - fold it into the auto file');
     });

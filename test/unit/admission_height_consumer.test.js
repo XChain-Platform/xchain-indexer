@@ -313,11 +313,11 @@ describe('mirror-admission height barriers: ARMED @regression @tier1', function 
         const idx = Object.create(armed.Indexer.prototype);
         idx.config = { COIN: 'BTC', NETWORK: 'regtest' };
         idx.hubDbSync = { matchWatermarkGraceS: 120, anchorAttestWatermarkGraceS: 120 };
-        assert.strictEqual(idx._barrierClearsAtHeightAware(1000, 'matchWatermarkGraceS', B), null);
-        assert.strictEqual(idx._anchorBarrierClearsAt(1000, 900, B, 'anchorAttestWatermarkGraceS'), null);
+        assert.strictEqual(idx.barrierClearsAtHeightAware(1000, 'matchWatermarkGraceS', B), null);
+        assert.strictEqual(idx.anchorBarrierClearsAt(1000, 900, B, 'anchorAttestWatermarkGraceS'), null);
         // On a chain the map does not arm, the clock instant is reported exactly as before.
         idx.config = { COIN: 'BTC', NETWORK: 'mainnet' };
-        assert.strictEqual(idx._barrierClearsAtHeightAware(1000, 'matchWatermarkGraceS', B), 1120000);
+        assert.strictEqual(idx.barrierClearsAtHeightAware(1000, 'matchWatermarkGraceS', B), 1120000);
     });
 
     it('mirrorStatus reports the height watermark beside the seconds one', function () {
@@ -379,6 +379,6 @@ describe('mirror-admission height barriers: UNARMED (today\'s rule, byte for byt
         const idx = Object.create(Indexer.prototype);
         idx.config = { COIN: 'BTC', NETWORK: 'regtest' };
         idx.hubDbSync = { matchWatermarkGraceS: 120 };
-        assert.strictEqual(idx._barrierClearsAtHeightAware(1000, 'matchWatermarkGraceS', B), 1120000);
+        assert.strictEqual(idx.barrierClearsAtHeightAware(1000, 'matchWatermarkGraceS', B), 1120000);
     });
 });

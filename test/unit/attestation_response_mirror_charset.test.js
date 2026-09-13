@@ -165,7 +165,7 @@ function migrationModifies() {
     const out = new Map();
     for (const file of fs.readdirSync(MIG_DIR).filter(f => f.endsWith('.sql')).sort()) {
         const raw  = fs.readFileSync(path.join(MIG_DIR, file), 'utf8');
-        const mode = Database.prototype._migrationMode.call({}, raw);
+        const mode = Database.prototype.migrationMode.call({}, raw);
         for (const stmt of stripComments(raw).split(';')) {
             const t = /ALTER\s+TABLE\s+`?(\w+)`?/i.exec(stmt);
             if (!t) continue;

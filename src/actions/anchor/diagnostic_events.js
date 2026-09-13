@@ -135,7 +135,7 @@ function installCrashHandlers({ proc = process, exitOnUncaught = true } = {}) {
 }
 
 // Tests only: the counter handles are process-wide.
-function _resetDiagnostics() {
+function resetDiagnostics() {
     _counters = null;
 }
 
@@ -144,5 +144,5 @@ module.exports = {
     noteAnchorFailed,
     isAnchorFailureStatus,
     installCrashHandlers,
-    _resetDiagnostics
+    resetDiagnostics
 };

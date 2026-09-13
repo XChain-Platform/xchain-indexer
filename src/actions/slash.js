@@ -119,7 +119,7 @@ const ENGINE_CAPABILITY = {
 // or a non-integer field means "this content does not declare the value" (null), never a
 // zero: coercing an absent round to 0 would make two absent rounds compare EQUAL and
 // re-open the false-pair hole this exists to close.
-function _parseOracleContent(content){
+function parseOracleContent(content){
     let obj = null;
     try { obj = JSON.parse(String(content)); } catch(e){ return null; }
     if(obj === null || typeof obj !== 'object' || Array.isArray(obj)) return null;
@@ -133,7 +133,7 @@ function _parseOracleContent(content){
 // reader here. Same null discipline as _parseOracleContent: an absent or non-integer field
 // yields null rather than 0, so two absent windows never compare EQUAL and re-open the
 // false-pair hole.
-function _parseBatchContent(content){
+function parseBatchContent(content){
     let obj = null;
     try { obj = JSON.parse(String(content)); } catch(e){ return null; }
     if(obj === null || typeof obj !== 'object' || Array.isArray(obj)) return null;
@@ -269,7 +269,7 @@ class Slash {
             // must agree on the oracle round carried in-content. Gated, not unconditional,
             // because narrowing which proofs burn a bond is a consensus acceptance rule.
             let oracleRoundGate = await this.actions.protocolChanges.isEnabled('SLASH_ORACLE_ROUND_DISCRIMINATED', data['BLOCK_INDEX']);
-            let slot = await this._resolveSlot(engineTag, roundId, msgA.substring(prefix.length), msgB.substring(prefix.length), oracleRoundGate);
+            let slot = await this.resolveSlot(engineTag, roundId, msgA.substring(prefix.length), msgB.substring(prefix.length), oracleRoundGate);
             if(slot.error) error = slot.error;
             else {
                 snapshotBlock = slot.snapshotBlock;
@@ -353,7 +353,7 @@ class Slash {
             let burned = burn.total;
 
             // Bounty / treasury split. Governance config (Phase D); absent → pure burn.
-            let split = this._bountyTreasurySplit(capability, burned);
+            let split = this.bountyTreasurySplit(capability, burned);
 
             let gas = this.config['GAS'];
             // Release the bond from the staker's escrow BEFORE redirecting any of it: a bond
@@ -407,7 +407,7 @@ class Slash {
     // Recover the slot's snapshot_block from the proof, deterministically per engine.
     // The two CONTENT strings (header already stripped) must agree on the block where
     // it is carried in-content; for engines that don't carry it, derive from the round.
-    async _resolveSlot(engineTag, roundId, contentA, contentB, oracleRoundGate){
+    async resolveSlot(engineTag, roundId, contentA, contentB, oracleRoundGate){
         // In-content snapshot_block field index per engine (raw canonical layout).
         const FIELD = {
             [eq.ENGINE_TAGS.DEX]:        2,   // XMATCH|match_id|snapshot_block|...
@@ -465,8 +465,8 @@ class Slash {
             // proof: both signatures verify against the offender's own key). The
             // btc_block_height cross-check runs on the same terms.
             if(oracleRoundGate){
-                let pa = _parseOracleContent(contentA);
-                let pb = _parseOracleContent(contentB);
+                let pa = parseOracleContent(contentA);
+                let pb = parseOracleContent(contentB);
                 if(pa !== null && pb !== null){
                     if(pa.round !== null && pb.round !== null && pa.round !== pb.round)
                         return { error: 'invalid: ORACLE round mismatch (distinct rounds, not equivocation)' };
@@ -504,8 +504,8 @@ class Slash {
             // whose first acceptance is this branch (the XCONFIG precedent), so there is no
             // earlier verdict to stay identical with, and no window in which an honest split
             // would burn a bond.
-            let pa = _parseBatchContent(contentA);
-            let pb = _parseBatchContent(contentB);
+            let pa = parseBatchContent(contentA);
+            let pb = parseBatchContent(contentB);
             if(pa !== null && pb !== null){
                 if((pa.first !== null && pb.first !== null && pa.first !== pb.first) ||
                    (pa.last  !== null && pb.last  !== null && pa.last  !== pb.last))
@@ -561,7 +561,7 @@ class Slash {
     //                                                  whole-federation scope, no CAPABILITIES home)
     //   = { BOUNTY_BPS, BOUNTY_FLOOR, BOUNTY_CAP, TREASURY_ADDRESS }  (all optional)
     // Absent / zero → PURE BURN (bounty 0, no treasury credit). Never pays validators.
-    _bountyTreasurySplit(capability, burned){
+    bountyTreasurySplit(capability, burned){
         let total = String(burned || '0');
         if(!this.util.bcgt(total, '0')) return { bounty: '0', treasury: '0', treasuryAddr: null };
 

@@ -60,7 +60,7 @@ describe('HubClient: a thrown hub rejection is classified like an in-result one'
         for(const [clientMethod, rpcMethod, payload] of PUSHES){
             it(clientMethod + ' resolves rather than throwing when the hub answers -32602', async function(){
                 let c = new HubClient('http://hub.example.com', '');
-                let call = sinon.stub(c, '_call').rejects(rpcError(-32602, UNKNOWN_CHAIN));
+                let call = sinon.stub(c, 'call').rejects(rpcError(-32602, UNKNOWN_CHAIN));
                 // Resolving IS the terminal verdict: HubPushQueue and XChainIndexer both key
                 // on throw-versus-resolve, so a resolve retires the durable row.
                 let result = await c[clientMethod](payload);
@@ -74,7 +74,7 @@ describe('HubClient: a thrown hub rejection is classified like an in-result one'
 
         it('logs the drop, worded like the in-result branch so one grep finds both', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            sinon.stub(c, '_call').rejects(rpcError(-32602, UNKNOWN_CHAIN));
+            sinon.stub(c, 'call').rejects(rpcError(-32602, UNKNOWN_CHAIN));
             let warn = sinon.stub(console, 'warn');
             await c.pushOraclePrice({ source_chain: 'ETH' });
             warn.restore();
@@ -90,13 +90,13 @@ describe('HubClient: a thrown hub rejection is classified like an in-result one'
             let c = new HubClient('http://hub.example.com', '');
             let err = new Error(UNKNOWN_CHAIN);
             err.code = -32602;
-            sinon.stub(c, '_call').rejects(err);
+            sinon.stub(c, 'call').rejects(err);
             assert.deepStrictEqual(await c.pushPriceBatch({ source_chain: 'ETH' }), { error: UNKNOWN_CHAIN });
         });
 
         it('classifies the retraction rails on the same code', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            sinon.stub(c, '_call').rejects(rpcError(-32602, UNKNOWN_CHAIN));
+            sinon.stub(c, 'call').rejects(rpcError(-32602, UNKNOWN_CHAIN));
             assert.deepStrictEqual(await c.retractPriceRange('ETH', 10), { error: UNKNOWN_CHAIN });
         });
     });
@@ -117,7 +117,7 @@ describe('HubClient: a thrown hub rejection is classified like an in-result one'
             for(const [clientMethod] of PUSHES){
                 it(clientMethod + ' throws on ' + label, async function(){
                     let c = new HubClient('http://hub.example.com', '');
-                    sinon.stub(c, '_call').rejects(err);
+                    sinon.stub(c, 'call').rejects(err);
                     await assert.rejects(() => c[clientMethod]({ source_chain: 'BTC' }));
                 });
             }
@@ -129,7 +129,7 @@ describe('HubClient: a thrown hub rejection is classified like an in-result one'
         // on a truncated body.
         it('does not read a local parse failure as the payload-invalid pattern', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            sinon.stub(c, '_call').rejects(new Error('Invalid JSON response: Unexpected token T'));
+            sinon.stub(c, 'call').rejects(new Error('Invalid JSON response: Unexpected token T'));
             await assert.rejects(() => c.pushAttestBatch({ source_chain: 'BTC' }), /Invalid JSON response/);
         });
 
@@ -140,7 +140,7 @@ describe('HubClient: a thrown hub rejection is classified like an in-result one'
             let err = rpcError(-32602, 'hub rate limit exceeded');
             err.rateLimited  = true;
             err.retryAfterMs = 60000;
-            sinon.stub(c, '_call').rejects(err);
+            sinon.stub(c, 'call').rejects(err);
             await assert.rejects(() => c.pushPriceBatch({ source_chain: 'BTC' }), (thrown) => {
                 assert.strictEqual(thrown.rateLimited, true);
                 return true;
@@ -154,19 +154,19 @@ describe('HubClient: a thrown hub rejection is classified like an in-result one'
     describe('the in-result path is untouched', function(){
         it('still resolves an in-result terminal rejection', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            sinon.stub(c, '_call').resolves({ error: UNKNOWN_CHAIN });
+            sinon.stub(c, 'call').resolves({ error: UNKNOWN_CHAIN });
             assert.deepStrictEqual(await c.pushPriceBatch({ source_chain: 'ETH' }), { error: UNKNOWN_CHAIN });
         });
 
         it('still throws an in-result transient rejection', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            sinon.stub(c, '_call').resolves({ accepted: false, reason: 'validator snapshot unavailable' });
+            sinon.stub(c, 'call').resolves({ accepted: false, reason: 'validator snapshot unavailable' });
             await assert.rejects(() => c.pushPriceBatch({ source_chain: 'BTC' }), /hub rejected pushpricebatch/);
         });
 
         it('still resolves an accepted push untouched', async function(){
             let c = new HubClient('http://hub.example.com', '');
-            sinon.stub(c, '_call').resolves({ accepted: true, stored: 6 });
+            sinon.stub(c, 'call').resolves({ accepted: true, stored: 6 });
             assert.deepStrictEqual(await c.pushPriceBatch({ source_chain: 'BTC' }), { accepted: true, stored: 6 });
         });
     });
@@ -222,7 +222,7 @@ describe('HubPushQueue: a -32602 rejection empties the queue instead of growing 
     it('drops every durable row the hub refuses on the payload, in one attempt each', async function(){
         let db = fakePendingTable(QUEUE_ROWS);
         let client = new HubClient('http://hub.example.com', '');
-        let call = sinon.stub(client, '_call').rejects(rpcError(-32602, UNKNOWN_CHAIN));
+        let call = sinon.stub(client, 'call').rejects(rpcError(-32602, UNKNOWN_CHAIN));
         let q = queueOver(client, db);
 
         assert.strictEqual(db.pending().length, 4);
@@ -241,7 +241,7 @@ describe('HubPushQueue: a -32602 rejection empties the queue instead of growing 
     it('keeps every durable row when the hub answers a transient error, growing attempts without bound', async function(){
         let db = fakePendingTable(QUEUE_ROWS);
         let client = new HubClient('http://hub.example.com', '');
-        sinon.stub(client, '_call').rejects(rpcError(-32000, 'internal hub failure'));
+        sinon.stub(client, 'call').rejects(rpcError(-32000, 'internal hub failure'));
         let q = queueOver(client, db);
 
         for(let i = 0; i < 5; i++) await q.drain();
@@ -258,7 +258,7 @@ describe('HubPushQueue: a -32602 rejection empties the queue instead of growing 
     it('reports the drop once per row so an operator sees the standing condition', async function(){
         let db = fakePendingTable([QUEUE_ROWS[3]]);
         let client = new HubClient('http://hub.example.com', '');
-        sinon.stub(client, '_call').rejects(rpcError(-32602, UNKNOWN_CHAIN));
+        sinon.stub(client, 'call').rejects(rpcError(-32602, UNKNOWN_CHAIN));
         await queueOver(client, db).drain();
         let lines = warn.getCalls().map(c => c.args.join(' '));
         assert.strictEqual(lines.filter(l => /rejected terminally by the hub/.test(l)).length, 1);
@@ -267,7 +267,7 @@ describe('HubPushQueue: a -32602 rejection empties the queue instead of growing 
     it('still delivers a row the hub accepts', async function(){
         let db = fakePendingTable([{ id: 9, push_type: 'attest_batch', payload: JSON.stringify({ source_chain: 'DOGE', rows: [] }) }]);
         let client = new HubClient('http://hub.example.com', '');
-        sinon.stub(client, '_call').resolves({ accepted: true });
+        sinon.stub(client, 'call').resolves({ accepted: true });
         await queueOver(client, db).drain();
         assert.strictEqual(db.table.size, 0);
     });

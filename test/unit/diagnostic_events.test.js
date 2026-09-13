@@ -38,7 +38,7 @@ describe('indexer failure-leg diagnostics @regression', function () {
 
     beforeEach(function () {
         observability._resetObservability();
-        diag._resetDiagnostics();
+        diag.resetDiagnostics();
         sink = { lines: [] };
         const push = (m) => sink.lines.push(m);
         observability.installObservability(null, {
@@ -48,7 +48,7 @@ describe('indexer failure-leg diagnostics @regression', function () {
 
     afterEach(function () {
         observability._resetObservability();
-        diag._resetDiagnostics();
+        diag.resetDiagnostics();
     });
 
     describe('XCALL_REJECTED', function () {

@@ -791,7 +791,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         // FORMAT 0 = a bundle SECTION, the only checkpoint canonical the hub still signs.
         // The root suffix it appends sits AFTER segment 9, so the slot read is unmoved -
         // which is the point of pinning it against the real builder rather than a literal.
-        return Anchor.prototype._canonical.call({}, {
+        return Anchor.prototype.canonical.call({}, {
             FORMAT: 0, CHAIN: 'BTC', NETWORK: 'regtest',
             BLOCK_INDEX_CHECKPOINTED: 199, BLOCK_HASH: 'aa'.repeat(32),
             LEDGER_HASH: ledgerHash, ACTIONS_HASH: 'cc'.repeat(32),
@@ -801,12 +801,12 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         });
     }
     function builtBundleAttestation(publisher) {
-        return Anchor.prototype._rewardCanonical.call({}, {
+        return Anchor.prototype.rewardCanonical.call({}, {
             FORMAT: 0, NETWORK: 'regtest', SNAPSHOT_BLOCK: CP_SNAP, PUBLISHER: publisher,
         });
     }
     function builtArchiveAttestation(publisher) {
-        return Anchor.prototype._rewardCanonical.call({}, {
+        return Anchor.prototype.rewardCanonical.call({}, {
             FORMAT: 1, CHAIN: 'BTC', NETWORK: 'regtest', MATCH_BATCH_SEQ: 7,
             SNAPSHOT_BLOCK: CP_SNAP, PUBLISHER: publisher, CHECKPOINT_SEQ: 5,
         });
@@ -980,7 +980,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
     });
 
     // ── Bounty / treasury split (Phase D mechanism; governance config + BURN default) ──
-    describe('_bountyTreasurySplit', function () {
+    describe('bountyTreasurySplit', function () {
         function withSlashConfig(cfg) {
             indexer.config.STAKING = { CAPABILITIES: { cross_chain: { MIN_STAKE: '5000', SLASH: cfg } } };
         }
@@ -989,7 +989,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
             // Explicit no-SLASH config: the real BTC.js now ships SLASH defaults, so assert
             // the absent-config path against a config that deliberately omits the SLASH block.
             indexer.config.STAKING = { CAPABILITIES: { cross_chain: { MIN_STAKE: '5000' } } };
-            const s = handler._bountyTreasurySplit('cross_chain', '1000');
+            const s = handler.bountyTreasurySplit('cross_chain', '1000');
             assert.strictEqual(Number(s.bounty), 0);
             assert.strictEqual(s.treasuryAddr, null);          // null = BURN
             assert.strictEqual(Number(s.treasury), 1000);      // the whole bond leaves circulation
@@ -997,7 +997,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
 
         it('applies BOUNTY_BPS and routes the remainder to the treasury', function () {
             withSlashConfig({ BOUNTY_BPS: 500, TREASURY_ADDRESS: 'addrT' });   // 5%
-            const s = handler._bountyTreasurySplit('cross_chain', '1000');
+            const s = handler.bountyTreasurySplit('cross_chain', '1000');
             assert.strictEqual(Number(s.bounty), 50);
             assert.strictEqual(Number(s.treasury), 950);
             assert.strictEqual(s.treasuryAddr, 'addrT');
@@ -1008,21 +1008,21 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
 
         it('clamps the bounty to BOUNTY_CAP', function () {
             withSlashConfig({ BOUNTY_BPS: 5000, BOUNTY_CAP: '10', TREASURY_ADDRESS: 'addrT' });   // 50% capped at 10
-            const s = handler._bountyTreasurySplit('cross_chain', '1000');
+            const s = handler.bountyTreasurySplit('cross_chain', '1000');
             assert.strictEqual(Number(s.bounty), 10);
             assert.strictEqual(Number(s.treasury), 990);
         });
 
         it('clamps BOUNTY_BPS to 100% (never pays more than the bond)', function () {
             withSlashConfig({ BOUNTY_BPS: 99999, TREASURY_ADDRESS: 'addrT' });
-            const s = handler._bountyTreasurySplit('cross_chain', '1000');
+            const s = handler.bountyTreasurySplit('cross_chain', '1000');
             assert.strictEqual(Number(s.bounty), 1000);
             assert.strictEqual(Number(s.treasury), 0);
         });
 
         it('a zero burn splits to all-zero with no treasury credit', function () {
             withSlashConfig({ BOUNTY_BPS: 500, TREASURY_ADDRESS: 'addrT' });
-            const s = handler._bountyTreasurySplit('cross_chain', '0');
+            const s = handler.bountyTreasurySplit('cross_chain', '0');
             assert.strictEqual(Number(s.bounty), 0);
             assert.strictEqual(Number(s.treasury), 0);
             assert.strictEqual(s.treasuryAddr, null);
@@ -1030,7 +1030,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
 
         it('raises a sub-floor bounty to BOUNTY_FLOOR (cost-coverage on small bonds)', function () {
             withSlashConfig({ BOUNTY_BPS: 500, BOUNTY_FLOOR: '50.00000000' });   // 5% of 500 = 25 < floor 50
-            const s = handler._bountyTreasurySplit('cross_chain', '500');
+            const s = handler.bountyTreasurySplit('cross_chain', '500');
             assert.strictEqual(Number(s.bounty), 50);    // floor wins over the 25 the bps would give
             assert.strictEqual(Number(s.treasury), 450); // remainder burned (no TREASURY_ADDRESS)
             assert.strictEqual(s.treasuryAddr, null);
@@ -1038,7 +1038,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
 
         it('clamps the floor to the bond: a sub-floor bond never mints', function () {
             withSlashConfig({ BOUNTY_BPS: 500, BOUNTY_FLOOR: '50.00000000' });
-            const s = handler._bountyTreasurySplit('cross_chain', '30');   // bond < floor
+            const s = handler.bountyTreasurySplit('cross_chain', '30');   // bond < floor
             assert.strictEqual(Number(s.bounty), 30);    // pays the whole bond, not 50
             assert.strictEqual(Number(s.treasury), 0);
             // Conservation: never pays out more than was burned.
@@ -1047,13 +1047,13 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
 
         it('the cap still wins over the floor when both are set', function () {
             withSlashConfig({ BOUNTY_BPS: 500, BOUNTY_FLOOR: '50.00000000', BOUNTY_CAP: '40.00000000' });
-            const s = handler._bountyTreasurySplit('cross_chain', '5000');  // 5% = 250, floor 50, cap 40
+            const s = handler.bountyTreasurySplit('cross_chain', '5000');  // 5% = 250, floor 50, cap 40
             assert.strictEqual(Number(s.bounty), 40);    // cap is the hard ceiling, applied last
         });
 
         it('XCONFIG reads config.CONFIG_SLASH (whole-federation, no CAPABILITIES home)', function () {
             indexer.config.CONFIG_SLASH = { BOUNTY_BPS: 500, BOUNTY_FLOOR: '50.00000000', BOUNTY_CAP: '1000.00000000' };
-            const s = handler._bountyTreasurySplit('config', '5000');
+            const s = handler.bountyTreasurySplit('config', '5000');
             assert.strictEqual(Number(s.bounty), 250);   // 5% of 5000
             assert.strictEqual(Number(s.treasury), 4750);
             assert.strictEqual(s.treasuryAddr, null);     // burned
@@ -1061,7 +1061,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
 
         it('XCONFIG is a pure burn when no CONFIG_SLASH is configured', function () {
             delete indexer.config.CONFIG_SLASH;
-            const s = handler._bountyTreasurySplit('config', '5000');
+            const s = handler.bountyTreasurySplit('config', '5000');
             assert.strictEqual(Number(s.bounty), 0);
             assert.strictEqual(Number(s.treasury), 5000);
             assert.strictEqual(s.treasuryAddr, null);

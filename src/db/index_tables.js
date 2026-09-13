@@ -205,7 +205,7 @@ module.exports = {
                 // raw address string), materialize them now into validator_rewards under this
                 // deterministic source_id. Normal indexing pays one COUNT(*) probe and then
                 // short-circuits forever (no recovery in progress => remaining stays 0).
-                await this._maybeApplyPendingRewards(address, id, bi);
+                await this.maybeApplyPendingRewards(address, id, bi);
             } else {
                 // Outside block processing (API read paths, recovery seed): keep the legacy
                 // AUTO_INCREMENT path with a NULL block_index. These ids are not assigned

@@ -301,7 +301,7 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
 
         it('pins the responsible set at its OWN block index, the BTC anchor the model exists for', async function () {
             indexer.config['COIN'] = 'BTC';
-            const spy = sinon.spy(handler, '_computeResponsibleSet');
+            const spy = sinon.spy(handler, 'computeResponsibleSet');
             const data = createBaseData({ ACTION: 'ATTEST', FORMAT: 3, BLOCK_INDEX: 900000 });
 
             await handler.parse(v3Params({ snapshotBlock: 899000 }), data, null);
@@ -614,7 +614,7 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
 
         it('the request canonical is the pinned field order the hub must reproduce', function () {
             sinon.stub(require('../../../src/equivocation_header.js'), 'isEquivHeaderActive').returns(false);
-            const canonical = handler._relayRequestCanonical({
+            const canonical = handler.relayRequestCanonical({
                 requestId: REQ_ID, snapshotBlock: 963000, network: 'mainnet',
                 originChain: 'LTC', originActionIndex: 4242, providerId: 'http_get',
                 requestPayload: 'https://example.com/score', redundancy: 3, deadlineBlocks: 10
@@ -629,7 +629,7 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
         it('the response canonical is the pinned field order the hub must reproduce', function () {
             sinon.stub(require('../../../src/equivocation_header.js'), 'isEquivHeaderActive').returns(false);
             const bodyHash = crypto.createHash('sha256').update('body', 'utf8').digest('hex');
-            const canonical = handler._relayResponseCanonical({
+            const canonical = handler.relayResponseCanonical({
                 requestId: REQ_ID, snapshotBlock: 963000, network: 'mainnet',
                 originChain: 'DOGE', homeResponseActionIndex: 777, providerId: 'http_get',
                 responseHash: bodyHash, status: 'ok', meta: '200'
@@ -642,12 +642,12 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
         it('the two legs of one request_id never share an EQUIV round id', function () {
             const eq = require('../../../src/equivocation_header.js');
             sinon.stub(eq, 'isEquivHeaderActive').returns(true);
-            const req = handler._relayRequestCanonical({
+            const req = handler.relayRequestCanonical({
                 requestId: REQ_ID, snapshotBlock: 963000, network: 'mainnet',
                 originChain: 'LTC', originActionIndex: 1, providerId: 'http_get',
                 requestPayload: '', redundancy: 1, deadlineBlocks: 10
             });
-            const res = handler._relayResponseCanonical({
+            const res = handler.relayResponseCanonical({
                 requestId: REQ_ID, snapshotBlock: 963000, network: 'mainnet',
                 originChain: 'LTC', homeResponseActionIndex: 1, providerId: 'http_get',
                 responseHash: 'f'.repeat(64), status: 'ok', meta: ''

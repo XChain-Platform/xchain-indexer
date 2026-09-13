@@ -1032,7 +1032,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
                 let g = { capability: 'cross_chain', block: 100, rows: [
                     { source: 'src_a', signing_pubkey: 'a'.repeat(64), amount: '5' },
                     { source: 'src_a', signing_pubkey: 'b'.repeat(64), amount: '50' }] };
-                await assert.rejects(() => rec._verifyWeightedCompleteness(g, [], 94, '1'),
+                await assert.rejects(() => rec.verifyWeightedCompleteness(g, [], 94, '1'),
                                      /two different weights/);
             });
         });
@@ -1379,9 +1379,9 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
                 { pubkey: keys[1].pubkey, sig: signHex(keys[1], CANON) },
                 { pubkey: keys[2].pubkey, sig: signHex(keys[2], CANON) }
             ];
-            assert.strictEqual(rec()._quorumVerified(CANON, sigs, set, true), true,
+            assert.strictEqual(rec().quorumVerified(CANON, sigs, set, true), true,
                 'weighted: the leading garbage entry must not drop a real signer');
-            assert.strictEqual(rec()._quorumVerified(CANON, sigs, set, false), true,
+            assert.strictEqual(rec().quorumVerified(CANON, sigs, set, false), true,
                 'count: same verdict on the legacy 2f+1 path');
         });
 
@@ -1393,9 +1393,9 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
                 { pubkey: keys[0].pubkey, sig: signHex(keys[0], CANON) },   // repeat of the same signer
                 { pubkey: keys[1].pubkey, sig: signHex(keys[1], CANON) }
             ];
-            assert.strictEqual(rec()._quorumVerified(CANON, sigs, set, true), false,
+            assert.strictEqual(rec().quorumVerified(CANON, sigs, set, true), false,
                 'a repeated signer must not inflate the stake tally to quorum');
-            assert.strictEqual(rec()._quorumVerified(CANON, sigs, set, false), false);
+            assert.strictEqual(rec().quorumVerified(CANON, sigs, set, false), false);
         });
 
         it('a signer with only garbage entries never counts, whatever the ordering', function () {
@@ -1407,7 +1407,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
                 { pubkey: keys[1].pubkey, sig: signHex(keys[1], CANON) },
                 { pubkey: keys[2].pubkey, sig: signHex(keys[2], CANON) }
             ];
-            assert.strictEqual(rec()._quorumVerified(CANON, sigs, set, true), false,
+            assert.strictEqual(rec().quorumVerified(CANON, sigs, set, true), false,
                 'verify gate is not weakened: two of four sources is sub-quorum');
         });
     });

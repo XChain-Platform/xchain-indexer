@@ -42,7 +42,7 @@ const mathjs = require('mathjs');
 // SQL and compare with decimal.js's exact .eq (never `parseFloat` or `===`).
 const bn = (s) => mathjs.bignumber(String(s == null ? 0 : s));
 
-async function _sum(indexerQuery, table, tickId) {
+async function sum(indexerQuery, table, tickId) {
     const r = await indexerQuery(
         `SELECT CAST(COALESCE(SUM(CAST(amount AS DECIMAL(65,18))), 0) AS CHAR) AS total FROM ${table} WHERE tick_id = ?`,
         [tickId]
@@ -66,10 +66,10 @@ async function assertStateInvariants(indexerQuery) {
         const tick = row.tick;
         const supply = bn(row.supply);
 
-        const credits = await _sum(indexerQuery, 'credits', tickId);
-        const debits = await _sum(indexerQuery, 'debits', tickId);
-        const escrows = await _sum(indexerQuery, 'escrows', tickId);
-        const balances = await _sum(indexerQuery, 'balances', tickId);
+        const credits = await sum(indexerQuery, 'credits', tickId);
+        const debits = await sum(indexerQuery, 'debits', tickId);
+        const escrows = await sum(indexerQuery, 'escrows', tickId);
+        const balances = await sum(indexerQuery, 'balances', tickId);
 
         const ledger = credits.minus(debits).plus(escrows);
         const total = balances.plus(escrows);

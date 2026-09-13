@@ -158,13 +158,13 @@ class AnchorRecovery {
             report.batches++;
             let batchSeq = Number(v1.match_batch_seq);
             try {
-                let archive = await this._verifyBatch(v1);
+                let archive = await this.verifyBatch(v1);
                 // The anchor txid is not in the archive blob, but it IS recoverable at
                 // rebuild time: it is the DOGE transaction hash of this v1 ANCHOR action.
                 // Populate it so a recovery-fed mirror matches a mirror-fed one, where the
                 // hub backfills anchor_txid on publish (hub_db_sync COALESCE upgrade path).
-                let anchorTxid = await this._anchorTxid(v1.action_index);
-                if(!this.dryRun) await this._rebuild(archive, report, v1.network, anchorTxid);
+                let anchorTxid = await this.anchorTxid(v1.action_index);
+                if(!this.dryRun) await this.rebuild(archive, report, v1.network, anchorTxid);
                 else {
                     report.matches   += archive.matches.length;
                     report.calls     += (archive.calls || []).length;
@@ -194,7 +194,7 @@ class AnchorRecovery {
     // row itself, never a process-level default: the parse path rejects an ANCHOR whose
     // NETWORK is not this indexer's ('invalid: NETWORK (not this network)'), so every
     // replayable row already carries the network the live gate resolved against.
-    async _archiveAuthorScope(v1){
+    async archiveAuthorScope(v1){
         let gate = await this.db.doQuery(ARCHIVE_HEAD_GATE_SQL, [Number(v1.match_batch_seq)]);
         let head = (gate && gate.length > 0) ? gate[0] : null;
         if(!head) return null;
@@ -202,7 +202,7 @@ class AnchorRecovery {
         return String(v1.source || '');
     }
 
-    async _verifyBatch(v1){
+    async verifyBatch(v1){
         // Reassemble v1 chunk 0 + v2 continuations.
         let totalChunks = Number(v1.total_chunks) || 1;
         let b64 = String(v1.archive_b64 || '');
@@ -225,7 +225,7 @@ class AnchorRecovery {
             // the anchor the live parse path uses, so recovery and the live path never
             // apply different rules to the same batch. Below the flag day the legacy
             // canonical-head query runs unchanged.
-            let scope = await this._archiveAuthorScope(v1);
+            let scope = await this.archiveAuthorScope(v1);
             let rows = (scope !== null)
                 ? await this.db.doQuery(ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL, [Number(v1.match_batch_seq), scope])
                 : await this.db.doQuery(ARCHIVE_CHUNK_SET_SQL,
@@ -251,7 +251,7 @@ class AnchorRecovery {
         let json;
         try { json = zlib.gunzipSync(Buffer.from(b64, 'base64url'), { maxOutputLength: 16 * 1024 * 1024 }).toString('utf8'); }
         catch(e){ throw new Error('archive is not valid gzip'); }
-        if(this._crc32Hex(json) !== String(v1.batch_crc32))
+        if(this.crc32Hex(json) !== String(v1.batch_crc32))
             throw new Error('BATCH_CRC32 mismatch');
 
         let archive = JSON.parse(json);
@@ -269,7 +269,7 @@ class AnchorRecovery {
 
         // Optional but recommended: archived validator sets must be backed by
         // real on-chain BTC stakes. Fabricated sets cannot survive this.
-        if(this.verifyStakes && this.btcDb) await this._verifyStakes(snaps, v1.network);
+        if(this.verifyStakes && this.btcDb) await this.verifyStakes(snaps, v1.network);
 
         // Key-binding (REC-BIND-1): existence alone accepts an archive whose signing key
         // is real but attributed to SOMEONE ELSE'S staking source. Under weighted quorum
@@ -287,20 +287,20 @@ class AnchorRecovery {
         // Needs the resolver (a BTC-scoped Database), so it is gated on that being present
         // in addition to --verify-stakes; the raw-doQuery test stub skips it harmlessly.
         if(this.verifyStakes && this.btcDb && typeof this.btcDb.getStakeWeightsByCapability === 'function')
-            await this._verifyCompleteness(snaps, v1.network);
+            await this.verifyCompleteness(snaps, v1.network);
 
         // 1. Wrapper signatures vs the ARCHIVED oracle_publish set.
         let wrapperSet = setFor('oracle_publish', v1.snapshot_block);
-        let wrapperCanonical = this._wrapperCanonical(v1);
-        let wrapperSigs = this._parseSigs(v1.validator_signatures);
-        if(!this._quorumVerified(wrapperCanonical, wrapperSigs, wrapperSet, swq.isStakeWeightedQuorumActive(v1.snapshot_block, v1.network)))
+        let wrapperCanonical = this.wrapperCanonical(v1);
+        let wrapperSigs = this.parseSigs(v1.validator_signatures);
+        if(!this.quorumVerified(wrapperCanonical, wrapperSigs, wrapperSet, swq.isStakeWeightedQuorumActive(v1.snapshot_block, v1.network)))
             throw new Error('wrapper signatures fail quorum against the archived oracle_publish set');
 
         // 2. Every match's signatures vs the ARCHIVED cross_chain set.
         for(let m of archive.matches){
             let set  = setFor('cross_chain', m.snapshot_block);
-            let sigs = this._parseSigs(m.validator_signatures);
-            if(!this._quorumVerified(this._matchCanonical(m), sigs, set, swq.isStakeWeightedQuorumActive(m.snapshot_block, m.network)))
+            let sigs = this.parseSigs(m.validator_signatures);
+            if(!this.quorumVerified(this.matchCanonical(m), sigs, set, swq.isStakeWeightedQuorumActive(m.snapshot_block, m.network)))
                 throw new Error('match ' + String(m.match_id).substring(0, 16) + '... fails quorum against the archived cross_chain set');
         }
 
@@ -308,8 +308,8 @@ class AnchorRecovery {
         // `calls` is absent from pre-XCALL archives; treated as empty.
         for(let c of (archive.calls || [])){
             let set  = setFor('cross_chain', c.snapshot_block);
-            let sigs = this._parseSigs(c.validator_signatures);
-            if(!this._quorumVerified(this._callCanonical(c), sigs, set, swq.isStakeWeightedQuorumActive(c.snapshot_block, c.network)))
+            let sigs = this.parseSigs(c.validator_signatures);
+            if(!this.quorumVerified(this.callCanonical(c), sigs, set, swq.isStakeWeightedQuorumActive(c.snapshot_block, c.network)))
                 throw new Error('call ' + String(c.call_id).substring(0, 16) + '... (' + c.phase + ') fails quorum against the archived cross_chain set');
         }
 
@@ -341,7 +341,7 @@ class AnchorRecovery {
     // Group archived snapshot rows by (capability, snapshot_block) - the locus both
     // cross-checks resolve at, since the on-chain effective signer set is defined per
     // capability at a block.
-    _groupSnaps(snaps){
+    groupSnaps(snaps){
         let groups = new Map();
         for(let s of snaps){
             let key = String(s.capability) + '@' + Number(s.snapshot_block);
@@ -396,17 +396,17 @@ class AnchorRecovery {
     // from a raw re-resolution and an honest archive is condemned as fabricated,
     // unrecoverable. Flag-day gated (INERT on mainnet/testnet), so below the gate this
     // is the declared height unchanged and pre-flag-day archives read exactly as before.
-    async _verifyStakes(snaps, network){
+    async verifyStakes(snaps, network){
         // A handle exposing only doQuery (unit fixtures, an embedder holding a raw query
         // handle) has no resolver, so stage 1 is the whole answer - exactly as
         // _verifyCompleteness degrades to skipping. The recovery bin always builds a
         // BTC-scoped Database, so production runs both stages.
         let canResolve = typeof this.btcDb.getValidatorsByCapability === 'function';
-        for(let g of this._groupSnaps(snaps)){
+        for(let g of this.groupSnaps(snaps)){
             let resolveBlock = srb.buriedSnapshotBlock(g.block, network);
             let undirected = [];
             for(let s of g.rows)
-                if(!(await this._hasDirectStake(s, resolveBlock))) undirected.push(s);
+                if(!(await this.hasDirectStake(s, resolveBlock))) undirected.push(s);
             if(undirected.length === 0) continue;
             if(!canResolve || !QUORUM_CAPABILITIES.has(g.capability))
                 throw new Error('archived snapshot pubkey ' + String(undirected[0].signing_pubkey).substring(0, 16) +
@@ -435,7 +435,7 @@ class AnchorRecovery {
     // buried by the reorg buffer at/above that flag-day, the declared height
     // below it. It is passed in rather than re-derived here so stage 1 and stage 2
     // can never probe two different heights for the same group.
-    async _hasDirectStake(s, atBlock){
+    async hasDirectStake(s, atBlock){
         let at   = (atBlock === undefined) ? s.snapshot_block : atBlock;
         let rows = await this.btcDb.doQuery(
             `SELECT 1 FROM stakes st
@@ -475,7 +475,7 @@ class AnchorRecovery {
     // archive was built from. Known residual: a source's own revoked or slashed key still
     // binds to that source and passes. Same reasoning as the existence guard above.
     async verifyKeySourceBinding(snaps, network){
-        for(let g of this._groupSnaps(snaps)){
+        for(let g of this.groupSnaps(snaps)){
             if(!QUORUM_CAPABILITIES.has(g.capability)) continue;
             if(!swq.isStakeWeightedQuorumActive(g.block, network)) continue;
             // Same buried height as _verifyStakes and _verifyCompleteness, so the three
@@ -569,8 +569,8 @@ class AnchorRecovery {
     // closed when their inputs are absent (a handle with no coin config, a schema with no
     // capability_slash_debits): a DR tool that refuses to run is the failure mode this
     // exists to remove, and check 1 - resolved ⊆ archived - is unaffected either way.
-    async _verifyCompleteness(snaps, network){
-        for(let g of this._groupSnaps(snaps)){
+    async verifyCompleteness(snaps, network){
+        for(let g of this.groupSnaps(snaps)){
             // Only the quorum-bearing capabilities are re-resolvable from BTC stakes; skip
             // any other archived group (none today, but future-proof against a new snapshot kind).
             if(!QUORUM_CAPABILITIES.has(g.capability))
@@ -586,7 +586,7 @@ class AnchorRecovery {
             // The bar the ARCHIVE was built at, reconstructed as of that block.
             // null = nothing resolvable (no coin config on this handle), in which case no
             // override is passed and db/stakes.js applies its own local floor unchanged.
-            let minStake = this._minStakeAt(g.capability, resolveBlock, network);
+            let minStake = this.minStakeAt(g.capability, resolveBlock, network);
             let weighted = swq.isStakeWeightedQuorumActive(g.block, network);
             let resolved = weighted
                 ? await this.btcDb.getStakeWeightsByCapability(g.capability, resolveBlock, minStake)
@@ -597,7 +597,7 @@ class AnchorRecovery {
                 throw new Error('archived ' + g.capability + ' snapshot at block ' + g.block +
                                 ' cannot be completeness-checked: the on-chain resolution is truncated (raise VALIDATOR_QUERY_LIMIT / STAKE_WEIGHT_MAX_SOURCES)');
             if(weighted)
-                await this._verifyWeightedCompleteness(g, resolved, resolveBlock, minStake);
+                await this.verifyWeightedCompleteness(g, resolved, resolveBlock, minStake);
             else {
                 // Legacy count quorum: completeness is by signing pubkey.
                 let archivedPubkeys = new Set(g.rows.map(r => String(r.signing_pubkey).toLowerCase()));
@@ -634,7 +634,7 @@ class AnchorRecovery {
     // on honest data is the wrong trade for this tool; judging candidates on weight alone
     // instead is not an option, because it condemns any archive whose source held stake but no
     // effective key (all keys revoked) at the block.
-    async _verifyWeightedCompleteness(g, resolved, resolveBlock, minStake){
+    async verifyWeightedCompleteness(g, resolved, resolveBlock, minStake){
         // Per-source archived weight. Every key of a source carries the SAME `amount` (the
         // source's aggregate; capability_snapshots.sql), so a source spelling two amounts
         // across its keys is malformed however it got that way - and is a way to hide an
@@ -649,7 +649,7 @@ class AnchorRecovery {
                                 ' weights (' + archived.get(src) + ' and ' + amt + ') across its keys');
             if(!archived.has(src)) archived.set(src, amt);
         }
-        let restores = await this._slashRestoresAfter(resolveBlock);
+        let restores = await this.slashRestoresAfter(resolveBlock);
 
         // 1. Source-level completeness: no qualifying staking source may be absent.
         let resolvedSources = new Map();
@@ -696,7 +696,7 @@ class AnchorRecovery {
     // older schema without the table, or a bare doQuery handle - because the check it feeds is
     // an ADDITION: skipping it leaves the earlier completeness check intact, where failing
     // closed would refuse an honest recovery outright.
-    async _slashRestoresAfter(atBlock){
+    async slashRestoresAfter(atBlock){
         let out = new Map();
         if(!this.btcDb || typeof this.btcDb.doQuery !== 'function') return out;
         let at = Number(atBlock);
@@ -736,15 +736,15 @@ class AnchorRecovery {
     // handle's own coin config, the frozen constant XChainHub asserts its genesis governance
     // value against at boot; null when this handle carries no config, which leaves
     // db/stakes.js applying its local floor unchanged.
-    _minStakeAt(capability, atBlock, network){
+    minStakeAt(capability, atBlock, network){
         return cmsh.minStakeAt(capability, atBlock, network,
-                               this._genesisMinStake(capability), this.minStakeActivations);
+                               this.genesisMinStake(capability), this.minStakeActivations);
     }
 
     // Genesis (block-0) MIN_STAKE for a capability, from the BTC-scoped handle's coin config
     // (STAKING.CAPABILITIES.<cap>.MIN_STAKE). Defensive throughout: recovery is also driven
     // by bare query handles that carry no config at all.
-    _genesisMinStake(capability){
+    genesisMinStake(capability){
         let cfg  = this.btcDb && this.btcDb.config;
         let caps = (cfg && cfg['STAKING'] && cfg['STAKING']['CAPABILITIES']) ? cfg['STAKING']['CAPABILITIES'] : null;
         let entry = caps ? caps[capability] : null;
@@ -758,7 +758,7 @@ class AnchorRecovery {
     // transactions -> index_transactions). Returns null when unresolvable
     // (e.g. synthetic fixtures), in which case anchor_txid stays NULL exactly
     // as a pre-backfill streamed mirror would.
-    async _anchorTxid(actionIndex){
+    async anchorTxid(actionIndex){
         try {
             let rows = await this.db.doQuery(
                 `SELECT it.hash FROM actions a
@@ -774,7 +774,7 @@ class AnchorRecovery {
     // by raw doQuery stubs (unit fixtures, and any embedder holding only a query handle),
     // so a handle without the transaction API degrades to autocommit behavior instead
     // of throwing. Returns whether a transaction is actually open.
-    async _begin(handle){
+    async begin(handle){
         if(!handle || typeof handle.beginTransaction !== 'function') return false;
         await handle.beginTransaction();
         return true;
@@ -782,7 +782,7 @@ class AnchorRecovery {
 
     // Roll back without masking the original failure: the caller is already unwinding a
     // batch error, and a rollback that itself fails must not replace that reason.
-    async _safeRollback(handle){
+    async safeRollback(handle){
         try {
             if(handle && typeof handle.rollbackTransaction === 'function') await handle.rollbackTransaction();
         } catch(e){
@@ -813,7 +813,7 @@ class AnchorRecovery {
     // outside a transaction (so a failed INSERT here used to leave the batch reported OK with
     // rows silently missing) and re-throws inside one, which is what this per-batch rollback
     // then acts on. A DR tool must never report a batch verified when its rows did not land.
-    async _rebuild(archive, report, network, anchorTxid = null){
+    async rebuild(archive, report, network, anchorTxid = null){
         let rewards = archive.rewards || [];
         // Hoisted ahead of every write: a batch that cannot restore its rewards must fail
         // before it half-writes its matches, which is the exact partial-batch shape the
@@ -830,14 +830,14 @@ class AnchorRecovery {
         // beginTransaction would block on that lock forever (a silent hang mid-recovery).
         let dogeTx = false, btcTx = false;
         try {
-            dogeTx = await this._begin(this.db);
-            btcTx  = (rewards.length > 0) ? await this._begin(this.btcDb) : false;
-            await this._writeBatch(archive, delta, network, anchorTxid, rewards);
+            dogeTx = await this.begin(this.db);
+            btcTx  = (rewards.length > 0) ? await this.begin(this.btcDb) : false;
+            await this.writeBatch(archive, delta, network, anchorTxid, rewards);
             if(dogeTx) await this.db.commitTransaction();
             if(btcTx)  await this.btcDb.commitTransaction();
         } catch(e){
-            if(btcTx)  await this._safeRollback(this.btcDb);
-            if(dogeTx) await this._safeRollback(this.db);
+            if(btcTx)  await this.safeRollback(this.btcDb);
+            if(dogeTx) await this.safeRollback(this.db);
             throw e;
         }
         report.matches   += delta.matches;
@@ -846,7 +846,7 @@ class AnchorRecovery {
         report.rewards   += delta.rewards;
     }
 
-    async _writeBatch(archive, report, network, anchorTxid, rewards){
+    async writeBatch(archive, report, network, anchorTxid, rewards){
         // Parity carve-out (documented): unlike cross_chain_matches/calls below,
         // capability_snapshots is rebuilt WITHOUT an id, deliberately. The archive
         // cannot carry one (hub ids are hub-local; every hub persists these rows
@@ -1086,7 +1086,7 @@ class AnchorRecovery {
     // Hub StateCheckpointEngine canonical + the v1 archive extension (anchor.js).
     // v1 ROUND_ID appends batch_seq (distinct from the v0 per-block key, the R-4 fix);
     // gated on the BTC snapshot_block + network, VIEW=0. Must byte-match anchor._canonical.
-    _wrapperCanonical(v1){
+    wrapperCanonical(v1){
         let raw = ['XCHECKPOINT', v1.chain, v1.network, String(v1.block_index), v1.block_hash,
                 v1.ledger_hash, v1.actions_hash, v1.contract_hash,
                 String(v1.checkpoint_seq), String(v1.snapshot_block),
@@ -1099,7 +1099,7 @@ class AnchorRecovery {
     }
 
     // Hub CrossChainDexEngine._canonicalMatch / indexer cross_settle._canonical.
-    _matchCanonical(m){
+    matchCanonical(m){
         let raw = [
             'XMATCH', m.match_id, String(m.snapshot_block),
             m.a_chain, String(m.a_action_index), m.a_tick || '', String(m.a_amount), String(m.a_ownership), m.a_payout_addr,
@@ -1121,7 +1121,7 @@ class AnchorRecovery {
 
     // Hub CrossChainCallEngine._canonicalMatch / indexer verifiers (xexec.js
     // dispatch, xcall.js result).
-    _callCanonical(c){
+    callCanonical(c){
         let sha = (s) => crypto.createHash('sha256').update(String(s == null ? '' : s), 'utf8').digest('hex');
         let phase = (c.phase === 'result') ? 'result' : 'dispatch';
         let raw;
@@ -1147,7 +1147,7 @@ class AnchorRecovery {
         return raw;
     }
 
-    _parseSigs(raw){
+    parseSigs(raw){
         try {
             let sigs = (typeof raw === 'string') ? JSON.parse(raw || '[]') : raw;
             return Array.isArray(sigs) ? sigs.filter(s => s && s.pubkey && s.sig) : [];
@@ -1157,7 +1157,7 @@ class AnchorRecovery {
     // validatorSet: [{pubkey, source, weight}] from the archived snapshot. When
     // `weighted` (snapshot_block at/above STAKE_WEIGHTED_QUORUM), the bar is summed
     // signer STAKE > 2/3 of S (source-deduped); else the legacy 2f+1 signer count.
-    _quorumVerified(canonical, sigs, validatorSet, weighted){
+    quorumVerified(canonical, sigs, validatorSet, weighted){
         let qualified = new Set((validatorSet || []).map(v => String(v.pubkey).toLowerCase()));
         if(qualified.size === 0) return false;
         let validSigners = [], seen = new Set();
@@ -1178,11 +1178,11 @@ class AnchorRecovery {
         return validSigners.length >= quorum;
     }
 
-    _crc32Hex(str){
-        let n = zlib.crc32 ? zlib.crc32(Buffer.from(str, 'utf8')) : this._crc32Fallback(Buffer.from(str, 'utf8'));
+    crc32Hex(str){
+        let n = zlib.crc32 ? zlib.crc32(Buffer.from(str, 'utf8')) : this.crc32Fallback(Buffer.from(str, 'utf8'));
         return (n >>> 0).toString(16).padStart(8, '0');
     }
-    _crc32Fallback(buf){
+    crc32Fallback(buf){
         let c, crc = 0xFFFFFFFF;
         for(let i = 0; i < buf.length; i++){
             c = (crc ^ buf[i]) & 0xFF;
@@ -1197,7 +1197,7 @@ class AnchorRecovery {
 // can call it without constructing a full AnchorRecovery(db, opts) instance.
 // Delegates to the real instance method; does not change its output.
 AnchorRecovery.wrapperCanonicalForTest = function(v1){
-    return AnchorRecovery.prototype._wrapperCanonical.call({}, v1);
+    return AnchorRecovery.prototype.wrapperCanonical.call({}, v1);
 };
 
 module.exports = AnchorRecovery;

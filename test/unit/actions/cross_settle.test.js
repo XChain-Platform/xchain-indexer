@@ -58,7 +58,7 @@ describe('Cross_Settle action handler @regression @tier1', function () {
     // Build a signed match: returns the match with `validators` resolvable and
     // validator_signatures populated by `n` valid signers over the canonical.
     function signMatch(match, n) {
-        const canonical = handler._canonical(match);
+        const canonical = handler.canonical(match);
         const validators = [];
         const sigs = [];
         for (let i = 0; i < n; i++) {
@@ -163,7 +163,7 @@ describe('Cross_Settle action handler @regression @tier1', function () {
 
     it('rejects malformed pubkey/sig and duplicate signers', async function () {
         const match = makeMatch();
-        const canonical = handler._canonical(match);
+        const canonical = handler.canonical(match);
         const v = genValidator();
         const goodSig = signCanonical(v.privateKey, canonical);
         // 1 valid signer, but duplicated + a malformed entry : only counts once,

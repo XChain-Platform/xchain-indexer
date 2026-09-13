@@ -67,7 +67,7 @@ describe('recovery._wrapperCanonical: independent byte-parity (ITEM 2729)', func
     // independently through its own uppercase/FORMAT=1 field contract.
     function anchorBaseSegments(){
         let anchor = new Anchor({});
-        let full = anchor._canonical({
+        let full = anchor.canonical({
             CHAIN: v1.chain,
             NETWORK: v1.network,
             BLOCK_INDEX_CHECKPOINTED: v1.block_index,

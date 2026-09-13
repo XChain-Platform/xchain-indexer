@@ -132,19 +132,19 @@ const LIST_EDIT_REMOVE  = '2';
 const POLICY_TX_PREFIX = 'XPOLICY-';
 const BRIDGE_TX_PREFIX = 'XBRIDGE-';
 
-function _isNull(v){ return v === null || v === undefined || v === ''; }
+function isNull(v){ return v === null || v === undefined || v === ''; }
 
 // A finite non-negative integer, or null. Heights, ordinals and action indexes arrive from a
 // MariaDB driver that may hand back a number, a string or a BigInt depending on its bigint
 // options, so the conversion is pinned here rather than trusted from the call site.
-function _int(v){
+function int(v){
     if(v === null || v === undefined) return null;
     if(typeof v === 'bigint') return (v >= 0n && v <= BigInt(Number.MAX_SAFE_INTEGER)) ? Number(v) : null;
     const n = Number(v);
     return (Number.isFinite(n) && Number.isInteger(n) && n >= 0) ? n : null;
 }
 
-function _sha256(s){ return crypto.createHash('sha256').update(String(s), 'utf8').digest('hex'); }
+function sha256(s){ return crypto.createHash('sha256').update(String(s), 'utf8').digest('hex'); }
 
 /**
  * The binding clause of a mirrored select at this pass's block, with its bindings.
@@ -259,7 +259,7 @@ function policyHash(allow, block, sleeping){
         .concat(part('BLOCK', block))
         .concat(['SLEEP', sleeping ? '1' : '0'])
         .join('|');
-    return _sha256(text);
+    return sha256(text);
 }
 
 /**
@@ -398,7 +398,7 @@ async function isSettled(indexerDb, id, kind){
  *          has no key for
  */
 async function isSourceLegSettled(indexerDb, srcChain, srcActionIndex){
-    const idx = _int(srcActionIndex);
+    const idx = int(srcActionIndex);
     if(!srcChain || idx === null) return false;
     return await indexerDb.isBridgeSourceLegSettled(srcChain, idx);
 }
@@ -428,10 +428,10 @@ async function recordSettlement(indexerDb, actionIndex, id, kind, blockIndex, ro
 // refused in the due set would otherwise re-log the same event every pass forever; that is what
 // storms the log and is what AT4's "exactly one refusal" rules out. Terminal call sites use
 // _warnOnce below instead of _warn.
-function _log(kind, id, message){
+function log(kind, id, message){
     console.log('\t ' + kind + ' : ' + String(id).substring(0, 16) + '... : ' + message);
 }
-function _warn(kind, id, message){
+function warn(kind, id, message){
     console.warn('\t ' + kind + ' : ' + String(id).substring(0, 16) + '... : ' + message);
 }
 
@@ -451,7 +451,7 @@ const _refusalMemo = new Map();
 // constant, never the fully formatted message, so two refusals in the same class with different
 // incidental detail (a different escrow address, a different quorum count) still count as one
 // refusal and do not re-log.
-function _shouldLogRefusal(kind, id, reason){
+function shouldLogRefusal(kind, id, reason){
     const key = kind + '' + String(id);
     if(_refusalMemo.get(key) === reason) return false;
     if(!_refusalMemo.has(key) && _refusalMemo.size >= REFUSAL_MEMO_CAP){
@@ -464,8 +464,8 @@ function _shouldLogRefusal(kind, id, reason){
 
 // A terminal refusal: warn once per (kind, id) unless the reason changes. Byte-identical to a
 // plain _warn call on the FIRST occurrence, which is what the rail suite greps the log for.
-function _warnOnce(kind, id, reason, message){
-    if(_shouldLogRefusal(kind, id, reason)) _warn(kind, id, message);
+function warnOnce(kind, id, reason, message){
+    if(shouldLogRefusal(kind, id, reason)) warn(kind, id, message);
 }
 
 // Test-only: forget every memoized refusal, so a unit test can run one id through the settle
@@ -539,16 +539,16 @@ async function applyBridgeTransfer(row, ctx){
     const srcChain  = String(row.src_chain || '');
     const destChain = String(row.dest_chain || '');
     const tick      = String(row.tick || '');
-    const decimals  = _int(row.decimals);
-    const snapshot  = _int(row.snapshot_block);
+    const decimals  = int(row.decimals);
+    const snapshot  = int(row.snapshot_block);
     // src_action_index is REQUIRED, not optional, because it is half of the source leg and the
     // source leg is what the one-settlement-per-leg refusal below is keyed on. A row that names
     // no source action cannot be tested for uniqueness at all, so admitting it would be a hole
     // straight through that refusal; it is also a row no real lock or burn can produce, since
     // the hub derives the field from the source action and signs it into the canonical.
-    const srcIndex  = _int(row.src_action_index);
+    const srcIndex  = int(row.src_action_index);
     if(!id || !srcChain || !destChain || !tick || decimals === null || snapshot === null ||
-       srcIndex === null || _isNull(row.dest_address) || _isNull(row.amount))
+       srcIndex === null || isNull(row.dest_address) || isNull(row.amount))
         return out(false, SETTLE_REASON.ROW_FIELDS);
 
     // Network scope, the CROSS_SETTLE belt-and-suspenders guard: the network is inside the
@@ -562,7 +562,7 @@ async function applyBridgeTransfer(row, ctx){
     // separates RE-GENESES of one environment, which is the case a regtest rail actually hits.
     // Transport and not signed, so it is compared only when this node knows its own identity.
     const localChainId = ctx.config ? ctx.config['BTC_CHAIN_ID'] : null;
-    if(!_isNull(row.btc_chain_id) && !_isNull(localChainId) &&
+    if(!isNull(row.btc_chain_id) && !isNull(localChainId) &&
        String(row.btc_chain_id) !== String(localChainId))
         return out(false, SETTLE_REASON.CHAIN_ID);
 
@@ -600,7 +600,7 @@ async function applyBridgeTransfer(row, ctx){
     // block_time, never by arrival order, a wall clock or the hub's AUTO_INCREMENT. Two nodes
     // replaying the same chain and the same mirror therefore refuse the same row.
     if(await isSourceLegSettled(db, srcChain, srcIndex)){
-        _warnOnce('XBRIDGE', id, SETTLE_REASON.SRC_LEG_APPLIED,
+        warnOnce('XBRIDGE', id, SETTLE_REASON.SRC_LEG_APPLIED,
                   SETTLE_REASON.SRC_LEG_APPLIED + ' (' + srcChain + ':' + srcIndex + ') : skipping');
         return out(false, SETTLE_REASON.SRC_LEG_APPLIED);
     }
@@ -621,11 +621,11 @@ async function applyBridgeTransfer(row, ctx){
     const quorum = await verifyQuorum(transferCanonical(row), row.validator_signatures,
                                       snapshot, row.network, db);
     if(quorum.snapshotAbsent){
-        _log('XBRIDGE', id, SETTLE_REASON.SNAPSHOT_ABSENT + ' : deferring');
+        log('XBRIDGE', id, SETTLE_REASON.SNAPSHOT_ABSENT + ' : deferring');
         return out(false, SETTLE_REASON.SNAPSHOT_ABSENT);
     }
     if(!quorum.met){
-        _warnOnce('XBRIDGE', id, SETTLE_REASON.QUORUM,
+        warnOnce('XBRIDGE', id, SETTLE_REASON.QUORUM,
                   SETTLE_REASON.QUORUM + ' (' + quorum.valid + '/' + quorum.total + ') : skipping');
         return out(false, SETTLE_REASON.QUORUM);
     }
@@ -636,7 +636,7 @@ async function applyBridgeTransfer(row, ctx){
     // over), so there is no branch here that could be gated wrong. ok:false applies NOTHING.
     const cross = verifyEscrowAgainstCheckpoint(row, ctx);
     if(!cross.ok){
-        _warnOnce('XBRIDGE', id, SETTLE_REASON.ESCROW_PROOF,
+        warnOnce('XBRIDGE', id, SETTLE_REASON.ESCROW_PROOF,
                   SETTLE_REASON.ESCROW_PROOF + ': ' + cross.reason + ' : skipping');
         return out(false, SETTLE_REASON.ESCROW_PROOF);
     }
@@ -679,12 +679,12 @@ async function applyBridgeTransfer(row, ctx){
             localTick = gasTick;
         } else {
             const owner = addresses['BRIDGE_' + srcChain];
-            if(_isNull(owner))
+            if(isNull(owner))
                 return out(false, SETTLE_REASON.ESCROW_MISSING);
             const made = await genesis.injectBridgedToken(
                 { origin: srcChain, name: tick, decimals: decimals, owner: owner }, injectCtx);
             if(!made.ok){
-                _warnOnce('XBRIDGE', id, SETTLE_REASON.TOKEN_ROW,
+                warnOnce('XBRIDGE', id, SETTLE_REASON.TOKEN_ROW,
                           SETTLE_REASON.TOKEN_ROW + ': ' + made.reason + ' : skipping');
                 return out(false, SETTLE_REASON.TOKEN_ROW);
             }
@@ -700,7 +700,7 @@ async function applyBridgeTransfer(row, ctx){
         // escrow is an ordinary balance at the keyless role address for the chain the units
         // were bridged TO, which is the row's src_chain (the burn happened there).
         const escrow = addresses['BRIDGE_' + srcChain];
-        if(_isNull(escrow))
+        if(isNull(escrow))
             return out(false, SETTLE_REASON.ESCROW_MISSING);
         const info = await db.getTokenInfo(localTick, ctx.blockIndex);
         if(!info)
@@ -710,7 +710,7 @@ async function applyBridgeTransfer(row, ctx){
         // nothing here, because the local ledger IS the authority on a local balance.
         const balances = await db.getAddressBalances(escrow, null, ctx.blockIndex);
         if(!util.hasBalance(balances, info['TICK_ID'], amount)){
-            _warnOnce('XBRIDGE', id, SETTLE_REASON.ESCROW_SHORT,
+            warnOnce('XBRIDGE', id, SETTLE_REASON.ESCROW_SHORT,
                       SETTLE_REASON.ESCROW_SHORT + ' at ' + escrow + ' : skipping');
             return out(false, SETTLE_REASON.ESCROW_SHORT);
         }
@@ -734,7 +734,7 @@ async function applyBridgeTransfer(row, ctx){
     data['ACTION_INDEX'] = await db.createActionIndex({ ACTION: 'XBRIDGE', BLOCK_INDEX: ctx.blockIndex, FORMAT: data['FORMAT'] });
     data['STATUS'] = 'valid';
 
-    _log('XBRIDGE v' + data['FORMAT'], id, (isInLeg ? 'mint ' : 'release ') + amount + ' ' +
+    log('XBRIDGE v' + data['FORMAT'], id, (isInLeg ? 'mint ' : 'release ') + amount + ' ' +
          localTick + ' -> ' + row.dest_address + ' : ' + data['STATUS']);
 
     await util.processTransactionLedgerChanges(db, data, credits, debits, []);
@@ -799,8 +799,8 @@ async function applyPolicySnapshot(row, ctx){
 
     const origin   = String(row.origin_chain || '');
     const name     = String(row.tick || '');
-    const snapshot = _int(row.snapshot_block);
-    const seq      = _int(row.policy_seq);
+    const snapshot = int(row.snapshot_block);
+    const seq      = int(row.policy_seq);
     if(!id || !origin || !name || snapshot === null || seq === null)
         return out(false, SETTLE_REASON.ROW_FIELDS, true);
 
@@ -812,7 +812,7 @@ async function applyPolicySnapshot(row, ctx){
     if(String(row.network || '') !== String(ctx.network || ''))
         return out(false, SETTLE_REASON.NETWORK, true);
     const localChainId = ctx.config ? ctx.config['BTC_CHAIN_ID'] : null;
-    if(!_isNull(row.btc_chain_id) && !_isNull(localChainId) &&
+    if(!isNull(row.btc_chain_id) && !isNull(localChainId) &&
        String(row.btc_chain_id) !== String(localChainId))
         return out(false, SETTLE_REASON.CHAIN_ID, true);
     if(String(row.status || '') !== 'finalized')
@@ -836,10 +836,10 @@ async function applyPolicySnapshot(row, ctx){
     // materializes the STALE membership last and leaves the copy enforcing a policy the origin
     // has already replaced, permanently. So an earlier finalized seq that this chain has not
     // recorded carries this row forward (D19: a missing earlier seq is CARRIED, never terminal).
-    const earlier = await db._mirrorDb().getEarlierFinalizedPolicySnapshots(row.network, origin, name, seq);
+    const earlier = await db.mirrorDb().getEarlierFinalizedPolicySnapshots(row.network, origin, name, seq);
     for(const e of (earlier || [])){
         if(!await isSettled(db, e.snapshot_id, 'policy')){
-            _log('XPOLICY', id, SETTLE_REASON.POLICY_SEQ_GAP + ' : carrying forward');
+            log('XPOLICY', id, SETTLE_REASON.POLICY_SEQ_GAP + ' : carrying forward');
             return out(false, SETTLE_REASON.POLICY_SEQ_GAP, false);
         }
     }
@@ -851,30 +851,30 @@ async function applyPolicySnapshot(row, ctx){
     const allow = parseMembership(row.allow_list);
     const block = parseMembership(row.block_list);
     if(allow === false || block === false){
-        _warnOnce('XPOLICY', id, SETTLE_REASON.POLICY_HASH,
+        warnOnce('XPOLICY', id, SETTLE_REASON.POLICY_HASH,
                   SETTLE_REASON.POLICY_HASH + ' (membership transport is not a JSON array) : terminal');
         return out(false, SETTLE_REASON.POLICY_HASH, true);
     }
     // Order is VERIFIED, never repaired (D13). Re-sorting here would silently accept a row
     // whose hash the fleet computed over a different byte string.
     if(!verifyMembershipOrder(allow) || !verifyMembershipOrder(block)){
-        _warnOnce('XPOLICY', id, SETTLE_REASON.POLICY_ORDER, SETTLE_REASON.POLICY_ORDER + ' : terminal');
+        warnOnce('XPOLICY', id, SETTLE_REASON.POLICY_ORDER, SETTLE_REASON.POLICY_ORDER + ' : terminal');
         return out(false, SETTLE_REASON.POLICY_ORDER, true);
     }
-    const sleeping = !!_int(row.sleeping);
+    const sleeping = !!int(row.sleeping);
     if(policyHash(allow, block, sleeping) !== String(row.policy_hash || '').toLowerCase()){
-        _warnOnce('XPOLICY', id, SETTLE_REASON.POLICY_HASH, SETTLE_REASON.POLICY_HASH + ' : terminal');
+        warnOnce('XPOLICY', id, SETTLE_REASON.POLICY_HASH, SETTLE_REASON.POLICY_HASH + ' : terminal');
         return out(false, SETTLE_REASON.POLICY_HASH, true);
     }
 
     const quorum = await verifyQuorum(policyCanonical(row), row.validator_signatures,
                                       snapshot, row.network, db);
     if(quorum.snapshotAbsent){
-        _log('XPOLICY', id, SETTLE_REASON.SNAPSHOT_ABSENT + ' : deferring');
+        log('XPOLICY', id, SETTLE_REASON.SNAPSHOT_ABSENT + ' : deferring');
         return out(false, SETTLE_REASON.SNAPSHOT_ABSENT, false);
     }
     if(!quorum.met){
-        _warnOnce('XPOLICY', id, SETTLE_REASON.QUORUM,
+        warnOnce('XPOLICY', id, SETTLE_REASON.QUORUM,
                   SETTLE_REASON.QUORUM + ' (' + quorum.valid + '/' + quorum.total + ') : terminal');
         return out(false, SETTLE_REASON.QUORUM, true);
     }
@@ -885,7 +885,7 @@ async function applyPolicySnapshot(row, ctx){
     const copyTick = origin + '.' + name;
     const owner    = ((ctx.config && ctx.config['ADDRESS']) || {})['BRIDGE_' + origin];
     const tickId   = await db.getTickerId(copyTick);
-    if(_isNull(tickId) || _isNull(owner))
+    if(isNull(tickId) || isNull(owner))
         return out(false, SETTLE_REASON.POLICY_NO_COPY, false);
     const info = await db.getTokenInfo(copyTick, ctx.blockIndex);
     if(!info)
@@ -930,7 +930,7 @@ async function applyPolicySnapshot(row, ctx){
     // turn it into deny-everyone (D7).
     const applyList = async (target, existingIndex, createOrRemoveOrdinal, addOrdinal) => {
         if(target === null) return { created: null };
-        if(_isNull(existingIndex)){
+        if(isNull(existingIndex)){
             const created = await inject(['LIST', '0', LIST_TYPE_ADDRESS, ''].concat(target), createOrRemoveOrdinal);
             if(!created || created['STATUS'] !== 'valid') return { created: false };
             return { created: Number(created['ACTION_INDEX']) };
@@ -965,10 +965,10 @@ async function applyPolicySnapshot(row, ctx){
     // and the invariant watch are what surface it.
     const legFailure = async (which) => {
         if(actionIndexes.length === 0){
-            _warn('XPOLICY', id, SETTLE_REASON.POLICY_LEG + ' (' + which + ') : nothing applied, carrying forward');
+            warn('XPOLICY', id, SETTLE_REASON.POLICY_LEG + ' (' + which + ') : nothing applied, carrying forward');
             return out(false, SETTLE_REASON.POLICY_LEG, false, actionIndexes);
         }
-        _warn('XPOLICY', id, SETTLE_REASON.POLICY_LEG + ' (' + which + ') : ' + actionIndexes.length +
+        warn('XPOLICY', id, SETTLE_REASON.POLICY_LEG + ' (' + which + ') : ' + actionIndexes.length +
               ' leg(s) already applied, recording so the pass cannot re-inject them');
         await recordSettlement(db, actionIndexes[actionIndexes.length - 1], id, 'policy', ctx.blockIndex,
                                { src_chain: origin, src_action_index: null, dest_chain: ctx.coin,
@@ -1037,7 +1037,7 @@ async function applyPolicySnapshot(row, ctx){
                            { src_chain: origin, src_action_index: null, dest_chain: ctx.coin,
                              dest_address: null, tick: name });
 
-    _log('XPOLICY', id, 'applied seq ' + seq + ' to ' + copyTick + ' (' + actionIndexes.length + ' legs)');
+    log('XPOLICY', id, 'applied seq ' + seq + ' to ' + copyTick + ' (' + actionIndexes.length + ' legs)');
     return out(true, null, false, actionIndexes);
 }
 
@@ -1172,7 +1172,7 @@ async function dueBridgeTransfers(ctx){
     const db   = ctx.indexerDb;
     // Bound by height in the admission era and by the clock below it (mirrorBindClause).
     const bind = mirrorBindClause(ctx);
-    const rows = await db._mirrorDb().getFinalizedBridgeTransfersForChain(ctx.network, ctx.coin, bind);
+    const rows = await db.mirrorDb().getFinalizedBridgeTransfersForChain(ctx.network, ctx.coin, bind);
     if(rows.length === 0) return [];
     const ids = rows.map(r => r.transfer_id);
     const settled = await db.getRecordedTransferSettlementIds(ids);
@@ -1186,19 +1186,19 @@ async function dueBridgeTransfers(ctx){
     // transfers behind it, the same reason the policy path records a snapshot that can no longer
     // progress. Deterministic: the set is a function of this chain's own bridge_settlements, so
     // every node replaying the same chain drops the same rows and applies the same slice.
-    const legChains = [...new Set(unsettled.filter(r => r.src_chain && _int(r.src_action_index) !== null)
+    const legChains = [...new Set(unsettled.filter(r => r.src_chain && int(r.src_action_index) !== null)
                                            .map(r => String(r.src_chain)))];
-    const legIndexes = [...new Set(unsettled.map(r => _int(r.src_action_index)).filter(v => v !== null))];
+    const legIndexes = [...new Set(unsettled.map(r => int(r.src_action_index)).filter(v => v !== null))];
     let settledLegs = new Set();
     if(legChains.length && legIndexes.length){
         const legRows = await db.getSettledBridgeSourceLegs(legChains, legIndexes);
         // Two IN lists select the cross product of the candidates' chains and indexes, so the
         // PAIR is matched here rather than trusted from the query: without this an applied leg
         // on one chain would suppress the same action index on another.
-        settledLegs = new Set((legRows || []).map(r => String(r.src_chain) + ':' + String(_int(r.src_action_index))));
+        settledLegs = new Set((legRows || []).map(r => String(r.src_chain) + ':' + String(int(r.src_action_index))));
     }
     return unsettled.filter(r => {
-                       const idx = _int(r.src_action_index);
+                       const idx = int(r.src_action_index);
                        // No usable source leg: left in the due set so the apply's ROW_FIELDS
                        // refusal is the one place that judges it.
                        if(!r.src_chain || idx === null) return true;
@@ -1224,7 +1224,7 @@ async function duePolicySnapshots(ctx){
     // THIS chain's column decides, and a row whose map never named this chain has that column
     // NULL and binds by the clock, which is C38's fail-closed direction for a chain added later.
     const bind = mirrorBindClause(ctx);
-    const rows = await db._mirrorDb().getFinalizedPolicySnapshots(ctx.network, bind);
+    const rows = await db.mirrorDb().getFinalizedPolicySnapshots(ctx.network, bind);
     if(rows.length === 0) return [];
 
     const groupRank = new Map();
@@ -1275,7 +1275,7 @@ module.exports = {
     resetRefusalMemo,
     // Test-only access to the refusal memo, so the bound and the dedupe rule can be driven
     // directly rather than by forcing 5000 real quorum verifications through applyBridgeTransfer.
-    _shouldLogRefusalForTest: _shouldLogRefusal,
+    _shouldLogRefusalForTest: shouldLogRefusal,
     _refusalMemoSizeForTest: () => _refusalMemo.size,
     SETTLE_REASON,
     POLICY_LEG_ORDINAL,

@@ -186,11 +186,11 @@ describe('tokens.lock_mint_supply backfill migration @regression @tier1', functi
 
     it('is gated mode=manual (the runner refuses a bare UPDATE on the auto path)', function () {
         const raw  = fs.readFileSync(MIG, 'utf8');
-        const mode = Database.prototype._migrationMode.call({}, raw);
+        const mode = Database.prototype.migrationMode.call({}, raw);
         assert.strictEqual(mode, 'manual');
         // Guard the reason it must be manual: the auto-apply classifier flags this UPDATE.
         const stmts = Database.prototype.splitSqlStatements.call(Database.prototype, raw);
-        assert.ok(Database.prototype._destructiveAutoStatement.call(Database.prototype, stmts),
+        assert.ok(Database.prototype.destructiveAutoStatement.call(Database.prototype, stmts),
             'a data-backfill UPDATE must be rejected by the auto-apply guard');
     });
 

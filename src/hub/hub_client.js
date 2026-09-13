@@ -163,7 +163,7 @@ class HubClient {
     // have to know which endpoint a method belongs to.
     async getAllConfigs(){
         if(!this.configEnabled) return null;
-        return this._call('getallconfigs', {}, this.configApiKey, this.configUrl);
+        return this.call('getallconfigs', {}, this.configApiKey, this.configUrl);
     }
 
     // Push a chain tip update to the hub (fire-and-forget). Network is
@@ -185,7 +185,7 @@ class HubClient {
                 block_time:   blockTime
             };
             if(chainId !== null && chainId !== undefined) params.chain_id = chainId;
-            await this._call('pushchaintip', params);
+            await this.call('pushchaintip', params);
         } catch (err) {
             // Best-effort: log and continue
             console.warn('HubClient: pushChainTip failed:', err);
@@ -196,13 +196,13 @@ class HubClient {
     // The hub deduplicates by round_number into the unified price_snapshots table
     async pushPriceRound(roundData){
         if(!this.enabled) return;
-        return this._push('pushpriceround', roundData);
+        return this.push('pushpriceround', roundData);
     }
 
     // Push a validated PRICE v1 user oracle price to the hub for cross-chain aggregation
     async pushOraclePrice(priceData){
         if(!this.enabled) return;
-        return this._push('pushoracleprice', priceData);
+        return this.push('pushoracleprice', priceData);
     }
 
     // Push a validated PRICE batch (a signed window of rounds) to the hub for cross-chain
@@ -214,7 +214,7 @@ class HubClient {
     // ~10 minutes a single round carries to ~70 minutes for a six-round window.
     async pushPriceBatch(batchData){
         if(!this.enabled) return;
-        return this._push('pushpricebatch', batchData);
+        return this.push('pushpricebatch', batchData);
     }
 
     // Push a validated ATTEST batch (a signed window of finalized attestation responses,
@@ -230,7 +230,7 @@ class HubClient {
     // the chain, so the hub verifies the same bytes this node verified.
     async pushAttestBatch(batchData){
         if(!this.enabled) return;
-        return this._push('pushattestbatch', batchData);
+        return this.push('pushattestbatch', batchData);
     }
 
     // Notify the hub that a reorg rolled back PRICE actions on this chain so it can
@@ -249,7 +249,7 @@ class HubClient {
         let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
         if(toActionIndex !== undefined && toActionIndex !== null) params.to_action_index = toActionIndex;
         if(retractionGeneration !== undefined && retractionGeneration !== null) params.retraction_generation = retractionGeneration;
-        return this._push('pushpricereorg', params, this.reorgApiKey);
+        return this.push('pushpricereorg', params, this.reorgApiKey);
     }
 
     // Notify the hub that a reorg rolled back XCALL request actions on this chain so it
@@ -267,7 +267,7 @@ class HubClient {
         let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
         if(toActionIndex !== undefined && toActionIndex !== null) params.to_action_index = toActionIndex;
         if(retractionGeneration !== undefined && retractionGeneration !== null) params.retraction_generation = retractionGeneration;
-        return this._push('pushxcallreorg', params, this.reorgApiKey);
+        return this.push('pushxcallreorg', params, this.reorgApiKey);
     }
 
     // Notify the hub that a reorg rolled back DEX ORDER actions on this chain so it can retract
@@ -285,7 +285,7 @@ class HubClient {
         let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
         if(toActionIndex !== undefined && toActionIndex !== null) params.to_action_index = toActionIndex;
         if(retractionGeneration !== undefined && retractionGeneration !== null) params.retraction_generation = retractionGeneration;
-        return this._push('pushdexreorg', params, this.reorgApiKey);
+        return this.push('pushdexreorg', params, this.reorgApiKey);
     }
 
     // Notify the hub that a reorg un-landed an ATTEST v5/v6 batch this chain carried, so
@@ -315,7 +315,7 @@ class HubClient {
             window_end:   retraction.window_end,
             action_index: retraction.action_index
         };
-        return this._push('retractattestbatch', params, this.reorgApiKey);
+        return this.push('retractattestbatch', params, this.reorgApiKey);
     }
 
     // Deliver one push and judge BOTH shapes a hub refusal arrives in: the in-result message
@@ -328,10 +328,10 @@ class HubClient {
     // error slot. Nothing downstream reads the value (HubPushQueue and XChainIndexer both
     // key on throw-versus-resolve alone), so the terminal verdict reaches them as the
     // delivered path and the queued row is dropped instead of replayed forever.
-    async _push(method, params, apiKeyOverride){
+    async push(method, params, apiKeyOverride){
         let result;
         try {
-            result = await this._call(method, params, apiKeyOverride);
+            result = await this.call(method, params, apiKeyOverride);
         } catch (err) {
             let reason = terminalHubRejection(err);
             if(reason === null) throw err;
@@ -342,7 +342,7 @@ class HubClient {
                 reason + '); dropping the queued row');
             return { error: reason };
         }
-        return this._requireHubAccepted(method, result);
+        return this.requireHubAccepted(method, result);
     }
 
     // Throw on an application-level hub rejection a retry could still clear, so the durable
@@ -352,7 +352,7 @@ class HubClient {
     // path did the same, which destroyed the only remaining copy of a price the hub had
     // just refused for a transient reason (no validator snapshot, a hub DB error, an
     // aggregator still booting). Returns the result untouched when there is nothing wrong.
-    _requireHubAccepted(method, result){
+    requireHubAccepted(method, result){
         let reason = hubRejectionReason(result);
         if(reason === null) return result;
         if(TERMINAL_HUB_REJECTIONS.some(rx => rx.test(reason))){
@@ -369,7 +369,7 @@ class HubClient {
     }
 
     // Make a JSON-RPC 2.0 call to the hub
-    _call(method, params, apiKeyOverride, urlOverride){
+    call(method, params, apiKeyOverride, urlOverride){
         return new Promise((settleResolve, settleReject) => {
             // Every exit runs through one latch, and the local `resolve`/`reject` below
             // ARE that latch: a hub that dies mid-body can fire several of the terminal

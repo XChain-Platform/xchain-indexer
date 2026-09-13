@@ -474,7 +474,7 @@ class Execute {
                         // the generic emission router (no decoder/parser exists for them).
                         // Handled inline: deduct stake, credit destination, write event log.
                         if(emission.action === 'SLASH'){
-                            await this._processSlashEmission(emission, data, i, slashLedger);
+                            await this.processSlashEmission(emission, data, i, slashLedger);
                         } else {
                             await this.processEmission(emission, data, i);
                             // Cross-contract callee finished: bank its unused
@@ -1074,7 +1074,7 @@ class Execute {
         // would be rejected by isValidAmountFormat (reverting e.g. every AMM swap) or stored
         // unrounded while the ledger rounds it (supply desync). This applies the SAME
         // normalization the ledger uses, so the two agree.
-        await this._truncateEmissionAmounts(action, params);
+        await this.truncateEmissionAmounts(action, params);
 
         // Build positional params array for the handler
         let actionParams = this.buildActionParams(action, params);
@@ -1334,7 +1334,7 @@ class Execute {
     // validated on the far chain. ISSUE uses its inline declared decimals (the tick is not in
     // the issues table yet). Driven by EMISSION_AMOUNT_FIELDS; keep that map in sync with
     // buildActionParams (enforced by the emission-map coverage test).
-    async _truncateEmissionAmounts(action, params){
+    async truncateEmissionAmounts(action, params){
         let fields = EMISSION_AMOUNT_FIELDS[action];
         if(!fields || !params) return params;
         for(let f of fields){
@@ -1364,7 +1364,7 @@ class Execute {
     // too: both call sites require the shared module rather than either one reaching
     // into the other handler's instance. It stays a method here so the EXECUTE path
     // below and its suites call the writer with this handler as the receiver.
-    async _processSlashEmission(emission, data, slashPosition, slashLedger){
+    async processSlashEmission(emission, data, slashPosition, slashLedger){
         return slashEmission.processSlashEmission.call(this, emission, data, slashPosition, slashLedger);
     }
 }

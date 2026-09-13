@@ -79,7 +79,7 @@ function makeDryRunCtx({ contaminate = true, feeAmount = '1.00000000' } = {}){
             ctx._primaryVerdict = { status: 'valid', actionIndex: ORDER_INDEX };
             return { STATUS: 'pending_coinpay', ACTION_INDEX: MATCH_INDEX };
         },
-        _dryRunAction: Actions.prototype._dryRunAction
+        dryRunAction: Actions.prototype.dryRunAction
     };
     ctx.config['BLOCK_PROCESS_TIMEOUT'] = 300000;
     return { ctx, calls };
@@ -110,7 +110,7 @@ describe('a fee quote answers for the action it was asked about', () => {
 
     it('[REGRESSION] reports the ORDER\'s verdict, not the match it triggered', async () => {
         let { ctx } = makeDryRunCtx();
-        let r = await ctx._dryRunAction.call(ctx, {
+        let r = await ctx.dryRunAction.call(ctx, {
             action: 'ORDER', params: ['0', 'LTC', '', '0.5', '', 'LTC', 'XCHAIN', '100'],
             source: 'taker', timeoutMs: 300000,
         });
@@ -121,7 +121,7 @@ describe('a fee quote answers for the action it was asked about', () => {
 
     it('[REGRESSION] reads the fee row of the ORDER, not of the match', async () => {
         let { ctx, calls } = makeDryRunCtx();
-        let r = await ctx._dryRunAction.call(ctx, {
+        let r = await ctx.dryRunAction.call(ctx, {
             action: 'ORDER', params: ['0'], source: 'taker', timeoutMs: 300000,
         });
         assert.strictEqual(calls.feeRecordFor, ORDER_INDEX,
@@ -132,7 +132,7 @@ describe('a fee quote answers for the action it was asked about', () => {
 
     it('an uncontaminated run is unchanged: the record\'s own status and index are used', async () => {
         let { ctx, calls } = makeDryRunCtx({ contaminate: false });
-        let r = await ctx._dryRunAction.call(ctx, {
+        let r = await ctx.dryRunAction.call(ctx, {
             action: 'ISSUE', params: ['0', 'TOK', '1000'], source: 'src', timeoutMs: 300000,
         });
         assert.strictEqual(r.status, 'valid');
@@ -148,7 +148,7 @@ describe('a fee quote answers for the action it was asked about', () => {
         };
         // A refused handler stages no fee row, which is what makes xchainFee null.
         ctx.indexerDb.getFeeRecord = async () => null;
-        let r = await ctx._dryRunAction.call(ctx, {
+        let r = await ctx.dryRunAction.call(ctx, {
             action: 'ORDER', params: ['0'], source: 'taker', timeoutMs: 300000,
         });
         assert.strictEqual(r.status, 'invalid: insufficient funds (GIVE_AMOUNT)',

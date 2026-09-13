@@ -28,7 +28,7 @@ module.exports = {
     // that field is the only signal of a stalled rail now that pushes retry without a cap,
     // because a stall shows up as an AGEING pending backlog, not a climbing failed count.
     async getHubPushQueueStats(){
-        return await this._poolQuery(
+        return await this.poolQuery(
             `SELECT status, COUNT(*) AS cnt,
                     TIMESTAMPDIFF(SECOND, MIN(created_at), NOW()) AS oldest_age_sec
                FROM pending_hub_pushes GROUP BY status`
@@ -80,7 +80,7 @@ module.exports = {
                         : ((payload && payload.action_index != null) ? payload.action_index : 0);
         let query = `INSERT INTO pending_hub_pushes (push_type, action_index, payload, status, attempts, created_at)
                      VALUES (?, ?, ?, 'pending', 0, NOW())`;
-        await this._poolQuery(query, [pushType, actionIndex, JSON.stringify(payload)]);
+        await this.poolQuery(query, [pushType, actionIndex, JSON.stringify(payload)]);
     },
 
     // Like enqueueHubPush, but routes through the OPEN transaction connection (doQuery, not
@@ -127,12 +127,12 @@ module.exports = {
                             OR last_attempted_at <= DATE_SUB(NOW(), INTERVAL LEAST(? * POW(2, GREATEST(attempts - 1, 0)), ?) SECOND))
                      ORDER BY id ASC
                      LIMIT ?`;
-        return await this._poolQuery(query, [baseSec, maxSec, max]);
+        return await this.poolQuery(query, [baseSec, maxSec, max]);
     },
 
     // Drop a row once the hub has accepted it (delivered rows aren't retained).
     async markHubPushDelivered(id){
-        await this._poolQuery('DELETE FROM pending_hub_pushes WHERE id=?', [id]);
+        await this.poolQuery('DELETE FROM pending_hub_pushes WHERE id=?', [id]);
     },
 
     // Delete terminal `failed` rows older than maxAgeSeconds and report how many
@@ -148,7 +148,7 @@ module.exports = {
     async pruneFailedHubPushes(maxAgeSeconds){
         let age = Number(maxAgeSeconds);
         if(!Number.isFinite(age) || age <= 0) return 0;
-        let res = await this._poolQuery(
+        let res = await this.poolQuery(
             `DELETE FROM pending_hub_pushes
                      WHERE status = 'failed'
                        AND COALESCE(last_attempted_at, created_at) <= DATE_SUB(NOW(), INTERVAL ? SECOND)`,
@@ -169,7 +169,7 @@ module.exports = {
                          last_error = ?,
                          status = IF(attempts + 1 >= ?, 'failed', 'pending')
                      WHERE id = ?`;
-        await this._poolQuery(query, [errMsg, max, id]);
+        await this.poolQuery(query, [errMsg, max, id]);
     },
 
 };

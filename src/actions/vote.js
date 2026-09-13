@@ -68,17 +68,17 @@ class Vote {
 
         // Dispatch to the version-specific handler
         if(format===0)
-            await this._parseCreate(data, error);
+            await this.parseCreate(data, error);
         else if(format===1)
-            await this._parseBallot(data, error);
+            await this.parseBallot(data, error);
         else if(format===2)
-            await this._parseFinalize(data, error);
+            await this.parseFinalize(data, error);
         else if(format===3)
-            await this._parseDelegate(data, error);
+            await this.parseDelegate(data, error);
     }
 
     // VOTE v0 - create poll
-    async _parseCreate(data, error){
+    async parseCreate(data, error){
         // Apply poll defaults before validation/storage
         if(this.util.isNull(data['MAX_SELECTIONS'])) data['MAX_SELECTIONS'] = '1';
         if(this.util.isNull(data['TALLY_MODE']))     data['TALLY_MODE']     = 'approval';
@@ -326,7 +326,7 @@ class Vote {
     }
 
     // VOTE v1 - cast ballot
-    async _parseBallot(data, error){
+    async parseBallot(data, error){
         let block_index  = parseInt(data['BLOCK_INDEX']);
         let action_index = data['ACTION_INDEX'];
         let selections   = [];
@@ -426,7 +426,7 @@ class Vote {
     // pure deterministic function of already-agreed on-chain state (the votes
     // ledger + getHolders at the close block), so every node computes the same
     // result locally with no consensus round.
-    async _parseFinalize(data, error){
+    async parseFinalize(data, error){
         // System-synthesized only. The decoder accepts VOTE in VALID_ACTION_NAMES,
         // but a user-broadcast VOTE|2 cannot legitimately finalize a poll; reject it
         // (mirrors attest.js:454).
@@ -459,7 +459,7 @@ class Vote {
         // Release any creation deposit per the terminal outcome: refund the creator
         // on a real result, forfeit to the DONATE1 treasury on failed_quorum.
         if(result)
-            await this._settleDeposit(poll, data, result.poll_status);
+            await this.settleDeposit(poll, data, result.poll_status);
 
         // Binding poll (Section 14): fire the contract callback when its CALLBACK_ON
         // gate is met - 'always' on any finalization, 'pass' only on a finalized win.
@@ -480,7 +480,7 @@ class Vote {
                     await this.indexerDb.setPollCallbackDue(poll.action_index, dueBlock);
                     console.log("\t VOTE callback : poll " + poll.action_index + ' timelocked, due at block ' + dueBlock);
                 } else {
-                    let cbIndex = await this._injectCallbackExecute(poll, data, result);
+                    let cbIndex = await this.injectCallbackExecute(poll, data, result);
                     if(cbIndex) await this.indexerDb.setPollCallbackIndex(poll.action_index, cbIndex);
                 }
             }
@@ -504,7 +504,7 @@ class Vote {
     // idiom); the matching credit routes the funds. No-op when the poll carried no
     // deposit. deposit_resolved records the outcome so a reprocessed finalize
     // cannot double-release.
-    async _settleDeposit(poll, data, terminalStatus){
+    async settleDeposit(poll, data, terminalStatus){
         let deposit   = String((poll && poll.deposit_amount) || '0');
         let gasEscrow = String((poll && poll.gas_escrow) || '0');
         let held      = this.util.bcadd(deposit, gasEscrow, 8); // combined v0 escrow
@@ -576,7 +576,7 @@ class Vote {
                 ACTION_INDEX: poll.finalized_action_index,
                 IS_SYNTHETIC: true
             };
-            let cbIndex = await this._injectCallbackExecute(poll, data, result);
+            let cbIndex = await this.injectCallbackExecute(poll, data, result);
             if(cbIndex) await this.indexerDb.setPollCallbackIndex(poll.action_index, cbIndex);
         }
     }
@@ -590,7 +590,7 @@ class Vote {
     // (SOURCE = contract address). A callback that reverts, runs out of gas, or
     // throws does NOT un-finalize the poll: the savepoint isolates its effects and
     // the recorded poll result stands.
-    async _injectCallbackExecute(poll, data, result){
+    async injectCallbackExecute(poll, data, result){
         if(!this.actions.actionExecute) return null;
 
         let callbackParams = [];
@@ -691,7 +691,7 @@ class Vote {
     // DELEGATE_TO clears it. Delegation is resolved at each poll's close
     // (db.getPollTally): one hop, a direct vote overrides it, and the delegator
     // must still hold TICK at close for their weight to flow.
-    async _parseDelegate(data, error){
+    async parseDelegate(data, error){
         let block_index  = parseInt(data['BLOCK_INDEX']);
         let action_index = data['ACTION_INDEX'];
 

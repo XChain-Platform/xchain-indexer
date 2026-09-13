@@ -67,24 +67,24 @@ describe('EQUIV XCALL canonical (WI-2 bump 2)', function () {
 
     it('dispatch below the flag-day (mainnet) → bare bytes', function () {
         const raw = RAW_D.replace('|100|regtest|', '|5|mainnet|');
-        assert.strictEqual(xexec._canonical(dispatchRow('mainnet', 5, 0)), raw);
+        assert.strictEqual(xexec.canonical(dispatchRow('mainnet', 5, 0)), raw);
     });
 
     it('dispatch at/above the flag-day → header-wrapped (ROUND_ID folds in phase, VIEW=finalizing_view)', function () {
         const rid = sha('XCALLROUND|dispatch|' + CID);
-        assert.strictEqual(xexec._canonical(dispatchRow('regtest', 100, 0)), 'EQUIV|XCALL|' + rid + '|0||' + RAW_D);
-        assert.strictEqual(xexec._canonical(dispatchRow('regtest', 100, 2)), 'EQUIV|XCALL|' + rid + '|2||' + RAW_D);
+        assert.strictEqual(xexec.canonical(dispatchRow('regtest', 100, 0)), 'EQUIV|XCALL|' + rid + '|0||' + RAW_D);
+        assert.strictEqual(xexec.canonical(dispatchRow('regtest', 100, 2)), 'EQUIV|XCALL|' + rid + '|2||' + RAW_D);
     });
 
     it('result at/above the flag-day → header-wrapped with its OWN round id', function () {
         const rid = sha('XCALLROUND|result|' + CID);
-        assert.strictEqual(xcall._resultCanonical(resultRow('regtest', 100, 0)), 'EQUIV|XCALL|' + rid + '|0||' + RAW_R);
+        assert.strictEqual(xcall.resultCanonical(resultRow('regtest', 100, 0)), 'EQUIV|XCALL|' + rid + '|0||' + RAW_R);
     });
 
     it('dispatch and result of the same call carry DISTINCT keys (no false equivocation)', function () {
         const keyOf = (c) => c.slice('EQUIV|'.length, c.indexOf('||'));
-        const kd = keyOf(xexec._canonical(dispatchRow('regtest', 100, 0)));
-        const kr = keyOf(xcall._resultCanonical(resultRow('regtest', 100, 0)));
+        const kd = keyOf(xexec.canonical(dispatchRow('regtest', 100, 0)));
+        const kr = keyOf(xcall.resultCanonical(resultRow('regtest', 100, 0)));
         assert.notStrictEqual(kd, kr);
         assert.strictEqual(kd, 'XCALL|' + sha('XCALLROUND|dispatch|' + CID) + '|0');
         assert.strictEqual(kr, 'XCALL|' + sha('XCALLROUND|result|' + CID) + '|0');
@@ -95,13 +95,13 @@ describe('EQUIV XCALL canonical (WI-2 bump 2)', function () {
         // a process that happened to be launched unarmed, and shows the era gate is wired
         // into both twins rather than one.
         const cols = { admit_block_btc: 104, admit_block_ltc: 404 };
-        assert.throws(() => xexec._canonical(Object.assign(dispatchRow('regtest', 100, 0), cols)),
+        assert.throws(() => xexec.canonical(Object.assign(dispatchRow('regtest', 100, 0), cols)),
                       /refusing to build an admission-era canonical/);
-        assert.throws(() => xcall._resultCanonical(Object.assign(resultRow('regtest', 100, 0), cols)),
+        assert.throws(() => xcall.resultCanonical(Object.assign(resultRow('regtest', 100, 0), cols)),
                       /refusing to build an admission-era canonical/);
         // NULL columns are the legacy row, byte for byte.
         const nulls = { admit_block_btc: null, admit_block_ltc: null, admit_block_doge: null };
-        assert.strictEqual(xexec._canonical(Object.assign(dispatchRow('regtest', 100, 0), nulls)),
-                           xexec._canonical(dispatchRow('regtest', 100, 0)));
+        assert.strictEqual(xexec.canonical(Object.assign(dispatchRow('regtest', 100, 0), nulls)),
+                           xexec.canonical(dispatchRow('regtest', 100, 0)));
     });
 });

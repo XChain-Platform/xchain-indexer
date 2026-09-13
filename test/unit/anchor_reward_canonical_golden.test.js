@@ -121,7 +121,7 @@ describe('XANCPUB reward canonical: derive copy vs the frozen wire format @regre
         // pair that must agree or the BTC-side re-verification never matches the DOGE-side
         // attestation and the reward silently never derives, fleet-wide.
         const Anchor = require('../../src/actions/anchor/index.js');
-        const parseSide = Anchor.prototype._rewardCanonical.call({}, {
+        const parseSide = Anchor.prototype.rewardCanonical.call({}, {
             FORMAT: 7, NETWORK: 'regtest', SNAPSHOT_BLOCK: 100, PUBLISHER: PUBLISHER
         });
         assert.strictEqual(

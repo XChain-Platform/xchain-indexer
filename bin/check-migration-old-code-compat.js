@@ -320,7 +320,7 @@ async function main(){
         const conn = await db.getConnection();
         // The product's own ledger DDL, not a copy: a hand-written copy omitted the
         // `mode` column and the migrator then failed on its own bookkeeping insert.
-        try { await db._ensureMigrationsLedger(conn); }
+        try { await db.ensureMigrationsLedger(conn); }
         finally { await conn.release(); }
     }
     for(const f of oldFiles){

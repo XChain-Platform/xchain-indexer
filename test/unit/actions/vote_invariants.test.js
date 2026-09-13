@@ -79,7 +79,7 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
             const p    = poll();
             const data = createBaseData({ ACTION: 'VOTE', FORMAT: 2, ACTION_INDEX: 100 });
 
-            await handler._settleDeposit(p, data, 'finalized');
+            await handler.settleDeposit(p, data, 'finalized');
 
             assert.ok(indexer.indexerDb.createEscrow.calledOnce, 'one combined escrow release row');
             const [, escTick, escAmount, escAddr] = indexer.indexerDb.createEscrow.firstCall.args;
@@ -102,7 +102,7 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
             const p    = poll();
             const data = createBaseData({ ACTION: 'VOTE', FORMAT: 2, ACTION_INDEX: 100 });
 
-            await handler._settleDeposit(p, data, 'failed_quorum');
+            await handler.settleDeposit(p, data, 'failed_quorum');
 
             const [, , escAmount] = indexer.indexerDb.createEscrow.firstCall.args;
             assert.strictEqual(Number(String(escAmount)), -120, 'the full 100+20 hold is still released');
@@ -125,7 +125,7 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
             const p    = poll({ deposit_resolved: 'refunded' });
             const data = createBaseData({ ACTION: 'VOTE', FORMAT: 2, ACTION_INDEX: 100 });
 
-            await handler._settleDeposit(p, data, 'finalized');
+            await handler.settleDeposit(p, data, 'finalized');
 
             assert.ok(indexer.indexerDb.createEscrow.notCalled, 'no double release of an already-resolved deposit');
             assert.ok(indexer.indexerDb.createCredit.notCalled);
@@ -136,7 +136,7 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
             const p    = poll({ deposit_amount: '0', gas_escrow: '0' });
             const data = createBaseData({ ACTION: 'VOTE', FORMAT: 2, ACTION_INDEX: 100 });
 
-            await handler._settleDeposit(p, data, 'finalized');
+            await handler.settleDeposit(p, data, 'finalized');
 
             assert.ok(indexer.indexerDb.createEscrow.notCalled);
             assert.ok(indexer.indexerDb.setPollDepositResolved.notCalled);
@@ -481,7 +481,7 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
                 const p = terminalPoll({ callback_delay_blocks: 25 });
                 stubFinalize(p, WIN);
 
-                await handler._parseFinalize(finalizeData(), null);
+                await handler.parseFinalize(finalizeData(), null);
 
                 assert.ok(indexer.indexerDb.setPollCallbackDue.calledOnceWith(100, 185), 'due block = finalize block 160 + 25');
                 assert.ok(executeStub.parse.notCalled, 'no EXECUTE in the finalization block');
@@ -492,7 +492,7 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
                 const p = terminalPoll({ callback_delay_blocks: null });
                 stubFinalize(p, WIN);
 
-                await handler._parseFinalize(finalizeData(), null);
+                await handler.parseFinalize(finalizeData(), null);
 
                 assert.ok(executeStub.parse.calledOnce, 'immediate EXECUTE injection');
                 assert.ok(indexer.indexerDb.setPollCallbackDue.notCalled);

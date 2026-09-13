@@ -43,7 +43,7 @@ class UtxoTracker {
     }
 
     // POST a JSON-RPC request and return responseData.result, or throw.
-    async _call(method, params){
+    async call(method, params){
         if(!this.enabled)
             throw new Error('UTXO tracker not configured (UTXO_TRACKER_URL / UTXO_TRACKER_API_PORT)');
 
@@ -88,7 +88,7 @@ class UtxoTracker {
     // them would move verdicts that were never fail-open.
     async getFirstSeen(address, opts){
         let strictShape = !!(opts && opts.strictShape);
-        let result = await this._call('get_first_seen', { address: address });
+        let result = await this.call('get_first_seen', { address: address });
         if(result === null || result === undefined)
             return null;
         if(typeof result.height !== 'number'){
@@ -108,7 +108,7 @@ class UtxoTracker {
     // caller decides what to do about that, and the one caller today is a
     // swallow-everything diagnostic.
     async getFirstSeenStatus(address){
-        let result    = await this._call('get_first_seen_status', { address: address });
+        let result    = await this.call('get_first_seen_status', { address: address });
         let raw       = (result && result.first_seen) || null;
         let firstSeen = (raw && typeof raw.height === 'number') ? { height: raw.height } : null;
         return { firstSeen: firstSeen, sync: (result && result.sync) || null };

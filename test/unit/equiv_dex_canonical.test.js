@@ -39,17 +39,17 @@ describe('EQUIV DEX canonical (WI-2 bump 2)', function () {
     it('below the flag-days (mainnet) → bare XMATCH bytes (regression-safe)', function () {
         const m = rowAt('mainnet', 5, 0);
         const raw = RAW.replace('|regtest|', '|mainnet|').replace('|100|', '|5|');
-        assert.strictEqual(settle._canonical(m), raw);
+        assert.strictEqual(settle.canonical(m), raw);
     });
 
     it('at/above the flag-day (regtest) → header-wrapped with VIEW=finalizing_view', function () {
-        assert.strictEqual(settle._canonical(rowAt('regtest', 100, 0)), 'EQUIV|XDEX|abc|0||' + RAWL);
-        assert.strictEqual(settle._canonical(rowAt('regtest', 100, 2)), 'EQUIV|XDEX|abc|2||' + RAWL);
+        assert.strictEqual(settle.canonical(rowAt('regtest', 100, 0)), 'EQUIV|XDEX|abc|0||' + RAWL);
+        assert.strictEqual(settle.canonical(rowAt('regtest', 100, 2)), 'EQUIV|XDEX|abc|2||' + RAWL);
     });
 
     it('R-3: a higher finalizing_view yields DIFFERENT bytes + a different equivocation key', function () {
-        const v0 = settle._canonical(rowAt('regtest', 100, 0));
-        const v1 = settle._canonical(rowAt('regtest', 100, 1));
+        const v0 = settle.canonical(rowAt('regtest', 100, 0));
+        const v1 = settle.canonical(rowAt('regtest', 100, 1));
         assert.notStrictEqual(v0, v1);
         const keyOf = (c) => c.slice('EQUIV|'.length, c.indexOf('||'));
         assert.strictEqual(keyOf(v0), 'XDEX|abc|0');
@@ -58,15 +58,15 @@ describe('EQUIV DEX canonical (WI-2 bump 2)', function () {
 
     it('matches buildEquivCanonical(XDEX, match_id, view, raw)', function () {
         const expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.DEX, 'abc', 3, RAWL);
-        assert.strictEqual(settle._canonical(rowAt('regtest', 100, 3)), expected);
+        assert.strictEqual(settle.canonical(rowAt('regtest', 100, 3)), expected);
     });
 
     it('CROSS_CHAIN_ROYALTY: non-null legs are signed into the canonical bytes', function () {
         const legs = JSON.stringify([{ to: 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM', bps: 500 }]);
         const m = rowAt('regtest', 100, 0);
         m.b_payout_legs = legs;
-        assert.strictEqual(settle._canonical(m), 'EQUIV|XDEX|abc|0||' + RAW + '||' + legs);
+        assert.strictEqual(settle.canonical(m), 'EQUIV|XDEX|abc|0||' + RAW + '||' + legs);
         // Stripping the legs changes the signed bytes → prior signatures stop verifying.
-        assert.notStrictEqual(settle._canonical(m), settle._canonical(rowAt('regtest', 100, 0)));
+        assert.notStrictEqual(settle.canonical(m), settle.canonical(rowAt('regtest', 100, 0)));
     });
 });

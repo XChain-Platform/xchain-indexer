@@ -87,8 +87,8 @@ function makeCtx({ status = 'valid', actionIndex = 55, feeAmount = '1.00000000',
             if(processHangs) return new Promise(() => {});   // never resolves: the watchdog must fire
             return { STATUS: status, ACTION_INDEX: actionIndex };
         },
-        _dryRunAction:         Actions.prototype._dryRunAction,
-        _priceFeeQuote:        Actions.prototype._priceFeeQuote,
+        dryRunAction:         Actions.prototype.dryRunAction,
+        priceFeeQuote:        Actions.prototype.priceFeeQuote,
         computeFeeQuoteDryRun: Actions.prototype.computeFeeQuoteDryRun
     };
     ctx.config['BLOCK_PROCESS_TIMEOUT'] = 300000;
@@ -101,7 +101,7 @@ describe('_dryRunAction (shared dry-run engine)', () => {
 
     it('valid action: one balanced transaction, fee row read INSIDE it, handler fee extracted', async () => {
         let { ctx, calls } = makeCtx({ status: 'valid' });
-        let r = await ctx._dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK', '1000'], source: 'src1', timeoutMs: 300000 });
+        let r = await ctx.dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK', '1000'], source: 'src1', timeoutMs: 300000 });
         assert.strictEqual(r.status, 'valid');
         assert.strictEqual(r.error, null);
         assert.strictEqual(r.xchainFee, '1.00000000', 'handler-staged fee extracted');
@@ -116,7 +116,7 @@ describe('_dryRunAction (shared dry-run engine)', () => {
 
     it('injects an oversized probe fee output when none supplied and a destination is given', async () => {
         let { ctx, calls } = makeCtx({});
-        await ctx._dryRunAction.call(ctx, { action: 'SEND', params: ['0', 'T', '1', 'd'], source: 's', probeFeeDestination: FEE_DEST, timeoutMs: 300000 });
+        await ctx.dryRunAction.call(ctx, { action: 'SEND', params: ['0', 'T', '1', 'd'], source: 's', probeFeeDestination: FEE_DEST, timeoutMs: 300000 });
         assert.strictEqual(calls.processed.tx_outputs.length, 1);
         assert.strictEqual(calls.processed.tx_outputs[0].address, FEE_DEST);
         assert.ok(Number(calls.processed.tx_outputs[0].value) >= 21000000, 'probe exceeds any band');
@@ -125,7 +125,7 @@ describe('_dryRunAction (shared dry-run engine)', () => {
     it('caller-supplied feeOutputs pass through untouched (no probe injection)', async () => {
         let { ctx, calls } = makeCtx({});
         let outs = [{ address: 'someAddr', value: '0.00001900' }];
-        await ctx._dryRunAction.call(ctx, { action: 'SEND', params: ['0', 'T', '1', 'd'], source: 's', feeOutputs: outs, probeFeeDestination: FEE_DEST, timeoutMs: 300000 });
+        await ctx.dryRunAction.call(ctx, { action: 'SEND', params: ['0', 'T', '1', 'd'], source: 's', feeOutputs: outs, probeFeeDestination: FEE_DEST, timeoutMs: 300000 });
         assert.deepStrictEqual(calls.processed.tx_outputs, outs);
     });
 
@@ -137,7 +137,7 @@ describe('_dryRunAction (shared dry-run engine)', () => {
         // every Mode B dispenser quotes `invalid: ORACLE_ADDRESS (missing oracle fee
         // output)` - a refusal whose remedy is the amount the refused quote computes.
         let { ctx, calls } = makeCtx({});
-        await ctx._dryRunAction.call(ctx, { action: 'DISPENSER', params: ['0'], source: 's',
+        await ctx.dryRunAction.call(ctx, { action: 'DISPENSER', params: ['0'], source: 's',
             probeFeeDestination: FEE_DEST, feeProbe: true, timeoutMs: 300000 });
         assert.strictEqual(calls.processed.fee_probe, true);
     });
@@ -146,7 +146,7 @@ describe('_dryRunAction (shared dry-run engine)', () => {
         // The raw regtest RPC exists to reproduce what a real broadcast would do with the
         // outputs it was handed, so it must keep failing on a missing oracle fee output.
         let { ctx, calls } = makeCtx({});
-        await ctx._dryRunAction.call(ctx, { action: 'DISPENSER', params: ['0'], source: 's',
+        await ctx.dryRunAction.call(ctx, { action: 'DISPENSER', params: ['0'], source: 's',
             feeOutputs: [], timeoutMs: 300000 });
         assert.strictEqual(calls.processed.fee_probe, false);
     });
@@ -168,13 +168,13 @@ describe('_dryRunAction (shared dry-run engine)', () => {
 
     it('no probe destination and no outputs: synthetic tx carries an empty output set', async () => {
         let { ctx, calls } = makeCtx({});
-        await ctx._dryRunAction.call(ctx, { action: 'SEND', params: ['0', 'T', '1', 'd'], source: 's', timeoutMs: 300000 });
+        await ctx.dryRunAction.call(ctx, { action: 'SEND', params: ['0', 'T', '1', 'd'], source: 's', timeoutMs: 300000 });
         assert.deepStrictEqual(calls.processed.tx_outputs, []);
     });
 
     it('class-B invalid: handler reason in status, fee null when no row was staged', async () => {
         let { ctx, calls } = makeCtx({ status: 'invalid: insufficient funds', feeAmount: null });
-        let r = await ctx._dryRunAction.call(ctx, { action: 'SEND', params: ['0', 'TOK', '999', 'dest'], source: 'src1', timeoutMs: 300000 });
+        let r = await ctx.dryRunAction.call(ctx, { action: 'SEND', params: ['0', 'TOK', '999', 'dest'], source: 'src1', timeoutMs: 300000 });
         assert.strictEqual(r.status, 'invalid: insufficient funds');
         assert.strictEqual(r.xchainFee, null, 'fee unknowable for a rejected action');
         assert.strictEqual(calls.rollback, 1, 'invalid action still rolls back');
@@ -182,14 +182,14 @@ describe('_dryRunAction (shared dry-run engine)', () => {
 
     it('valid zero-fee action (no fee row): xchainFee is "0"', async () => {
         let { ctx } = makeCtx({ status: 'valid', feeAmount: null });
-        let r = await ctx._dryRunAction.call(ctx, { action: 'MINT', params: ['0', 'TOK'], source: 'src1', timeoutMs: 300000 });
+        let r = await ctx.dryRunAction.call(ctx, { action: 'MINT', params: ['0', 'TOK'], source: 'src1', timeoutMs: 300000 });
         assert.strictEqual(r.xchainFee, '0');
     });
 
     it('fresh (never-indexed) source is dry-run normally: dense in-txn ids roll back cleanly', async () => {
         // No getAddressId gate exists any more; the engine must not require one.
         let { ctx, calls } = makeCtx({ status: 'invalid: insufficient funds', feeAmount: null });
-        let r = await ctx._dryRunAction.call(ctx, { action: 'SEND', params: ['0', 'T', '1', 'd'], source: 'neverSeenAddr', timeoutMs: 300000 });
+        let r = await ctx.dryRunAction.call(ctx, { action: 'SEND', params: ['0', 'T', '1', 'd'], source: 'neverSeenAddr', timeoutMs: 300000 });
         assert.strictEqual(calls.begin, 1, 'transaction opened for a fresh source');
         assert.strictEqual(r.status, 'invalid: insufficient funds', 'handler judged it');
     });
@@ -200,7 +200,7 @@ describe('_dryRunAction (shared dry-run engine)', () => {
 
         it('reads the balance inside the transaction, BEFORE the handler runs', async () => {
             let { ctx, calls } = makeCtx({ status: 'valid' });
-            let r = await ctx._dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'payer',
+            let r = await ctx.dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'payer',
                                                         feeBalanceTick: 'XCHAIN', timeoutMs: 300000 });
             assert.strictEqual(r.sourceFeeBalance, '19898');
             assert.deepStrictEqual(calls.order,
@@ -212,7 +212,7 @@ describe('_dryRunAction (shared dry-run engine)', () => {
 
         it('an address the ledger has never seen holds zero (no id, no balance query)', async () => {
             let { ctx, calls } = makeCtx({ status: 'valid', addressId: null });
-            let r = await ctx._dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'freshAddr',
+            let r = await ctx.dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'freshAddr',
                                                         feeBalanceTick: 'XCHAIN', timeoutMs: 300000 });
             assert.strictEqual(r.sourceFeeBalance, '0');
             assert.ok(calls.order.indexOf('getAddressBalances:7') === -1, 'nothing to look up');
@@ -221,21 +221,21 @@ describe('_dryRunAction (shared dry-run engine)', () => {
 
         it('an indexed address with no XCHAIN row reports 0, not null', async () => {
             let { ctx } = makeCtx({ status: 'valid', addressBalances: { 9: '5' } });
-            let r = await ctx._dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'payer',
+            let r = await ctx.dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'payer',
                                                         feeBalanceTick: 'XCHAIN', timeoutMs: 300000 });
             assert.strictEqual(r.sourceFeeBalance, '0');
         });
 
         it('an unknown fee tick is null (unknown), never a fabricated zero', async () => {
             let { ctx } = makeCtx({ status: 'valid', tickId: null });
-            let r = await ctx._dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'payer',
+            let r = await ctx.dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'payer',
                                                         feeBalanceTick: 'NOSUCH', timeoutMs: 300000 });
             assert.strictEqual(r.sourceFeeBalance, null);
         });
 
         it('is skipped entirely when the caller does not ask for it', async () => {
             let { ctx, calls } = makeCtx({ status: 'valid' });
-            let r = await ctx._dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'payer', timeoutMs: 300000 });
+            let r = await ctx.dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'payer', timeoutMs: 300000 });
             assert.strictEqual(r.sourceFeeBalance, null);
             assert.deepStrictEqual(calls.order, ['begin', 'process', 'getFeeRecord:55', 'rollback'],
                 'no extra reads on the fee-quote path');
@@ -243,7 +243,7 @@ describe('_dryRunAction (shared dry-run engine)', () => {
 
         it('a failing balance read degrades to null and leaves the verdict untouched', async () => {
             let { ctx, calls } = makeCtx({ status: 'valid', balanceThrows: true });
-            let r = await ctx._dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'payer',
+            let r = await ctx.dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'payer',
                                                         feeBalanceTick: 'XCHAIN', timeoutMs: 300000 });
             assert.strictEqual(r.sourceFeeBalance, null, 'advisory field degrades');
             assert.strictEqual(r.status, 'valid', 'the handler verdict still stands');
@@ -254,7 +254,7 @@ describe('_dryRunAction (shared dry-run engine)', () => {
 
     it('bounds a hung handler with the caller timeout and releases the lock', async () => {
         let { ctx, calls } = makeCtx({ processHangs: true });
-        let r = await ctx._dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'src1', timeoutMs: 50, label: 'feequote ISSUE' });
+        let r = await ctx.dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'src1', timeoutMs: 50, label: 'feequote ISSUE' });
         assert.ok(/timeout|exceeded/i.test(r.error), 'error reports the watchdog timeout: ' + r.error);
         assert.strictEqual(r.status, null);
         assert.strictEqual(calls.begin, 1);
@@ -263,7 +263,7 @@ describe('_dryRunAction (shared dry-run engine)', () => {
 
     it('handler throws: rollback still runs in finally (no lock leak)', async () => {
         let { ctx, calls } = makeCtx({ processThrows: true });
-        let r = await ctx._dryRunAction.call(ctx, { action: 'EXECUTE', params: ['0', 'c'], source: 'src1', timeoutMs: 300000 });
+        let r = await ctx.dryRunAction.call(ctx, { action: 'EXECUTE', params: ['0', 'c'], source: 'src1', timeoutMs: 300000 });
         assert.ok(/handler threw/.test(r.error), 'error reports the throw');
         assert.strictEqual(calls.begin, 1, 'transaction was opened');
         assert.strictEqual(calls.rollback, 1, 'rollback runs in finally even on throw');

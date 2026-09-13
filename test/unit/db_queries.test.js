@@ -1954,22 +1954,22 @@ describe('Database._migrationMode() @regression @tier1', function () {
     beforeEach(function () { db = makeDb(); });
 
     it('returns "manual" when no tag present (conservative default)', function () {
-        assert.strictEqual(db._migrationMode('SELECT 1;'), 'manual');
+        assert.strictEqual(db.migrationMode('SELECT 1;'), 'manual');
     });
 
     it('returns "auto" for -- xchain:migration mode=auto tag', function () {
         const raw = '-- xchain:migration mode=auto\nALTER TABLE t ADD COLUMN x INT;';
-        assert.strictEqual(db._migrationMode(raw), 'auto');
+        assert.strictEqual(db.migrationMode(raw), 'auto');
     });
 
     it('returns "manual" for -- xchain:migration mode=manual tag', function () {
         const raw = '-- xchain:migration mode=manual\nALTER TABLE t DROP COLUMN x;';
-        assert.strictEqual(db._migrationMode(raw), 'manual');
+        assert.strictEqual(db.migrationMode(raw), 'manual');
     });
 
     it('is case-insensitive', function () {
         const raw = '-- XCHAIN:MIGRATION MODE=AUTO\nSELECT 1;';
-        assert.strictEqual(db._migrationMode(raw), 'auto');
+        assert.strictEqual(db.migrationMode(raw), 'auto');
     });
 });
 
@@ -1985,7 +1985,7 @@ describe('Database._poolQuery() @regression @tier1', function () {
             release: sinon.stub().resolves()
         };
         db.pool.getConnection.resolves(conn);
-        const result = await db._poolQuery('SELECT 1', []);
+        const result = await db.poolQuery('SELECT 1', []);
         assert.deepStrictEqual(result, row);
         assert.ok(conn.release.calledOnce);
     });
@@ -1997,7 +1997,7 @@ describe('Database._poolQuery() @regression @tier1', function () {
             release: sinon.stub().resolves()
         };
         db.pool.getConnection.resolves(conn);
-        await assert.rejects(() => db._poolQuery('SELECT 1'), /pool error/);
+        await assert.rejects(() => db.poolQuery('SELECT 1'), /pool error/);
         assert.ok(conn.release.calledOnce);
     });
 });
@@ -2230,14 +2230,14 @@ describe('Database capability snapshot methods @regression @tier1', function () 
 describe('Database._mirrorDb() @regression @tier1', function () {
     it('returns this when indexer has no hubDb', function () {
         const db = makeDb();
-        assert.strictEqual(db._mirrorDb(), db);
+        assert.strictEqual(db.mirrorDb(), db);
     });
 
     it('returns hubDb when indexer has one', function () {
         const db    = makeDb();
         const hubDb = { doQuery: sinon.stub() };
         db.indexer.hubDb = hubDb;
-        assert.strictEqual(db._mirrorDb(), hubDb);
+        assert.strictEqual(db.mirrorDb(), hubDb);
     });
 });
 

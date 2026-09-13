@@ -60,7 +60,7 @@ class Cross_Settle {
     // Phase B appends the fill fields after `network` (Phase-A field order preserved):
     // a_amount/b_amount are the FILL settled by THIS match; *_kind + *_filled_before bind
     // sequential partial fills apart.
-    _canonical(m){
+    canonical(m){
         let raw = [
             'XMATCH', m.match_id, String(m.snapshot_block),
             m.a_chain, String(m.a_action_index), m.a_tick || '', String(m.a_amount), String(m.a_ownership), m.a_payout_addr,
@@ -172,7 +172,7 @@ class Cross_Settle {
         try { sigs = JSON.parse(m.validator_signatures || '[]'); }
         catch(_) { sigs = []; }
 
-        let canonical = this._canonical(m);
+        let canonical = this.canonical(m);
         // Collect the distinct pubkeys that produced a valid signature AND are in the
         // locked snapshot (presence in the snapshot = qualified, same membership the
         // hub tallied). Used by both the weighted predicate and the count check.
@@ -206,7 +206,7 @@ class Cross_Settle {
         // ORDER leg → partial-fill settlement (release the fill, decrement remaining, complete
         // only when fully filled). SWAP leg falls through to the Phase-A full-release path.
         if(localKind === 'order')
-            return await this._settleOrderLeg(data, m, coin, localActionIndex, giveTick, giveAmount, getAmount, getTick, giveOwnership, payoutAddr, counterpartyCoin, localInfo);
+            return await this.settleOrderLeg(data, m, coin, localActionIndex, giveTick, giveAmount, getAmount, getTick, giveOwnership, payoutAddr, counterpartyCoin, localInfo);
 
         // The local offer must still be open (not already settled / cancelled / expired).
         // A cross-chain swap stores get_coin = counterparty coin, so getSwapInfo resolved it
@@ -222,7 +222,7 @@ class Cross_Settle {
             // anchored to a real internal action row so a reorg (which may revive the
             // offer's open status) drops it and the match re-applies.
             console.log("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : offer ' + coin + ':' + localActionIndex + ' not open (' + swapInfo['SWAP_STATUS'] + ') : recording no-op settlement');
-            await this._recordNoopSettlement(data, m, localActionIndex);
+            await this.recordNoopSettlement(data, m, localActionIndex);
             return;
         }
 
@@ -240,7 +240,7 @@ class Cross_Settle {
         } else {
             // BigNumber-space negation, not JS unary minus (float truncation, #3736).
             escrows.push([giveTick, this.util.bcsub(0, giveAmount, 64), payoutAddr]);
-            for(let c of await this._proceedsCredits(data, m, coin, giveTick, giveAmount, payoutAddr, counterpartyCoin)){
+            for(let c of await this.proceedsCredits(data, m, coin, giveTick, giveAmount, payoutAddr, counterpartyCoin)){
                 credits.push(c);
                 this.util.addAddressTicker(c[2], c[0]);
             }
@@ -270,7 +270,7 @@ class Cross_Settle {
     // (impossible for a create-side-validated order, but a hostile mirror row could carry
     // anything) yields NO split, so the seller keeps full proceeds and a bad row can never
     // trap the settlement. Below the flag-day the single full credit is returned unchanged.
-    async _proceedsCredits(data, m, coin, giveTick, giveAmount, payoutAddr, counterpartyCoin){
+    async proceedsCredits(data, m, coin, giveTick, giveAmount, payoutAddr, counterpartyCoin){
         let full = [[giveTick, giveAmount, payoutAddr]];
         if(!ccr.isCrossChainRoyaltyActive(m.snapshot_block, m.network))
             return full;
@@ -302,7 +302,7 @@ class Cross_Settle {
     // mint the internal CROSS_SETTLE action (the rollback anchor) and the
     // cross_chain_settlements row, move no funds. Without the record, the match
     // stays "effective + unsettled" and re-evaluates on every subsequent block.
-    async _recordNoopSettlement(data, m, localActionIndex){
+    async recordNoopSettlement(data, m, localActionIndex){
         let action = { ACTION: 'CROSS_SETTLE', BLOCK_INDEX: data['BLOCK_INDEX'] };
         data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
         data['STATUS'] = 'valid';
@@ -314,7 +314,7 @@ class Cross_Settle {
     // to the counterparty, record the fill (so the order's remaining drops), and complete the
     // order only once fully filled. Multiple partial fills each settle once (distinct match_id
     // → distinct cross_chain_settlements row), accumulating against the same local order.
-    async _settleOrderLeg(data, m, coin, localActionIndex, giveTick, giveAmount, getAmount, getTick, giveOwnership, payoutAddr, counterpartyCoin, orderInfo){
+    async settleOrderLeg(data, m, coin, localActionIndex, giveTick, giveAmount, getAmount, getTick, giveOwnership, payoutAddr, counterpartyCoin, orderInfo){
         // A cross-chain order stores get_coin = counterparty coin, so getOrderInfo (which
         // filters by get_coin) resolves it under the counterparty coin; parse() already read
         // it for the dismissal probe and hands it in, so the leg is read once per block.
@@ -329,7 +329,7 @@ class Cross_Settle {
             // the settlement so we stop re-evaluating it but move no funds (same
             // reorg-anchored no-op record as the swap leg above).
             console.log("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : order ' + coin + ':' + localActionIndex + ' not open (' + orderInfo['ORDER_STATUS'] + ') : recording no-op settlement');
-            await this._recordNoopSettlement(data, m, localActionIndex);
+            await this.recordNoopSettlement(data, m, localActionIndex);
             return;
         }
 
@@ -347,7 +347,7 @@ class Cross_Settle {
             if(giveRemaining !== undefined && giveRemaining !== null){
                 if(this.util.bclte(giveRemaining, 0)){
                     console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : order ' + coin + ':' + localActionIndex + ' has no give remaining : recording no-op settlement');
-                    await this._recordNoopSettlement(data, m, localActionIndex);
+                    await this.recordNoopSettlement(data, m, localActionIndex);
                     return;
                 }
                 if(this.util.bclt(giveRemaining, giveAmount)){
@@ -371,7 +371,7 @@ class Cross_Settle {
         } else {
             // BigNumber-space negation, not JS unary minus (float truncation, #3736).
             escrows.push([giveTick, this.util.bcsub(0, giveAmount, 64), payoutAddr]);
-            for(let c of await this._proceedsCredits(data, m, coin, giveTick, giveAmount, payoutAddr, counterpartyCoin)){
+            for(let c of await this.proceedsCredits(data, m, coin, giveTick, giveAmount, payoutAddr, counterpartyCoin)){
                 credits.push(c);
                 this.util.addAddressTicker(c[2], c[0]);
             }

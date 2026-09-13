@@ -57,7 +57,7 @@ class Unstake {
 
         // v1 = contract-targeted unstake; dispatch to its own handler
         if(!error && format === 1){
-            return await this._parseContractUnstake(params, data, error);
+            return await this.parseContractUnstake(params, data, error);
         }
 
         // Extract params (v0 capability unstake)
@@ -209,7 +209,7 @@ class Unstake {
     // UNSTAKE v1: contract-targeted unstake. Writes to contract_unstakes table,
     // sets deactivation_block on the matching contract_stakes rows, uses the contract's
     // own cooldown_blocks (vs. the global 1000 used for capability staking).
-    async _parseContractUnstake(params, data, error){
+    async parseContractUnstake(params, data, error){
         // Extract params
         data['SIGNING_PUBKEY']        = params[1];
         data['TARGET_CONTRACT_INDEX'] = params[2];

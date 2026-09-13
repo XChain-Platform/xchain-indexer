@@ -117,13 +117,13 @@ class FakeDb {
     // derivation's own reads went strict.
     async doQuery(sql, args){
         this.softSql.push(sql);
-        return await this._run(sql, args);
+        return await this.run(sql, args);
     }
     async doQueryStrict(sql, args){
         this.strictSql.push(sql);
-        return await this._run(sql, args);
+        return await this.run(sql, args);
     }
-    async _run(sql, args){
+    async run(sql, args){
         // Fault injection: model a transient DB fault. doQueryStrict propagates
         // it; doQuery would have swallowed it into [] outside a transaction.
         if(this.failOn && sql.indexOf(this.failOn) !== -1)

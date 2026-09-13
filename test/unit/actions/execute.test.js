@@ -702,7 +702,7 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
     // ─── _processSlashEmission (internal SLASH handler) ───────────────────
     // Driven directly: SLASH emissions never reach the wire/decoder, so they are
     // handled inline by this method rather than the generic emission router.
-    describe('_processSlashEmission', function () {
+    describe('processSlashEmission', function () {
 
         const PUBKEY = 'a'.repeat(64);
 
@@ -737,7 +737,7 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
 
         it('slashes stake, credits the destination, and writes a slash event (happy path)', async function () {
             wireSlashDb();
-            await handler._processSlashEmission(slashEmission(), slashData());
+            await handler.processSlashEmission(slashEmission(), slashData());
             assert.ok(indexer.indexerDb.slashContractStake.calledWith(CONTRACT, 7, 3, '100'));
             assert.ok(indexer.indexerDb.createCredit.calledWith(99, 'STK', '100', '1SlashDestXXXXXXXXXXXXXXXXXXXXX'));
             // The credit REDIRECTS locked tokens, it does not mint them: the staker's escrow
@@ -759,30 +759,30 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
         it('throws on a contractIndex mismatch (defense in depth)', async function () {
             wireSlashDb();
             await assert.rejects(
-                handler._processSlashEmission(slashEmission({ contractIndex: 999 }), slashData()),
+                handler.processSlashEmission(slashEmission({ contractIndex: 999 }), slashData()),
                 /contractIndex mismatch/);
         });
 
         it('throws when the contract row is missing', async function () {
             wireSlashDb({ getContract: sinon.stub().resolves(null) });
-            await assert.rejects(handler._processSlashEmission(slashEmission(), slashData()), /contract not found/);
+            await assert.rejects(handler.processSlashEmission(slashEmission(), slashData()), /contract not found/);
         });
 
         it('throws when the contract has no slash destination configured', async function () {
             wireSlashDb({ getContract: sinon.stub().resolves({ slash_destination_id: null }) });
-            await assert.rejects(handler._processSlashEmission(slashEmission(), slashData()), /no slash destination/);
+            await assert.rejects(handler.processSlashEmission(slashEmission(), slashData()), /no slash destination/);
         });
 
         it('no-ops silently when the pubkey is not staked here', async function () {
             wireSlashDb({ getPubkeyId: sinon.stub().resolves(null) });
-            await handler._processSlashEmission(slashEmission(), slashData());
+            await handler.processSlashEmission(slashEmission(), slashData());
             assert.ok(indexer.indexerDb.slashContractStake.notCalled);
             assert.ok(indexer.indexerDb.createCredit.notCalled);
         });
 
         it('no-ops when the token ticker is unknown', async function () {
             wireSlashDb({ getTickerId: sinon.stub().resolves(null) });
-            await handler._processSlashEmission(slashEmission(), slashData());
+            await handler.processSlashEmission(slashEmission(), slashData());
             assert.ok(indexer.indexerDb.slashContractStake.notCalled);
             assert.ok(indexer.indexerDb.createCredit.notCalled);
         });
@@ -793,7 +793,7 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
         // shift fields and the guard stops being optional. Assert the property.
         it('consumes a delimiter-bearing token whole (named-field read, never pipe-split)', async function () {
             wireSlashDb();
-            await handler._processSlashEmission(slashEmission({ token: 'ST|K' }), slashData());
+            await handler.processSlashEmission(slashEmission({ token: 'ST|K' }), slashData());
             assert.ok(indexer.indexerDb.getTickerId.calledWith('ST|K'),
                 'token must reach the ticker lookup intact, not split on "|"');
             assert.ok(indexer.indexerDb.createCredit.calledWith(99, 'ST|K', '100', '1SlashDestXXXXXXXXXXXXXXXXXXXXX'));
@@ -801,14 +801,14 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
 
         it('no-ops when nothing was actually slashed (0 available)', async function () {
             wireSlashDb({ slashContractStake: sinon.stub().resolves({ total: '0', releases: [] }) });
-            await handler._processSlashEmission(slashEmission(), slashData());
+            await handler.processSlashEmission(slashEmission(), slashData());
             assert.ok(indexer.indexerDb.createCredit.notCalled);
             assert.ok(indexer.indexerDb.createSlashEvent.notCalled);
         });
 
         it('throws when the destination address row is missing', async function () {
             wireSlashDb({ doQuery: sinon.stub().resolves([]) });
-            await assert.rejects(handler._processSlashEmission(slashEmission(), slashData()), /destination address row missing/);
+            await assert.rejects(handler.processSlashEmission(slashEmission(), slashData()), /destination address row missing/);
         });
     });
 

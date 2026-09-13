@@ -64,13 +64,13 @@ module.exports = {
             let witnessRows = await this.doQueryStrict(
                 `SELECT time, data FROM events WHERE id = ? AND code='REORG'`, [Number(afterId)]);
             if(witnessRows.length === 0)
-                throw this._reorgCursorIncoherentError('indexer cursor decoder_event_id=' + afterId +
+                throw this.reorgCursorIncoherentError('indexer cursor decoder_event_id=' + afterId +
                     ' points at no live decoder REORG event (the cursor row is gone).');
             if(cursorWitness && cursorWitness.time != null && cursorWitness.hash != null){
                 let live     = witnessRows[0];
-                let liveHash = this._hashReorgData(live.data);
+                let liveHash = this.hashReorgData(live.data);
                 if(String(live.time) !== String(cursorWitness.time) || liveHash !== String(cursorWitness.hash))
-                    throw this._reorgCursorIncoherentError('indexer cursor decoder_event_id=' + afterId +
+                    throw this.reorgCursorIncoherentError('indexer cursor decoder_event_id=' + afterId +
                         ' witness mismatch (the live decoder REORG event at that id has a different ' +
                         'time/payload than when it was recorded).');
             }
@@ -93,7 +93,7 @@ module.exports = {
             let maxRow = await this.doQueryStrict(`SELECT MAX(id) AS max_id FROM events WHERE code='REORG'`);
             let maxId  = (maxRow.length > 0) ? maxRow[0]["max_id"] : null;
             if(maxId === null || Number(maxId) < Number(afterId)){
-                throw this._reorgCursorIncoherentError('indexer cursor decoder_event_id=' + afterId +
+                throw this.reorgCursorIncoherentError('indexer cursor decoder_event_id=' + afterId +
                     ' exceeds the decoder\'s newest REORG event id (' + maxId + ').');
             }
         }
@@ -221,7 +221,7 @@ module.exports = {
         let rows = await this.doQueryStrict(
             `SELECT time, data FROM events WHERE id = ? AND code='REORG'`, [Number(decoder_event_id)]);
         if(rows.length === 0) return null;
-        return { time: rows[0].time, hash: this._hashReorgData(rows[0].data) };
+        return { time: rows[0].time, hash: this.hashReorgData(rows[0].data) };
     },
 
     // Startup probe: warn loudly if the indexer has REORG markers but NONE carry a decoder_event_id

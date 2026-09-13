@@ -92,7 +92,7 @@ describe('UtxoTracker', function(){
         it('throws when not enabled', async function(){
             let t = new UtxoTracker();
             await assert.rejects(
-                () => t._call('get_first_seen', { address: 'abc' }),
+                () => t.call('get_first_seen', { address: 'abc' }),
                 /UTXO tracker not configured/
             );
         });
@@ -102,7 +102,7 @@ describe('UtxoTracker', function(){
             let stub = makeFetch({ jsonrpc: '2.0', id: 1, result: { height: 100 } });
             global.fetch = stub;
 
-            let result = await t._call('get_first_seen', { address: 'myaddr' });
+            let result = await t.call('get_first_seen', { address: 'myaddr' });
 
             assert.strictEqual(stub.calledOnce, true);
             // First arg = endpoint
@@ -126,7 +126,7 @@ describe('UtxoTracker', function(){
             global.fetch = makeFetch({}, { ok: false, status: 500 });
 
             await assert.rejects(
-                () => t._call('get_first_seen', {}),
+                () => t.call('get_first_seen', {}),
                 /UTXO tracker HTTP error: 500/
             );
         });
@@ -139,7 +139,7 @@ describe('UtxoTracker', function(){
             });
 
             await assert.rejects(
-                () => t._call('unknown_method', {}),
+                () => t.call('unknown_method', {}),
                 /UTXO tracker RPC error/
             );
         });
@@ -149,7 +149,7 @@ describe('UtxoTracker', function(){
             global.fetch = sinon.stub().rejects(new Error('ECONNREFUSED'));
 
             await assert.rejects(
-                () => t._call('get_first_seen', {}),
+                () => t.call('get_first_seen', {}),
                 /ECONNREFUSED/
             );
         });
@@ -158,7 +158,7 @@ describe('UtxoTracker', function(){
             let t = new UtxoTracker('localhost', 3005);
             global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: { height: 42 } });
 
-            let r = await t._call('get_first_seen', { address: 'x' });
+            let r = await t.call('get_first_seen', { address: 'x' });
             assert.deepStrictEqual(r, { height: 42 });
         });
 
@@ -166,7 +166,7 @@ describe('UtxoTracker', function(){
             let t = new UtxoTracker('localhost', 3005);
             global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: null });
 
-            let r = await t._call('get_first_seen', { address: 'x' });
+            let r = await t.call('get_first_seen', { address: 'x' });
             assert.strictEqual(r, null);
         });
     });

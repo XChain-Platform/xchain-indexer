@@ -194,7 +194,7 @@ function knownGateKeys(){
 // to arm is the block from which a build lacking the gate is running different rules.
 // Reading the bare key alone would report such a gate inactive forever, because an arming
 // train sizes one height per chain and leaves the bare fallback on the far-future sentinel.
-function _networkActivationHeight(map, network, coin){
+function networkActivationHeight(map, network, coin){
     if (coin != null) {
         const keyed = map[String(coin) + ':' + network];
         if (keyed !== undefined) return keyed;
@@ -236,7 +236,7 @@ function activeGatesAt(height, network, coin){
     for (const key of Object.keys(values)) {
         const v = values[key];
         if (v === ABSENT || v === null || typeof v !== 'object' || Array.isArray(v)) continue;
-        const at = _networkActivationHeight(v, network, coin);
+        const at = networkActivationHeight(v, network, coin);
         if (at === undefined) continue;
         if (!Number.isFinite(at) || at >= FAR_FUTURE_HEIGHT_SENTINEL) continue;
         if (at <= h) out.push(key);

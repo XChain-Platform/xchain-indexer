@@ -404,7 +404,7 @@ module.exports = {
     // the next candidate up is then the honest pick rather than a stall. Capped at 8 because
     // it runs inside the block loop. Reads the mirror home, not the indexer's own tables.
     async getMirroredStateCheckpointCandidates(chain, network, atOrAfterBlock){
-        return await this._mirrorDb().doQuery(
+        return await this.mirrorDb().doQuery(
             `SELECT * FROM state_checkpoints
              WHERE chain = ? AND network = ? AND block_index >= ? AND state_root IS NOT NULL
              ORDER BY block_index ASC, checkpoint_seq DESC

@@ -121,13 +121,13 @@ const ESCROW_PROOF_REASON = {
     INSUFFICIENT:        'proven escrow balance is below the transfer amount',
 };
 
-function _fail(reason){ return { ok: false, reason: reason }; }
-function _pass(reason){ return { ok: true,  reason: reason }; }
+function fail(reason){ return { ok: false, reason: reason }; }
+function pass(reason){ return { ok: true,  reason: reason }; }
 
 // A non-empty string, or null. Used for every field taken off the row or the envelope:
 // a number, a Buffer or an object where a chain or an address belongs is malformed input,
 // not something to String() into a key preimage.
-function _str(v){
+function str(v){
     if(typeof v !== 'string') return null;
     const s = v.trim();
     return s.length ? s : null;
@@ -136,7 +136,7 @@ function _str(v){
 // A finite non-negative integer height, or null. Heights arrive from a MariaDB driver that
 // may hand back a number, a string or a BigInt depending on its bigint options, so the
 // conversion is pinned here rather than trusted from the call site.
-function _height(v){
+function height(v){
     if(v === null || v === undefined) return null;
     if(typeof v === 'bigint') return (v >= 0n && v <= BigInt(Number.MAX_SAFE_INTEGER)) ? Number(v) : null;
     const n = Number(v);
@@ -148,7 +148,7 @@ function _height(v){
 // reads true as 1, ' 1 ' as 1 and null as 0, so a field that is not a version at all would
 // compare equal to a derived version of 1 and pass. Shape follows _strictHeight in
 // state_subtree_activation.js, plus the BigInt case the MariaDB driver can hand back.
-function _version(v){
+function version(v){
     if(typeof v === 'bigint')
         return (v >= 0n && v <= BigInt(Number.MAX_SAFE_INTEGER)) ? Number(v) : null;
     const n = (typeof v === 'number') ? v
@@ -160,7 +160,7 @@ function _version(v){
 // A canonical amount scaled to an exact 18-dp integer, or null when the input is not a
 // non-negative decimal. BigInt rather than mathjs: the comparison is exact, and it cannot
 // depend on a bignumber config that the producer of the proof does not share.
-function _scaled(amount){
+function scaled(amount){
     if(typeof amount !== 'string' && typeof amount !== 'number') return null;
     let canon;
     try { canon = M.canonicalAmount(String(amount).trim()); }
@@ -185,14 +185,14 @@ function _scaled(amount){
  * @returns {string|null}
  */
 function resolveEscrowAddress(originChain, destChain, network){
-    const chain = _str(originChain), dest = _str(destChain), net = _str(network);
+    const chain = str(originChain), dest = str(destChain), net = str(network);
     if(!chain || !dest || !net) return null;
     if(!/^[A-Z]{2,10}$/.test(chain) || !/^[A-Z]{2,10}$/.test(dest)) return null;
     let conf;
     try { conf = coinAdapter.toIndexerConfig(chain, net); }
     catch(e){ return null; }
     const addresses = (conf && (conf.ADDRESS || conf.address)) || {};
-    return _str(addresses[ESCROW_ROLE_PREFIX + dest]);
+    return str(addresses[ESCROW_ROLE_PREFIX + dest]);
 }
 
 /**
@@ -241,37 +241,37 @@ function resolveEscrowAddress(originChain, destChain, network){
  */
 function verifyEscrowAgainstCheckpoint(row, ctx){
     if(!row || typeof row !== 'object' || !ctx || typeof ctx !== 'object')
-        return _fail(ESCROW_PROOF_REASON.ROW_FIELDS);
+        return fail(ESCROW_PROOF_REASON.ROW_FIELDS);
 
-    const srcChain  = _str(row.src_chain);
-    const destChain = _str(row.dest_chain);
-    const rowNet    = _str(row.network);
-    const tick      = _str(row.tick);
-    const snapshot  = _height(row.snapshot_block);
-    const thisChain = _str(ctx.coin);
-    const ctxNet    = _str(ctx.network);
+    const srcChain  = str(row.src_chain);
+    const destChain = str(row.dest_chain);
+    const rowNet    = str(row.network);
+    const tick      = str(row.tick);
+    const snapshot  = height(row.snapshot_block);
+    const thisChain = str(ctx.coin);
+    const ctxNet    = str(ctx.network);
     if(!srcChain || !destChain || !rowNet || !tick || snapshot === null || !thisChain || !ctxNet)
-        return _fail(ESCROW_PROOF_REASON.ROW_FIELDS);
+        return fail(ESCROW_PROOF_REASON.ROW_FIELDS);
     if(srcChain === destChain)
-        return _fail(ESCROW_PROOF_REASON.ROW_FIELDS);
+        return fail(ESCROW_PROOF_REASON.ROW_FIELDS);
 
     // The transfer must be for the network this indexer is on. A foreign-network row is
     // refused outright by the settle pass too; it is re-checked here because every key and
     // every root below is network-scoped, so proceeding on a mismatch would prove a balance
     // on a chain this node is not indexing.
     if(rowNet !== ctxNet)
-        return _fail(ESCROW_PROOF_REASON.ROW_NETWORK);
+        return fail(ESCROW_PROOF_REASON.ROW_NETWORK);
 
     // The settle pass applies THIS chain's leg, and that is always the destination leg: an
     // in leg mints here from a lock on the escrow chain, an out leg releases escrow here
     // from a burn on the other side. A row naming neither side as this chain is not ours.
-    if(thisChain !== destChain) return _fail(ESCROW_PROOF_REASON.NOT_THIS_CHAIN);
+    if(thisChain !== destChain) return fail(ESCROW_PROOF_REASON.NOT_THIS_CHAIN);
 
     // Direction is DERIVED and is never a column (D19). The OUT leg releases an escrow that
     // is an ordinary balance on this very chain, where the local ledger is authoritative and
     // the would-go-negative refusal in the settle pass is the guard: a remote checkpoint can
     // add nothing to a balance this node holds itself.
-    if(thisChain === ESCROW_CHAIN) return _pass(ESCROW_PROOF_REASON.OUT_LEG);
+    if(thisChain === ESCROW_CHAIN) return pass(ESCROW_PROOF_REASON.OUT_LEG);
 
     // Everything else is an IN leg: this chain is about to MINT, so it needs the proof. The
     // exemption is keyed on THIS chain being the escrow chain and never on the row's
@@ -279,29 +279,29 @@ function verifyEscrowAgainstCheckpoint(row, ctx){
     // naming any non-escrow source chain would derive as an "out leg" and mint here with no
     // cross-check at all, which is precisely the forgery D2 exists to stop. A mint can only
     // come from a lock on the escrow chain, so a source chain that is not it is refused.
-    if(srcChain !== ESCROW_CHAIN) return _fail(ESCROW_PROOF_REASON.IN_LEG_ORIGIN);
+    if(srcChain !== ESCROW_CHAIN) return fail(ESCROW_PROOF_REASON.IN_LEG_ORIGIN);
 
-    const amount = _scaled(row.amount);
+    const amount = scaled(row.amount);
     if(amount === null || amount <= 0n)
-        return _fail(ESCROW_PROOF_REASON.ROW_AMOUNT);
+        return fail(ESCROW_PROOF_REASON.ROW_AMOUNT);
 
     const proof = ctx.proof;
     if(!proof || typeof proof !== 'object')
-        return _fail(ESCROW_PROOF_REASON.PROOF_MISSING);
+        return fail(ESCROW_PROOF_REASON.PROOF_MISSING);
 
     const cp = proof.checkpoint;
     if(!cp || typeof cp !== 'object')
-        return _fail(ESCROW_PROOF_REASON.CHECKPOINT_MISSING);
+        return fail(ESCROW_PROOF_REASON.CHECKPOINT_MISSING);
 
     // The checkpoint must be the ORIGIN chain's, on this network. A checkpoint of the
     // destination chain proves nothing about the escrow, and one of another network proves
     // a balance in another ledger entirely.
-    if(_str(cp.chain) !== srcChain || _str(cp.network) !== rowNet)
-        return _fail(ESCROW_PROOF_REASON.CHECKPOINT_BINDING);
+    if(str(cp.chain) !== srcChain || str(cp.network) !== rowNet)
+        return fail(ESCROW_PROOF_REASON.CHECKPOINT_BINDING);
 
-    const cpHeight = _height(cp.block_index);
+    const cpHeight = height(cp.block_index);
     if(cpHeight === null)
-        return _fail(ESCROW_PROOF_REASON.CHECKPOINT_BINDING);
+        return fail(ESCROW_PROOF_REASON.CHECKPOINT_BINDING);
 
     // STALENESS. snapshot_block is the origin height the transfer is pinned at, so the lock
     // that credited the escrow is at or below it. A checkpoint BELOW snapshot_block can
@@ -309,26 +309,26 @@ function verifyEscrowAgainstCheckpoint(row, ctx){
     // balance that was put there for some earlier transfer. At or after it, the credit is
     // inside the committed state.
     if(cpHeight < snapshot)
-        return _fail(ESCROW_PROOF_REASON.CHECKPOINT_STALE);
+        return fail(ESCROW_PROOF_REASON.CHECKPOINT_STALE);
 
     // The roots in the envelope must be the roots of the block the checkpoint commits, or
     // the reassembly below would compare roots from two different heights.
-    const proofHeight = _height(proof.block_index);
-    if(_str(proof.chain) !== srcChain || _str(proof.network) !== rowNet || proofHeight !== cpHeight)
-        return _fail(ESCROW_PROOF_REASON.PROOF_BINDING);
+    const proofHeight = height(proof.block_index);
+    if(str(proof.chain) !== srcChain || str(proof.network) !== rowNet || proofHeight !== cpHeight)
+        return fail(ESCROW_PROOF_REASON.PROOF_BINDING);
 
     // The escrow address is resolved HERE from the origin chain's own config, never taken
     // from the envelope: an attacker who could name the address would simply prove the
     // balance of an address it had funded itself.
     const escrow = resolveEscrowAddress(srcChain, destChain, rowNet);
     if(!escrow)
-        return _fail(ESCROW_PROOF_REASON.ESCROW_UNRESOLVED);
-    if(_str(proof.address) !== escrow || _str(proof.tick) !== tick)
-        return _fail(ESCROW_PROOF_REASON.PROOF_BINDING);
+        return fail(ESCROW_PROOF_REASON.ESCROW_UNRESOLVED);
+    if(str(proof.address) !== escrow || str(proof.tick) !== tick)
+        return fail(ESCROW_PROOF_REASON.PROOF_BINDING);
 
-    const cpRoot = _str(cp.state_root);
+    const cpRoot = str(cp.state_root);
     if(!cpRoot || !/^[0-9a-fA-F]{64}$/.test(cpRoot))
-        return _fail(ESCROW_PROOF_REASON.CHECKPOINT_ROOTLESS);
+        return fail(ESCROW_PROOF_REASON.CHECKPOINT_ROOTLESS);
 
     // The state_root layout is versioned: which named sub-trees really carry a root, and so
     // which leaf set the signed root commits, is a property of the version. A checkpoint cut
@@ -351,48 +351,48 @@ function verifyEscrowAgainstCheckpoint(row, ctx){
     // at the transfer's snapshot_block: the version travels with the root it describes, and
     // tip derivation is the specific trap api.js calls out, because it relabels every
     // below-boundary checkpoint once a slot arms.
-    const stampedVersion  = _version(cp.state_root_version);
+    const stampedVersion  = version(cp.state_root_version);
     // srcChain and rowNet ARE the checkpoint's own chain and network: the binding check above
     // refused the row unless cp.chain and cp.network matched them exactly.
     const derivedVersion  = stateSubtree.stateRootVersion(cpHeight, rowNet, srcChain);
     if(stampedVersion === null || stampedVersion !== derivedVersion)
-        return _fail(ESCROW_PROOF_REASON.ROOT_VERSION);
+        return fail(ESCROW_PROOF_REASON.ROOT_VERSION);
 
     const subRoots = proof.sub_roots;
-    const balancesRoot = subRoots && _str(subRoots.balances_root);
+    const balancesRoot = subRoots && str(subRoots.balances_root);
     if(!subRoots || typeof subRoots !== 'object' || !balancesRoot || !/^[0-9a-fA-F]{64}$/.test(balancesRoot))
-        return _fail(ESCROW_PROOF_REASON.PROOF_MALFORMED);
+        return fail(ESCROW_PROOF_REASON.PROOF_MALFORMED);
 
     // THE BINDING THAT MAKES THE WHOLE CHECK WORTH ANYTHING: the sub-roots handed over must
     // reassemble, byte for byte, to the state_root the checkpoint quorum signed. Without it
     // a forger supplies its own balances_root and proves whatever balance it likes under it.
     let assembled;
     try { assembled = M.toHex(M.stateRoot(subRoots)); }
-    catch(e){ return _fail(ESCROW_PROOF_REASON.PROOF_MALFORMED); }
+    catch(e){ return fail(ESCROW_PROOF_REASON.PROOF_MALFORMED); }
     if(assembled.toLowerCase() !== cpRoot.toLowerCase())
-        return _fail(ESCROW_PROOF_REASON.ROOT_MISMATCH);
+        return fail(ESCROW_PROOF_REASON.ROOT_MISMATCH);
 
     // The claimed balance decides the leaf, so a claim and its proof cannot drift apart. The
     // envelope's own leaf_value is never read: it is the one field a forger would set to the
     // leaf it holds a proof for while claiming a different balance.
-    const claimed = _scaled(proof.balance);
+    const claimed = scaled(proof.balance);
     if(claimed === null)
-        return _fail(ESCROW_PROOF_REASON.PROOF_MALFORMED);
+        return fail(ESCROW_PROOF_REASON.PROOF_MALFORMED);
     // Delete-on-zero is normative for balances_root, so a zero balance is a NON-membership
     // proof (no leaf), not a leaf holding zero.
     let leaf = null;
     if(claimed > 0n){
         try { leaf = M.amountLeaf(String(proof.balance).trim()); }
-        catch(e){ return _fail(ESCROW_PROOF_REASON.PROOF_MALFORMED); }
+        catch(e){ return fail(ESCROW_PROOF_REASON.PROOF_MALFORMED); }
     }
 
     let key;
     try { key = M.balanceKey(srcChain, rowNet, escrow, tick); }
-    catch(e){ return _fail(ESCROW_PROOF_REASON.PROOF_MALFORMED); }
+    catch(e){ return fail(ESCROW_PROOF_REASON.PROOF_MALFORMED); }
 
     const bp = proof.balance_proof;
     if(!bp || typeof bp !== 'object')
-        return _fail(ESCROW_PROOF_REASON.PROOF_MALFORMED);
+        return fail(ESCROW_PROOF_REASON.PROOF_MALFORMED);
     // The verifier compares its recomputed root as lowercase hex, so an envelope that spells
     // its roots in upper case must not read as a forgery. Normalize once, here.
     const rootLc = balancesRoot.toLowerCase();
@@ -405,23 +405,23 @@ function verifyEscrowAgainstCheckpoint(row, ctx){
         else if(bp.bitmap)
             verified = M.verifyCompressedSmtProof(rootLc, key, leaf, bp);
         else
-            return _fail(ESCROW_PROOF_REASON.PROOF_MALFORMED);
+            return fail(ESCROW_PROOF_REASON.PROOF_MALFORMED);
     } catch(e){
         // A malformed sibling list (wrong length, non-hex, surplus compressed siblings)
         // throws inside the verifier. It is a bad proof, not a crash of the block loop.
-        return _fail(ESCROW_PROOF_REASON.PROOF_MALFORMED);
+        return fail(ESCROW_PROOF_REASON.PROOF_MALFORMED);
     }
     if(!verified)
-        return _fail(ESCROW_PROOF_REASON.PROOF_INVALID);
+        return fail(ESCROW_PROOF_REASON.PROOF_INVALID);
 
     // The escrow must already hold at least what this transfer is about to mint. It is an
     // inequality and not an equality on purpose (D65): a stray credit to the escrow address
     // is a surplus and harms nobody, while a deficit is the direction in which somebody
     // else's units would have nothing behind them.
     if(claimed < amount)
-        return _fail(ESCROW_PROOF_REASON.INSUFFICIENT);
+        return fail(ESCROW_PROOF_REASON.INSUFFICIENT);
 
-    return _pass(ESCROW_PROOF_REASON.VERIFIED);
+    return pass(ESCROW_PROOF_REASON.VERIFIED);
 }
 
 module.exports = {

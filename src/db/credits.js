@@ -397,7 +397,7 @@ module.exports = {
         // ledger connection is the wrong place to ask on every standing indexer, and an
         // origin indexer asked there can never produce a proof, which stalls every in leg
         // on the destination's proof barrier. Same handle the proof client reads through.
-        let cpRows = await this._mirrorDb().doQueryStrict(
+        let cpRows = await this.mirrorDb().doQueryStrict(
             `SELECT checkpoint_seq, snapshot_block, state_root, state_root_version
              FROM state_checkpoints WHERE chain=? AND network=? AND block_index=? LIMIT 1`,
             [chain, network, height]);

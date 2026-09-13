@@ -214,14 +214,14 @@ describe('BATCH pre-flight : a guard-inert sub-command is UNJUDGED, not invalid 
                 actionAliases: {},
                 _preflightMemo: new PreflightMemo(4),
                 _feeQuotePending: 0,
-                _dryRunAction: async () => Object.assign(
+                dryRunAction: async () => Object.assign(
                     { blockIndex: 100, blockTime: 1000, status: 'valid', error: null, xchainFee: '0',
                       sourceFeeBalance: null, subCommands: null, oracleFeesOwed: null }, dryRun || {}),
-                _nativeFeeMandatory: Actions.prototype._nativeFeeMandatory,
-                _batchProbeForbiddenSubAction: Actions.prototype._batchProbeForbiddenSubAction,
+                nativeFeeMandatory: Actions.prototype.nativeFeeMandatory,
+                batchProbeForbiddenSubAction: Actions.prototype.batchProbeForbiddenSubAction,
                 computeFeeQuote:  Actions.prototype.computeFeeQuote,
                 computePreflight: Actions.prototype.computePreflight,
-                _staticFeeQuote:  Actions.prototype._staticFeeQuote
+                staticFeeQuote:  Actions.prototype.staticFeeQuote
             };
         }
 

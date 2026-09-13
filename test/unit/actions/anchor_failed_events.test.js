@@ -70,7 +70,7 @@ describe('ANCHOR_FAILED: a refused anchor is separable from an accepted one @reg
 
     beforeEach(function () {
         observability._resetObservability();
-        diag._resetDiagnostics();
+        diag.resetDiagnostics();
         sink = { lines: [] };
         const push = (m) => sink.lines.push(m);
         observability.installObservability(null, {
@@ -102,7 +102,7 @@ describe('ANCHOR_FAILED: a refused anchor is separable from an accepted one @reg
         verifyStub.restore(); swqStub.restore();
         sinon.restore();
         observability._resetObservability();
-        diag._resetDiagnostics();
+        diag.resetDiagnostics();
     });
 
     it('a refused v0 bundle emits one record carrying the verdict and the chains that parsed', async function () {

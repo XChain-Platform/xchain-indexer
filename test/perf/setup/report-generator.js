@@ -36,23 +36,23 @@ class ReportGenerator {
 
         console.log(` Block timing (ms)  min      avg      p50      p95      p99      max`);
         const bt = stats.blockTiming;
-        console.log(`   Total         ${this._pad(bt.min)}${this._pad(bt.avg)}${this._pad(bt.p50)}${this._pad(bt.p95)}${this._pad(bt.p99)}${this._pad(bt.max)}`);
+        console.log(`   Total         ${this.pad(bt.min)}${this.pad(bt.avg)}${this.pad(bt.p50)}${this.pad(bt.p95)}${this.pad(bt.p99)}${this.pad(bt.max)}`);
         console.log(dash);
 
         console.log(` Phase timing (ms)  avg      p95`);
         for (const [name, pt] of Object.entries(stats.phaseTiming)) {
-            console.log(`   ${name.padEnd(18)}${this._pad(pt.avg)}${this._pad(pt.p95)}`);
+            console.log(`   ${name.padEnd(18)}${this.pad(pt.avg)}${this.pad(pt.p95)}`);
         }
         console.log(dash);
 
         const m = stats.memory;
         console.log(` Memory (MB)      initial   peak     final    growth`);
-        console.log(`   heapUsed    ${this._pad(m.initialHeapMb)}${this._pad(m.peakHeapMb)}${this._pad(m.finalHeapMb)}${this._pad(m.heapGrowthMb)}`);
+        console.log(`   heapUsed    ${this.pad(m.initialHeapMb)}${this.pad(m.peakHeapMb)}${this.pad(m.finalHeapMb)}${this.pad(m.heapGrowthMb)}`);
         console.log(dash);
 
         const el = stats.eventLoop;
         console.log(` Event Loop (ms)  mean     p95      p99      max`);
-        console.log(`                ${this._pad(el.meanMs)}${this._pad(el.p95Ms)}${this._pad(el.p99Ms)}${this._pad(el.maxMs)}`);
+        console.log(`                ${this.pad(el.meanMs)}${this.pad(el.p95Ms)}${this.pad(el.p99Ms)}${this.pad(el.maxMs)}`);
         console.log(dash);
 
         console.log(` Errors: ${stats.errors.length}`);
@@ -67,7 +67,7 @@ class ReportGenerator {
 
     writeJson(stats, filename) {
         if (!this.writeFiles) return;
-        this._ensureDir();
+        this.ensureDir();
         const data = {
             generated: new Date().toISOString(),
             nodeVersion: process.version,
@@ -80,7 +80,7 @@ class ReportGenerator {
 
     writeMarkdown(stats, filename) {
         if (!this.writeFiles) return;
-        this._ensureDir();
+        this.ensureDir();
         const lines = [];
         lines.push(`# Performance Report: ${stats.name}`);
         lines.push('');
@@ -154,11 +154,11 @@ class ReportGenerator {
         this.writeMarkdown(stats, baseName);
     }
 
-    _pad(val, width = 9) {
+    pad(val, width = 9) {
         return String(val != null ? val : '-').padStart(width);
     }
 
-    _ensureDir() {
+    ensureDir() {
         fs.mkdirSync(this.outputDir, { recursive: true });
     }
 }

@@ -271,7 +271,7 @@ class XBridge {
         // Pure-string tick guards (row kind, GAS, dot, length). No database read, so the
         // refused shapes above never intern a junk ticker id.
         if(!error){
-            let shape = this._validateTickShape(format, ctx);
+            let shape = this.validateTickShape(format, ctx);
             if(!shape.valid)
                 error = shape.verdict;
             ctx.origin = shape.origin;
@@ -399,7 +399,7 @@ class XBridge {
      * @param {Object} ctx    - the handler context; reads ctx.tick and ctx.coin
      * @returns {{valid: boolean, verdict: (string|null), origin: (string|null)}}
      */
-    _validateTickShape(format, ctx){
+    validateTickShape(format, ctx){
         let pass = { valid: true, verdict: null, origin: null };
 
         // v0 and v1 move the GAS tick, which is protocol-reserved on every chain and needs
@@ -461,7 +461,7 @@ class XBridge {
      * @param {Object} ctx  - the handler context; reads ctx.tick
      * @returns {Promise<{valid: boolean, verdict: (string|null)}>}
      */
-    async _validateSourceAllowed(data, ctx){
+    async validateSourceAllowed(data, ctx){
         if(await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             return { valid: false, verdict: SOURCE_SLEEPING };
         if(await this.indexerDb.isActionAllowed(null, ctx.tick, data['BLOCK_INDEX']) == false)
@@ -480,7 +480,7 @@ class XBridge {
      * @param {Object} data - the action row; reads MEMO
      * @returns {{valid: boolean, verdict: (string|null)}}
      */
-    _validateMemo(data){
+    validateMemo(data){
         if(!this.util.isNull(data['MEMO']) && String(data['MEMO']).indexOf('|') != -1)
             return { valid: false, verdict: MEMO_PIPE };
         if(!this.util.isNull(data['MEMO']) && String(data['MEMO']).indexOf(';') != -1)
@@ -500,7 +500,7 @@ class XBridge {
      * @param {string} destCoin - the requested destination coin
      * @returns {boolean}
      */
-    _isBridgeableTo(info, destCoin){
+    isBridgeableTo(info, destCoin){
         let raw = (info) ? info['BRIDGE_CHAINS'] : null;
         if(this.util.isNull(raw) || String(raw) === '' || String(raw) === '-')
             return false;
@@ -623,7 +623,7 @@ class XBridge {
         // base v0/v1 field refusals: a destination the issuer never opted into is a
         // property of the TOKEN, and saying so is more useful than "unknown coin" for a
         // name that happens to be both.
-        if(format === 3 && !this._isBridgeableTo(info, data['DEST_COIN']))
+        if(format === 3 && !this.isBridgeableTo(info, data['DEST_COIN']))
             return { valid: false, verdict: VERDICTS.TICK_NOT_BRIDGEABLE };
 
         // DEST_COIN is a supported coin other than this one. Compared verbatim, not
@@ -655,11 +655,11 @@ class XBridge {
            !this.util.bcgt(data['AMOUNT'], 0))
             return { valid: false, verdict: VERDICTS.AMOUNT };
 
-        let allowed = await this._validateSourceAllowed(data, ctx);
+        let allowed = await this.validateSourceAllowed(data, ctx);
         if(!allowed.valid)
             return allowed;
 
-        let memo = this._validateMemo(data);
+        let memo = this.validateMemo(data);
         if(!memo.valid)
             return memo;
 
@@ -757,11 +757,11 @@ class XBridge {
            !this.util.bcgt(data['AMOUNT'], 0))
             return { valid: false, verdict: VERDICTS.AMOUNT };
 
-        let allowed = await this._validateSourceAllowed(data, ctx);
+        let allowed = await this.validateSourceAllowed(data, ctx);
         if(!allowed.valid)
             return allowed;
 
-        let memo = this._validateMemo(data);
+        let memo = this.validateMemo(data);
         if(!memo.valid)
             return memo;
 

@@ -856,7 +856,15 @@ class Actions {
     // bespoke parsing (repeating recipients, variable-length constructor params, etc.),
     // so they are deliberately absent here and their new addresses keep deterministic
     // handler-order assignment (still reorg-safe via the explicit index-id counter).
-    _setActionParamHandler(action){
+    // Also the public name of this map, so a caller OUTSIDE this class can ask the same
+    // question the address pre-pass asks: "does this ACTION have a fixed positional wire
+    // layout I may read a field out of?" batch.js's D10 fee pre-check (nominalDurationFee)
+    // is the caller: it reads EXPIRATION's index out of the handler's own format string
+    // instead of hardcoding a position, so a format change moves the pre-check with it.
+    // This was a private map behind a same-named public delegator until the underscore
+    // pass collapsed the pair: two honest names for one seam cost a hop on a consensus
+    // path, and the rename the delegator was avoiding is the one that just happened.
+    setActionParamHandler(action){
         switch(action){
             case 'MINT':      return this.actionMint;
             case 'MESSAGE':   return this.actionMessage;
@@ -868,18 +876,6 @@ class Actions {
             // A case here would be unreachable dead code.
             default:          return null;
         }
-    }
-
-    // Public name for the map above, so a caller OUTSIDE this class can ask the same
-    // question the address pre-pass asks: "does this ACTION have a fixed positional wire
-    // layout I may read a field out of?" batch.js's D10 fee pre-check (nominalDurationFee)
-    // is the caller: it reads EXPIRATION's index out of the handler's own format string
-    // instead of hardcoding a position, so a format change moves the pre-check with it.
-    // Deliberately a delegator rather than a rename: _setActionParamHandler is referenced by
-    // the pre-pass and by its tests, and one seam with two honest names is cheaper than a
-    // rename that touches a consensus path.
-    setActionParamHandler(action){
-        return this._setActionParamHandler(action);
     }
 
     // Pre-pass: assign deterministic, value-sorted index ids to the NEW wire-field
@@ -904,8 +900,8 @@ class Actions {
         // SEND recipients) and type-gated (LIST.ITEM) fields are skipped here and keep
         // handler-order assignment; the handler interns them in a fixed, cross-node
         // deterministic order. Only handlers with a fixed setActionParams layout are
-        // resolved (see _setActionParamHandler).
-        let handler = this._setActionParamHandler(action);
+        // resolved (see setActionParamHandler).
+        let handler = this.setActionParamHandler(action);
         if(!handler || !handler.formats)
             return;
         let format = data['FORMAT'];
@@ -995,7 +991,7 @@ class Actions {
     // Returns { blockIndex, blockTime, status, error, xchainFee, sourceFeeBalance } where
     // xchainFee is the handler-recorded fee ('0' for a valid zero-fee action, null when the
     // run never got far enough to stage one).
-    async _dryRunAction({ action, params, source, feeOutputs, probeFeeDestination, timeoutMs, acquireTimeoutMs, label, guardInert, feeProbe, feeBalanceTick }){
+    async dryRunAction({ action, params, source, feeOutputs, probeFeeDestination, timeoutMs, acquireTimeoutMs, label, guardInert, feeProbe, feeBalanceTick }){
         let blockIndex = await this.indexerDb.getLatestBlockIndex();
         let blockTime  = await this.indexerDb.getBlockTime(blockIndex);
 
@@ -1139,7 +1135,7 @@ class Actions {
     // (optionally) judge a proposed fee-output amount against the same lower-bound rule the
     // on-chain validator enforces (util.validateNativeCoinFee rejects only below min). Pure
     // pricing, shared by computeFeeQuote and computeFeeQuoteDryRun; extends and returns `base`.
-    async _priceFeeQuote(base, xchainFeeRaw, feeOutputSats){
+    async priceFeeQuote(base, xchainFeeRaw, feeOutputSats){
         let coin         = this.config['COIN'];
         let toleranceMin = this.util.bcnum(this.config['FEE_TOLERANCE_MIN'] || '0.95');
         let toleranceMax = this.util.bcnum(this.config['FEE_TOLERANCE_MAX'] || '1.10');
@@ -1212,7 +1208,7 @@ class Actions {
     // native-coin output. Mirrors the runtime rule in utility.detectFeePaymentMode (BTC falls
     // back to an XCHAIN balance debit when no fee output is present; every other coin rejects).
     // Message-shaping only: nothing consensus-bearing reads this.
-    _nativeFeeMandatory(){
+    nativeFeeMandatory(){
         let feeDestination = this.config['ADDRESS'] ? this.config['ADDRESS']['FEE_DESTINATION'] : null;
         if(!feeDestination || feeDestination === 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX') return false;
         return this.config['COIN'] !== 'BTC';
@@ -1224,7 +1220,7 @@ class Actions {
     // codeBytes is multiplied by VM_DEPLOY_PER_BYTE, so a decode that differs from the handler's
     // would quote a fee the chain does not accept. Returns { bytes } or { error } with the
     // handler's own verbatim reject string.
-    async _decodeDeployCodeBytes(encoded, blockIndex){
+    async decodeDeployCodeBytes(encoded, blockIndex){
         if(this.util.isNull(encoded))
             return { error: 'invalid: CODE_ENCODING (required)' };
         // Bound the decode before doing it: this runs on an unauthenticated endpoint, and no
@@ -1269,7 +1265,7 @@ class Actions {
     // those handlers calls, so a term added to one is added to this quote too.
     // Returns { gasCost, xchainFee }, { error } for an input the handler would reject outright,
     // or null when the action has no statically knowable fee.
-    async _staticProtocolFee(action, params, blockIndex){
+    async staticProtocolFee(action, params, blockIndex){
         let schedule = this.config['GAS_SCHEDULE'] || {};
         let gasCost  = null;
 
@@ -1278,7 +1274,7 @@ class Actions {
         } else if(action === 'DEPLOY'){
             let format = this.util.getFormatVersion(params[0]);
             if(format === 0 || format === 1){
-                let decoded = await this._decodeDeployCodeBytes(params[1], blockIndex);
+                let decoded = await this.decodeDeployCodeBytes(params[1], blockIndex);
                 if(decoded.error) return { error: decoded.error };
                 gasCost = this.util.vmGasCost(schedule, 'DEPLOY_INLINE', decoded.bytes);
             } else if(format === 2 || format === 3){
@@ -1307,11 +1303,11 @@ class Actions {
     // sized fee is not a verdict. The one verdict this path CAN reach is a negative one (a caller-
     // supplied output below the band's minimum, or an input the handler rejects before the VM),
     // and those stay valid:false because they are computed, not assumed.
-    async _staticFeeQuote(base, action, params, feeOutputSats){
+    async staticFeeQuote(base, action, params, feeOutputSats){
         if(!FEE_QUOTE_STATIC.has(action))
             return Object.assign(base, { supported: false, valid: false, denied: true,
                 error: 'native fee pre-flight not supported for ' + action +
-                       (this._nativeFeeMandatory()
+                       (this.nativeFeeMandatory()
                         ? ' (no fee quote is available for it on ' + this.config['COIN'] + ')'
                         : ' (pay the fee in XCHAIN)') });
 
@@ -1322,7 +1318,7 @@ class Actions {
 
         // A schedule that cannot price the action (a key missing or mistyped) fails CLOSED, back
         // to the refusal: quoting a fee from a half-read schedule is how an output gets under-sized.
-        let staticFee = await this._staticProtocolFee(action, params, blockIndex);
+        let staticFee = await this.staticProtocolFee(action, params, blockIndex);
         if(staticFee === null)
             return Object.assign(base, { supported: false, valid: false, denied: true,
                 error: 'native fee pre-flight not supported for ' + action });
@@ -1333,7 +1329,7 @@ class Actions {
             return Object.assign(base, { valid: false, error: staticFee.error, xchainFee: null });
 
         base.gasCost = staticFee.gasCost;
-        let quote = await this._priceFeeQuote(base, staticFee.xchainFee, feeOutputSats);
+        let quote = await this.priceFeeQuote(base, staticFee.xchainFee, feeOutputSats);
         if(quote.valid === true) quote.valid = null;
         quote.note = action + ' is priced from the gas schedule without a dry-run: the fee is the ' +
             'protocol fee the chain checks the native-coin output against, but on-chain validity ' +
@@ -1395,7 +1391,7 @@ class Actions {
         let feeClass = classifyFeeQuoteAction(action);
 
         if(feeClass === 'denied')
-            return await this._staticFeeQuote(base, action, params, feeOutputSats);
+            return await this.staticFeeQuote(base, action, params, feeOutputSats);
 
         // Fee-exempt settlement/lifecycle actions: no protocol fee to price, and their required
         // native outputs can't be reproduced by the dry-run harness. Answer zero, skip the engine.
@@ -1419,7 +1415,7 @@ class Actions {
         this._feeQuotePending = (this._feeQuotePending || 0) + 1;
         let run;
         try {
-            run = await this._dryRunAction({
+            run = await this.dryRunAction({
                 action, params, source,
                 probeFeeDestination: feeDestination,
                 timeoutMs: timeoutMs,
@@ -1474,7 +1470,7 @@ class Actions {
                 xchainFee: (run.xchainFee == null) ? null : this.util.bcformat(this.util.bcnum(run.xchainFee), 8)
             });
 
-        return await this._priceFeeQuote(base, run.xchainFee, feeOutputSats);
+        return await this.priceFeeQuote(base, run.xchainFee, feeOutputSats);
     }
 
     // Raw fee/validity dry-run (the regtest-only `feequotedryrun` JSON-RPC). Same engine as the
@@ -1496,7 +1492,7 @@ class Actions {
         let feeDestination = this.config['ADDRESS'] ? this.config['ADDRESS']['FEE_DESTINATION'] : null;
         let nativeEnabled  = !!(feeDestination && feeDestination !== 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX');
 
-        let run = await this._dryRunAction({
+        let run = await this.dryRunAction({
             action, params, source, feeOutputs,
             probeFeeDestination: null,
             timeoutMs: this.config['BLOCK_PROCESS_TIMEOUT'],
@@ -1527,7 +1523,7 @@ class Actions {
             // Carry blockTime: it is what _priceFeeQuote anchors the whole price read on (round
             // selection, staleness, flag-day gate). Without it this raw surface would silently
             // fall back to wall clock and quote off a different price set than the chain.
-            let priced = await this._priceFeeQuote({ blockIndex: run.blockIndex, blockTime: run.blockTime }, run.xchainFee, undefined);
+            let priced = await this.priceFeeQuote({ blockIndex: run.blockIndex, blockTime: run.blockTime }, run.xchainFee, undefined);
             if(priced.valid !== false){
                 result.feeSupported      = true;
                 result.oracleRound       = priced.oracleRound;
@@ -1561,7 +1557,7 @@ class Actions {
     // sub-action costs the node one string scan rather than a transaction. It is NOT the
     // load-bearing guard: batch.js re-checks each dispatched name (see
     // isBatchProbeForbiddenSubAction).
-    _batchProbeForbiddenSubAction(params){
+    batchProbeForbiddenSubAction(params){
         let format   = this.util.getFormatVersion(params[0]);
         let commands = ['BATCH'].concat(params).join('|').split(';');
         commands[0]  = commands[0].replace('BATCH|' + format + '|', '');
@@ -1611,7 +1607,7 @@ class Actions {
         let requestedMode  = String(feeMode == null ? '' : feeMode).trim().toLowerCase();
         let resolvedMode   = (requestedMode === 'native' || requestedMode === 'xchain')
                            ? requestedMode
-                           : (this._nativeFeeMandatory() ? 'native' : 'xchain');
+                           : (this.nativeFeeMandatory() ? 'native' : 'xchain');
         // Native settlement needs somewhere to pay: with no usable FEE_DESTINATION the chain
         // itself falls back to the XCHAIN debit (utility.detectFeePaymentMode), so match it.
         if(resolvedMode === 'native' && !probeDest) resolvedMode = 'xchain';
@@ -1643,7 +1639,7 @@ class Actions {
         // payer's miner fee on a guaranteed-invalid transaction). Validity and pricing are
         // separate questions and only the validity one is closed here.
         if(action === 'BATCH'){
-            let forbidden = this._batchProbeForbiddenSubAction(params);
+            let forbidden = this.batchProbeForbiddenSubAction(params);
             if(forbidden)
                 return Object.assign(base, { supported: false, denied: true, valid: null,
                     deniedSubAction: forbidden,
@@ -1674,7 +1670,7 @@ class Actions {
         this._feeQuotePending = (this._feeQuotePending || 0) + 1;
         let run;
         try {
-            run = await this._dryRunAction({
+            run = await this.dryRunAction({
                 action, params, source,
                 probeFeeDestination: (resolvedMode === 'native') ? probeDest : null,
                 timeoutMs: timeoutMs,

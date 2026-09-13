@@ -259,7 +259,7 @@ describe('markets: the migration that rebuilds the missing rows @regression @tie
                            '2026-09-10-markets-native-coin-side.sql');
     const raw  = fs.readFileSync(FILE, 'utf8');
     // The same header read and quote-aware split runMigrations applies to the file.
-    const mode = Database.prototype._migrationMode.call({}, raw);
+    const mode = Database.prototype.migrationMode.call({}, raw);
     const statements = Database.prototype.splitSqlStatements.call(Database.prototype, raw)
         .map(s => String(s).trim()).filter(Boolean);
 
@@ -297,7 +297,7 @@ describe('markets: the migration that rebuilds the missing rows @regression @tie
     it('is manual, and cannot be retagged auto', function () {
         assert.strictEqual(mode, 'manual');
         const flagged = statements.filter(s =>
-            Database.prototype._destructiveAutoStatement.call(Database.prototype, [s]));
+            Database.prototype.destructiveAutoStatement.call(Database.prototype, [s]));
         assert.ok(flagged.length >= 3,
             'the DELETE and the bare UPDATEs each refuse the auto path, so a mode=auto ' +
             'tag would make runMigrations throw at boot rather than run unattended');

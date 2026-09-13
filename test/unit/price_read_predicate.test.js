@@ -57,7 +57,7 @@ function ctx(opts = {}) {
 }
 
 const evaluate = (self, block, txs) =>
-    XChainIndexer.prototype._evaluatePriceBarrier.call(self, block, txs);
+    XChainIndexer.prototype.evaluatePriceBarrier.call(self, block, txs);
 
 function makeDb() {
     const config  = getTestConfig();
@@ -188,7 +188,7 @@ describe('action-scoped price barrier', function () {
             db.indexer.priceBarrierSkipped = true;
             // No txEpochStore context: this is an api.js fee quote or a healthcheck,
             // free to read whatever the mirror currently holds.
-            assert.doesNotThrow(() => db._assertPriceBarrierNotSkipped('test'));
+            assert.doesNotThrow(() => db.assertPriceBarrierNotSkipped('test'));
             assert.strictEqual(db.indexer.priceBarrierForceBlock, null);
         });
 
@@ -196,7 +196,7 @@ describe('action-scoped price barrier', function () {
             const db = makeDb();
             db.indexer.priceBarrierSkipped = false;
             db.runInTxEpoch(0, () => {
-                assert.doesNotThrow(() => db._assertPriceBarrierNotSkipped('test'));
+                assert.doesNotThrow(() => db.assertPriceBarrierNotSkipped('test'));
             });
             assert.strictEqual(db.indexer.priceBarrierForceBlock, null);
         });
@@ -205,7 +205,7 @@ describe('action-scoped price barrier', function () {
             const db = makeDb();
             db.indexer.priceBarrierSkipped = true;
             db.runInTxEpoch(0, () => {
-                assert.throws(() => db._assertPriceBarrierNotSkipped('test'), /price barrier skipped/);
+                assert.throws(() => db.assertPriceBarrierNotSkipped('test'), /price barrier skipped/);
             });
             // The retry must take the barrier, or the block would skip again and loop.
             assert.strictEqual(db.indexer.priceBarrierForceBlock, 959864);
@@ -221,7 +221,7 @@ describe('action-scoped price barrier', function () {
             db.indexer.priceBarrierSkipped = true;
             let caught = null;
             db.runInTxEpoch(0, () => {
-                try { db._assertPriceBarrierNotSkipped('getOracleDataForVM'); }
+                try { db.assertPriceBarrierNotSkipped('getOracleDataForVM'); }
                 catch (e) { caught = e; }
             });
             assert.ok(caught instanceof Error, 'the deferral must be an Error, not a bare string');

@@ -57,42 +57,42 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
 
     describe('_judge: binding an on-chain anchor to the reward tuple', function () {
         it('verifies a buried, tuple-matching v1 archive head on its match_batch_seq', function () {
-            assert.strictEqual(client()._judge([anchor()], expectation()), 'verified');
+            assert.strictEqual(client().judge([anchor()], expectation()), 'verified');
         });
 
         it('verifies the v0 bundle leg against an anchor_bundle reward on its snapshot block', function () {
             const a = anchor({ version: 0, match_batch_seq: null, checkpoint_seq: 900 });
             const e = expectation({ rewardType: 'anchor_bundle', roundReference: 900 });
-            assert.strictEqual(client()._judge([a], e), 'verified');
+            assert.strictEqual(client().judge([a], e), 'verified');
         });
 
         it('rejects a v0 bundle section offered as proof of an ARCHIVE reward', function () {
             const a = anchor({ version: 0, match_batch_seq: null });
-            assert.strictEqual(client()._judge([a], expectation()), 'rejected');
+            assert.strictEqual(client().judge([a], expectation()), 'rejected');
         });
 
         it('rejects a v1 archive head offered as proof of a BUNDLE reward', function () {
             const e = expectation({ rewardType: 'anchor_bundle', roundReference: 900 });
-            assert.strictEqual(client()._judge([anchor()], e), 'rejected');
+            assert.strictEqual(client().judge([anchor()], e), 'rejected');
         });
 
         it('rejects an anchor crediting a different publisher', function () {
-            assert.strictEqual(client()._judge([anchor({ publisher: 'cc'.repeat(32) })], expectation()), 'rejected');
+            assert.strictEqual(client().judge([anchor({ publisher: 'cc'.repeat(32) })], expectation()), 'rejected');
         });
 
         it('rejects an anchor for a different round', function () {
             // The archive family's round term is match_batch_seq, never the wrapper's seq.
-            assert.strictEqual(client()._judge([anchor({ match_batch_seq: 13 })], expectation()), 'rejected');
-            assert.strictEqual(client()._judge([anchor({ checkpoint_seq: 8 })], expectation()), 'verified',
+            assert.strictEqual(client().judge([anchor({ match_batch_seq: 13 })], expectation()), 'rejected');
+            assert.strictEqual(client().judge([anchor({ checkpoint_seq: 8 })], expectation()), 'verified',
                 'a different wrapper checkpoint_seq is not a different archive round');
         });
 
         it('rejects an anchor whose snapshot_block differs (a different signing set)', function () {
-            assert.strictEqual(client()._judge([anchor({ snapshot_block: 901 })], expectation()), 'rejected');
+            assert.strictEqual(client().judge([anchor({ snapshot_block: 901 })], expectation()), 'rejected');
         });
 
         it('rejects an anchor for a different network', function () {
-            assert.strictEqual(client()._judge([anchor({ checkpoint_network: 'testnet' })], expectation()), 'rejected');
+            assert.strictEqual(client().judge([anchor({ checkpoint_network: 'testnet' })], expectation()), 'rejected');
         });
 
         // Neither live family binds a chain, so there is no chain term left to gate on. The
@@ -101,10 +101,10 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
         it('binds no chain on either live family', function () {
             const c = client();
             const head = anchor({ checkpoint_chain: 'LTC' });
-            assert.strictEqual(c._judge([head], expectation()), 'verified',
+            assert.strictEqual(c.judge([head], expectation()), 'verified',
                 'an archive head wrapping another chain\'s checkpoint still proves its own reward');
             const sect = anchor({ version: 0, checkpoint_chain: 'DOGE', match_batch_seq: null, checkpoint_seq: 900 });
-            assert.strictEqual(c._judge([sect], expectation({ rewardType: 'anchor_bundle', roundReference: 900 })),
+            assert.strictEqual(c.judge([sect], expectation({ rewardType: 'anchor_bundle', roundReference: 900 })),
                 'verified', 'a bundle section proves the one bundle reward whichever chain it names');
         });
 
@@ -115,17 +115,17 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
         it('permanently rejects a reward_type naming no live family', function () {
             const c = client();
             for (const rewardType of ['anchor_BTC', 'anchor_btc', 'anchor_LTC', 'anchor_DOGE', 'anchor_nonsense'])
-                assert.strictEqual(c._judge([anchor(), anchor({ version: 0, match_batch_seq: null })],
+                assert.strictEqual(c.judge([anchor(), anchor({ version: 0, match_batch_seq: null })],
                                             expectation({ rewardType })), 'rejected', rewardType);
         });
 
         it('rejects a retired reward_type even on a transaction carrying no anchors at all', function () {
-            assert.strictEqual(client()._judge([], expectation({ rewardType: 'anchor_BTC' })), 'rejected',
+            assert.strictEqual(client().judge([], expectation({ rewardType: 'anchor_BTC' })), 'rejected',
                 'the verdict comes off the signed reward_type alone, so it never depends on the page');
         });
 
         it('rejects a decoded-invalid anchor (it never anchored anything)', function () {
-            assert.strictEqual(client()._judge([anchor({ status: 'invalid: bad sigs' })], expectation()), 'rejected');
+            assert.strictEqual(client().judge([anchor({ status: 'invalid: bad sigs' })], expectation()), 'rejected');
         });
 
         // The reject verdict is memoized as PERMANENT, and its whole licence to be so is
@@ -139,18 +139,18 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
         // nothing, so the verdict falls through to the node-class-independent fields.
         it('does not reject on a signature-verdict status, which is node-class-dependent', function () {
             const c = client();
-            assert.strictEqual(c._judge([anchor({ status: 'invalid: insufficient valid signatures (1/3)' })],
+            assert.strictEqual(c.judge([anchor({ status: 'invalid: insufficient valid signatures (1/3)' })],
                                         expectation()), 'verified');
-            assert.strictEqual(c._judge([anchor({ status: 'invalid: insufficient signer stake' })],
+            assert.strictEqual(c.judge([anchor({ status: 'invalid: insufficient signer stake' })],
                                         expectation()), 'verified');
         });
 
         it('does not reject on invalid_archive, which only a chunk-holding node can stamp', function () {
-            assert.strictEqual(client()._judge([anchor({ status: 'invalid_archive' })], expectation()), 'verified');
+            assert.strictEqual(client().judge([anchor({ status: 'invalid_archive' })], expectation()), 'verified');
         });
 
         it('still treats unverified as non-evidence, matching the two statuses above', function () {
-            assert.strictEqual(client()._judge([anchor({ status: 'unverified' })], expectation()), 'verified');
+            assert.strictEqual(client().judge([anchor({ status: 'unverified' })], expectation()), 'verified');
         });
 
         it('keeps rejecting the deterministic invalid reasons a node computes from the wire', function () {
@@ -159,13 +159,13 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
                                  'invalid: CHECKPOINT_SEQ (stale; replay of an older checkpoint)',
                                  'invalid: STATE_ROOT (format)',
                                  'invalid: VERSION (unknown)'])
-                assert.strictEqual(c._judge([anchor({ status })], expectation()), 'rejected', status);
+                assert.strictEqual(c.judge([anchor({ status })], expectation()), 'rejected', status);
         });
 
         // Depth is the one failure that self-heals, so it must never be terminal: the anchor
         // WILL bury. Treating it as a reject would forfeit a legitimate reward permanently.
         it('returns unknown for a tuple-matching anchor that is not yet buried deep enough', function () {
-            assert.strictEqual(client()._judge([anchor({ confirmations: 59 })], expectation()), 'unknown');
+            assert.strictEqual(client().judge([anchor({ confirmations: 59 })], expectation()), 'unknown');
         });
 
         // A transaction carrying only unattested versions tells us nothing about this reward:
@@ -179,7 +179,7 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
             // evidence - proving their own family (6 archive, 7 bundle) and deterministically
             // rejecting outside it (4/5, the retired per-chain wires, prove nothing).
             const c = client();
-            assert.strictEqual(c._judge([anchor({ version: 2, publisher: null })], expectation()), 'unknown');
+            assert.strictEqual(c.judge([anchor({ version: 2, publisher: null })], expectation()), 'unknown');
         });
 
         // The pre-restart era, in one place. The version restart renumbered the archive head
@@ -189,26 +189,26 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
         // byte; the family exclusivity holds across eras; and the retired per-chain wires
         // reject deterministically instead of deferring the block forever.
         it('verifies a buried, tuple-matching pre-restart v6 archive head (the 150456 shape)', function () {
-            assert.strictEqual(client()._judge([anchor({ version: 6 })], expectation()), 'verified');
+            assert.strictEqual(client().judge([anchor({ version: 6 })], expectation()), 'verified');
         });
 
         it('verifies a buried pre-restart v7 bundle against its anchor_bundle reward', function () {
             const a = anchor({ version: 7, match_batch_seq: null, checkpoint_seq: 900 });
             const e = expectation({ rewardType: 'anchor_bundle', roundReference: 900 });
-            assert.strictEqual(client()._judge([a], e), 'verified');
+            assert.strictEqual(client().judge([a], e), 'verified');
         });
 
         it('keeps the family exclusive across eras: v6 proves no bundle, v7 proves no archive', function () {
             const c = client();
             const e = expectation({ rewardType: 'anchor_bundle', roundReference: 900 });
-            assert.strictEqual(c._judge([anchor({ version: 6 })], e), 'rejected');
-            assert.strictEqual(c._judge([anchor({ version: 7, match_batch_seq: null })], expectation()), 'rejected');
+            assert.strictEqual(c.judge([anchor({ version: 6 })], e), 'rejected');
+            assert.strictEqual(c.judge([anchor({ version: 7, match_batch_seq: null })], expectation()), 'rejected');
         });
 
         it('rejects (never defers on) a txid carrying only retired per-chain v4/v5 anchors', function () {
             const c = client();
             for (const version of [4, 5])
-                assert.strictEqual(c._judge([anchor({ version })], expectation()), 'rejected', 'v' + version);
+                assert.strictEqual(c.judge([anchor({ version })], expectation()), 'rejected', 'v' + version);
         });
 
         it('drops a post-activation forgery on a legacy byte via its wire-determined status', function () {
@@ -216,12 +216,12 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
             // chain data every DOGE node computes identically, so the row is not evidence
             // and the mis-bind resolves 'rejected' rather than minting or deferring.
             const a = anchor({ version: 6, status: 'invalid: VERSION (unknown)' });
-            assert.strictEqual(client()._judge([a], expectation()), 'rejected');
+            assert.strictEqual(client().judge([a], expectation()), 'rejected');
         });
 
         it('picks the matching anchor when a transaction carries several', function () {
             const rows = [anchor({ version: 2, publisher: null }), anchor()];
-            assert.strictEqual(client()._judge(rows, expectation()), 'verified');
+            assert.strictEqual(client().judge(rows, expectation()), 'verified');
         });
     });
 
@@ -244,14 +244,14 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
         it('memoizes a decided verdict but never memoizes unknown', async function () {
             const c = client();
             let calls = 0;
-            c._fetch = async () => { calls++; return { exists: true, anchors: [anchor()] }; };
+            c.fetch = async () => { calls++; return { exists: true, anchors: [anchor()] }; };
             assert.strictEqual(await c.proveMined(expectation()), 'verified');
             assert.strictEqual(await c.proveMined(expectation()), 'verified');
             assert.strictEqual(calls, 1, 'a buried anchor is immutable chain data; re-asking is pure load');
 
             const c2 = client();
             let calls2 = 0;
-            c2._fetch = async () => { calls2++; return { exists: true, anchors: [anchor({ confirmations: 1 })] }; };
+            c2.fetch = async () => { calls2++; return { exists: true, anchors: [anchor({ confirmations: 1 })] }; };
             assert.strictEqual(await c2.proveMined(expectation()), 'unknown');
             assert.strictEqual(await c2.proveMined(expectation()), 'unknown');
             assert.strictEqual(calls2, 2, 'unknown is exactly the state expected to change, so it must be re-asked');
@@ -265,7 +265,7 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
         it('does not leak a decided verdict to a different reward tuple on the same txid', async function () {
             const c = client();
             // The transaction carries ONLY the publisher-aa / seq-7 anchor.
-            c._fetch = async () => ({ exists: true, anchors: [anchor()] });
+            c.fetch = async () => ({ exists: true, anchors: [anchor()] });
             assert.strictEqual(await c.proveMined(expectation()), 'verified');
             // A different publisher's row naming the same txid is a positively-detected
             // mis-bind and must still be judged, not answered from the first row's memo.
@@ -274,20 +274,20 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
 
             // Same shape the other way round: a rejected tuple must not poison the legitimate one.
             const c2 = client();
-            c2._fetch = async () => ({ exists: true, anchors: [anchor()] });
+            c2.fetch = async () => ({ exists: true, anchors: [anchor()] });
             assert.strictEqual(await c2.proveMined(expectation({ roundReference: 8 })), 'rejected');
             assert.strictEqual(await c2.proveMined(expectation()), 'verified');
         });
 
         it('treats an unreachable DOGE indexer as unknown (defer), not as absent', async function () {
             const c = client();
-            c._fetch = async () => null;
+            c.fetch = async () => null;
             assert.strictEqual(await c.proveMined(expectation()), 'unknown');
         });
 
         it('treats "no such transaction" as unknown: the DOGE indexer may simply be behind', async function () {
             const c = client();
-            c._fetch = async () => ({ exists: false, anchors: [] });
+            c.fetch = async () => ({ exists: false, anchors: [] });
             assert.strictEqual(await c.proveMined(expectation()), 'unknown');
         });
     });
@@ -309,7 +309,7 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
         it('follows the cursor and finds a match that fell past the first page', async function () {
             const c = client();
             const seen = [];
-            c._fetch = async (txid, after) => {
+            c.fetch = async (txid, after) => {
                 seen.push(after);
                 return (after === null || after === undefined)
                     ? { exists: true, anchors: [sibling()], truncated: true, next_after_action_index: 41 }
@@ -323,7 +323,7 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
             // Same shape, but the anchor past the boundary is also a mis-bind: only after the
             // walk completes is 'rejected' a statement about the WHOLE set rather than a page.
             const c = client();
-            c._fetch = async (txid, after) => (after === null || after === undefined)
+            c.fetch = async (txid, after) => (after === null || after === undefined)
                 ? { exists: true, anchors: [sibling()], truncated: true, next_after_action_index: 41 }
                 : { exists: true, anchors: [sibling()], truncated: false, next_after_action_index: null };
             assert.strictEqual(await c.proveMined(expectation()), 'rejected');
@@ -332,7 +332,7 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
         it('asks for exactly one page when the peer says the set is complete', async function () {
             const c = client();
             let calls = 0;
-            c._fetch = async () => { calls++; return { exists: true, anchors: [anchor()], truncated: false }; };
+            c.fetch = async () => { calls++; return { exists: true, anchors: [anchor()], truncated: false }; };
             assert.strictEqual(await c.proveMined(expectation()), 'verified');
             assert.strictEqual(calls, 1);
         });
@@ -342,19 +342,19 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
             // behaviour (judge page one) rather than stall the block loop on a mixed fleet.
             const c = client();
             let calls = 0;
-            c._fetch = async () => { calls++; return { exists: true, anchors: [sibling()] }; };
+            c.fetch = async () => { calls++; return { exists: true, anchors: [sibling()] }; };
             assert.strictEqual(await c.proveMined(expectation()), 'rejected');
             assert.strictEqual(calls, 1);
         });
 
         it('refuses to judge a partial set when the cursor is missing or does not advance', async function () {
             const noCursor = client();
-            noCursor._fetch = async () => ({ exists: true, anchors: [sibling()], truncated: true,
+            noCursor.fetch = async () => ({ exists: true, anchors: [sibling()], truncated: true,
                                              next_after_action_index: null });
             assert.strictEqual(await noCursor.proveMined(expectation()), 'unknown');
 
             const stuck = client();
-            stuck._fetch = async () => ({ exists: true, anchors: [sibling()], truncated: true,
+            stuck.fetch = async () => ({ exists: true, anchors: [sibling()], truncated: true,
                                           next_after_action_index: 41 });
             assert.strictEqual(await stuck.proveMined(expectation()), 'unknown',
                 'a cursor that never advances would loop forever; it is a half-spoken protocol, not a set');
@@ -363,7 +363,7 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
         it('bounds the walk and refuses rather than judging what it managed to collect', async function () {
             const c = client();
             let calls = 0;
-            c._fetch = async () => {
+            c.fetch = async () => {
                 calls++;
                 return { exists: true, anchors: [sibling()], truncated: true, next_after_action_index: calls };
             };
@@ -374,7 +374,7 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
         it('never memoizes an undecided walk, so the reward is retried rather than lost', async function () {
             const c = client();
             let calls = 0;
-            c._fetch = async () => {
+            c.fetch = async () => {
                 calls++;
                 return { exists: true, anchors: [sibling()], truncated: true, next_after_action_index: null };
             };
@@ -423,7 +423,7 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
         }
 
         it('verifies a buried v0 bundle against its one anchor_bundle reward', function () {
-            assert.strictEqual(client()._judge(bundle(), bundleReward()), 'verified');
+            assert.strictEqual(client().judge(bundle(), bundleReward()), 'verified');
         });
 
         // The whole point of the family: no section's chain is compared to anything. Slicing
@@ -432,7 +432,7 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
         it('binds the bundle reward to no chain, whichever section leads the wire', function () {
             const c = client();
             for (const first of ['LTC', 'DOGE', 'BTC'])
-                assert.strictEqual(c._judge([section({ checkpoint_chain: first })], bundleReward()),
+                assert.strictEqual(c.judge([section({ checkpoint_chain: first })], bundleReward()),
                                    'verified', first);
         });
 
@@ -443,9 +443,9 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
         // block loop forever, which is the failure this leg exists to remove.
         it('refuses a v0 bundle whose snapshot block is not the reward round', function () {
             const c = client();
-            assert.strictEqual(c._judge(bundle({ snapshot_block: SNAP - 6, checkpoint_seq: SNAP - 6 }),
+            assert.strictEqual(c.judge(bundle({ snapshot_block: SNAP - 6, checkpoint_seq: SNAP - 6 }),
                                         bundleReward()), 'rejected');
-            assert.strictEqual(c._judge(bundle(), bundleReward({ roundReference: SNAP - 6 })), 'rejected');
+            assert.strictEqual(c.judge(bundle(), bundleReward({ roundReference: SNAP - 6 })), 'rejected');
         });
 
         // A lagging chain rides the bundle at its OWN older snapshot block, and the parser proves
@@ -455,8 +455,8 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
         it('verifies a bundle carrying a lagging section, and only at the header block', function () {
             const rows = [section({ checkpoint_chain: 'BTC' }),
                           section({ checkpoint_chain: 'LTC', snapshot_block: SNAP - 6, checkpoint_seq: SNAP - 6 })];
-            assert.strictEqual(client()._judge(rows, bundleReward()), 'verified');
-            assert.strictEqual(client()._judge(rows, bundleReward({ roundReference: SNAP - 6, snapshotBlock: SNAP - 6 })),
+            assert.strictEqual(client().judge(rows, bundleReward()), 'verified');
+            assert.strictEqual(client().judge(rows, bundleReward({ roundReference: SNAP - 6, snapshotBlock: SNAP - 6 })),
                                'rejected');
         });
 
@@ -466,34 +466,34 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
         // part of the one reward, so the round term must never read it. Binding to it instead
         // would tie the whole bundle to whichever chain led the wire.
         it('binds the bundle round to the snapshot block, never to a section checkpoint_seq', function () {
-            assert.strictEqual(client()._judge(bundle({ checkpoint_seq: SNAP - 3 }), bundleReward()), 'verified');
+            assert.strictEqual(client().judge(bundle({ checkpoint_seq: SNAP - 3 }), bundleReward()), 'verified');
         });
 
         it('refuses a v0 bundle crediting a different publisher', function () {
-            assert.strictEqual(client()._judge(bundle({ publisher: 'cc'.repeat(32) }), bundleReward()), 'rejected');
+            assert.strictEqual(client().judge(bundle({ publisher: 'cc'.repeat(32) }), bundleReward()), 'rejected');
         });
 
         it('refuses a v0 bundle anchored for a different network', function () {
-            assert.strictEqual(client()._judge(bundle({ checkpoint_network: 'testnet' }), bundleReward()), 'rejected');
+            assert.strictEqual(client().judge(bundle({ checkpoint_network: 'testnet' }), bundleReward()), 'rejected');
         });
 
         // Depth is the one failure that self-heals, so a matching but shallow bundle defers.
         it('returns unknown for a matching bundle that is not yet buried deep enough', function () {
-            assert.strictEqual(client()._judge(bundle({ confirmations: 59 }), bundleReward()), 'unknown');
+            assert.strictEqual(client().judge(bundle({ confirmations: 59 }), bundleReward()), 'unknown');
         });
 
         // A bundle section can never stand in for a retired per-chain reward: it shares the
         // publisher, network, snapshot block, seq and even the chain of the anchor_<CHAIN>
         // reward of the same round, and now the reward_type names no live family at all.
         it('refuses a v0 section as proof of a retired per-chain reward', function () {
-            assert.strictEqual(client()._judge([section()],
+            assert.strictEqual(client().judge([section()],
                 expectation({ rewardType: 'anchor_BTC', roundReference: SNAP, snapshotBlock: SNAP })),
                 'rejected');
         });
 
         it('refuses a v1 archive head as proof of a bundle reward', function () {
             const a = anchor({ version: 1, checkpoint_seq: SNAP, snapshot_block: SNAP, match_batch_seq: SNAP });
-            assert.strictEqual(client()._judge([a], bundleReward()), 'rejected');
+            assert.strictEqual(client().judge([a], bundleReward()), 'rejected');
         });
 
         // Pre-restart anchors are attested rows every node can read, so they are evidence:
@@ -503,9 +503,9 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
         it('judges a pre-restart anchor offered as proof of a bundle reward', function () {
             const c = client();
             for (const version of [4, 5, 6])
-                assert.strictEqual(c._judge([anchor({ version, checkpoint_seq: SNAP, snapshot_block: SNAP })],
+                assert.strictEqual(c.judge([anchor({ version, checkpoint_seq: SNAP, snapshot_block: SNAP })],
                                             bundleReward()), 'rejected', 'v' + version);
-            assert.strictEqual(c._judge([anchor({ version: 7, checkpoint_seq: SNAP, snapshot_block: SNAP })],
+            assert.strictEqual(c.judge([anchor({ version: 7, checkpoint_seq: SNAP, snapshot_block: SNAP })],
                                         bundleReward()), 'verified', 'v7 is the bundle\'s own pre-restart byte');
         });
 
@@ -514,7 +514,7 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
         // and the reward is re-asked rather than forfeited.
         it('returns unknown when the txid carries no attestation-bearing anchor at all', function () {
             const chunk = section({ version: 2, publisher: null, snapshot_block: null, checkpoint_seq: null });
-            assert.strictEqual(client()._judge([chunk], bundleReward()), 'unknown');
+            assert.strictEqual(client().judge([chunk], bundleReward()), 'unknown');
         });
 
         // The live shape: an archive head sharing the transaction with the bundle. Each reward
@@ -523,13 +523,13 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
             const archiveHead = anchor({ version: 1, checkpoint_chain: 'DOGE', checkpoint_seq: 99,
                                          snapshot_block: SNAP, match_batch_seq: 12 });
             const rows = bundle().concat([archiveHead]);
-            assert.strictEqual(client()._judge(rows, bundleReward()), 'verified');
-            assert.strictEqual(client()._judge(rows, expectation({ rewardType: 'anchor_archive',
+            assert.strictEqual(client().judge(rows, bundleReward()), 'verified');
+            assert.strictEqual(client().judge(rows, expectation({ rewardType: 'anchor_archive',
                                                                   roundReference: 12, snapshotBlock: SNAP })),
                                'verified');
             // The archive head is the only v1 present, so a bundle reward at ITS batch seq is
             // still a mis-bind rather than an accidental match.
-            assert.strictEqual(client()._judge(rows, bundleReward({ roundReference: 12, snapshotBlock: 12 })),
+            assert.strictEqual(client().judge(rows, bundleReward({ roundReference: 12, snapshotBlock: 12 })),
                                'rejected');
         });
 
@@ -543,7 +543,7 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
             for (const status of ['invalid: SECTION 0 insufficient valid signatures (1/3)',
                                   'invalid: SECTION 2 insufficient signer stake',
                                   'unverified'])
-                assert.strictEqual(c._judge(bundle({ status }), bundleReward()), 'verified', status);
+                assert.strictEqual(c.judge(bundle({ status }), bundleReward()), 'verified', status);
         });
 
         it('keeps rejecting the v0 verdicts a node computes from the wire alone', function () {
@@ -551,7 +551,7 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
             for (const status of ['invalid: SECTION 1 CHECKPOINT_SEQ (stale; replay of an older checkpoint)',
                                   'invalid: SECTION 0 CHAIN (duplicate)',
                                   'invalid: SNAPSHOT_BLOCK (not the section maximum)'])
-                assert.strictEqual(c._judge(bundle({ status }), bundleReward()), 'rejected', status);
+                assert.strictEqual(c.judge(bundle({ status }), bundleReward()), 'rejected', status);
         });
 
         // End to end over the real transport shape: one page, three version-0 sections, the
@@ -559,7 +559,7 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
         it('proves the live three-section bundle through proveMined', async function () {
             const c = client();
             let calls = 0;
-            c._fetch = async () => { calls++; return { exists: true, anchors: bundle(), truncated: false }; };
+            c.fetch = async () => { calls++; return { exists: true, anchors: bundle(), truncated: false }; };
             assert.strictEqual(await c.proveMined(bundleReward()), 'verified');
             assert.strictEqual(await c.proveMined(bundleReward()), 'verified');
             assert.strictEqual(calls, 1);
@@ -587,7 +587,7 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
 
             it('judges each bundle against its own header when the rows carry action identity', function () {
                 const rows = ownBundle().concat([sibling({ status: 'invalid: bad sigs' })]);
-                assert.strictEqual(client()._judge(rows, bundleReward()), 'verified');
+                assert.strictEqual(client().judge(rows, bundleReward()), 'verified');
             });
 
             it('is not suppressed by a sibling whose invalidity is a NODE-CLASS verdict', function () {
@@ -596,16 +596,16 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
                 // only the per-action grouping can. A forged sibling naming the real publisher
                 // is cheap, which is why the identity is the fix rather than the filter.
                 const rows = ownBundle().concat([sibling({ status: 'invalid: SECTION 1 insufficient' })]);
-                assert.strictEqual(client()._judge(rows, bundleReward()), 'verified');
+                assert.strictEqual(client().judge(rows, bundleReward()), 'verified');
             });
 
             it('judges two VALID bundles on one transaction against their own headers', function () {
                 const other = section({ action_index: 42, section_index: 0,
                                         snapshot_block: SNAP + 6, checkpoint_seq: SNAP + 6 });
                 const rows  = ownBundle().concat([other]);
-                assert.strictEqual(client()._judge(rows, bundleReward()), 'verified',
+                assert.strictEqual(client().judge(rows, bundleReward()), 'verified',
                     'the lower bundle still proves its own reward');
-                assert.strictEqual(client()._judge(rows, bundleReward({
+                assert.strictEqual(client().judge(rows, bundleReward({
                     roundReference: SNAP + 6, snapshotBlock: SNAP + 6
                 })), 'verified', 'and so does the higher one');
             });
@@ -620,7 +620,7 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
                                    { checkpoint_network: 'testnet' }]) {
                     const rows = bundle().concat([section(Object.assign(
                         { snapshot_block: SNAP + 6, checkpoint_seq: SNAP + 6 }, bad))]);
-                    assert.strictEqual(client()._judge(rows, bundleReward()), 'verified',
+                    assert.strictEqual(client().judge(rows, bundleReward()), 'verified',
                         JSON.stringify(bad));
                 }
             });
@@ -632,7 +632,7 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
                     action_index: 41, section_index: 3,
                     snapshot_block: SNAP - 40, checkpoint_seq: SNAP - 40
                 })]);
-                assert.strictEqual(client()._judge(rows, bundleReward({
+                assert.strictEqual(client().judge(rows, bundleReward({
                     roundReference: SNAP - 40, snapshotBlock: SNAP - 40
                 })), 'rejected');
             });
@@ -655,17 +655,17 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
             const c = client();
             for (const chain of ['BTC', 'DOGE', 'LTC']) {
                 const e = expectation({ rewardType: 'anchor_' + chain });
-                assert.strictEqual(c._judge([anchor({ checkpoint_chain: chain })], e), 'rejected', chain);
-                assert.strictEqual(c._judge([anchor({ version: 4, checkpoint_chain: chain })], e), 'rejected', chain + '/v4');
-                assert.strictEqual(c._judge([], e), 'rejected', chain + '/empty');
+                assert.strictEqual(c.judge([anchor({ checkpoint_chain: chain })], e), 'rejected', chain);
+                assert.strictEqual(c.judge([anchor({ version: 4, checkpoint_chain: chain })], e), 'rejected', chain + '/v4');
+                assert.strictEqual(c.judge([], e), 'rejected', chain + '/empty');
             }
         });
 
         it('leaves the two live legs proving their own rewards', function () {
             const c = client();
-            assert.strictEqual(c._judge([anchor({ checkpoint_chain: 'LTC' })], expectation()), 'verified');
+            assert.strictEqual(c.judge([anchor({ checkpoint_chain: 'LTC' })], expectation()), 'verified');
             assert.strictEqual(
-                c._judge([anchor({ version: 0, match_batch_seq: null, checkpoint_seq: 900 })],
+                c.judge([anchor({ version: 0, match_batch_seq: null, checkpoint_seq: 900 })],
                          expectation({ rewardType: 'anchor_bundle', roundReference: 900 })), 'verified');
         });
     });

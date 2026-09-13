@@ -56,18 +56,18 @@ function makeCtx({ dryRun } = {}){
         _preflightMemo: new PreflightMemo(4),
         _feeQuotePending: 0,
         _calls: calls,
-        _dryRunAction: async (args) => {
+        dryRunAction: async (args) => {
             calls.dryRuns++;
             calls.lastArgs = args;
             return Object.assign({ blockIndex: 100, blockTime: 1000, status: 'valid', error: null,
                                    xchainFee: '0', sourceFeeBalance: null,
                                    subCommands: null, oracleFeesOwed: null }, dryRun || {});
         },
-        _nativeFeeMandatory: Actions.prototype._nativeFeeMandatory,
-        _batchProbeForbiddenSubAction: Actions.prototype._batchProbeForbiddenSubAction,
+        nativeFeeMandatory: Actions.prototype.nativeFeeMandatory,
+        batchProbeForbiddenSubAction: Actions.prototype.batchProbeForbiddenSubAction,
         computePreflight: Actions.prototype.computePreflight,
         computeFeeQuote:  Actions.prototype.computeFeeQuote,
-        _staticFeeQuote:  Actions.prototype._staticFeeQuote
+        staticFeeQuote:  Actions.prototype.staticFeeQuote
     };
     return { ctx, calls };
 }

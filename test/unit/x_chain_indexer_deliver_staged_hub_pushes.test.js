@@ -54,7 +54,7 @@ describe('XChainIndexer._deliverStagedHubPushes()', function(){
 
     it('does nothing when there is nothing staged', async function(){
         let indexer = makeIndexer([]);
-        await indexer._deliverStagedHubPushes();
+        await indexer.deliverStagedHubPushes();
         assert.strictEqual(indexer.hubClient.pushPriceRound.callCount, 0);
         assert.strictEqual(indexer.hubClient.pushOraclePrice.callCount, 0);
         assert.strictEqual(indexer.hubClient.pushPriceBatch.callCount, 0);
@@ -63,13 +63,13 @@ describe('XChainIndexer._deliverStagedHubPushes()', function(){
     it('does nothing when hubClient is unset', async function(){
         let indexer = makeIndexer([{ id: 1, pushType: 'price_batch', payload: {} }]);
         indexer.hubClient = null;
-        await assert.doesNotReject(() => indexer._deliverStagedHubPushes());
+        await assert.doesNotReject(() => indexer.deliverStagedHubPushes());
     });
 
     it('dispatches price_round entries to pushPriceRound', async function(){
         let payload = { round: 5, coin: 'BTC' };
         let indexer = makeIndexer([{ id: 1, pushType: 'price_round', payload }]);
-        await indexer._deliverStagedHubPushes();
+        await indexer.deliverStagedHubPushes();
         assert.strictEqual(indexer.hubClient.pushPriceRound.calledOnceWith(payload), true);
         assert.strictEqual(indexer.indexerDb.markHubPushDelivered.calledWith(1), true);
     });
@@ -77,7 +77,7 @@ describe('XChainIndexer._deliverStagedHubPushes()', function(){
     it('dispatches oracle_price entries to pushOraclePrice', async function(){
         let payload = { tick: 'AAA', price: '1.00' };
         let indexer = makeIndexer([{ id: 2, pushType: 'oracle_price', payload }]);
-        await indexer._deliverStagedHubPushes();
+        await indexer.deliverStagedHubPushes();
         assert.strictEqual(indexer.hubClient.pushOraclePrice.calledOnceWith(payload), true);
         assert.strictEqual(indexer.indexerDb.markHubPushDelivered.calledWith(2), true);
     });
@@ -97,7 +97,7 @@ describe('XChainIndexer._deliverStagedHubPushes()', function(){
             block_time:       1700000600
         };
         let indexer = makeIndexer([{ id: 3, pushType: 'price_batch', payload }]);
-        await indexer._deliverStagedHubPushes();
+        await indexer.deliverStagedHubPushes();
         assert.strictEqual(indexer.hubClient.pushPriceBatch.calledOnce, true);
         assert.strictEqual(indexer.hubClient.pushPriceBatch.firstCall.args[0], payload);
         assert.strictEqual(indexer.indexerDb.markHubPushDelivered.calledWith(3), true);
@@ -108,13 +108,13 @@ describe('XChainIndexer._deliverStagedHubPushes()', function(){
             [{ id: 4, pushType: 'price_batch', payload: { first_round: 1, last_round: 6 } }],
             { pushPriceBatch: sinon.stub().rejects(new Error('hub down')) }
         );
-        await indexer._deliverStagedHubPushes();
+        await indexer.deliverStagedHubPushes();
         assert.strictEqual(indexer.indexerDb.markHubPushDelivered.callCount, 0);
     });
 
     it('skips an unknown pushType without calling any hub method or marking delivered', async function(){
         let indexer = makeIndexer([{ id: 5, pushType: 'mystery_type', payload: {} }]);
-        await indexer._deliverStagedHubPushes();
+        await indexer.deliverStagedHubPushes();
         assert.strictEqual(indexer.hubClient.pushPriceRound.callCount, 0);
         assert.strictEqual(indexer.hubClient.pushOraclePrice.callCount, 0);
         assert.strictEqual(indexer.hubClient.pushPriceBatch.callCount, 0);
@@ -127,7 +127,7 @@ describe('XChainIndexer._deliverStagedHubPushes()', function(){
             { id: 7, pushType: 'price_batch',  payload: { first_round: 2, last_round: 7 } },
             { id: 8, pushType: 'oracle_price', payload: { tick: 'BBB' } }
         ]);
-        await indexer._deliverStagedHubPushes();
+        await indexer.deliverStagedHubPushes();
         assert.strictEqual(indexer.hubClient.pushPriceRound.calledOnce, true);
         assert.strictEqual(indexer.hubClient.pushPriceBatch.calledOnce, true);
         assert.strictEqual(indexer.hubClient.pushOraclePrice.calledOnce, true);

@@ -1851,7 +1851,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             const srcOf = { k1a: 'S1', k1b: 'S1', k1c: 'S1', k2: 'S2', k3: 'S3' };
             // Weights clear the http_get provider floor (10000) so this vector isolates the
             // source-dedupe rule; the floor itself is exercised in its own describe below.
-            const resp = await handler._computeResponsibleSet('req-1', 3, 90, 'http_get');
+            const resp = await handler.computeResponsibleSet('req-1', 3, 90, 'http_get');
             const sources = resp.map(pk => srcOf[pk]);
             assert.strictEqual(new Set(sources).size, sources.length, 'a source occupied >1 responsible slot');
             assert.deepStrictEqual([...new Set(sources)].sort(), ['S1', 'S2', 'S3']);
@@ -1863,14 +1863,14 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 ...['a', 'b', 'c', 'd', 'e'].map(s => ({ pubkey: 'k1' + s, source: 'S1', weight: '50000' })),
                 { pubkey: 'k2', source: 'S2', weight: '50000' },
             ]);
-            const resp = await handler._computeResponsibleSet('req-2', 3, 90, 'http_get');
+            const resp = await handler.computeResponsibleSet('req-2', 3, 90, 'http_get');
             assert.strictEqual(resp.filter(pk => pk.startsWith('k1')).length, 1, 'S1 took more than one slot');
             assert.strictEqual(resp.length, 2, 'responsible set capped at the number of distinct sources');
         });
 
         it('uses the source-keyed query (not the count query) when weighted', async function () {
             indexer.indexerDb.getStakeWeightsByCapability.resolves([{ pubkey: 'k1', source: 'S1', weight: '50000' }]);
-            await handler._computeResponsibleSet('req-3', 1, 90, 'http_get');
+            await handler.computeResponsibleSet('req-3', 1, 90, 'http_get');
             // the declared block 90 is resolved at its buried height; the
             // stake-weighted flag-day still keys on the declared 90 (see snapshot_reorg_buffer.test.js).
             assert.ok(indexer.indexerDb.getStakeWeightsByCapability.calledWith(
@@ -2090,7 +2090,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 // Driven through the settle directly: above the height the chain handler
                 // refuses the wire, so the settle is reached by the mirror applier, and the
                 // retirement has to live where BOTH callers pass through.
-                await handler._settleRequestFee(request, data, 'fulfilled');
+                await handler.settleRequestFee(request, data, 'fulfilled');
 
                 assert.deepStrictEqual(rewardsByType('attest_bcast'), [],
                     'nobody broadcast anything, so there is no miner fee to reimburse');
@@ -2110,7 +2110,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 const data = createBaseData({
                     ACTION: 'ATTEST', FORMAT: 1, BLOCK_INDEX: 100, ACTION_INDEX: 60, BLOCK_TIME: 1700000000,
                 });
-                await handler._settleRequestFee(feeRequestRow({ redundancy: 3 }), data, 'fulfilled');
+                await handler.settleRequestFee(feeRequestRow({ redundancy: 3 }), data, 'fulfilled');
                 const split = rewardsByType('attest_fee');
                 assert.strictEqual(split.length, 3);
                 // 6/3 exactly, where the legacy era would have paid (6-2)/3 = 1.33333333.
@@ -2125,7 +2125,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 const data = createBaseData({
                     ACTION: 'ATTEST', FORMAT: 1, BLOCK_INDEX: 100, ACTION_INDEX: 60, BLOCK_TIME: 1700000000,
                 });
-                await handler._settleRequestFee(feeRequestRow({ block_index: 90 }), data, 'fulfilled');
+                await handler.settleRequestFee(feeRequestRow({ block_index: 90 }), data, 'fulfilled');
                 assert.strictEqual(rewardsByType('attest_bcast').length, 1,
                     'request block 90 is below 95, so the legacy carve-out still applies at settle block 100');
             });
@@ -2297,7 +2297,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             // batch that tried to verify rows here would refuse every honest one. Per-row
             // verification happens on the BTC indexer after the hub re-serves the row.
             const { handler: h } = batchHandler('DOGE');
-            const spy = sinon.spy(h, '_computeResponsibleSet');
+            const spy = sinon.spy(h, 'computeResponsibleSet');
             const enc = abw.encodeAttestBatch(batchWindow(3));
             await h.parse(wireParams(enc.wires[0]), batchData(), null);
             assert.strictEqual(spy.called, false);
@@ -2790,7 +2790,7 @@ describe('ATTEST responsible-set is BTC-anchored (#3233) @regression @tier1', fu
     for (const coin of ['LTC', 'DOGE']) {
         it(`${coin}: returns an empty set without consulting the BTC-anchored gate`, async function () {
             const { handler, db } = handlerForCoin(coin);
-            const out = await handler._computeResponsibleSet('req-1', 2, PAST_ANCHOR, 'http_get');
+            const out = await handler.computeResponsibleSet('req-1', 2, PAST_ANCHOR, 'http_get');
             assert.deepStrictEqual(out, [],
                 'capability staking is BTC-only; a non-BTC indexer has no responsible set');
             assert.strictEqual(db.getStakeWeightsByCapability.called, false,
@@ -2802,7 +2802,7 @@ describe('ATTEST responsible-set is BTC-anchored (#3233) @regression @tier1', fu
 
     it('BTC: still evaluates the gate, because there the local height IS a BTC height', async function () {
         const { handler, db } = handlerForCoin('BTC');
-        const out = await handler._computeResponsibleSet('req-1', 2, PAST_ANCHOR, 'http_get');
+        const out = await handler.computeResponsibleSet('req-1', 2, PAST_ANCHOR, 'http_get');
         assert.strictEqual(out.length, 2, 'BTC must still resolve a responsible set');
         assert.strictEqual(db.getStakeWeightsByCapability.called, true,
             'past the anchor on BTC the weighted branch is correct and must still run');
@@ -2810,7 +2810,7 @@ describe('ATTEST responsible-set is BTC-anchored (#3233) @regression @tier1', fu
 
     it('BTC below the anchor takes the legacy unweighted branch', async function () {
         const { handler, db } = handlerForCoin('BTC');
-        await handler._computeResponsibleSet('req-1', 2, 900000, 'http_get');
+        await handler.computeResponsibleSet('req-1', 2, 900000, 'http_get');
         assert.strictEqual(db.getValidatorsByCapability.called, true);
         assert.strictEqual(db.getStakeWeightsByCapability.called, false,
             'below 961000 the gate is off, so replay of pre-anchor history is unchanged');

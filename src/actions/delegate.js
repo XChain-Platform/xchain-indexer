@@ -60,9 +60,9 @@ class Delegate {
             error = 'invalid: VERSION (unknown)';
 
         // Dispatch by version
-        if(!error && format === 1) return await this._parseContractDelegate(params, data, error);
-        if(!error && format === 2) return await this._parseCapabilityRevoke(params, data, error);
-        if(!error && format === 3) return await this._parseContractRevoke(params, data, error);
+        if(!error && format === 1) return await this.parseContractDelegate(params, data, error);
+        if(!error && format === 2) return await this.parseCapabilityRevoke(params, data, error);
+        if(!error && format === 3) return await this.parseContractRevoke(params, data, error);
 
         // Extract params (v0 capability delegation)
         data['SIGNING_PUBKEY'] = params[1];
@@ -165,7 +165,7 @@ class Delegate {
     // Scoped to (target_contract_index, tick); pubkey-collision check is restricted to
     // contract_* tables so a single pubkey CAN serve as both a capability validator
     // and a contract staker simultaneously (see plan §12.5).
-    async _parseContractDelegate(params, data, error){
+    async parseContractDelegate(params, data, error){
 
         // Extract params
         data['SIGNING_PUBKEY']        = params[1];
@@ -262,7 +262,7 @@ class Delegate {
     // DELEGATE v2: capability revoke. Removes a previously delegated signing key
     // without replacing it. Marks `deactivation_block` (BLOCK_INDEX + activation delay)
     // on the matching capability delegation row.
-    async _parseCapabilityRevoke(params, data, error){
+    async parseCapabilityRevoke(params, data, error){
 
         // Extract params
         data['SIGNING_PUBKEY'] = params[1];
@@ -361,7 +361,7 @@ class Delegate {
     // DELEGATE v3: contract-targeted revoke. Removes a previously delegated signing key
     // scoped to (target_contract_index, signing_pubkey, tick) without replacing it.
     // Marks `deactivation_block` on the matching contract_delegations row.
-    async _parseContractRevoke(params, data, error){
+    async parseContractRevoke(params, data, error){
 
         // Extract params
         data['SIGNING_PUBKEY']        = params[1];

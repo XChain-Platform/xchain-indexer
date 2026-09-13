@@ -34,7 +34,7 @@ module.exports = {
     // holds nothing for it (pre-activation). The retention window is measured down from
     // this, so null means there is nothing to prune rather than "prune everything".
     async getStateTreeRootTip(chain, network){
-        const rows = await this._poolQuery(
+        const rows = await this.poolQuery(
             'SELECT MAX(block_index) AS tip FROM state_tree_roots WHERE chain=? AND network=?',
             [chain, network]);
         return (rows.length && rows[0].tip != null) ? Number(rows[0].tip) : null;
@@ -43,7 +43,7 @@ module.exports = {
     // How many root rows sit at or below the retention cutoff, i.e. how many phase 1 would
     // drop. Counting first is what lets the planner report a prune without performing one.
     async countStateTreeRootsAtOrBelow(chain, network, cutoff){
-        const rows = await this._poolQuery(
+        const rows = await this.poolQuery(
             'SELECT COUNT(*) AS c FROM state_tree_roots WHERE chain=? AND network=? AND block_index <= ?',
             [chain, network, cutoff]);
         return rows.length ? Number(rows[0].c) : 0;
@@ -53,7 +53,7 @@ module.exports = {
     // rows went. Node rows are untouched; only the set of heights the SPV proof server can
     // still answer for narrows.
     async deleteStateTreeRootsAtOrBelow(chain, network, cutoff){
-        const result = await this._poolQuery(
+        const result = await this.poolQuery(
             'DELETE FROM state_tree_roots WHERE chain=? AND network=? AND block_index <= ?',
             [chain, network, cutoff]);
         return result && result.affectedRows ? Number(result.affectedRows) : 0;
@@ -63,7 +63,7 @@ module.exports = {
     // walks. Deliberately unfiltered: the mark has to see the whole store to decide which
     // rows nothing points at.
     async readAllStateTreeNodes(){
-        return await this._poolQuery(
+        return await this.poolQuery(
             'SELECT node_hash, left_hash, right_hash FROM state_tree_nodes', []);
     },
 
@@ -78,7 +78,7 @@ module.exports = {
     // contract_state_root is NULL on every inert row and IS NOT NULL drops those, so the
     // union is unchanged until a chain arms the slot.
     async getRetainedStateSubtreeRoots(chain, network){
-        return await this._poolQuery(
+        return await this.poolQuery(
             'SELECT DISTINCT balances_root AS r FROM state_tree_roots WHERE chain=? AND network=? ' +
             'UNION SELECT DISTINCT stakes_root AS r FROM state_tree_roots WHERE chain=? AND network=? ' +
             'UNION SELECT DISTINCT contract_state_root AS r FROM state_tree_roots WHERE chain=? AND network=? AND contract_state_root IS NOT NULL',
@@ -89,7 +89,7 @@ module.exports = {
     // mark materializes every row into a Map and an oversized store would exhaust process
     // memory before any post-load size check could fire.
     async countStateTreeNodes(){
-        const rows = await this._poolQuery('SELECT COUNT(*) AS c FROM state_tree_nodes', []);
+        const rows = await this.poolQuery('SELECT COUNT(*) AS c FROM state_tree_nodes', []);
         return rows && rows.length ? Number(rows[0].c) : 0;
     },
 
@@ -97,7 +97,7 @@ module.exports = {
     // caller batches, because the placeholder list is what bounds the statement size.
     async deleteStateTreeNodesByHash(hashes){
         const placeholders = hashes.map(() => '?').join(',');
-        const result = await this._poolQuery(
+        const result = await this.poolQuery(
             'DELETE FROM state_tree_nodes WHERE node_hash IN (' + placeholders + ')', hashes);
         return result && result.affectedRows ? Number(result.affectedRows) : 0;
     },

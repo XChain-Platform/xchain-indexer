@@ -93,7 +93,7 @@ describe('ATTEST responsible-set canonical-vector conformance @regression @tier1
 
     (vec ? vec.computeResponsibleSet : []).forEach(function (c) {
         it(c.name, async function () {
-            const got = await handlerFor(c)._computeResponsibleSet(c.requestId, c.redundancy, BLOCK, 'http_get');
+            const got = await handlerFor(c).computeResponsibleSet(c.requestId, c.redundancy, BLOCK, 'http_get');
             assert.deepStrictEqual(got, c.expected);
         });
     });
@@ -114,7 +114,7 @@ describe('ATTEST responsible-set canonical-vector conformance @regression @tier1
                     isEnabled: sinon.stub().resolves(true),
                 };
                 const rb  = new Rollback(ix);
-                const got = rb._responsibleSet(c.requestId, c.validators, c.redundancy, c.weighted,
+                const got = rb.responsibleSet(c.requestId, c.validators, c.redundancy, c.weighted,
                                                c.minStake === undefined ? null : c.minStake);
                 assert.deepStrictEqual(got, c.expected);
             });

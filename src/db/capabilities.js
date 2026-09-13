@@ -223,7 +223,7 @@ module.exports = {
         // doQueryStrict (not doQuery): a CONSENSUS input read on the hub mirror, which never
         // holds a transaction, so doQuery turns a transient DB fault into an empty weight set,
         // collapsing the stake-weighted quorum denominator S to 0 on this node alone.
-        let rows = await this._mirrorDb().doQueryStrict(query, [capability, snapshotBlock]);
+        let rows = await this.mirrorDb().doQueryStrict(query, [capability, snapshotBlock]);
         return rows.map(r => ({
             pubkey: String(r.pubkey),
             source: r.source == null ? '' : String(r.source),
@@ -255,7 +255,7 @@ module.exports = {
         // doQueryStrict (not doQuery): a CONSENSUS input read on the hub mirror, which never
         // holds a transaction, so doQuery turns a transient DB fault into an empty capable set
         // on this node alone, and its quorum verdict stops matching the fleet's.
-        let rows = await this._mirrorDb().doQueryStrict(query, [capability, snapshotBlock]);
+        let rows = await this.mirrorDb().doQueryStrict(query, [capability, snapshotBlock]);
         // Guard a NULL amount to '0' so all three snapshot read methods render it
         // identically: the sibling getCapabilitySnapshotWeights (r.weight == null ?
         // '0') and the BTC local path both coerce NULL to '0'; without this an
@@ -274,7 +274,7 @@ module.exports = {
         // doQueryStrict (not doQuery): a CONSENSUS input read on the hub mirror, which never
         // holds a transaction, so doQuery turns a transient DB fault into N = 0, which is the
         // quorum DENOMINATOR, on this node alone.
-        let rows = await this._mirrorDb().doQueryStrict(query, [capability, snapshotBlock]);
+        let rows = await this.mirrorDb().doQueryStrict(query, [capability, snapshotBlock]);
         return rows.length > 0 ? Number(rows[0].cnt) : 0;
     },
 
@@ -285,7 +285,7 @@ module.exports = {
         // doQueryStrict (not doQuery): a CONSENSUS input read on the hub mirror, which never
         // holds a transaction, so doQuery turns a transient DB fault into "not qualified" on
         // this node alone, which is the answer that silently drops a capable signer.
-        let rows = await this._mirrorDb().doQueryStrict(query, [capability, snapshotBlock, String(pubkey).toLowerCase()]);
+        let rows = await this.mirrorDb().doQueryStrict(query, [capability, snapshotBlock, String(pubkey).toLowerCase()]);
         return rows.length > 0;
     },
 

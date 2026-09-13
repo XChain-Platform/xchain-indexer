@@ -382,16 +382,16 @@ class Database {
     // halts loudly instead of truncating the source_pubkey seam (#3875). If the inner
     // body throws it is already failing loudly, so the assertion is skipped.
     async runMigrations(opts = {}){
-        const result = await this._runMigrationsInner(opts);
-        await this._assertPubkeyColumnIsUncompressedWide();
-        await this._assertStakeWeightOrderingCollation();
+        const result = await this.runMigrationsInner(opts);
+        await this.assertPubkeyColumnIsUncompressedWide();
+        await this.assertStakeWeightOrderingCollation();
         // Invoked through the prototype rather than `this`: the reward-identity assertion is
         // a fail-closed COLLECT-rail guard, and a partial object that happens not to carry
         // the method would otherwise drop it without a word. Nothing may opt out of it.
-        await Database.prototype._assertRewardUniqueKeyCarriesQualifier.call(this);
+        await Database.prototype.assertRewardUniqueKeyCarriesQualifier.call(this);
         // Same fail-closed rule as the reward assertion above: invoked through the prototype
         // so a partial object cannot silently drop the bridge-table check.
-        await Database.prototype._assertBridgeTablesPresent.call(this);
+        await Database.prototype.assertBridgeTablesPresent.call(this);
         return result;
     }
 
@@ -412,7 +412,7 @@ class Database {
     // An absent column and an unreadable name both return early rather than halt: a
     // fresh install has no table yet, and an answer we could not read is not evidence of
     // drift. Same convention as _assertPubkeyColumnIsUncompressedWide above.
-    async _assertStakeWeightOrderingCollation(){
+    async assertStakeWeightOrderingCollation(){
         let conn;
         try {
             conn = await this.getConnection();
@@ -433,7 +433,7 @@ class Database {
         }
     }
 
-    async _runMigrationsInner(opts = {}){
+    async runMigrationsInner(opts = {}){
         const crypto        = require('crypto');
         const includeManual = !!opts.includeManual;
         const only          = (opts.only == null) ? null
@@ -475,7 +475,7 @@ class Database {
                 return result;
             }
             try {
-                await this._ensureMigrationsLedger(conn);
+                await this.ensureMigrationsLedger(conn);
                 const appliedRows   = await conn.query('SELECT name, checksum FROM schema_migrations');
                 const appliedByName = new Map(appliedRows.map(r => [r.name, r.checksum]));
 
@@ -561,7 +561,7 @@ class Database {
                         continue;
                     }
 
-                    const mode = this._migrationMode(raw);
+                    const mode = this.migrationMode(raw);
 
                     // Precondition gate: a migration listed in MIGRATION_PRECONDITIONS is
                     // applicable only to a schema in a particular shape, and running it on
@@ -578,7 +578,7 @@ class Database {
                     // It runs BEFORE the mode gate deliberately, so an unattended startup
                     // baselines a pending manual migration and the hazard is gone before an
                     // operator ever reaches for `npm run migrate`.
-                    const preconditionSkip = await this._migrationPreconditionSkip(file, conn);
+                    const preconditionSkip = await this.migrationPreconditionSkip(file, conn);
                     if(preconditionSkip){
                         await conn.query(
                             'INSERT INTO schema_migrations (name, checksum, mode, applied_at) VALUES (?, ?, ?, NOW())',
@@ -629,7 +629,7 @@ class Database {
                     // through migrate.js under the wrong tag) - block startup with an
                     // actionable error instead of executing it against every validator's DB.
                     if(mode === 'auto'){
-                        const offender = this._destructiveAutoStatement(statements);
+                        const offender = this.destructiveAutoStatement(statements);
                         if(offender){
                             throw new Error('runMigrations: ' + file + ' is tagged mode=auto but contains destructive DDL: "' +
                                 offender.slice(0, 160) + (offender.length > 160 ? '...' : '') + '". ' +
@@ -674,7 +674,7 @@ class Database {
     // This assertion is REGISTERED in Database.STARTUP_ASSERTED_MIGRATIONS, which is
     // what lets a deploy discover the requirement before it recreates a container
     // rather than after (see that constant for the 2026-08-09 outage it closes).
-    async _assertPubkeyColumnIsUncompressedWide(){
+    async assertPubkeyColumnIsUncompressedWide(){
         const UNCOMPRESSED_PUBKEY_HEX_LENGTH = 130;
         let conn;
         try {
@@ -698,7 +698,7 @@ class Database {
                     'pubkeys.pubkey holds ' + len + ' chars but VARCHAR(' + UNCOMPRESSED_PUBKEY_HEX_LENGTH + ') is required ' +
                     'for uncompressed keys; narrower silently NULLs or truncates the source_pubkey seam field. ' +
                     'Run the pending migration: node src/migrate.js --file ' +
-                    Database.startupAssertedMigrationFile('_assertPubkeyColumnIsUncompressedWide')
+                    Database.startupAssertedMigrationFile('assertPubkeyColumnIsUncompressedWide')
                 );
             }
         } finally {
@@ -739,12 +739,12 @@ class Database {
     // REGISTERED in Database.STARTUP_ASSERTED_MIGRATIONS and tagged
     // `deploy-precondition=required` in the migration's own header, which is what lets a
     // deploy refuse before it recreates a container instead of after (see that constant).
-    async _assertRewardUniqueKeyCarriesQualifier(){
+    async assertRewardUniqueKeyCarriesQualifier(){
         // Name the exact file in every halt, for the same reason the pubkey halt above
         // does: a bare `node src/migrate.js` on an aged fleet database means "apply every
         // pending manual migration", which is never what a scoped recovery wants.
         const remedy = ' Run the pending migration: node src/migrate.js --file ' +
-            Database.startupAssertedMigrationFile('_assertRewardUniqueKeyCarriesQualifier');
+            Database.startupAssertedMigrationFile('assertRewardUniqueKeyCarriesQualifier');
         let conn;
         try {
             conn = await this.getConnection();
@@ -818,13 +818,13 @@ class Database {
     //
     // Passes through (never halts) when a count is unreadable: an answer we could not read
     // is not evidence of a missing table, the same convention as the two assertions above.
-    async _assertBridgeTablesPresent(){
+    async assertBridgeTablesPresent(){
         const REQUIRED = ['bridge_transfers', 'bridge_settlements', 'policy_snapshots'];
         // Name the exact file in the halt: a bare `node src/migrate.js` on an aged fleet
         // database means "apply every pending manual migration", which is never what a
         // scoped recovery wants.
         const remedy = ' Run the pending migration: node src/migrate.js --file ' +
-            Database.startupAssertedMigrationFile('_assertBridgeTablesPresent');
+            Database.startupAssertedMigrationFile('assertBridgeTablesPresent');
         let conn;
         try {
             conn = await this.getConnection();
@@ -852,7 +852,7 @@ class Database {
 
     // Read a migration file's `-- xchain:migration mode=auto|manual` header tag.
     // Defaults to 'manual' when absent (conservative - unknown DDL never auto-runs).
-    _migrationMode(raw){
+    migrationMode(raw){
         // The mode tag is a leading-prologue directive: it may only sit in the run of
         // blank and `--`-comment lines BEFORE the first SQL statement. Scanning the
         // whole file (the old /m behavior) let a `mode=auto` token buried in body prose
@@ -897,7 +897,7 @@ class Database {
     // data lost), ADD ..., plain CREATE TABLE / CREATE TABLE IF NOT EXISTS (additive;
     // but CREATE OR REPLACE TABLE IS flagged - it is an atomic DROP+CREATE), and
     // MODIFY that widens/nullables a column.
-    _destructiveAutoStatement(statements){
+    destructiveAutoStatement(statements){
         // Drops that remove metadata only; anything else after DROP inside an
         // ALTER (COLUMN, PARTITION, or a bare column identifier) loses data.
         const SAFE_ALTER_DROP = new Set(['INDEX', 'KEY', 'FOREIGN', 'CONSTRAINT', 'CHECK', 'DEFAULT', 'PRIMARY']);
@@ -989,7 +989,7 @@ class Database {
             // WHERE id = 0;` in 2026-06-10-mirror-id-autoincrement-repair.sql), which
             // touches only the sentinel id=0 row; carve exactly that shape out and
             // flag every other UPDATE.
-            if(/^UPDATE\b/i.test(stmt) && !this._isIdRepairUpdate(stmt)) return raw;
+            if(/^UPDATE\b/i.test(stmt) && !this.isIdRepairUpdate(stmt)) return raw;
             if(/^ALTER\s+TABLE\b/i.test(stmt)){
                 // Partition and tablespace clauses move or discard row data while carrying
                 // none of the keywords the checks below look for: TRUNCATE PARTITION empties
@@ -1050,7 +1050,7 @@ class Database {
     // trails. The 2026-06-10-mirror-id-autoincrement-repair.sql migration uses a
     // NESTED subquery with commas, so a "no inner parens / no commas" rule would
     // wrongly reject it and hard-fail startup; the balanced scan is required.
-    _isIdRepairUpdate(stmt){
+    isIdRepairUpdate(stmt){
         const head = /^UPDATE\s+(?:`[^`]+`|[A-Za-z0-9_$.]+)\s+SET\s+id\s*=\s*\(/i.exec(stmt);
         if(!head) return false;
         let i = head[0].length - 1;              // index of the opening '('
@@ -1076,7 +1076,7 @@ class Database {
 
     // Create the migration ledger if absent. Created directly (not via src/sql/) - it
     // is infrastructure, not a domain table, so verifyTables() doesn't manage it.
-    async _ensureMigrationsLedger(conn){
+    async ensureMigrationsLedger(conn){
         await conn.query(
             'CREATE TABLE IF NOT EXISTS schema_migrations (' +
             "name VARCHAR(255) NOT NULL PRIMARY KEY, " +
@@ -1091,7 +1091,7 @@ class Database {
     // human reason string when the migration does NOT apply to this database (the caller
     // baselines it), or null when it should run. Files with no entry always run.
     // Runs on the caller's migration connection so it stays inside the migration lock.
-    async _migrationPreconditionSkip(file, conn){
+    async migrationPreconditionSkip(file, conn){
         const pre = Database.MIGRATION_PRECONDITIONS[file];
         if(!pre) return null;
         const rows = await conn.query(pre.sql, [this.dbName]);
@@ -1804,7 +1804,7 @@ class Database {
     // the quote's own time box only ever covered the dry-run, never the wait in front of it.
     // Rejects with code TX_LOCK_BUSY, before any connection work, so the caller can answer
     // "busy, retry" in milliseconds.
-    _acquireTxLock(timeoutMs){
+    acquireTxLock(timeoutMs){
         if(!this._txLock.locked){
             this._txLock.locked = true;
             return Promise.resolve();
@@ -1839,7 +1839,7 @@ class Database {
     // caller that has given up would strand it held with nothing left to release it, which
     // would wedge block processing permanently - a far worse failure than the slow quote
     // the budget exists to bound.
-    _releaseTxLock(){
+    releaseTxLock(){
         while(this._txLock.queue.length > 0){
             let next = this._txLock.queue.shift();
             if(next.settled) continue;
@@ -1900,7 +1900,7 @@ class Database {
     // async context; neither is fenced. This can only ADD a throw on the already-broken
     // timeout path; it never suppresses a legitimate write, so the non-timeout path is
     // byte-identical.
-    _assertTxNotFenced(){
+    assertTxNotFenced(){
         const ctx = txEpochStore.getStore();
         if(ctx !== undefined && ctx.owner === this && ctx.epoch !== this._txEpoch)
             this.util.throwError('transaction fenced (M-16): write from epoch ' + ctx.epoch +
@@ -1936,7 +1936,7 @@ class Database {
     // block committed a validator-local 'error' verdict instead of retrying with the barrier
     // (every injected XEXEC on a transaction-less block recorded result_status='error'
     // while healthy peers recorded 'ok'). The code is what makes rethrowIfInfraFault propagate.
-    _assertPriceBarrierNotSkipped(site){
+    assertPriceBarrierNotSkipped(site){
         const ctx = txEpochStore.getStore();
         if(ctx === undefined || ctx.consensus !== true) return;
         const ix = this.indexer;
@@ -1954,7 +1954,7 @@ class Database {
     // throws TX_LOCK_BUSY instead of queueing; unset (every block-loop and reorg caller)
     // keeps the unbounded wait.
     async beginTransaction(opts){
-        await this._acquireTxLock(opts && opts.acquireTimeoutMs);
+        await this.acquireTxLock(opts && opts.acquireTimeoutMs);
         if(this.transactionConnection != null)
             await this.releaseConnection();
         try {
@@ -1968,7 +1968,7 @@ class Database {
                 try { await this.transactionConnection.release(); } catch(_){}
                 this.transactionConnection = null;
             }
-            this._releaseTxLock();
+            this.releaseTxLock();
             this.util.throwError('beginTransaction error=' + e);
         }
     }
@@ -1991,7 +1991,7 @@ class Database {
                 // caller will be given. In the finally, beside the epoch bump, for
                 // the same reason: a throw out of rollback() must not be able to skip it.
                 this.clearSmtNameCaches();
-                this._releaseTxLock();
+                this.releaseTxLock();
             }
         }
     }
@@ -2005,7 +2005,7 @@ class Database {
                 this.transactionConnection = null;
                 // Fence any zombie of the block that just committed (M-16).
                 this._txEpoch++;
-                this._releaseTxLock();
+                this.releaseTxLock();
                 return true;
             } catch (e){
                 console.error('Error committing transaction:', e)
@@ -2017,7 +2017,7 @@ class Database {
                     this._txEpoch++;
                     // A failed commit aborts, so its id assignments are gone too.
                     this.clearSmtNameCaches();
-                    this._releaseTxLock();
+                    this.releaseTxLock();
                 }
                 this.util.throwError('commitTransaction error=' + e);
             }
@@ -2027,7 +2027,7 @@ class Database {
 
     // Handle running a query and returning the results
     async doQuery(query, args){
-        this._assertTxNotFenced();
+        this.assertTxNotFenced();
         let results = [];
         if(!this.util.isNull(query)){
             // Normalize args: convert any boxed primitives (e.g. mathjs BigNumber) to plain values.
@@ -2065,7 +2065,7 @@ class Database {
     // ledger (M-17: the hub-DB price read). Callers inside block processing
     // let the throw roll back and retry the block.
     async doQueryStrict(query, args){
-        this._assertTxNotFenced();
+        this.assertTxNotFenced();
         let results = [];
         if(!this.util.isNull(query)){
             if(Array.isArray(args)){
@@ -2205,7 +2205,7 @@ class Database {
     // Stable hash of a decoder REORG event's `data` payload, used as the reorg-marker witness
     // (#2735). sha256 hex; null/undefined data hashes the empty string so a missing payload has a
     // deterministic witness rather than throwing.
-    _hashReorgData(data){
+    hashReorgData(data){
         const crypto = require('crypto');
         return crypto.createHash('sha256').update(String(data == null ? '' : data), 'utf8').digest('hex');
     }
@@ -2213,7 +2213,7 @@ class Database {
     // Build the canonical RE-1 (reorg cursor incoherent) error. One shared shape + operator
     // recovery guidance for every incoherence cause (over-cursor, missing cursor row, witness
     // mismatch), so the message never drifts. `detail` names the specific cause.
-    _reorgCursorIncoherentError(detail){
+    reorgCursorIncoherentError(detail){
         return new Error('Reorg cursor incoherent (RE-1): ' + detail + ' The decoder DB was likely ' +
             'rebuilt or restored out-of-band; rollback detection would be silently disabled. ' +
             'Recovery: rebuild decoder+indexer jointly (clean reindex), or restore a matching decoder DB.');
@@ -2352,7 +2352,7 @@ class Database {
     // of unapplied staged rewards so normal indexing (no recovery in progress) pays a single
     // COUNT(*) and then short-circuits on every later call. See the constructor flags above
     // and recovery.js for the staging side.
-    async _maybeApplyPendingRewards(address, source_id, materializedBlock){
+    async maybeApplyPendingRewards(address, source_id, materializedBlock){
         if(source_id === null || source_id === undefined)
             return;
         if(!await this._probeRecoveryPending())
@@ -2372,7 +2372,7 @@ class Database {
     // the restored row claims the height the LIVE fleet derived it at
     // (earn + ANCHOR_REWARD_MIRROR_MATURITY), never the height recovery re-applied it at.
     // null below the derive flag-day / on an inert network, where the legacy NULL stamp stands.
-    _restoredRewardDeriveBlock(earnBlock){
+    restoredRewardDeriveBlock(earnBlock){
         let network = String((this.config && this.config['NETWORK']) || '');
         return ar.restoredRewardDeriveHeight(earnBlock, network);
     }
@@ -2637,7 +2637,7 @@ class Database {
 
     // Run a query on a fresh pooled connection, isolated from any in-progress
     // block transaction. Always releases the connection.
-    async _poolQuery(query, args){
+    async poolQuery(query, args){
         let conn = await this.pool.getConnection();
         try {
             return await conn.query(query, args);
@@ -2663,13 +2663,13 @@ class Database {
     apiView(){
         if(!this._apiView){
             this._apiView = Object.create(this);
-            this._apiView.doQuery = (query, args) => this._poolQuery(query, args);
+            this._apiView.doQuery = (query, args) => this.poolQuery(query, args);
             // doQueryStrict must also bypass transactionConnection. _poolQuery already throws on a
             // query error (no swallow), so it satisfies the strict contract. Without this override,
             // a method that internally calls doQueryStrict (e.g. createReorg) would still adopt an
             // open foreign transaction when invoked on the view - defeating the reorg-path isolation
             // that routes createReorg / the rollback read-phase through this view (REORG-1).
-            this._apiView.doQueryStrict = (query, args) => this._poolQuery(query, args);
+            this._apiView.doQueryStrict = (query, args) => this.poolQuery(query, args);
             // Own block_time memo so a federation read's getBlockTime (XCC-2 expiration filter)
             // can never torn-write or evict the block loop's shared _blockTimeCache, which feeds
             // the consensus-path ProtocolChanges.isEnabled. Without this the view inherits the
@@ -2709,7 +2709,7 @@ class Database {
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return [];
         // Safety cap - see getActiveValidators. No MIN_STAKE floor (minStake '0').
-        let { rows, truncated } = await this._stakeWeightsWithCap(valid_id, blockIndex, '0', 'getActiveStakeWeights');
+        let { rows, truncated } = await this.stakeWeightsWithCap(valid_id, blockIndex, '0', 'getActiveStakeWeights');
         let result = rows;
         // Surface truncation to callers (the RPC layer alarms on it) the same way
         // the capability variants do - the console.warn alone is invisible to a hub.
@@ -2750,7 +2750,7 @@ class Database {
             : localFloor;
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return [];
-        let { rows, truncated } = await this._stakeWeightsWithCap(valid_id, blockIndex, minStake, 'getStakeWeightsByCapability(' + capability + ')');
+        let { rows, truncated } = await this.stakeWeightsWithCap(valid_id, blockIndex, minStake, 'getStakeWeightsByCapability(' + capability + ')');
         let result = rows;
         result.truncated = truncated;
         return result;
@@ -2764,7 +2764,7 @@ class Database {
     //   below it -> legacy uncapped key-row LIMIT: truncated at >= VALIDATOR_QUERY_LIMIT.
     // The gate (network/coin/blockIndex) + caps + _cappedStakeWeightsSql are byte-mirrored
     // in xchain-sync so the stakes_root set is identical on both sides of the height.
-    async _stakeWeightsWithCap(valid_id, blockIndex, minStake, label){
+    async stakeWeightsWithCap(valid_id, blockIndex, minStake, label){
         let sw = this._stakeWeightsSql(valid_id, blockIndex, minStake);
         // Ordering collation for BOTH regimes (stake_weight_collation_activation.js);
         // the legacy LIMIT branch truncates on the same order the capped branch ranks on.
@@ -2900,7 +2900,7 @@ class Database {
     // cross_chain_matches, capability_snapshots). In distributed deployments these live in
     // the local hub-DB copy; single-host falls back to this indexer DB. Mirrors the
     // `(this.actions.hubDb || this.indexerDb)` idiom used at the oracle read sites.
-    _mirrorDb(){
+    mirrorDb(){
         return (this.indexer && this.indexer.hubDb) ? this.indexer.hubDb : this;
     }
 
@@ -2908,7 +2908,7 @@ class Database {
     // side of the mirror-admission flag day for (COIN, NETWORK). A caller that passes no
     // height reads as below the activation, which is today's clock form, so every existing
     // call shape keeps its meaning; the block loop's callers all pass their block index.
-    _mirrorAdmissionActiveAt(blockHeight){
+    mirrorAdmissionActiveAt(blockHeight){
         if(blockHeight === null || blockHeight === undefined) return false;
         return isMirrorAdmissionConsumerActive(this.config['COIN'], this.config['NETWORK'], blockHeight);
     }
@@ -2939,9 +2939,9 @@ class Database {
     // chain column for the one table that carries a single fixed column (attestation_responses,
     // BTC-only by its call-site guard). bridge_settle.js carries the same clause text for its
     // two selects and the admission-binding suite pins the two spellings equal.
-    _mirrorBindClause(blockTime, blockHeight, alias, column){
+    mirrorBindClause(blockTime, blockHeight, alias, column){
         let p   = alias ? alias + '.' : '';
-        if(!this._mirrorAdmissionActiveAt(blockHeight))
+        if(!this.mirrorAdmissionActiveAt(blockHeight))
             return { sql: p + 'effective_time <= ?', args: [blockTime] };
         let col = p + (column || this._admitColumn());
         return {
@@ -3024,7 +3024,7 @@ class Database {
     // value so a reorg can restore it verbatim (see rollback.js) and xchain-sync can carry the
     // mutated surviving row to followers (updatedRows.js). Shared by the rotate and revert passes
     // above. `table` is a fixed literal from this method, never caller input.
-    async _rotateContractStakeKey(table, stakeRow, delegationActionIndex, newPubkeyId, blockIndex){
+    async rotateContractStakeKey(table, stakeRow, delegationActionIndex, newPubkeyId, blockIndex){
         await this.doQuery('UPDATE ' + table + ' SET signing_pubkey_id=? WHERE action_index=?',
             [newPubkeyId, stakeRow.action_index]);
         await this.createContractDelegationRotation(table, delegationActionIndex, stakeRow.action_index,
@@ -3096,7 +3096,7 @@ class Database {
 
     // Create a savepoint within the current transaction
     async createSavepoint(name){
-        this._assertTxNotFenced();
+        this.assertTxNotFenced();
         if(!this.transactionConnection)
             throw new Error('createSavepoint requires an active transaction');
         await this.transactionConnection.query('SAVEPOINT ' + name);
@@ -3105,7 +3105,7 @@ class Database {
 
     // Release a savepoint
     async releaseSavepoint(name){
-        this._assertTxNotFenced();
+        this.assertTxNotFenced();
         if(!this.transactionConnection)
             throw new Error('releaseSavepoint requires an active transaction');
         await this.transactionConnection.query('RELEASE SAVEPOINT ' + name);
@@ -3113,7 +3113,7 @@ class Database {
 
     // Rollback to a savepoint
     async rollbackToSavepoint(name){
-        this._assertTxNotFenced();
+        this.assertTxNotFenced();
         if(!this.transactionConnection)
             throw new Error('rollbackToSavepoint requires an active transaction');
         await this.transactionConnection.query('ROLLBACK TO SAVEPOINT ' + name);
@@ -3641,17 +3641,17 @@ Database.DEPLOY_PRECONDITION_TAG = 'deploy-precondition=required';
 Database.STARTUP_ASSERTED_MIGRATIONS = [
     {
         file:      '2026-07-24-pubkeys-widen-uncompressed.sql',
-        assertion: '_assertPubkeyColumnIsUncompressedWide',
+        assertion: 'assertPubkeyColumnIsUncompressedWide',
         symptom:   'Fatal indexer error: pubkeys.pubkey holds 66 chars but VARCHAR(130) is required'
     },
     {
         file:      '2026-08-24-validator-rewards-round-qualifier.sql',
-        assertion: '_assertRewardUniqueKeyCarriesQualifier',
+        assertion: 'assertRewardUniqueKeyCarriesQualifier',
         symptom:   'Fatal indexer error: validator_rewards.reward_unique does not include round_qualifier'
     },
     {
         file:      '2026-09-12-bridge-tables.sql',
-        assertion: '_assertBridgeTablesPresent',
+        assertion: 'assertBridgeTablesPresent',
         symptom:   'Fatal indexer error: the bridge tables bridge_transfers, bridge_settlements, policy_snapshots are absent'
     }
 ];

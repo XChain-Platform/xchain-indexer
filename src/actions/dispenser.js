@@ -88,7 +88,7 @@ class Dispenser {
     //
     // Log-only, in the shape of dispenserDivergenceMetrics: no DB write, no
     // influence on validation, never an input to block hashing.
-    async _logStaleFreshness(data){
+    async logStaleFreshness(data){
         try {
             if(!this.utxoTracker || typeof this.utxoTracker.getFirstSeenStatus !== 'function')
                 return;
@@ -507,7 +507,7 @@ class Dispenser {
                         // a stale-but-successful answer). Record when that happened.
                         // Log-only, and never an input to isFresh.
                         if(isFresh && !firstSeen)
-                            await this._logStaleFreshness(data);
+                            await this.logStaleFreshness(data);
                     } catch (err) {
                         console.log('WARNING: utxo-tracker get_first_seen failed for ' + data['GET_ADDRESS'] + ': ', err);
                     }

@@ -313,13 +313,13 @@ describe('Database._migrationPreconditionSkip() @regression @tier1', function ()
     // parameter passed to the precondition query, MIGRATION_PRECONDITIONS is a
     // static lookup reached via the constructor, not `this`.
     function dbStub(dbName){
-        return { dbName, _migrationPreconditionSkip: Database.prototype._migrationPreconditionSkip };
+        return { dbName, migrationPreconditionSkip: Database.prototype.migrationPreconditionSkip };
     }
 
     it('returns null for a file with no registered precondition', async function () {
         const db = dbStub('test_indexer');
         const conn = { query: async () => { throw new Error('must not query when no precondition is registered'); } };
-        const result = await db._migrationPreconditionSkip('2026-01-01-unrelated.sql', conn);
+        const result = await db.migrationPreconditionSkip('2026-01-01-unrelated.sql', conn);
         assert.strictEqual(result, null);
     });
 
@@ -333,7 +333,7 @@ describe('Database._migrationPreconditionSkip() @regression @tier1', function ()
                 return [{ len: 130 }];
             }
         };
-        const reason = await db._migrationPreconditionSkip(FILE, conn);
+        const reason = await db.migrationPreconditionSkip(FILE, conn);
         assert.ok(reason);
         assert.deepStrictEqual(seenParams, ['test_indexer']);
         assert.match(seenSql, /CHARACTER_MAXIMUM_LENGTH/);
@@ -342,21 +342,21 @@ describe('Database._migrationPreconditionSkip() @regression @tier1', function ()
     it('returns null (do not baseline) when the live column is still narrow', async function () {
         const db = dbStub('test_indexer');
         const conn = { query: async () => [{ len: 66 }] };
-        const result = await db._migrationPreconditionSkip(FILE, conn);
+        const result = await db.migrationPreconditionSkip(FILE, conn);
         assert.strictEqual(result, null);
     });
 
     it('returns null when the query yields no rows (table/column absent)', async function () {
         const db = dbStub('test_indexer');
         const conn = { query: async () => [] };
-        const result = await db._migrationPreconditionSkip(FILE, conn);
+        const result = await db.migrationPreconditionSkip(FILE, conn);
         assert.strictEqual(result, null);
     });
 
     it('tolerates a query result with no rows array (guards with `|| []`)', async function () {
         const db = dbStub('test_indexer');
         const conn = { query: async () => null };
-        const result = await db._migrationPreconditionSkip(FILE, conn);
+        const result = await db.migrationPreconditionSkip(FILE, conn);
         assert.strictEqual(result, null);
     });
 });
@@ -413,20 +413,20 @@ describe('runMigrations() precondition baseline branch @regression @tier1', func
             dbName: 'test_indexer',
             transactionConnection: null,
             getConnection: async () => conn,
-            _ensureMigrationsLedger: async () => {},
-            _runMigrationsInner: Database.prototype._runMigrationsInner,
-            _migrationPreconditionSkip: Database.prototype._migrationPreconditionSkip,
-            _assertPubkeyColumnIsUncompressedWide: async () => {},
+            ensureMigrationsLedger: async () => {},
+            runMigrationsInner: Database.prototype.runMigrationsInner,
+            migrationPreconditionSkip: Database.prototype.migrationPreconditionSkip,
+            assertPubkeyColumnIsUncompressedWide: async () => {},
             // The REAL collation assertion, not a stub: this harness's conn answers []
             // to any SQL it does not recognise, which is exactly the absent-column case
             // that assertion must pass through rather than halt on. Stubbing it away
             // would let a regression in that pass-through ride into runMigrations unseen.
-            _assertStakeWeightOrderingCollation: Database.prototype._assertStakeWeightOrderingCollation,
-            _migrationMode: Database.prototype._migrationMode,
+            assertStakeWeightOrderingCollation: Database.prototype.assertStakeWeightOrderingCollation,
+            migrationMode: Database.prototype.migrationMode,
             splitSqlStatements: Database.prototype.splitSqlStatements,
             stripSqlLineComments: Database.prototype.stripSqlLineComments,
-            _destructiveAutoStatement: Database.prototype._destructiveAutoStatement,
-            _isIdRepairUpdate: Database.prototype._isIdRepairUpdate,
+            destructiveAutoStatement: Database.prototype.destructiveAutoStatement,
+            isIdRepairUpdate: Database.prototype.isIdRepairUpdate,
         };
         const realLog = console.log, realErr = console.error, realWarn = console.warn;
         console.log = console.error = console.warn = (...a) => { logged.push(a.join(' ')); };
@@ -521,16 +521,16 @@ describe('runMigrations() precondition baseline branch, round_qualifier @regress
             dbName: 'test_indexer',
             transactionConnection: null,
             getConnection: async () => conn,
-            _ensureMigrationsLedger: async () => {},
-            _runMigrationsInner: Database.prototype._runMigrationsInner,
-            _migrationPreconditionSkip: Database.prototype._migrationPreconditionSkip,
-            _assertPubkeyColumnIsUncompressedWide: async () => {},
-            _assertStakeWeightOrderingCollation: Database.prototype._assertStakeWeightOrderingCollation,
-            _migrationMode: Database.prototype._migrationMode,
+            ensureMigrationsLedger: async () => {},
+            runMigrationsInner: Database.prototype.runMigrationsInner,
+            migrationPreconditionSkip: Database.prototype.migrationPreconditionSkip,
+            assertPubkeyColumnIsUncompressedWide: async () => {},
+            assertStakeWeightOrderingCollation: Database.prototype.assertStakeWeightOrderingCollation,
+            migrationMode: Database.prototype.migrationMode,
             splitSqlStatements: Database.prototype.splitSqlStatements,
             stripSqlLineComments: Database.prototype.stripSqlLineComments,
-            _destructiveAutoStatement: Database.prototype._destructiveAutoStatement,
-            _isIdRepairUpdate: Database.prototype._isIdRepairUpdate,
+            destructiveAutoStatement: Database.prototype.destructiveAutoStatement,
+            isIdRepairUpdate: Database.prototype.isIdRepairUpdate,
         };
         const realLog = console.log, realErr = console.error, realWarn = console.warn;
         console.log = console.error = console.warn = (...a) => { logged.push(a.join(' ')); };

@@ -230,7 +230,7 @@ class Bet {
             // Validate DETAILS (optional): strict base64 wrapping a JSON object whose
             // optional `outcomes` array must agree with the consensus OUTCOMES field
             if(!error && !this.util.isNull(data['DETAILS']))
-                error = this._validateDetails(String(data['DETAILS']), outcomeLabels);
+                error = this.validateDetails(String(data['DETAILS']), outcomeLabels);
         }
 
         // Format 1 / 2 / 3 (existing feed) validations
@@ -491,11 +491,11 @@ class Bet {
             // Format 1 - Cancel Feed: refund every open stake in full, no oracle fee.
             // The oracle's honest out for postponed/voided events
             if(format==1)
-                await this._refundOpenBets(data, feedInfo, 'cancelled', credits, escrows);
+                await this.refundOpenBets(data, feedInfo, 'cancelled', credits, escrows);
 
             // Format 3 - Resolve Feed: settle inline (DISPENSE precedent)
             if(format==3)
-                await this._settleFeed(data, feedInfo, feedTokenInfo, credits, escrows);
+                await this.settleFeed(data, feedInfo, feedTokenInfo, credits, escrows);
 
             // Handle any transaction FEE according to the user's ADDRESS preferences
             [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
@@ -524,7 +524,7 @@ class Bet {
     // credits are protocol credits that BYPASS sleeping and token-list checks:
     // place-time checks gate entry, nothing may wedge exit, or escrow strands and
     // conservation breaks.
-    async _refundOpenBets(data, feedInfo, terminalStatus, credits, escrows){
+    async refundOpenBets(data, feedInfo, terminalStatus, credits, escrows){
         let openBets = await this.indexerDb.getOpenBetsByFeed(feedInfo['ACTION_INDEX']);
         for(let betRow of openBets){
             // Release escrow and credit the stake back to the ORIGINAL bettor
@@ -546,7 +546,7 @@ class Bet {
     // mathjs bignumber via the house bc* helpers; every division/floor at the feed
     // tick's DECIMALS. The pool predicate is normative: only bet_status='open' rows
     // are summed, and every summed row leaves 'open' in this same action.
-    async _settleFeed(data, feedInfo, feedTokenInfo, credits, escrows){
+    async settleFeed(data, feedInfo, feedTokenInfo, credits, escrows){
         let d       = feedTokenInfo['DECIMALS'];
         let winning = Number(data['OUTCOME']);
         let count   = String(feedInfo['OUTCOMES']).split(',').length;
@@ -613,7 +613,7 @@ class Bet {
         } else {
             // Empty winning pool (decision E): full refund, NO oracle fee. Bettors
             // never net-lose to an outcome nobody backed
-            await this._refundOpenBets(data, feedInfo, 'resolved_void', credits, escrows);
+            await this.refundOpenBets(data, feedInfo, 'resolved_void', credits, escrows);
         }
     }
 
@@ -621,7 +621,7 @@ class Bet {
      * DETAILS validation
      ****************************************************************/
     // Validate the base64 JSON market definition. Returns an error string or null.
-    _validateDetails(details, outcomeLabels){
+    validateDetails(details, outcomeLabels){
         // Strict base64: charset with = padding, length % 4 == 0, and a re-encode
         // that round-trips byte-identically (rejects non-canonical encodings)
         if(!/^[A-Za-z0-9+/]+={0,2}$/.test(details) || details.length % 4 !== 0)
@@ -643,7 +643,7 @@ class Bet {
         // MAX_BET_DETAILS_LENGTH)
         if(parsed === null || typeof parsed !== 'object' || Array.isArray(parsed))
             return 'invalid: DETAILS (json shape)';
-        if(this._jsonDepth(parsed) > this.config['MAX_BET_DETAILS_DEPTH'])
+        if(this.jsonDepth(parsed) > this.config['MAX_BET_DETAILS_DEPTH'])
             return 'invalid: DETAILS (json shape)';
         // An `outcomes` key must be an array whose labels equal the canonical
         // OUTCOMES exactly (order + count + byte-equal after trim); present-but-
@@ -661,13 +661,13 @@ class Bet {
     }
 
     // Nesting depth of a parsed JSON value (objects and arrays count one level each)
-    _jsonDepth(node, depth = 1){
+    jsonDepth(node, depth = 1){
         if(node === null || typeof node !== 'object')
             return depth;
         let max = depth;
         // Early exit once past the cap: bounded work on adversarial input
         for(let key of Object.keys(node)){
-            let child = this._jsonDepth(node[key], depth + 1);
+            let child = this.jsonDepth(node[key], depth + 1);
             if(child > max) max = child;
             if(max > this.config['MAX_BET_DETAILS_DEPTH']) return max;
         }

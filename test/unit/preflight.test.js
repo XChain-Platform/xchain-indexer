@@ -41,14 +41,14 @@ function makeCtx(util, { dryRun, blockIndex = 100 } = {}){
         _preflightMemo: new PreflightMemo(4),
         _feeQuotePending: 0,
         _calls: calls,
-        _dryRunAction: async (args) => {
+        dryRunAction: async (args) => {
             calls.dryRuns++;
             calls.lastArgs = args;
             return Object.assign({ blockIndex, blockTime: 1000, status: 'valid', error: null,
                                    xchainFee: '0', sourceFeeBalance: null }, dryRun || {});
         },
-        _nativeFeeMandatory: Actions.prototype._nativeFeeMandatory,
-        _batchProbeForbiddenSubAction: Actions.prototype._batchProbeForbiddenSubAction,
+        nativeFeeMandatory: Actions.prototype.nativeFeeMandatory,
+        batchProbeForbiddenSubAction: Actions.prototype.batchProbeForbiddenSubAction,
         computePreflight: Actions.prototype.computePreflight
     };
     return { ctx, calls };

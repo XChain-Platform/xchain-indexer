@@ -303,7 +303,7 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
             const rec   = new AnchorRecovery({}, { btcDb, verifyStakes: true, log: () => {} });
             // Pre-fix this threw "has no on-chain stake at block 1000 (fabricated set?)"
             // for B and the whole archive became unrecoverable.
-            await rec._verifyStakes(honestArchive, 'regtest');
+            await rec.verifyStakes(honestArchive, 'regtest');
             for(const c of btcDb.calls)
                 assert.strictEqual(c.block, BURIED, c.method + ' probed block ' + c.block + ', not the buried ' + BURIED);
         });
@@ -314,7 +314,7 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
             // C activates at 998, so it is absent from the hub-resolved set at 994 and
             // therefore absent from the archive. Re-resolving at the raw N reports C and
             // condemns the honest archive for a "dropped qualifying source".
-            await rec._verifyCompleteness(honestArchive, 'regtest');
+            await rec.verifyCompleteness(honestArchive, 'regtest');
             const resolutions = btcDb.calls.filter(c => c.method !== 'doQuery');
             assert.ok(resolutions.length > 0, 'completeness must re-resolve the set');
             for(const c of resolutions)
@@ -328,7 +328,7 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
                 capability: 'oracle_publish', snapshot_block: N,
                 signing_pubkey: 'f'.repeat(64), source: 'src_forged', amount: '5',
             }]);
-            await assert.rejects(() => rec._verifyStakes(forged, 'regtest'), /fabricated set\?/);
+            await assert.rejects(() => rec.verifyStakes(forged, 'regtest'), /fabricated set\?/);
         });
     });
 

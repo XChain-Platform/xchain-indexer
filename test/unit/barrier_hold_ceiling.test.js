@@ -211,7 +211,7 @@ describe('XChainIndexer._noteBarrierHold @regression @tier1', function () {
     }
     function wire(ix) { ix.hubDbSync.owner = ix; return ix; }
 
-    const note = XChainIndexer.prototype._noteBarrierHold;
+    const note = XChainIndexer.prototype.noteBarrierHold;
 
     let err;
     beforeEach(function () { err = sinon.stub(console, 'error'); });

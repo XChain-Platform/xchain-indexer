@@ -59,34 +59,34 @@ class DispenserDivergenceMetrics {
     // Roll the per-block tallies forward when a new block starts, emitting a
     // one-line summary for the block just finished. Blocks are processed in
     // ascending order, so a change in block_index marks a boundary.
-    _track(block_index){
+    track(block_index){
         if(this.currentBlock !== null && block_index !== this.currentBlock)
             this.flush();
         this.currentBlock = block_index;
     }
 
-    _bump(name){
+    bump(name){
         this.block[name]  += 1;
         this.totals[name] += 1;
     }
 
     // A cancel (DISPENSER format 1) has been applied and the dispenser closed.
     recordCancel(coin, block_index, action_index, address){
-        this._track(block_index);
-        this._bump('cancels');
+        this.track(block_index);
+        this.bump('cancels');
         console.log('\t DISPENSER_DIVERGENCE : CANCEL : ' + coin + ':' + action_index +
                     ' addr=' + address + ' block=' + block_index);
     }
 
     // An EXPIRATION edit (DISPENSER format 2) has changed the effective expiry.
     recordExpirationEdit(coin, block_index, action_index, address, oldExpiration, newExpiration){
-        this._track(block_index);
+        this.track(block_index);
         let older = Number(oldExpiration);
         let newer = Number(newExpiration);
         let delta = 'unchanged';
-        if(newer < older){ delta = 'shortened'; this._bump('editsShortened'); }
-        else if(newer > older){ delta = 'lengthened'; this._bump('editsLengthened'); }
-        this._bump('edits');
+        if(newer < older){ delta = 'shortened'; this.bump('editsShortened'); }
+        else if(newer > older){ delta = 'lengthened'; this.bump('editsLengthened'); }
+        this.bump('edits');
         console.log('\t DISPENSER_DIVERGENCE : EDIT_EXPIRATION : ' + coin + ':' + action_index +
                     ' addr=' + address + ' old=' + oldExpiration + ' new=' + newExpiration +
                     ' delta=' + delta + ' block=' + block_index);
@@ -96,9 +96,9 @@ class DispenserDivergenceMetrics {
     // paid address was already cancelled or expired. `reason` is 'cancelled' or
     // 'expired'. Observational only: the trigger is still dropped as before.
     recordRejectedDispense(coin, block_index, address, action_index, reason){
-        this._track(block_index);
-        if(reason === 'cancelled') this._bump('rejectedCancelled');
-        else if(reason === 'expired') this._bump('rejectedExpired');
+        this.track(block_index);
+        if(reason === 'cancelled') this.bump('rejectedCancelled');
+        else if(reason === 'expired') this.bump('rejectedExpired');
         console.log('\t DISPENSER_DIVERGENCE : DISPENSE_REJECTED : ' + coin +
                     ' addr=' + address + ' dispenser=' + action_index +
                     ' reason=' + reason + ' block=' + block_index);

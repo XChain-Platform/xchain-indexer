@@ -77,10 +77,10 @@ class Rollcall {
         let format = data['FORMAT'];
         if(!error && (format === null || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
-        if(format === 0 || format === 1) return await this._parseRollcall(params, data, error, format);
+        if(format === 0 || format === 1) return await this.parseRollcall(params, data, error, format);
     }
 
-    async _parseRollcall(params, data, error, version){
+    async parseRollcall(params, data, error, version){
 
         let network = String(this.config['NETWORK']);
         let v1      = (version === 1);

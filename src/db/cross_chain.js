@@ -41,12 +41,12 @@ module.exports = {
         // Bound by the clock below the admission activation and by this chain's signed
         // admission height above it (_mirrorBindClause); `block_index` is that key.
         let network = this.config['NETWORK'];
-        let bind    = this._mirrorBindClause(block_time, block_index);
+        let bind    = this.mirrorBindClause(block_time, block_index);
         // doQueryStrict (not doQuery): a CONSENSUS input read on the hub mirror, which never
         // holds a transaction, so doQuery turns a transient DB fault into an empty set on this
         // node alone - peers settle the matches, this node does not, and the block hashes
         // diverge. Throwing rolls the block back so it retries.
-        let matches = await this._mirrorDb().doQueryStrict(
+        let matches = await this.mirrorDb().doQueryStrict(
             `SELECT * FROM cross_chain_matches
              WHERE status = 'finalized' AND network = ? AND ${bind.sql} AND (a_chain = ? OR b_chain = ?)
              ORDER BY snapshot_block ASC, match_id ASC`,
@@ -94,12 +94,12 @@ module.exports = {
     // state). Cap per block (overflow carries forward; never dropped).
     async getEffectiveUndispatchedCalls(coin, network, block_time, limit, block_index){
         // Clock-bound below the admission activation, height-bound above it (_mirrorBindClause).
-        let bind  = this._mirrorBindClause(block_time, block_index);
+        let bind  = this.mirrorBindClause(block_time, block_index);
         // doQueryStrict (not doQuery): a CONSENSUS input read on the hub mirror, which never
         // holds a transaction, so doQuery turns a transient DB fault into an empty dispatch set
         // on this node alone - peers inject the XEXEC actions, this node does not, and the
         // block hashes diverge. Throwing rolls the block back so it retries.
-        let calls = await this._mirrorDb().doQueryStrict(
+        let calls = await this.mirrorDb().doQueryStrict(
             `SELECT * FROM cross_chain_calls
              WHERE phase = 'dispatch' AND status = 'finalized' AND network = ?
                AND target_chain = ? AND ${bind.sql}
@@ -138,7 +138,7 @@ module.exports = {
     // a cross-database exclusion cannot address without a cross-DB join.
     async getEffectiveUnprocessedCallResults(coin, network, block_time, limit, block_index){
         let cap = Number(limit) || 25;
-        let mirror = this._mirrorDb();
+        let mirror = this.mirrorDb();
         // doQueryStrict (not doQuery) on both branches: these are CONSENSUS input reads. The
         // mirror branch never holds a transaction, so doQuery turns a transient DB fault into
         // an empty result set on this node alone - peers record the callbacks, this node does
@@ -146,7 +146,7 @@ module.exports = {
         // later caller outside the block transaction cannot reintroduce the swallow.
         if(mirror === this){
             // The single-DB form aliases the table, so the clause is spelled on the alias.
-            let bind = this._mirrorBindClause(block_time, block_index, 'c');
+            let bind = this.mirrorBindClause(block_time, block_index, 'c');
             return await this.doQueryStrict(
                 `SELECT c.* FROM cross_chain_calls c
                  WHERE c.phase = 'result' AND c.status = 'finalized' AND c.network = ?
@@ -157,7 +157,7 @@ module.exports = {
                  LIMIT ?`,
                 [network, coin].concat(bind.args, [cap]));
         }
-        let bind    = this._mirrorBindClause(block_time, block_index);
+        let bind    = this.mirrorBindClause(block_time, block_index);
         let results = await mirror.doQueryStrict(
             `SELECT * FROM cross_chain_calls
              WHERE phase = 'result' AND status = 'finalized' AND network = ?

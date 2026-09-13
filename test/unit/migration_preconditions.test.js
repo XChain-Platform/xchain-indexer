@@ -36,7 +36,7 @@ const Database = require('../../src/db');
 
 const MIG_DIR = path.join(__dirname, '..', '..', 'src', 'sql', 'migrations');
 
-const modeOf = Database.prototype._migrationMode.bind({});
+const modeOf = Database.prototype.migrationMode.bind({});
 const readMigration = (file) => fs.readFileSync(path.join(MIG_DIR, file), 'utf8');
 const allMigrations = () => fs.readdirSync(MIG_DIR).filter(f => f.endsWith('.sql')).sort();
 
@@ -141,7 +141,7 @@ describe('Database.STARTUP_ASSERTED_MIGRATIONS @regression @tier1', function () 
 
     describe('startupAssertedMigrationFile()', function () {
         it('resolves a registered assertion to its migration filename', function () {
-            assert.strictEqual(Database.startupAssertedMigrationFile('_assertPubkeyColumnIsUncompressedWide'),
+            assert.strictEqual(Database.startupAssertedMigrationFile('assertPubkeyColumnIsUncompressedWide'),
                 '2026-07-24-pubkeys-widen-uncompressed.sql');
         });
         it('throws on an unregistered assertion rather than yielding undefined', function () {
@@ -173,7 +173,7 @@ describe('_assertPubkeyColumnIsUncompressedWide error text @regression @tier1', 
         // made the 2026-08-09 recovery a scoped --file run instead of a judgement call.
         let message = null;
         try {
-            await Database.prototype._assertPubkeyColumnIsUncompressedWide.call(dbWithColumnWidth(66));
+            await Database.prototype.assertPubkeyColumnIsUncompressedWide.call(dbWithColumnWidth(66));
         } catch (err) {
             message = err.message;
         }
@@ -183,8 +183,8 @@ describe('_assertPubkeyColumnIsUncompressedWide error text @regression @tier1', 
     });
 
     it('passes at the required width and when the column is absent', async function () {
-        await Database.prototype._assertPubkeyColumnIsUncompressedWide.call(dbWithColumnWidth(130));
-        await Database.prototype._assertPubkeyColumnIsUncompressedWide.call(dbWithColumnWidth(null));
+        await Database.prototype.assertPubkeyColumnIsUncompressedWide.call(dbWithColumnWidth(130));
+        await Database.prototype.assertPubkeyColumnIsUncompressedWide.call(dbWithColumnWidth(null));
     });
 });
 
@@ -206,7 +206,7 @@ describe('_assertRewardUniqueKeyCarriesQualifier @regression @tier1', function (
             })
         };
     }
-    const run = (db) => Database.prototype._assertRewardUniqueKeyCarriesQualifier.call(db);
+    const run = (db) => Database.prototype.assertRewardUniqueKeyCarriesQualifier.call(db);
     // The live shape the assertion reads: table present, qualifier column present, a
     // reward_unique index of `key_columns` columns, `qualifier_columns` of which is the
     // qualifier as part of a UNIQUE index.

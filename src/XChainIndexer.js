@@ -513,7 +513,7 @@ class XChainIndexer {
     // transaction that just committed. Each push_type maps to the same HubClient method the
     // HubPushQueue drain uses; on success the durable pending_hub_pushes row is dropped, on any
     // failure it is left for HubPushQueue to retry with backoff. Never throws into the block loop.
-    async _deliverStagedHubPushes(){
+    async deliverStagedHubPushes(){
         let staged = this.indexerDb.takeStagedHubPushes();
         if(!staged || staged.length === 0 || !this.hubClient) return;
         for(let entry of staged){
@@ -582,7 +582,7 @@ class XChainIndexer {
     // the inputs are not finite, which leaves the caller's verdict exactly as it was before.
     //
     // Used ONLY for the /status health verdict. It gates no wait, no read and no write.
-    _barrierClearsAt(blockTime, graceField){
+    barrierClearsAt(blockTime, graceField){
         blockTime = Number(blockTime);
         if(!this.hubDbSync || !Number.isFinite(blockTime)) return null;
         let graceS = Number(this.hubDbSync[graceField]);
@@ -603,9 +603,9 @@ class XChainIndexer {
     // "measurable, attributable and self-remedying", which is the whole point of the re-keying.
     //
     // Keyed on B, the block being processed, exactly as the predicate is.
-    _barrierClearsAtHeightAware(blockTime, graceField, blockHeight){
-        if(this._mirrorAdmissionActiveAt(blockHeight)) return null;
-        return this._barrierClearsAt(blockTime, graceField);
+    barrierClearsAtHeightAware(blockTime, graceField, blockHeight){
+        if(this.mirrorAdmissionActiveAt(blockHeight)) return null;
+        return this.barrierClearsAt(blockTime, graceField);
     }
 
     // The anchor-attest barrier's clear instant, bound-aware.
@@ -617,18 +617,18 @@ class XChainIndexer {
     // and the 900 s hold ceiling could never fire on the one barrier the horizon bound was
     // added to un-stall. The grace field is passed by NAME so _barrierClearsAt stays the only
     // reader of a grace and the barrier-to-grace wiring scan still sees which one this is.
-    _anchorBarrierClearsAt(blockTime, horizonBound, blockHeight, graceField){
+    anchorBarrierClearsAt(blockTime, horizonBound, blockHeight, graceField){
         // Height-keyed above the activation: no clock instant exists, so null, per C8.
-        if(this._mirrorAdmissionActiveAt(blockHeight)) return null;
+        if(this.mirrorAdmissionActiveAt(blockHeight)) return null;
         blockTime = Number(blockTime);
         if(!Number.isFinite(blockTime)) return null;
         let usable = (typeof horizonBound === 'number') && Number.isFinite(horizonBound);
-        return this._barrierClearsAt(usable ? Math.min(blockTime, horizonBound) : blockTime, graceField);
+        return this.barrierClearsAt(usable ? Math.min(blockTime, horizonBound) : blockTime, graceField);
     }
 
     // Whether this chain binds mirrored rows by admission height at block B. Inert on every
     // network in this train, in which case every barrier above behaves exactly as it does now.
-    _mirrorAdmissionActiveAt(blockHeight){
+    mirrorAdmissionActiveAt(blockHeight){
         if(blockHeight === null || blockHeight === undefined) return false;
         return isMirrorAdmissionConsumerActive(this.config['COIN'], this.config['NETWORK'], blockHeight);
     }
@@ -649,7 +649,7 @@ class XChainIndexer {
     // returns literal `false` for an absent blocks row, and `Number(false)` is 0, so a coercing
     // guard here would hand the predicate a bound of `0 + margin` and open the barrier at
     // `watermark >= margin + grace` on any decoder gap above height 144.
-    async _anchorAttestHorizonBound(blockToParse){
+    async anchorAttestHorizonBound(blockToParse){
         if(!this.hubDbSync) return null;
         let b = Number(blockToParse);
         if(!Number.isFinite(b) || (b - ANCHOR_REWARD_MIRROR_MATURITY) < 0) return null;
@@ -689,7 +689,7 @@ class XChainIndexer {
         process.exit(1);
     }
 
-    _noteBarrierHold(blockToParse, now = Date.now()){
+    noteBarrierHold(blockToParse, now = Date.now()){
         let prev = this.barrierHold;
         this.barrierHold = nextBarrierHold(prev, blockToParse, this.stallReason, this.stallClearsAt, now);
         let hold = this.barrierHold;
@@ -724,7 +724,7 @@ class XChainIndexer {
         return barrierHoldMs(hold, now);
     }
 
-    _evaluatePriceBarrier(blockToParse, blockTransactions){
+    evaluatePriceBarrier(blockToParse, blockTransactions){
         let mayReadPrice = blockMayReadPrice(blockTransactions)
                            || this.priceBarrierForceBlock === blockToParse;
         this.priceBarrierBlock   = blockToParse;
@@ -741,12 +741,12 @@ class XChainIndexer {
     // height-keyed and no clock instant opens it, so a hold accumulates and the 900 s ceiling
     // can fire exactly as it does for the mirrored twins. A caller that passes no height gets
     // today's clock verdict, which keeps the existing one-argument shape meaningful.
-    _directCallBarrierClearsAt(blockTime, blockHeight){
+    directCallBarrierClearsAt(blockTime, blockHeight){
         // Guarded on the RAW height before _mirrorAdmissionActiveAt is reached, so the
         // pre-train one-argument shape (and a hand-built harness with no config) reads inert
         // without touching this.config. Number(null) is 0, and 0 is above an activation armed
         // at height 0, which is why the guard is on the raw value and never a coerced one.
-        if(blockHeight !== null && blockHeight !== undefined && this._mirrorAdmissionActiveAt(blockHeight)) return null;
+        if(blockHeight !== null && blockHeight !== undefined && this.mirrorAdmissionActiveAt(blockHeight)) return null;
         blockTime = Number(blockTime);
         if(!this.hubDb || !Number.isFinite(blockTime)) return null;
         let graceS = Number(this.directCallGraceS);
@@ -783,14 +783,14 @@ class XChainIndexer {
     // error all read as NOT covered (fail closed), and the value is never coerced from a
     // missing reading: Number(null) is 0, and 0 would certify a genesis-era mirror for every
     // block.
-    async _waitForDirectCallPresence(blockTime, blockHeight){
+    async waitForDirectCallPresence(blockTime, blockHeight){
         blockTime = Number(blockTime);
         if(!this.hubDb || !Number.isFinite(blockTime)) return;
         let timeoutMs = Number(this.callPresenceTimeoutMs);
         if(!Number.isFinite(timeoutMs) || timeoutMs <= 0) timeoutMs = 10000;
         // The raw-height guard is what keeps the one-argument shape inert without reading
         // this.config (see _directCallBarrierClearsAt).
-        let admission = blockHeight !== null && blockHeight !== undefined && this._mirrorAdmissionActiveAt(blockHeight);
+        let admission = blockHeight !== null && blockHeight !== undefined && this.mirrorAdmissionActiveAt(blockHeight);
         let chain = (this.config && this.config['COIN']) ? String(this.config['COIN']).trim().toUpperCase() : '';
         // Resolved here rather than at the top of the file so this row touches nothing
         // outside its two methods; the module is already loaded by the require above.
@@ -970,11 +970,11 @@ class XChainIndexer {
         this.rollcallProof = new RollcallProofClient(this.config);
 
         // Overlay hub-served operational params on top of local config defaults (best-effort)
-        await this._applyHubConfigOverlay();
+        await this.applyHubConfigOverlay();
 
         // Keep the overlay live: poll the hub so a PBFT-committed config change takes
         // effect without requiring a process restart (see _startHubConfigPolling).
-        this._startHubConfigPolling();
+        this.startHubConfigPolling();
 
         // Establish database connections
         this.decoderDb = new database(this.decoderDbHost, this.decoderDbPort, this.decoderDbName, this.decoderDbUser, this.decoderDbPass, this);
@@ -1006,7 +1006,7 @@ class XChainIndexer {
                     // rounds the blocks THIS node will parse can read, not the oracle's whole
                     // history. Re-evaluated on every (re-)bootstrap, and null-safe - an
                     // unresolvable horizon mirrors the table in full, as before.
-                    getPriceMirrorHorizon: () => this._priceMirrorHorizon(),
+                    getPriceMirrorHorizon: () => this.priceMirrorHorizon(),
                     // Fail-loud stage of the mirror's watermark-stall detector. The mirror
                     // never ends a process on its own (a consumer running several mirrors
                     // in one process must not lose all of them to one stalled chain); this
@@ -1142,7 +1142,7 @@ class XChainIndexer {
             await this.indexerDb.warnOnLegacyReorgCursor();
             // Surface a pre-existing decoder REORG_HALT at startup (loud) so a node booting
             // behind a halted decoder is not silently mistaken for a slow catch-up.
-            await this._checkDecoderReorgHalt();
+            await this.checkDecoderReorgHalt();
 
             // Now that the indexer tables exist (including every hub-mirror table the
             // sync client writes into), start the hub DB sync in the background.
@@ -1152,7 +1152,7 @@ class XChainIndexer {
             // a hub database that outlived a venue re-genesis has its relic matches and
             // capability snapshots refused on arrival rather than mirrored and then purged.
             // No-op off BTC and while block 1 is not decoded yet; the block loop retries.
-            await this._resolveBtcChainId();
+            await this.resolveBtcChainId();
 
             if(this.hubDbSync){
                 this.hubDbSync.start().catch(err => {
@@ -1175,14 +1175,14 @@ class XChainIndexer {
         // Start the read-only state_tree_nodes orphan-count metric (observability only; no
         // deletion). Surfaces unbounded COW-node growth so we can measure it before building a
         // safe reclaiming sweep (see stateCommitment.reportOrphanStats for why deletion is deferred).
-        this._startStateTreeMetric();
+        this.startStateTreeMetric();
 
         // Start the state-retention pruner. DEFAULT OFF: inert unless
         // STATE_ROOT_RETENTION_BLOCKS is set (see src/chain/retention.js + the
         // data-retention page under components/indexer/ in xchain-documentation).
         // Phase-2 node reclaim, when opted in, runs
         // under the db transaction mutex so it cannot interleave with block-root inserts.
-        this._startStateRetention();
+        this.startStateRetention();
 
         // Define placeholders for block parsing status
         let firstDecoderBlock     = null;
@@ -1238,7 +1238,7 @@ class XChainIndexer {
             let unprocessedReorgs    = await this.decoderDb.getReorgsSince(lastProcessedReorgId, cursorWitness);
             // Keep the decoder-halt flag current on every poll (loud on transition, then
             // periodic). Advisory: it does not gate block processing, only makes the halt visible.
-            await this._checkDecoderReorgHalt();
+            await this.checkDecoderReorgHalt();
 
             // Get last processed block from Indexer and Decoder databases
             lastDecoderBlock       = await this.decoderDb.getBlockIndex('decoder', 'last');
@@ -1370,7 +1370,7 @@ class XChainIndexer {
                 // STOPS here rather than applying the block under the old rules: continue-old
                 // writes forked state and answers queries from it, and the sync followers would
                 // halt on the divergence one block later anyway, after the damage.
-                if(await this._checkTrainActivation(blockToParse)){
+                if(await this.checkTrainActivation(blockToParse)){
                     // Defer with the same semantics as the barriers below: lastIndexerBlock is
                     // not advanced, no transaction is open, and the outer loop retries. Unlike a
                     // barrier this does NOT self-clear; only a build that implements the required
@@ -1404,7 +1404,7 @@ class XChainIndexer {
                 // block's own protocol-time read below: getBlockTime memoizes exactly one
                 // height, and taking the horizon afterwards would evict the memo that
                 // protocol_changes.js re-reads later in this same block.
-                let anchorHorizonBound = await this._anchorAttestHorizonBound(blockToParse);
+                let anchorHorizonBound = await this.anchorAttestHorizonBound(blockToParse);
 
                 let blockTime    = await this.decoderDb.getBlockTime(blockToParse);
                 let rawBlockTime = await this.decoderDb.getRawBlockTime(blockToParse);
@@ -1500,7 +1500,7 @@ class XChainIndexer {
                 // caught fail-closed at the read itself by db._assertPriceBarrierNotSkipped().
                 // Safe without a flag day because a skipped barrier changes no hashed value,
                 // only whether this node paused first.
-                let mayReadPrice = this._evaluatePriceBarrier(blockToParse, blockTransactions);
+                let mayReadPrice = this.evaluatePriceBarrier(blockToParse, blockTransactions);
                 if(this.hubDbSync && mayReadPrice && this.config['COIN'] === 'BTC'){
                     try {
                         await this.hubDbSync.waitForPriceSyncHeight(blockToParse, this.priceSyncTimeoutMs, blockTime);
@@ -1526,7 +1526,7 @@ class XChainIndexer {
                         // passes blockTime + grace; both advance only as real time does. Record
                         // that instant so a future-stamped block is not reported as a wedge
                         // while the wait is expected and self-clearing.
-                        this.stallClearsAt = this._barrierClearsAtHeightAware(blockTime, 'priceWatermarkGraceS', blockToParse);
+                        this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'priceWatermarkGraceS', blockToParse);
                         break;
                     }
                 }
@@ -1553,7 +1553,7 @@ class XChainIndexer {
                         // against a stale oracle copy. No transaction is open yet.
                         console.warn('Deferring block ' + blockToParse + ' (oracle sync): ', err);
                         this.stallReason = 'oracle_sync_barrier';
-                        this.stallClearsAt = this._barrierClearsAtHeightAware(blockTime, 'oracleWatermarkGraceS', blockToParse);
+                        this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'oracleWatermarkGraceS', blockToParse);
                         break;
                     }
                 }
@@ -1568,7 +1568,7 @@ class XChainIndexer {
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (cross-chain match sync): ', err);
                         this.stallReason = 'match_sync_barrier';
-                        this.stallClearsAt = this._barrierClearsAtHeightAware(blockTime, 'matchWatermarkGraceS', blockToParse);
+                        this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'matchWatermarkGraceS', blockToParse);
                         break;
                     }
                 }
@@ -1588,7 +1588,7 @@ class XChainIndexer {
                         // (hub_db_sync.js HUB_SYNC_WATERMARK_GRACE_S.call). Keying the health
                         // verdict on the match value would mis-time the wedge discriminator the
                         // moment the two constants diverge or a regtest override moves one.
-                        this.stallClearsAt = this._barrierClearsAtHeightAware(blockTime, 'callWatermarkGraceS', blockToParse);
+                        this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'callWatermarkGraceS', blockToParse);
                         break;
                     }
                 }
@@ -1609,7 +1609,7 @@ class XChainIndexer {
                         // engine is a third producer with its own effective_time stamping rule,
                         // and sharing another table's grace couples two producers' timing, the
                         // documented mistake the call barrier was split out to end.
-                        this.stallClearsAt = this._barrierClearsAtHeightAware(blockTime, 'bridgeWatermarkGraceS', blockToParse);
+                        this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'bridgeWatermarkGraceS', blockToParse);
                         break;
                     }
                 }
@@ -1626,7 +1626,7 @@ class XChainIndexer {
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (policy snapshot sync): ', err);
                         this.stallReason = 'policy_sync_barrier';
-                        this.stallClearsAt = this._barrierClearsAtHeightAware(blockTime, 'policyWatermarkGraceS', blockToParse);
+                        this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'policyWatermarkGraceS', blockToParse);
                         break;
                     }
                 }
@@ -1650,7 +1650,7 @@ class XChainIndexer {
                 // height watermark for this chain instead (C9), so blockToParse rides along.
                 if(!this.hubDbSync && this.hubDb){
                     try {
-                        await this._waitForDirectCallPresence(blockTime, blockToParse);
+                        await this.waitForDirectCallPresence(blockTime, blockToParse);
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (direct call-presence barrier): ', err);
                         this.stallReason = 'call_presence_barrier';
@@ -1662,7 +1662,7 @@ class XChainIndexer {
                         // single-host topology this barrier serves, and this value gates no
                         // wait, no read and no write (health verdict only, see _barrierClearsAt).
                         // Null above the admission activation, where no clock instant opens it.
-                        this.stallClearsAt = this._directCallBarrierClearsAt(blockTime, blockToParse);
+                        this.stallClearsAt = this.directCallBarrierClearsAt(blockTime, blockToParse);
                         break;
                     }
                 }
@@ -1682,7 +1682,7 @@ class XChainIndexer {
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (anchor-reward attestation mirror): ', err);
                         this.stallReason = 'anchor_attest_barrier';
-                        this.stallClearsAt = this._anchorBarrierClearsAt(
+                        this.stallClearsAt = this.anchorBarrierClearsAt(
                             blockTime, anchorHorizonBound, blockToParse, 'anchorAttestWatermarkGraceS');
                         break;
                     }
@@ -1705,7 +1705,7 @@ class XChainIndexer {
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (attestation response mirror): ', err);
                         this.stallReason = 'attest_response_sync_barrier';
-                        this.stallClearsAt = this._barrierClearsAtHeightAware(blockTime, 'attestResponseWatermarkGraceS', blockToParse);
+                        this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'attestResponseWatermarkGraceS', blockToParse);
                         break;
                     }
                 }
@@ -2007,7 +2007,7 @@ class XChainIndexer {
                         // was re-genesised has no block 1 to read when this process boots; the
                         // memoized read costs one point query per block until it lands, and
                         // nothing is sent until then, which leaves an older hub's wire intact.
-                        let chainId = await this._resolveBtcChainId();
+                        let chainId = await this.resolveBtcChainId();
                         // rawBlockTime: the hub publishes this as the chain's tip timestamp to
                         // other services, which compare it against wall clock for freshness.
                         this.hubClient.pushChainTip(this.config['COIN'], this.config['NETWORK'], lastIndexerBlock, rawBlockTime, chainId);
@@ -2019,7 +2019,7 @@ class XChainIndexer {
                     // this is only an immediate live-delivery fast path that drops the durable row on
                     // success and leaves it for the queue on any failure. Best-effort and never throws
                     // into the block loop.
-                    await this._deliverStagedHubPushes();
+                    await this.deliverStagedHubPushes();
 
                     // Refresh the decoder tip after each committed block. Without this the
                     // decoder tip is snapshotted once per outer-loop iteration and stays frozen
@@ -2118,7 +2118,7 @@ class XChainIndexer {
             // block that keeps being deferred across passes is measured against the named
             // ceiling instead of retrying forever behind identically-healthy-looking log
             // lines. A no-op when nothing is stalled; see _noteBarrierHold.
-            this._noteBarrierHold(this.util.isNull(lastIndexerBlock) ? null : Number(lastIndexerBlock) + 1);
+            this.noteBarrierHold(this.util.isNull(lastIndexerBlock) ? null : Number(lastIndexerBlock) + 1);
 
             // Set flag to indicate fully synced and listening for block
             if(!this.synced && !this.util.bclt(lastIndexerBlock, lastDecoderBlock)){
@@ -2134,16 +2134,16 @@ class XChainIndexer {
     // Fetch operational params from the hub and shallow-merge them over the local coin config.
     // Called once at startup. Best-effort: logs a warning and returns without modifying config
     // if the hub is unreachable or returns an unexpected response.
-    async _applyHubConfigOverlay(){
+    async applyHubConfigOverlay(){
         if(!this.hubClient || !this.hubClient.configEnabled) return;
         try {
-            let { ok, configs, seq, watermark, coinConsensusHashes } = this._unwrapHubConfigResponse(await this.hubClient.getAllConfigs());
+            let { ok, configs, seq, watermark, coinConsensusHashes } = this.unwrapHubConfigResponse(await this.hubClient.getAllConfigs());
             if(!ok){
                 console.warn('XChainIndexer: hub config overlay skipped, hub returned no usable config (using local defaults)');
                 return;
             }
-            this._checkHubConsensusHash(coinConsensusHashes);
-            this._mergeHubParams(configs);
+            this.checkHubConsensusHash(coinConsensusHashes);
+            this.mergeHubParams(configs);
             this.lastHubConfigSeq = seq;
             this.lastHubConfigWatermark = watermark;
             this.lastHubConfigFetchAt = Date.now();
@@ -2157,7 +2157,7 @@ class XChainIndexer {
     // serve divergent consensus values; we never apply consensus params from the hub
     // (the pinned-verify-only class below), so this only logs, but it surfaces a hub
     // that is out of sync with this node's pinned bundle so an operator can upgrade.
-    _checkHubConsensusHash(coinConsensusHashes){
+    checkHubConsensusHash(coinConsensusHashes){
         if(!coinConsensusHashes) return; // older hub: field absent, nothing to compare
         let coin = this.config.COIN, network = this.config.NETWORK;
         let hubHash = coinConsensusHashes[network] && coinConsensusHashes[network][coin];
@@ -2176,7 +2176,7 @@ class XChainIndexer {
     // standalone/config-oracle hub (no consensus) never bumps it; watermark
     // (MAX(updated_at) over configs) advances on ANY config write, so both signals must
     // be honored or a non-consensus hub's committed changes are never re-applied live.
-    _unwrapHubConfigResponse(response){
+    unwrapHubConfigResponse(response){
         if(response && typeof response === 'object' && response.configs && typeof response.configs === 'object' && ('seq' in response)){
             return { ok: true, configs: response.configs, seq: Number(response.seq) || 0, watermark: Number(response.watermark) || 0, coinConsensusHashes: response.coin_consensus_hashes || null };
         }
@@ -2195,7 +2195,7 @@ class XChainIndexer {
     // Shallow-merge the hub's operational params for this coin/network over the live
     // config object. Mutating this.config in place is what lets a re-applied overlay
     // take effect without a process restart.
-    _mergeHubParams(allConfigs){
+    mergeHubParams(allConfigs){
         // THREE-WAY CONFIG CLASSIFIER (see the platform consolidation plan):
         //   1. pinned-verify-only - consensus-critical coin params (gas schedule, staking,
         //      fee math, addresses, genesis, byte-prefixes). NEVER applied from the hub;
@@ -2285,7 +2285,7 @@ class XChainIndexer {
     // reading of an install that has no manifest to require one. A manifest that
     // exists and cannot be PARSED is a different matter and is reported as malformed,
     // which evaluateTrainActivation halts on fail-closed.
-    _resolveTrainActivationRequirement(){
+    resolveTrainActivationRequirement(){
         if(this._trainActivationRequired !== undefined) return this._trainActivationRequired;
         let candidates = [];
         if(this.config && this.config['RELEASE_MANIFEST_PATH'])
@@ -2321,13 +2321,13 @@ class XChainIndexer {
     // requirement as fail-closed (see the header of src/train_activation.js). Never throws
     // into the block loop: an unexpected fault in the gate itself is reported and halts,
     // because a gate that cannot decide must not wave the block through.
-    async _checkTrainActivation(blockToParse){
+    async checkTrainActivation(blockToParse){
         let verdict;
         try {
             verdict = trainActivation.evaluateTrainActivation({
                 height:   (this.config['COIN'] === 'BTC') ? blockToParse : null,
                 network:  this.config['NETWORK'],
-                required: this._resolveTrainActivationRequirement()
+                required: this.resolveTrainActivationRequirement()
             });
         } catch(e){
             verdict = {
@@ -2364,7 +2364,7 @@ class XChainIndexer {
                 'required rule set. Clearing the marker by hand is not a supported path.');
         this.stallReason   = 'train_activation_halt: ' + verdict.reason;
         this.stallClearsAt = null;
-        await this._recordTrainActivationHalt(blockToParse, verdict);
+        await this.recordTrainActivationHalt(blockToParse, verdict);
         return true;
     }
 
@@ -2373,7 +2373,7 @@ class XChainIndexer {
     // halt fired at) and not the prose reason, which the log and health already carry in
     // full. A marker write that fails is logged and the halt still holds: the halt is a
     // refusal to advance, and it must not depend on a successful INSERT.
-    async _recordTrainActivationHalt(blockToParse, verdict){
+    async recordTrainActivationHalt(blockToParse, verdict){
         if(!this.indexerDb || typeof this.indexerDb.doQuery !== 'function') return;
         try {
             let existing = await this.indexerDb.getLatestTrainActivationHaltEvent();
@@ -2391,7 +2391,7 @@ class XChainIndexer {
         }
     }
 
-    async _checkDecoderReorgHalt(){
+    async checkDecoderReorgHalt(){
         if(!this.decoderDb) return this.decoderReorgHalted;
         let halted;
         try {
@@ -2462,7 +2462,7 @@ class XChainIndexer {
     //
     // Never throws: the identity is transport (it enters no canonical and no block-hash
     // preimage), so a decoder read fault must never reach the block loop.
-    async _resolveBtcChainId(){
+    async resolveBtcChainId(){
         if(this.btcChainId) return this.btcChainId;
         if(this.config['COIN'] !== 'BTC') return null;
         let hash = null;
@@ -2482,7 +2482,7 @@ class XChainIndexer {
         return this.btcChainId;
     }
 
-    async _priceMirrorHorizon(){
+    async priceMirrorHorizon(){
         const SLOP_SECONDS = 86400;
         // Local null test rather than this.util.isNull: util is wired in start(), and a
         // horizon that silently answered "mirror everything" because a helper was missing
@@ -2514,7 +2514,7 @@ class XChainIndexer {
         }
     }
 
-    _startHubConfigPolling(){
+    startHubConfigPolling(){
         if(!this.hubClient || !this.hubClient.configEnabled) return;
         if(this._hubConfigPollTimer) return;
         // Same reader the staleness boundary is derived from, so the reported boundary is
@@ -2528,7 +2528,7 @@ class XChainIndexer {
             if(this._hubConfigPollRunning) return;   // a prior slow poll is still in flight
             this._hubConfigPollRunning = true;
             try {
-                let { ok, configs, seq, watermark, coinConsensusHashes } = this._unwrapHubConfigResponse(await this.hubClient.getAllConfigs());
+                let { ok, configs, seq, watermark, coinConsensusHashes } = this.unwrapHubConfigResponse(await this.hubClient.getAllConfigs());
                 // A usable envelope (not a { error: ... } failure result) means the hub
                 // actually answered with config. A failed fetch must NOT refresh the freshness
                 // signal, or a persistently config-DB-failing hub reports healthy while the
@@ -2540,7 +2540,7 @@ class XChainIndexer {
                 // Re-check hub/node consensus-config drift on every poll (not only at startup),
                 // so a mid-run hub upgrade/downgrade to a divergent bundle is surfaced live.
                 // The check is log-only / pinned-verify-only and cannot affect consensus.
-                this._checkHubConsensusHash(coinConsensusHashes);
+                this.checkHubConsensusHash(coinConsensusHashes);
                 // Record the fetch time even when seq is unchanged, since the freshness of the
                 // live-polled params is what the health/status age signal reports, not whether
                 // they happened to change.
@@ -2579,7 +2579,7 @@ class XChainIndexer {
                                   '/watermark ' + watermark + ', below last-seen ' + this.lastHubConfigSeq +
                                   '/' + this.lastHubConfigWatermark +
                                   ' (hub restart or restore from an older snapshot); re-applying hub config and resetting the cursor.');
-                    this._mergeHubParams(configs);
+                    this.mergeHubParams(configs);
                     this.lastHubConfigSeq       = seq;
                     this.lastHubConfigWatermark = watermark;
                     return;
@@ -2588,7 +2588,7 @@ class XChainIndexer {
                 let watermarkAdvanced = watermark > (this.lastHubConfigWatermark || 0);
                 let watermarkRedeliver = watermark > 0 && watermark === (this.lastHubConfigWatermark || 0);
                 if(seqAdvanced || watermarkAdvanced || watermarkRedeliver){
-                    this._mergeHubParams(configs);
+                    this.mergeHubParams(configs);
                     this.lastHubConfigSeq = Math.max(seq, this.lastHubConfigSeq || 0);
                     this.lastHubConfigWatermark = Math.max(watermark, this.lastHubConfigWatermark || 0);
                     // Only announce an actual advance; an equal-watermark redelivery re-merge
@@ -2610,7 +2610,7 @@ class XChainIndexer {
     // the process open), guarded against self-overlap, and reads on a POOLED connection so it never
     // touches the block-processing transaction. No deletion: see stateCommitment.reportOrphanStats.
     // Interval STATE_TREE_METRIC_INTERVAL_MS (default 4h; 0 disables).
-    _startStateTreeMetric(){
+    startStateTreeMetric(){
         if(this._stateTreeMetricTimer) return;
         const raw = parseInt(process.env.STATE_TREE_METRIC_INTERVAL_MS, 10);
         const intervalMs = Number.isFinite(raw) ? raw : (4 * 60 * 60 * 1000);
@@ -2621,7 +2621,7 @@ class XChainIndexer {
             this._stateTreeMetricRunning = true;
             try {
                 const stats = await stateCommitment.reportOrphanStats(
-                    (sql, args) => this.indexerDb._poolQuery(sql, args),
+                    (sql, args) => this.indexerDb.poolQuery(sql, args),
                     this.config['COIN'], this.config['NETWORK']);
                 if(stats.totalNodes === 0) return;   // pre-activation / empty store: nothing to report
                 console.log('[METRIC] ' + JSON.stringify({
@@ -2653,16 +2653,16 @@ class XChainIndexer {
     // in, phase-2 orphan-node reclaim serialized against the block loop via the db
     // transaction mutex (runExclusive) so a concurrent forward insert can never
     // re-reference a node between the mark and the delete.
-    _startStateRetention(){
+    startStateRetention(){
         if(this._stateRetentionTimer) return;
         const cfg = retention.parseRetentionConfig(process.env);
         if(!cfg.enabled) return;   // policy off: no timer, nothing prunes
         const runExclusive = async (fn) => {
             // Hold the same mutex block processing acquires in beginTransaction so
             // the mark+delete never interleaves with a forward block-root insert.
-            await this.indexerDb._acquireTxLock();
+            await this.indexerDb.acquireTxLock();
             try { return await fn(); }
-            finally { this.indexerDb._releaseTxLock(); }
+            finally { this.indexerDb.releaseTxLock(); }
         };
         this._stateRetentionRunning = false;
         this._stateRetentionTimer = setInterval(async () => {

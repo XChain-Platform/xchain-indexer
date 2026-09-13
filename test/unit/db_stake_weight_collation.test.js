@@ -71,7 +71,7 @@ describe('stake-weight ordering collation gate @regression @tier1', function () 
                 'this test needs an unpinned chain; re-point it if testnet is ever armed');
             for (const height of [capHeight - 1, capHeight + 1]) {
                 const db = dbFor('testnet');
-                await db._stakeWeightsWithCap(1, height, '0', 'test');
+                await db.stakeWeightsWithCap(1, height, '0', 'test');
                 const q = db._calls.map(c => c.query).join('\n');
                 assert.ok(q.length > 0, 'no query was emitted at height ' + height);
                 assert.doesNotMatch(q, /COLLATE/,
@@ -83,7 +83,7 @@ describe('stake-weight ordering collation gate @regression @tier1', function () 
 
         it('regtest is armed and pins utf8_bin at every ordering site', async function () {
             const db = dbFor('regtest');
-            await db._stakeWeightsWithCap(1, 10, '0', 'test');
+            await db.stakeWeightsWithCap(1, 10, '0', 'test');
             const q = db._calls.map(c => c.query).join('\n').replace(/\s+/g, ' ');
             assert.match(q, /DENSE_RANK\(\) OVER \(ORDER BY b\.source COLLATE utf8_bin\)/,
                 'the source rank decides which sources survive the cap');
@@ -101,7 +101,7 @@ describe('stake-weight ordering collation gate @regression @tier1', function () 
             assert.strictEqual(capHeight, 0, 'regtest source cap is expected genesis-armed');
             // Force the legacy branch by stubbing the source-cap gate off.
             sinon.stub(swqCap, 'isSwqSourceCapActive').returns(false);
-            await db._stakeWeightsWithCap(1, 10, '0', 'test');
+            await db.stakeWeightsWithCap(1, 10, '0', 'test');
             const q = db._calls.map(c => c.query).join('\n').replace(/\s+/g, ' ');
             assert.match(q, /ORDER BY source COLLATE utf8_bin, pubkey COLLATE utf8_bin LIMIT \?/,
                 'the legacy LIMIT branch must pin the same collation the capped branch does');
@@ -109,11 +109,11 @@ describe('stake-weight ordering collation gate @regression @tier1', function () 
 
         it('only the ordering changed: the gate adds COLLATE and nothing else', async function () {
             const off = dbFor('testnet');
-            await off._stakeWeightsWithCap(1, 5000000, '0', 'test');
+            await off.stakeWeightsWithCap(1, 5000000, '0', 'test');
             const offQ = off._calls[0].query;
             sinon.restore();
             const on = dbFor('regtest');
-            await on._stakeWeightsWithCap(1, 5000000, '0', 'test');
+            await on.stakeWeightsWithCap(1, 5000000, '0', 'test');
             const onQ = on._calls[0].query;
             assert.strictEqual(onQ.split(' COLLATE utf8_bin').join(''), offQ,
                 'stripping the COLLATE suffixes must reproduce the unpinned query exactly; ' +
@@ -229,17 +229,17 @@ describe('stake-weight ordering collation gate @regression @tier1', function () 
 
         it('passes on a correct schema', async function () {
             const db = dbWithSchemaRows([{ CHARACTER_SET_NAME: 'utf8mb3', COLLATION_NAME: 'utf8mb3_general_ci' }]);
-            await db._assertStakeWeightOrderingCollation();
+            await db.assertStakeWeightOrderingCollation();
         });
 
         it('passes when the table is not there yet', async function () {
             const db = dbWithSchemaRows([]);
-            await db._assertStakeWeightOrderingCollation();
+            await db.assertStakeWeightOrderingCollation();
         });
 
         it('throws on drift, naming the column', async function () {
             const db = dbWithSchemaRows([{ CHARACTER_SET_NAME: 'utf8mb4', COLLATION_NAME: 'utf8mb4_general_ci' }]);
-            await assert.rejects(() => db._assertStakeWeightOrderingCollation(), /index_addresses\.address/);
+            await assert.rejects(() => db.assertStakeWeightOrderingCollation(), /index_addresses\.address/);
         });
     });
 });

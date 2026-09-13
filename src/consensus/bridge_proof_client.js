@@ -106,7 +106,7 @@ class BridgeProofUnavailableError extends Error {
 
 // A finite non-negative integer, or null. Heights arrive from a MariaDB driver that may hand
 // back a number, a string or a BigInt depending on its bigint options.
-function _height(v){
+function height(v){
     if(v === null || v === undefined) return null;
     if(typeof v === 'bigint') return (v >= 0n && v <= BigInt(Number.MAX_SAFE_INTEGER)) ? Number(v) : null;
     const n = Number(v);
@@ -139,7 +139,7 @@ function resolveOriginEndpoint(chain, config){
  * HubClient._call. The indexer deliberately carries no HTTP client dependency and this read
  * sits on the block-processing path, so it does not get to add one.
  */
-function _rpc(endpoint, method, params, timeoutMs){
+function rpc(endpoint, method, params, timeoutMs){
     return new Promise((resolve, reject) => {
         const parsed  = urllib.parse(endpoint.url);
         const isHttps = parsed.protocol === 'https:';
@@ -211,7 +211,7 @@ function checkpointCanonical(cp){
  * @returns {Promise<boolean>}
  */
 async function verifyCheckpointQuorum(cp, indexerDb){
-    const snapshotBlock = _height(cp.snapshot_block);
+    const snapshotBlock = height(cp.snapshot_block);
     if(snapshotBlock === null) return false;
     const weighted = swq.isStakeWeightedQuorumActive(snapshotBlock, cp.network);
     const validators = weighted
@@ -270,7 +270,7 @@ async function verifyCheckpointQuorum(cp, indexerDb){
 async function selectCheckpoint(row, ctx){
     const chain     = String(row.src_chain || '');
     const network   = String(row.network || '');
-    const atOrAfter = _height(row.snapshot_block);
+    const atOrAfter = height(row.snapshot_block);
     if(!chain || !network || atOrAfter === null) return null;
 
     const db = ctx.indexerDb;
@@ -289,8 +289,8 @@ async function selectCheckpoint(row, ctx){
         anchors = [];
     }
     for(const a of anchors)
-        candidates.push({ chain: a.chain, network: a.network, block_index: _height(a.block_index),
-                          checkpoint_seq: _height(a.checkpoint_seq), snapshot_block: _height(a.snapshot_block),
+        candidates.push({ chain: a.chain, network: a.network, block_index: height(a.block_index),
+                          checkpoint_seq: height(a.checkpoint_seq), snapshot_block: height(a.snapshot_block),
                           state_root: a.state_root, state_root_version: a.state_root_version,
                           source: 'anchor_actions' });
 
@@ -306,8 +306,8 @@ async function selectCheckpoint(row, ctx){
     }
     for(const m of mirrored){
         if(!await verifyCheckpointQuorum(m, db)) continue;
-        candidates.push({ chain: m.chain, network: m.network, block_index: _height(m.block_index),
-                          checkpoint_seq: _height(m.checkpoint_seq), snapshot_block: _height(m.snapshot_block),
+        candidates.push({ chain: m.chain, network: m.network, block_index: height(m.block_index),
+                          checkpoint_seq: height(m.checkpoint_seq), snapshot_block: height(m.snapshot_block),
                           state_root: m.state_root, state_root_version: m.state_root_version,
                           source: 'state_checkpoints' });
         // One verified mirrored candidate at the lowest qualifying height is all the rule can
@@ -355,7 +355,7 @@ async function fetchEscrowProof(row, ctx, checkpoint, escrowAddress){
     // an indexer serves exactly one pair.
     let result = null;
     try {
-        result = await _rpc(endpoint, 'getbridgeescrowproof', {
+        result = await rpc(endpoint, 'getbridgeescrowproof', {
             chain:       String(row.src_chain),
             network:     String(row.network),
             block_index: checkpoint.block_index,

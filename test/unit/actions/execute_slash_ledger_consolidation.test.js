@@ -101,8 +101,8 @@ describe('Execute._processSlashEmission multi-slash ledger conservation @regress
             .onFirstCall().resolves({ total: '10', releases: [{ address: 'ownerX', amount: '10' }] })
             .onSecondCall().resolves({ total: '20', releases: [{ address: 'ownerY', amount: '20' }] });
         const ledger = { credits: new Map(), escrows: new Map() };
-        await handler._processSlashEmission(slashEmission(PUBKEY_A), slashData(), 0, ledger);
-        await handler._processSlashEmission(slashEmission(PUBKEY_B), slashData(), 1, ledger);
+        await handler.processSlashEmission(slashEmission(PUBKEY_A), slashData(), 0, ledger);
+        await handler.processSlashEmission(slashEmission(PUBKEY_B), slashData(), 1, ledger);
         return {
             credits: db.createCredit.getCalls().map(c => String(c.args[2])),
             escrows: db.createEscrow.getCalls().map(c => [c.args[3], String(c.args[2])]),
@@ -134,8 +134,8 @@ describe('Execute._processSlashEmission multi-slash ledger conservation @regress
             .onFirstCall().resolves({ total: '10', releases: [{ address: 'ownerX', amount: '10' }] })
             .onSecondCall().resolves({ total: '5',  releases: [{ address: 'ownerX', amount: '5' }] });
         const ledger = { credits: new Map(), escrows: new Map() };
-        await handler._processSlashEmission(slashEmission(PUBKEY_A), slashData(), 0, ledger);
-        await handler._processSlashEmission(slashEmission(PUBKEY_A), slashData(), 1, ledger);
+        await handler.processSlashEmission(slashEmission(PUBKEY_A), slashData(), 0, ledger);
+        await handler.processSlashEmission(slashEmission(PUBKEY_A), slashData(), 1, ledger);
         return {
             credits: db.createCredit.getCalls().map(c => String(c.args[2])),
             escrows: db.createEscrow.getCalls().map(c => String(c.args[2]))
@@ -168,8 +168,8 @@ describe('Execute._processSlashEmission multi-slash ledger conservation @regress
         const upper = slashEmission(PUBKEY_A);
         const lower = slashEmission(PUBKEY_B);
         lower.params.token = 'stk';
-        await handler._processSlashEmission(upper, slashData(), 0, ledger);
-        await handler._processSlashEmission(lower, slashData(), 1, ledger);
+        await handler.processSlashEmission(upper, slashData(), 0, ledger);
+        await handler.processSlashEmission(lower, slashData(), 1, ledger);
         return {
             credits: db.createCredit.getCalls().map(c => String(c.args[2])),
             escrows: db.createEscrow.getCalls().map(c => String(c.args[2]))
@@ -194,7 +194,7 @@ describe('Execute._processSlashEmission multi-slash ledger conservation @regress
         const one = async (network) => {
             const { handler, db } = makeHandler(network);
             db.slashContractStake = sinon.stub().resolves({ total: '100', releases: [{ address: 'ownerX', amount: '100' }] });
-            await handler._processSlashEmission(slashEmission(PUBKEY_A), slashData(), 0, { credits: new Map(), escrows: new Map() });
+            await handler.processSlashEmission(slashEmission(PUBKEY_A), slashData(), 0, { credits: new Map(), escrows: new Map() });
             const out = {
                 credit: String(db.createCredit.firstCall.args[2]),
                 escrow: String(db.createEscrow.firstCall.args[2])
@@ -210,8 +210,8 @@ describe('Execute._processSlashEmission multi-slash ledger conservation @regress
         db.slashContractStake = sinon.stub()
             .onFirstCall().resolves({ total: '10', releases: [{ address: 'ownerX', amount: '10' }] })
             .onSecondCall().resolves({ total: '20', releases: [{ address: 'ownerY', amount: '20' }] });
-        await handler._processSlashEmission(slashEmission(PUBKEY_A), slashData(), 0);
-        await handler._processSlashEmission(slashEmission(PUBKEY_B), slashData(), 1);
+        await handler.processSlashEmission(slashEmission(PUBKEY_A), slashData(), 0);
+        await handler.processSlashEmission(slashEmission(PUBKEY_B), slashData(), 1);
         assert.deepStrictEqual(db.createCredit.getCalls().map(c => String(c.args[2])), ['10', '20']);
     });
 });

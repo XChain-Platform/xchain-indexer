@@ -101,7 +101,7 @@ function makeCtx(db, processTransaction){
         config:        db.util.config,
         indexerDb:     db,
         processTransaction,
-        _dryRunAction: Actions.prototype._dryRunAction
+        dryRunAction: Actions.prototype.dryRunAction
     };
     ctx.config['BLOCK_PROCESS_TIMEOUT'] = 300000;
     return ctx;
@@ -122,7 +122,7 @@ describe('the fee-quote dry run drops the SMT name memos it poisoned @regression
             return { STATUS: 'valid', ACTION_INDEX: 1 };
         });
 
-        const r = await ctx._dryRunAction.call(ctx, {
+        const r = await ctx.dryRunAction.call(ctx, {
             action: 'ISSUE', params: ['0', QUOTED_TICK, '1000'], source: ADDR, timeoutMs: 300000
         });
 
@@ -143,7 +143,7 @@ describe('the fee-quote dry run drops the SMT name memos it poisoned @regression
             throw new Error('injected handler fault');
         });
 
-        const r = await ctx._dryRunAction.call(ctx, {
+        const r = await ctx.dryRunAction.call(ctx, {
             action: 'ISSUE', params: ['0', QUOTED_TICK, '1000'], source: ADDR, timeoutMs: 300000
         });
 
@@ -173,7 +173,7 @@ describe('the fee-quote dry run drops the SMT name memos it poisoned @regression
             await db.createLedgerChangeRecord('credits', 1, QUOTED_TICK, '1000', ADDR);
             return { STATUS: 'valid', ACTION_INDEX: 1 };
         });
-        await ctx._dryRunAction.call(ctx, {
+        await ctx.dryRunAction.call(ctx, {
             action: 'ISSUE', params: ['0', QUOTED_TICK, '1000'], source: ADDR, timeoutMs: 300000
         });
         assert.strictEqual(db._smtTickNameCache, null,
@@ -207,7 +207,7 @@ describe('the fee-quote dry run drops the SMT name memos it poisoned @regression
         sinon.stub(db, 'createAddress').resolves(9);
 
         const ctx = makeCtx(db, async () => ({ STATUS: 'valid', ACTION_INDEX: 1 }));
-        await ctx._dryRunAction.call(ctx, {
+        await ctx.dryRunAction.call(ctx, {
             action: 'ISSUE', params: ['0', REAL_TICK, '1000'], source: ADDR, timeoutMs: 300000
         });
 

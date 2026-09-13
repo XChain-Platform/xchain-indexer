@@ -51,7 +51,7 @@ module.exports = {
     // read as "nothing finalized" and quietly feed the whole history again.
     async getPendingBridgeTransfers(limit){
         let coin   = this.config['COIN'];
-        let mirror = this._mirrorDb();
+        let mirror = this.mirrorDb();
         if(mirror === this){
             return await this.doQuery(
                 this._pendingBridgeTransfersSql(
@@ -91,7 +91,7 @@ module.exports = {
     // the mirror handle: on a node whose hub copy lives in a separate database the
     // ledger connection holds no bridge_transfers rows at all.
     async getBridgeTransferById(transfer_id){
-        let rows = await this._mirrorDb().doQuery(
+        let rows = await this.mirrorDb().doQuery(
             `SELECT
                 transfer_id, snapshot_block, network, src_chain, src_action_index, src_address,
                 dest_chain, dest_address, tick, decimals, amount, effective_time, finalizing_view,
