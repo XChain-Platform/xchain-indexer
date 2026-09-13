@@ -46,8 +46,10 @@ describe('bin/reachability.js', function () {
         });
 
         it('resolves a relative require to the file it loads, extension or not', () => {
-            assert.strictEqual(reach.resolveRequire('src/api.js', './db.js'), 'src/db.js');
-            assert.strictEqual(reach.resolveRequire('src/api.js', './db'), 'src/db.js');
+            assert.strictEqual(reach.resolveRequire('src/api.js', './utility.js'), 'src/utility.js');
+            assert.strictEqual(reach.resolveRequire('src/api.js', './utility'), 'src/utility.js');
+            assert.strictEqual(reach.resolveRequire('src/api.js', './db'), 'src/db/index.js',
+                'a directory require loads its index.js, which is how every reader reaches the database');
             assert.strictEqual(reach.resolveRequire('src/api.js', './coins'), 'src/coins/index.js');
             assert.strictEqual(reach.resolveRequire('src/api.js', 'mariadb'), null,
                 'a package is not a repo-local edge');
@@ -58,8 +60,22 @@ describe('bin/reachability.js', function () {
         const report = reach.analyse({ siblings: false });
 
         it('carries a transitively required module, not just the direct ones', () => {
-            assert.strictEqual(report.files['src/db.js'].reachableFromIndexerRuntime, true);
+            assert.strictEqual(report.files['src/db/index.js'].reachableFromIndexerRuntime, true);
             assert.strictEqual(report.files['src/actions/send.js'].reachableFromIndexerRuntime, true);
+        });
+
+        it('carries the database mixins the install loop requires by computed path', () => {
+            // Nothing in src/db/index.js names a mixin as a literal, so withdrawing
+            // the declared edge drops all three assertions at once and every mixin
+            // reads unreferenced across the platform.
+            const mixin = report.files['src/db/sends.js'];
+            assert.deepStrictEqual(mixin.requiredByInRepo, ['src/db/index.js'],
+                'a mixin is held by the install loop and by nothing else');
+            assert.strictEqual(mixin.reachableFromIndexerRuntime, true,
+                'a mixin is on the boot path through the database module');
+            const unheld = Object.keys(report.files)
+                .filter((f) => f.startsWith('src/db/') && !report.files[f].reachableFromIndexerRuntime);
+            assert.deepStrictEqual(unheld, [], 'every file under src/db/ is reached from the runtime');
         });
 
         it('applies the declared dynamic edges the static walk cannot see', () => {

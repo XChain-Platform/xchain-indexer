@@ -79,6 +79,27 @@ const DYNAMIC_EDGES = [
         },
         why: 'the consensus-rules digest requires every SHARED_GATES module by computed path',
     },
+    {
+        from: 'src/db/index.js',
+        // The mixin install loop calls require(file) over its MIXIN_FILES rows, so
+        // not one literal in the file names a mixin and all of src/db/ reads
+        // unreachable without this edge. The list is read out of the declaration
+        // rather than restated here, because a restated copy is a second registry
+        // that drifts away from the one the loop actually walks.
+        toList: () => {
+            const declared = fs.readFileSync(path.join(REPO_ROOT, 'src/db/index.js'), 'utf8');
+            const block = /const MIXIN_FILES = \[([\s\S]*?)\];/.exec(declared);
+            if (!block) {
+                throw new Error('src/db/index.js no longer declares MIXIN_FILES: the mixin edge cannot be read');
+            }
+            const rows = Array.from(block[1].matchAll(/(['"])([^'"]+)\1/g))
+                .map((m) => resolveRequire('src/db/index.js', m[2]))
+                .filter(Boolean);
+            if (!rows.length) throw new Error('MIXIN_FILES declares no resolvable mixin: the edge is stale');
+            return rows;
+        },
+        why: 'the Database mixin install loop requires every MIXIN_FILES row by computed path',
+    },
 ];
 
 const SOURCE_EXT = ['.js'];
