@@ -33,7 +33,9 @@
 
 class Coinpay {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -41,6 +43,7 @@ class Coinpay {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
+        // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|ORDER_MATCH_ACTION_INDEX';
     }
@@ -68,18 +71,23 @@ class Coinpay {
         return null;
     }
 
+    // Handle parsing the COINPAY transaction
     async parse(params, data, error){
 
+        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
 
+        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
+        // Convert NUMBER fields from string value to number value
         if(!error)
             data = this.util.setNumberFormats(data);
 
+        // Look up the COINPay obligation by ORDER_MATCH_ACTION_INDEX
         let obligationInfo = false;
         if(!error)
             obligationInfo = await this.indexerDb.getCoinpayObligationInfo(data['ORDER_MATCH_ACTION_INDEX']);
@@ -154,6 +162,7 @@ class Coinpay {
         // probe that cannot ask it quotes a mismatch the chain does not report.
         let payeeOutput = batchLedger ? this.findPaymentOutput(data['TX_OUTPUTS'], payee) : null;
 
+        // Early exit: if this output's destination does not match the payee address
         if(!payeeOutput && data['COIN_DESTINATION'] != payee){
             console.log("\t COINPAY (skip): destination mismatch tx=" + data['COIN_DESTINATION'] + " payee=" + payee);
             await this.indexerDb.deleteActionIndex(data['ACTION_INDEX']);
@@ -208,9 +217,11 @@ class Coinpay {
             return;
         }
 
+        // Validate obligation has not expired
         if(!error && data['BLOCK_TIME'] >= obligationInfo['EXPIRATION'])
             error = 'invalid: COINPAY obligation expired';
 
+        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
@@ -242,6 +253,7 @@ class Coinpay {
             }
         }
 
+        // Print status message
         console.log("\t COINPAY : " + this.config['COIN'] + ':' + data['ORDER_MATCH_ACTION_INDEX'] + ' : ' + data['STATUS']);
 
         // Record the output this obligation actually settled against. On the legacy path
@@ -250,6 +262,7 @@ class Coinpay {
         // under seller A's payment; `coinpays` is a descriptive record (nothing in the
         // indexer reads the table back), so this corrects the attribution without moving a
         // consensus value.
+        // Record in the coinpays table
         let coinpayData = {
             ACTION_INDEX:            data['ACTION_INDEX'],
             OBLIGATION_ACTION_INDEX: obligationInfo['ACTION_INDEX'],
@@ -261,6 +274,7 @@ class Coinpay {
         };
         await this.indexerDb.createCoinpay(coinpayData);
 
+        // If invalid, record and exit
         if(status != 'valid'){
             await this.mapper.createMappings(data);
             return;
@@ -271,6 +285,7 @@ class Coinpay {
         if(!matchOrders)
             return;
 
+        // Get info on both orders involved in the match
         let giveOrderInfo = await this.indexerDb.getOrderInfo(this.config['COIN'], matchOrders.give_action_index);
         let getOrderInfo  = await this.indexerDb.getOrderInfo(this.config['COIN'], matchOrders.get_action_index);
         if(!giveOrderInfo || !getOrderInfo)
@@ -309,9 +324,11 @@ class Coinpay {
         // The buyer (coin payer) receives tokens at their order's GET_ADDRESS
         let buyerGetAddress = coinOrder['GET_ADDRESS'];
 
+        // Add addresses to the addresses list
         this.util.addAddressTicker(sellerOrder['SOURCE'], sellerOrder['GIVE_TICK']);
         this.util.addAddressTicker(buyerGetAddress, sellerOrder['GIVE_TICK']);
 
+        // Array of credits, debits, and escrows
         let credits = [],
             debits  = [],
             escrows = [];
@@ -322,6 +339,8 @@ class Coinpay {
         let matchQuery = await this.indexerDb.getOrderMatchAmounts(obligationInfo['ACTION_INDEX']);
         let tokenAmount;
         if(matchQuery){
+            // The match's give_amount or get_amount depends on which side is the seller
+            // give_action_index = match order, get_action_index = original order
             if(sellerOrder['ACTION_INDEX'] == matchQuery.get_action_index){
                 // Seller is the original order (get side): token amount is give_amount
                 tokenAmount = matchQuery.give_amount;
@@ -344,6 +363,7 @@ class Coinpay {
             }
         }
 
+        // Update coinpay obligation status to 'fulfilled'
         await this.indexerDb.createCoinpayStatus(data['ACTION_INDEX'], obligationInfo['ACTION_INDEX'], 'fulfilled');
 
         // Clear the MATCH. Its status lives on its own order_matches row; order_statuses
@@ -351,6 +371,7 @@ class Coinpay {
         // index written there matches nothing.
         await this.indexerDb.updateOrderMatchStatus(obligationInfo['ACTION_INDEX'], 'valid');
 
+        // Check if orders should be marked 'complete'
         // Re-fetch order info to get updated GIVE_REMAINING after this settlement
         let updatedSellerOrder = await this.indexerDb.getOrderInfo(this.config['COIN'], sellerOrder['ACTION_INDEX']);
         let updatedCoinOrder   = await this.indexerDb.getOrderInfo(this.config['COIN'], coinOrder['ACTION_INDEX']);
@@ -392,14 +413,18 @@ class Coinpay {
             }
         }
 
+        // Process any transaction ledger changes (credits / debits / escrows)
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
 
+        // Get a list of tickers & addresses
         let tickers   = this.util.getTickersList(),
             addresses = Object.keys(this.util.getAddressesList());
 
+        // Update address balances and token supply
         await this.indexerDb.updateBalances(addresses);
         await this.indexerDb.updateTokens(tickers);
 
+        // Create action mappings
         await this.mapper.createMappings(data);
     }
 }

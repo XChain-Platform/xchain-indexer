@@ -20,7 +20,9 @@
 
 class Order_Match {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -28,14 +30,18 @@ class Order_Match {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
+        // Flag to print debugging messages to the console
         this.debug = false;
     }
 
+    // Handle looking for matching orders
     async parse(params, data, error){
 
+        // Placeholder to store match and order info (get/give remaining amounts)
         let match = {};
         let order = {};
 
+        // Get information on a order given the COIN network and ORDER_ACTION_INDEX
         let orderIndex = (data['ORDER_ACTION_INDEX']) ? data['ORDER_ACTION_INDEX'] : data['ACTION_INDEX'];
         let orderInfo  = await this.indexerDb.getOrderInfo(this.config['COIN'], orderIndex);
 
@@ -43,6 +49,7 @@ class Order_Match {
         if(!orderInfo)
             return;
 
+        // Get a list of any matching open orders
         let matches = await this.indexerDb.findOrderMatches(orderInfo);
 
         // Filter for ownership compatibility: an ownership-side and a balance-side
@@ -57,23 +64,30 @@ class Order_Match {
 
         if(matches){
 
+            // Get information on the tokens involved in the order
             let getTokenInfo  = await this.indexerDb.getTokenInfo(orderInfo['GET_TICK'],  data['BLOCK_INDEX'], data['ACTION_INDEX']);
             let giveTokenInfo = await this.indexerDb.getTokenInfo(orderInfo['GIVE_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
+            // List of addresses allowed or blocked from holding GET_TICK
             let getTokenAllowList = (getTokenInfo && !this.util.isNull(getTokenInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(getTokenInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : [];
             let getTokenBlockList = (getTokenInfo && !this.util.isNull(getTokenInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(getTokenInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : [];
 
+            // List of addresses allowed or blocked from holding GIVE_TICK
             let giveTokenAllowList = (giveTokenInfo && !this.util.isNull(giveTokenInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(giveTokenInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : [];
             let giveTokenBlockList = (giveTokenInfo && !this.util.isNull(giveTokenInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(giveTokenInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : [];
 
+            // List of addresses allowed or blocked from matching with this ORDER
             let orderInfoAllowList = (!this.util.isNull(orderInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(orderInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : [];
             let orderInfoBlockList = (!this.util.isNull(orderInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(orderInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : [];
 
+            // Set get/give remaining amounts for this order
             order['GIVE_REMAINING'] = orderInfo['GIVE_REMAINING'];
             order['GET_REMAINING']  = orderInfo['GET_REMAINING'];
 
+            // Loop through matches and determine if we have a valid match
             for(let matchInfo of matches){
 
+                // Reset the address/tickers/transactions list on each match
                 this.util.resetLists();
 
                 // Reciprocity gate (defense-in-depth for the findOrderMatches reverse-leg
@@ -122,9 +136,11 @@ class Order_Match {
                     }
                 }
 
+                // Set get/give remaining amounts for this order match
                 match['GIVE_REMAINING'] = matchInfo['GIVE_REMAINING'];
                 match['GET_REMAINING']  = matchInfo['GET_REMAINING'];
 
+                // Display get/give remaining amounts
                 if(this.debug){
                     console.log('ORDER - GET / GIVE remaining=', order['GIVE_REMAINING'], order['GET_REMAINING'])
                     console.log('MATCH - GIVE / GET remaining=', match['GET_REMAINING'],  match['GIVE_REMAINING'])
@@ -221,6 +237,7 @@ class Order_Match {
                     }
                 }
 
+                // List of addresses allowed or blocked from matching with this matching ORDER
                 let matchInfoAllowList = (!this.util.isNull(matchInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(matchInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : [];
                 let matchInfoBlockList = (!this.util.isNull(matchInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(matchInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : [];
 
@@ -257,21 +274,27 @@ class Order_Match {
                                          this.util.isNull(matchInfo['GIVE_TICK']) ||
                                          this.util.isNull(matchInfo['GET_TICK']));
 
+                // Set the status
                 data['STATUS'] = isNativeCoinMatch ? 'pending_coinpay' : 'valid';
                 data['SETTLEMENT_TYPE'] = isNativeCoinMatch ? 'coinpay' : 'instant';
 
+                // Print status message
                 console.log("\t ORDER_MATCH : " + this.util.logAmount(give_amount) + ' ' + orderInfo['GIVE_COIN'] + ':' + (orderInfo['GIVE_TICK'] || orderInfo['GIVE_COIN']) + ' = '  + this.util.logAmount(get_amount) + ' ' + data['GET_COIN'] + ':' + (data['GET_TICK'] || data['GET_COIN']) + ' : ' + data['STATUS']);
 
+                // Array of credits, debits, and escrows
                 let credits = [],
                     debits  = [],
                     escrows = [];
 
+                // Define ORDER_MATCH action
                 let action = {}
                 action['ACTION']      = 'ORDER_MATCH';
                 action['BLOCK_INDEX'] = data['BLOCK_INDEX'];
 
+                // Create a record of this ORDER_MATCH action in the actions table
                 action['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
 
+                // Update the data object
                 data['ACTION_INDEX'] = action['ACTION_INDEX'];
                 // Stringify in normal notation here so every downstream consumer (order_matches
                 // insert, remaining-amount math, logs) sees the canonical decimal form; a raw
@@ -284,6 +307,7 @@ class Order_Match {
                     // Two-phase settlement: create COINPay obligation.
                     // Tokens stay escrowed; no credits/escrow changes until COINPay fulfills or expires.
 
+                    // Determine which side is the coin offerer and which is the token seller
                     let coinOrder, sellerOrder, nativeCoinAmount;
                     if(this.util.isNull(orderInfo['GIVE_TICK'])){
                         // orderInfo is offering native coin, matchInfo is selling tokens
@@ -310,6 +334,7 @@ class Order_Match {
                         }
                     }
 
+                    // Create the COINPay obligation
                     let obligationData = {
                         ACTION_INDEX:  data['ACTION_INDEX'],
                         PAYER_ADDRESS: coinOrder['SOURCE'],
@@ -321,8 +346,10 @@ class Order_Match {
                     };
                     await this.indexerDb.createCoinpayObligation(obligationData);
 
+                    // Create coinpay obligation status as pending_coinpay
                     await this.indexerDb.createCoinpayStatus(data['ACTION_INDEX'], data['ACTION_INDEX'], 'pending_coinpay');
 
+                    // Store addresses in list for balance/mapping updates
                     if(!this.util.isNull(matchInfo['GET_TICK']))
                         this.util.addAddressTicker(matchInfo['GET_ADDRESS'], matchInfo['GET_TICK']);
                     if(!this.util.isNull(orderInfo['GET_TICK']))
@@ -383,8 +410,10 @@ class Order_Match {
                     }
                 }
 
+                // Process any transaction ledger changes (credits / debits / escrows)
                 await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
 
+                // Create record of match in order_matches table
                 await this.indexerDb.createOrderMatch(data, orderInfo, matchInfo);
 
                 if(!isNativeCoinMatch){
@@ -396,10 +425,13 @@ class Order_Match {
                 }
                 // For native coin matches, orders stay 'open' until COINPay fulfills or expires
 
+                // Create action mappings
                 await this.mapper.createMappings(action);
 
+                // Get a list of addresses
                 let addresses = Object.keys(this.util.getAddressesList());
 
+                // Update address balances
                 await this.indexerDb.updateBalances(addresses);
 
 

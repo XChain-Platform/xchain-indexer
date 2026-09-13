@@ -42,7 +42,9 @@
 
 class Order {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -59,14 +61,28 @@ class Order {
         this.listTypes = [2];
     }
 
+    // Handle parsing the ORDER transaction
     async parse(params, data, error){
+        /*****************************************************************
+         * DEBUGGING - Force params
+         ****************************************************************/
+        // Example payloads by FORMAT version:
+        // let str    = "0|BTC|RAREPEPE|1|BTC|PEPECASH|10000000.00000000|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|||Selling my RAREPEPE cuz mom in hospital";
+        // let str    = "1|1234|Closing order, no buyers, much disappoint";
+        // let str    = "2|1234|4321|||Updating order to only sell to club member addresses";
+        // params = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
+
+        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
+        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
+        // Convert NUMBER fields from string value to number value so comparisons are mathematical
         if(!error)
             data = this.util.setNumberFormats(data);
 
@@ -102,6 +118,7 @@ class Order {
         // Get information on the GIVE and GET tokens (skip for native coin sides)
         let giveTokenInfo = false;
         let getTokenInfo  = false;
+        // Look up the GIVE and GET token records that the checks below rely on
         if(format==0){
             if(!isNativeCoinGive)
                 giveTokenInfo = await this.indexerDb.getTokenInfo(data['GIVE_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
@@ -134,6 +151,7 @@ class Order {
         if(format==0 && this.util.isNull(data['EXPIRATION']))
             data['EXPIRATION'] = this.util.getDefaultExpiration(data['BLOCK_TIME']);
 
+        // Clone the raw data for storage in orders table
         let order = Object.assign({}, data);
 
         // TICK & COIN Validations
@@ -421,12 +439,14 @@ class Order {
             }
         }
 
+        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = order['STATUS'] = status;
 
         // Set ORDER status to 'open' when creating a valid order
         order['ORDER_STATUS'] = (status=='valid') ? 'open' : 'invalid';
 
+        // Print status message
         if(format==0)
             console.log("\t ORDER : " + this.util.logAmount(data['GIVE_AMOUNT']) + ' ' + this.config['COIN'] + ':' + data['GIVE_TICK'] + ' = '  +  this.util.logAmount(data['GET_AMOUNT']) + ' ' + data['GET_COIN'] + ':' + data['GET_TICK'] + ' : ' + data['STATUS']);
         if(format==1)
@@ -450,16 +470,19 @@ class Order {
             await this.indexerDb.createOrderEdit(order);
         }
 
+        // Store the SOURCE, GIVE_TICK, and GET_TICK in addresses list
         if(format==0){
             this.util.addAddressTicker(data['SOURCE'], [data['GIVE_TICK'], data['GET_TICK']]);
         } else if(orderInfo) {
             this.util.addAddressTicker(orderInfo['SOURCE'], [orderInfo['GIVE_TICK'], orderInfo['GET_TICK']]);
         }
 
+        // Array of credits, debits, and escrows
         let credits = [],
             debits  = [],
             escrows = [];
 
+        // If this was a valid transaction, add GIVE_AMOUNT to escrow
         if(status=='valid'){
 
             // If we are charging a fee, store the SOURCE and fees TICK in addresses list
@@ -522,16 +545,20 @@ class Order {
                 this.util.addAddressTicker(data['SOURCE'], this.config['GAS']);
             }
 
+            // Process any transaction ledger changes (credits / debits / escrows)
             await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
 
+            // Get a list of tickers & addresses
             let tickers   = this.util.getTickersList(),
                 addresses = Object.keys(this.util.getAddressesList());
 
+            // Update address balances and token supply
             await this.indexerDb.updateBalances(addresses);
             await this.indexerDb.updateTokens(tickers);
 
         }
 
+        // Create action mappings
         await this.mapper.createMappings(data);
 
         // Check to see if we have any matches for this order. Cross-chain orders are NOT
