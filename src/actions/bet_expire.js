@@ -25,7 +25,9 @@
 
 class Bet_Expire {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -37,6 +39,7 @@ class Bet_Expire {
     // data['ACTION_INDEX'] arrives as the FEED's action_index (the processExpirations
     // injection shape); a fresh action row is minted below for the expire record itself.
     async parse(params, data, error){
+        // Get info on the feed by its action_index
         let feedInfo = await this.indexerDb.getBetFeedInfo(data['ACTION_INDEX']);
 
         // Bail out if the feed no longer exists or already left the live statuses
@@ -47,6 +50,7 @@ class Bet_Expire {
         if(!feedInfo || !['open','closed'].includes(feedInfo['FEED_STATUS']))
             return;
 
+        // Feed tick info (refund credits at its decimals)
         this.util.addAddressTicker(feedInfo['SOURCE'], feedInfo['TICK']);
 
         // Mint a fresh action row for the expire record itself (ORDER_EXPIRE precedent):
@@ -56,10 +60,13 @@ class Bet_Expire {
         action['BLOCK_INDEX'] = data['BLOCK_INDEX'];
         data['ACTION_INDEX']  = await this.indexerDb.createActionIndex(action);
 
+        // Set the status to valid
         data['STATUS'] = 'valid';
 
+        // Print status message
         console.log("\t BET_EXPIRE : " + this.config['COIN'] + ':' + feedInfo['ACTION_INDEX'] + ' : ' + data['STATUS']);
 
+        // Array of credits, debits, and escrows
         let credits = [],
             debits  = [],
             escrows = [];
@@ -84,14 +91,18 @@ class Bet_Expire {
         await this.indexerDb.setBetFeedTerminal(feedInfo['ACTION_INDEX'], 'expired', data['BLOCK_INDEX']);
         await this.indexerDb.createBetFeedStatus(data['ACTION_INDEX'], feedInfo['ACTION_INDEX'], 'expired');
 
+        // Process any transaction ledger changes (credits / debits / escrows)
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
 
+        // Get a list of tickers & addresses
         let tickers   = this.util.getTickersList(),
             addresses = Object.keys(this.util.getAddressesList());
 
+        // Update address balances and token supply
         await this.indexerDb.updateBalances(addresses);
         await this.indexerDb.updateTokens(tickers);
 
+        // Create action mappings
         await this.mapper.createMappings(data);
     }
 }

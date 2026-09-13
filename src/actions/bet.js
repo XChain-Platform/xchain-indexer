@@ -50,7 +50,9 @@
 
 class Bet {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -58,6 +60,7 @@ class Bet {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
+        // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|LABEL|OUTCOMES|TICK|FEE|DEADLINE|REFUND_WINDOW|MIN_AMOUNT|ALLOW_LIST|BLOCK_LIST|DETAILS|MEMO';
         this.formats[1] = 'VERSION|FEED_ACTION_INDEX|MEMO';
@@ -68,11 +71,14 @@ class Bet {
         this.listTypes = [2];
     }
 
+    // Handle parsing the BET transaction
     async parse(params, data, error){
+        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
+        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
@@ -97,9 +103,11 @@ class Bet {
         if(feedInfo)
             feedTokenInfo = await this.indexerDb.getTokenInfo(feedInfo['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
+        // Get source address balances and preferences
         let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let preferences = await this.indexerDb.getAddressPreferences(data['SOURCE'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
+        // Create the fees object
         let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
 
         // Canonical outcome labels (trimmed, comma-joined) - computed during
@@ -109,9 +117,11 @@ class Bet {
         // Format 0 (Create Feed) validations
         if(format==0){
 
+            // Verify LABEL is present and within length bounds
             if(!error && (this.util.isNull(data['LABEL']) || String(data['LABEL']).length < 1 || String(data['LABEL']).length > this.config['MAX_BET_LABEL_LENGTH']))
                 error = 'invalid: LABEL (length)';
 
+            // Verify OUTCOMES: comma-split count bounds
             if(!error){
                 let rawOutcomes = this.util.isNull(data['OUTCOMES']) ? [] : String(data['OUTCOMES']).split(',');
                 if(rawOutcomes.length < 2 || rawOutcomes.length > this.config['MAX_BET_OUTCOMES'])
@@ -143,6 +153,7 @@ class Bet {
             if(!error && !tokenInfo)
                 error = 'invalid: TICK (unknown)';
 
+            // Verify TICK is not sleeping
             if(!error && await this.indexerDb.isActionAllowed(null, data['TICK'], data['BLOCK_INDEX']) == false)
                 error = 'invalid: TICK (sleeping)';
 
@@ -251,6 +262,7 @@ class Bet {
             if(!error && data['SOURCE']==feedInfo['SOURCE'])
                 error = 'invalid: SOURCE (oracle may not bet own feed)';
 
+            // OUTCOME must be an integer inside the feed's outcome range
             let outcomeCount = feedInfo ? String(feedInfo['OUTCOMES']).split(',').length : 0;
             if(!error && (this.util.isNull(data['OUTCOME']) || !this.util.isNumeric(data['OUTCOME']) || !this.util.isInteger(data['OUTCOME']) || Number(data['OUTCOME']) < 0 || Number(data['OUTCOME']) >= outcomeCount))
                 error = 'invalid: OUTCOME (range)';
@@ -305,6 +317,11 @@ class Bet {
                 error = 'invalid: OUTCOME (range)';
         }
 
+        /*****************************************************************
+         * General Validations
+         ****************************************************************/
+
+        // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
@@ -320,6 +337,7 @@ class Bet {
         if(!error && !this.util.isNull(data['MEMO']) && String(data['MEMO']).indexOf(';')!=-1)
             error = 'invalid: MEMO (semicolon)';
 
+        // Verify MEMO is shorter than MAX_MEMO_LENGTH
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
@@ -353,6 +371,7 @@ class Bet {
         // pre-funded at place time, and a resolve surcharge would be griefable
         // (dust bets inflating the oracle's cost until rational expiry)
 
+        // Validate fee payment (native coin or XCHAIN balance)
         if(!error && this.util.bcgt(fees['AMOUNT'], 0)){
             let paymentMode = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']);
             if(paymentMode === 'native'){
@@ -381,14 +400,19 @@ class Bet {
         if(!error && format==2 && !this.util.hasBalance(balances, feedTokenInfo['TICK_ID'], data['AMOUNT']))
             error = 'invalid: insufficient funds (AMOUNT)';
 
+        /*****************************************************************
+         * Storage + ledger changes
+         ****************************************************************/
         // Canonical stored values (create): trimmed labels joined with a single
         // comma, defaulted refund window, materialized expire_at
         if(format==0 && !error)
             data['OUTCOMES'] = outcomeLabels.join(',');
 
+        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
+        // Clone the raw data for storage
         let bet = Object.assign({}, data);
 
         // Current lifecycle status for the new row (invalid rows store 'invalid'
@@ -400,6 +424,7 @@ class Bet {
             bet['TICK'] = feedInfo ? feedInfo['TICK'] : null; // denormalized feed tick
         }
 
+        // Print status message
         if(format==0)
             console.log("\t BET_FEED : " + this.config['COIN'] + ' : ' + data['LABEL'] + ' : ' + data['STATUS']);
         if(format==1)
@@ -426,17 +451,21 @@ class Bet {
         if(format==3)
             await this.indexerDb.createBetResolve(bet);
 
+        // Store the SOURCE and wagered TICK in addresses list
         if(format==0)
             this.util.addAddressTicker(data['SOURCE'], data['TICK']);
         if(feedInfo)
             this.util.addAddressTicker(data['SOURCE'], feedInfo['TICK']);
 
+        // Array of credits, debits, and escrows
         let credits = [],
             debits  = [],
             escrows = [];
 
+        // If this was a valid transaction, process the lifecycle leg
         if(status=='valid'){
 
+            // If we are charging a fee, store the SOURCE and fees TICK in addresses list
             if(this.util.bcgt(fees['AMOUNT'], 0))
                 this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
 
@@ -461,17 +490,22 @@ class Bet {
             if(format==3)
                 await this._settleFeed(data, feedInfo, feedTokenInfo, credits, escrows);
 
+            // Handle any transaction FEE according to the user's ADDRESS preferences
             [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
 
+            // Process any transaction ledger changes (credits / debits / escrows)
             await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
 
+            // Get a list of tickers & addresses
             let tickers   = this.util.getTickersList(),
                 addresses = Object.keys(this.util.getAddressesList());
 
+            // Update address balances and token supply
             await this.indexerDb.updateBalances(addresses);
             await this.indexerDb.updateTokens(tickers);
         }
 
+        // Create action mappings
         await this.mapper.createMappings(data);
     }
 
@@ -576,6 +610,9 @@ class Bet {
         }
     }
 
+    /*****************************************************************
+     * DETAILS validation
+     ****************************************************************/
     // Validate the base64 JSON market definition. Returns an error string or null.
     _validateDetails(details, outcomeLabels){
         // Strict base64: charset with = padding, length % 4 == 0, and a re-encode
