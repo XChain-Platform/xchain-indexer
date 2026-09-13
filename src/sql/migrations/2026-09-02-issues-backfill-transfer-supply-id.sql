@@ -36,7 +36,7 @@
 -- left the recipient's balance row stale until some later action touched it.
 --
 -- src/config.js no longer lists TRANSFER_SUPPLY in NUMBER_FIELDS and
--- test/unit/number_fields_exclude_address_fields.test.js keeps the whole address-bearing
+-- test/unit/number-fields-exclude-address-fields.test.js keeps the whole address-bearing
 -- class out of it, so new ISSUEs store the column. Only rows already written need this
 -- one-time repair, and nothing re-touches them on its own: `issues` rows are per-action
 -- audit rows, never rewritten except by a re-index of that exact action.

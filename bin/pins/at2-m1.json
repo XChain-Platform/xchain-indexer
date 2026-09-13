@@ -61,7 +61,7 @@
     "delta_map": "bin/pins/m1-title-delta.json",
     "pin_before_sha256": "de142db0133560d13f0fd7def8abce4dbbc5fd84c873485d1744ad525d8a26df",
     "pin_after_sha256": "43126c11fd28e776d29287028bc1162ddacc1a69212e429e586018ad93c8b285",
-    "accounting": "one M1 title rename in test/unit/protocol_address_roles.test.js, reported once under each of the two script tiers that collect the file, as a dropped title plus an added title each. No file was added, dropped or moved in any tier."
+    "accounting": "one M1 title rename in test/unit/protocol-address-roles.test.js, reported once under each of the two script tiers that collect the file, as a dropped title plus an added title each. No file was added, dropped or moved in any tier."
   },
   "sibling_reference_map": {
     "result": "pass",

@@ -6,7 +6,7 @@
     "siblingsRoot": "..",
     "note": "M3 wave-1 baseline for row 37 (repaired tool: root-var, helper, shell-var, shell-arg and computed-require idioms added). The indexer working tree was CLEAN at e8ae831e when this lane started; by the time the repaired tool could run, lanes MAP+CODEMOD, ROW-7+8 and CROSS-REPO were already mid-move in the same tree, so the exists flags here are of a tree in motion, not of e8ae831e. indexerSrcFilesAtBaseSha is the stable answer: a reference whose path is in that list and absent from the tree at the barrier is a MISSED repoint. Sibling repos only: the platform-tooling sweep is opt-in (--include-platform-tooling plus SIBLING_MAP_EXTRA_DIRS) and is excluded from this pin, so platformToolingSwept is empty here.",
     "indexerSrcFilesAtBaseSha": [
-      "src/utxo_tracker.js",
+      "src/UtxoTracker.js",
       "src/XChainIndexer.js",
       "src/actions.js",
       "src/actions/README.md",
@@ -65,7 +65,7 @@
       "src/actions/xexec.js",
       "src/addressRefFields.js",
       "src/amount_representability_activation.js",
-      "src/anchor_action_query.js",
+      "src/anchor-action-query.js",
       "src/anchor_activation.js",
       "src/anchor_proof_client.js",
       "src/anchor_reward_activation.js",
@@ -108,7 +108,7 @@
       "src/contractStateSubtree.js",
       "src/contract_meta.js",
       "src/corsOrigin.js",
-      "src/cross_chain_offer_decimals.js",
+      "src/crossChainOfferDecimals.js",
       "src/cross_chain_royalty_activation.js",
       "src/db/actions.js",
       "src/db/addresses.js",
@@ -173,10 +173,10 @@
       "src/db/withdrawals.js",
       "src/db/xbridges.js",
       "src/db/xcalls.js",
-      "src/diagnostic_events.js",
+      "src/diagnosticEvents.js",
       "src/dispense_cancelling_match_activation.js",
       "src/dispense_payment_tally_scale_activation.js",
-      "src/dispenser_divergence_metrics.js",
+      "src/dispenserDivergenceMetrics.js",
       "src/dispenser_amount_positivity_activation.js",
       "src/dispenser_caps_activation.js",
       "src/dispenser_freshness_activation.js",
@@ -191,13 +191,13 @@
       "src/escrowLeafSubtree.js",
       "src/gated_handoff_ref_activation.js",
       "src/genesis.js",
-      "src/genesis_dump.js",
+      "src/genesisDump.js",
       "src/health.js",
       "src/hub-schema-version.js",
       "src/hub_client.js",
       "src/hub_db_sync.js",
       "src/hub_push_queue.js",
-      "src/indexer_metrics.js",
+      "src/indexerMetrics.js",
       "src/ledger_amount_precision_activation.js",
       "src/list_edit_resolution_activation.js",
       "src/list_owner_activation.js",
@@ -213,9 +213,9 @@
       "src/oracle_snapshot_age_causality_activation.js",
       "src/oracle_stale_round_visibility_activation.js",
       "src/output_fanout.js",
-      "src/preflight_memo.js",
-      "src/price_batch_query.js",
-      "src/price_read_predicate.js",
+      "src/preflightMemo.js",
+      "src/price-batch-query.js",
+      "src/priceReadPredicate.js",
       "src/price_batch_compression.js",
       "src/price_batching_floor_activation.js",
       "src/price_fee_batch_landed_activation.js",
@@ -227,7 +227,7 @@
       "src/protocolAddressRoles.js",
       "src/protocol_changes.js",
       "src/protocol_time.js",
-      "src/reorg_history_query.js",
+      "src/reorg-history-query.js",
       "src/reservedRoots.js",
       "src/retention.js",
       "src/retraction_signing_activation.js",
@@ -459,7 +459,7 @@
       "src/sql/withdrawals.sql",
       "src/sql/xbridges.sql",
       "src/sql/xcalls.sql",
-      "src/stake_source.js",
+      "src/stake-source.js",
       "src/stake_key_reuse_activation.js",
       "src/stake_weight_collation_activation.js",
       "src/stake_weighted_quorum.js",
@@ -475,7 +475,7 @@
       "src/token_bridge_activation.js",
       "src/token_policy_activation.js",
       "src/train_activation.js",
-      "src/utf8mb4_columns.js",
+      "src/utf8mb4Columns.js",
       "src/utility.js",
       "src/vm_deploy_lint_pkg3_activation.js",
       "src/vm_exec_lint_activation.js",
@@ -989,7 +989,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-indexer/test/unit/anchor_reward_canonical_golden.test.js",
+          "file": "xchain-node/modules/xchain-indexer/test/unit/anchorRewardCanonicalGolden.test.js",
           "line": 20,
           "kind": "text",
           "form": "text",
@@ -997,7 +997,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/tmp/xchain-indexer/test/unit/anchor_reward_canonical_golden.test.js",
+          "file": "xchain-node/tmp/xchain-indexer/test/unit/anchorRewardCanonicalGolden.test.js",
           "line": 20,
           "kind": "text",
           "form": "text",
@@ -3717,7 +3717,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sdk/test/unit/action_manifest_conformance.test.js",
+          "file": "xchain-node/modules/xchain-sdk/test/unit/ActionManifestConformance.test.js",
           "line": 144,
           "kind": "text",
           "form": "root-var",
@@ -3899,7 +3899,7 @@
         },
         {
           "repo": "xchain-sdk",
-          "file": "xchain-sdk/test/unit/action_manifest_conformance.test.js",
+          "file": "xchain-sdk/test/unit/ActionManifestConformance.test.js",
           "line": 144,
           "kind": "text",
           "form": "root-var",
@@ -4859,7 +4859,7 @@
       "referrers": [
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-indexer/test/unit/address_ref_fields_conformance.test.js",
+          "file": "xchain-node/modules/xchain-indexer/test/unit/address-ref-fields-conformance.test.js",
           "line": 66,
           "kind": "text",
           "form": "text",
@@ -4892,7 +4892,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/tmp/xchain-indexer/test/unit/address_ref_fields_conformance.test.js",
+          "file": "xchain-node/tmp/xchain-indexer/test/unit/address-ref-fields-conformance.test.js",
           "line": 66,
           "kind": "text",
           "form": "text",
@@ -4943,7 +4943,7 @@
         },
         {
           "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/anchor_reward_activation_parity.test.js",
+          "file": "xchain-hub/test/unit/anchorRewardActivationParity.test.js",
           "line": 31,
           "kind": "text",
           "form": "text",
@@ -4951,7 +4951,7 @@
         },
         {
           "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/anchor_reward_activation_parity.test.js",
+          "file": "xchain-hub/test/unit/anchorRewardActivationParity.test.js",
           "line": 40,
           "kind": "text",
           "form": "text",
@@ -5016,7 +5016,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-indexer/test/unit/anchor_reward_canonical_golden.test.js",
+          "file": "xchain-node/modules/xchain-indexer/test/unit/anchorRewardCanonicalGolden.test.js",
           "line": 21,
           "kind": "text",
           "form": "text",
@@ -5032,7 +5032,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/tmp/xchain-indexer/test/unit/anchor_reward_canonical_golden.test.js",
+          "file": "xchain-node/tmp/xchain-indexer/test/unit/anchorRewardCanonicalGolden.test.js",
           "line": 21,
           "kind": "text",
           "form": "text",
@@ -5263,7 +5263,7 @@
         }
       ]
     },
-    "src/api/stake_source.js": {
+    "src/api/stake-source.js": {
       "exists": true,
       "referenceCount": 3,
       "referringRepos": [
@@ -5276,7 +5276,7 @@
           "line": 59,
           "kind": "text",
           "form": "text",
-          "raw": "src/api/stake_source.js"
+          "raw": "src/api/stake-source.js"
         },
         {
           "repo": "xchain-e2e-test",
@@ -5284,7 +5284,7 @@
           "line": 60,
           "kind": "text",
           "form": "text",
-          "raw": "src/api/stake_source.js"
+          "raw": "src/api/stake-source.js"
         },
         {
           "repo": "xchain-e2e-test",
@@ -5292,7 +5292,7 @@
           "line": 61,
           "kind": "text",
           "form": "text",
-          "raw": "src/api/stake_source.js"
+          "raw": "src/api/stake-source.js"
         }
       ]
     },
@@ -5305,7 +5305,7 @@
       "referrers": [
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 815,
           "kind": "text",
           "form": "helper",
@@ -5839,7 +5839,7 @@
         }
       ]
     },
-    "src/chain/price_read_predicate.js": {
+    "src/chain/priceReadPredicate.js": {
       "exists": true,
       "referenceCount": 1,
       "referringRepos": [
@@ -5852,7 +5852,7 @@
           "line": 465,
           "kind": "text",
           "form": "helper",
-          "raw": "src/chain/price_read_predicate.js",
+          "raw": "src/chain/priceReadPredicate.js",
           "via": "sibling"
         }
       ]
@@ -5874,7 +5874,7 @@
         }
       ]
     },
-    "src/chain/utf8mb4_columns.js": {
+    "src/chain/utf8mb4Columns.js": {
       "exists": true,
       "referenceCount": 1,
       "referringRepos": [
@@ -5883,11 +5883,11 @@
       "referrers": [
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 1068,
           "kind": "text",
           "form": "helper",
-          "raw": "src/chain/utf8mb4_columns.js",
+          "raw": "src/chain/utf8mb4Columns.js",
           "via": "indexerFile"
         }
       ]
@@ -7615,7 +7615,7 @@
       "referrers": [
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 1068,
           "kind": "text",
           "form": "helper",
@@ -7708,7 +7708,7 @@
         },
         {
           "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/price_v0_canonical_admission.test.js",
+          "file": "xchain-hub/test/unit/priceV0CanonicalAdmission.test.js",
           "line": 58,
           "kind": "text",
           "form": "text",
@@ -7716,7 +7716,7 @@
         },
         {
           "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/price_v0_canonical_admission.test.js",
+          "file": "xchain-hub/test/unit/priceV0CanonicalAdmission.test.js",
           "line": 103,
           "kind": "require",
           "form": "text",
@@ -7724,7 +7724,7 @@
         },
         {
           "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/price_v2_payload_twin_parity.test.js",
+          "file": "xchain-hub/test/unit/priceV2PayloadTwinParity.test.js",
           "line": 86,
           "kind": "require",
           "form": "text",
@@ -7732,7 +7732,7 @@
         },
         {
           "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/price_v2_payload_twin_parity.test.js",
+          "file": "xchain-hub/test/unit/priceV2PayloadTwinParity.test.js",
           "line": 237,
           "kind": "text",
           "form": "text",
@@ -7740,7 +7740,7 @@
         },
         {
           "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/price_v2_payload_twin_parity.test.js",
+          "file": "xchain-hub/test/unit/priceV2PayloadTwinParity.test.js",
           "line": 258,
           "kind": "require",
           "form": "text",
@@ -7765,7 +7765,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 1068,
           "kind": "text",
           "form": "helper",
@@ -7808,7 +7808,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 1068,
           "kind": "text",
           "form": "helper",
@@ -8011,7 +8011,7 @@
       "referrers": [
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 799,
           "kind": "text",
           "form": "helper",
@@ -8707,7 +8707,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-indexer/test/unit/blockhash_conformance_twin.test.js",
+          "file": "xchain-node/modules/xchain-indexer/test/unit/blockhash-conformance-twin.test.js",
           "line": 24,
           "kind": "text",
           "form": "text",
@@ -8715,7 +8715,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-indexer/test/unit/blockhash_conformance_twin.test.js",
+          "file": "xchain-node/modules/xchain-indexer/test/unit/blockhash-conformance-twin.test.js",
           "line": 149,
           "kind": "text",
           "form": "text",
@@ -8867,7 +8867,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/blockhash_conformance_twin.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/blockhash-conformance-twin.test.js",
           "line": 19,
           "kind": "text",
           "form": "text",
@@ -8875,7 +8875,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/blockhash_conformance_twin.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/blockhash-conformance-twin.test.js",
           "line": 147,
           "kind": "text",
           "form": "text",
@@ -8883,7 +8883,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 365,
           "kind": "text",
           "form": "text",
@@ -8891,7 +8891,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 378,
           "kind": "text",
           "form": "helper",
@@ -8900,7 +8900,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 381,
           "kind": "text",
           "form": "text",
@@ -8908,7 +8908,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 401,
           "kind": "text",
           "form": "helper",
@@ -8917,7 +8917,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 404,
           "kind": "text",
           "form": "text",
@@ -9037,7 +9037,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/tmp/xchain-indexer/test/unit/blockhash_conformance_twin.test.js",
+          "file": "xchain-node/tmp/xchain-indexer/test/unit/blockhash-conformance-twin.test.js",
           "line": 24,
           "kind": "text",
           "form": "text",
@@ -9045,7 +9045,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/tmp/xchain-indexer/test/unit/blockhash_conformance_twin.test.js",
+          "file": "xchain-node/tmp/xchain-indexer/test/unit/blockhash-conformance-twin.test.js",
           "line": 149,
           "kind": "text",
           "form": "text",
@@ -9262,7 +9262,7 @@
       "referrers": [
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/blockhash_conformance_twin.test.js",
+          "file": "xchain-sync/test/unit/blockhash-conformance-twin.test.js",
           "line": 19,
           "kind": "text",
           "form": "text",
@@ -9329,7 +9329,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/blockhash_conformance_twin.test.js",
+          "file": "xchain-sync/test/unit/blockhash-conformance-twin.test.js",
           "line": 153,
           "kind": "text",
           "form": "text",
@@ -9346,7 +9346,7 @@
       "referrers": [
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 435,
           "kind": "text",
           "form": "text",
@@ -9354,7 +9354,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 452,
           "kind": "text",
           "form": "helper",
@@ -9363,7 +9363,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 455,
           "kind": "text",
           "form": "text",
@@ -9371,7 +9371,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 477,
           "kind": "text",
           "form": "helper",
@@ -9380,7 +9380,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 480,
           "kind": "text",
           "form": "text",
@@ -9405,7 +9405,7 @@
         }
       ]
     },
-    "src/dispenser_divergence_metrics.js": {
+    "src/dispenserDivergenceMetrics.js": {
       "exists": false,
       "referenceCount": 6,
       "referringRepos": [
@@ -9419,7 +9419,7 @@
           "line": 3343,
           "kind": "text",
           "form": "text",
-          "raw": "src/dispenser_divergence_metrics.js"
+          "raw": "src/dispenserDivergenceMetrics.js"
         },
         {
           "repo": "xchain-decoder",
@@ -9427,7 +9427,7 @@
           "line": 513,
           "kind": "text",
           "form": "text",
-          "raw": "src/dispenser_divergence_metrics.js"
+          "raw": "src/dispenserDivergenceMetrics.js"
         },
         {
           "repo": "xchain-node",
@@ -9435,7 +9435,7 @@
           "line": 3000,
           "kind": "text",
           "form": "text",
-          "raw": "src/dispenser_divergence_metrics.js"
+          "raw": "src/dispenserDivergenceMetrics.js"
         },
         {
           "repo": "xchain-node",
@@ -9443,7 +9443,7 @@
           "line": 513,
           "kind": "text",
           "form": "text",
-          "raw": "src/dispenser_divergence_metrics.js"
+          "raw": "src/dispenserDivergenceMetrics.js"
         },
         {
           "repo": "xchain-node",
@@ -9451,7 +9451,7 @@
           "line": 3278,
           "kind": "text",
           "form": "text",
-          "raw": "src/dispenser_divergence_metrics.js"
+          "raw": "src/dispenserDivergenceMetrics.js"
         },
         {
           "repo": "xchain-node",
@@ -9459,7 +9459,7 @@
           "line": 513,
           "kind": "text",
           "form": "text",
-          "raw": "src/dispenser_divergence_metrics.js"
+          "raw": "src/dispenserDivergenceMetrics.js"
         }
       ]
     },
@@ -9611,7 +9611,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-hub/test/unit/price_v2_payload_twin_parity.test.js",
+          "file": "xchain-node/modules/xchain-hub/test/unit/priceV2PayloadTwinParity.test.js",
           "line": 77,
           "kind": "require",
           "form": "text",
@@ -9679,7 +9679,7 @@
         },
         {
           "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/equivocation_header.test.js",
+          "file": "xchain-hub/test/unit/EquivocationHeader.test.js",
           "line": 16,
           "kind": "text",
           "form": "text",
@@ -9687,7 +9687,7 @@
         },
         {
           "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/equivocation_header.test.js",
+          "file": "xchain-hub/test/unit/EquivocationHeader.test.js",
           "line": 80,
           "kind": "require",
           "form": "text",
@@ -9728,7 +9728,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-hub/test/unit/equivocation_header.test.js",
+          "file": "xchain-node/modules/xchain-hub/test/unit/EquivocationHeader.test.js",
           "line": 16,
           "kind": "text",
           "form": "text",
@@ -9736,7 +9736,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-hub/test/unit/equivocation_header.test.js",
+          "file": "xchain-node/modules/xchain-hub/test/unit/EquivocationHeader.test.js",
           "line": 80,
           "kind": "require",
           "form": "text",
@@ -9893,7 +9893,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 799,
           "kind": "text",
           "form": "helper",
@@ -10148,7 +10148,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 382,
           "kind": "text",
           "form": "text",
@@ -10165,7 +10165,7 @@
       "referrers": [
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 1068,
           "kind": "text",
           "form": "helper",
@@ -10292,7 +10292,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 341,
           "kind": "text",
           "form": "text",
@@ -10371,7 +10371,7 @@
       "referrers": [
         {
           "repo": "xchain-explorer",
-          "file": "xchain-explorer/test/unit/db_list_edit_resolution.test.js",
+          "file": "xchain-explorer/test/unit/db.list-edit-resolution.test.js",
           "line": 227,
           "kind": "join",
           "form": "join",
@@ -10379,7 +10379,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-explorer/test/unit/db_list_edit_resolution.test.js",
+          "file": "xchain-node/modules/xchain-explorer/test/unit/db.list-edit-resolution.test.js",
           "line": 227,
           "kind": "join",
           "form": "join",
@@ -10387,7 +10387,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/tmp/xchain-explorer/test/unit/db_list_edit_resolution.test.js",
+          "file": "xchain-node/tmp/xchain-explorer/test/unit/db.list-edit-resolution.test.js",
           "line": 227,
           "kind": "join",
           "form": "join",
@@ -10445,7 +10445,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 799,
           "kind": "text",
           "form": "helper",
@@ -10463,7 +10463,7 @@
       "referrers": [
         {
           "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/price_v0_canonical_admission.test.js",
+          "file": "xchain-hub/test/unit/priceV0CanonicalAdmission.test.js",
           "line": 57,
           "kind": "text",
           "form": "text",
@@ -10471,7 +10471,7 @@
         },
         {
           "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/price_v2_payload_twin_parity.test.js",
+          "file": "xchain-hub/test/unit/priceV2PayloadTwinParity.test.js",
           "line": 236,
           "kind": "text",
           "form": "text",
@@ -11857,7 +11857,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 26,
           "kind": "text",
           "form": "text",
@@ -11865,7 +11865,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 206,
           "kind": "text",
           "form": "text",
@@ -11873,7 +11873,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 209,
           "kind": "text",
           "form": "helper",
@@ -11882,7 +11882,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 261,
           "kind": "text",
           "form": "helper",
@@ -11891,7 +11891,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 313,
           "kind": "text",
           "form": "text",
@@ -11899,7 +11899,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 330,
           "kind": "text",
           "form": "helper",
@@ -11908,7 +11908,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 337,
           "kind": "text",
           "form": "text",
@@ -11916,7 +11916,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 357,
           "kind": "text",
           "form": "helper",
@@ -11925,7 +11925,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 417,
           "kind": "text",
           "form": "helper",
@@ -11934,7 +11934,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 455,
           "kind": "text",
           "form": "helper",
@@ -11943,7 +11943,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 488,
           "kind": "text",
           "form": "helper",
@@ -11952,7 +11952,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 582,
           "kind": "text",
           "form": "helper",
@@ -11961,7 +11961,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 624,
           "kind": "text",
           "form": "helper",
@@ -11970,7 +11970,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 695,
           "kind": "text",
           "form": "helper",
@@ -12275,7 +12275,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 26,
           "kind": "text",
           "form": "text",
@@ -12283,7 +12283,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 207,
           "kind": "text",
           "form": "text",
@@ -12291,7 +12291,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 210,
           "kind": "text",
           "form": "helper",
@@ -12300,7 +12300,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 262,
           "kind": "text",
           "form": "helper",
@@ -12309,7 +12309,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 314,
           "kind": "text",
           "form": "text",
@@ -12317,7 +12317,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 331,
           "kind": "text",
           "form": "helper",
@@ -12326,7 +12326,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 340,
           "kind": "text",
           "form": "text",
@@ -12334,7 +12334,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 356,
           "kind": "text",
           "form": "helper",
@@ -12343,7 +12343,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 378,
           "kind": "text",
           "form": "text",
@@ -12351,7 +12351,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 398,
           "kind": "text",
           "form": "helper",
@@ -12360,7 +12360,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 405,
           "kind": "text",
           "form": "text",
@@ -12368,7 +12368,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 424,
           "kind": "text",
           "form": "helper",
@@ -12377,7 +12377,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 493,
           "kind": "text",
           "form": "helper",
@@ -12386,7 +12386,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 531,
           "kind": "text",
           "form": "helper",
@@ -12395,7 +12395,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 566,
           "kind": "text",
           "form": "helper",
@@ -12404,7 +12404,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 662,
           "kind": "text",
           "form": "helper",
@@ -12413,7 +12413,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 693,
           "kind": "text",
           "form": "text",
@@ -12421,7 +12421,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 698,
           "kind": "text",
           "form": "text",
@@ -12429,7 +12429,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 721,
           "kind": "text",
           "form": "helper",
@@ -12438,7 +12438,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 761,
           "kind": "text",
           "form": "helper",
@@ -12447,7 +12447,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 798,
           "kind": "text",
           "form": "helper",
@@ -12456,7 +12456,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 909,
           "kind": "text",
           "form": "helper",
@@ -14115,7 +14115,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 1084,
           "kind": "text",
           "form": "helper",
@@ -14308,7 +14308,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-indexer/test/unit/state_checkpoints_fence_parity.test.js",
+          "file": "xchain-node/modules/xchain-indexer/test/unit/state-checkpoints-fence-parity.test.js",
           "line": 37,
           "kind": "text",
           "form": "text",
@@ -14324,7 +14324,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/tmp/xchain-indexer/test/unit/state_checkpoints_fence_parity.test.js",
+          "file": "xchain-node/tmp/xchain-indexer/test/unit/state-checkpoints-fence-parity.test.js",
           "line": 37,
           "kind": "text",
           "form": "text",
@@ -14396,7 +14396,7 @@
         }
       ]
     },
-    "src/stake_source.js": {
+    "src/stake-source.js": {
       "exists": false,
       "referenceCount": 3,
       "referringRepos": [
@@ -14409,7 +14409,7 @@
           "line": 59,
           "kind": "text",
           "form": "text",
-          "raw": "src/stake_source.js"
+          "raw": "src/stake-source.js"
         },
         {
           "repo": "xchain-node",
@@ -14417,7 +14417,7 @@
           "line": 60,
           "kind": "text",
           "form": "text",
-          "raw": "src/stake_source.js"
+          "raw": "src/stake-source.js"
         },
         {
           "repo": "xchain-node",
@@ -14425,7 +14425,7 @@
           "line": 61,
           "kind": "text",
           "form": "text",
-          "raw": "src/stake_source.js"
+          "raw": "src/stake-source.js"
         }
       ]
     },
@@ -14456,7 +14456,7 @@
       "referrers": [
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 799,
           "kind": "text",
           "form": "helper",
@@ -14465,7 +14465,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 1068,
           "kind": "text",
           "form": "helper",
@@ -14493,7 +14493,7 @@
         },
         {
           "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/stake_weighted_quorum.test.js",
+          "file": "xchain-hub/test/unit/StakeWeightedQuorum.test.js",
           "line": 16,
           "kind": "text",
           "form": "text",
@@ -14509,7 +14509,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-hub/test/unit/stake_weighted_quorum.test.js",
+          "file": "xchain-node/modules/xchain-hub/test/unit/StakeWeightedQuorum.test.js",
           "line": 16,
           "kind": "text",
           "form": "text",
@@ -14584,7 +14584,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-indexer/test/unit/blockhash_conformance_twin.test.js",
+          "file": "xchain-node/modules/xchain-indexer/test/unit/blockhash-conformance-twin.test.js",
           "line": 232,
           "kind": "text",
           "form": "text",
@@ -14624,7 +14624,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/blockhash_conformance_twin.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/blockhash-conformance-twin.test.js",
           "line": 269,
           "kind": "text",
           "form": "text",
@@ -14632,7 +14632,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/blockhash_conformance_twin.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/blockhash-conformance-twin.test.js",
           "line": 298,
           "kind": "text",
           "form": "text",
@@ -14640,7 +14640,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/blockhash_conformance_twin.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/blockhash-conformance-twin.test.js",
           "line": 315,
           "kind": "text",
           "form": "text",
@@ -14648,7 +14648,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/blockhash_conformance_twin.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/blockhash-conformance-twin.test.js",
           "line": 338,
           "kind": "text",
           "form": "text",
@@ -14656,7 +14656,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/blockhash_conformance_twin.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/blockhash-conformance-twin.test.js",
           "line": 362,
           "kind": "text",
           "form": "text",
@@ -14688,7 +14688,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/tmp/xchain-indexer/test/unit/blockhash_conformance_twin.test.js",
+          "file": "xchain-node/tmp/xchain-indexer/test/unit/blockhash-conformance-twin.test.js",
           "line": 232,
           "kind": "text",
           "form": "text",
@@ -14728,7 +14728,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/blockhash_conformance_twin.test.js",
+          "file": "xchain-sync/test/unit/blockhash-conformance-twin.test.js",
           "line": 275,
           "kind": "text",
           "form": "text",
@@ -14736,7 +14736,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/blockhash_conformance_twin.test.js",
+          "file": "xchain-sync/test/unit/blockhash-conformance-twin.test.js",
           "line": 304,
           "kind": "text",
           "form": "text",
@@ -14744,7 +14744,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/blockhash_conformance_twin.test.js",
+          "file": "xchain-sync/test/unit/blockhash-conformance-twin.test.js",
           "line": 321,
           "kind": "text",
           "form": "text",
@@ -14752,7 +14752,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/blockhash_conformance_twin.test.js",
+          "file": "xchain-sync/test/unit/blockhash-conformance-twin.test.js",
           "line": 344,
           "kind": "text",
           "form": "text",
@@ -14760,7 +14760,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/blockhash_conformance_twin.test.js",
+          "file": "xchain-sync/test/unit/blockhash-conformance-twin.test.js",
           "line": 368,
           "kind": "text",
           "form": "text",
@@ -14821,7 +14821,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 678,
           "kind": "text",
           "form": "helper",
@@ -14830,7 +14830,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 740,
           "kind": "text",
           "form": "helper",
@@ -14839,7 +14839,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 892,
           "kind": "text",
           "form": "helper",
@@ -14848,7 +14848,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 989,
           "kind": "text",
           "form": "helper",
@@ -14901,7 +14901,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 799,
           "kind": "text",
           "form": "helper",
@@ -14918,7 +14918,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 1068,
           "kind": "text",
           "form": "helper",
@@ -14945,7 +14945,7 @@
       "referrers": [
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 799,
           "kind": "text",
           "form": "helper",
@@ -14954,7 +14954,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 1068,
           "kind": "text",
           "form": "helper",
@@ -15128,7 +15128,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 799,
           "kind": "text",
           "form": "helper",
@@ -15177,7 +15177,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 1068,
           "kind": "text",
           "form": "helper",
@@ -15213,7 +15213,7 @@
       "referrers": [
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 799,
           "kind": "text",
           "form": "helper",
@@ -15222,7 +15222,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 1068,
           "kind": "text",
           "form": "helper",
@@ -15240,7 +15240,7 @@
       "referrers": [
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/rollback_coverage.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/rollback-coverage.test.js",
           "line": 799,
           "kind": "text",
           "form": "helper",
@@ -15856,7 +15856,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-indexer/test/unit/blockhash_conformance_twin.test.js",
+          "file": "xchain-node/modules/xchain-indexer/test/unit/blockhash-conformance-twin.test.js",
           "line": 208,
           "kind": "text",
           "form": "text",
@@ -16031,7 +16031,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/modules/xchain-sync/test/unit/blockhash_conformance_twin.test.js",
+          "file": "xchain-node/modules/xchain-sync/test/unit/blockhash-conformance-twin.test.js",
           "line": 245,
           "kind": "text",
           "form": "text",
@@ -16111,7 +16111,7 @@
         },
         {
           "repo": "xchain-node",
-          "file": "xchain-node/tmp/xchain-indexer/test/unit/blockhash_conformance_twin.test.js",
+          "file": "xchain-node/tmp/xchain-indexer/test/unit/blockhash-conformance-twin.test.js",
           "line": 208,
           "kind": "text",
           "form": "text",
@@ -16352,7 +16352,7 @@
         },
         {
           "repo": "xchain-sync",
-          "file": "xchain-sync/test/unit/blockhash_conformance_twin.test.js",
+          "file": "xchain-sync/test/unit/blockhash-conformance-twin.test.js",
           "line": 251,
           "kind": "text",
           "form": "text",
@@ -17180,7 +17180,7 @@
     },
     {
       "repo": "xchain-node",
-      "file": "xchain-node/modules/xchain-sdk/test/unit/action_manifest_conformance.test.js",
+      "file": "xchain-node/modules/xchain-sdk/test/unit/ActionManifestConformance.test.js",
       "line": 157,
       "form": "root-var",
       "expression": "path.join(ACTIONS_DIR, action.toLowerCase()",
@@ -17228,7 +17228,7 @@
     },
     {
       "repo": "xchain-node",
-      "file": "xchain-node/modules/xchain-sync/test/unit/blockhash_conformance_twin.test.js",
+      "file": "xchain-node/modules/xchain-sync/test/unit/blockhash-conformance-twin.test.js",
       "line": 132,
       "form": "helper",
       "expression": "indexerRel",
@@ -17236,7 +17236,7 @@
     },
     {
       "repo": "xchain-node",
-      "file": "xchain-node/modules/xchain-sync/test/unit/blockhash_conformance_twin.test.js",
+      "file": "xchain-node/modules/xchain-sync/test/unit/blockhash-conformance-twin.test.js",
       "line": 135,
       "form": "helper",
       "expression": "indexerRel",
@@ -17299,7 +17299,7 @@
     },
     {
       "repo": "xchain-sdk",
-      "file": "xchain-sdk/test/unit/action_manifest_conformance.test.js",
+      "file": "xchain-sdk/test/unit/ActionManifestConformance.test.js",
       "line": 157,
       "form": "root-var",
       "expression": "path.join(ACTIONS_DIR, action.toLowerCase()",
@@ -17347,7 +17347,7 @@
     },
     {
       "repo": "xchain-sync",
-      "file": "xchain-sync/test/unit/blockhash_conformance_twin.test.js",
+      "file": "xchain-sync/test/unit/blockhash-conformance-twin.test.js",
       "line": 132,
       "form": "helper",
       "expression": "indexerRel",
@@ -17355,7 +17355,7 @@
     },
     {
       "repo": "xchain-sync",
-      "file": "xchain-sync/test/unit/blockhash_conformance_twin.test.js",
+      "file": "xchain-sync/test/unit/blockhash-conformance-twin.test.js",
       "line": 135,
       "form": "helper",
       "expression": "indexerRel",

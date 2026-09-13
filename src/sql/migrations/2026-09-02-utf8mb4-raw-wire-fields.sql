@@ -36,7 +36,7 @@
 -- (CONTRACT_ACTION_INDEX, the 2026-07-05 LTC-regtest wedge). After this file the columns
 -- hold the bytes whatever the list says.
 --
--- The columns are listed in src/utf8mb4_columns.js, which is the ONE definition the three
+-- The columns are listed in src/utf8mb4Columns.js, which is the ONE definition the three
 -- paths share: the src/sql/<table>.sql definitions (fresh installs), this migration (aged
 -- origin DBs), and the xchain-sync replica widen (followers, which run no migrations).
 -- That module also records what stays excluded and why - notably index_addresses.address,
