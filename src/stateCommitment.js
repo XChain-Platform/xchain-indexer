@@ -962,6 +962,23 @@ async function computeAndStoreRoots(db, chain, network, blockIndex, isActivation
             balances_root_escrow_shadow=VALUES(balances_root_escrow_shadow)`,
         [chain, network, blockIndex, balancesRoot, stakesRoot, stateRoot, blockMerkleRoot, contractStateRoot, contractStateShadow, balancesEscrowShadow]);
 
+    // Bound the touched-key name memos to ONE block. db._smtAddressNameCache and
+    // db._smtTickNameCache are filled ONLY under the _smtTouched choke point
+    // (db.createLedgerChangeRecord), and XChainIndexer installs a fresh _smtTouched per
+    // block, but nothing dropped the memos on a SUCCESSFUL commit: only rollbackTransaction
+    // and the reorg path in rollback.js did. An uninterrupted indexer therefore retained one
+    // entry per distinct address and ticker it had ever touched, so resident size tracked the
+    // cumulative address/ticker population instead of per-block work.
+    //
+    // Clearing HERE, at the end of the per-block root computation, gives the memos exactly
+    // the lifetime of the touched set they serve: this runs after sanityCheck and after every
+    // ledger write of the block, and a block that never reaches this point is rolled back,
+    // which clears them on the existing path. Refill is lazy and STRICT (doQueryStrict), so
+    // the only cost is one indexed primary-key read per distinct touched id per block and no
+    // value can change. Guarded because computeAndStoreRoots is also driven by unit mocks
+    // that implement only the query surface.
+    if(typeof db.clearSmtNameCaches === 'function') db.clearSmtNameCaches();
+
     return { balances_root: balancesRoot, stakes_root: stakesRoot, state_root: stateRoot,
              block_merkle_root: blockMerkleRoot, contract_state_root: contractStateRoot };
 }

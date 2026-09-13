@@ -1069,6 +1069,56 @@ class Rollback {
                     let newEscrow = (offerRows.length > 0) ? offerRows[0].action_index : null;
                     await this.indexerDb.doQuery("UPDATE tokens SET escrow_action_index=? WHERE tick_id=(SELECT id FROM index_tickers WHERE tick=? LIMIT 1)", [newEscrow, row.tick]);
                 }
+
+                // Re-derive order_matches.status for COINPay matches, AFTER the dataTables
+                // delete and for the same reason the escrow gate above is re-derived there.
+                // A COINPay match is written `pending_coinpay` (actions/order_match.js) and
+                // promoted IN PLACE to `valid` by the settling COINPAY
+                // (actions/coinpay.js -> updateOrderMatchStatus, UPDATE order_matches SET
+                // status_id=? WHERE action_index=?). The promoted row belongs to an EARLIER
+                // action than the COINPAY, so a reorg that orphans the payment deletes the
+                // payment's rows and leaves the promotion standing: the match reads `valid`
+                // where a from-genesis replay reads `pending_coinpay`, and the valid-only
+                // last-trade and 24h price reads keep counting a settlement that no longer
+                // exists.
+                //
+                // Settlement proof is the same thing the forward handler writes: a
+                // `fulfilled` coinpay_statuses row for the obligation, whose
+                // coinpay_action_index IS the match's action_index (createCoinpayStatus is
+                // called with the obligation's index, and coinpay_obligations.action_index =
+                // order_matches.action_index). Those status rows are action-scoped, so the
+                // generic delete has already removed the orphaned one by the time this runs.
+                //
+                // Re-derived rather than range-reset, for the reason this file already states
+                // for the escrow gate: a range reset handles only the SET direction, while a
+                // re-derive collapses both and is idempotent, so it also self-heals rows an
+                // earlier reorg left wrong. Both statements are restricted to rows whose
+                // status actually disagrees, and both no-op when the target status has never
+                // been minted in index_statuses, so neither can blank a status_id.
+                // `pending_coinpay` and `valid` are the only two values a COINPay match ever
+                // takes (updateOrderMatchStatus has exactly one caller), so anything else is
+                // left untouched rather than guessed at.
+                //
+                // The SQL between the COINPAY-MATCH-REDERIVE-SQL markers is kept logically
+                // identical with xchain-sync/src/ClientRollback.js; a cross-repo drift guard
+                // (xchain-sync test/unit/rollback-coverage.test.js) asserts they match, so
+                // source and replica derive the same match statuses.
+                //<COINPAY-MATCH-REDERIVE-SQL>
+                const coinpayMatchDemoteSql =
+                    `UPDATE order_matches SET status_id=(SELECT id FROM index_statuses WHERE status='pending_coinpay' LIMIT 1)
+                     WHERE settlement_type='coinpay'
+                       AND (SELECT id FROM index_statuses WHERE status='pending_coinpay' LIMIT 1) IS NOT NULL
+                       AND status_id=(SELECT id FROM index_statuses WHERE status='valid' LIMIT 1)
+                       AND action_index NOT IN (SELECT cs.coinpay_action_index FROM coinpay_statuses cs INNER JOIN index_statuses si ON si.id=cs.status_id WHERE si.status='fulfilled' AND cs.coinpay_action_index IS NOT NULL)`;
+                const coinpayMatchPromoteSql =
+                    `UPDATE order_matches SET status_id=(SELECT id FROM index_statuses WHERE status='valid' LIMIT 1)
+                     WHERE settlement_type='coinpay'
+                       AND (SELECT id FROM index_statuses WHERE status='valid' LIMIT 1) IS NOT NULL
+                       AND status_id=(SELECT id FROM index_statuses WHERE status='pending_coinpay' LIMIT 1)
+                       AND action_index IN (SELECT cs.coinpay_action_index FROM coinpay_statuses cs INNER JOIN index_statuses si ON si.id=cs.status_id WHERE si.status='fulfilled' AND cs.coinpay_action_index IS NOT NULL)`;
+                //</COINPAY-MATCH-REDERIVE-SQL>
+                await this.indexerDb.doQuery(coinpayMatchDemoteSql, []);
+                await this.indexerDb.doQuery(coinpayMatchPromoteSql, []);
             }
 
             // Restore anchor validator_rewards rows an orphaned reconcile DELETEd IN PLACE
@@ -1727,6 +1777,21 @@ class Rollback {
     // never completed its coverage is harmless the other way: the retraction matches no
     // link on the hub and is answered as an accepted no-op.
     //
+    // The CHUNK side carries the same two predicates, because collection has to describe
+    // the same chunk set forward assembly accepted (db.getAttestBatchChunks) and nothing
+    // less. A batch key is sha256 over the window its head declares, so anyone can derive
+    // it and file rows under it: A BATCH'S IDENTITY IS (KEY, AUTHOR), NEVER THE KEY ALONE
+    // (actions/attest.js _authoredBy). Joining on the key alone let a row that is no part
+    // of the batch un-land it - a rejected duplicate, or a foreign publisher's chunk, sitting
+    // anywhere in the orphaned range pulled in a SURVIVING head and queued a retraction that
+    // cleared a live batch's hub links. The hub cannot catch that: the retraction names a
+    // genuinely valid window, and the link is set-once, so nothing ever restores it.
+    //
+    // The author joins are INNER on purpose, mirroring _authoredBy's fail-closed rule that an
+    // unresolvable broadcaster scopes to NOTHING. A publisher whose author cannot be resolved
+    // never assembles a batch forward either, so no link was ever stamped and there is nothing
+    // to retract.
+    //
     // doQueryStrict, like the two reads above it and for the same reason: this runs
     // outside the transaction, where doQuery collapses a transient DB fault into an empty
     // result, which here is indistinguishable from "no batch was un-landed" and would
@@ -1739,10 +1804,16 @@ class Rollback {
                         h.batch_window_end      AS window_end
                      FROM attests h
                         JOIN index_statuses hs ON hs.id = h.status_id AND hs.status = 'valid'
+                        JOIN actions         hact ON hact.action_index = h.action_index
+                        JOIN index_addresses hadr ON hadr.id = hact.source_id
                         JOIN attests c ON c.request_id = h.request_id
                                       AND c.version IN (${abw.ATTEST_BATCH_HEAD_VERSION}, ${abw.ATTEST_BATCH_CONTINUATION_VERSION})
                                       AND c.batch_chunk_index IS NOT NULL
                                       AND c.action_index >= ?
+                        JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid'
+                        JOIN actions         cact ON cact.action_index = c.action_index
+                        JOIN index_addresses cadr ON cadr.id = cact.source_id
+                                                 AND cadr.address = hadr.address
                      WHERE h.version = ${abw.ATTEST_BATCH_HEAD_VERSION}
                        AND h.batch_chunk_index IS NOT NULL
                        AND h.batch_window_start IS NOT NULL

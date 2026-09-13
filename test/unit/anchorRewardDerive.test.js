@@ -284,6 +284,65 @@ describe('anchor_reward_derive (BTC-side derivation) @regression @tier2', functi
             assert.ok(db.createValidatorReward.called);
         });
 
+        // The reward FAMILY flag-days, which are a different question from the relocation
+        // flag-day above. ANCHOR_REWARD_DERIVE_ACTIVATION only moves the mint to this
+        // indexer; ANCHOR_REWARD_ACTIVATION / ARCHIVE_REWARD_ACTIVATION decide whether the
+        // family pays at all, and the protocol says a below-flag-day archive anchor indexes
+        // valid but "never derives an anchor_archive reward even with a full attestation".
+        // The relocation gate is armed at genesis everywhere, so it cannot stand in for these.
+        describe('reward-family flag-days', function () {
+
+            // Threshold-exact on both sides, because a gate that is only ever driven from
+            // below is how an over-broad predicate suppresses legitimate pay with nothing
+            // going red.
+            const cases = [
+                { type: 'anchor_BTC',     gate: 'ANCHOR_REWARD_ACTIVATION'  },
+                { type: 'anchor_bundle',  gate: 'ANCHOR_REWARD_ACTIVATION'  },
+                { type: 'anchor_archive', gate: 'ARCHIVE_REWARD_ACTIVATION' },
+            ];
+
+            for (const c of cases) {
+                const flagDay = ar[c.gate].mainnet;
+
+                it('mints no ' + c.type + ' below ' + c.gate + ' even on a full quorum', async function () {
+                    const keys = [makeKey()];
+                    const row  = makeRow(keys, { network: 'mainnet', reward_type: c.type,
+                                                 snapshot_block: flagDay - 1 });
+                    const db   = stubDb(keys, [row]);
+                    const n    = await derive.deriveAnchorRewards(
+                        db, { COIN: 'BTC', NETWORK: 'mainnet' }, maturedAt(flagDay - 1), stubProof());
+                    assert.strictEqual(n, 0, 'a snapshot below the family flag-day must pay nothing');
+                    assert.ok(db.createValidatorReward.notCalled,
+                        'no validator_rewards row may exist below the family flag-day');
+                });
+
+                it('mints ' + c.type + ' at exactly ' + c.gate, async function () {
+                    const keys = [makeKey()];
+                    const row  = makeRow(keys, { network: 'mainnet', reward_type: c.type,
+                                                 snapshot_block: flagDay });
+                    const db   = stubDb(keys, [row]);
+                    const n    = await derive.deriveAnchorRewards(
+                        db, { COIN: 'BTC', NETWORK: 'mainnet' }, maturedAt(flagDay), stubProof());
+                    assert.strictEqual(n, 1, 'the threshold block itself is ON, not off-by-one');
+                    assert.ok(db.createValidatorReward.calledOnce);
+                });
+            }
+
+            it('pays a reward type it has never seen rather than failing it closed', async function () {
+                // A whitelist of known types would silently stop paying a family added later.
+                // Anything that is not anchor_archive rides the anchor flag-day, which is the
+                // same split the amount pick makes.
+                const keys = [makeKey()];
+                const row  = makeRow(keys, { network: 'mainnet', reward_type: 'anchor_FUTURECHAIN',
+                                             snapshot_block: ar.ANCHOR_REWARD_ACTIVATION.mainnet });
+                const db   = stubDb(keys, [row]);
+                const n    = await derive.deriveAnchorRewards(
+                    db, { COIN: 'BTC', NETWORK: 'mainnet' },
+                    maturedAt(ar.ANCHOR_REWARD_ACTIVATION.mainnet), stubProof());
+                assert.strictEqual(n, 1);
+            });
+        });
+
         it('derives nothing when no rows are pending (idempotent steady state)', async function () {
             const db = stubDb([makeKey()], []);
             assert.strictEqual(await derive.deriveAnchorRewards(db, cfg, 1000, stubProof()), 0);

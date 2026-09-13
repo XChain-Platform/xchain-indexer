@@ -271,6 +271,14 @@ class AnchorRecovery {
         // real on-chain BTC stakes. Fabricated sets cannot survive this.
         if(this.verifyStakes && this.btcDb) await this._verifyStakes(snaps, v1.network);
 
+        // Key-binding (REC-BIND-1): existence alone accepts an archive whose signing key
+        // is real but attributed to SOMEONE ELSE'S staking source. Under weighted quorum
+        // the source carries the weight and stake_weighted_quorum derives pubkey->source
+        // from the archive itself, so swapping an attacker key onto an honest source's row
+        // (source and amount left byte-identical) is credited that source's full weight.
+        // Needs no resolver, so it runs on a bare doQuery handle too.
+        if(this.verifyStakes && this.btcDb) await this._verifyKeySourceBinding(snaps, v1.network);
+
         // Completeness (REC-SUBSET-1): existence alone (above) accepts a real-but-
         // PROPER-SUBSET snapshot - a single small-but-real staker could omit the honest
         // high-stake sources so the under-counted S lets its minority clear the 2/3 bar,
@@ -438,6 +446,84 @@ class AnchorRecovery {
                AND (st.deactivation_block IS NULL OR st.deactivation_block > ?)
              LIMIT 1`,
             [String(s.signing_pubkey).toLowerCase(), Number(at), Number(at)]);
+        return !!(rows && rows.length > 0);
+    }
+
+    // REC-BIND-1: bind every archived signing key to the staking SOURCE the archive claims
+    // for it. _verifyStakes answers "does this key hold stake somewhere" and
+    // _verifyWeightedCompleteness reduces the archive to source -> amount before it looks,
+    // so signing-key identity leaves the weighted path entirely: an attacker holding any
+    // small active stake can write their own key onto an honest source's archived row,
+    // leave source and amount untouched, pass both checks, and be credited that source's
+    // full quorum weight by stake_weighted_quorum, which reads pubkey -> source out of the
+    // archive itself. The legacy count path already compares archived pubkeys, so only the
+    // weighted path needs this.
+    //
+    // Scoped to stake-WEIGHTED quorum capabilities, for the false-reject reason this file is
+    // built around: under count quorum the source carries no weight and older archives may
+    // not populate it at all, so enforcing binding there would condemn honest archives and
+    // halt disaster recovery. Below the flag day nothing changes, byte for byte.
+    //
+    // Existence semantics (LIMIT 1 on a matching row), never stake-source.js's
+    // `ORDER BY action_index DESC LIMIT 1` single-answer form: a key legitimately backed by
+    // two sources must pass under EACH of them, and picking only the latest would reject an
+    // honest archive.
+    //
+    // Deliberately NOT added here: the revocation and permanent-slash exclusions
+    // stake-source.js carries. Those are QUALIFICATION predicates and belong to
+    // _verifyCompleteness; applying them here would make this probe stricter than the set the
+    // archive was built from. Known residual: a source's own revoked or slashed key still
+    // binds to that source and passes. Same reasoning as the existence guard above.
+    async _verifyKeySourceBinding(snaps, network){
+        for(let g of this._groupSnaps(snaps)){
+            if(!QUORUM_CAPABILITIES.has(g.capability)) continue;
+            if(!swq.isStakeWeightedQuorumActive(g.block, network)) continue;
+            // Same buried height as _verifyStakes and _verifyCompleteness, so the three
+            // checks can never probe a group at two different blocks.
+            let atBlock = srb.buriedSnapshotBlock(g.block, network);
+            for(let s of g.rows){
+                let src = String(s.source != null ? s.source : '').trim();
+                let pk  = String(s.signing_pubkey).toLowerCase();
+                if(src === '')
+                    throw new Error('archived ' + g.capability + ' snapshot at block ' + g.block +
+                                    ' carries key ' + pk.substring(0, 16) + '... with no staking source,' +
+                                    ' which cannot be bound on the stake-weighted path');
+                if(!(await this._hasBoundStake(pk, src, atBlock)))
+                    throw new Error('archived ' + g.capability + ' snapshot at block ' + g.block +
+                                    ': key ' + pk.substring(0, 16) + '... is not authorized by its claimed' +
+                                    ' source ' + src.substring(0, 24) + '... at block ' + atBlock +
+                                    ' (key-binding forge?)');
+            }
+        }
+    }
+
+    // Is this (pubkey, source) pair an active on-chain authorization at `atBlock`? Two legs,
+    // the second tried only when the first finds nothing: a DELEGATED signing key holds no
+    // `stakes` row of its own, so a stakes-only probe would reject every honest archive that
+    // carries a delegated-only validator. Join-shaped like _hasDirectStake rather than
+    // id-lookup-shaped like stake-source.js, so it answers on a bare doQuery handle.
+    async _hasBoundStake(pubkey, source, atBlock){
+        let at   = Number(atBlock);
+        let args = [pubkey, source, at, at];
+        let rows = await this.btcDb.doQuery(
+            `SELECT 1 FROM stakes st
+             JOIN index_pubkeys ip ON ip.id = st.signing_pubkey_id
+             JOIN index_addresses ia ON ia.id = st.source_id
+             JOIN index_statuses ix ON ix.id = st.status_id
+             WHERE ip.pubkey = ? AND ia.address = ? AND ix.status = 'valid'
+               AND st.activation_block <= ?
+               AND (st.deactivation_block IS NULL OR st.deactivation_block > ?)
+             LIMIT 1`, args);
+        if(rows && rows.length > 0) return true;
+        rows = await this.btcDb.doQuery(
+            `SELECT 1 FROM delegations dg
+             JOIN index_pubkeys ip ON ip.id = dg.signing_pubkey_id
+             JOIN index_addresses ia ON ia.id = dg.source_id
+             JOIN index_statuses ix ON ix.id = dg.status_id
+             WHERE ip.pubkey = ? AND ia.address = ? AND ix.status = 'valid'
+               AND dg.activation_block <= ?
+               AND (dg.deactivation_block IS NULL OR dg.deactivation_block > ?)
+             LIMIT 1`, args);
         return !!(rows && rows.length > 0);
     }
 

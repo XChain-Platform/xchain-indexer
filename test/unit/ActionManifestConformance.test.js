@@ -30,9 +30,17 @@ function decomment(src) {
 function manifestSlice(flag) {
     return Object.entries(MANIFEST.actions).filter(([, v]) => v[flag]).map(([k]) => k).sort();
 }
+// Matches a handler DISPATCH only: `if(action=='X') await this.actionX.parse(`.
+// A bare `action == 'X'` comparison is not dispatch and must not count as coverage.
+// processAction also compares the action name outside the switch (the ORDER_MATCH /
+// SWAP_MATCH fee-quote verdict capture), so the looser pattern credited both names
+// whether or not their real handlers were still wired: deleting either dispatch left
+// this whole file green (AML #7690).
+// Built per call so no lastIndex state is ever shared between the cases below.
+function dispatchRe() { return /if\s*\(\s*action\s*==\s*'([A-Z_]+)'\s*\)\s*await\s+this\.[A-Za-z0-9_]+\.parse\s*\(/g; }
 function localIndexerSet() {
     const src = decomment(fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'actions.js'), 'utf8'));
-    const names = [...new Set([...src.matchAll(/action\s*==\s*'([A-Z_]+)'/g)].map(x => x[1]))];
+    const names = [...new Set([...src.matchAll(dispatchRe())].map(x => x[1]))];
     return names.filter(n => n !== 'UNKNOWN').sort(); // UNKNOWN is the catch-all sentinel, not an action
 }
 

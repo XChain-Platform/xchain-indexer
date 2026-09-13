@@ -74,6 +74,16 @@ class RollcallProofClient {
         // data and a block may be re-attempted many times behind a barrier, so
         // re-asking is pure load. 'unknown' is NEVER memoized: it is precisely the
         // state that is expected to change.
+        //
+        // Keyed on the COMPLETE request (_memoKey), never on the epoch alone. The answer is
+        // a function of every RPC param, and maxBlockTime comes from the window-end block's
+        // block_time, which a BTC reorg rewrites while the epoch's ledger hash survives.
+        // This client lives for the whole process (XChainIndexer builds one) and rollback
+        // never clears it, so an epoch-only key let a replay after a reorg reuse the
+        // pre-reorg DOGE cut and signer set while a fresh indexer re-queried and derived a
+        // different quorum, gate set, rewards and absences - a consensus fork. Any field
+        // later added to the RPC params must be added to _memoKey too, or the stale answer
+        // silently returns. Same defect class the sibling anchor_proof_client keys around.
         this._memo = new Map();
     }
 
@@ -111,8 +121,9 @@ class RollcallProofClient {
      */
     async fetchSigners({epochHeight, maxBlockTime, pubkeys, publishers}){
         let network = String(this.config['NETWORK']);
+        let memoKey = this._memoKey({epochHeight, maxBlockTime, pubkeys, publishers, network});
 
-        if(this._memo.has(epochHeight)) return this._memo.get(epochHeight);
+        if(this._memo.has(memoKey)) return this._memo.get(memoKey);
 
         // (1) unconfigured. Every BTC indexer must be wired to a DOGE indexer from
         // ROLLCALL_ACTIVATION on, or its blocks defer here from the first close.
@@ -187,8 +198,21 @@ class RollcallProofClient {
             signers:    signers,
             publishers: (result.publishers && typeof result.publishers === 'object') ? result.publishers : {}
         };
-        this._memo.set(epochHeight, decided);
+        this._memo.set(memoKey, decided);
         return decided;
+    }
+
+    // Cache key for a DECIDED answer: every field the getrollcallsigners params carry,
+    // serialized exactly as they are sent. The arrays are deliberately NOT sorted, deduped
+    // or lowercased: over-keying costs one extra RPC, while under-keying lets one request's
+    // answer speak for a different one, which is a consensus bug. JSON.stringify keeps the
+    // array boundaries delimiter-safe, so ['a','b'] and ['a,b'] cannot collide.
+    _memoKey({epochHeight, maxBlockTime, pubkeys, publishers, network}){
+        return JSON.stringify([String(network || ''),
+                               Number(epochHeight),
+                               Number(maxBlockTime),
+                               pubkeys || [],
+                               publishers || []]);
     }
 
     // JSON-RPC over the node http/https core modules, matching AnchorProofClient.

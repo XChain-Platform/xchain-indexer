@@ -110,6 +110,17 @@ describe('Rollback: ATTEST batch-link retraction (spec §6.3, row 55)', function
             'both batch wire versions count as chunks of the batch');
         assert.match(sql, /hs\.status = 'valid'/,
             'a batch stamped invalid on its head was never pushed, so there is no link to retract');
+        // The collect has to describe the SAME chunk set forward assembly accepted
+        // (db.getAttestBatchChunks), or a row that is no part of the batch un-lands it.
+        assert.match(sql, /cs\.status = 'valid'/,
+            'a rejected duplicate in the orphaned range must not un-land the surviving batch ' +
+            'it was a duplicate of');
+        assert.match(sql, /cadr\.address = hadr\.address/,
+            'a batch is (key, author): a foreign publisher filing a chunk under the same key ' +
+            'must not un-land somebody else\'s batch');
+        assert.match(sql, /JOIN index_addresses hadr/,
+            'the head author is resolved with an INNER join, matching _authoredBy: an ' +
+            'unresolvable broadcaster scopes to nothing, and never assembled forward either');
     });
 
     it('write-ahead-stages a durable attest_batch_retraction naming the batch, then delivers it live', async function(){

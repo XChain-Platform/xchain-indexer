@@ -207,6 +207,29 @@ async function deriveAnchorRewards(indexerDb, config, blockIndex, proof){
             // Gate PER ROW on its own snapshot_block so an inert mainnet/testnet placeholder
             // keeps this byte-neutral until the operator arms the derive flag-day.
             if(!ar.isAnchorRewardDeriveActive(Number(row.snapshot_block), String(row.network))) continue;
+            // And gate on the reward FAMILY's own flag-day, which is a different question from
+            // WHERE derivation happens. ANCHOR_REWARD_DERIVE_ACTIVATION only relocates the mint
+            // from the DOGE indexer to this one; whether the family pays at all is
+            // ANCHOR_REWARD_ACTIVATION / ARCHIVE_REWARD_ACTIVATION, and the protocol is explicit
+            // that below the archive flag-day a v1 indexes its checkpoint and archive valid but
+            // "never derives an anchor_archive reward even with a full attestation"
+            // (xchain-documentation/protocol/actions/anchor.md). The relocation gate is armed at
+            // genesis on every network while the family gates are not, so without this the only
+            // thing between a below-flag-day attestation row and a COLLECT-spendable
+            // validator_rewards row is the hub's own leader-side family check: one honest
+            // producer, and no consumer-side defence at all against a rogue or mis-built hub.
+            // The mirror is transport, not trust - the same rule the XANCPUB re-verification and
+            // the DOGE mined-proof below exist for - so the consumer re-derives this gate too.
+            //
+            // The split is the SAME one the amount pick below makes, deliberately: anchor_archive
+            // rides the archive flag-day and every other anchor family (anchor_bundle and the
+            // per-chain anchor_<CHAIN>) rides the anchor flag-day. Keying it off a whitelist of
+            // known reward types instead would silently stop paying a family added later, which
+            // is a worse failure than the one this closes.
+            let familyActive = (String(row.reward_type) === 'anchor_archive')
+                ? ar.isArchiveRewardActive(Number(row.snapshot_block), String(row.network))
+                : ar.isAnchorRewardActive(Number(row.snapshot_block), String(row.network));
+            if(!familyActive) continue;
             if(!await verifyAttestation(indexerDb, row)) continue;
             // The mirror says this reward's anchor was mined. Prove it against DOGE
             // ourselves before minting: the mirror is transport, and the hub that wrote the

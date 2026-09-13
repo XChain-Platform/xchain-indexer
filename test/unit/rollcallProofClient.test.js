@@ -163,6 +163,67 @@ describe('rollcall_proof_client', function () {
         assert.strictEqual(calls2, 2, 'an unknown must NOT be memoized');
     });
 
+    // The memo key is the COMPLETE request. maxBlockTime comes from the window-end block's
+    // block_time, which a BTC reorg rewrites while the epoch's ledger hash survives, and the
+    // client outlives rollback, so an epoch-only key answered the post-reorg request with the
+    // pre-reorg cut and signer set: a replaying indexer and a fresh one then derive different
+    // quorum, gates, rewards and absences off the same chain.
+    describe('memo key covers the whole request', function () {
+
+        // Answers hcut 50 on the first call and 60 on every call after it, so a reused memo
+        // entry is visible in the ANSWER and not only in the call count.
+        function countingClient(){
+            let c = new RollcallProofClient(CONFIG, { url: 'http://doge.invalid/' });
+            c.calls = 0;
+            // The tip is stamped past every window end these cases ask about, so a deferral
+            // can never stand in for the memo behaviour under test.
+            c._rpc = async () => { c.calls++; return goodReply({ hcut: c.calls === 1 ? 50 : 60,
+                                                                tip_block_index: 60 + MATURITY,
+                                                                tip_block_time:  MAXT + 2000 }); };
+            return c;
+        }
+
+        it('re-asks when a reorg moved the window-end stamp', async function () {
+            let c = countingClient();
+            let a = await c.fetchSigners(ask);
+            let b = await c.fetchSigners(Object.assign({}, ask, { maxBlockTime: MAXT + 1000 }));
+            assert.strictEqual(a.hcut, 50);
+            assert.strictEqual(c.calls, 2, 'a different maxBlockTime is a different question');
+            assert.strictEqual(b.hcut, 60, 'the second answer must not be the pre-reorg cut');
+        });
+
+        it('re-asks when the asked key set differs', async function () {
+            let c = countingClient();
+            await c.fetchSigners(ask);
+            let b = await c.fetchSigners(Object.assign({}, ask, { pubkeys: ['cc'.repeat(32)] }));
+            assert.strictEqual(c.calls, 2, 'the answer is bounded by the asked keys');
+            assert.strictEqual(b.hcut, 60);
+        });
+
+        it('re-asks when the publisher set differs', async function () {
+            let c = countingClient();
+            await c.fetchSigners(ask);
+            let b = await c.fetchSigners(Object.assign({}, ask, { publishers: ['dd'.repeat(32)] }));
+            assert.strictEqual(c.calls, 2, 'the publish reward rides on this term');
+            assert.strictEqual(b.hcut, 60);
+        });
+
+        it('still memoizes a byte-identical request', async function () {
+            let c = countingClient();
+            let a = await c.fetchSigners(ask);
+            let b = await c.fetchSigners(Object.assign({}, ask, { pubkeys: ask.pubkeys.slice() }));
+            assert.strictEqual(c.calls, 1, 'the memo must still do its job');
+            assert.strictEqual(b.hcut, a.hcut);
+        });
+
+        it('cannot collide two key lists that share a concatenation', async function () {
+            let c = countingClient();
+            await c.fetchSigners(Object.assign({}, ask, { pubkeys: ['aa', 'bb'] }));
+            await c.fetchSigners(Object.assign({}, ask, { pubkeys: ['aa,bb'] }));
+            assert.strictEqual(c.calls, 2, 'array boundaries must survive the key');
+        });
+    });
+
     // ROLLCALL v1: the close chooses which canonical it verifies against by whether
     // the row carries a GATES string, so the field has to survive the transport with
     // "absent" and "present" still distinguishable.

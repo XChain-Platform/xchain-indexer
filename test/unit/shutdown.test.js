@@ -14,13 +14,18 @@
 // that decide whether a rolling upgrade aborts a MariaDB write transaction.
 
 const assert = require('assert');
+const sinon = require('sinon');
 const { createShutdown, createIndexerDrain, closeServer, resolveTimeoutMs, DEFAULT_SHUTDOWN_TIMEOUT_MS } = require('../../src/shutdown');
 
-// Shared poll-until / fixed-settle helpers. waitUntil() is for a case that
-// asserts an event DID happen; a case asserting an event did NOT happen, or one
-// that must outlive a timer to prove the timer was cleared, has nothing to poll
-// and keeps its fixed sleep() settle.
+// Shared poll-until helper. waitUntil() is for a case that asserts an event DID
+// happen; a case asserting an event did NOT happen drives a fake clock or a
+// bounded macrotask flush instead, so no assertion here rides the wall clock.
 const { sleep, waitUntil } = require('../helpers/wait.js');
+
+// Turn the event loop a bounded number of times. The indexer/server doubles below
+// resolve their callbacks with setImmediate, so a handful of macrotask turns is
+// strictly more than a drain needs to reach its await.
+const flushMacrotasks = async (n = 5) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)); };
 
 const silentLog = { log(){}, warn(){}, error(){} };
 
@@ -111,35 +116,43 @@ describe('graceful shutdown', function(){
 
         it('exits non-zero when the drain throws, and only once', async function(){
             const codes = [];
-            const shutdown = createShutdown({
-                drain: async () => { throw new Error('pool refused to close'); },
-                timeoutMs: 50,
-                exit: (c) => codes.push(c),
-                log: silentLog
-            });
-            shutdown('SIGTERM');
-            // Deliberate delay, not a settle: the throw exits at once, and the point
-            // of the wait is to OUTLIVE the 50ms hard-exit timer and prove it was
-            // cleared. Polling for the first exit would return before the timer could
-            // fire and the "only once" claim would stop being tested.
-            await sleep(120);
-            assert.deepStrictEqual(codes, [1]);
+            const clock = sinon.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+            try {
+                const shutdown = createShutdown({
+                    drain: async () => { throw new Error('pool refused to close'); },
+                    timeoutMs: 50,
+                    exit: (c) => codes.push(c),
+                    log: silentLog
+                });
+                shutdown('SIGTERM');
+                // The window that has to be outlived is the 50ms hard-exit timer, and a
+                // fake clock makes it virtual: settle the throw, then advance far past
+                // the budget and prove the cleared timer added nothing.
+                await clock.tickAsync(0);
+                assert.deepStrictEqual(codes, [1]);
+                await clock.tickAsync(500);
+                assert.deepStrictEqual(codes, [1], 'a cleared timer must not add a second exit');
+            } finally { clock.restore(); }
         });
 
         it('does not fire the hard-exit timer after a clean drain', async function(){
             const codes = [];
-            const shutdown = createShutdown({
-                drain: async () => {},
-                timeoutMs: 20,
-                exit: (c) => codes.push(c),
-                log: silentLog
-            });
-            shutdown('SIGTERM');
-            // Deliberate delay, not a settle: the clean drain exits at once, and the
-            // wait exists to outlive the 20ms hard-exit timer so a leaked timer would
-            // append a second code. There is no predicate for "nothing else happened".
-            await sleep(80);
-            assert.deepStrictEqual(codes, [0], 'a cleared timer must not add a second exit');
+            const clock = sinon.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+            try {
+                const shutdown = createShutdown({
+                    drain: async () => {},
+                    timeoutMs: 20,
+                    exit: (c) => codes.push(c),
+                    log: silentLog
+                });
+                shutdown('SIGTERM');
+                // Same virtual window as above: a leaked 20ms timer would append a
+                // second code, and advancing the fake clock past it proves it cannot.
+                await clock.tickAsync(0);
+                assert.deepStrictEqual(codes, [0]);
+                await clock.tickAsync(500);
+                assert.deepStrictEqual(codes, [0], 'a cleared timer must not add a second exit');
+            } finally { clock.restore(); }
         });
     });
 
@@ -219,10 +232,10 @@ describe('graceful shutdown', function(){
             let settled = false;
             const running = drain().then(() => { settled = true; });
 
-            // Deliberate delay, not a settle: the claim is that the drain does NOT
-            // progress while the loop promise is unresolved, so the window itself is
-            // the test and there is nothing to poll for.
-            await sleep(30);
+            // The claim is that the drain does NOT progress while the loop promise is
+            // unresolved. Turning the event loop a bounded number of times gives the
+            // drain strictly more turns than it needs, with no wall clock in it.
+            await flushMacrotasks();
             assert.strictEqual(settled, false, 'the drain must not finish while the block loop is mid-block');
             assert.strictEqual(indexer.indexerDb.closed, false,
                 'closing a pool under an open block transaction is the exact abort this fix removes');

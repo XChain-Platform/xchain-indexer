@@ -242,6 +242,14 @@ function btcDbStub(staked, opts) {
     let set = new Set(staked.map(p => p.toLowerCase()));
     let effective = (opts.effective || staked).map(p => String(p).toLowerCase());
     let capSets = opts.capSets || {};
+    // The source(s) a key is really bound to on chain; an archived row must claim one of
+    // them to pass REC-BIND-1. Mirrors the fixture's per-key formula. opts.bindings
+    // overrides it per key, and takes an ARRAY for a key backed by more than one source.
+    let boundSources = (pk) => {
+        let b = (opts.bindings && opts.bindings[pk] !== undefined)
+            ? opts.bindings[pk] : ('src_' + String(pk).slice(0, 16));
+        return Array.isArray(b) ? b.map(String) : [String(b)];
+    };
     let truncated = new Set(opts.truncated || []);
     let calls = [];
     function resolve(capability, minStake, method) {
@@ -257,11 +265,25 @@ function btcDbStub(staked, opts) {
         out.truncated = truncated.has(capability);
         return out;
     }
+    let effectiveSet = new Set(effective);
     let db = {
         calls,
         async doQuery(sql, params) {
             if (String(sql).includes('capability_slash_debits'))
                 return (opts.slashRestores || []).map(r => ({ source: r.source, restored: String(r.restored) }));
+            // REC-BIND-1's (pubkey, source) probe, told apart from the delegation-blind
+            // existence query by its `ia.address = ?` leg. Answering it on the PUBKEY alone
+            // would make this stub incapable of ever saying no, so it matches the pair: the
+            // stakes leg answers for a directly-staked key, the delegations leg for a
+            // delegated-only one, and both require the claimed source to be the one that
+            // key is actually bound to (bindingSource).
+            if (/ia\.address\s*=\s*\?/.test(String(sql))) {
+                let pk  = String(params[0]).toLowerCase();
+                let src = String(params[1]);
+                if (!boundSources(pk).includes(src)) return [];
+                let leg = /FROM\s+delegations/.test(String(sql)) ? effectiveSet : set;
+                return leg.has(pk) ? [{ 1: 1 }] : [];
+            }
             return set.has(String(params[0]).toLowerCase()) ? [{ 1: 1 }] : [];
         },
         async getStakeWeightsByCapability(cap, block, minStake) { return resolve(cap, minStake, 'getStakeWeightsByCapability'); },
@@ -279,9 +301,22 @@ function btcDbStub(staked, opts) {
 // Raw-handle stub: doQuery only, no capability resolvers. Models a unit fixture or an
 // embedder holding a bare query handle, where _verifyStakes degrades to the legacy
 // direct-stake existence query.
-function rawStakeHandleStub(staked) {
+function rawStakeHandleStub(staked, opts) {
+    opts = opts || {};
     let set = new Set(staked.map(p => p.toLowerCase()));
-    return { async doQuery(sql, params) { return set.has(String(params[0]).toLowerCase()) ? [{ 1: 1 }] : []; } };
+    let boundSources = (pk) => {
+        let b = (opts.bindings && opts.bindings[pk] !== undefined)
+            ? opts.bindings[pk] : ('src_' + String(pk).slice(0, 16));
+        return Array.isArray(b) ? b.map(String) : [String(b)];
+    };
+    return { async doQuery(sql, params) {
+        let pk = String(params[0]).toLowerCase();
+        // REC-BIND-1 runs on a bare handle too (it needs no resolver), so this stub has to
+        // answer the pair probe on the PAIR, not on the pubkey alone.
+        if (/ia\.address\s*=\s*\?/.test(String(sql)))
+            return (set.has(pk) && boundSources(pk).includes(String(params[1]))) ? [{ 1: 1 }] : [];
+        return set.has(pk) ? [{ 1: 1 }] : [];
+    } };
 }
 
 // Full qualifying set the BTC resolver would report for a set of signing keys,
@@ -675,6 +710,104 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         // recovery runbook would fail every batch before the reindex runs.
         let report = await new AnchorRecovery(memDb([v1], []), Object.assign({ btcDb: rewardBtcDbStub() }, quiet)).run();
         assert.strictEqual(report.verified, 1);
+    });
+
+    // REC-BIND-1: the archive decides which SOURCE a signing key speaks for, and under
+    // weighted quorum the source carries the stake. Existence answers "is this key staked
+    // somewhere" and weighted completeness reduces the archive to source -> amount before it
+    // looks, so signing-key identity left the weighted path entirely and an attacker holding
+    // any small stake could write their own key onto an honest source's row.
+    describe('key-source binding cross-check (REC-BIND-1)', function () {
+
+        // An archive where `attacker` occupies the row of honest validator `victim`: the
+        // source and the weight are byte-identical to the honest archive, only the signing
+        // key changed, and the attacker re-signed the batch with their own key.
+        function forgedBatch() {
+            let victim   = crossKeys[0];
+            let attacker = makeKeypair();
+            let forgedCross = [attacker].concat(crossKeys.slice(1));
+            let victimSource = 'src_' + victim.pubkey.slice(0, 16);
+            let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, forgedCross, {
+                snapSourceFor: pk => (pk === attacker.pubkey ? victimSource : 'src_' + pk.slice(0, 16))
+            });
+            // The attacker really does hold stake, under their OWN source, which is what
+            // makes the existence guard pass.
+            let staked = oracleKeys.map(k => k.pubkey)
+                .concat(crossKeys.slice(1).map(k => k.pubkey))
+                .concat([attacker.pubkey]);
+            // On chain the victim's source is still the victim's: the archived set the
+            // resolver reports is unchanged, so completeness has nothing to object to.
+            let capSets = {
+                cross_chain: capSetFromKeys(crossKeys),
+                oracle_publish: capSetFromKeys(oracleKeys)
+            };
+            return { v1, staked, capSets, attacker, victimSource };
+        }
+
+        it('rejects an attacker key wearing an honest validator\'s staking source', async function () {
+            let { v1, staked, capSets, attacker, victimSource } = forgedBatch();
+            let report = await new AnchorRecovery(memDb([v1], []),
+                Object.assign({ btcDb: btcDbStub(staked, { capSets }), verifyStakes: true }, quiet)).run();
+            assert.strictEqual(report.verified, 0);
+            assert.ok(report.failed[0].reason.includes('key-binding forge'), report.failed[0].reason);
+            assert.ok(report.failed[0].reason.includes(attacker.pubkey.substring(0, 16)));
+            assert.ok(report.failed[0].reason.includes(victimSource.substring(0, 24)));
+        });
+
+        it('and EVERY other guard passes that same forge, which is why this check exists', async function () {
+            // Negative control for the case above: with only the binding probe disabled, the
+            // forged archive certifies. Existence, completeness, the weight equality and the
+            // weighted quorum all read it as honest, so a green run here is the pre-fix
+            // behaviour and not an artefact of the fixture.
+            let { v1, staked, capSets } = forgedBatch();
+            let rec = new AnchorRecovery(memDb([v1], []),
+                Object.assign({ btcDb: btcDbStub(staked, { capSets }), verifyStakes: true }, quiet));
+            rec._verifyKeySourceBinding = async () => {};
+            let report = await rec.run();
+            assert.strictEqual(report.verified, 1, JSON.stringify(report.failed));
+        });
+
+        it('admits a key legitimately backed by TWO sources under either of them', async function () {
+            // Existence semantics, not stake-source.js's "latest row wins": picking one
+            // answer per key would condemn an honest archive that names the other source.
+            let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
+            let staked  = oracleKeys.concat(crossKeys).map(k => k.pubkey);
+            let shared  = crossKeys[0].pubkey;
+            let capSets = { cross_chain: capSetFromKeys(crossKeys), oracle_publish: capSetFromKeys(oracleKeys) };
+            let btcDb = btcDbStub(staked, { capSets,
+                bindings: { [shared]: ['src_other_source', 'src_' + shared.slice(0, 16)] } });
+            let report = await new AnchorRecovery(memDb([v1], []),
+                Object.assign({ btcDb, verifyStakes: true }, quiet)).run();
+            assert.strictEqual(report.verified, 1, JSON.stringify(report.failed));
+        });
+
+        it('runs on a bare doQuery handle, where the resolver-based checks skip', async function () {
+            let { v1, staked, attacker } = forgedBatch();
+            let bad = await new AnchorRecovery(memDb([v1], []),
+                Object.assign({ btcDb: rawStakeHandleStub(staked), verifyStakes: true }, quiet)).run();
+            assert.strictEqual(bad.verified, 0);
+            assert.ok(bad.failed[0].reason.includes('key-binding forge'), bad.failed[0].reason);
+            assert.ok(bad.failed[0].reason.includes(attacker.pubkey.substring(0, 16)));
+        });
+
+        it('leaves the legacy count-quorum path byte-unchanged', async function () {
+            // Below the stake-weighted flag day the source carries no weight and older
+            // archives may not populate it at all, so binding is not enforced there:
+            // enforcing it would false-reject honest archives and halt recovery.
+            let poisoned = { async doQuery(){ throw new Error('the binding probe must not run under count quorum'); } };
+            let rec = new AnchorRecovery(memDb([], []),
+                Object.assign({ btcDb: poisoned, verifyStakes: true }, quiet));
+            // mainnet arms stake-weighted quorum at 961000; 960999 is the last count block.
+            await rec._verifyKeySourceBinding(
+                [{ snapshot_block: 960999, capability: 'cross_chain', signing_pubkey: 'ab'.repeat(32), source: '', amount: '5' }],
+                'mainnet');
+            // ... and at the activation height it does run, against the same blank source.
+            await assert.rejects(
+                rec._verifyKeySourceBinding(
+                    [{ snapshot_block: 961000, capability: 'cross_chain', signing_pubkey: 'ab'.repeat(32), source: '', amount: '5' }],
+                    'mainnet'),
+                /no staking source/);
+        });
     });
 
     describe('completeness cross-check (REC-SUBSET-1)', function () {
