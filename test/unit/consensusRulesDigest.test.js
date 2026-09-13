@@ -158,7 +158,11 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
             'price_sig_tally_activation', 'retraction_signing_activation', 'rollcall_activation',
             'snapshot_reorg_buffer', 'stake_weighted_quorum', 'attest_responsible_widening_activation',
             'attest_response_mirror_activation', 'attest_zero_conf_activation',
-            'attest_responsible_widening_activation', 'rollcall_gates_activation'
+            'attest_responsible_widening_activation', 'rollcall_gates_activation',
+            // Landed by the bridge train while this one was in flight. Two trains appended to
+            // one order-significant registry; this one lands SECOND, so the bridge gate is
+            // pre-existing from here and the family sits after it, not before.
+            'xchain_bridge_activation'
         ];
         const mods = crd.SHARED_GATES.map(g => g[0]);
         assert.deepStrictEqual(mods.slice(0, PRE_EXISTING.length), PRE_EXISTING,
