@@ -9,7 +9,7 @@
  * General Public License v3.0 or later; see LICENSE.md.
  *
  **********************************************************************
- * test/unit/db.mirror-strict-consensus-reads.test.js
+ * test/unit/db_mirror_strict_consensus_reads.test.js
  *
  * The hub-mirrored reads are consensus INPUTS and must fail loudly.
  *

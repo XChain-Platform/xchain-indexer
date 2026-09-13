@@ -9,7 +9,7 @@
  * General Public License v3.0 or later; see LICENSE.md.
  *
  **********************************************************************
- * test/unit/db.integer-field-range.test.js
+ * test/unit/db_integer_field_range.test.js
  *
  * A wire field that lands in an integer column must never reach the bind with a
  * value the column cannot represent.
