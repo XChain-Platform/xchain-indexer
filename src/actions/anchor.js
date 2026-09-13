@@ -339,12 +339,14 @@ class Anchor {
                 error = 'invalid: CHECKPOINT_SEQ (stale; replay of an older checkpoint)';
         }
         // The archive half of the guard needs a second condition: MATCH_BATCH_SEQ is a dense
-        // counter the hub allocates from its own tables, and those tables are reset by a
-        // wipe-and-replay rebase while this watermark (read from replayed anchor_actions)
-        // returns to the pre-rebase maximum. Seq alone cannot tell "the hub's counter
-        // restarted" from "someone is replaying an old archive", and reading it alone fails
-        // closed: every post-rebase archive indexes invalid and the rail stays down for as
-        // many batches as history had, while paying real DOGE for each attempt.
+        // counter the hub allocates from its own tables (StateAnchorPublisher._getNextBatchSeq:
+        // MAX(batch_seq)+1 over cross_chain_matches / cross_chain_calls / validator_rewards),
+        // and those tables are reset by a wipe-and-replay rebase while this watermark (read
+        // from replayed anchor_actions) returns to the pre-rebase maximum. Seq alone cannot
+        // tell "the hub's counter restarted" from "someone is replaying an old archive", and
+        // reading it alone fails closed: every post-rebase archive indexes invalid, the
+        // invalid row does not advance the watermark, and the rail stays down for as many
+        // batches as history had, while paying real DOGE for each attempt.
         //
         // The wrapper checkpoint seq settles it: CHECKPOINT_SEQ is NOT dense, it equals
         // snapshot_block, a chain value that keeps advancing across any wipe. A genuine
@@ -353,9 +355,10 @@ class Anchor {
         // batch seq is stale only when the checkpoint is ALSO behind the newest archive's.
         //
         // Deliberately "behind", not "not ahead": two archives can legitimately ride ONE
-        // checkpoint, and the equal case is already tolerated elsewhere in this guard since
-        // an exact re-broadcast is signature-bound to identical content and can only produce
-        // a duplicate row.
+        // checkpoint (a second batch draining leftover rows in the same cadence), and the
+        // equal case is already tolerated elsewhere in this guard since an exact re-broadcast
+        // is signature-bound to identical content and can only produce a duplicate row, which
+        // the archive-head pick is already required to handle deterministically.
         if(!error){
             let wm = await this.indexerDb.getArchiveReplayWatermarks();
             let batchStale      = (wm.batchSeq !== null && Number(data['MATCH_BATCH_SEQ']) < wm.batchSeq);
@@ -427,8 +430,9 @@ class Anchor {
         // verdict deterministically. This is also the whole path a degraded ATTEST_SIG_COUNT 0
         // tail takes: no attestation, no quorum, no reward, checkpoint intact. amount is the
         // FROZEN consensus constant; reconcile keeps the smallest-pubkey winner on a failover
-        // double-publish, so the COLLECT rail stays single-winner fleet-wide. Reward type
-        // anchor_archive, round = MATCH_BATCH_SEQ.
+        // double-publish, identical to the retired push path and its recovery, so the COLLECT
+        // rail stays single-winner fleet-wide. Reward type anchor_archive,
+        // round = MATCH_BATCH_SEQ.
         if(!error && format === 1 && snapPubkeys && oracleN > 0){
             let rewardCanonical = this._rewardCanonical(data);
             let attSigners = [], attSeen = new Set();
@@ -452,8 +456,9 @@ class Anchor {
                 // BTC indexer from the mirrored anchor_reward_attestations row (where the stake
                 // source resolves; ANCHOR is DOGE-only, capability staking is BTC-only). This
                 // DOGE-side write always silently dropped (no local stake), so stopping it is
-                // byte-neutral to the DOGE ledger. The attestation-quorum check above still
-                // runs; only the createValidatorReward/reconcile write is relocated.
+                // byte-neutral to the DOGE ledger and removes the wasted lookup. The
+                // attestation-quorum check above still runs (anchor validity is unaffected);
+                // only the createValidatorReward/reconcile write is relocated.
             } else if(attQuorumMet && snapPubkeys.has(String(data['PUBLISHER']))){
                 let rewardType  = 'anchor_archive';
                 let rewardRound = Number(data['MATCH_BATCH_SEQ']);

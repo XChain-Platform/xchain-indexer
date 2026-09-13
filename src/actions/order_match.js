@@ -111,13 +111,17 @@ class Order_Match {
 
                 // Native-coin (COINPay) reciprocity: the mirror of the bothTokenLegs gate for the
                 // two-phase path. findOrderMatches enforces the forward leg strictly but NULL-relaxes
-                // the reverse leg, so a token-for-COIN order can pair with a token-for-token maker
-                // whose GIVE_TICK is a real token. That pair is NOT a coin trade: no side gives native
-                // coin, yet native settlement below would mint a bogus COINPay obligation and
-                // mis-assign the coin/seller roles. A legitimate native match mirrors both legs
-                // exactly (null-to-null, or the same real token+coin), so exactly one side GIVES
-                // native coin; anything else is rejected. Gated because it is consensus-visible
-                // (changes which matches settle) and must flip at a coordinated block.
+                // the reverse leg (orderInfo.GET == matchInfo.GIVE), so a token-for-COIN order
+                // (GET_TICK null) can pair with a token-for-token maker whose GIVE_TICK is a real
+                // token. That pair is NOT a coin trade: no side gives native coin to the coin-wanting
+                // side, yet native settlement below would mint a bogus COINPay obligation and
+                // mis-assign the coin/seller roles, because this file's GET_TICK-aware detection
+                // disagrees with coinpay.js / coinpay_expire.js's single-GIVE_TICK detection and so
+                // releases the wrong order's escrowed token. A legitimate native match mirrors both
+                // legs exactly (null-to-null, or the same real token+coin), so exactly one side GIVES
+                // native coin; anything else is rejected. Gated by COINPAY_NATIVE_RECIPROCITY because
+                // it is consensus-visible (changes which matches settle) and must flip at a
+                // coordinated block, staying byte-identical below it.
                 let anyNullTick = this.util.isNull(orderInfo['GIVE_TICK']) || this.util.isNull(orderInfo['GET_TICK']) ||
                                   this.util.isNull(matchInfo['GIVE_TICK']) || this.util.isNull(matchInfo['GET_TICK']);
                 if(anyNullTick && await this.actions.protocolChanges.isEnabled('COINPAY_NATIVE_RECIPROCITY', data['BLOCK_INDEX'])){
@@ -169,11 +173,13 @@ class Order_Match {
 
                 // Calculate the give and get amounts for this order match.
                 //
-                // Both orders constrain the trade: give_amount is bounded by matchInfo.GET_REMAINING
-                // and the taker's RUNNING give-remaining; get_amount by matchInfo.GIVE_REMAINING and
-                // the taker's RUNNING get-remaining. The taker bound must read order[...] (decremented
-                // after each fill), NOT orderInfo[...] (fetched once above, never refreshed): across
-                // two makers in one pass the stale bound would let a later fill over-release escrow,
+                // Both orders constrain the trade: give_amount (orderInfo.GIVE_TICK =
+                // matchInfo.GET_TICK) is bounded by matchInfo.GET_REMAINING and the taker's RUNNING
+                // give-remaining; get_amount (orderInfo.GET_TICK = matchInfo.GIVE_TICK) by
+                // matchInfo.GIVE_REMAINING and the taker's RUNNING get-remaining. The taker bound
+                // must read order[...] (decremented after each fill), NOT orderInfo[...] (fetched
+                // once above, never refreshed): across two makers in one pass the stale bound would
+                // let a later fill release more escrow than the taker still has, over-releasing and
                 // tripping the per-block supply sanity check.
                 // Take whichever pair tightens first as the bottleneck, then derive the other amount
                 // from the price at precision 64 (matching GET_PRICE/GIVE_PRICE), so the intermediate
@@ -197,8 +203,9 @@ class Order_Match {
                 }
 
                 // Snap each settled amount onto its own tick's decimal grid (give_amount in
-                // orderInfo.GIVE_TICK, get_amount in orderInfo.GET_TICK; native-coin sides use
-                // COIN_DECIMALS). This enforces indivisibility: a 0-decimal (NFT) tick is forced
+                // orderInfo.GIVE_TICK = matchInfo.GET_TICK, get_amount in orderInfo.GET_TICK =
+                // matchInfo.GIVE_TICK; native-coin sides, meaning a null tick and null tokenInfo,
+                // use COIN_DECIMALS). This enforces indivisibility: a 0-decimal (NFT) tick is forced
                 // to integer fills, and any token's fill is freed of sub-unit dust. Each derived
                 // amount is <= its side's on-grid max, so rounding can never exceed the escrowed
                 // remaining; a fill that rounds to zero is dropped by the guards just below.

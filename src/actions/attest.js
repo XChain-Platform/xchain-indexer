@@ -2102,7 +2102,7 @@ class Attest {
             // fulfillment would. The responsible set it splits to is the ORIGIN row's,
             // which is empty off BTC, so the fee lands in the REWARD pool and no
             // per-validator reward row is written; paying the BTC-staked validators
-            // out of an origin-chain pool is future economics work, not something
+            // out of an origin-chain pool is Phase 3 economics work, not something
             // this relay leg needs to solve.
             await this._settleRequestFee(request, data, newRequestStatus);
 

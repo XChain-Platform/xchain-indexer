@@ -336,16 +336,19 @@ class Send {
             if(!error){
                 let packs = gatedPacks[send['TICK']] || [];
                 if(packs.length > 0){
-                    // PC-29 rule 3-5: the handoff is now CONDITIONAL. Previously ANY gated FILE
-                    // on a tick made EVERY send of it require a handoff; now a pack only compels
+                    // PC-29 rule 3-5: the handoff is CONDITIONAL. A gated FILE on a tick does
+                    // NOT make every send of it require a handoff; a pack only compels
                     // one when the recipient will actually end up able to unlock it, judged on
                     // POST-SEND balance (pre-send balance + everything this action sends them),
                     // since a recipient who already holds enough crosses the threshold on any
                     // transfer and one who holds nothing may not cross it even on a large one.
-                    // send['AMOUNT'] is already the TOTAL for this (DESTINATION, TICK) pair
-                    // (legs were CONSOLIDATED further up), which is what closes the
-                    // split-into-many-small-sends bypass; a test vector pins that consolidation
-                    // so it cannot silently regress. Self-send is deliberately NOT special-cased:
+                    // The "everything this action sends them" half is already exact here, and it
+                    // is worth saying why because it looks like a gap: legs were CONSOLIDATED by
+                    // (DESTINATION, TICK) further up, so send['AMOUNT'] is the TOTAL for this
+                    // pair, not one leg. That consolidation is what closes the
+                    // split-120-into-two-60s bypass; it is structural rather than something this
+                    // block re-derives, and a test vector pins it so a future de-consolidation
+                    // cannot silently reopen it. Self-send is deliberately NOT special-cased:
                     // the rule applies literally, the resulting overcount is accepted for
                     // determinism, and a sender's self-addressed MESSAGE satisfies the requirement.
                     let destBal = destBalances[send['DESTINATION']] || {};

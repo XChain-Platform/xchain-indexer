@@ -64,7 +64,7 @@ class Delegate {
         if(!error && format === 2) return await this._parseCapabilityRevoke(params, data, error);
         if(!error && format === 3) return await this._parseContractRevoke(params, data, error);
 
-        // v0 capability delegation
+        // Extract params (v0 capability delegation)
         data['SIGNING_PUBKEY'] = params[1];
 
         // Convert NUMBER fields from string value to number value
@@ -87,7 +87,7 @@ class Delegate {
         if(!error && this.util.isNull(data['SIGNING_PUBKEY']))
             error = 'invalid: SIGNING_PUBKEY (required)';
 
-        // 64 hex characters (Ed25519)
+        // Verify SIGNING_PUBKEY is 64 hex characters (Ed25519)
         if(!error && !/^[0-9a-fA-F]{64}$/.test(data['SIGNING_PUBKEY']))
             error = 'invalid: SIGNING_PUBKEY (format)';
 
@@ -95,7 +95,7 @@ class Delegate {
          * Stake Existence Validations
          ****************************************************************/
 
-        // Gated by activation delay
+        // Verify SOURCE has an active stake (gated by activation delay)
         if(!error){
             let activeStake = await this.indexerDb.getActiveStakeBySource(data['SOURCE'], data['BLOCK_INDEX']);
             if(!activeStake)
@@ -110,7 +110,7 @@ class Delegate {
                 error = 'invalid: SIGNING_PUBKEY (already in use)';
         }
 
-        // and not already held by another active (or pending-activation)
+        // ... and not already held by another active (or pending-activation)
         // delegation. Spec: "NEW_SIGNING_PUBKEY must not already be in use by
         // any active stake or delegation." A revoked delegation
         // (deactivation_block <= height) frees the pubkey for reuse.
@@ -124,7 +124,7 @@ class Delegate {
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
-        // Per-chain ACTIVATION_DELAY_BLOCKS, calibrated for ~60 min reorg protection on each chain
+        // Calculate the activation block (per-chain ACTIVATION_DELAY_BLOCKS, calibrated for ~60 min reorg protection on each chain)
         let staking = this.config['STAKING'];
         let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
         data['ACTIVATION_BLOCK'] = parseInt(data['BLOCK_INDEX']) + activationDelay;

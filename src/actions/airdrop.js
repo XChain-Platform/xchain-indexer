@@ -147,10 +147,11 @@ class Airdrop {
             // Guard gas fee billed to SOURCE for this leg (0 = uncontrolled token)
             let guardFee = 0;
 
-            // Set, not array: membership is tested once per holder and a list can carry thousands
-            // of addresses, so an array made dedup O(n^2) on the synchronous per-block path. Set
-            // over a plain object because insertion order is guaranteed, keeping the credit order
-            // below deterministic for consensus.
+            // Set of addresses that will receive this AIRDROP. A Set, not an array: membership is
+            // tested once per holder and a list can carry thousands of addresses (see mapper.js),
+            // so an array made dedup O(n^2) on the synchronous per-block path. Set over a plain
+            // object (the dividend.js/callback.js idiom) because insertion order is guaranteed,
+            // keeping the credit order below deterministic for consensus.
             let recipients = new Set();
 
             // Placeholder for list and list type
@@ -254,10 +255,13 @@ class Airdrop {
             // Build out array of recipient addresses that are allowed to receive the airdrop
             // Fetch TICK's allow/block lists ONCE before the recipient loop, then check membership in
             // memory via Sets (matching isActionAllowed's no-block_index behavior) so each recipient
-            // costs an O(1) hash probe instead of an O(n) scan, not O(recipients x list).
-            // Determinism rides on `recipients` iteration order, which Sets preserve; an empty list
-            // stays truthy as a Set exactly as it was as an array, so an empty ALLOW_LIST still
-            // approves nobody.
+            // costs an O(1) hash probe instead of an O(n) scan, not O(recipients x list). The
+            // approved set is unchanged by this: membership is the only thing asked of the two
+            // lists, so their own order never mattered. Determinism rides on `recipients`
+            // iteration order, which Sets preserve, and therefore on the insertion order of
+            // `approved` and of the credits built from it downstream; an empty list stays truthy
+            // as a Set exactly as it was as an array, so an empty ALLOW_LIST still approves
+            // nobody.
             let approved = new Set();
             let hasAllowList = tokenInfo && !this.util.isNull(tokenInfo['ALLOW_LIST']) && this.util.isNumeric(tokenInfo['ALLOW_LIST']);
             let hasBlockList = tokenInfo && !this.util.isNull(tokenInfo['BLOCK_LIST']) && this.util.isNumeric(tokenInfo['BLOCK_LIST']);
@@ -358,7 +362,8 @@ class Airdrop {
                 }
             }
 
-            // Only for XCHAIN deduction mode (no PAYMENT_MODE, or mode 2)
+            // Adjust balances to reduce by FEE AMOUNT, only for XCHAIN deduction mode
+            // (no PAYMENT_MODE, or mode 2)
             if(!error && (!fees['PAYMENT_MODE'] || fees['PAYMENT_MODE'] === 2))
                 legBalances = this.util.debitBalances(legBalances, fees['TICK_ID'], fees['AMOUNT']);
 

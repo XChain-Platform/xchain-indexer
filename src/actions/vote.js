@@ -46,8 +46,8 @@ class Vote {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
-        // v0 create + v1 ballot are user actions; v2 finalize is system-injected only
-        // (the per-block sweep synthesizes it).
+        // Define list of known FORMATS. v0 create + v1 ballot are user actions; v2
+        // finalize is system-injected only (the per-block sweep synthesizes it).
         this.formats = {};
         this.formats[0] = 'VERSION|TICK|END_BLOCK|OPTIONS|MAX_SELECTIONS|TALLY_MODE|WEIGHT_MODE|QUORUM|MIN_VOTERS|MIN_VOTE_BALANCE|DECIDE_THRESHOLD|QUESTION|DEPOSIT|CALLBACK_CONTRACT|CALLBACK_METHOD|CALLBACK_PARAMS|CALLBACK_ON|GAS_ESCROW|CALLBACK_DELAY_BLOCKS';
         this.formats[1] = 'VERSION|POLL_REF|BALLOT|MEMO';
@@ -551,10 +551,12 @@ class Vote {
     // the frozen result is reconstructed from the terminal polls row and the
     // callback EXECUTE injected exactly as the immediate path would have at
     // finalize (same EMITTER = the v2's action_index, same savepoint isolation).
-    // Fires exactly once: the due query matches only callback_due_block = block. A
-    // deterministic callback failure is final on both paths; only a reorg re-fires,
-    // since rolling back the due block deletes the EXECUTE generically and
-    // rollback.js re-NULLs callback_execute_action_index.
+    // Fires exactly once: the due query matches only callback_due_block = block,
+    // mirroring the immediate path's fire-once-at-v2 semantics. A deterministic
+    // callback failure is final on both paths; only a reorg re-fires, since rolling
+    // back the due block deletes the EXECUTE generically and rollback.js re-NULLs
+    // callback_execute_action_index, so replaying the due block re-fires
+    // deterministically.
     async processDueCallbacks(block_index, block_time){
         let due = await this.indexerDb.getDueCallbackPolls(block_index);
         for(let poll of due){

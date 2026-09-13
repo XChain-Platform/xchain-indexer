@@ -60,13 +60,15 @@ class File {
 
         // Define list of known FORMATS
         this.formats = {};
-        // Optional NINTH field, the unlock threshold: the eight-field form is
+        // PC-29: optional NINTH field, the unlock threshold. The eight-field form is
         // byte-identical, so historical FILEs replay unchanged.
         //
         // Optional TENTH field, COMPRESSION, deliberately absent from every
         // validation below because compression is PRESENTATIONAL, not consensus
-        // (spec §5.5): FILE validity never inspects rawData content, so parsing
-        // this field changes nothing about what is valid. Validating it would let
+        // (spec §5.5): FILE validity never inspects rawData content, so an indexer
+        // that has never heard of this field produces identical verdicts and
+        // identical state, and parsing it changes nothing about what is valid.
+        // Validating it would let
         // an indexer that rejects a malformed value fork VALIDITY against
         // neighbours that ignore unknown trailing fields (as shipped indexers do),
         // so unknown/invalid codes must stay inert here and degrade to serve-raw
@@ -75,8 +77,9 @@ class File {
         // There is also deliberately no gated_files/files column for it: serve
         // paths derive COMPRESSION from the stored ACTION STRING at serve time
         // (spec §5.1), not a parsed-at-ingest column, so a FILE compressed before
-        // an indexer upgrade is never stored marker-less and served as garbage
-        // forever. The action string is already preserved verbatim.
+        // an indexer upgrade is never stored marker-less and served as deflated
+        // garbage forever, even after the upgrade. The action string is already
+        // preserved verbatim, so a column would only invite the parsed-at-ingest trap.
         this.formats[0] = 'VERSION|NAME|TYPE|TITLE|MEMO|GATE_TICKER|ENCRYPTION_METHOD|KEY_HASH|GATE_MIN_AMOUNT|COMPRESSION';
 
     }
@@ -159,7 +162,7 @@ class File {
                 else if(await this.indexerDb.isOwnershipEscrowed(data['GATE_TICKER']))
                     error = 'invalid: GATE_TICKER (ownership escrowed)';
 
-                // GATE_MIN_AMOUNT is validated STRICT: a present but invalid
+                // PC-29: GATE_MIN_AMOUNT is validated STRICT. A present but invalid
                 // threshold REJECTS the FILE rather than being dropped, since a
                 // FILE is immutable and dropping would let the publisher believe
                 // a threshold was in force when the chain recorded none. This is

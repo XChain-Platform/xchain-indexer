@@ -167,14 +167,17 @@ class Deploy {
 
         // Resolve a compacted ^<id> SLASH_DESTINATION back to its canonical address (the SDK
         // compacts this field by default). 'BURN' and null pass through untouched; a
-        // non-resolvable/malformed reference is left as-is here (see resolveAddressRefChecked)
-        // and hard-rejected below on its own flag-day, independent of the separate
+        // non-resolvable/malformed reference is left as-is here (see resolveAddressRefChecked),
+        // which also keeps a malformed id off the slash-credit FK path, and is
+        // hard-rejected below on its own flag-day, independent of the separate
         // DEPLOY_SLASH_DEST_ADDRESS_VALID gate: without that reject a bogus caret would intern
         // into the IMMUTABLE contracts.slash_destination and every later slash would route stake
         // nowhere. `slashDestExplicit` marks a user-supplied, non-BURN destination: only those
         // get the isCryptoAddress format reject below (BURN and the default-to-BURN path already
         // resolve to the trusted configured burn address). The verdict is captured here but
-        // applied further down, so the existing pairing/cooldown verdicts still win.
+        // APPLIED with the sibling address check further down, so the existing
+        // pairing/cooldown verdicts still win, in the same ordering the
+        // DEPLOY_SLASH_DEST_ADDRESS_VALID check was written to preserve.
         let slashDestExplicit = hasStaking && !this.util.isNull(data['SLASH_DESTINATION']) && data['SLASH_DESTINATION'] !== 'BURN';
         let slashDestUnresolvable = false;
         // Resolve an explicit SLASH_DESTINATION reference to its real address before checking it
@@ -537,9 +540,12 @@ class Deploy {
             // an absent context would read the manifest under a different sandbox rule set than
             // every later execute() of the same contract. contractAddress is passed too and is
             // load-bearing, not cosmetic: the Pkg 3 sandbox gate derives its COIN from this
-            // string, and with no coin the mainnet threshold lookup misses and the gate resolves
-            // false regardless of height. Uses the identical expression as the constructor
-            // execution further down, so the two contexts cannot disagree.
+            // string (pkg3CoinFromAddress), and with no coin the mainnet threshold lookup misses
+            // and the gate resolves false regardless of height. Passing only network + height
+            // would therefore fix testnet/regtest and silently leave mainnet on the
+            // pre-activation reading. Uses the identical expression as the constructor execution
+            // further down, and both inputs are already known here, so the two contexts cannot
+            // disagree.
             let manifestRead = await this.actions.vm.readManifest(code, {
                 network:         this.config['NETWORK'],
                 contractAddress: 'C:' + this.config['CHAIN'] + ':' + data['ACTION_INDEX'],
@@ -629,7 +635,8 @@ class Deploy {
             }
         }
 
-        // Native coin or XCHAIN balance. A deferred deployment does not re-detect the mode:
+        // Validate gas fee payment: native coin or XCHAIN balance. A deferred deployment does
+        // not re-detect the mode:
         // the base fee was validated and paid at the assembler, in the mode THAT transaction's
         // outputs decided, and the mode governs whether constructor gas is debited below.
         let feePaymentMode = paidFeePaymentMode === null ? 2 : Number(paidFeePaymentMode); // default: xchain balance
