@@ -123,7 +123,7 @@ class Withdraw {
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
-        // Every other token-moving handler (its mirror DEPOSIT,
+        // Verify TICK is not sleeping. Every other token-moving handler (its mirror DEPOSIT,
         // plus SEND/MINT/AIRDROP/CALLBACK/DESTROY/ORDER/SWAP/DISPENSER) blocks movement of a
         // sleeping tick; WITHDRAW was the sole omission, so a frozen token could be pulled out
         // of contract custody while DEPOSIT of the same tick is rejected.

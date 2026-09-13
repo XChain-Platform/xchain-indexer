@@ -36,8 +36,9 @@ class Bet_Expire {
         this.mapper    = action.mapper;
     }
 
-    // data['ACTION_INDEX'] arrives as the FEED's action_index (the processExpirations
-    // injection shape); a fresh action row is minted below for the expire record itself.
+    // Handle expiring a bet feed. data['ACTION_INDEX'] arrives as the FEED's action_index
+    // (the processExpirations injection shape); a fresh action row is minted below for the
+    // expire record itself.
     async parse(params, data, error){
         // Get info on the feed by its action_index
         let feedInfo = await this.indexerDb.getBetFeedInfo(data['ACTION_INDEX']);

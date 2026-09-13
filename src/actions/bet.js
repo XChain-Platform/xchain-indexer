@@ -330,7 +330,8 @@ class Bet {
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
-        // Wagered-tick allow/block check (create only; place checks the feed tick above)
+        // Verify SOURCE may act on the wagered tick (house token allow/block lists, create
+        // only; place checks the feed tick above)
         if(!error && format==0 && await this.indexerDb.isActionAllowed(data['SOURCE'], data['TICK']) == false)
             error = 'invalid: SOURCE (not authorized)';
 
@@ -348,7 +349,8 @@ class Bet {
 
         // Fees: unified schedule only. BET and UNIFIED_FEES are both genesis-active on every
         // chain and network, so a BET action can never process below the gate; the legacy
-        // else-branch other actions carry would be dead code here.
+        // else-branch other actions carry would be dead code here, and dead code that
+        // silently charges zero if the condition were ever mis-evaluated.
         fees['AMOUNT'] = 0;
 
         // Create: duration-metered on the feed's full pass-eligible life

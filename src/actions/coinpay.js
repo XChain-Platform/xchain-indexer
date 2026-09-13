@@ -334,8 +334,9 @@ class Coinpay {
             escrows = [];
 
         // Token amount released to the buyer: derived from the ORDER_MATCH, not the
-        // obligation's coin_amount (a different asset/leg). give_action_index is the
-        // matching order; get_action_index is the original order.
+        // obligation's coin_amount (a different asset/leg). Whether that is the match's
+        // give_amount or its get_amount depends on which side is the seller.
+        // give_action_index is the matching order; get_action_index is the original order.
         let matchQuery = await this.indexerDb.getOrderMatchAmounts(obligationInfo['ACTION_INDEX']);
         let tokenAmount;
         if(matchQuery){

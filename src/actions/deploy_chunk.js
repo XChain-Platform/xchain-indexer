@@ -202,7 +202,7 @@ class DeployChunk {
         let tokenInfo = await this.indexerDb.getTokenInfo(gas, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let balances  = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
-        // Native coin or XCHAIN balance; mirrors deploy.js
+        // Validate gas fee payment (native coin or XCHAIN balance); mirrors deploy.js
         let feePaymentMode = 2; // default: xchain balance
         // Verify the gas fee is paid, either in native coin or the configured GAS token
         if(!error && tokenInfo && this.util.bcgt(fee, 0)){

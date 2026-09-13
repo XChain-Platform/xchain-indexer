@@ -97,7 +97,7 @@ class Unstake {
             // undeactivatedOnly: an UNSTAKE may only target stake that is not already
             // being unstaked. A second UNSTAKE inside the activation-delay window would
             // otherwise re-read the same still-"active" rows and write a duplicate
-            // cooldown credit.
+            // cooldown credit (a double-credit).
             let aggregate = await this.indexerDb.getActiveStakeByPubkey(data['SIGNING_PUBKEY'], data['BLOCK_INDEX'], {undeactivatedOnly: true});
             if(!aggregate){
                 error = 'invalid: SIGNING_PUBKEY (no active stake or unstake already in progress)';
@@ -309,9 +309,10 @@ class Unstake {
         // target / not-stakeable / no-active-stake), persisting a phantom BLOCK_INDEX+1000
         // cooldown_end_block into the invalid contract_unstakes row (a replicated,
         // state_hash-covered column). At/after the flag-day: reject a non-positive-integer
-        // contract cooldown outright and compute COOLDOWN_END_BLOCK only on the valid path,
-        // leaving error rows at 0. The valid-path value is unchanged. Below it: byte-identical
-        // to the legacy ternary so a from-genesis replay reproduces the historic error-row
+        // contract cooldown outright (which closes the latent cross-file trap) and compute
+        // COOLDOWN_END_BLOCK only on the valid path, leaving error rows at 0. The valid-path
+        // value is unchanged. Below it: byte-identical to the legacy ternary so a from-genesis
+        // replay, or a heterogeneous fleet, reproduces the historic phantom-1000 error-row
         // values.
         if(await this.actions.protocolChanges.isEnabled('UNSTAKE_CONTRACT_COOLDOWN_STRICT', data['BLOCK_INDEX'])){
             if(!error){

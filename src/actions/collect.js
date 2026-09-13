@@ -73,7 +73,7 @@ class Collect {
          * Stake Existence Validations
          ****************************************************************/
 
-        // Any tier, gated by activation delay
+        // Verify SOURCE has an active stake (any tier, gated by activation delay)
         if(!error){
             let activeStake = await this.indexerDb.getActiveStakeBySource(data['SOURCE'], data['BLOCK_INDEX']);
             if(!activeStake)
