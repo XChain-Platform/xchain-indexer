@@ -68,6 +68,9 @@
  *   node bin/bench-contract-state-root.js --synthetic 500 --shape spread,deep,wide,prefix
  *   node bin/bench-contract-state-root.js --db XChain_BTC_Regtest_Indexer --chain BTC --network regtest
  *
+ * Regtest only. The figure is a per-host cost curve, so a number measured anywhere
+ * else does not transfer to the fleet.
+ *
  * DB and scratch modes read credentials the same way the indexer does (its own
  * config layer), and never take them on the command line.
  *

@@ -52,6 +52,9 @@ class Bet_Expire {
         if(!feedInfo || !['open','closed'].includes(feedInfo['FEED_STATUS']))
             return;
 
+        // A reorg can hand the per-block expiry sweep the same feed a second time, which is why
+        // the guard above tests the feed's live status instead of remembering action indexes.
+
         // Feed tick info (refund credits at its decimals)
         this.util.addAddressTicker(feedInfo['SOURCE'], feedInfo['TICK']);
 

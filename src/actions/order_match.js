@@ -60,6 +60,9 @@ class Order_Match {
                 Number(m['GIVE_OWNERSHIP']||0) === Number(orderInfo['GET_OWNERSHIP']||0) &&
                 Number(m['GET_OWNERSHIP']||0)  === Number(orderInfo['GIVE_OWNERSHIP']||0)
             );
+            // Collapse an emptied list back to false: every test below asks whether `matches`
+            // is truthy, and an empty array answers yes, so the fill loop would run over
+            // nothing and record a match that never happened.
             if(matches.length === 0) matches = false;
         }
 
@@ -236,6 +239,10 @@ class Order_Match {
                 if(orderIsOwnership || matchIsOwnership){
                     let expectedGive = (Number(orderInfo['GIVE_OWNERSHIP']||0)==1) ? '1' : orderInfo['GIVE_AMOUNT'];
                     let expectedGet  = (Number(orderInfo['GET_OWNERSHIP']||0)==1)  ? '1' : orderInfo['GET_AMOUNT'];
+                    // Equality is written as "not greater and not less" because these amounts are
+                    // BigNumber strings: a direct == compares text, so '1.0' and '1' would read as
+                    // different fills and an ownership order would be refused a counter-party that
+                    // offered exactly the asked price.
                     let giveEqual = (!this.util.bcgt(give_amount, expectedGive) && !this.util.bclt(give_amount, expectedGive));
                     let getEqual  = (!this.util.bcgt(get_amount,  expectedGet)  && !this.util.bclt(get_amount,  expectedGet));
                     if(!giveEqual || !getEqual){

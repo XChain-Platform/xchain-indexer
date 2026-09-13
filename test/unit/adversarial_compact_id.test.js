@@ -17,6 +17,8 @@
  *
  * ADVERSARIAL SUITE (Cat 2 of the ^<id> compaction test brief).
  *
+ * The adversary here controls the wire, not the SDK, so nothing sanitises these inputs first.
+ *
  * Goal: try to fork or crash the indexer through malformed / dangling
  * compact-ID (`^<id>`) wire references on the RESOLUTION path
  * (db.getAddressId / db.getTickerId), below the SDK (the SDK only ever

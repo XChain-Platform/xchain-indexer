@@ -53,6 +53,8 @@ class Coinpay_Expire {
         if(!matchOrders)
             return;
 
+        // Get info on both orders involved in the match: expiry releases the seller's
+        // escrowed token, so both legs have to resolve before either side moves.
         // give_action_index = the matching order (counter-party); get_action_index = the original order
         let giveOrderInfo = await this.indexerDb.getOrderInfo(this.config['COIN'], matchOrders.give_action_index);
         let getOrderInfo  = await this.indexerDb.getOrderInfo(this.config['COIN'], matchOrders.get_action_index);

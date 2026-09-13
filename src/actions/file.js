@@ -176,12 +176,15 @@ class File {
                    String(data['GATE_MIN_AMOUNT']).length > 0){
                     let raw = String(data['GATE_MIN_AMOUNT']);
                     // Format rules, byte-for-byte the SDK's stateless set (spec §5.2).
+                    // Length first, so a pathological input never reaches the regexes below.
                     if(raw.length > GATE_MIN_AMOUNT_MAX_LENGTH)
                         error = 'invalid: GATE_MIN_AMOUNT';
                     else if(!/^\d+(\.\d+)?$/.test(raw))
                         error = 'invalid: GATE_MIN_AMOUNT';
+                    // No leading zeros: '007' and '7' must not be two spellings of one threshold.
                     else if(/^0\d/.test(raw))
                         error = 'invalid: GATE_MIN_AMOUNT';
+                    // A zero threshold is not a gate: the field exists to require a nonzero balance.
                     else if(!/[1-9]/.test(raw))
                         error = 'invalid: GATE_MIN_AMOUNT';   // every zero spelling
                     // Verify GATE_MIN_AMOUNT does not use more decimal places than the tick (or the fixed threshold scale) allows

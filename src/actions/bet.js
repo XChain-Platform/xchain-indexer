@@ -125,6 +125,8 @@ class Bet {
             // Verify OUTCOMES: comma-split count bounds
             if(!error){
                 let rawOutcomes = this.util.isNull(data['OUTCOMES']) ? [] : String(data['OUTCOMES']).split(',');
+                // A feed needs at least two outcomes to be a market at all, and the ceiling bounds
+                // the settlement work every node does when the feed resolves.
                 if(rawOutcomes.length < 2 || rawOutcomes.length > this.config['MAX_BET_OUTCOMES'])
                     error = 'invalid: OUTCOMES (count)';
                 // Each label trimmed non-empty, within length, and free of the wire
@@ -151,6 +153,8 @@ class Bet {
             // Verify TICK: native coin (empty) rejects in v0; token must exist
             if(!error && this.util.isNull(data['TICK']))
                 error = 'invalid: TICK (native coin not supported)';
+            // The wagered tick must be an issued token: stakes are escrowed at its DECIMALS,
+            // which an unknown tick cannot supply.
             if(!error && !tokenInfo)
                 error = 'invalid: TICK (unknown)';
 
@@ -172,6 +176,8 @@ class Bet {
 
             // Verify FEE: optional percent of the pot, <= 2 decimals, 0..MAX_FEED_FEE
             if(!error && !this.util.isNull(data['FEE'])){
+                // Two decimal places at most, checked here rather than at settlement, where a bad
+                // value would already have taken stakes it could not pay back.
                 if(!/^\d+(\.\d{1,2})?$/.test(String(data['FEE'])))
                     error = 'invalid: FEE (format)';
                 else if(this.util.bclt(data['FEE'], 0) || this.util.bcgt(data['FEE'], this.config['MAX_FEED_FEE']))
@@ -257,6 +263,7 @@ class Bet {
             // written by the end-of-block pass
             if(!error && feedInfo['FEED_STATUS']!='open')
                 error = 'invalid: FEED_ACTION_INDEX (feed not open)';
+            // Betting closes AT the deadline, so a bet in the deadline block itself is late.
             if(!error && !this.util.bclt(data['BLOCK_TIME'], feedInfo['DEADLINE']))
                 error = 'invalid: FEED_ACTION_INDEX (closed)';
 

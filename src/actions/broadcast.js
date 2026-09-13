@@ -74,6 +74,9 @@ class Broadcast {
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
+        // VALUE carries the oracle reading itself, so it is stored verbatim and never
+        // coerced here; a feed consumer decides how to read it.
+
         // Convert NUMBER fields from string to number so comparisons below are mathematical, not lexical.
         if(!error)
             data = this.util.setNumberFormats(data);

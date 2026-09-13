@@ -72,17 +72,22 @@ class Link {
 
         // COIN Validations
 
-        // Validate COIN1 is valid
+        // Validate COIN1 is valid: a LINK pairs two on-chain actions across two COIN networks,
+        // so COIN1 has to be a network this indexer is configured for, or the pairing can never
+        // be verified.
         if(!error && format==0 && !this.config['COINS'].includes(data['COIN1']))
             error = 'invalid: COIN1 (unsupported COIN network)';
 
-        // Validate COIN2 is valid
+        // Validate COIN2 is valid: the other side of the pair is checked separately, because a
+        // LINK between a supported network and an unsupported one is not half-valid, it is
+        // unverifiable.
         if(!error && format==0 && !this.config['COINS'].includes(data['COIN2']))
             error = 'invalid: COIN2 (unsupported COIN network)';
 
         // FORMAT Validations
 
-        // Verify COIN1_ACTION_INDEX format
+        // Verify COIN1_ACTION_INDEX format: both action indexes are numeric row references, not
+        // hashes, so a non-numeric value cannot be looked up and would silently link nothing.
         if(!error && (this.util.isNull(data['COIN1_ACTION_INDEX']) || !this.util.isNumeric(data['COIN1_ACTION_INDEX'])))
             error = 'invalid: COIN1_ACTION_INDEX (format)';
 
@@ -92,7 +97,8 @@ class Link {
 
         // General Validations
 
-        // Verify SOURCE is not sleeping
+        // Verify SOURCE is not sleeping: a frozen address may not create or change links,
+        // matching every other action-creating handler.
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
@@ -115,6 +121,8 @@ class Link {
                 let tokenInfo = await this.indexerDb.getTokenInfo(tick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
                 if(tokenInfo && tokenInfo['OWNER'] !== data['SOURCE'])
                     error = 'invalid: SOURCE (not current TICK owner)';
+                // Verify TICK ownership is not escrowed: an owner mid-sale must not be able to
+                // re-point the token's links while the ownership transfer is still pending.
                 if(!error && await this.indexerDb.isOwnershipEscrowed(tick))
                     error = 'invalid: TICK (ownership escrowed)';
             }

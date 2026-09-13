@@ -237,8 +237,10 @@ describe('13 – Cross-node equivalence @regression @tier1', function () {
     // it asserts cross-node ledger-hash equivalence after a reorg whose
     // orphaned branch minted novel entities. It was skipped 2026-06-12 as a
     // CONFIRMED CONSENSUS FORK (P2a finding #1: getBlockHashes folded raw
-    // index_* ids into the hash while rollback never deleted index_* rows;
-    // see). Both
+    // index_* ids into the hash while rollback never deleted index_* rows,
+    // so a survivor kept an orphan's index_* row, the next new entity took
+    // the id after it, and a fresh resync gave that same entity a lower id;
+    // the two nodes then hashed different ledgers from the same chain). Both
     // consensus-side fixes have since landed - getBlockHashes hashes the
     // RESOLVED address/ticker strings, and rollback.js block-scope-deletes
     // index_addresses/index_tickers - so the guard is live again (re-enabled

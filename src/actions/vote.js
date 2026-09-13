@@ -185,7 +185,8 @@ class Vote {
                 error = 'invalid: DECIDE_THRESHOLD (fraction 0-1)';
         }
 
-        // QUESTION (optional): bounded length
+        // QUESTION (optional) shares the MAX_MESSAGE_LENGTH ceiling with every other free-text
+        // field, because all of them ride the one compiled action string.
         if(!error && !this.util.isNull(data['QUESTION']) && String(data['QUESTION']).length > this.config['MAX_MESSAGE_LENGTH'])
             error = 'invalid: QUESTION (length)';
 
@@ -222,6 +223,8 @@ class Vote {
         let binding   = !error && !this.util.isNull(data['CALLBACK_CONTRACT']) && String(data['CALLBACK_CONTRACT']).trim() !== '';
         let gasEscrow = '0';
         if(!error && binding){
+            // CALLBACK_CONTRACT names a contract by its numeric index, not an address, and
+            // the contract has to exist now: a poll cannot bind to something deployed later.
             if(!this.util.isNumeric(data['CALLBACK_CONTRACT'])){
                 error = 'invalid: CALLBACK_CONTRACT (format)';
             } else {
@@ -232,11 +235,15 @@ class Vote {
             // CALLBACK_METHOD required and bounded (matches ATTEST's 64-char cap).
             if(!error && (this.util.isNull(data['CALLBACK_METHOD']) || String(data['CALLBACK_METHOD']).trim() === ''))
                 error = 'invalid: CALLBACK_METHOD (required for a binding poll)';
+            // The 64-character cap: CALLBACK_METHOD is stored on the poll row and replayed
+            // verbatim into the injected EXECUTE, so it has to fit that action's method field.
             if(!error && String(data['CALLBACK_METHOD']).length > 64)
                 error = 'invalid: CALLBACK_METHOD (length)';
             // CALLBACK_ON: default 'pass' (fire only on a finalized win); 'always'
             // fires on every finalization including failed_quorum.
             if(this.util.isNull(data['CALLBACK_ON'])) data['CALLBACK_ON'] = 'pass';
+            // Only the two documented triggers are accepted. An unknown value would have to
+            // be given a meaning at finalize time, and two nodes could choose differently.
             if(!error && !['pass','always'].includes(data['CALLBACK_ON']))
                 error = 'invalid: CALLBACK_ON (pass|always)';
             // At/after the VOTE_BINDING_MINIMUMS flag-day a binding poll must set its
@@ -260,6 +267,8 @@ class Vote {
             if(await this.actions.protocolChanges.isEnabled('VOTE_CALLBACK_TIMELOCK', data['BLOCK_INDEX'])){
                 if(!error && !this.util.isNull(data['CALLBACK_DELAY_BLOCKS'])){
                     let cbd = Number(data['CALLBACK_DELAY_BLOCKS']);
+                    // The delay is added to the resolve block to stamp callback_due_block, so a
+                    // fractional or negative value would put the due block in the past or off-grid.
                     if(!Number.isInteger(cbd) || cbd < 0)
                         error = 'invalid: CALLBACK_DELAY_BLOCKS (non-negative integer)';
                 }
@@ -270,6 +279,8 @@ class Vote {
             if(!error && !this.util.isNull(data['CALLBACK_PARAMS']) && String(data['CALLBACK_PARAMS']).trim() !== ''){
                 let ok = false;
                 try { ok = Array.isArray(JSON.parse(data['CALLBACK_PARAMS'])); } catch(e){ ok = false; }
+                // CALLBACK_PARAMS is handed to the contract as positional EXECUTE arguments, so it
+                // must be an array; an object or a bare scalar has no positional reading.
                 if(!ok) error = 'invalid: CALLBACK_PARAMS (must be a JSON array)';
             }
             // GAS_ESCROW (optional): XCHAIN the creator locks to back the callback
@@ -284,6 +295,9 @@ class Vote {
                 let need     = this.util.bcadd(deposit, gasEscrow, 8);
                 let gasInfo  = await this.indexerDb.getTokenInfo(gas, block_index, action_index);
                 let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, block_index, action_index);
+                // GAS_ESCROW is locked at creation, so this funding read is taken at
+                // (block, action) for the same reason the DEPOSIT read above is: two validators
+                // reading at different points would disagree on accept/reject.
                 if(!gasInfo || !this.util.hasBalance(balances, gasInfo['TICK_ID'], need))
                     error = 'invalid: insufficient funds (GAS_ESCROW)';
             }
@@ -341,6 +355,8 @@ class Vote {
         // POLL_REF must reference an existing poll
         let poll = null;
         if(!error){
+            // POLL_REF is a poll's own action_index, so a ballot for a poll that does not exist
+            // is rejected rather than parked: there is nothing to attach the vote to.
             if(!this.util.isNumeric(data['POLL_REF']))
                 error = 'invalid: POLL_REF (format)';
             else {
@@ -380,10 +396,14 @@ class Vote {
                 let parts  = entries[i].split(':');
                 let choice = Number(parts[0]);
                 let share  = (parts.length > 1) ? String(parts[1]).trim() : '1';
+                // Option indexes are positions in the poll's stored OPTIONS array, so anything
+                // outside it would tally a vote for an option the poll never offered.
                 if(!Number.isInteger(choice) || choice < 0 || choice >= optionCount){
                     error = 'invalid: BALLOT (option index out of range)';
                     break;
                 }
+                // One entry per option: a repeated option would count the voter's weight twice
+                // in approval mode and let a split ballot exceed its own share total.
                 if(seen[choice]){
                     error = 'invalid: BALLOT (duplicate option)';
                     break;
