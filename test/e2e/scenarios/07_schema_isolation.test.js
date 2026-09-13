@@ -94,7 +94,7 @@ describe('E2E: per-file schema isolation @regression @tier1', function () {
 
     it('gives the same-numbered e2e and perf scenarios different schemas', function () {
         const e2eKey  = dbConnection.fileKey(path.join(TEST_ROOT, 'e2e', 'scenarios', '01_token_lifecycle.test.js'));
-        const perfKey = dbConnection.fileKey(path.join(TEST_ROOT, 'perf', 'scenarios', '01-baseline-throughput.test.js'));
+        const perfKey = dbConnection.fileKey(path.join(TEST_ROOT, 'perf', 'scenarios', '01_baseline_throughput.test.js'));
         assert.notStrictEqual(e2eKey, perfKey);
         assert.notStrictEqual(
             dbConnection.scopedDbName('xchain_test_indexer', e2eKey),

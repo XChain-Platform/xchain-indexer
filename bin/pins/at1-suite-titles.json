@@ -12981,79 +12981,79 @@
       "fileCount": 9,
       "titleCount": 26,
       "files": {
-        "test/perf/scenarios/01-baseline-throughput.test.js": "e224c1f6ab921a72",
-        "test/perf/scenarios/02-action-benchmarks.test.js": "58fd73daf6487e45",
-        "test/perf/scenarios/03-sustained-load.test.js": "8a5cc74cb5fc6df0",
-        "test/perf/scenarios/04-spike-load.test.js": "db4cdd7dac8b8bff",
-        "test/perf/scenarios/05-scaling.test.js": "c607fd4205462c32",
-        "test/perf/scenarios/06-genesis-bootstrap.test.js": "587ca334686b8a78",
-        "test/perf/scenarios/07-grown-database.test.js": "157dcfaa3a3b9d23",
-        "test/perf/scenarios/08-fast-chain.test.js": "307e7031bdbc09be",
-        "test/perf/scenarios/09-fee-spike.test.js": "d00dad3ce91741da"
+        "test/perf/scenarios/01_baseline_throughput.test.js": "e224c1f6ab921a72",
+        "test/perf/scenarios/02_action_benchmarks.test.js": "58fd73daf6487e45",
+        "test/perf/scenarios/03_sustained_load.test.js": "8a5cc74cb5fc6df0",
+        "test/perf/scenarios/04_spike_load.test.js": "db4cdd7dac8b8bff",
+        "test/perf/scenarios/05_scaling.test.js": "c607fd4205462c32",
+        "test/perf/scenarios/06_genesis_bootstrap.test.js": "587ca334686b8a78",
+        "test/perf/scenarios/07_grown_database.test.js": "157dcfaa3a3b9d23",
+        "test/perf/scenarios/08_fast_chain.test.js": "307e7031bdbc09be",
+        "test/perf/scenarios/09_fee_spike.test.js": "d00dad3ce91741da"
       }
     },
     "test:perf:baseline": {
       "fileCount": 1,
       "titleCount": 4,
       "files": {
-        "test/perf/scenarios/01-baseline-throughput.test.js": "e224c1f6ab921a72"
+        "test/perf/scenarios/01_baseline_throughput.test.js": "e224c1f6ab921a72"
       }
     },
     "test:perf:benchmarks": {
       "fileCount": 1,
       "titleCount": 4,
       "files": {
-        "test/perf/scenarios/02-action-benchmarks.test.js": "58fd73daf6487e45"
+        "test/perf/scenarios/02_action_benchmarks.test.js": "58fd73daf6487e45"
       }
     },
     "test:perf:fastchain": {
       "fileCount": 1,
       "titleCount": 4,
       "files": {
-        "test/perf/scenarios/08-fast-chain.test.js": "307e7031bdbc09be"
+        "test/perf/scenarios/08_fast_chain.test.js": "307e7031bdbc09be"
       }
     },
     "test:perf:feespike": {
       "fileCount": 1,
       "titleCount": 5,
       "files": {
-        "test/perf/scenarios/09-fee-spike.test.js": "d00dad3ce91741da"
+        "test/perf/scenarios/09_fee_spike.test.js": "d00dad3ce91741da"
       }
     },
     "test:perf:grown": {
       "fileCount": 1,
       "titleCount": 1,
       "files": {
-        "test/perf/scenarios/07-grown-database.test.js": "157dcfaa3a3b9d23"
+        "test/perf/scenarios/07_grown_database.test.js": "157dcfaa3a3b9d23"
       }
     },
     "test:perf:regimes": {
       "fileCount": 2,
       "titleCount": 9,
       "files": {
-        "test/perf/scenarios/08-fast-chain.test.js": "307e7031bdbc09be",
-        "test/perf/scenarios/09-fee-spike.test.js": "d00dad3ce91741da"
+        "test/perf/scenarios/08_fast_chain.test.js": "307e7031bdbc09be",
+        "test/perf/scenarios/09_fee_spike.test.js": "d00dad3ce91741da"
       }
     },
     "test:perf:scaling": {
       "fileCount": 1,
       "titleCount": 4,
       "files": {
-        "test/perf/scenarios/05-scaling.test.js": "c607fd4205462c32"
+        "test/perf/scenarios/05_scaling.test.js": "c607fd4205462c32"
       }
     },
     "test:perf:spike": {
       "fileCount": 1,
       "titleCount": 2,
       "files": {
-        "test/perf/scenarios/04-spike-load.test.js": "db4cdd7dac8b8bff"
+        "test/perf/scenarios/04_spike_load.test.js": "db4cdd7dac8b8bff"
       }
     },
     "test:perf:sustained": {
       "fileCount": 1,
       "titleCount": 1,
       "files": {
-        "test/perf/scenarios/03-sustained-load.test.js": "8a5cc74cb5fc6df0"
+        "test/perf/scenarios/03_sustained_load.test.js": "8a5cc74cb5fc6df0"
       }
     },
     "test:regression": {
