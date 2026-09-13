@@ -26,7 +26,7 @@ const AnchorRecovery = require('../../bin/recovery.js');
 const Utility        = require('../../src/utility.js');
 
 // Publisher-faithful archive builder shared with the recovery-determinism e2e
-// (test/integration/recovery-determinism-e2e.test.js). Single source for the
+// (test/integration/recovery_determinism_e2e.test.js). Single source for the
 // hub serialization both tests verify against.
 const { makeKeypair, signHex, buildBatch, rawMatch, rawCall, SNAPSHOT_BLOCK } = require('../fixtures/anchor-archive.js');
 

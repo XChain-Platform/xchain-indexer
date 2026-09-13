@@ -4970,7 +4970,7 @@ describe('Database.getActiveStakeWeights() @regression @tier1', function () {
 // doQuery SWALLOWS a non-transactional query error, so a broken predicate would derive
 // NO anchor rewards on a live node while every assertion here stayed green. The
 // semantics are driven against a real MariaDB in
-// test/integration/anchor-reward-late-publisher.test.js; change one and move the other.
+// test/integration/anchor_reward_late_publisher.test.js; change one and move the other.
 describe('Database.getPendingAnchorRewardAttestations() @regression @tier1', function () {
     it('excludes a round PER PUBLISHER, so a smaller-pubkey late arrival is re-admitted', async function () {
         const db = dbWithDoQuery([]);

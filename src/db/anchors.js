@@ -64,7 +64,7 @@ module.exports = {
     // the true minimum. Self-terminating - after the promotion the new winner excludes both.
     // Compared under the shared utf8_general_ci collation, the same one MIN(pk.pubkey) in
     // reconcileAnchorRewardWinner elects, so the two predicates cannot disagree. Driven
-    // against a real MariaDB in test/integration/anchor-reward-late-publisher.test.js: the
+    // against a real MariaDB in test/integration/anchor_reward_late_publisher.test.js: the
     // unit tier stubs doQuery, and doQuery swallows a non-transactional query error, so a
     // shape-only test cannot tell this predicate from one that derives nothing at all.
     async getPendingAnchorRewardAttestations(network, maxSnapshotBlock){

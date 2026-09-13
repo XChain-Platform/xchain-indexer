@@ -12,7 +12,7 @@
 
 // Publisher-faithful ANCHOR archive builder, shared between the AnchorRecovery
 // unit round-trip (test/unit/recovery.test.js) and the recovery-determinism
-// integration e2e (test/integration/recovery-determinism-e2e.test.js). Builds an
+// integration e2e (test/integration/recovery_determinism_e2e.test.js). Builds an
 // archive batch exactly as the hub's StateAnchorPublisher serializes it (fixed key
 // order, gzip+base64url, CRC32, chunking, REAL Ed25519 signatures + EQUIV canonical),
 // so a single source pins the serialization both tests verify against.
