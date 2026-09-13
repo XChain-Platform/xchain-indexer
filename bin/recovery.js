@@ -128,7 +128,7 @@ class AnchorRecovery {
         // STATUS to 'valid'); do NOT loosen this to a LEFT JOIN accepting NULL, which reopens the hole.
         // match_batch_seq is NOT unique: the _parseCheckpoint replay guard admits an EQUAL
         // MATCH_BATCH_SEQ (a permissionless re-broadcast or failover double-publish stores a
-        // second v1 head for the same batch, db.js 'match_batch_seq is NOT unique'). The
+        // second v1 head for the same batch, db/anchors.js 'match_batch_seq is NOT unique'). The
         // rebuild below is order-dependent (latest-status-wins per match_id; finalized-wins full
         // overwrite per (call_id,phase)), so equal-seq heads MUST replay in a deterministic total
         // order or two nodes persist divergent finalized content. Break the tie on action_index
@@ -359,7 +359,7 @@ class AnchorRecovery {
     //      key the delegation-blind check already accepted is still accepted.
     //   2. ONLY a key that query rejects is looked up in the delegation-aware effective
     //      signer set. A DELEGATED signing key is authorized by a staked source and holds no
-    //      `stakes` row of its own (db.js _effectiveCapabilitySetSql / _stakeWeightsSql UNION
+    //      `stakes` row of its own (db/stakes.js _effectiveCapabilitySetSql / _stakeWeightsSql UNION
     //      active `delegations`), so a direct-only check rejected the WHOLE batch for any
     //      honest archive carrying a delegated-only validator. That is the bug this closes.
     //
@@ -373,7 +373,7 @@ class AnchorRecovery {
     //
     // The threshold is deliberately LOOSE (minStake '0'), not the capability MIN_STAKE: this
     // is the existence guard, and _verifyCompleteness is the bar. slashCapabilityStake
-    // rewrites `stakes.amount` IN PLACE (db.js), so re-resolving a historical block AFTER a
+    // rewrites `stakes.amount` IN PLACE (db/stakes.js), so re-resolving a historical block AFTER a
     // slash reports the post-slash amount; a MIN_STAKE-thresholded existence check would then
     // false-reject an honest archive, while at '0' the source still resolves.
     //
@@ -540,14 +540,14 @@ class AnchorRecovery {
     // closed (mirrors meetsStakeThreshold + XHUB-TRUNC-2).
     //
     // This replaces an interim bar (this node's LOCAL coin-config MIN_STAKE, applied by
-    // db.js when no override is passed) with an AS-OF-BLOCK reconstruction of the two things
-    // the hub actually built the archive from:
+    // db/stakes.js when no override is passed) with an AS-OF-BLOCK reconstruction of the two
+    // things the hub actually built the archive from:
     //
     //   1. THE THRESHOLD. capability_min_stake_history.minStakeAt() resolves the governance
     //      MIN_STAKE effective at the resolve block from the frozen block-anchored table plus
     //      the genesis coin-config floor, byte-mirroring xchain-hub
     //      CapabilityRegistry.getMinStake(capability, blockIndex) - the value
-    //      CapabilitySnapshot hands the indexer, and which db.js honours VERBATIM precisely
+    //      CapabilitySnapshot hands the indexer, and which db/stakes.js honours VERBATIM precisely
     //      because local config drifts between independently-operated indexers. The local
     //      floor was NOT the bar the archive was built at: a governance MIN_STAKE ABOVE it
     //      made this check STRICTER than the honest hub, so the re-resolution reported sources
@@ -585,7 +585,7 @@ class AnchorRecovery {
             let resolveBlock = srb.buriedSnapshotBlock(g.block, network);
             // The bar the ARCHIVE was built at, reconstructed as of that block.
             // null = nothing resolvable (no coin config on this handle), in which case no
-            // override is passed and db.js applies its own local floor exactly as before.
+            // override is passed and db/stakes.js applies its own local floor unchanged.
             let minStake = this._minStakeAt(g.capability, resolveBlock, network);
             let weighted = swq.isStakeWeightedQuorumActive(g.block, network);
             let resolved = weighted
@@ -686,7 +686,7 @@ class AnchorRecovery {
     //
     // Scoped to `target_table = 'stakes'`: only active stake rows carry capability weight -
     // an `unstakes` row is cooldown-locked tokens, outside the weight sum by construction
-    // (db.js _stakeWeightsSql), so unwinding its slash would inflate the reconstruction. The
+    // (db/stakes.js _stakeWeightsSql), so unwinding its slash would inflate the reconstruction. The
     // debit join applies the SAME valid-status + activation/deactivation window at `atBlock`
     // the resolver applies, so both halves of the sum cover one identical row set.
     //
@@ -734,8 +734,8 @@ class AnchorRecovery {
     // The capability MIN_STAKE effective at `atBlock` - the bar the hub that wrote the
     // archive resolved its qualifying set at. Genesis floor comes from the BTC
     // handle's own coin config, the frozen constant XChainHub asserts its genesis governance
-    // value against at boot; null when this handle carries no config, which leaves db.js
-    // applying its local floor exactly as it did before.
+    // value against at boot; null when this handle carries no config, which leaves
+    // db/stakes.js applying its local floor unchanged.
     _minStakeAt(capability, atBlock, network){
         return cmsh.minStakeAt(capability, atBlock, network,
                                this._genesisMinStake(capability), this.minStakeActivations);
