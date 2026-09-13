@@ -62,6 +62,7 @@ const { isMirrorAdmissionConsumerActive } = require('../mirror_admission_activat
 // and every mixin read the same instance of each.
 const { requireStakeWeight, normalizeStakeAmount, AUTO_DEDUP_TABLES, recordShapeDrift, txEpochStore, usesCapabilitySnapshot, opensBackslashEscape } = require('./shared.js');
 
+const { CONFIG_ENV } = require('../config.js');
 class Database {
 
     constructor(host, port, dbName, user, pass, indexer) {
@@ -97,8 +98,8 @@ class Database {
             port:     this.port,
             // Connection options
             connectionLimit:      10,
-            connectTimeout:       parseInt(process.env.DB_CONNECT_TIMEOUT) || 10000,
-            acquireTimeout:       parseInt(process.env.DB_ACQUIRE_TIMEOUT) || 10000,
+            connectTimeout:       parseInt(CONFIG_ENV.DB_CONNECT_TIMEOUT) || 10000,
+            acquireTimeout:       parseInt(CONFIG_ENV.DB_ACQUIRE_TIMEOUT) || 10000,
             idleTimeout:          60000,
             insertIdAsNumber:     true,
             // Return BIGINT columns as JS Numbers rather than BigInts. Without
@@ -110,7 +111,7 @@ class Database {
             // are within Number.MAX_SAFE_INTEGER for any realistic chain.
             bigIntAsNumber:       true,
             minDelayValidation:   3000,
-            queryTimeout:         parseInt(process.env.DB_QUERY_TIMEOUT) || 30000
+            queryTimeout:         parseInt(CONFIG_ENV.DB_QUERY_TIMEOUT) || 30000
         };
 
         // Setup pool of connections
@@ -540,7 +541,7 @@ class Database {
                             // mode fail closed so a diverged schema is caught in CI / by an operator
                             // instead of silently continuing. Default auto-startup stays non-fatal
                             // (console.error, not warn) to avoid a surprise fleet-wide boot failure.
-                            if(includeManual || process.env.MIGRATION_STRICT_CHECKSUM === '1'){
+                            if(includeManual || CONFIG_ENV.MIGRATION_STRICT_CHECKSUM === '1'){
                                 // Tailor the remedy to which branch actually fired. The operator path
                                 // (includeManual, `node src/migrate.js`) ALWAYS fails closed by design, so
                                 // MIGRATION_STRICT_CHECKSUM has no effect there - telling the operator to
@@ -613,7 +614,7 @@ class Database {
                             // Same dual-mode contract as the checksum guard above: the operator
                             // path and opt-in strict mode fail closed, passive startup logs and
                             // proceeds so a backdated commit cannot black-start the fleet.
-                            if(includeManual || process.env.MIGRATION_STRICT_CHECKSUM === '1') throw new Error(msg);
+                            if(includeManual || CONFIG_ENV.MIGRATION_STRICT_CHECKSUM === '1') throw new Error(msg);
                             console.error(msg + ' Applying it anyway at this position - review manually.');
                         }
                     }

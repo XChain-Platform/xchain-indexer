@@ -42,6 +42,7 @@ const { isMirrorAdmissionConsumerActive, isRowReadableAt } = require('./mirror_a
 // consensus timestamp so historical replay below the threshold is byte-identical.
 const amountRepresentability = require('./amount_representability_activation.js');
 
+const { CONFIG_ENV } = require('./config.js');
 // Page size the mirror applier walks its applicability read in. NOT consensus and
 // deliberately not exported: it shapes how many rows a node holds at once, never which
 // rows bind (the read's order is total and the pages are disjoint slices of it), so
@@ -1680,7 +1681,7 @@ class Utility {
         // this block's time (deterministic across nodes and on replay). The
         // block loop enforces the matching time-keyed price barrier
         // (XChainIndexer/hub_db_sync), gated by the SAME shared predicate.
-        let network      = this.config['NETWORK'] || process.env.INDEXER_NETWORK;
+        let network      = this.config['NETWORK'] || CONFIG_ENV.INDEXER_NETWORK;
         // One chain-derived anchor drives the gate, the selection and the staleness guard.
         let selectByTime = (coin !== 'BTC') &&
             protocolChanges.isNativeFeePriceTimeGateActive(network, refTime);
