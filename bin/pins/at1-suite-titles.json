@@ -12298,10 +12298,10 @@
       "fileCount": 5,
       "titleCount": 44,
       "files": {
-        "test/chaos/suites/backoff-retry.test.js": "ed5213e6532e58d0",
-        "test/chaos/suites/block-resilience.test.js": "9c7ca58561dbe842",
-        "test/chaos/suites/circuit-breaker.test.js": "aaa1f7acb927f744",
-        "test/chaos/suites/query-propagation.test.js": "12f208888ecc19fc",
+        "test/chaos/suites/backoff_retry.test.js": "ed5213e6532e58d0",
+        "test/chaos/suites/block_resilience.test.js": "9c7ca58561dbe842",
+        "test/chaos/suites/circuit_breaker.test.js": "aaa1f7acb927f744",
+        "test/chaos/suites/query_propagation.test.js": "12f208888ecc19fc",
         "test/chaos/suites/watchdog.test.js": "b4ab10fde0a94fac"
       }
     },
@@ -13062,7 +13062,7 @@
       "files": {
         "test/boundary/retraction_signing_activation.test.js": "1b40427e0e4dee1e",
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
-        "test/chaos/suites/block-resilience.test.js": "c4308b650669ed74",
+        "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
         "test/e2e/scenarios/01-token-lifecycle.test.js": "4365faef2b0a9c54",
         "test/e2e/scenarios/02-order-lifecycle.test.js": "0d895f3bfea03346",
         "test/e2e/scenarios/03-dispenser-lifecycle.test.js": "7de1998d17dc11c5",
@@ -13687,7 +13687,7 @@
       "files": {
         "test/boundary/retraction_signing_activation.test.js": "1b40427e0e4dee1e",
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
-        "test/chaos/suites/block-resilience.test.js": "c4308b650669ed74",
+        "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
         "test/e2e/scenarios/01-token-lifecycle.test.js": "4365faef2b0a9c54",
         "test/e2e/scenarios/02-order-lifecycle.test.js": "0d895f3bfea03346",
         "test/e2e/scenarios/03-dispenser-lifecycle.test.js": "7de1998d17dc11c5",
