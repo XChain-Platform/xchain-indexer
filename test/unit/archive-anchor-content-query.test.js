@@ -36,7 +36,7 @@ const {
     ARCHIVE_ANCHOR_BY_CONTENT_SQL, ARCHIVE_ANCHOR_ROW_LIMIT, ARCHIVE_CRC_RE,
     ARCHIVE_HEAD_VERSIONS, validateArchiveAnchorParams, selectArchiveHeadRow,
     presentChunkIndexes, buildArchiveAnchorResponse
-} = require('../../src/anchor-action-query');
+} = require('../../src/actions/anchor/anchor-action-query');
 
 const CONFIG = { COIN: 'DOGE', NETWORK: 'regtest' };
 const CRC    = 'deadbeef';

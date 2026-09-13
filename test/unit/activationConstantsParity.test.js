@@ -142,7 +142,7 @@ const GATES = [
     // point: membership decides a verdict, so a name present on one side and absent on the
     // other forks the chain the first time anyone issues it. deepStrictEqual over the array
     // pins ORDER too, which a set comparison would let drift silently.
-    ['reservedRoots.js',                   'RESERVED_FUTURE_ROOTS'],
+    ['consensus/reservedRoots.js',         'RESERVED_FUTURE_ROOTS'],
     ['snapshot_reorg_buffer.js',           'SNAPSHOT_BURIAL_ACTIVATION'],
     // The burial depth that gate reads; canon claims it byte-identical to the local copies.
     ['snapshot_reorg_buffer.js',           'CANONICAL_REORG_BUFFER'],
@@ -421,7 +421,7 @@ describe('activation-gate constant parity to canonical constants.js @regression'
     // thing they match is usable as a case-folded membership test at all. A lower-case or
     // duplicated entry would not throw anywhere, it would just quietly fail to reserve a chain.
     it('holds RESERVED_FUTURE_ROOTS frozen, upper-case and duplicate-free at the surveyed width', function () {
-        const roots = require('../../src/reservedRoots.js').RESERVED_FUTURE_ROOTS;
+        const roots = require('../../src/consensus/reservedRoots.js').RESERVED_FUTURE_ROOTS;
         assert.ok(Array.isArray(roots), 'RESERVED_FUTURE_ROOTS must be an array');
         assert.ok(Object.isFrozen(roots), 'RESERVED_FUTURE_ROOTS must be frozen; a reserved set a caller can push to is not a rule');
         // 47 measured free on 2026-09-11 plus the 6 squatted in the mainnet genesis manifests.
@@ -437,7 +437,7 @@ describe('activation-gate constant parity to canonical constants.js @regression'
     // case fold that matters (every tick lookup is LOWER(tick), so an exact-case test would
     // leave 'eth' free to take the row getTokenInfo('ETH') returns).
     it('refuses a listed root in any case and admits an unlisted one', function () {
-        const { isReservedFutureRoot } = require('../../src/reservedRoots.js');
+        const { isReservedFutureRoot } = require('../../src/consensus/reservedRoots.js');
         assert.strictEqual(isReservedFutureRoot('ETH'), true);
         assert.strictEqual(isReservedFutureRoot('eth'), true);
         assert.strictEqual(isReservedFutureRoot('EtH'), true);

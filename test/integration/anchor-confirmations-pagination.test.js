@@ -14,7 +14,7 @@
  * test/integration/anchor-confirmations-pagination.test.js
  *
  * getanchorconfirmations and its anchor-by-txid pagination SQL
- * (ANCHOR_BY_TXID_SQL / ANCHOR_BY_TXID_AFTER_SQL, src/anchor-action-query.js) had no
+ * (ANCHOR_BY_TXID_SQL / ANCHOR_BY_TXID_AFTER_SQL, src/actions/anchor/anchor-action-query.js) had no
  * executing test venue against real MariaDB. The 2026-08-24 round landed the
  * pagination itself (truncation probe + an AFTER_SQL resume on action_index) with
  * only unit coverage, which pins the query TEXT but proves nothing about whether
@@ -50,7 +50,7 @@ const path    = require('path');
 const mariadb = require('mariadb');
 
 const Database = require('../../src/db');
-const anchorActionQuery = require('../../src/anchor-action-query');
+const anchorActionQuery = require('../../src/actions/anchor/anchor-action-query');
 
 const {
     ANCHOR_ROW_LIMIT,

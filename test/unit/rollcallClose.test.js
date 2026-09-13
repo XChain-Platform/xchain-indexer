@@ -25,11 +25,11 @@
 const assert = require('assert');
 const crypto = require('crypto');
 
-const rc  = require('../../src/rollcall_close.js');
+const rc  = require('../../src/consensus/rollcall_close.js');
 const rca = require('../../src/rollcall_activation.js');
 const rga = require('../../src/rollcall_gates_activation.js');
 const eq  = require('../../src/equivocation_header.js');
-const { RollcallProofUnavailableError } = require('../../src/rollcall_proof_client.js');
+const { RollcallProofUnavailableError } = require('../../src/consensus/rollcall_proof_client.js');
 
 const NETWORK = 'regtest';
 const EPOCH   = 30;                                    // ROLLCALL_INTERVAL_BLOCKS.regtest

@@ -83,7 +83,7 @@ const { XPOLICY_MAX_MEMBERS } = require('../protocol/constants.js');
 // taken from the module rather than re-derived here, so the case folding it applies (D13)
 // lives with the list it folds. A name leaves the list only by moving into COINS, and both
 // refuse identically, so nothing re-verdicts on the move.
-const { isReservedFutureRoot } = require('../reservedRoots.js');
+const { isReservedFutureRoot } = require('../consensus/reservedRoots.js');
 
 // The floor on a NEW top-level name at/above TICK_NAMESPACE_ACTIVATION (R8 (c)). Measured
 // on the FULL tick, so a child such as ABCD.X passes on its own length. Creation only:
@@ -776,7 +776,7 @@ class Issue {
         // Verify CONTROLLER references an existing, active contract on this chain.
         // The bound contract's `guard` method is consulted before guarded native
         // actions on this token settle (see Controller_Bound_Tokens.md). Mirrors the
-        // contract-active check in actions/execute.js so a token can only bind to a
+        // contract-active check in actions/execute/index.js so a token can only bind to a
         // contract the indexer can actually execute. A guard whose `guard` method is
         // missing/throws is fail-closed at runtime (denies the action), not here.
         if(!error && !this.util.isNull(data['CONTROLLER'])){

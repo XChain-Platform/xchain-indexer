@@ -28,12 +28,12 @@ const crypto = require('crypto');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const { buildInjectedExecContext, synthesizeTxHash, SYNTH_EXEC_TX_HASH, SYNTH_TAGS } =
-    require('../../../src/actions/execContext.js');
-const { rethrowIfInfraFault } = require('../../../src/actions/faultGuard.js');
+    require('../../../src/consensus/exec_context.js');
+const { rethrowIfInfraFault } = require('../../../src/consensus/fault_guard.js');
 
-const Attest = require('../../../src/actions/attest.js');
+const Attest = require('../../../src/actions/attest/index.js');
 const Vote   = require('../../../src/actions/vote.js');
-const Xcall  = require('../../../src/actions/xcall.js');
+const Xcall  = require('../../../src/actions/xcall/index.js');
 
 const sha256hex = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
@@ -214,7 +214,7 @@ describe('execContext (injected-execution TX_HASH seam) @regression @tier2', fun
     });
 
     describe('execute.js host-side assert', function () {
-        const Execute = require('../../../src/actions/execute.js');
+        const Execute = require('../../../src/actions/execute/index.js');
 
         function makeExecute(synthActive) {
             const indexer = createMockIndexer();

@@ -21,7 +21,7 @@
 const assert = require('assert');
 const sinon = require('sinon');
 
-const HubDbSync = require('../../src/hub_db_sync.js');
+const HubDbSync = require('../../src/hub/hub_db_sync.js');
 
 describe('HubDbSync barrier timeout self-heal (ITEM 2492) @regression @tier2', function () {
 

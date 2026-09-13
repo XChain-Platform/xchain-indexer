@@ -27,7 +27,7 @@
 const assert = require('assert');
 const sinon  = require('sinon');
 const { createMockIndexer } = require('../fixtures/mocks');
-const Execute = require('../../src/actions/execute.js');
+const Execute = require('../../src/actions/execute/index.js');
 
 describe('runControllerGuard: guard returnValue parsing (royalty payoutLegs) @regression @tier1', function () {
 

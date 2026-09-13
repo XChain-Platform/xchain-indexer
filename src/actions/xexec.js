@@ -44,12 +44,16 @@
  ********************************************************************/
 
 const crypto  = require('crypto');
-const ed25519 = require('../ed25519.js');
+const ed25519 = require('../consensus/ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
 const ah      = require('../mirror_admission_activation.js');
-const { XCALL_MAX_HOPS } = require('./xcall.js');
-const { rethrowIfInfraFault } = require('./faultGuard.js');
+// Read from the vendored protocol constants, not re-exported through
+// actions/xcall: an action that requires another action makes the two
+// load-order dependent, and the hop ceiling is protocol data rather than
+// xcall's to own.
+const XCALL_MAX_HOPS = require('../protocol/constants.js').XCALL_MAX_HOPS;
+const { rethrowIfInfraFault } = require('../consensus/fault_guard.js');
 
 // Return payloads are mirrored to every indexer AND ANCHOR-archived on DOGE,
 // so they are hard-capped. Oversize yields status 'payload_too_large' with an

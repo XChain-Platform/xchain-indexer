@@ -17,6 +17,13 @@
 # machinery (the explorer's copies land under src/sql/hub-mirror/ so they are
 # obviously not the explorer's own tables).
 #
+# The vendored copies MIRROR THE CANONICAL DIRECTORY DEPTH, which is why there
+# are two client sets below. hub_db_sync.js lives at src/hub/ and reaches its
+# dependency-free modules with ../, so a consumer that flattened it into src/
+# would resolve those requires one directory above its own src/ and fail at
+# boot. HUB_FILES therefore land in <service>/src/hub/ and DEP_FILES, which the
+# client reaches with ../, land in <service>/src/.
+#
 # Usage:
 #   sync-hub-mirror-client.sh           Copy canonical -> every consumer (overwrites vendored copies).
 #   sync-hub-mirror-client.sh --check   Verify every vendored copy is byte-identical; exit 1 on drift.
@@ -29,7 +36,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="$HERE/../src"
 ROOT="$(cd "$HERE/../.." && pwd)"
 
-CLIENT_FILES="hub_db_sync.js hub-schema-version.js price_batching_floor_activation.js"
+HUB_FILES="hub_db_sync.js hub-schema-version.js"
+DEP_FILES="price_batching_floor_activation.js mirror_admission_activation.js"
 SQL_FILES="price_snapshots.sql oracle_prices.sql cross_chain_matches.sql cross_chain_calls.sql capability_snapshots.sql state_checkpoints.sql anchor_reward_attestations.sql attestation_responses.sql bridge_transfers.sql policy_snapshots.sql"
 SERVICES="xchain-explorer"
 
@@ -39,8 +47,20 @@ CHECK=0
 drift=0
 for svc in $SERVICES; do
     dest="$ROOT/$svc/src"
+    hubdest="$dest/hub"
     sqldest="$dest/sql/hub-mirror"
-    for f in $CLIENT_FILES; do
+    for f in $HUB_FILES; do
+        if [ "$CHECK" -eq 1 ]; then
+            if ! cmp -s "$SRC/hub/$f" "$hubdest/$f"; then
+                echo "DRIFT: $svc/src/hub/$f differs from canonical xchain-indexer/src/hub/$f"
+                drift=1
+            fi
+        else
+            mkdir -p "$hubdest"
+            cp "$SRC/hub/$f" "$hubdest/$f"
+        fi
+    done
+    for f in $DEP_FILES; do
         if [ "$CHECK" -eq 1 ]; then
             if ! cmp -s "$SRC/$f" "$dest/$f"; then
                 echo "DRIFT: $svc/src/$f differs from canonical xchain-indexer/src/$f"
@@ -75,7 +95,7 @@ done
 if [ "$CHECK" -eq 1 ]; then
     HUB_VERSION_FILE="$ROOT/xchain-hub/src/hub-schema-version.js"
     if [ -f "$HUB_VERSION_FILE" ]; then
-        indexer_ver="$(grep -oE 'HUB_SCHEMA_VERSION = [0-9]+' "$SRC/hub-schema-version.js" | grep -oE '[0-9]+$')"
+        indexer_ver="$(grep -oE 'HUB_SCHEMA_VERSION = [0-9]+' "$SRC/hub/hub-schema-version.js" | grep -oE '[0-9]+$')"
         hub_ver="$(grep -oE 'HUB_SCHEMA_VERSION = [0-9]+' "$HUB_VERSION_FILE" | grep -oE '[0-9]+$')"
         if [ -z "$indexer_ver" ] || [ -z "$hub_ver" ]; then
             echo "DRIFT: could not extract HUB_SCHEMA_VERSION from indexer and/or hub source; check both files by hand."

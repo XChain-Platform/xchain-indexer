@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// THE ATTEST v5/v6 BATCH WIRE (src/attest_batch_wire.js).
+// THE ATTEST v5/v6 BATCH WIRE (src/actions/attest/attest_batch_wire.js).
 //
 // The module is pure, so everything it owes can be asserted directly rather than
 // inferred from a handler's side effects: a window in, wires out, and the same
@@ -25,7 +25,7 @@ const assert = require('assert');
 const crypto = require('crypto');
 const zlib   = require('zlib');
 
-const abw = require('../../../src/attest_batch_wire.js');
+const abw = require('../../../src/actions/attest/attest_batch_wire.js');
 
 const PUBKEY_A = 'a'.repeat(64);
 const SIG_A    = '1'.repeat(128);
@@ -340,7 +340,7 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
 
         it('refuses a TOTAL_CHUNKS that cannot fit the column it is written to @regression', function () {
             // batch_total_chunks / batch_chunk_index are INT UNSIGNED (max 4294967295), and
-            // actions/attest.js stamps the parsed count straight through, so an unbounded
+            // actions/attest/index.js stamps the parsed count straight through, so an unbounded
             // count is a halt on any node running the MariaDB default sql_mode rather than
             // a refused wire.
             const win = window_(1);

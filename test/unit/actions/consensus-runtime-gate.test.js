@@ -25,7 +25,7 @@
 'use strict';
 
 const assert = require('assert');
-const { assertConsensusRuntime } = require('../../../src/actions.js');
+const { assertConsensusRuntime } = require('../../../src/actions/index.js');
 
 describe('consensus-runtime gate: fail closed on an off-pin engine @regression @tier1', function () {
 

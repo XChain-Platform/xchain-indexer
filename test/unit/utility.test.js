@@ -99,7 +99,7 @@ describe('Utility @regression @tier1', function () {
     // ─── Cross-chain call orchestration (the block loop's three deterministic passes) ──
     describe('processCrossChainCalls()', function () {
         const COIN = 'BTC', NETWORK = 'regtest';
-        const CAP = require('../../src/actions/xcall.js').XCALL_MAX_CALLS_PER_BLOCK;
+        const CAP = require('../../src/actions/xcall/index.js').XCALL_MAX_CALLS_PER_BLOCK;
         let actions, db, processAction, processResult;
 
         let resultSuppressesExpiry;

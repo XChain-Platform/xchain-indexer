@@ -13,7 +13,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert       = require('assert');
 const sinon        = require('sinon');
-const HubPushQueue = require('../../src/hub_push_queue.js');
+const HubPushQueue = require('../../src/hub/hub_push_queue.js');
 
 // ---------------------------------------------------------------------------
 // Helpers

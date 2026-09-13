@@ -32,11 +32,11 @@ const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
-const Price         = require('../../../src/actions/price.js');
-const ed25519       = require('../../../src/ed25519.js');
+const Price         = require('../../../src/actions/price/index.js');
+const ed25519       = require('../../../src/consensus/ed25519.js');
 const swq           = require('../../../src/stake_weighted_quorum.js');
 const priceSigTally = require('../../../src/price_sig_tally_activation.js');
-const comp          = require('../../../src/price_batch_compression.js');
+const comp          = require('../../../src/actions/price/price_batch_compression.js');
 
 // ---------------------------------------------------------------------------
 // Real Ed25519 identities. The 64-hex pubkey the wire carries is the raw key

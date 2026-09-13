@@ -36,7 +36,7 @@ const fs     = require('fs');
 const path   = require('path');
 
 const Database = require('../../src/db');
-const q        = require('../../src/anchor-action-query.js');
+const q        = require('../../src/actions/anchor/anchor-action-query.js');
 
 const SQL_DIR = path.join(__dirname, '..', '..', 'src', 'sql');
 

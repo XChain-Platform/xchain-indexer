@@ -18,7 +18,7 @@ const crypto = require('crypto');
 const { createMockIndexer } = require('../../fixtures/mocks');
 
 const Xexec   = require('../../../src/actions/xexec.js');
-const ed25519 = require('../../../src/ed25519.js');
+const ed25519 = require('../../../src/consensus/ed25519.js');
 const eq      = require('../../../src/equivocation_header.js');
 
 const PUBKEY_A = 'a'.repeat(64);
@@ -71,7 +71,7 @@ describe('Xexec (XEXEC) @regression @tier3', function () {
         db.rollbackToSavepoint            = sinon.stub().resolves();
 
         // The injected EXECUTE: default to a successful run that surfaces a
-        // return value + billed gas the way actions/execute.js does.
+        // return value + billed gas the way actions/execute/index.js does.
         executeStub = { parse: sinon.stub().callsFake(async (params, data) => {
             data['STATUS']           = 'valid';
             data['VM_RETURN_VALUE']  = '"hello"';

@@ -38,6 +38,17 @@
  * A file outside all four is unreferenced across the platform and is the only
  * shape this pass deletes outright.
  *
+ * THE SIBLING REACH INCLUDES THE PLATFORM TOOLING, and it has to. The map tool
+ * sweeps the `xchain-*` siblings by default and treats the surrounding tree's
+ * tooling directories as OPT-IN, because those paths belong to the tree around
+ * this checkout rather than to this repo. A deletion verdict cannot take that
+ * option: the twin-copier script alone byte-copies about thirty of this repo's
+ * src/ files outward and no CI job runs it, so a module held only from there
+ * reads deletable with the sweep off and takes the tooling down with it when
+ * deleted. This tool therefore turns the sweep ON and names the directories
+ * itself, from SIBLING_MAP_EXTRA_DIRS when the caller set it and otherwise from
+ * a probe of the tree beside this checkout (see toolingSweepDirs).
+ *
  * DYNAMIC EDGES. A static walk cannot see a require built at runtime, so every
  * such edge is declared in DYNAMIC_EDGES below with the site that builds it.
  * The walk reports how many it applied, so a new computed require that nobody
@@ -48,6 +59,9 @@
  *   node bin/reachability.js --json             the full per-file verdict
  *   node bin/reachability.js --siblings <dir>   sweep root for the sibling half
  *   node bin/reachability.js --no-siblings      repo-local reaches only, fast
+ *   SIBLING_MAP_EXTRA_DIRS=<dir>,<dir> node bin/reachability.js
+ *                                               name the tooling directories
+ *                                               instead of probing for them
  *
  ********************************************************************/
 
@@ -57,9 +71,53 @@ const fs   = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
-const { buildReferenceMap } = require('./sibling-reference-map.js');
+const { buildReferenceMap, platformToolingDirs } = require('./sibling-reference-map.js');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
+
+// The twin-copier script, by name only. Which directory of the surrounding tree
+// holds the platform's tooling is that tree's business, so the sweep finds the
+// tooling parent by looking for this script instead of carrying its path.
+const TWIN_COPIER = 'reconcile-twins.sh';
+
+// Tooling that sits at the top of the surrounding tree rather than inside the
+// tooling parent. Swept when present, skipped silently when this checkout
+// stands alone, which is every consumer outside the platform tree.
+const TOP_LEVEL_TOOLING = ['bin', 'tools'];
+
+// Subdirectories of the tooling parent that hold executables. Its other
+// subdirectories are prose (specs, reports, runbooks), and a document naming a
+// module is a mention, not a holder: sweeping them would clear a dead file.
+const TOOLING_PARENT_SUBDIRS = ['bin', 'scripts'];
+
+/**
+ * The platform tooling directories to sweep, relative to the siblings root.
+ * SIBLING_MAP_EXTRA_DIRS wins when the caller named them; otherwise they are
+ * probed for, so a verdict taken on a fresh checkout is the same verdict.
+ *
+ * @param {string} siblingsRoot the tree this checkout sits in
+ * @returns {string[]} directories, relative to that root, possibly empty
+ */
+function toolingSweepDirs(siblingsRoot) {
+    const named = platformToolingDirs();
+    if (named.length) return named;
+
+    const dirs = [];
+    const present = (rel) => fs.existsSync(path.join(siblingsRoot, rel));
+    for (const rel of TOP_LEVEL_TOOLING) if (present(rel)) dirs.push(rel);
+
+    let entries;
+    try { entries = fs.readdirSync(siblingsRoot, { withFileTypes: true }); } catch (e) { return dirs; }
+    for (const entry of entries) {
+        if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name.startsWith('xchain-')) continue;
+        if (!present(path.join(entry.name, 'bin', TWIN_COPIER))) continue;
+        for (const sub of TOOLING_PARENT_SUBDIRS) {
+            const rel = path.join(entry.name, sub);
+            if (present(rel)) dirs.push(rel);
+        }
+    }
+    return dirs;
+}
 
 /**
  * Requires this repo builds at runtime, which no static walk can follow.
@@ -279,7 +337,10 @@ function analyse(opts) {
     let siblings = { paths: {}, siblingRepos: [], distinctPathCount: 0 };
     let twins = {};
     if (opts.siblings !== false) {
-        siblings = buildReferenceMap(opts.siblingsRoot);
+        siblings = buildReferenceMap(opts.siblingsRoot, {
+            includePlatformTooling: true,
+            extraDirs: toolingSweepDirs(opts.siblingsRoot),
+        });
         twins = twinCopies(sources, opts.siblingsRoot);
     }
 
@@ -381,4 +442,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { analyse, closure, runtimeEntries, resolveRequire, DYNAMIC_EDGES };
+module.exports = { analyse, closure, runtimeEntries, resolveRequire, toolingSweepDirs, DYNAMIC_EDGES };

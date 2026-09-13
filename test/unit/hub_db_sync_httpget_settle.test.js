@@ -26,7 +26,7 @@
 
 const assert    = require('assert');
 const http      = require('http');
-const HubDbSync = require('../../src/hub_db_sync.js');
+const HubDbSync = require('../../src/hub/hub_db_sync.js');
 
 function startHub(handler){
     return new Promise((resolve) => {

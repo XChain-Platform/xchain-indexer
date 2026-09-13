@@ -33,7 +33,7 @@ const Slash = require('../../../src/actions/slash.js');
 // rather than hard-coded so these expectations track the shared constant.
 const buried = (h) => srb.buriedSnapshotBlock(h, 'regtest');
 
-// ── Ed25519 helpers matching src/ed25519.js (raw 32-byte pubkey hex, 64-byte sig hex) ──
+// ── Ed25519 helpers matching src/consensus/ed25519.js (raw 32-byte pubkey hex, 64-byte sig hex) ──
 function genKey() {
     const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
     const der = publicKey.export({ format: 'der', type: 'spki' });   // 12-byte SPKI prefix + 32-byte raw
@@ -785,7 +785,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
     // StateCheckpointEngine.canonicalCheckpoint), so a layout change in anchor.js
     // moves the fixture and this file goes red rather than agreeing with itself.
     // Called off the prototype with a bare receiver: neither builder touches `this`.
-    const Anchor = require('../../../src/actions/anchor.js');
+    const Anchor = require('../../../src/actions/anchor/index.js');
     const CP_SNAP = 100;
     function builtCheckpoint(ledgerHash) {
         // FORMAT 0 = a bundle SECTION, the only checkpoint canonical the hub still signs.

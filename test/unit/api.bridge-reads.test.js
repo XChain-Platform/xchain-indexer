@@ -42,8 +42,8 @@ const { getTestConfig } = require('../fixtures/config');
 const Utility  = require('../../src/utility');
 const Database = require('../../src/db');
 const SC  = require('../../src/stateCommitment.js');
-const M   = require('../../src/merkle.js');
-const CHK = require('../../src/bridge_checkpoint_check.js');
+const M   = require('../../src/consensus/merkle.js');
+const CHK = require('../../src/consensus/bridge_checkpoint_check.js');
 
 const API_SRC = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
 
@@ -298,7 +298,7 @@ describe('db.getBridgeEscrowProof, driven through CHK.verifyEscrowAgainstCheckpo
 
     it('state_root_version is DERIVED via state_subtree_activation.stateRootVersion, never the static merkle constant', async function(){
         const SUB = require('../../src/state_subtree_activation.js');
-        const M2  = require('../../src/merkle.js');
+        const M2  = require('../../src/consensus/merkle.js');
         const realVersion = SUB.stateRootVersion(HEIGHT, NETWORK, CHAIN);
         // The static constant and the derived value happen to agree at this fixture's
         // height (both 1); assert that fact so the next assertion's contrast is real.

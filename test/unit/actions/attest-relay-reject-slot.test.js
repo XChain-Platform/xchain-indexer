@@ -41,10 +41,10 @@ const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
-const Attest          = require('../../../src/actions/attest.js');
+const Attest          = require('../../../src/actions/attest/index.js');
 const Database        = require('../../../src/db');
 const swq             = require('../../../src/stake_weighted_quorum.js');
-const ed25519         = require('../../../src/ed25519.js');
+const ed25519         = require('../../../src/consensus/ed25519.js');
 const attestRelay     = require('../../../src/attest_relay_activation.js');
 const relayRejectSlot = require('../../../src/attest_relay_reject_slot_activation.js');
 

@@ -48,7 +48,7 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 
-const merkle = require('../../src/merkle.js');
+const merkle = require('../../src/consensus/merkle.js');
 const SUB    = require('../../src/state_subtree_activation.js');
 
 const API_SRC = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');

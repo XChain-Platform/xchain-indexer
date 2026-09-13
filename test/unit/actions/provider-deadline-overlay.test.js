@@ -16,8 +16,8 @@ const sinon  = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 const { getTestConfig } = require('../../fixtures/config');
 
-const Execute = require('../../../src/actions/execute.js');
-const Deploy  = require('../../../src/actions/deploy.js');
+const Execute = require('../../../src/actions/execute/index.js');
+const Deploy  = require('../../../src/actions/deploy/index.js');
 
 // the deadline-window map injected into the VM gateway was built from an
 // UNCONFIGURED ProviderRegistry, so it only ever carried the built-in DEFAULTS while

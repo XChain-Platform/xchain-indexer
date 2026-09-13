@@ -14,7 +14,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon = require('sinon');
 
-const HubDbSync = require('../../src/hub_db_sync.js');
+const HubDbSync = require('../../src/hub/hub_db_sync.js');
 const { ORACLE_VM_ROUND_WINDOW } = require('../../src/protocol/constants.js');
 
 // price_snapshots is the one hub-mirrored table nothing prunes: 36 coin pairs at

@@ -61,7 +61,7 @@ describe('consensus_rules_digest (indexer copy)', function () {
     });
 
     it('publishes the digest on the health payload beside the file fingerprint', function () {
-        const src = fs.readFileSync(path.resolve(__dirname, '../../src/health.js'), 'utf8');
+        const src = fs.readFileSync(path.resolve(__dirname, '../../src/api/health.js'), 'utf8');
         assert.ok(/consensus_rules_digest:\s*computeConsensusRulesDigest\(\)\.digest/.test(src),
             'health.js must publish consensus_rules_digest');
         assert.ok(/armed_map_fingerprint:/.test(src),

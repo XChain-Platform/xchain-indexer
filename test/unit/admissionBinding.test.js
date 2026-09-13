@@ -77,11 +77,11 @@ if (!HAVE_HUB && process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
 // arming has to purge and re-require all of them or the consumer keeps the old arm.
 const LOCAL_MODULES = [
     '../../src/mirror_admission_activation.js',
-    '../../src/attest_response_canonical.js',
-    '../../src/actions/xcall.js',
+    '../../src/consensus/attest_response_canonical.js',
+    '../../src/actions/xcall/index.js',
     '../../src/actions/xexec.js',
-    '../../src/actions/cross_settle.js',
-    '../../src/bridge_settle.js',
+    '../../src/actions/cross_settle/index.js',
+    '../../src/consensus/bridge_settle.js',
     '../../src/db',
     '../../src/utility.js',
     '../../src/XChainIndexer.js'
@@ -109,11 +109,11 @@ function load(activation) {
     const h = {
         activation,
         act:      require('../../src/mirror_admission_activation.js'),
-        can:      require('../../src/attest_response_canonical.js'),
-        Xcall:    require('../../src/actions/xcall.js'),
+        can:      require('../../src/consensus/attest_response_canonical.js'),
+        Xcall:    require('../../src/actions/xcall/index.js'),
         Xexec:    require('../../src/actions/xexec.js'),
-        Settle:   require('../../src/actions/cross_settle.js'),
-        BS:       require('../../src/bridge_settle.js'),
+        Settle:   require('../../src/actions/cross_settle/index.js'),
+        BS:       require('../../src/consensus/bridge_settle.js'),
         Database: require('../../src/db'),
         Utility:  require('../../src/utility.js'),
         Indexer:  require('../../src/XChainIndexer.js'),
@@ -765,7 +765,7 @@ describe('admission binding: the attest-response bind predicate', function () {
 
 describe('admission binding: the direct-hub-DB call-presence member', function () {
 
-    const { HUB_SYNC_WATERMARK_GRACE_S } = require('../../src/hub_db_sync.js');
+    const { HUB_SYNC_WATERMARK_GRACE_S } = require('../../src/hub/hub_db_sync.js');
     const GRACE = HUB_SYNC_WATERMARK_GRACE_S.call;
     const NOW_S = () => Math.floor(Date.now() / 1000);
     const FLOOR_SQL = "SELECT param_value FROM configs WHERE coin = ? AND network = ? AND module = ? AND param_name = ?";

@@ -115,7 +115,7 @@ describe('mirror-twin BIGINT signedness conformance @regression', function () {
     // decide what the mirror actually carries, so the NEXT table added to either array
     // reddens the suite instead of drifting silently.
     it('every hub_db_sync registry table is inventoried in MIRROR_TWINS', function () {
-        const source = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'hub_db_sync.js'), 'utf8');
+        const source = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'hub', 'hub_db_sync.js'), 'utf8');
         const missingDecls = [];
         const declared = [];
         for (const name of ['CROSS_CHAIN_TABLES', 'HUB_STATE_TABLES']) {
@@ -124,7 +124,7 @@ describe('mirror-twin BIGINT signedness conformance @regression', function () {
             declared.push(...tables);
         }
         assert.deepStrictEqual(missingDecls, [],
-            'could not scrape these registries out of src/hub_db_sync.js; the declaration was ' +
+            'could not scrape these registries out of src/hub/hub_db_sync.js; the declaration was ' +
             'renamed or reformatted and this guard is now inventorying nothing: ' + missingDecls.join(', '));
         declared.push(...REGISTRY_IMPLICIT);
 

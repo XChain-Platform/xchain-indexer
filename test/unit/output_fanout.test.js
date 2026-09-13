@@ -14,7 +14,7 @@
  * test/unit/output_fanout.test.js
  *
  * Unit tests for the reader-side per-output fan-out collapse
- * (src/output_fanout.js). Verifies that a data-bearing action whose
+ * (src/chain/output_fanout.js). Verifies that a data-bearing action whose
  * transaction fans out to multiple transaction_outputs rows executes
  * exactly once (one collapsed row) when FIX_OUTPUT_FANOUT is active,
  * that COINPAY/empty-data settlement rows keep their per-output fan-out,
@@ -25,7 +25,7 @@
 'use strict';
 
 const assert = require('assert');
-const { collapseOutputFanout, isPerOutputSettlementRow } = require('../../src/output_fanout.js');
+const { collapseOutputFanout, isPerOutputSettlementRow } = require('../../src/chain/output_fanout.js');
 
 // Build a decoder row as getDecoderBlockData would emit it (one per output).
 function row(tx_hash, data, vout, destination){

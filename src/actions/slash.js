@@ -79,7 +79,7 @@
  *
  ********************************************************************/
 
-const ed25519 = require('../ed25519.js');
+const ed25519 = require('../consensus/ed25519.js');
 const eq      = require('../equivocation_header.js');
 const srb     = require('../snapshot_reorg_buffer.js');
 

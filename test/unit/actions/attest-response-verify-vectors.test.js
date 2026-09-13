@@ -12,7 +12,7 @@
 // ATTEST v1 response-verification byte vectors.
 //
 // These vectors were CAPTURED by driving the real _parseResponse handler BEFORE
-// the verify block was factored out into src/attest_response_verify.js
+// the verify block was factored out into src/actions/attest/attest_response_verify.js
 // (the ATTEST response-mirror design, §4.3 row 7), and they are
 // asserted against the refactored path afterwards. That is the whole point of the
 // file: the extraction is a pure refactor, so every byte it produces must be the
@@ -51,8 +51,8 @@ const crypto = require('crypto');
 
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
-const Attest  = require('../../../src/actions/attest.js');
-const avr     = require('../../../src/attest_response_verify.js');
+const Attest  = require('../../../src/actions/attest/index.js');
+const avr     = require('../../../src/actions/attest/attest_response_verify.js');
 const swq     = require('../../../src/stake_weighted_quorum.js');
 const attestAdmission = require('../../../src/attest_admission_activation.js');
 const attestBcastFee  = require('../../../src/attest_broadcast_fee_activation.js');
@@ -60,7 +60,7 @@ const srb     = require('../../../src/snapshot_reorg_buffer.js');
 const eq      = require('../../../src/equivocation_header.js');
 // Same module instance the handler (and the extracted verifier) hold: wrapping
 // `verify` here observes the exact canonical Buffer both are handed.
-const ed25519 = require('../../../src/ed25519.js');
+const ed25519 = require('../../../src/consensus/ed25519.js');
 
 // ---------------------------------------------------------------------------
 // Deterministic Ed25519 identities from fixed 32-byte seeds.

@@ -55,7 +55,7 @@ const mariadb = require('mariadb');
 const { getTestConfig } = require('../fixtures/config');
 const Utility  = require('../../src/utility');
 const Database = require('../../src/db');
-const arKey    = require('../../src/anchor_reward_key');
+const arKey    = require('../../src/actions/anchor/anchor_reward_key');
 
 const DB_HOST = process.env.TEST_DB_HOST || '127.0.0.1';
 const DB_PORT = parseInt(process.env.TEST_DB_PORT) || 3306;

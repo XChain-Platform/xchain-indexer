@@ -29,7 +29,7 @@
 'use strict';
 
 const assert = require('assert');
-const m = require('../../src/merkle.js');
+const m = require('../../src/consensus/merkle.js');
 
 describe('merkle stakes-root + block-leaf golden vectors (#4751) @regression @tier1', function () {
 

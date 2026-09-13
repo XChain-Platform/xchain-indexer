@@ -49,7 +49,7 @@ describe('Tier 1 - processTransaction crash safety @tier1', function () {
     let Actions, indexer, actions;
 
     before(function () {
-        Actions = require('../../../src/actions.js');
+        Actions = require('../../../src/actions/index.js');
     });
 
     beforeEach(function () {

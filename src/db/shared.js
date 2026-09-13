@@ -24,7 +24,7 @@ const path    = require('path');
 const { AsyncLocalStorage } = require('async_hooks');
 // The ATTEST batch wire versions, taken from the codec rather than written as literals
 // here, so the chunk read and the parser cannot disagree about which versions are chunks.
-const abw = require('../attest_batch_wire.js');
+const abw = require('../actions/attest/attest_batch_wire.js');
 
 // Row limit on ONE publisher's chunk set for ONE ATTEST batch key, the archive rail's
 // ANCHOR_ROW_LIMIT / ARCHIVE_ANCHOR_ROW_LIMIT applied to the batch rail. Only ever

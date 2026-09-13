@@ -34,9 +34,9 @@ const sinon  = require('sinon');
 const crypto = require('crypto');
 
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
-const Attest  = require('../../../src/actions/attest.js');
-const abw     = require('../../../src/attest_batch_wire.js');
-const ed25519 = require('../../../src/ed25519.js');
+const Attest  = require('../../../src/actions/attest/index.js');
+const abw     = require('../../../src/actions/attest/attest_batch_wire.js');
+const ed25519 = require('../../../src/consensus/ed25519.js');
 
 const { ATTEST_BATCH_COMPLETION_STAMP } = Attest;
 

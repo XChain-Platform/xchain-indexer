@@ -15,7 +15,7 @@ process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const Utility = require('../../src/utility.js');
-const Actions = require('../../src/actions.js');
+const Actions = require('../../src/actions/index.js');
 
 const FEE_DEST    = 'feeDestinationAddr111111111111111';
 const PLACEHOLDER = 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';

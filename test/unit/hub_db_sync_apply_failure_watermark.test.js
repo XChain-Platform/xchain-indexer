@@ -24,7 +24,7 @@
 const assert = require('assert');
 const sinon  = require('sinon');
 
-const HubDbSync = require('../../src/hub_db_sync.js');
+const HubDbSync = require('../../src/hub/hub_db_sync.js');
 
 // A sync with no socket and no real DB. hubDb carries both query primitives so the
 // routing decision is observable; drop doQueryStrict to model the explorer's pool.

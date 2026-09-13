@@ -49,10 +49,10 @@
 
 'use strict';
 
-const EJW = require('../src/escrowJournalWriter.js');
-const ESC = require('../src/escrowLeafSubtree.js');
+const EJW = require('../src/consensus/escrowJournalWriter.js');
+const ESC = require('../src/consensus/escrowLeafSubtree.js');
 const SC  = require('../src/stateCommitment.js');
-const M   = require('../src/merkle.js');
+const M   = require('../src/consensus/merkle.js');
 
 function parseArgs(argv){
     const out = { db: null, chain: 'BTC', network: 'regtest', from: null, to: null };

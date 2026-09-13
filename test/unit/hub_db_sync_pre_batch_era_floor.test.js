@@ -37,7 +37,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 
-const HubDbSync = require('../../src/hub_db_sync.js');
+const HubDbSync = require('../../src/hub/hub_db_sync.js');
 const floorMod  = require('../../src/price_batching_floor_activation.js');
 
 // An armed rail start and two blocks either side of it. The pre-era block is a

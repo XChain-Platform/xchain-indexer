@@ -23,8 +23,8 @@ const zlib   = require('zlib');
 
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
-const Anchor  = require('../../../src/actions/anchor.js');
-const ed25519 = require('../../../src/ed25519.js');
+const Anchor  = require('../../../src/actions/anchor/index.js');
+const ed25519 = require('../../../src/consensus/ed25519.js');
 const swq     = require('../../../src/stake_weighted_quorum.js');
 const ahug    = require('../../../src/archive_head_unverified_gate_activation.js');
 const aact    = require('../../../src/anchor_activation.js');

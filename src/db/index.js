@@ -36,7 +36,7 @@ if (NODE_MAJOR < 22 || (NODE_MAJOR === 22 && NODE_MINOR < 12)) {
 const mariadb = require('mariadb');
 const fs      = require('fs');
 const path    = require('path');
-const protocolTime = require('../protocol_time');
+const protocolTime = require('../consensus/protocol_time');
 const swqCap = require('../swq_source_cap_activation');
 const listEditResolution = require('../list_edit_resolution_activation');
 const caretRefStrict = require('../caret_ref_strict_activation');
@@ -49,8 +49,8 @@ const tokenPolicyActivation = require('../token_policy_activation');
 const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS,
         ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
         ARCHIVE_ANCHOR_BY_CONTENT_SQL, selectArchiveHeadRow,
-        dedupeArchiveChunks } = require('../anchor-action-query');
-const { rethrowIfInfraFault } = require('../actions/faultGuard');
+        dedupeArchiveChunks } = require('../actions/anchor/anchor-action-query');
+const { rethrowIfInfraFault } = require('../consensus/fault_guard');
 // The frozen anchor/archive reward heights: the derive flag-day and the fleet-agreed
 // mirror-completeness watermark. Recovery-restored rewards claim their ORIGINAL derive
 // height from here, so a restored row and a live-derived one carry the same stamp.

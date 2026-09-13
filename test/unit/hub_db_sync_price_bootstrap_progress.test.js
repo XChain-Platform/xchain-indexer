@@ -14,7 +14,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon = require('sinon');
 
-const HubDbSync = require('../../src/hub_db_sync.js');
+const HubDbSync = require('../../src/hub/hub_db_sync.js');
 
 // A fresh indexer's price_snapshots drain is every round the hub has ever finalized, and
 // its cost IS the drain: one awaited INSERT round-trip per row - 411,747 rows measured on

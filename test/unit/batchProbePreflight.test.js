@@ -28,8 +28,8 @@ const assert = require('assert');
 const sinon  = require('sinon');
 
 const Utility       = require('../../src/utility.js');
-const Actions       = require('../../src/actions.js');
-const PreflightMemo = require('../../src/preflightMemo.js');
+const Actions       = require('../../src/actions/index.js');
+const PreflightMemo = require('../../src/chain/preflightMemo.js');
 const Batch         = require('../../src/actions/batch.js');
 const Dispenser     = require('../../src/actions/dispenser.js');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../fixtures/mocks');
@@ -85,7 +85,7 @@ describe('BATCH sub-command pre-flight (spec row 46) @regression @tier1', functi
             // ATTEST and XCALL are 'exempt' and VOTE is 'quotable', so the denylist alone is
             // not a wide enough net for a surface that dispatches real sub-handlers. VOTE's
             // reach is additionally gated by vote.js's IS_SYNTHETIC refusal (measured, not
-            // assumed), so its entry here is defence in depth; see the note in src/actions.js.
+            // assumed), so its entry here is defence in depth; see the note in src/actions/index.js.
             for(const a of ['ATTEST', 'VOTE', 'XCALL']){
                 assert.notStrictEqual(Actions.classifyFeeQuoteAction(a), 'denied',
                     a + ' is expected NOT to be denylisted; if that changed, this test is now vacuous');

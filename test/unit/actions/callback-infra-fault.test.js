@@ -18,7 +18,7 @@
 // driver-level errno (deadlock 1213, lock-wait 1205) - commits a block on THIS
 // validator with the callback's state effects silently missing while healthy
 // peers apply them, forking contract_hash. These tests pin the faultGuard gate
-// (src/actions/faultGuard.js) at every previously-swallowing catch:
+// (src/consensus/fault_guard.js) at every previously-swallowing catch:
 //   - xcall.js  v2 expiry callback + processResult callback
 //   - attest.js v1 response callback + v2 expiry callback + missed_count stats
 // Deterministic callback failures must STILL be swallowed (verdict stands).
@@ -31,9 +31,9 @@ const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
-const Xcall   = require('../../../src/actions/xcall.js');
-const Attest  = require('../../../src/actions/attest.js');
-const ed25519 = require('../../../src/ed25519.js');
+const Xcall   = require('../../../src/actions/xcall/index.js');
+const Attest  = require('../../../src/actions/attest/index.js');
+const ed25519 = require('../../../src/consensus/ed25519.js');
 const swq     = require('../../../src/stake_weighted_quorum.js');
 
 const PUBKEY_A = 'a'.repeat(64);

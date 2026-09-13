@@ -61,7 +61,7 @@
 
 const zlib    = require('zlib');
 const crypto  = require('crypto');
-const ed25519 = require('../src/ed25519.js');
+const ed25519 = require('../src/consensus/ed25519.js');
 const swq     = require('../src/stake_weighted_quorum.js');
 const eq      = require('../src/equivocation_header.js');
 const ccr     = require('../src/cross_chain_royalty_activation.js');
@@ -72,7 +72,7 @@ const srb     = require('../src/snapshot_reorg_buffer.js');
 const cmsh    = require('../src/capability_min_stake_history.js');
 const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
         ARCHIVE_HEAD_GATE_SQL, dedupeArchiveChunks,
-        archiveChunkCoverage } = require('../src/anchor-action-query.js');
+        archiveChunkCoverage } = require('../src/actions/anchor/anchor-action-query.js');
 // Archive-head version set, spliced rather than hand-copied: recovery must replay the
 // SAME heads the live mirror path reads, so a new publisher-bearing version added to
 // ARCHIVE_HEAD_VERSIONS cannot reach one path and silently skip the other.

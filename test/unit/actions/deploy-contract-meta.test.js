@@ -22,8 +22,8 @@ const sinon  = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 const { getTestConfig } = require('../../fixtures/config');
 
-const Deploy       = require('../../../src/actions/deploy.js');
-const contractMeta = require('../../../src/contract_meta.js');
+const Deploy       = require('../../../src/actions/deploy/index.js');
+const contractMeta = require('../../../src/actions/deploy/contract_meta.js');
 const V            = contractMeta.VERDICTS;
 
 const VALID_CODE     = 'module.exports = { run: function() { return 1; } };';

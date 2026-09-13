@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/health.test.js
  *
- * Unit tests for the health() response builder (src/health.js).
+ * Unit tests for the health() response builder (src/api/health.js).
  *
  * The health endpoint reports a growing `lag` when the indexer is not
  * advancing. A bare lag value is ambiguous: a hub-sync-barrier stall, a
@@ -26,7 +26,7 @@
 
 const assert = require('assert');
 
-const { buildHealthResponse } = require('../../src/health');
+const { buildHealthResponse } = require('../../src/api/health');
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -30,7 +30,7 @@ const fs     = require('fs');
 const path   = require('path');
 const sinon  = require('sinon');
 
-const HubDbSync = require('../../src/hub_db_sync.js');
+const HubDbSync = require('../../src/hub/hub_db_sync.js');
 
 const SQL_DIR = path.join(__dirname, '..', '..', 'src', 'sql');
 

@@ -10,7 +10,7 @@
 
 const assert = require('assert');
 const crypto = require('crypto');
-const ed = require('../../src/ed25519.js');
+const ed = require('../../src/consensus/ed25519.js');
 
 // Mint a REAL Ed25519 keypair and expose the 32-byte raw pubkey as hex,
 // exactly as xchain-hub/src/ValidatorIdentity.js does. These tests exercise

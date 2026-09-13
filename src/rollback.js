@@ -25,9 +25,9 @@ const pmsh      = require('./attestation/providerMinStakeHistory.js');
 // The rules-aware capability filter the live attest.js path applies. The reorg
 // recompute must subtract the SAME keys or it charges missed_count to validators
 // the live expiry never held responsible.
-const rgf       = require('./rollcall_gates_filter.js');
+const rgf       = require('./actions/attest/rollcall_gates_filter.js');
 const ProviderRegistry = require('./attestation/providerRegistry.js');
-const lifecycle = require('./tableLifecycle.js');
+const lifecycle = require('./hub/tableLifecycle.js');
 // For the market-pair sentinel only. db.js requires nothing from here, so this is
 // a one-way edge; the pair key has to be the same one Database.getMarkets builds or
 // the two collectors disagree about which markets a reorg must recompute.
@@ -38,7 +38,7 @@ const { archiveAuthorScopeJoin } = require('./archive_rollback_author_scope_acti
 // Wire versions only, for the ATTEST batch-link retraction below: the head and the
 // continuation are what make an `attests` row part of a batch, and naming them from the
 // wire module keeps the reorg query and the parser reading the same two numbers.
-const abw       = require('./attest_batch_wire.js');
+const abw       = require('./actions/attest/attest_batch_wire.js');
 // Byte-identical copy of actions/attest.js's ATTEST_BATCH_COMPLETION_STAMP, the marker a
 // completing v6 continuation appends to the verdict it stamps on a surviving v5 head. The
 // reorg reset below restores ONLY marked stamps; the constant is duplicated rather than
@@ -101,7 +101,7 @@ class Rollback {
         // is the only reading a re-derivation can make without inventing a height.
 
         // Generic rollback table lists, generated from the table-lifecycle
-        // registry (src/tableLifecycle.js): dataTables are deleted by
+        // registry (src/hub/tableLifecycle.js): dataTables are deleted by
         // action_index, blockTables by block_index, indexTables are the two
         // wire-^<id> consensus lookups deleted by their own block_index. Per-
         // table rationale (why a table is generic vs recomputed vs bespoke vs

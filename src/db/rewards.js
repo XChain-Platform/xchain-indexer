@@ -22,7 +22,7 @@
 const path    = require('path');
 // The validator_rewards ledger-key qualifier rule, shared with the two JS writers so the
 // SQL predicate here and they cannot disagree about which reward type is qualified.
-const arKey = require('../anchor_reward_key.js');
+const arKey = require('../actions/anchor/anchor_reward_key.js');
 // The frozen anchor/archive reward heights: the derive flag-day and the fleet-agreed
 // mirror-completeness watermark. Recovery-restored rewards claim their ORIGINAL derive
 // height from here, so a restored row and a live-derived one carry the same stamp.

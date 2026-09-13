@@ -25,7 +25,7 @@ const sinon = require('sinon');
 const ws = require('ws');
 const WebSocketServer = ws.WebSocketServer || ws.Server;
 
-const HubDbSync = require('../../src/hub_db_sync.js');
+const HubDbSync = require('../../src/hub/hub_db_sync.js');
 
 // Shared poll-until / fixed-settle helpers. waitUntil() is for a case that
 // asserts an event DID happen; a case asserting an event did NOT happen has

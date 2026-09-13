@@ -19,16 +19,16 @@ const path   = require('path');
 
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
-const Attest  = require('../../../src/actions/attest.js');
+const Attest  = require('../../../src/actions/attest/index.js');
 const swq     = require('../../../src/stake_weighted_quorum.js');
 const attestAdmission = require('../../../src/attest_admission_activation.js');
 const attestBcastFee  = require('../../../src/attest_broadcast_fee_activation.js');
 const arm     = require('../../../src/attest_response_mirror_activation.js');
-const abw     = require('../../../src/attest_batch_wire.js');
+const abw     = require('../../../src/actions/attest/attest_batch_wire.js');
 const srb     = require('../../../src/snapshot_reorg_buffer.js');
 // Same module instance Attest holds a reference to (Node module cache); stubbing
 // `verify` here controls signature acceptance inside the handler.
-const ed25519 = require('../../../src/ed25519.js');
+const ed25519 = require('../../../src/consensus/ed25519.js');
 const wid     = require('../../../src/attest_responsible_widening_activation.js');
 
 // 64-hex pubkeys / 128-hex sigs (format-valid; verification is stubbed)

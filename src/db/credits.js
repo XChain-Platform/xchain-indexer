@@ -25,7 +25,7 @@ const ledgerPrecision = require('../ledger_amount_precision_activation');
 // the SAME key/leaf derivation and the SAME persistent, content-addressed SMT the block
 // path commits, never a rebuilt in-memory tree, so a proof this method hands out can only
 // ever match what was actually committed.
-const bridgeMerkle = require('../merkle.js');
+const bridgeMerkle = require('../consensus/merkle.js');
 const bridgeStateCommitment = require('../stateCommitment.js');
 // state_root_version is a DERIVED-per-height quantity (api.js getblockhashes is the ONLY
 // place it is MINTED), never the static merkle.STATE_ROOT_VERSION constant: a static

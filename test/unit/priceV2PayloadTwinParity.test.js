@@ -32,7 +32,7 @@
 'use strict';
 
 const assert  = require('assert');
-const ed25519 = require('../../src/ed25519.js');
+const ed25519 = require('../../src/consensus/ed25519.js');
 const eq      = require('../../src/equivocation_header.js');
 const adm     = require('../../src/mirror_admission_activation.js');
 
@@ -214,7 +214,7 @@ describe('PRICE v0 canonical: three-way twin parity', function () {
     // exactly as found. Without this the per-round map's parity is asserted only when a
     // process happens to be launched armed, which is the false green row 16 closed hub-side.
     describe('the admission era: one map per round, byte-equal across all three twins', function () {
-        const MODS = ['../../src/mirror_admission_activation.js', '../../src/ed25519.js',
+        const MODS = ['../../src/mirror_admission_activation.js', '../../src/consensus/ed25519.js',
                       '../../../xchain-hub/src/mirror_admission_activation.js',
                       '../../../xchain-hub/src/lib/admission_height.js',
                       '../../../xchain-hub/src/OracleConsensus.js',
@@ -233,7 +233,7 @@ describe('PRICE v0 canonical: three-way twin parity', function () {
             for (const p of paths) delete require.cache[p];
             process.env.XC_MIRROR_ADMISSION_ACTIVATION = '0';
             const act = require('../../src/mirror_admission_activation.js');
-            const ed  = require('../../src/ed25519.js');
+            const ed  = require('../../src/consensus/ed25519.js');
             const OC  = require('../../../xchain-hub/src/OracleConsensus.js');
             const PA  = require('../../../xchain-hub/src/PriceAggregator.js');
             const stubHub = { db: null, network: NETWORK, getPeerManager: () => ({}) };

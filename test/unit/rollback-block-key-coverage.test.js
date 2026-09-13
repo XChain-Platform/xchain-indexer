@@ -16,7 +16,7 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 
-const lifecycle = require('../../src/tableLifecycle.js');
+const lifecycle = require('../../src/hub/tableLifecycle.js');
 
 const SQL_DIR      = path.resolve(__dirname, '../../src/sql');
 const ROLLBACK_SRC = path.resolve(__dirname, '../../src/rollback.js');

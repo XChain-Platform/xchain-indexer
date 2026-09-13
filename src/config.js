@@ -45,7 +45,7 @@ const parseIntMin0 = (val, defaultVal) => {
 // that stored value, so two nodes running different windows release the same
 // escrow at different blocks and fork the ledger. Off regtest a differing
 // override is therefore IGNORED with a loud startup warning and the frozen value
-// wins, the same one-sided gating as resolveWatermarkGrace (src/hub_db_sync.js)
+// wins, the same one-sided gating as resolveWatermarkGrace (src/hub/hub_db_sync.js)
 // and resolveFeeDestination (src/coins/index.js). On regtest a SET override that
 // is not a positive integer THROWS at startup rather than being stamped as a
 // silent NaN deadline, which would compare false against every block time and
@@ -57,7 +57,7 @@ const parseIntMin0 = (val, defaultVal) => {
 // stamps the mined blocks two hours into the future, and any barrier comparing a
 // block's own timestamp against a wall-clock watermark then stalls the indexer
 // for the whole window in REAL time. The anchor-reward attestation barrier does
-// exactly that (`streamWatermark >= blockTime + grace`, src/hub_db_sync.js), and
+// exactly that (`streamWatermark >= blockTime + grace`, src/hub/hub_db_sync.js), and
 // on the 2026-09-06 release matrix it held one BTC regtest block for 2h08m50s,
 // all 119 deferrals naming that single block. A short regtest window removes the
 // need for the clock jump entirely, which is cheaper and safer than teaching

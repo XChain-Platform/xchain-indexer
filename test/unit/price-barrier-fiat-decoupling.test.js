@@ -50,7 +50,7 @@ const fs     = require('fs');
 const path   = require('path');
 
 const changes   = require('../../src/protocol_changes.js');
-const HubDbSync = require('../../src/hub_db_sync.js');
+const HubDbSync = require('../../src/hub/hub_db_sync.js');
 
 const INDEXER_SRC = fs.readFileSync(
     path.resolve(__dirname, '../../src/XChainIndexer.js'), 'utf8');

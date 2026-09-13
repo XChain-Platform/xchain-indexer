@@ -61,7 +61,7 @@
 
 'use strict';
 
-const EJW = require('../src/escrowJournalWriter.js');
+const EJW = require('../src/consensus/escrowJournalWriter.js');
 
 function parseArgs(argv){
     const out = { synthetic: null, db: null, chain: 'BTC', network: 'regtest' };

@@ -36,7 +36,7 @@ const sinon  = require('sinon');
 const { getTestConfig }       = require('../fixtures/config');
 const Utility                 = require('../../src/utility');
 const Database                = require('../../src/db');
-const { CHECKPOINT_VERSIONS } = require('../../src/anchor-action-query');
+const { CHECKPOINT_VERSIONS } = require('../../src/actions/anchor/anchor-action-query');
 
 function makeDb() {
     const config  = getTestConfig();

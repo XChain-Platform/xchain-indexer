@@ -43,7 +43,7 @@
  *
  ********************************************************************/
 
-const divergenceMetrics = require('../dispenserDivergenceMetrics.js');
+const divergenceMetrics = require('../chain/dispenserDivergenceMetrics.js');
 const dispenserFreshness = require('../dispenser_freshness_activation.js');
 const dispenserFreshnessShape = require('../dispenser_freshness_shape_activation.js');
 const dispenserCaps = require('../dispenser_caps_activation.js');
@@ -407,7 +407,7 @@ class Dispenser {
                 // there is a validator price to value its fee against, both of which a caller
                 // can act on) and skip the half that structurally cannot exist yet. The
                 // native-coin fee check gets a probe OUTPUT for the same reason
-                // (actions.js _dryRunAction); this one cannot, because ORACLE_ADDRESS may be
+                // (actions/index.js _dryRunAction); this one cannot, because ORACLE_ADDRESS may be
                 // a ^id reference that is only resolved above.
                 let feeCheck = data['FEE_PROBE']
                     ? await this.util.quoteOracleFee(data['BLOCK_TIME'], feeDispenser, this.indexerDb)

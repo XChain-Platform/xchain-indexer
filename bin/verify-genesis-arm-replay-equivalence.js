@@ -698,8 +698,8 @@ async function main() {
 
     // N3: same harness on both sides.
     for (const rel of ['test/integration/setup/indexer-launcher.js', 'test/integration/setup/db-connection.js',
-                       'test/integration/setup/equivalence.js', 'src/genesis.js', 'src/XChainIndexer.js',
-                       'src/actions.js', 'package.json']) {
+                       'test/integration/setup/equivalence.js', 'src/chain/genesis.js', 'src/XChainIndexer.js',
+                       'src/actions/index.js', 'package.json']) {
         const a = path.join(T.on, rel), b = path.join(T.old, rel);
         const same = fs.existsSync(a) && fs.existsSync(b) && sha256File(a) === sha256File(b);
         check(same, 'N3 identical in both trees: ' + rel, same ? '' : 'the two sides would run different harnesses');

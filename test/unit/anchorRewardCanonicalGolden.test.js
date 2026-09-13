@@ -18,7 +18,7 @@
  * The same signed string is built in three independent places:
  *   1. xchain-hub/src/StateAnchorPublisher.js  _attestationCanonical / _archiveAttestationCanonical
  *   2. xchain-indexer/src/actions/anchor.js    Anchor.prototype._rewardCanonical  (DOGE wire-parse side)
- *   3. xchain-indexer/src/anchor_reward_derive.js  rewardCanonical(row)           (BTC mirror re-derivation)
+ *   3. xchain-indexer/src/consensus/anchor_reward_derive.js  rewardCanonical(row)           (BTC mirror re-derivation)
  *
  * Copies 1 and 2 are byte-compared against each other and against these same
  * literals by xchain-e2e-test/test/integration/parity/anchorRewardParity.test.js.
@@ -38,7 +38,7 @@
 'use strict';
 
 const assert = require('assert');
-const derive = require('../../src/anchor_reward_derive.js');
+const derive = require('../../src/consensus/anchor_reward_derive.js');
 const ar     = require('../../src/anchor_reward_activation.js');
 const eq     = require('../../src/equivocation_header.js');
 
@@ -120,7 +120,7 @@ describe('XANCPUB reward canonical: derive copy vs the frozen wire format @regre
         // Copy 2 of 3 (actions/anchor.js) rebuilt over the same tuple. These two are the
         // pair that must agree or the BTC-side re-verification never matches the DOGE-side
         // attestation and the reward silently never derives, fleet-wide.
-        const Anchor = require('../../src/actions/anchor.js');
+        const Anchor = require('../../src/actions/anchor/index.js');
         const parseSide = Anchor.prototype._rewardCanonical.call({}, {
             FORMAT: 7, NETWORK: 'regtest', SNAPSHOT_BLOCK: 100, PUBLISHER: PUBLISHER
         });
@@ -156,7 +156,7 @@ describe('XANCPUB reward canonical: derive copy vs the frozen wire format @regre
             'archive round id must not collide with the per-chain XANCPUB round id');
     });
 
-    // Load-bearing: the mirror copy in src/anchor_reward_derive.js takes the chain
+    // Load-bearing: the mirror copy in src/consensus/anchor_reward_derive.js takes the chain
     // VERBATIM out of reward_type (`String(row.reward_type).slice('anchor_'.length)`),
     // while Anchor.prototype._rewardCanonical in src/actions/anchor.js upper-cases
     // d.CHAIN. The two produce the same signed string only for as long as every mirrored

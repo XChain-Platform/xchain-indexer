@@ -51,14 +51,29 @@ const GOLDEN       = JSON.parse(fs.readFileSync(FIXTURE_PATH, 'utf8'));
 function loadHandlerFormats() {
     const STUB = { config: {}, decoderDb: null, indexerDb: null, util: null, mapper: null };
     const out = {};
-    for (const file of fs.readdirSync(ACTIONS_DIR)) {
+    // Since M3 a handler is either <name>.js or <name>/index.js, so the entry a name
+    // resolves to has to be asked for by name: a flat .js filter alone drops the nine
+    // biggest actions out of the golden and the comparison below would read green on a
+    // roundtrip it never ran.
+    const entries = fs.readdirSync(ACTIONS_DIR, { withFileTypes: true })
+        .map(e => e.isDirectory() ? (fs.existsSync(path.join(ACTIONS_DIR, e.name, 'index.js')) ? e.name + '/index.js' : null)
+                                  : e.name)
+        .filter(Boolean);
+    for (const file of entries) {
         if (!file.endsWith('.js') || file === 'README.md') continue;
+        // index.js at the TOP of the directory is the loader, not a handler, and its
+        // constructor builds the whole dispatch table (and probes the VM package), so
+        // constructing it here would not return. Directory handlers are '<name>/index.js'
+        // and are unaffected by this skip.
+        if (file === 'index.js') continue;
         let Handler, inst;
         try { Handler = require(path.join(ACTIONS_DIR, file)); } catch (_) { continue; }
         if (typeof Handler !== 'function') continue;
         try { inst = new Handler(STUB); } catch (_) { continue; }
         if (inst && inst.formats && typeof inst.formats === 'object' && Object.keys(inst.formats).length)
-            out[file.replace(/\.js$/, '')] = inst.formats;
+            // The golden is keyed by ACTION name, so a directory handler keys on the
+            // directory, never on 'attest/index'.
+            out[file.replace(/(\/index)?\.js$/, '')] = inst.formats;
     }
     return out;
 }

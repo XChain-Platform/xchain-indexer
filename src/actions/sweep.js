@@ -287,7 +287,7 @@ class Sweep {
         // (fail-closed, per the chosen bounded-aggregate model). SOURCE pays the cumulative guard gas
         // in GAS, reserved out of `balances` as we go so the swept GAS amount below already excludes it
         // (SOURCE is never over-debited). Guard executions are iterated in byte (binary) order of the
-        // RESOLVED tick STRING - the consensus-stable key (matching actions.js's pending byte-sort and
+        // RESOLVED tick STRING - the consensus-stable key (matching actions/index.js's pending byte-sort and
         // the getBlockHashes utf8_bin tiebreak), NOT ascending tick_id. tick_id is a local
         // index_tickers AUTO_INCREMENT surrogate assigned on first reference and surviving reorgs, so
         // two nodes whose id assignment diverged post-reorg would run the guards in a different order

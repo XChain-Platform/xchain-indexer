@@ -31,8 +31,8 @@
  *
  ********************************************************************/
 
-const { rethrowIfInfraFault } = require('./faultGuard.js');
-const { buildInjectedExecContext, SYNTH_EXEC_TX_HASH, SYNTH_TAGS } = require('./execContext.js');
+const { rethrowIfInfraFault } = require('../consensus/fault_guard.js');
+const { buildInjectedExecContext, SYNTH_EXEC_TX_HASH, SYNTH_TAGS } = require('../consensus/exec_context.js');
 
 class Vote {
 

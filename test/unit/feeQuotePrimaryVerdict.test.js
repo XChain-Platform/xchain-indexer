@@ -32,7 +32,7 @@ process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const Utility = require('../../src/utility.js');
-const Actions = require('../../src/actions.js');
+const Actions = require('../../src/actions/index.js');
 
 /** The ORDER's own identity, and the MATCH's, which overwrites it in place. */
 const ORDER_INDEX = 41;

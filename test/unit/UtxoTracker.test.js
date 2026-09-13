@@ -13,7 +13,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert      = require('assert');
 const sinon       = require('sinon');
-const UtxoTracker = require('../../src/UtxoTracker.js');
+const UtxoTracker = require('../../src/chain/UtxoTracker.js');
 
 // ---------------------------------------------------------------------------
 // Helpers

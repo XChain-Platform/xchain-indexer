@@ -25,7 +25,7 @@
  * A sibling of db/shared.js: it lives under the db home and is NOT in
  * db/index.js's MIXIN_FILES, because nothing here belongs on Database.prototype.
  *
- * src/anchor-action-query.js re-exports every name below, so a caller that
+ * src/actions/anchor/anchor-action-query.js re-exports every name below, so a caller that
  * already imports from there keeps working unchanged; new call sites should read
  * them from here, where they sit beside the tables they name.
  *
@@ -279,7 +279,7 @@ const ARCHIVE_ANCHOR_BY_CONTENT_SQL =
 // The getanchorconfirmations read, its page-resumed twin, and the column list both
 // share. The design rationale for the cap, the page probe and the exclusive
 // action_index cursor lives above buildAnchorConfirmationsResponse in
-// src/anchor-action-query.js, which is the code the rules constrain; what is
+// src/actions/anchor/anchor-action-query.js, which is the code the rules constrain; what is
 // load-bearing HERE is that section_index is selected and ordered, so the
 // within-action order is deterministic rather than whatever the engine returns, and
 // so the caller can tell two anchors riding one transaction apart.

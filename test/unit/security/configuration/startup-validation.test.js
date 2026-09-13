@@ -90,10 +90,10 @@ describe('Security: connection pool timeout configuration @regression @tier4', f
 // and reproducing it for real would need a foreign node_modules on the test host.
 describe('Security: VM runtime boot refusal @regression @tier4', function () {
     const Module  = require('module');
-    const Actions = require('../../../../src/actions.js');
+    const Actions = require('../../../../src/actions/index.js');
     const { createMockIndexer } = require('../../../fixtures/mocks');
 
-    const actionsPath = require.resolve('../../../../src/actions.js');
+    const actionsPath = require.resolve('../../../../src/actions/index.js');
 
     function dlopenFailure() {
         const err = new Error(
@@ -104,7 +104,7 @@ describe('Security: VM runtime boot refusal @regression @tier4', function () {
         return err;
     }
 
-    /** Re-evaluate src/actions.js with require('xchain-vm') failing, then restore the cache. */
+    /** Re-evaluate src/actions/index.js with require('xchain-vm') failing, then restore the cache. */
     function actionsWithUnloadableVm(loadError) {
         const origLoad = Module._load;
         const saved    = require.cache[actionsPath];

@@ -220,7 +220,7 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
     const INDEXER_SRC = fs.readFileSync(
         path.resolve(__dirname, '../../src/XChainIndexer.js'), 'utf8');
     const SYNC_SRC = fs.readFileSync(
-        path.resolve(__dirname, '../../src/hub_db_sync.js'), 'utf8');
+        path.resolve(__dirname, '../../src/hub/hub_db_sync.js'), 'utf8');
 
     // Every `this.stallReason = '<name>';` in the block loop is immediately followed by
     // the matching `this.stallClearsAt = ...;`, so a non-greedy pair scan reads the

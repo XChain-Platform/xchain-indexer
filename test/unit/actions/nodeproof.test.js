@@ -22,7 +22,7 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 const NodeProof = require('../../../src/actions/nodeproof.js');
 // Same cached module NodeProof references; stubbing verify() controls which
 // verifier signatures the handler accepts toward quorum.
-const ed25519   = require('../../../src/ed25519.js');
+const ed25519   = require('../../../src/consensus/ed25519.js');
 const srb       = require('../../../src/snapshot_reorg_buffer.js');
 
 // 64-hex pubkeys / 128-hex sigs (format-valid; verification is stubbed)

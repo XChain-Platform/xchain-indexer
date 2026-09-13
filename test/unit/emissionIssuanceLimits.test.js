@@ -48,10 +48,10 @@ const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../fixtures/mocks');
 const ProtocolChanges = require('../../src/protocol_changes.js');
-const { buildInjectedExecContext } = require('../../src/actions/execContext.js');
+const { buildInjectedExecContext } = require('../../src/consensus/exec_context.js');
 
 const Issue   = require('../../src/actions/issue.js');
-const Execute = require('../../src/actions/execute.js');
+const Execute = require('../../src/actions/execute/index.js');
 
 const GATE = 'EMISSION_ISSUANCE_LIMITS';
 

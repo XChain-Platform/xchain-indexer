@@ -108,7 +108,7 @@ describe('bin/reachability.js', function () {
         const report = reach.analyse({ siblings: true, siblingsRoot: SIBLINGS_ROOT });
 
         it('clears a file another repo keeps a maintained copy of', () => {
-            const price = report.files['src/xchainPrice.js'];
+            const price = report.files['src/consensus/xchainPrice.js'];
             assert.strictEqual(price.reachableFromIndexerRuntime, false);
             assert.ok(price.twinCopies.length > 0 || price.referencedBySiblings.length > 0,
                 'a twinned module is held by the platform even with no runtime path here');
@@ -128,11 +128,13 @@ describe('bin/reachability.js', function () {
             const local = reach.analyse({ siblings: false });
             const withheld = Object.keys(local.files)
                 .filter((f) => local.files[f].unreferencedAcrossPlatform);
+            // Path order, not an arbitrary list: the verdict is keyed by sorted
+            // path, so moving a module into a feature directory moves its row.
             assert.deepStrictEqual(withheld, [
-                'src/utf8mb4Columns.js',
+                'src/chain/utf8mb4Columns.js',
+                'src/consensus/xchainPrice.js',
+                'src/consensus/xchainPriceQuery.js',
                 'src/vm_exec_lint_activation.js',
-                'src/xchainPrice.js',
-                'src/xchainPriceQuery.js',
             ], 'the four test-only modules are candidates that only the sibling sweep clears');
         });
     });
@@ -154,7 +156,7 @@ describe('bin/sibling-reference-map.js', function () {
     });
 
     it('resolves a reference written without its extension', () => {
-        assert.strictEqual(refs.resolveInRepo('src/hub_db_sync'), 'src/hub_db_sync.js');
+        assert.strictEqual(refs.resolveInRepo('src/hub/hub_db_sync'), 'src/hub/hub_db_sync.js');
         assert.strictEqual(refs.resolveInRepo('src/does_not_exist.js'), null);
     });
 

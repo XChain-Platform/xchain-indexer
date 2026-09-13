@@ -35,7 +35,7 @@
  ********************************************************************/
 
 const assert  = require('assert');
-const Execute = require('../../src/actions/execute.js');
+const Execute = require('../../src/actions/execute/index.js');
 
 // Every action that can be emitted from a VM contract : must stay in lock-step
 // with Execute.getActionHandler()'s map and the buildActionParams() switch.
@@ -57,7 +57,7 @@ const EMITTABLE_HANDLERS = {
     'LINK':      require('../../src/actions/link.js'),
     'BROADCAST': require('../../src/actions/broadcast.js'),
     'MESSAGE':   require('../../src/actions/message.js'),
-    'ATTEST':    require('../../src/actions/attest.js')
+    'ATTEST':    require('../../src/actions/attest/index.js')
 };
 
 // buildActionParams() does not touch `this`; call it directly off the prototype.
@@ -90,7 +90,7 @@ describe('Emission Params Arity (MANDATORY) @regression @tier1', function() {
             assert.strictEqual(built.length, expected,
                 action + ': buildActionParams produced ' + built.length + ' positional params but ' +
                 'handler formats[0] declares ' + expected + ' fields : emission would misalign. ' +
-                'Update Execute.buildActionParams (src/actions/execute.js) to match the handler format.');
+                'Update Execute.buildActionParams (src/actions/execute/index.js) to match the handler format.');
             // VERSION slot is always 0 (format[0] handlers).
             assert.strictEqual(built[0], 0, action + ': first positional param (VERSION) must be 0');
         });

@@ -40,17 +40,32 @@ const path   = require('path');
 const ACTIONS_DIR = path.join(__dirname, '../../src/actions');
 const STUB = { config: {}, decoderDb: null, indexerDb: null, util: null, mapper: null };
 
-// Load every action handler that declares `this.formats`, keyed by file name.
+// Load every action handler that declares `this.formats`, keyed by action name.
 function loadFormats() {
     const out = {};
-    for (const file of fs.readdirSync(ACTIONS_DIR)) {
+    // Since M3 a handler is either <name>.js or <name>/index.js, so the entry a name
+    // resolves to has to be asked for by name: a flat .js filter alone drops the nine
+    // biggest actions and every assertion below would run over a smaller set while
+    // still reading green.
+    const entries = fs.readdirSync(ACTIONS_DIR, { withFileTypes: true })
+        .map(e => e.isDirectory() ? (fs.existsSync(path.join(ACTIONS_DIR, e.name, 'index.js')) ? e.name + '/index.js' : null)
+                                  : e.name)
+        .filter(Boolean);
+    for (const file of entries) {
         if (!file.endsWith('.js') || file === 'README.md') continue;
+        // index.js at the TOP of the directory is the dispatch loader, not a handler:
+        // its constructor builds the whole table and probes the VM package, so
+        // constructing it here hangs rather than throwing. Directory handlers are
+        // '<name>/index.js' and are unaffected by this skip.
+        if (file === 'index.js') continue;
         let Handler, inst;
         try { Handler = require(path.join(ACTIONS_DIR, file)); } catch (_) { continue; }
         if (typeof Handler !== 'function') continue;
         try { inst = new Handler(STUB); } catch (_) { continue; }
         if (inst && inst.formats && typeof inst.formats === 'object' && Object.keys(inst.formats).length) {
-            out[file.replace(/\.js$/, '')] = inst.formats;
+            // Keyed by ACTION name, so a directory handler keys on the directory,
+            // never on 'attest/index'.
+            out[file.replace(/(\/index)?\.js$/, '')] = inst.formats;
         }
     }
     return out;

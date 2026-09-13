@@ -35,11 +35,11 @@
 
 'use strict';
 
-const M = require('./merkle.js');
+const M = require('./consensus/merkle.js');
 const SUB = require('./state_subtree_activation.js');
-const CST = require('./contractStateSubtree.js');
-const ESC = require('./escrowLeafSubtree.js');
-const EJW = require('./escrowJournalWriter.js');   // SOURCE ONLY: the follower replicates these rows
+const CST = require('./consensus/contractStateSubtree.js');
+const ESC = require('./consensus/escrowLeafSubtree.js');
+const EJW = require('./consensus/escrowJournalWriter.js');   // SOURCE ONLY: the follower replicates these rows
 
 const EMPTY_ROOT_HEX = M.toHex(M.EMPTY_SMT_ROOT);   // root of an empty depth-256 SMT
 const EMPTY0_HEX     = M.toHex(M.EMPTY[0]);

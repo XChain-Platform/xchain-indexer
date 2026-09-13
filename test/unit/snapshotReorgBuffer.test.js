@@ -38,7 +38,7 @@ const srb = require('../../src/snapshot_reorg_buffer.js');
 const swq = require('../../src/stake_weighted_quorum.js');
 
 const { createMockIndexer, createBaseData } = require('../fixtures/mocks');
-const Attest         = require('../../src/actions/attest.js');
+const Attest         = require('../../src/actions/attest/index.js');
 const AnchorRecovery = require('../../bin/recovery.js');
 
 const HUB_DIR = path.resolve(__dirname, '../../../xchain-hub');
@@ -167,7 +167,7 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
         const SIG    = '1'.repeat(128);
 
         beforeEach(function () {
-            ed25519 = require('../../src/ed25519.js');
+            ed25519 = require('../../src/consensus/ed25519.js');
             indexer = createMockIndexer();
             const db = indexer.indexerDb;
 
@@ -384,7 +384,7 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
     // one implementation (attest-response-mirror.md §4.3). The guard follows the code:
     // it is the comment ABOVE that height that the ledger asked to be true or gone.
     it('the response verifier no longer claims it "byte-matches the hub" for the snapshot height', function () {
-        const src = fs.readFileSync(path.join(__dirname, '../../src/attest_response_verify.js'), 'utf8');
+        const src = fs.readFileSync(path.join(__dirname, '../../src/actions/attest/attest_response_verify.js'), 'utf8');
         const declLine = src.split('\n').findIndex(l => l.includes('let declaredBlock ='));
         assert.ok(declLine > 0, 'the declared/resolved split must exist');
         // The false claim sat in the three comment lines immediately above the height.

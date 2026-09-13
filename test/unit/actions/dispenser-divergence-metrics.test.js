@@ -15,7 +15,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
-const metrics = require('../../../src/dispenserDivergenceMetrics.js');
+const metrics = require('../../../src/chain/dispenserDivergenceMetrics.js');
 const Dispenser_Close = require('../../../src/actions/dispenser_close.js');
 const Dispense = require('../../../src/actions/dispense.js');
 

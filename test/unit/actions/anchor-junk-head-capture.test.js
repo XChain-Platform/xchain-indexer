@@ -36,8 +36,8 @@ const zlib   = require('zlib');
 
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
-const Anchor  = require('../../../src/actions/anchor.js');
-const ed25519 = require('../../../src/ed25519.js');
+const Anchor  = require('../../../src/actions/anchor/index.js');
+const ed25519 = require('../../../src/consensus/ed25519.js');
 const swq     = require('../../../src/stake_weighted_quorum.js');
 const abs     = require('../../../src/archive_batch_author_activation.js');
 const aact    = require('../../../src/anchor_activation.js');
@@ -264,7 +264,7 @@ describe('ANCHOR archive batch capture by a junk head @regression @tier1', funct
     // The author-scoped chunk set is the half that decides what actually reassembles
     // (live path AND recovery share it), so pin the properties it must not lose.
     it('the author-scoped chunk query keeps every filter the canonical-head one has', function () {
-        const q = require('../../../src/anchor-action-query.js');
+        const q = require('../../../src/actions/anchor/anchor-action-query.js');
         const one = (sql) => String(sql).replace(/\s+/g, ' ').trim();
         const scoped = one(q.ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL);
         assert.match(scoped, /c\.version = 2/i);

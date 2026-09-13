@@ -9,7 +9,7 @@
  * General Public License v3.0 or later; see LICENSE.md.
  *
  **********************************************************************
- * Unit tests: genesis XCP/XDP airdrop pass (src/genesis.js).
+ * Unit tests: genesis XCP/XDP airdrop pass (src/chain/genesis.js).
  *
  * The airdrop leg credits the CP/DP native-token allocation to snapshot
  * holders pro-rata inside each configured bucket. These tests pin its
@@ -30,7 +30,7 @@ const fs     = require('fs');
 const os     = require('os');
 const path   = require('path');
 
-const Genesis = require('../../src/genesis');
+const Genesis = require('../../src/chain/genesis');
 const Utility = require('../../src/utility');
 
 const GAS_ADDR = 'mgash6jYSKAR3Q5HPpDgNX2BYr18q9N6GQ';
@@ -71,7 +71,7 @@ function build(airdrop, cfgOverride){
 
 // Recompute the combined set-hash the way an operator arming a bucket set has to:
 // `NAME:hash:amount` per bucket, newline-joined, in canonical (name byte-order) order.
-// Written independently of src/genesis.js on purpose - it is the pinned wire form, so a
+// Written independently of src/chain/genesis.js on purpose - it is the pinned wire form, so a
 // test that called the implementation could not catch the format changing under it.
 function setHash(airdrop){
     let lines = airdrop.paths

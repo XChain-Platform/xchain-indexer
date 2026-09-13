@@ -25,7 +25,7 @@
 const http    = require('http');
 const express = require('express');
 const cors    = require('cors');
-const { parseCorsOrigin } = require('../../../src/corsOrigin.js');
+const { parseCorsOrigin } = require('../../../src/api/corsOrigin.js');
 const path    = require('path');
 
 // Set package info before requiring explorer (it reads process.env.npm_package_*)

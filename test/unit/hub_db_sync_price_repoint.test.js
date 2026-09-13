@@ -14,7 +14,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon = require('sinon');
 
-const HubDbSync = require('../../src/hub_db_sync.js');
+const HubDbSync = require('../../src/hub/hub_db_sync.js');
 
 // Repointing an indexer at a different hub (another network, a rebuilt
 // database, a re-genesised testnet) purges state_checkpoints, which carries a

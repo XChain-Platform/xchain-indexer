@@ -17,10 +17,10 @@ const crypto = require('crypto');
 
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
-const Xcall   = require('../../../src/actions/xcall.js');
+const Xcall   = require('../../../src/actions/xcall/index.js');
 // Same module instance Xcall holds a reference to; stubbing `verify` here
 // controls signature acceptance inside processResult.
-const ed25519 = require('../../../src/ed25519.js');
+const ed25519 = require('../../../src/consensus/ed25519.js');
 const eq      = require('../../../src/equivocation_header.js');
 
 const PUBKEY_A = 'a'.repeat(64);

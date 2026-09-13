@@ -26,10 +26,10 @@ const { buildStateHashData, ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } =
 const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS,
         ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
         ARCHIVE_ANCHOR_BY_CONTENT_SQL, selectArchiveHeadRow,
-        dedupeArchiveChunks } = require('../anchor-action-query');
+        dedupeArchiveChunks } = require('../actions/anchor/anchor-action-query');
 // The validator_rewards ledger-key qualifier rule, shared with the two JS writers so the
 // SQL predicate here and they cannot disagree about which reward type is qualified.
-const arKey = require('../anchor_reward_key.js');
+const arKey = require('../actions/anchor/anchor_reward_key.js');
 
 module.exports = {
 

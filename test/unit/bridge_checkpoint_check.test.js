@@ -41,9 +41,9 @@
 
 const assert = require('assert');
 const sinon  = require('sinon');
-const M      = require('../../src/merkle.js');
+const M      = require('../../src/consensus/merkle.js');
 const SUB    = require('../../src/state_subtree_activation.js');
-const CHK    = require('../../src/bridge_checkpoint_check.js');
+const CHK    = require('../../src/consensus/bridge_checkpoint_check.js');
 
 const R = CHK.ESCROW_PROOF_REASON;
 

@@ -16,7 +16,7 @@ const fs     = require('fs');
 const path   = require('path');
 const sinon  = require('sinon');
 
-const HubDbSync = require('../../src/hub_db_sync.js');
+const HubDbSync = require('../../src/hub/hub_db_sync.js');
 const { stallClassOf } = require('../../src/XChainIndexer.js');
 
 // A HubDbSync with enabled === true (needs both a hub URL and a hub DB). doQuery

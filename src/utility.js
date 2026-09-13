@@ -2466,7 +2466,7 @@ class Utility {
         });
         // Required here rather than at the top of the file, the way the XCALL pass below
         // resolves its own per-block cap: the action modules are constructed from this one.
-        let cap = require('./actions/attest.js').ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK;
+        let cap = require('./actions/attest/index.js').ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK;
         return out.slice(0, cap);
     }
 
@@ -2483,7 +2483,7 @@ class Utility {
     // inert, so a synthesized-and-skipped row writes nothing.
     async processAttestationResponses(actions, db, block_index, block_time){
         let network = db.config['NETWORK'];
-        let cap     = require('./actions/attest.js').ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK;
+        let cap     = require('./actions/attest/index.js').ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK;
 
         // BOUNDED READ. The per-block cap bounds the callbacks; this bounds the two reads
         // that feed them. Both are walked one page at a time in the §4.1 order and the
@@ -2948,7 +2948,7 @@ class Utility {
     async processCrossChainCalls(actions, db, block_index, block_time){
         let coin    = db.config['COIN'];
         let network = db.config['NETWORK'];
-        let cap     = require('./actions/xcall.js').XCALL_MAX_CALLS_PER_BLOCK;
+        let cap     = require('./actions/xcall/index.js').XCALL_MAX_CALLS_PER_BLOCK;
 
         // 1. Inject executions for dispatches targeting this chain.
         // block_index keys the admission era in both call reads (db._mirrorBindClause).

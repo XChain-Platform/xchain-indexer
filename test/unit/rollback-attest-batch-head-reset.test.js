@@ -49,8 +49,8 @@ const sinon  = require('sinon');
 const { createMockIndexer } = require('../fixtures/mocks');
 const { mysqlDdlToSqlite }  = require('../helpers/sqlAnchorDb');
 const Rollback = require('../../src/rollback.js');
-const abw      = require('../../src/attest_batch_wire.js');
-const { ATTEST_BATCH_COMPLETION_STAMP } = require('../../src/actions/attest.js');
+const abw      = require('../../src/actions/attest/attest_batch_wire.js');
+const { ATTEST_BATCH_COMPLETION_STAMP } = require('../../src/actions/attest/index.js');
 
 const SQL_DIR = path.join(__dirname, '..', '..', 'src', 'sql');
 

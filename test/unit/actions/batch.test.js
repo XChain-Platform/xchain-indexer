@@ -35,7 +35,7 @@ describe('Batch @regression @tier3', function () {
                 isEnabled:  sinon.stub().resolves(true),
             },
             processAction:   sinon.stub().resolves(),
-            // Mirror the alias table actions.js defines; batch.js reads it via
+            // Mirror the alias table actions/index.js defines; batch.js reads it via
             // this.actions.actionAliases for flag-day sub-action normalization.
             actionAliases:   { TRANSFER: 'SEND', ADDR: 'ADDRESS', DROP: 'AIRDROP', CAST: 'BROADCAST', MSG: 'MESSAGE' },
         };
@@ -1877,7 +1877,7 @@ describe('Batch @regression @tier3', function () {
                 if (name === 'BATCH_COST_WEIGHTING') return weightsOn;
                 return known.includes(name);
             });
-            // The seam batch.js reads positions through. Mirrors actions.js's own map.
+            // The seam batch.js reads positions through. Mirrors actions/index.js's own map.
             const paramHandlers = {
                 ORDER:     new Order(actionsCtx),
                 SWAP:      new Swap(actionsCtx),
@@ -2289,7 +2289,7 @@ describe('Batch @regression @tier3', function () {
         // block loop, but null is also what a transient DB fault produces, and null short-
         // circuits the predicate to false: the faulted node writes 'valid' and dispatches every
         // sub-command while a healthy peer writes one collapsed invalid record. That is a
-        // validator-local verdict committed into the block, the exact class faultGuard.js is
+        // validator-local verdict committed into the block, the exact class consensus/fault_guard.js is
         // for, and the sibling ISSUE probe already avoids it by calling probeTokenInfo unwrapped.
         describe('the EXECUTE floor probe must not swallow an infrastructure fault', function () {
 

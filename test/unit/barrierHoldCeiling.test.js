@@ -21,11 +21,11 @@ const fs     = require('fs');
 const path   = require('path');
 const sinon  = require('sinon');
 
-const HubDbSync = require('../../src/hub_db_sync.js');
+const HubDbSync = require('../../src/hub/hub_db_sync.js');
 const {
     HUB_SYNC_BARRIER_HOLD_CEILING_S,
     resolveBarrierHoldCeilingMs
-} = require('../../src/hub_db_sync.js');
+} = require('../../src/hub/hub_db_sync.js');
 const XChainIndexer = require('../../src/XChainIndexer.js');
 const { nextBarrierHold, barrierHoldMs, barrierCeilingExceeded,
         isMirrorBarrierReason } = require('../../src/XChainIndexer.js');
@@ -414,7 +414,7 @@ describe('mirror-barrier hold is wired into the block loop @regression @tier1', 
 // ── Health reporting ───────────────────────────────────────────────────────────
 describe('health exposes the hold and its ceiling @regression @tier1', function () {
 
-    const HEALTH_SRC = fs.readFileSync(path.resolve(__dirname, '../../src/health.js'), 'utf8');
+    const HEALTH_SRC = fs.readFileSync(path.resolve(__dirname, '../../src/api/health.js'), 'utf8');
 
     it('reports the hold, the block it holds, the ceiling and the crossings', function () {
         for (const field of ['barrierHoldMs:', 'barrierHoldBlock:', 'barrierHoldCeilingMs:',

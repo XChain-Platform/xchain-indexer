@@ -111,7 +111,15 @@ describe('Escrow release negation parity @regression @tier1', function () {
         // in any handler fails here without needing a per-handler behavioral repro.
         const actionsDir = path.join(__dirname, '../../../src/actions');
         const offenders  = [];
-        for (const file of fs.readdirSync(actionsDir).filter(f => f.endsWith('.js'))) {
+        // Recursive since M3: the nine largest handlers are <name>/index.js with named
+        // parts beside them, so a flat read would stop scanning exactly the biggest
+        // ledger-writing handlers and this pin would silently cover less each time an
+        // action grows into a directory.
+        const handlerFiles = (dir, prefix) => fs.readdirSync(dir, { withFileTypes: true })
+            .flatMap(e => e.isDirectory()
+                ? handlerFiles(path.join(dir, e.name), prefix + e.name + '/')
+                : (e.name.endsWith('.js') ? [prefix + e.name] : []));
+        for (const file of handlerFiles(actionsDir, '')) {
             const lines = fs.readFileSync(path.join(actionsDir, file), 'utf8').split('\n');
             lines.forEach((line, i) => {
                 const code = line.split('//')[0];

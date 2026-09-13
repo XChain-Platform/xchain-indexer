@@ -68,7 +68,7 @@ const SEGLEG = `module.exports={ meta:{ name:'Segwit Leg Guard', description:'Pa
 
 // The production canonical builder (cross_settle._canonical): the injected match must be
 // signed over the EXACT bytes the settlement pass verifies, legs included.
-const Cross_Settle = require('../../../src/actions/cross_settle.js');
+const Cross_Settle = require('../../../src/actions/cross_settle/index.js');
 const settleCanon  = new Cross_Settle({ config: {}, decoderDb: null, indexerDb: null, util: null, mapper: null });
 
 function genValidator() {

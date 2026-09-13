@@ -39,7 +39,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 const { getTestConfig } = require('../../fixtures/config');
-const Execute = require('../../../src/actions/execute.js');
+const Execute = require('../../../src/actions/execute/index.js');
 const gate    = require('../../../src/slash_ledger_consolidation_activation.js');
 
 describe('Execute._processSlashEmission multi-slash ledger conservation @regression @tier1', function () {

@@ -24,11 +24,11 @@ const assert = require('assert');
 const sinon  = require('sinon');
 const crypto = require('crypto');
 
-const derive = require('../../src/anchor_reward_derive.js');
+const derive = require('../../src/consensus/anchor_reward_derive.js');
 const swq    = require('../../src/stake_weighted_quorum.js');
 const ar     = require('../../src/anchor_reward_activation.js');
 
-// Ed25519 keypair whose raw 32-byte pubkey / 64-byte sig hex match src/ed25519.js verify().
+// Ed25519 keypair whose raw 32-byte pubkey / 64-byte sig hex match src/consensus/ed25519.js verify().
 function makeKey() {
     const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
     const spki = publicKey.export({ format: 'der', type: 'spki' });
@@ -455,7 +455,7 @@ describe('anchor-reward derive set is INVARIANT under the barrier change @regres
     const MODULES = [
         '../../src/mirror_admission_activation.js',
         '../../src/anchor_reward_activation.js',
-        '../../src/anchor_reward_derive.js'
+        '../../src/consensus/anchor_reward_derive.js'
     ];
 
     beforeEach(function () { sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false); });
@@ -481,7 +481,7 @@ describe('anchor-reward derive set is INVARIANT under the barrier change @regres
         for (const p of paths) delete require.cache[p];
         process.env.XC_MIRROR_ADMISSION_ACTIVATION = '0';
         try {
-            return fn(require('../../src/anchor_reward_derive.js'),
+            return fn(require('../../src/consensus/anchor_reward_derive.js'),
                       require('../../src/anchor_reward_activation.js'));
         } finally {
             for (const [p, mod] of saved) {

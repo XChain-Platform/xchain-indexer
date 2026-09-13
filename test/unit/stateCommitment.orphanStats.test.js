@@ -27,7 +27,7 @@ process.env.INDEXER_COIN    = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
-const M      = require('../../src/merkle.js');
+const M      = require('../../src/consensus/merkle.js');
 const SC     = require('../../src/stateCommitment.js');
 
 // Drive a query(sql,args) over an in-memory node store + an explicit live-root list,

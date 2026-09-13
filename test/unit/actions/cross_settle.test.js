@@ -16,7 +16,7 @@ const crypto = require('crypto');
 const sinon = require('sinon');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
 
-const Cross_Settle = require('../../../src/actions/cross_settle.js');
+const Cross_Settle = require('../../../src/actions/cross_settle/index.js');
 const swq          = require('../../../src/stake_weighted_quorum.js');
 
 // ── Real Ed25519 keypair helpers ───────────────────────────────────────────

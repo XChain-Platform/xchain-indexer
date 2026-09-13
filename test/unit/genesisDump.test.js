@@ -9,7 +9,7 @@
  * General Public License v3.0 or later; see LICENSE.md.
  *
  **********************************************************************
- * Unit tests: genesis state-dump importer (src/genesisDump.js).
+ * Unit tests: genesis state-dump importer (src/chain/genesisDump.js).
  *
  * The importer bulk-loads an UNTRUSTED artifact and its trust is supposed to
  * reduce entirely to the pinned GENESIS_DUMP_HASH. These tests pin the security
@@ -31,7 +31,7 @@ const os     = require('os');
 const path   = require('path');
 const zlib   = require('zlib');
 
-const GenesisDump = require('../../src/genesisDump');
+const GenesisDump = require('../../src/chain/genesisDump');
 
 const util = { isNull: (v) => v === null || v === undefined || v === '' };
 

@@ -27,7 +27,7 @@
 
 const assert  = require('assert');
 const Utility = require('../../src/utility.js');
-const { deriveXchainRate, referenceRateFromUsd, toUsd } = require('../../src/xchainPrice.js');
+const { deriveXchainRate, referenceRateFromUsd, toUsd } = require('../../src/consensus/xchainPrice.js');
 
 // A fill as the caller will shape it from order_matches / dispenses: how much
 // XCHAIN moved and how much BTC was paid for it.

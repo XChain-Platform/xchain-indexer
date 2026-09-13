@@ -36,7 +36,7 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 const { getTestConfig } = require('../../fixtures/config');
 const Utility  = require('../../../src/utility');
 const Database = require('../../../src/db');
-const Anchor   = require('../../../src/actions/anchor.js');
+const Anchor   = require('../../../src/actions/anchor/index.js');
 const aact     = require('../../../src/anchor_activation.js');
 
 const HASH   = (c) => c.repeat(64);

@@ -30,7 +30,7 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 
-const INDEXER_FILE = path.join(__dirname, '..', '..', 'src', 'addressRefFields.js');
+const INDEXER_FILE = path.join(__dirname, '..', '..', 'src', 'consensus', 'addressRefFields.js');
 const SDK_FILE     = path.join(__dirname, '..', '..', '..', 'xchain-sdk', 'src', 'addressRefFields.js');
 
 describe('addressRefFields.js conformance (indexer <-> sdk) @regression', function () {

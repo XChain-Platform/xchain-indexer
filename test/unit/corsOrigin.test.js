@@ -32,7 +32,7 @@
 const assert  = require('assert')
 const express = require('express')
 const cors    = require('cors')
-const { parseCorsOrigin } = require('../../src/corsOrigin.js')
+const { parseCorsOrigin } = require('../../src/api/corsOrigin.js')
 
 // The indexer's unset default, preserved by the fix: an operator who never set
 // CORS_ORIGIN keeps the localhost grant they had before.

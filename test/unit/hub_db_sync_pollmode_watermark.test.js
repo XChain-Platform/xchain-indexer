@@ -20,7 +20,7 @@
 const assert = require('assert');
 const sinon = require('sinon');
 
-const HubDbSync = require('../../src/hub_db_sync.js');
+const HubDbSync = require('../../src/hub/hub_db_sync.js');
 
 function makeSync() {
     const doQuery = sinon.stub().resolves([{ h: 0 }]);

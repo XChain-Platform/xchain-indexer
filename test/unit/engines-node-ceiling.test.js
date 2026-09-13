@@ -14,7 +14,7 @@
 //
 // The indexer installs xchain-vm through `file:./xchain-vm`, and that package
 // carries the consensus runtime, which pins process.versions.modules to 127
-// (Node 22) alongside v8/icu/unicode/cldr. src/actions.js fails closed on
+// (Node 22) alongside v8/icu/unicode/cldr. src/actions/index.js fails closed on
 // checkConsensusRuntime(), so an indexer on Node 24 (ABI 137) starts and then
 // refuses to validate. isolated-vm 6.2.0 installs on either major from per-ABI
 // prebuilt bindings, so the dependency does not supply the bound.

@@ -15,7 +15,7 @@ process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const Utility = require('../../src/utility.js');
-const Actions = require('../../src/actions.js');
+const Actions = require('../../src/actions/index.js');
 
 const FEE_DEST = 'feeDestinationAddr111111111111111';
 
@@ -157,7 +157,7 @@ describe('_dryRunAction (shared dry-run engine)', () => {
         // Source-shape pin: these two call sites are the whole wiring.
         const fs   = require('fs');
         const path = require('path');
-        const src  = fs.readFileSync(path.resolve(__dirname, '../../src/actions.js'), 'utf8');
+        const src  = fs.readFileSync(path.resolve(__dirname, '../../src/actions/index.js'), 'utf8');
         for (const label of ['feequote', 'preflight']) {
             const at = src.indexOf(`label: '${label} ' + action`);
             assert.ok(at > 0, `the ${label} dry-run call site must exist`);

@@ -20,7 +20,7 @@
  ********************************************************************/
 
 const path    = require('path');
-const { rethrowIfInfraFault } = require('../actions/faultGuard');
+const { rethrowIfInfraFault } = require('../consensus/fault_guard');
 
 module.exports = {
 

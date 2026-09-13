@@ -22,8 +22,8 @@
 'use strict';
 
 const assert = require('assert');
-const M = require('../../src/merkle.js');
-const R = require('../../src/retention.js');
+const M = require('../../src/consensus/merkle.js');
+const R = require('../../src/chain/retention.js');
 const stateTreeMixin = require('../../src/db/state_tree.js');
 
 const EMPTY = M.toHex(M.EMPTY[256]);   // an EMPTY subtree constant (skipped by the mark)

@@ -103,9 +103,10 @@ class Coinpay {
         // Batch-cumulative settlement-value accounting (BATCH_ISSUANCE_LIMITS).
         //
         // COIN_AMOUNT is TRANSACTION-level state that the batch loop preserves across
-        // every sub-command, and nothing decrements it. So before this, each COINPAY
-        // sub-command judged the SAME untouched payment from zero: N COINPAYs in one
-        // batch settled N obligations out of ONE payment. batch.js seeds
+        // every sub-command, and nothing decrements it, so a running tally is the only
+        // thing that stops each COINPAY sub-command judging the SAME untouched payment
+        // from zero: without one, N COINPAYs in a batch settle N obligations out of ONE
+        // payment. batch.js seeds
         // data['BATCH_VALUE_LEDGER'] (only when the flag is active, and only before its
         // baseKeys snapshot so the per-command field clear preserves it); this is where
         // the settlement half of that tally is read and written.
@@ -115,20 +116,21 @@ class Coinpay {
         // pre-existing behavior byte for byte, which is what a non-BATCH transaction and a
         // pre-flag-day BATCH must still see.
         //
-        // data['FEE_PROBE'] marks the read-only dry-run surfaces. TWO capabilities used to
-        // hang off one variable here, and conflating them made a probe disagree with the
-        // chain (spec row 30):
+        // data['FEE_PROBE'] marks the read-only dry-run surfaces. TWO capabilities hang
+        // off the pair of variables below and must stay apart, because collapsing them
+        // into one makes a probe disagree with the chain (spec row 30):
         //   batchLedger - "am I inside a flagged batch", answered by the key's PRESENCE.
         //                 A probe is inside one too, so this is true for a probe.
         //   ledger      - "may I draw on the tally", answered by !FEE_PROBE. A read-only
         //                 surface must never mutate consensus state, so this is the one
         //                 capability a probe is denied.
-        // Denying a probe BOTH left it resolving no per-payee output, so it answered
-        // `destination mismatch` for every payee the collapsed row does not name: a false
-        // negative on a transaction the chain accepts, the same class the _primaryVerdict
-        // snapshot in actions.js fixes for ORDER. A probe now reads the output set and
-        // tallies ZERO, so each sub-command is quoted against the payment it will really
-        // draw on. FEE_PROBE is false for every decoded transaction (actions.js sources it
+        // Denying a probe BOTH capabilities leaves it resolving no per-payee output, so it
+        // answers `destination mismatch` for every payee the collapsed row does not name: a
+        // false negative on a transaction the chain accepts, the same class the _primaryVerdict
+        // snapshot in actions/index.js fixes for ORDER. Granting batchLedger while denying
+        // ledger lets a probe read the output set and tally ZERO, so each sub-command is quoted
+        // against the payment it will really draw on. FEE_PROBE is false for every decoded
+        // transaction (actions/index.js sources it
         // from the synthetic tx only), so nothing below this line can move a consensus value.
         let batchLedger = (data['BATCH_VALUE_LEDGER'] && typeof data['BATCH_VALUE_LEDGER'] === 'object')
                             ? data['BATCH_VALUE_LEDGER'] : null;

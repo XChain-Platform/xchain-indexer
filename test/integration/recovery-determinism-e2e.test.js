@@ -55,8 +55,8 @@ const { makeKeypair, buildBatch, rawMatch } = require('../fixtures/anchor-archiv
 const Utility        = require('../../src/utility');
 const Database       = require('../../src/db');
 const AnchorRecovery = require('../../bin/recovery.js');
-const Deploy         = require('../../src/actions/deploy.js');
-const Mapper         = require('../../src/mapper.js');
+const Deploy         = require('../../src/actions/deploy/index.js');
+const Mapper         = require('../../src/chain/mapper.js');
 const { buildStateHashData, INDEX_MAP_STATE_HASH_ACTIVATION } = require('../../src/stateHash');
 
 const DB_HOST = process.env.TEST_DB_HOST || '127.0.0.1';
@@ -154,7 +154,7 @@ function sharedVm() {
     if (vmInstance || vmLoadFailed) return vmInstance || null;
     try {
         const XChainVM = require('xchain-vm');
-        // Same subprocess executor the indexer runs in production (src/actions.js), so the
+        // Same subprocess executor the indexer runs in production (src/actions/index.js), so the
         // gates this fixture drives are the ones a real node applies.
         vmInstance = new XChainVM({
             execution:   'subprocess',

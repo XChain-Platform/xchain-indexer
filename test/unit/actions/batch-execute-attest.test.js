@@ -16,7 +16,7 @@
  * TWO-EXECUTE BATCH ATTEST regression.
  *
  * The defect: batch.js bounds BATCH/MINT/ISSUE only, so a BATCH may carry any
- * number of EXECUTE subcommands; actions.js assigns TX_VOUT once per TRANSACTION;
+ * number of EXECUTE subcommands; actions/index.js assigns TX_VOUT once per TRANSACTION;
  * and every subcommand is its own ROOT execution, seeding call-path ''. Two EXECUTE
  * subcommands against the SAME contract therefore fed the request_id preimage
  * (tx_hash, TX_VOUT, '', contract_index, 0) twice and derived the IDENTICAL
@@ -50,10 +50,10 @@ const crypto = require('crypto');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
 
 const Batch  = require('../../../src/actions/batch.js');
-const Attest = require('../../../src/actions/attest.js');
+const Attest = require('../../../src/actions/attest/index.js');
 const swq    = require('../../../src/stake_weighted_quorum.js');
 const attestAdmission = require('../../../src/attest_admission_activation.js');
-const { rootDiscriminator } = require('../../../src/batch_root_discriminator.js');
+const { rootDiscriminator } = require('../../../src/consensus/batch_root_discriminator.js');
 
 const SOURCE   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const TX_HASH  = 'a'.repeat(64);

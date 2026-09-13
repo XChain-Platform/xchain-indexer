@@ -80,7 +80,7 @@
 const path = require('path');
 
 const SRC = path.resolve(__dirname, '..', 'src');
-const M   = require(path.join(SRC, 'merkle.js'));
+const M   = require(path.join(SRC, 'consensus', 'merkle.js'));
 const SC  = require(path.join(SRC, 'stateCommitment.js'));
 const SUB = require(path.join(SRC, 'state_subtree_activation.js'));
 

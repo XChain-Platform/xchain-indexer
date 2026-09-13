@@ -25,7 +25,7 @@ const sinon  = require('sinon');
 const { createMockDb, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
 const Utility  = require('../../../src/utility.js');
 const configjs = require('../../../src/config.js');
-const XBridge  = require('../../../src/actions/xbridge.js');
+const XBridge  = require('../../../src/actions/xbridge/index.js');
 const { XCHAIN_BRIDGE_ACTIVATION } = require('../../../src/xchain_bridge_activation.js');
 
 // Regtest p2pkh version byte is 0x6f on BTC, LTC and DOGE alike, so one regtest address
@@ -89,7 +89,7 @@ function makeHandler(opts){
     return { handler: new XBridge(actionsCtx), indexerDb, config, util, mapper };
 }
 
-// One data object shaped the way actions.js hands it to a handler.
+// One data object shaped the way actions/index.js hands it to a handler.
 function makeData(format, coin, overrides){
     return createBaseData(Object.assign({
         ACTION:       'XBRIDGE',

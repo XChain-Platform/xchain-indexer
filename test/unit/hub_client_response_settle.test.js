@@ -31,8 +31,8 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert       = require('assert');
 const sinon        = require('sinon');
 const http         = require('http');
-const HubClient    = require('../../src/hub_client.js');
-const HubPushQueue = require('../../src/hub_push_queue.js');
+const HubClient    = require('../../src/hub/hub_client.js');
+const HubPushQueue = require('../../src/hub/hub_push_queue.js');
 
 // A hub stand-in that answers whatever the current test asks for.
 function startHub(handler){

@@ -16,7 +16,10 @@ const sinon  = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 const { getTestConfig } = require('../../fixtures/config');
 
-const Deploy = require('../../../src/actions/deploy.js');
+const Deploy = require('../../../src/actions/deploy/index.js');
+// The SLASH writer a constructor's emissions route through. Stubbed at the module
+// seam because DEPLOY no longer reaches into the Execute instance for it (M3 row 8).
+const slashEmission = require('../../../src/actions/execute/slash_emission.js');
 
 // Minimal valid JS contract code (base64-encoded)
 const VALID_CODE    = 'module.exports = { run: function() { return 1; } };';
@@ -162,12 +165,12 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
         });
 
         it('VM-isolate maxCodeSize is single-sourced from the shared MAX_CODE_SIZE (no drift-prone literal)', function () {
-            // The DEPLOY byte-length check and the actions.js VM-isolate limit must be the
+            // The DEPLOY byte-length check and the actions/index.js VM-isolate limit must be the
             // same value or an oversized contract passes one gate and fails the other. Guard
-            // that actions.js references the shared constant instead of a bare 65536 literal
+            // that actions/index.js references the shared constant instead of a bare 65536 literal
             // that could silently drift from Deploy.MAX_CODE_SIZE.
             const fs  = require('fs');
-            const src = fs.readFileSync(require('path').join(__dirname, '../../../src/actions.js'), 'utf8');
+            const src = fs.readFileSync(require('path').join(__dirname, '../../../src/actions/index.js'), 'utf8');
             assert.ok(/maxCodeSize:\s*deploy\.MAX_CODE_SIZE/.test(src),
                 'actions.js VM-isolate config must set maxCodeSize from deploy.MAX_CODE_SIZE');
             assert.ok(!/maxCodeSize:\s*\d/.test(src),
@@ -869,9 +872,9 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
                 }),
             });
             actionsCtx.actionExecute = {
-                processEmission:       sinon.stub().callsFake(async (emission) => { emission.resultActionIndex = 999; }),
-                _processSlashEmission: sinon.stub().resolves(),
+                processEmission: sinon.stub().callsFake(async (emission) => { emission.resultActionIndex = 999; }),
             };
+            sinon.stub(slashEmission, 'processSlashEmission').resolves();
             handler = new Deploy(actionsCtx);
             return actionsCtx;
         }
@@ -947,7 +950,10 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             const ctx = wireEmissionDeps([{ action: 'SLASH', params: { contractIndex: 10, pubkey: 'a'.repeat(64), token: 'T', amount: '1' } }]);
             const data = deployData({ FORMAT: 0, ACTION_INDEX: 10 });
             await handler.parse(['0', VALID_CODE_B64, '100000', 'init'], data, null);
-            sinon.assert.calledOnce(ctx.actionExecute._processSlashEmission);
+            sinon.assert.calledOnce(slashEmission.processSlashEmission);
+            // Called with the DEPLOY handler as the receiver: the writer reads
+            // indexerDb/util/config off it, and both handlers alias the same three.
+            assert.strictEqual(slashEmission.processSlashEmission.firstCall.thisValue, handler);
             sinon.assert.notCalled(ctx.actionExecute.processEmission);
         });
 

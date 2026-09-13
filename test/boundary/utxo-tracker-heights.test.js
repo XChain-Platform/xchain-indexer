@@ -10,7 +10,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 
-// Boundary coverage for src/UtxoTracker.js: the JSON-RPC client whose
+// Boundary coverage for src/chain/UtxoTracker.js: the JSON-RPC client whose
 // get_first_seen height feeds the DISPENSER fresh-address exception. The client
 // gates its return on `typeof height === 'number'` ONLY (no range/integer/
 // finiteness check), so these cases pin exactly where the numeric edge is drawn
@@ -28,7 +28,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert      = require('assert');
 const sinon       = require('sinon');
-const UtxoTracker = require('../../src/UtxoTracker.js');
+const UtxoTracker = require('../../src/chain/UtxoTracker.js');
 
 // Stub global.fetch with a resolved JSON-RPC envelope. `ok`/`status` default to
 // a 200 success; pass overrides to exercise the HTTP-error path.

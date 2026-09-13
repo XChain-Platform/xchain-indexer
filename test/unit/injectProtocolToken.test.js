@@ -26,7 +26,7 @@
 
 const assert = require('assert');
 
-const Genesis = require('../../src/genesis.js');
+const Genesis = require('../../src/chain/genesis.js');
 
 const ROOT_HASH   = 'GENESIS-DOGE-BRIDGE-35cbfdc6c3f97424fc32843d0f69caa9f0a5d7b873efa215';
 const CHILD_HASH  = 'GENESIS-DOGE-BRIDGE-029afbb3bb78818645894494fa46d47f073219b132184e1a';

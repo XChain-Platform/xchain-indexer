@@ -24,13 +24,13 @@
 const assert = require('assert');
 const sinon  = require('sinon');
 
-const HubDbSync = require('../../src/hub_db_sync.js');
+const HubDbSync = require('../../src/hub/hub_db_sync.js');
 const {
     HUB_SYNC_WATERMARK_STALL_S,
     HUB_SYNC_WATERMARK_STALL_EXIT_S,
     resolveWatermarkStallMs,
     watermarkStallVerdict
-} = require('../../src/hub_db_sync.js');
+} = require('../../src/hub/hub_db_sync.js');
 
 const STALL_MS = 60000;      // stage 1 window used by the wiring cases
 const EXIT_MS  = 90000;      // stage 2 window used by the wiring cases

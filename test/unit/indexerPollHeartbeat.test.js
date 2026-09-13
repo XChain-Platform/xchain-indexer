@@ -35,7 +35,7 @@ const assert = require('assert');
 const fs     = require('fs');
 
 const XChainIndexer = require('../../src/XChainIndexer.js');
-const { buildHealthResponse } = require('../../src/health');
+const { buildHealthResponse } = require('../../src/api/health');
 
 describe('XChainIndexer#isPollSilent()', function () {
 

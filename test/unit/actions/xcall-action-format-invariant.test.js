@@ -31,8 +31,8 @@ const crypto = require('crypto');
 
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
-const Xcall   = require('../../../src/actions/xcall.js');
-const ed25519 = require('../../../src/ed25519.js');
+const Xcall   = require('../../../src/actions/xcall/index.js');
+const ed25519 = require('../../../src/consensus/ed25519.js');
 
 const PUBKEY_A = 'a'.repeat(64);
 const SIG_A    = '1'.repeat(128);

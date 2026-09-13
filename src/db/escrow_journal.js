@@ -20,7 +20,7 @@
  * INSERT. Installed onto Database.prototype by db/index.js, so call sites stay
  * this.db.<method>().
  *
- * The attribution RULES stay in src/escrowJournalWriter.js, which is the frozen
+ * The attribution RULES stay in src/consensus/escrowJournalWriter.js, which is the frozen
  * part; what lives here is only the SQL each rule reads through. Every "exactly one
  * row or halt" judgement stays with the rule, because the halt message names the
  * action and the attribution that could not be made.

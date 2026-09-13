@@ -10,7 +10,7 @@
 
 const assert = require('assert');
 
-const { installIndexerMetrics } = require('../../src/indexerMetrics.js');
+const { installIndexerMetrics } = require('../../src/api/indexerMetrics.js');
 const { installObservability }  = require('../../src/observability');
 
 // Real registry from the vendored observability module, not a stub: the point of

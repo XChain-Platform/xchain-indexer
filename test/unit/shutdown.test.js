@@ -15,7 +15,7 @@
 
 const assert = require('assert');
 const sinon = require('sinon');
-const { createShutdown, createIndexerDrain, closeServer, resolveTimeoutMs, DEFAULT_SHUTDOWN_TIMEOUT_MS } = require('../../src/shutdown');
+const { createShutdown, createIndexerDrain, closeServer, resolveTimeoutMs, DEFAULT_SHUTDOWN_TIMEOUT_MS } = require('../../src/api/shutdown');
 
 // Shared poll-until helper. waitUntil() is for a case that asserts an event DID
 // happen; a case asserting an event did NOT happen drives a fake clock or a

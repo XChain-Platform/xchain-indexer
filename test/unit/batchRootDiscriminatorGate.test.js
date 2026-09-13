@@ -50,7 +50,7 @@ const sinon  = require('sinon');
 const { createMockIndexer } = require('../fixtures/mocks');
 const ProtocolChanges       = require('../../src/protocol_changes.js');
 const { BATCH_ROOT_DISCRIMINATOR_GATE, rootDiscriminator, resolveRootDiscriminator } =
-    require('../../src/batch_root_discriminator.js');
+    require('../../src/consensus/batch_root_discriminator.js');
 
 const GATE = BATCH_ROOT_DISCRIMINATOR_GATE;
 

@@ -36,7 +36,7 @@ const assert = require('assert');
 const crypto = require('crypto');
 const eq     = require('../../src/equivocation_header.js');
 const swq    = require('../../src/stake_weighted_quorum.js');
-const CHK    = require('../../src/bridge_checkpoint_check.js');
+const CHK    = require('../../src/consensus/bridge_checkpoint_check.js');
 
 // THE LEGACY ARM, EXPLICITLY. Every row below is a regtest row with no admission columns,
 // which is a legacy row only while the mirror-admission activation is inert; in a process
@@ -62,9 +62,9 @@ function requireDisarmed(mod){
         else process.env.XC_MIRROR_ADMISSION_ACTIVATION = savedEnv;
     }
 }
-const BS     = requireDisarmed('../../src/bridge_settle.js');
-const PC     = require('../../src/bridge_proof_client.js');
-const M      = require('../../src/merkle.js');
+const BS     = requireDisarmed('../../src/consensus/bridge_settle.js');
+const PC     = require('../../src/consensus/bridge_proof_client.js');
+const M      = require('../../src/consensus/merkle.js');
 const SUB    = require('../../src/state_subtree_activation.js');
 const Utility = require('../../src/utility.js');
 const { XBRIDGE_MAX_PER_BLOCK } = require('../../src/protocol/constants.js');
@@ -80,7 +80,7 @@ function bindSettlementReads(db){
     return db;
 }
 
-// Ed25519 keypair whose raw 32-byte pubkey / 64-byte sig hex match src/ed25519.js verify().
+// Ed25519 keypair whose raw 32-byte pubkey / 64-byte sig hex match src/consensus/ed25519.js verify().
 function makeKey(){
     const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
     const spki = publicKey.export({ format: 'der', type: 'spki' });

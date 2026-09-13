@@ -23,7 +23,7 @@ const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../fixtures/mocks');
 
-const Attest = require('../../src/actions/attest.js');
+const Attest = require('../../src/actions/attest/index.js');
 const swq    = require('../../src/stake_weighted_quorum.js');
 const zc     = require('../../src/attest_zero_conf_activation.js');
 

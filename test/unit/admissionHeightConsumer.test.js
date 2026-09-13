@@ -35,7 +35,7 @@ const path   = require('path');
 const ARMED_MODULES = [
     '../../src/mirror_admission_activation.js',
     '../../src/anchor_reward_activation.js',
-    '../../src/hub_db_sync.js',
+    '../../src/hub/hub_db_sync.js',
     '../../src/XChainIndexer.js'
 ];
 
@@ -50,7 +50,7 @@ function armModules() {
     process.env.XC_MIRROR_ADMISSION_ACTIVATION = String(ARMED_AT);
 
     const act        = require('../../src/mirror_admission_activation.js');
-    const HubDbSync  = require('../../src/hub_db_sync.js');
+    const HubDbSync  = require('../../src/hub/hub_db_sync.js');
     const Indexer    = require('../../src/XChainIndexer.js');
 
     // Put the process back exactly as it was found. The modules captured above keep the armed
@@ -332,7 +332,7 @@ describe('mirror-admission height barriers: ARMED @regression @tier1', function 
 });
 
 describe('mirror-admission height barriers: UNARMED (today\'s rule, byte for byte) @regression @tier1', function () {
-    const HubDbSync = require('../../src/hub_db_sync.js');
+    const HubDbSync = require('../../src/hub/hub_db_sync.js');
 
     it('is INERT on every network in this train, so nothing below the cut changes', function () {
         const act = require('../../src/mirror_admission_activation.js');

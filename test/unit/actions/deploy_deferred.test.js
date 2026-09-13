@@ -22,7 +22,7 @@ const sinon  = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 const { getTestConfig } = require('../../fixtures/config');
 
-const Deploy = require('../../../src/actions/deploy.js');
+const Deploy = require('../../../src/actions/deploy/index.js');
 
 const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const CODE   = 'module.exports = { initialize: function() { return 1; } };';

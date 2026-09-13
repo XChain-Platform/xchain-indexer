@@ -16,7 +16,7 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 
-const can = require('../../src/attest_response_canonical.js');
+const can = require('../../src/consensus/attest_response_canonical.js');
 
 const BASE = {
     requestId:    'a'.repeat(64),

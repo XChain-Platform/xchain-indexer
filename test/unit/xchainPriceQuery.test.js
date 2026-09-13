@@ -31,12 +31,12 @@
 
 const assert  = require('assert');
 const Utility = require('../../src/utility.js');
-const { deriveXchainRate } = require('../../src/xchainPrice.js');
+const { deriveXchainRate } = require('../../src/consensus/xchainPrice.js');
 const {
     VENUE_DISPENSE, VENUE_DEX, XCHAIN_TICK_SQL, COIN_ID_SQL, DISPENSE_FILLS_SQL, DEX_FILLS_SQL,
     computeWindowBounds, selectCoinId, selectXchainTickId, mapDispenseRow, mapDexRow, compareFills,
     getWindowFills,
-} = require('../../src/xchainPriceQuery.js');
+} = require('../../src/consensus/xchainPriceQuery.js');
 
 // Real ids on the dumped database.
 const BTC_COIN_ID    = 1;

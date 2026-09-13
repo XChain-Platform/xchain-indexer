@@ -20,7 +20,7 @@
  ********************************************************************/
 
 const { buildStateHashData, ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../stateHash');
-const { canonicalizeHashAddress } = require('../protocolAddressRoles');
+const { canonicalizeHashAddress } = require('../consensus/protocolAddressRoles');
 const stateKeyCollation = require('../state_key_collation_activation');
 // Per-block cap on the ATTEST deadline-expiry sweep. Vendored
 // byte-identical from xchain-documentation/protocol/constants.js, same convention

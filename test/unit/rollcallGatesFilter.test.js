@@ -31,7 +31,7 @@ const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
 
-const FILTER_PATH = require.resolve('../../src/rollcall_gates_filter.js');
+const FILTER_PATH = require.resolve('../../src/actions/attest/rollcall_gates_filter.js');
 const ACTIV_PATH  = require.resolve('../../src/rollcall_gates_activation.js');
 const ENV_KEY     = 'XC_ROLLCALL_GATES_REGTEST_ACTIVATION';
 
@@ -318,14 +318,14 @@ describe('rollcall_gates_filter: the rules-aware attestation capability filter @
 // ---------------------------------------------------------------------------
 
 const { createMockIndexer, createBaseData } = require('../fixtures/mocks');
-const Attest          = require('../../src/actions/attest.js');
+const Attest          = require('../../src/actions/attest/index.js');
 const swq             = require('../../src/stake_weighted_quorum.js');
 const attestAdmission = require('../../src/attest_admission_activation.js');
 const attestBcastFee  = require('../../src/attest_broadcast_fee_activation.js');
 const arm             = require('../../src/attest_response_mirror_activation.js');
 // The SAME module object actions/attest.js closed over at require time, which is
 // what makes a sinon stub here reach inside the handler.
-const rgf             = require('../../src/rollcall_gates_filter.js');
+const rgf             = require('../../src/actions/attest/rollcall_gates_filter.js');
 
 const deriveReqId = (txHash, rootActionIndex, emitterPath, contractIndex, position) =>
     crypto.createHash('sha256')

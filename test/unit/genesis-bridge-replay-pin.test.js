@@ -24,7 +24,7 @@
 
 const assert = require('assert');
 
-const Genesis = require('../../src/genesis.js');
+const Genesis = require('../../src/chain/genesis.js');
 
 // The gas token transaction, byte for byte, as genesis wrote it before the refactor.
 const GAS_DATA = 'ISSUE|0|XCHAIN|100000000||8|XChain gas token|||||||||||||||999999999';

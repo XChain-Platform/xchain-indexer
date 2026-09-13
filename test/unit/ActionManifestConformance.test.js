@@ -39,7 +39,7 @@ function manifestSlice(flag) {
 // Built per call so no lastIndex state is ever shared between the cases below.
 function dispatchRe() { return /if\s*\(\s*action\s*==\s*'([A-Z_]+)'\s*\)\s*await\s+this\.[A-Za-z0-9_]+\.parse\s*\(/g; }
 function localIndexerSet() {
-    const src = decomment(fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'actions.js'), 'utf8'));
+    const src = decomment(fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'actions', 'index.js'), 'utf8'));
     const names = [...new Set([...src.matchAll(dispatchRe())].map(x => x[1]))];
     return names.filter(n => n !== 'UNKNOWN').sort(); // UNKNOWN is the catch-all sentinel, not an action
 }
@@ -58,23 +58,23 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
     });
 
     // #2721: the manifest's `aliases` map is expanded to canonical names before any gate
-    // (indexer ACTION_ALIASES module constant in src/actions.js, ~line 62; the constructor
+    // (indexer ACTION_ALIASES module constant in src/actions/index.js, ~line 62; the constructor
     // copies it into this.actionAliases via Object.assign, #3133/#3189). It was copied into
     // the indexer with no conformance guard: a sixth alias added on only one side decodes on
     // one and coerces to UNKNOWN on the other (the same silent-drop / ledger-fork class the
     // dispatch guard above prevents, reached through the alias door). Bind the single
     // ACTION_ALIASES source to the manifest.
     it('the indexer ACTION_ALIASES map exactly equals the manifest aliases map', function () {
-        const src = decomment(fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'actions.js'), 'utf8'));
+        const src = decomment(fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'actions', 'index.js'), 'utf8'));
         const local = {};
         const blockMatch = src.match(/const ACTION_ALIASES\s*=\s*\{([\s\S]*?)\};/);
-        assert.ok(blockMatch, 'ACTION_ALIASES object literal not found in src/actions.js');
+        assert.ok(blockMatch, 'ACTION_ALIASES object literal not found in src/actions/index.js');
         for (const m of blockMatch[1].matchAll(/'([A-Z_]+)'\s*:\s*'([A-Z_]+)'/g)) {
             local[m[1]] = m[2];
         }
         const expected = MANIFEST.aliases || {};
         assert.deepStrictEqual(local, expected,
-            'indexer actionAliases (src/actions.js) drifted from action-manifest.json aliases. ' +
+            'indexer actionAliases (src/actions/index.js) drifted from action-manifest.json aliases. ' +
             'indexer=' + JSON.stringify(local) + ' manifest=' + JSON.stringify(expected) +
             '. Edit xchain-documentation/protocol/action-manifest.json + re-vendor, or wire src/actions.js.');
     });
@@ -94,7 +94,7 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
     // table via the exported classifier, so a name added to either set (or removed from dispatch)
     // cannot drift silently. Reuses localIndexerSet() as the dispatch-scraper.
     describe('fee-quote classification conformance @regression', function () {
-        const Actions = require('../../src/actions.js');
+        const Actions = require('../../src/actions/index.js');
         const denied  = Actions.getFeeQuoteDenylist();
         const exempt  = Actions.getFeeQuoteExempt();
 
@@ -105,7 +105,7 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
         // constrained only by disjointness (b) and no-orphans (c), so a fee-bearing action added
         // to FEE_QUOTE_EXEMPT, or a new VM/compound action left out of FEE_QUOTE_DENYLIST and
         // defaulting to `quotable`, passed every check. The second re-opens the unauthenticated
-        // VM-compute-under-mutex the denylist comment (src/actions.js) exists to close.
+        // VM-compute-under-mutex the denylist comment (src/actions/index.js) exists to close.
         //
         // EXPECTED is a hand-written literal on purpose. Deriving it from
         // getFeeQuoteDenylist()/getFeeQuoteExempt() would compare the sets against themselves
@@ -141,7 +141,7 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
             const unclassified = localIndexerSet().filter(
                 a => !Object.prototype.hasOwnProperty.call(EXPECTED_FEE_QUOTE_CLASS, a));
             assert.deepStrictEqual(unclassified, [],
-                'These actions are dispatched by src/actions.js but no one decided their fee-quote class, ' +
+                'These actions are dispatched by src/actions/index.js but no one decided their fee-quote class, ' +
                 'so classifyFeeQuoteAction silently defaults them to `quotable` and the PUBLIC feequote ' +
                 'endpoint will dry-run them. If an action runs caller code in the VM it belongs in ' +
                 'FEE_QUOTE_DENYLIST; if it stages no priceable fee it belongs in FEE_QUOTE_EXEMPT. Then ' +
@@ -157,7 +157,7 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
                 'The fee-quote class of these actions changed. A quotable -> exempt move stops pricing a ' +
                 'fee the chain still charges; a denied -> quotable move hands unauthenticated callers a ' +
                 'VM dry-run under the block-loop mutex. Fix FEE_QUOTE_DENYLIST / FEE_QUOTE_EXEMPT in ' +
-                'src/actions.js, or - if the reclassification is deliberate - change this map in the same ' +
+                'src/actions/index.js, or - if the reclassification is deliberate - change this map in the same ' +
                 'commit and say why:\n' +
                 mismatches.map(m => `  ${m.action}: want ${m.want}, got ${m.got}`).join('\n'));
         });
@@ -166,7 +166,7 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
             const dispatched = new Set(localIndexerSet());
             const orphans = Object.keys(EXPECTED_FEE_QUOTE_CLASS).filter(a => !dispatched.has(a));
             assert.deepStrictEqual(orphans, [],
-                'This map classifies actions src/actions.js no longer dispatches, so the entries are dead ' +
+                'This map classifies actions src/actions/index.js no longer dispatches, so the entries are dead ' +
                 'weight that would silently re-waive (a1) if a name were ever reused: ' + JSON.stringify(orphans));
         });
 
@@ -207,7 +207,7 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
     // NEW action defaults to ALLOWED, and an action with a VM reach that nobody classified
     // re-opens the compute primitive FEE_QUOTE_DENYLIST exists to close.
     describe('BATCH probe sub-action policy conformance @regression', function () {
-        const Actions = require('../../src/actions.js');
+        const Actions = require('../../src/actions/index.js');
 
         // Hand-written, like EXPECTED_FEE_QUOTE_CLASS above and for the same reason: deriving
         // it from getFeeQuoteDenylist()/getProbeVmReachingActions() would compare the policy
@@ -238,10 +238,10 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
             const undecided = localIndexerSet().filter(
                 a => !Object.prototype.hasOwnProperty.call(EXPECTED_PROBE_FORBIDDEN, a));
             assert.deepStrictEqual(undecided, [],
-                'These actions are dispatched by src/actions.js but nobody decided whether the PUBLIC ' +
+                'These actions are dispatched by src/actions/index.js but nobody decided whether the PUBLIC ' +
                 'BATCH pre-flight may run them as a sub-command, so they default to ALLOWED. If the ' +
                 'action can reach the VM (directly, or by injecting an EXECUTE the way ATTEST/VOTE/XCALL ' +
-                'do) add it to PROBE_VM_REACHING_ACTIONS in src/actions.js. Then record the decision ' +
+                'do) add it to PROBE_VM_REACHING_ACTIONS in src/actions/index.js. Then record the decision ' +
                 'here: ' + JSON.stringify(undecided));
         });
 

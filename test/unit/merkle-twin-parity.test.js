@@ -13,7 +13,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * src/merkle.js is carried byte-identically by four repos, and nothing
+ * src/consensus/merkle.js is carried byte-identically by four repos, and nothing
  * enforced that.
  *
  * The indexer commits block_merkle_root with this module; the explorer proof
@@ -39,25 +39,40 @@ const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
 
-const CARRIERS = ['xchain-indexer', 'xchain-explorer', 'xchain-sync', 'xchain-sdk'];
+// Each carrier names its OWN src-relative path, because the M3 feature directories are
+// an xchain-indexer layout: the canonical sits under consensus/ here while the three
+// vendored copies stay flat. One shared path would silently drop the canonical out of
+// the comparison, leaving the three siblings agreeing with each other while the file
+// this repo actually commits roots with went unchecked.
+const CARRIERS = [
+    ['xchain-indexer',  'consensus/merkle.js'],
+    ['xchain-explorer', 'merkle.js'],
+    ['xchain-sync',     'merkle.js'],
+    ['xchain-sdk',      'merkle.js'],
+];
 
 function sha256File(p) {
     return crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
 }
 
-describe('src/merkle.js is byte-identical across its four carriers', function () {
+describe('src/consensus/merkle.js is byte-identical across its four carriers', function () {
 
     it('this repo carries the module at all', function () {
-        assert.strictEqual(fs.existsSync(path.resolve(__dirname, '..', '..', 'src', 'merkle.js')), true);
+        assert.strictEqual(fs.existsSync(path.resolve(__dirname, '..', '..', 'src', 'consensus', 'merkle.js')), true);
     });
 
     it('every carrier present on disk has the same bytes', function () {
         const root = path.resolve(__dirname, '..', '..', '..');
         const found = [];
-        for (const repo of CARRIERS) {
-            const p = path.join(root, repo, 'src', 'merkle.js');
-            if (fs.existsSync(p)) found.push([repo, sha256File(p)]);
+        for (const [repo, rel] of CARRIERS) {
+            const p = path.join(root, repo, 'src', rel);
+            if (fs.existsSync(p)) found.push([repo + '/src/' + rel, sha256File(p)]);
         }
+        // This repo's own copy is never optional: it is the canonical the others are
+        // vendored from, so a path that stopped resolving here has to fail rather than
+        // leave the siblings comparing against each other.
+        assert.ok(found.some(([label]) => label.startsWith('xchain-indexer/')),
+            'the canonical copy did not resolve; repoint CARRIERS at its current path');
         // Fewer than two carriers means the siblings are not checked out next to
         // this repo; the pin above still runs, so a standalone CI lane is not
         // silently toothless, it just cannot compare.
@@ -66,7 +81,7 @@ describe('src/merkle.js is byte-identical across its four carriers', function ()
         const [baseRepo, expected] = found[0];
         for (const [repo, digest] of found) {
             assert.strictEqual(digest, expected,
-                `${repo}/src/merkle.js (${digest.slice(0, 16)}) differs from ${baseRepo}/src/merkle.js (${expected.slice(0, 16)}); `
+                `${repo} (${digest.slice(0, 16)}) differs from ${baseRepo} (${expected.slice(0, 16)}); `
                 + 'merkle.js is a consensus primitive whose leaf order and preimage are position-defined, '
                 + 'so the copies must be edited in lockstep or commit and proof disagree');
         }

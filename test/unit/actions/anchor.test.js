@@ -17,10 +17,10 @@ const zlib   = require('zlib');
 
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
-const Anchor  = require('../../../src/actions/anchor.js');
+const Anchor  = require('../../../src/actions/anchor/index.js');
 // Same module instance Anchor holds a reference to (Node module cache); stubbing
 // `verify` here controls signature acceptance inside the handler.
-const ed25519 = require('../../../src/ed25519.js');
+const ed25519 = require('../../../src/consensus/ed25519.js');
 const swq     = require('../../../src/stake_weighted_quorum.js');
 const eq      = require('../../../src/equivocation_header.js');
 const arMod   = require('../../../src/anchor_reward_activation.js');
@@ -52,7 +52,7 @@ function crc32Hex(str) {
 function gz64(str) { return zlib.gzipSync(Buffer.from(str, 'utf8'), { level: 9 }).toString('base64url'); }
 
 // ANCHOR v0 params (the per-network checkpoint bundle; params[0] = VERSION, mirroring how
-// actions.js splits the wire string): header, SECTION_COUNT sections in wire order, then
+// actions/index.js splits the wire string): header, SECTION_COUNT sections in wire order, then
 // ONE publisher tail for the whole bundle. `section_count` overrides the declared count
 // independently of the sections actually emitted, so a lying header can be exercised.
 function v0Params(overrides = {}) {
@@ -518,7 +518,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
                 'the v1-below-flag-day wire-shape rejection is deleted; the flag day is not a parser rule');
         } finally { arStub.restore(); }
         assert.ok(!/before ARCHIVE_REWARD flag-day/.test(
-            require('fs').readFileSync(require('path').resolve(__dirname, '../../../src/actions/anchor.js'), 'utf8')),
+            require('fs').readFileSync(require('path').resolve(__dirname, '../../../src/actions/anchor/index.js'), 'utf8')),
             'the deleted rejection must not come back');
     });
 

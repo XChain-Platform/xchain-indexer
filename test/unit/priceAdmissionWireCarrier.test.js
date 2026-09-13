@@ -53,8 +53,8 @@ const NETWORK   = 'regtest';
 
 // Every module in this repo that closes over the activation: the parser reads the era to
 // decide whether a round has a slot, so it is armed with the twin or it never reads one.
-const ARMED_MODULES = ['../../src/mirror_admission_activation.js', '../../src/ed25519.js',
-                       '../../src/actions/price.js'];
+const ARMED_MODULES = ['../../src/mirror_admission_activation.js', '../../src/consensus/ed25519.js',
+                       '../../src/actions/price/index.js'];
 // The hub's verifier twin, so the round trip is driven across the repo boundary the wire
 // actually crosses rather than inside one repo's own idea of the bytes.
 const HUB_MODULES = [
@@ -80,8 +80,8 @@ function armTwins() {
     process.env.XC_MIRROR_ADMISSION_ACTIVATION = String(ADMIT_AT);
 
     const act     = require('../../src/mirror_admission_activation.js');
-    const ed      = require('../../src/ed25519.js');
-    const Price   = require('../../src/actions/price.js');
+    const ed      = require('../../src/consensus/ed25519.js');
+    const Price   = require('../../src/actions/price/index.js');
     const hubAgg  = hubPaths ? require('../../../xchain-hub/src/PriceAggregator.js') : null;
 
     function restore() {

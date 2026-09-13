@@ -36,7 +36,7 @@ const {
     medianTimePast,
     protocolTime,
     stampProtocolTime
-} = require('../../src/protocol_time');
+} = require('../../src/consensus/protocol_time');
 
 // Real testnet4 stamps, oldest first (149798..149809).
 const TESTNET4 = [

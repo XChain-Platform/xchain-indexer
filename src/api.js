@@ -34,22 +34,22 @@ const cors          = require('cors');
 const rateLimit     = require('express-rate-limit');
 const XChainIndexer = require('./XChainIndexer');
 const jsonRouter    = require('express-json-rpc-router');
-const { buildHealthResponse, committedView, inFlightBlockIndex } = require('./health');
-const { createShutdown, createIndexerDrain } = require('./shutdown');
-const { getStakeSourceByPubkey } = require('./stake-source');
-const anchorActionQuery = require('./anchor-action-query');
-const priceBatchQuery   = require('./price-batch-query');
-const reorgHistoryQuery = require('./reorg-history-query');
-const { stampGiveDecimals } = require('./crossChainOfferDecimals');
-const merkle        = require('./merkle');
+const { buildHealthResponse, committedView, inFlightBlockIndex } = require('./api/health');
+const { createShutdown, createIndexerDrain } = require('./api/shutdown');
+const { getStakeSourceByPubkey } = require('./api/stake-source');
+const anchorActionQuery = require('./actions/anchor/anchor-action-query');
+const priceBatchQuery   = require('./api/price-batch-query');
+const reorgHistoryQuery = require('./api/reorg-history-query');
+const { stampGiveDecimals } = require('./api/crossChainOfferDecimals');
+const merkle        = require('./consensus/merkle');
 const stateSubtree  = require('./state_subtree_activation');
 const srb           = require('./snapshot_reorg_buffer.js');      // CANONICAL_REORG_BUFFER, to reconstruct the raw request height
-const gatesFilter   = require('./rollcall_gates_filter.js');      // rules-aware attestation capability filter
+const gatesFilter   = require('./actions/attest/rollcall_gates_filter.js');      // rules-aware attestation capability filter
 const crypto        = require('crypto');
 const { installObservability } = require('./observability');   // default-off /metrics + structured log shim
-const { installIndexerMetrics } = require('./indexerMetrics');  // poll-freshness heartbeat gauge
-const { parseCorsOrigin } = require('./corsOrigin.js');
-const { installCrashHandlers } = require('./diagnosticEvents.js');
+const { installIndexerMetrics } = require('./api/indexerMetrics');  // poll-freshness heartbeat gauge
+const { parseCorsOrigin } = require('./api/corsOrigin.js');
+const { installCrashHandlers } = require('./actions/anchor/diagnosticEvents.js');
 
 // Constant-time API-key comparison. A plain `!==` short-circuits at the first
 // mismatching byte, leaking the key that guards reward-forging writes through
@@ -281,7 +281,7 @@ async function startApi(){
     // CORS_ORIGIN is comma-separated, not a single origin: handing `cors` the raw
     // string makes it echo that string verbatim to every caller, a multi-value
     // header no browser accepts, so every listed origin is blocked while the
-    // header reads as configured. See src/corsOrigin.js.
+    // header reads as configured. See src/api/corsOrigin.js.
     app.use(cors({
         origin: parseCorsOrigin(process.env.CORS_ORIGIN || 'http://localhost'),
         methods: ['POST']
@@ -2138,7 +2138,7 @@ async function startApi(){
     // SIGTERM to this process; before this handler existed the default action
     // killed the block loop wherever it stood, which meant an aborted MariaDB
     // write transaction and InnoDB crash recovery on every routine restart.
-    // The handler is bounded by its own hard-exit timer (see src/shutdown.js):
+    // The handler is bounded by its own hard-exit timer (see src/api/shutdown.js):
     // installing it removes node's default terminate, so a drain that hangs must
     // still end the process rather than linger until the supervisor's SIGKILL.
     const shutdown = createShutdown({

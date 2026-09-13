@@ -15,7 +15,7 @@
  * re-deriving the genesis ledger. These tests assert the safety property that
  * makes that sound - importing a dump yields BYTE-IDENTICAL genesis block hashes
  * to the canonical CSV injection - plus that a content-hash mismatch halts the
- * import. See src/genesisDump.js and scripts/generate-genesis-dump.js.
+ * import. See src/chain/genesisDump.js and scripts/generate-genesis-dump.js.
  */
 
 'use strict';
@@ -28,7 +28,7 @@ const { decoderQuery, indexerQuery, createDatabases, createDecoderSchema,
         resetDecoderDb, resetIndexerDb, closeAll } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
 const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
-const GenesisDump = require('../../../src/genesisDump');
+const GenesisDump = require('../../../src/chain/genesisDump');
 
 const GENESIS_BLOCK = 100;
 const BASE_TIME     = 1700000000;

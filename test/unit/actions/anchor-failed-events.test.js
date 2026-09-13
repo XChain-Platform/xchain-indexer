@@ -22,10 +22,10 @@ const assert = require('assert');
 const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
-const Anchor        = require('../../../src/actions/anchor.js');
-const ed25519       = require('../../../src/ed25519.js');
+const Anchor        = require('../../../src/actions/anchor/index.js');
+const ed25519       = require('../../../src/consensus/ed25519.js');
 const swq           = require('../../../src/stake_weighted_quorum.js');
-const diag          = require('../../../src/diagnosticEvents.js');
+const diag          = require('../../../src/actions/anchor/diagnosticEvents.js');
 const observability = require('../../../src/observability');
 
 const PUBKEY_A = 'a'.repeat(64);

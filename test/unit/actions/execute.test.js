@@ -16,7 +16,7 @@ const sinon  = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 const { getTestConfig } = require('../../fixtures/config');
 
-const Execute = require('../../../src/actions/execute.js');
+const Execute = require('../../../src/actions/execute/index.js');
 
 describe('Execute (EXECUTE) @regression @tier2', function () {
     let indexer, actionsCtx, handler;
@@ -27,7 +27,7 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
     function addExecuteStubs(db) {
         // The stored source of a contract that deployed at/after CONTRACT_META_REQUIRED
         // always carries `meta` (spec 2.1), so the fixture does too. The EXECUTE path
-        // never re-evaluates meta (the verdict lives in actions/deploy.js alone), so this
+        // never re-evaluates meta (the verdict lives in actions/deploy/index.js alone), so this
         // is fixture realism, not a behaviour this suite asserts.
         db.getContract             = sinon.stub().resolves({ contract_index: CONTRACT, code: "module.exports={meta:{name:'Execute Fixture',description:'A unit-test contract fixture.',version:'1.0.0'}}", status_id: 1 });
         db.getContractPermissions  = sinon.stub().resolves(null);   // Phase E: no manifest → unrestricted

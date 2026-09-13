@@ -36,7 +36,7 @@ const fs     = require('fs');
 const path   = require('path');
 const zlib   = require('zlib');
 
-const c = require('../../src/price_batch_compression.js');
+const c = require('../../src/actions/price/price_batch_compression.js');
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -527,7 +527,7 @@ describe('price_batch_compression: vendored-twin byte identity @regression', fun
             this.skip();
             return;
         }
-        const local = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'price_batch_compression.js'), 'utf8');
+        const local = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'actions', 'price', 'price_batch_compression.js'), 'utf8');
         assert.strictEqual(local, fs.readFileSync(twin, 'utf8'),
             'price_batch_compression.js has drifted between xchain-indexer and xchain-hub; the two would ' +
             'disagree on which compressed batches are valid, which is a fork');

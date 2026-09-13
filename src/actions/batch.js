@@ -25,14 +25,14 @@
  * 
  ********************************************************************/
 
-// Leaf module (requires nothing of its own), so no cycle with the actions.js note below.
-const { rethrowIfInfraFault } = require('./faultGuard.js');
+// Leaf module (requires nothing of its own), so no cycle with the actions/index.js note below.
+const { rethrowIfInfraFault } = require('../consensus/fault_guard.js');
 
 
-// Resolved at CALL time, never at module load: actions.js requires this file while it is
+// Resolved at CALL time, never at module load: actions/index.js requires this file while it is
 // still being evaluated, so a top-level require here would bind an empty exports object.
 function probeForbiddenSubAction(action){
-    return require('../actions.js').isBatchProbeForbiddenSubAction(action);
+    return require('./index.js').isBatchProbeForbiddenSubAction(action);
 }
 
 class Batch {
@@ -213,7 +213,7 @@ class Batch {
         // weight-30 seat already permits, whichever piece completes the group, and a
         // non-completing carrier is not over-charged for work it never does (spec D20).
         // The drift objection that first kept it over-charged does not hold up: the format is
-        // read with the SAME util.getFormatVersion(params[0]) call the dispatcher (actions.js)
+        // read with the SAME util.getFormatVersion(params[0]) call the dispatcher (actions/index.js)
         // uses to set data['FORMAT'], one shared derivation rather than a second one, and
         // DEPLOY is outside normalizeSubAction's legacy VERSION injection so params[0] is
         // always the explicit version field. The asymmetry still binds for the change itself:
@@ -242,7 +242,7 @@ class Batch {
         //    schedule constant, so it has its own table below (vmBaseFeeActions) rather than a
         //    seat here.
         //  - SEND / ISSUE / SWEEP / DEPLOY use bespoke parsing (repeating recipients,
-        //    variable-length constructor params), which is exactly why actions.js's
+        //    variable-length constructor params), which is exactly why actions/index.js's
         //    _setActionParamHandler omits them. ISSUE is priced here by its own dedicated
         //    path (nominalIssueFee), not positionally.
         this.durationFeeActions = ['ORDER', 'SWAP', 'DISPENSER'];
@@ -279,7 +279,7 @@ class Batch {
         this.childIssueKey = 'ISSUE.CHILD';
     }
 
-    // Normalize a sub-action the same way the top-level dispatcher (actions.js)
+    // Normalize a sub-action the same way the top-level dispatcher (actions/index.js)
     // does: rewrite ACTION aliases, then (when params are given) inject the
     // implied legacy VERSION 0 for BTNS-style ISSUE/MINT/SEND params so FORMAT
     // derivation sees a version field. Mutates params in place; returns the
@@ -500,7 +500,7 @@ class Batch {
     //
     // The EXPIRATION POSITION is read out of the HANDLER'S OWN format string rather than
     // hardcoded (it is index 10 for ORDER/SWAP and 13 for DISPENSER today), through the same
-    // actions.js seam - _setActionParamHandler - that already exists to say which handlers have
+    // actions/index.js seam - _setActionParamHandler - that already exists to say which handlers have
     // a fixed positional layout. A format string that gains or loses a field therefore moves
     // this pre-check with it instead of silently mispricing. If the seam is absent (a partial
     // test double, an older Actions), the answer is null: unpriceable, no collapse.
@@ -1039,7 +1039,7 @@ class Batch {
                 };
 
             // Public BATCH pre-flight collectors (spec row 46). data['FEE_PROBE'] is set ONLY
-            // on the synthetic transaction the read-only quote surfaces build (actions.js
+            // on the synthetic transaction the read-only quote surfaces build (actions/index.js
             // sources it from tx.fee_probe), so it is false for every decoded transaction and
             // nothing in this block can move a consensus value. Seeded here, above the
             // baseKeys snapshot, for the same reason the value ledger is: the per-sub-command
@@ -1096,7 +1096,7 @@ class Batch {
                 // transaction's single TX_VOUT, so the position is the only
                 // content-derived value that tells two same-contract EXECUTE
                 // subcommands apart in the ATTEST request_id / XCALL call_id
-                // preimages (src/batch_root_discriminator.js; whether it actually
+                // preimages (src/consensus/batch_root_discriminator.js; whether it actually
                 // enters a preimage is decided by that gate, not here). Set after
                 // the clear above, which drops every non-base key each iteration.
                 data['BATCH_POSITION'] = batchPosition;
@@ -1110,7 +1110,7 @@ class Batch {
                 //
                 // Placed HERE, immediately above the dispatch, on the SAME `action` variable
                 // processAction receives - after the uppercase and after normalizeSubAction's
-                // alias rewrite. A pre-scan of the wire string (actions.js
+                // alias rewrite. A pre-scan of the wire string (actions/index.js
                 // _batchProbeForbiddenSubAction) refuses the batch earlier and more cheaply,
                 // but only this one is impossible to spell around, because there is no further
                 // transformation between the check and the call.

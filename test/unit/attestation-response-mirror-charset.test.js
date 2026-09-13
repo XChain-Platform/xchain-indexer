@@ -48,7 +48,7 @@ const path   = require('path');
 const sinon  = require('sinon');
 
 const Database  = require('../../src/db');
-const HubDbSync = require('../../src/hub_db_sync.js');
+const HubDbSync = require('../../src/hub/hub_db_sync.js');
 
 const SQL_DIR = path.join(__dirname, '..', '..', 'src', 'sql');
 const MIG_DIR = path.join(SQL_DIR, 'migrations');

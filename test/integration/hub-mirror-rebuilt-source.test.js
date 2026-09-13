@@ -48,7 +48,7 @@ const sinon   = require('sinon');
 const { getTestConfig } = require('../fixtures/config');
 const Utility   = require('../../src/utility');
 const Database  = require('../../src/db');
-const HubDbSync = require('../../src/hub_db_sync.js');
+const HubDbSync = require('../../src/hub/hub_db_sync.js');
 
 const DB_HOST = process.env.TEST_DB_HOST || '127.0.0.1';
 const DB_PORT = parseInt(process.env.TEST_DB_PORT) || 3306;

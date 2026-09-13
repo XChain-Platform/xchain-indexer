@@ -42,7 +42,7 @@ const TIME      = 1756199400;
 
 const LOCAL_MODULES = [
     '../../src/mirror_admission_activation.js',
-    '../../src/ed25519.js'
+    '../../src/consensus/ed25519.js'
 ];
 const HUB_MODULES = [
     '../../../xchain-hub/src/mirror_admission_activation.js',
@@ -80,7 +80,7 @@ function armTwins() {
     for (const p of paths) delete require.cache[p];
     process.env.XC_MIRROR_ADMISSION_ACTIVATION = String(ADMIT_AT);
 
-    const ed  = require('../../src/ed25519.js');
+    const ed  = require('../../src/consensus/ed25519.js');
     const act = require('../../src/mirror_admission_activation.js');
     let hub = null;
     if (hubPaths) {

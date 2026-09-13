@@ -27,7 +27,7 @@ const sinon  = require('sinon');
 const crypto = require('crypto');
 
 const Database = require('../../../src/db');
-const abw      = require('../../../src/attest_batch_wire.js');
+const abw      = require('../../../src/actions/attest/attest_batch_wire.js');
 
 const AUTHOR  = 'nWbnkorpwGHrGQjaLo2rmyRQPPzn8CFrKQ';
 const FOREIGN = 'nUxUJZAhGwNyZDvqSHUFZ2NhVKAqZbnyDp';

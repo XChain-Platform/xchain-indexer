@@ -38,7 +38,7 @@ const fs     = require('fs');
 const path   = require('path');
 
 const Database = require('../../src/db');
-const { buildHealthResponse, committedView, inFlightBlockIndex } = require('../../src/health');
+const { buildHealthResponse, committedView, inFlightBlockIndex } = require('../../src/api/health');
 
 const COMMITTED   = 13422;   // the height a committed-only reader can answer at
 const UNCOMMITTED = 13423;   // the block inside the block loop's open transaction

@@ -41,7 +41,7 @@ const path   = require('path');
 const fs     = require('fs');
 
 const SC      = require('../../src/stateCommitment.js');
-const M       = require('../../src/merkle.js');
+const M       = require('../../src/consensus/merkle.js');
 const Utility = require('../../src/utility.js');
 
 const SRC = fs.readFileSync(path.resolve(__dirname, '../../src/stateCommitment.js'), 'utf8');

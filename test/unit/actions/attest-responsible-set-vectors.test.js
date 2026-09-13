@@ -38,7 +38,7 @@ const sinon  = require('sinon');
 const path   = require('path');
 
 const { createMockIndexer } = require('../../fixtures/mocks');
-const Attest = require('../../../src/actions/attest.js');
+const Attest = require('../../../src/actions/attest/index.js');
 
 const DOCS_DIR = process.env.XCHAIN_DOCS_DIR
     || path.join(__dirname, '..', '..', '..', '..', 'xchain-documentation');

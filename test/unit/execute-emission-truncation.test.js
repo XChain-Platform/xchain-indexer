@@ -36,7 +36,7 @@ const assert  = require('assert');
 process.env.INDEXER_COIN = process.env.INDEXER_COIN || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
-const Execute = require('../../src/actions/execute.js');
+const Execute = require('../../src/actions/execute/index.js');
 const Utility = require('../../src/utility.js');
 
 // Emittable actions that legitimately carry NO tick-denominated amount (kept explicit so the

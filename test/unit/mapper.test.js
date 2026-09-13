@@ -15,7 +15,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../fixtures/mocks');
 
-const Mapper = require('../../src/mapper.js');
+const Mapper = require('../../src/chain/mapper.js');
 
 describe('Mapper @regression @tier3', function () {
     let indexer, mapper;

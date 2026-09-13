@@ -70,7 +70,7 @@ describe('federation READ connection isolation @regression @tier1', function () 
     const bodies = extractHandlerBodies(API_SRC);
 
     // getstakesourcebypubkey delegates its whole implementation to
-    // src/stake-source.js (getStakeSourceByPubkey), which is where the apiView()
+    // src/api/stake-source.js (getStakeSourceByPubkey), which is where the apiView()
     // routing and its own runtime test live; it has no inline DB access to guard.
     const DELEGATED = new Set(['getstakesourcebypubkey']);
 

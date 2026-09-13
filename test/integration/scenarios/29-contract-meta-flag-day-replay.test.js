@@ -48,7 +48,7 @@
  * exactly one activation: this one.
  *
  * AND THE CLOCK IS MEDIAN TIME PAST. testnet resolves protocol time from MTP over
- * the previous 11 blocks (src/protocol_time.js; regtest and mainnet read the raw
+ * the previous 11 blocks (src/consensus/protocol_time.js; regtest and mainnet read the raw
  * stamp), so ONE future-stamped block arms nothing: the corpus drags the median
  * across the flag day with a short run of blocks, and the first of them carries a
  * nameless deploy that must still read `valid` precisely because its own stamp is
@@ -104,7 +104,7 @@ const T_PRE = 1789000000;
 // isEnabled, which compares the change's testnet_time against getBlockTime().
 //
 // AND THAT IS MEDIAN TIME PAST ON TESTNET, not the block's own stamp
-// (src/protocol_time.js: MTP is on for testnet, off for mainnet and regtest). A
+// (src/consensus/protocol_time.js: MTP is on for testnet, off for mainnet and regtest). A
 // single future-stamped block therefore activates NOTHING: db.getBlockTime medians
 // the timestamps of the blocks BELOW it. With the two pre-activation blocks plus
 // the three fillers below B_POST the window is [T_GAS, T_PRE, T_FILL x3], whose
@@ -122,7 +122,7 @@ const sha = s => crypto.createHash('sha256').update(s).digest('hex');
 const chainDigest = chain => sha(JSON.stringify(chain));
 
 // The frozen consensus token, written literally rather than imported from
-// src/contract_meta.js: a test that reads the string out of the code under test
+// src/actions/deploy/contract_meta.js: a test that reads the string out of the code under test
 // proves only that the code agrees with itself.
 const META_REQUIRED = 'invalid: CONTRACT_MANIFEST (meta required)';
 

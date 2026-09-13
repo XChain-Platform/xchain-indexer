@@ -35,8 +35,8 @@ const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
-const Price      = require('../../../src/actions/price.js');
-const ed25519    = require('../../../src/ed25519.js');
+const Price      = require('../../../src/actions/price/index.js');
+const ed25519    = require('../../../src/consensus/ed25519.js');
 const swq        = require('../../../src/stake_weighted_quorum.js');
 const priceScale = require('../../../src/price_scale_activation.js');
 

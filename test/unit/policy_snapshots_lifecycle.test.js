@@ -26,7 +26,7 @@
  * bridge_settlements row keyed kind='policy' goes with them, so replay re-applies the
  * snapshot from the surviving mirrored row.
  *
- * The registry ships as two byte-identical twins (xchain-indexer/src/tableLifecycle.js
+ * The registry ships as two byte-identical twins (xchain-indexer/src/hub/tableLifecycle.js
  * and xchain-sync/src/tableLifecycle.js), and rollback-coverage.test.js already locks
  * those two files byte-identical. This guard is deliberately NOT that check: it reads
  * each copy's OWN registry and pins the two fields, so a twin edit that moves both files
@@ -57,7 +57,7 @@ const REQUIRE_SIBLINGS = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
 const SYNC_REGISTRY = path.join(SYNC_ROOT, 'src', 'tableLifecycle.js');
 
 const COPIES = [
-    { side: 'xchain-indexer', file: path.resolve(__dirname, '../../src/tableLifecycle.js') },
+    { side: 'xchain-indexer', file: path.resolve(__dirname, '../../src/hub/tableLifecycle.js') },
     { side: 'xchain-sync',    file: SYNC_REGISTRY },
 ];
 
@@ -110,7 +110,7 @@ describe('policy_snapshots rollback classification @regression @tier1', function
     }
 
     it('the exemption is not vacuous: the registry does classify tables as deletable', function () {
-        const lifecycle = require(path.resolve(__dirname, '../../src/tableLifecycle.js'));
+        const lifecycle = require(path.resolve(__dirname, '../../src/hub/tableLifecycle.js'));
         const lists = lifecycle.rollbackTables();
         assert.ok(lists.dataTables.length > 0 && lists.blockTables.length > 0,
             'the generic delete lists are empty, so "policy_snapshots is absent from them" proves nothing');

@@ -18,7 +18,7 @@
 // view's, distinguishing it from a true double-sign.
 const assert = require('assert');
 const eq = require('../../src/equivocation_header.js');
-const Cross_Settle = require('../../src/actions/cross_settle.js');
+const Cross_Settle = require('../../src/actions/cross_settle/index.js');
 
 const settle = new Cross_Settle({ config: {}, decoderDb: null, indexerDb: null, util: null, mapper: null });
 

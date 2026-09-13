@@ -53,7 +53,7 @@ describe('a contract stake locks tokens rather than destroying them', function()
     // in isolation would pass while the trio disagreed.
     const stakeSrc   = fs.readFileSync(path.join(SRC, 'actions/stake.js'), 'utf8');
     const utilSrc    = fs.readFileSync(path.join(SRC, 'utility.js'), 'utf8');
-    const journalSrc = fs.readFileSync(path.join(SRC, 'escrowJournalWriter.js'), 'utf8');
+    const journalSrc = fs.readFileSync(path.join(SRC, 'consensus', 'escrowJournalWriter.js'), 'utf8');
 
     // The contract-stake handler's ledger block: from its `let credits` through the
     // processTransactionLedgerChanges call that consumes it.
@@ -142,7 +142,9 @@ describe('a contract stake locks tokens rather than destroying them', function()
     // releasing is a pure mint, and it strands the burned bond in the staker's escrow.
     // Whole-ledger deltas live in actions/slash.test.js; these are the cross-file shapes.
     const slashSrc   = fs.readFileSync(path.join(SRC, 'actions/slash.js'), 'utf8');
-    const executeSrc = fs.readFileSync(path.join(SRC, 'actions/execute.js'), 'utf8');
+    // The VM slash writer left Execute as a private method in M3 and is now its own
+    // module under the EXECUTE handler, shared with DEPLOY (a constructor emits SLASH).
+    const executeSrc = fs.readFileSync(path.join(SRC, 'actions/execute/slash_emission.js'), 'utf8');
 
     it('the capability slash releases the bond per OWNER and hands the array to the writer', function(){
         const i = slashSrc.indexOf('let credits = [], debits = []');
@@ -158,7 +160,7 @@ describe('a contract stake locks tokens rather than destroying them', function()
     });
 
     it('the contract slash releases the escrow it burns, keyed to the staker', function(){
-        const i = executeSrc.indexOf('_processSlashEmission');
+        const i = executeSrc.indexOf('processSlashEmission');
         const fn = executeSrc.slice(i, executeSrc.indexOf('createSlashEvent', i));
         // The negated per-release amount and the escrow write are bound through ONE
         // identifier, so neither half can be dropped or swapped without failing here. The

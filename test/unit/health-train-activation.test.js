@@ -27,7 +27,7 @@
 'use strict';
 
 const assert = require('assert');
-const { buildHealthResponse } = require('../../src/health');
+const { buildHealthResponse } = require('../../src/api/health');
 
 // The minimum an indexer stand-in needs for buildHealthResponse: it reads a lot of
 // optional fields and every one of them tolerates absence.

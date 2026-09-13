@@ -16,7 +16,7 @@ const sinon     = require('sinon');
 const http      = require('http');
 const https     = require('https');
 const EventEmitter = require('events');
-const HubClient = require('../../src/hub_client.js');
+const HubClient = require('../../src/hub/hub_client.js');
 
 // ---------------------------------------------------------------------------
 // Helpers

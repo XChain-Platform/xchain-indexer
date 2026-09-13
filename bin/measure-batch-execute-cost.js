@@ -268,7 +268,7 @@ const b64 = s => Buffer.from(s, 'utf8').toString('base64');
 // at or under the VM's gas ceiling. A deploy-big at ~60000 bytes charges ~700000.
 const DEPLOY_GAS_LIMIT = 900000;
 
-// Must match the gasCeiling the indexer configures for the VM in src/actions.js.
+// Must match the gasCeiling the indexer configures for the VM in src/actions/index.js.
 // Read back off the live instance at run time rather than trusted from here; this
 // is only the fallback for the report line.
 const EXPECTED_GAS_CEILING = 1000000;
@@ -329,7 +329,7 @@ try {
     db                   = require('../test/integration/setup/db-connection');
     DecoderSeeder        = require('../test/integration/setup/decoder-seeder');
     launcher             = require('../test/integration/setup/indexer-launcher');
-    collapseOutputFanout = require('../src/output_fanout.js').collapseOutputFanout;
+    collapseOutputFanout = require('../src/chain/output_fanout.js').collapseOutputFanout;
 } catch (e) {
     console.error('measure-batch-execute-cost: cannot load the integration harness: ' + (e && e.message));
     process.exit(2);

@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/actions.test.js
  *
- * Unit tests for the Actions class (src/actions.js).
+ * Unit tests for the Actions class (src/actions/index.js).
  *
  * All DB methods and action handler parse() methods are stubbed so that
  * no real database calls or action logic executes.
@@ -28,7 +28,7 @@ const assert  = require('assert');
 const sinon   = require('sinon');
 
 const { createMockIndexer } = require('../fixtures/mocks');
-const Actions               = require('../../src/actions');
+const Actions               = require('../../src/actions/index');
 
 // ---------------------------------------------------------------------------
 // Helpers

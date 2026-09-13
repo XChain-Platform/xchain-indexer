@@ -42,7 +42,7 @@
 const assert = require('assert');
 const path   = require('path');
 
-const { ADDRESS_REF_FIELDS } = require(path.join(__dirname, '..', '..', 'src', 'addressRefFields.js'));
+const { ADDRESS_REF_FIELDS } = require(path.join(__dirname, '..', '..', 'src', 'consensus', 'addressRefFields.js'));
 const Config                 = require(path.join(__dirname, '..', '..', 'src', 'config.js'));
 
 // The config module shape differs across call sites (class vs factory vs plain

@@ -32,7 +32,7 @@ const sinon  = require('sinon');
 const { createMockIndexer } = require('../fixtures/mocks');
 
 const Rollback = require('../../src/rollback.js');
-const abw      = require('../../src/attest_batch_wire.js');
+const abw      = require('../../src/actions/attest/attest_batch_wire.js');
 
 const FIRST_ACTION = 50;   // lowest action in the orphaned range
 const LAST_ACTION  = 75;   // highest action in the orphaned range

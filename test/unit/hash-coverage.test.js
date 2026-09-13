@@ -14,7 +14,7 @@
  * test/unit/hash-coverage.test.js
  *
  * Hash-coverage guard: binds the per-table `hashed` declarations in the
- * table-lifecycle registry (src/tableLifecycle.js) to the code that actually
+ * table-lifecycle registry (src/hub/tableLifecycle.js) to the code that actually
  * computes each hash. The registry is where a new table DECLARES which
  * integrity hash would catch a divergence in it; these tests make that
  * declaration verifiable in both directions:
@@ -37,7 +37,7 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 
-const lifecycle = require('../../src/tableLifecycle.js');
+const lifecycle = require('../../src/hub/tableLifecycle.js');
 const stateHash = require('../../src/stateHash.js');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '../..', rel), 'utf8');
@@ -139,7 +139,7 @@ describe('Hash coverage guard @regression', function () {
         const note = lifecycle.entry('attests').hashed.note;
         for (const name of methods) {
             assert.ok(note.includes(name),
-                `db.js ${name} mutates attests in place but the attests registry note in src/tableLifecycle.js ` +
+                `db.js ${name} mutates attests in place but the attests registry note in src/hub/tableLifecycle.js ` +
                 `does not name it; state its hash / updated_rows / rollback coverage there (and copy to the sync twin)`);
         }
     });
@@ -178,7 +178,7 @@ describe('Hash coverage guard @regression', function () {
         // journal is only consensus-visible because escrowLeafSubtree.js reads it into
         // balances_root, and stateCommitment.js applies that behind
         // ESCROW_LOCKED_LEAF_ACTIVATION. If either half moves, the declaration is stale.
-        const leaf = read('src/escrowLeafSubtree.js');
+        const leaf = read('src/consensus/escrowLeafSubtree.js');
         assert.ok(/FROM escrow_leaf_journal j/.test(leaf),
             'escrowLeafSubtree.js no longer reads escrow_leaf_journal; its state_commitment declaration is stale');
         const commit = read('src/stateCommitment.js');

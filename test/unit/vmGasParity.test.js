@@ -30,7 +30,7 @@ process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const Utility = require('../../src/utility.js');
-const Actions = require('../../src/actions.js');
+const Actions = require('../../src/actions/index.js');
 
 const SRC = path.join(__dirname, '..', '..', 'src');
 
@@ -173,10 +173,10 @@ describe('static fee quote <-> handler acceptance fee parity @regression @tier1'
      */
     describe('no site recomputes the VM gas arithmetic', function () {
         const SITES = [
-            'actions.js',
-            path.join('actions', 'deploy.js'),
-            path.join('actions', 'deploy_chunk.js'),
-            path.join('actions', 'execute.js')
+            path.join('actions', 'index.js'),
+            path.join('actions', 'deploy', 'index.js'),
+            path.join('actions', 'deploy', 'deploy_chunk.js'),
+            path.join('actions', 'execute', 'index.js')
         ];
         const GAS_KEY = /VM_DEPLOY_BASE|VM_DEPLOY_PER_BYTE|VM_EXECUTE_BASE/;
 

@@ -28,7 +28,7 @@
  * classifies fails here instead of shipping.
  *
  * To satisfy this test, a new table needs ONE entry in the table-lifecycle
- * registry (src/tableLifecycle.js) declaring its replication, rollback, and
+ * registry (src/hub/tableLifecycle.js) declaring its replication, rollback, and
  * hash-coverage classification; the rollback buckets checked here (generic
  * lists, RECOMPUTED, SPECIAL_CASE, ROLLBACK_EXEMPT, inert lookups) are all
  * derived from that registry. Classify by understanding the table, not by
@@ -47,7 +47,7 @@ const sinon  = require('sinon');
 
 const { createMockIndexer } = require('../fixtures/mocks');
 const Rollback              = require('../../src/rollback.js');
-const lifecycle             = require('../../src/tableLifecycle.js');
+const lifecycle             = require('../../src/hub/tableLifecycle.js');
 
 // ---------------------------------------------------------------------------
 // The universe: every table the indexer creates, straight from src/sql/.
@@ -160,7 +160,7 @@ describe('Rollback coverage guard @regression', function () {
     });
 
     // ── Table-lifecycle registry gates ──────────────────────────────────
-    // The registry (src/tableLifecycle.js) is the single place a new table is
+    // The registry (src/hub/tableLifecycle.js) is the single place a new table is
     // classified for replication, rollback, and hash coverage. These tests make
     // "forgot to classify" impossible in each direction.
 
@@ -171,7 +171,7 @@ describe('Rollback coverage guard @regression', function () {
             missing,
             [],
             missing.length
-                ? `\n\nThese src/sql tables have NO entry in src/tableLifecycle.js:\n` +
+                ? `\n\nThese src/sql tables have NO entry in src/hub/tableLifecycle.js:\n` +
                   missing.map(t => `    - ${t}`).join('\n') +
                   `\n\nEvery table must declare its replication, rollback, and hash-coverage\n` +
                   `lifecycle in the registry (see its header for field definitions), then be\n` +
@@ -267,9 +267,19 @@ describe('Rollback coverage guard @regression', function () {
             ? path.resolve(process.env.XCHAIN_SYNC_PATH)
             : path.resolve(__dirname, '..', '..', '..', 'xchain-sync');
         const REQUIRE_SIBLINGS = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
-        for(const twin of ['merkle.js', 'state_commitment_activation.js', 'swq_source_cap_activation.js', 'state_key_collation_activation.js', 'tableLifecycle.js']){
+        // Each twin is a PAIR of src-relative paths, because the M3 feature directories
+        // are an xchain-indexer layout and xchain-sync's copies stay flat: merkle.js sits
+        // under consensus/ here and at src/merkle.js there. A single shared path would
+        // read a file that does not exist on the sync side and turn the guard into a
+        // throw (under XCHAIN_REQUIRE_SIBLINGS) or a silent skip. reconcile-twins.sh
+        // records the same asymmetry per twin.
+        for(const [twin, syncTwin] of [['consensus/merkle.js', 'merkle.js'],
+                                       ['state_commitment_activation.js', 'state_commitment_activation.js'],
+                                       ['swq_source_cap_activation.js', 'swq_source_cap_activation.js'],
+                                       ['state_key_collation_activation.js', 'state_key_collation_activation.js'],
+                                       ['hub/tableLifecycle.js', 'tableLifecycle.js']]){
             it(twin + ' is byte-identical across xchain-indexer and xchain-sync (cross-repo twin)', function(){
-                const syncPath = path.join(SYNC_ROOT, 'src', twin);
+                const syncPath = path.join(SYNC_ROOT, 'src', syncTwin);
                 if(!fs.existsSync(syncPath)){
                     if(REQUIRE_SIBLINGS)
                         throw new Error('consensus drift guard cannot run: sibling missing at ' + syncPath +

@@ -42,7 +42,7 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../fixtures/config');
 const Utility           = require('../../src/utility');
 const Database          = require('../../src/db');
-const HubDbSync         = require('../../src/hub_db_sync.js');
+const HubDbSync         = require('../../src/hub/hub_db_sync.js');
 
 // The BTC-anchored boundary the hub locked this validator set at.
 const SNAP_BLOCK = 961234;

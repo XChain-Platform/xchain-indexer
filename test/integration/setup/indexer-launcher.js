@@ -46,7 +46,7 @@ process.env.npm_package_name = process.env.npm_package_name || 'xchain-indexer';
 const XChainIndexer = require('../../../src/XChainIndexer.js');
 // Same module the production block loop uses, so the harness cannot drift from
 // the collapse rule it is meant to model (see processBlocks below).
-const { collapseOutputFanout } = require('../../../src/output_fanout.js');
+const { collapseOutputFanout } = require('../../../src/chain/output_fanout.js');
 
 /**
  * Create a configured XChainIndexer instance pointing at the test databases.
@@ -79,10 +79,10 @@ async function initIndexer(opts = {}) {
     const Database = require('../../../src/db');
     const Utility  = require('../../../src/utility.js');
     const ProtocolChanges = require('../../../src/protocol_changes.js');
-    const Mapper   = require('../../../src/mapper.js');
-    const Actions  = require('../../../src/actions.js');
+    const Mapper   = require('../../../src/chain/mapper.js');
+    const Actions  = require('../../../src/actions/index.js');
     const Rollback = require('../../../src/rollback.js');
-    const Genesis  = require('../../../src/genesis.js');
+    const Genesis  = require('../../../src/chain/genesis.js');
 
     indexer.config = config.getConfig();
     // Share the ONE config snapshot exactly like XChainIndexer.start() does: a bare

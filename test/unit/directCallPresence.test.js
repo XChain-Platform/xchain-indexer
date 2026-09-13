@@ -38,7 +38,7 @@ const sinon          = require('sinon');
 const XChainIndexer  = require('../../src/XChainIndexer.js');
 // Assert against the frozen protocol constant rather than restating 120, so a change
 // to the grace cannot pass these tests against a stale number.
-const { HUB_SYNC_WATERMARK_GRACE_S } = require('../../src/hub_db_sync.js');
+const { HUB_SYNC_WATERMARK_GRACE_S } = require('../../src/hub/hub_db_sync.js');
 // The barrier's injected util.sleep is a spy over the shared fixed-delay helper,
 // so the poll loop under test uses a real (spied) timer, not a raw setTimeout.
 const { sleep }      = require('../helpers/wait.js');

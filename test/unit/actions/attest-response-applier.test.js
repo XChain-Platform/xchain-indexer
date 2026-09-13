@@ -34,15 +34,15 @@ const crypto = require('crypto');
 
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
-const Attest   = require('../../../src/actions/attest.js');
+const Attest   = require('../../../src/actions/attest/index.js');
 const Utility  = require('../../../src/utility.js');
 const Database = require('../../../src/db');
 const swq     = require('../../../src/stake_weighted_quorum.js');
 const attestAdmission = require('../../../src/attest_admission_activation.js');
 const attestBcastFee  = require('../../../src/attest_broadcast_fee_activation.js');
 const arm     = require('../../../src/attest_response_mirror_activation.js');
-const ed25519 = require('../../../src/ed25519.js');
-const { SYNTH_TAGS, synthesizeTxHash } = require('../../../src/actions/execContext.js');
+const ed25519 = require('../../../src/consensus/ed25519.js');
+const { SYNTH_TAGS, synthesizeTxHash } = require('../../../src/consensus/exec_context.js');
 
 const PUBKEY_A = 'a'.repeat(64);
 const SIG_A    = '1'.repeat(128);
@@ -265,7 +265,7 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
 
         it('is the admission cap\'s own per-block figure, so it never throttles a legal rate', function () {
             const caps = require('../../../src/attest_request_cap_activation.js');
-            const declared = require('../../../src/actions/attest.js').ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK;
+            const declared = require('../../../src/actions/attest/index.js').ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK;
             assert.strictEqual(declared, CAP, 'the cap the cases above spell out is the one the code carries');
             assert.strictEqual(declared, caps.ATTEST_REQUEST_CAPS.perBlock,
                 'the chain cannot admit more requests per block than this, so a steady ' +

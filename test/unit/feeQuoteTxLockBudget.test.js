@@ -21,7 +21,7 @@ process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const Utility  = require('../../src/utility.js');
-const Actions  = require('../../src/actions.js');
+const Actions  = require('../../src/actions/index.js');
 const Database = require('../../src/db');
 // Fixed-delay helper: one case schedules a release, another settles a window to
 // assert an unbounded waiter did NOT give up — neither has an event to poll.

@@ -1,0 +1,118 @@
+{
+  "note": "The declared delta between the suite title map as pinned at AT1 and the map at the end of milestone M3. AT2 reads identity THROUGH this file: every difference the compare reports is listed here with the row that caused it, so a difference that is not listed is a regression rather than a restructure. M3 renames no collected test FILE (git status reports no add, delete or rename anywhere under test/), so the rename set stays empty and the compare needs no --rename-map argument; every difference below is a describe or it TITLE that names a source path M3 moved.",
+  "milestone": "M3",
+  "rows": [7, 8, 9, 10, 11],
+  "date": "2026-09-13",
+  "pin_before_sha256": "43126c11fd28e776d29287028bc1162ddacc1a69212e429e586018ad93c8b285",
+  "renames": {},
+  "compare_totals": {
+    "differences_against_at1_pin": 95,
+    "declared_by_m2_title_delta": 23,
+    "declared_here_for_m3": 72,
+    "undeclared": 0,
+    "how_counted": "node bin/suite-title-map.js --compare bin/pins/at1-suite-titles.json reports one line per (script, file, title) difference. The 23 belonging to M2 are the four files m2-title-delta.json already declares (db_prototype_install.test.js, db_table_parameterized_identifiers.test.js, price-batch-query.test.js, reorg-history-query.test.js); M1's single title rename is already inside this pin, which is why its sha256 equals m2-title-delta.json's pin_before_sha256 and M1 contributes nothing here."
+  },
+  "no_test_was_lost": "Every dropped title has a same-file added title carrying identical assertion text, at equal counts per file (1/1, 2/2, 2/2, 4/4). There is no file_added and no file_dropped anywhere in the M3 set: not one suite entered or left a script's collection. Each pair differs only in the source PATH the title quotes, and in every case the assertion body is byte-unchanged apart from the path it reads.",
+  "titleDeltas": [
+    {
+      "rows": [9, 11],
+      "file": "test/unit/activationConstantsParity.test.js",
+      "scripts": ["test", "test:integration", "test:regression", "test:regression:full"],
+      "differences": 8,
+      "dropped": [
+        "activation-gate constant parity to canonical constants.js @regression reservedRoots.js RESERVED_FUTURE_ROOTS is value-identical to xchain-documentation/protocol/constants.js"
+      ],
+      "added": [
+        "activation-gate constant parity to canonical constants.js @regression consensus/reservedRoots.js RESERVED_FUTURE_ROOTS is value-identical to xchain-documentation/protocol/constants.js"
+      ],
+      "why": "reservedRoots.js moved to src/consensus/reservedRoots.js, and the title names the file it compares. The comparison is unchanged: the same RESERVED_FUTURE_ROOTS export is still read against the same xchain-documentation constants."
+    },
+    {
+      "rows": [9],
+      "file": "test/unit/merkle-twin-parity.test.js",
+      "scripts": ["test", "test:integration"],
+      "differences": 8,
+      "dropped": [
+        "src/merkle.js is byte-identical across its four carriers every carrier present on disk has the same bytes",
+        "src/merkle.js is byte-identical across its four carriers this repo carries the module at all"
+      ],
+      "added": [
+        "src/consensus/merkle.js is byte-identical across its four carriers every carrier present on disk has the same bytes",
+        "src/consensus/merkle.js is byte-identical across its four carriers this repo carries the module at all"
+      ],
+      "why": "a describe rename only: merkle.js moved to src/consensus/ here while the three vendored copies stay flat, so the describe names the canonical's new path. Both it titles are preserved verbatim. The barrier also had to give each carrier its OWN src-relative path, because the single shared 'src/merkle.js' join silently dropped the canonical out of the comparison and left the three siblings agreeing with each other; an explicit assertion now fails if the canonical does not resolve."
+    },
+    {
+      "rows": [9, 10],
+      "file": "test/unit/rollback-coverage.test.js",
+      "scripts": ["test", "test:integration", "test:regression", "test:regression:full"],
+      "differences": 16,
+      "dropped": [
+        "Rollback coverage guard @regression indexer<->sync twin byte-identity (reciprocal guard) merkle.js is byte-identical across xchain-indexer and xchain-sync (cross-repo twin)",
+        "Rollback coverage guard @regression indexer<->sync twin byte-identity (reciprocal guard) tableLifecycle.js is byte-identical across xchain-indexer and xchain-sync (cross-repo twin)"
+      ],
+      "added": [
+        "Rollback coverage guard @regression indexer<->sync twin byte-identity (reciprocal guard) consensus/merkle.js is byte-identical across xchain-indexer and xchain-sync (cross-repo twin)",
+        "Rollback coverage guard @regression indexer<->sync twin byte-identity (reciprocal guard) hub/tableLifecycle.js is byte-identical across xchain-indexer and xchain-sync (cross-repo twin)"
+      ],
+      "why": "the twin loop is generated from its file list and the title carries each entry, so moving merkle.js to consensus/ and tableLifecycle.js to hub/ renames two of the five. The other three activation twins are unmoved (D40) and their titles are unchanged. The loop now carries a PAIR of paths per twin, indexer side and xchain-sync side, because xchain-sync keeps its copies flat; a single shared path threw under XCHAIN_REQUIRE_SIBLINGS=1. Driven with XCHAIN_REQUIRE_SIBLINGS=1: 16 passing, 0 failing, 0 pending."
+    },
+    {
+      "rows": [7, 8],
+      "file": "test/unit/vmGasParity.test.js",
+      "scripts": ["test", "test:integration", "test:regression", "test:regression:fast", "test:regression:full"],
+      "differences": 40,
+      "dropped": [
+        "static fee quote <-> handler acceptance fee parity @regression @tier1 no site recomputes the VM gas arithmetic actions.js reads no gas-schedule key outside util.vmGasCost",
+        "static fee quote <-> handler acceptance fee parity @regression @tier1 no site recomputes the VM gas arithmetic actions/deploy.js reads no gas-schedule key outside util.vmGasCost",
+        "static fee quote <-> handler acceptance fee parity @regression @tier1 no site recomputes the VM gas arithmetic actions/deploy_chunk.js reads no gas-schedule key outside util.vmGasCost",
+        "static fee quote <-> handler acceptance fee parity @regression @tier1 no site recomputes the VM gas arithmetic actions/execute.js reads no gas-schedule key outside util.vmGasCost"
+      ],
+      "added": [
+        "static fee quote <-> handler acceptance fee parity @regression @tier1 no site recomputes the VM gas arithmetic actions/index.js reads no gas-schedule key outside util.vmGasCost",
+        "static fee quote <-> handler acceptance fee parity @regression @tier1 no site recomputes the VM gas arithmetic actions/deploy/index.js reads no gas-schedule key outside util.vmGasCost",
+        "static fee quote <-> handler acceptance fee parity @regression @tier1 no site recomputes the VM gas arithmetic actions/deploy/deploy_chunk.js reads no gas-schedule key outside util.vmGasCost",
+        "static fee quote <-> handler acceptance fee parity @regression @tier1 no site recomputes the VM gas arithmetic actions/execute/index.js reads no gas-schedule key outside util.vmGasCost"
+      ],
+      "pairing": {
+        "actions.js": "actions/index.js",
+        "actions/deploy.js": "actions/deploy/index.js",
+        "actions/deploy_chunk.js": "actions/deploy/deploy_chunk.js",
+        "actions/execute.js": "actions/execute/index.js"
+      },
+      "why": "the SITES list is four hard-coded paths and each generates one it title, so the four moves rename four titles one for one. The scan itself is unchanged and no site was added or removed. The one file M3 newly created under src/actions/, execute/slash_emission.js, carries zero VM gas-schedule keys, so it is correctly outside this list rather than a coverage hole."
+    }
+  ],
+  "scan_changes_that_produce_NO_title_difference": [
+    {
+      "file": "test/unit/actions/roundtrip-golden.test.js",
+      "what": "loadHandlerFormats became directory-aware (a directory maps to <name>/index.js, the top-level loader index.js is skipped, the key strips a trailing /index).",
+      "why_no_title": "the titles are static; the change widens what the existing assertions cover rather than adding or renaming a title."
+    },
+    {
+      "file": "test/unit/actionFormats.test.js",
+      "what": "the same three changes, applied at the barrier. Measured: 30 FORMATS keys before, 38 after.",
+      "why_no_title": "static titles again. 38 rather than 39 because cross_settle declares no this.formats at all, verified against e8ae831e where src/actions/cross_settle.js contains no occurrence of the word formats, so the directory handler set contributing formats is eight, not nine."
+    },
+    {
+      "file": "test/unit/escrowJournalWriter.test.js",
+      "what": "the attribution scan became RECURSIVE and attributes a nested part file to its owning directory, because the EXECUTE contract-slash release now lives in execute/slash_emission.js rather than in the handler body.",
+      "why_no_title": "one existing it, unchanged title. Without the change the guard failed loudly on its own vacuity assertion (EXECUTE no longer derivable), which is the guard working."
+    },
+    {
+      "file": "test/unit/actions/escrow-negation-parity.test.js",
+      "what": "already made recursive by lane ROW-7+8.",
+      "why_no_title": "static title."
+    },
+    {
+      "file": "test/unit/price-barrier-dry-run-scope.test.js",
+      "what": "the consensus opt-out pin moved from actions.js:_dryRunAction to actions/index.js:_dryRunAction (both sites, unchanged count of two).",
+      "why_no_title": "the path is inside the asserted VALUE, not in a title."
+    },
+    {
+      "file": "test/unit/stake-escrow-conservation.test.js",
+      "what": "reads actions/execute/slash_emission.js and searches processSlashEmission, since the writer left Execute as a private method.",
+      "why_no_title": "static titles; the file went from 9 passing / 1 failing to 10 passing."
+    }
+  ]
+}

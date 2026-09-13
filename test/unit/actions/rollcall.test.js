@@ -27,11 +27,11 @@ const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
-const Rollcall = require('../../../src/actions/rollcall.js');
+const Rollcall = require('../../../src/actions/rollcall/index.js');
 const eq       = require('../../../src/equivocation_header.js');
 const rca      = require('../../../src/rollcall_activation.js');
 const rga      = require('../../../src/rollcall_gates_activation.js');
-const { buildRollcallCanonical } = require('../../../src/rollcall_canonical.js');
+const { buildRollcallCanonical } = require('../../../src/actions/rollcall/rollcall_canonical.js');
 const { knownGateKeys }          = require('../../../src/consensus_rules_digest.js');
 
 const NETWORK = 'regtest';
@@ -65,7 +65,7 @@ function signForV1(id, epochHeight, ledgerHash, gates){
     return crypto.sign(null, Buffer.from(canon, 'utf8'), id.priv).toString('hex');
 }
 
-// params[0] is VERSION; actions.js splits the wire string this way.
+// params[0] is VERSION; actions/index.js splits the wire string this way.
 function paramsFor(over){
     let o = Object.assign({ epoch: EPOCH, ledger: LEDGER, publisher: null, sigs: [], count: null }, over || {});
     let pub = o.publisher === null ? o.sigs[0].pubkey : o.publisher;

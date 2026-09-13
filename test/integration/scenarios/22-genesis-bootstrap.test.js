@@ -18,7 +18,7 @@
  * GAS and transferred in a reverse-order cleanup pass. Every name lands on the right
  * owner (incl. deep-nested + divergent-owner cases), no balances are created, the
  * genesis block is a rollback floor, and a reindex reproduces the identical
- * ledger/actions hashes (consensus determinism). See src/genesis.js.
+ * ledger/actions hashes (consensus determinism). See src/chain/genesis.js.
  */
 
 'use strict';

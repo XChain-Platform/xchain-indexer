@@ -88,10 +88,10 @@
 const path = require('path');
 
 const SRC = path.resolve(__dirname, '..', 'src');
-const M   = require(path.join(SRC, 'merkle.js'));
+const M   = require(path.join(SRC, 'consensus', 'merkle.js'));
 const SC  = require(path.join(SRC, 'stateCommitment.js'));
 const SUB = require(path.join(SRC, 'state_subtree_activation.js'));
-const ESC = require(path.join(SRC, 'escrowLeafSubtree.js'));
+const ESC = require(path.join(SRC, 'consensus', 'escrowLeafSubtree.js'));
 
 function parseArgs(){
     const a = process.argv.slice(2), o = {};

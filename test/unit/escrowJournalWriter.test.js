@@ -35,8 +35,8 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 
-const M = require('../../src/merkle.js');
-const W = require('../../src/escrowJournalWriter.js');
+const M = require('../../src/consensus/merkle.js');
+const W = require('../../src/consensus/escrowJournalWriter.js');
 const escrowJournalMixin = require('../../src/db/escrow_journal.js');
 
 // The writer reaches the ledger through the db/escrow_journal methods, so the stub below
@@ -173,8 +173,13 @@ describe('escrow journal writer: attribution exhaustiveness @regression', functi
     // found that; this now finds it statically.
     function mintedActions(src, file){
         // The action the file is named for, which is the one its escrows.push
-        // sites run under...
-        const names = new Set([file.replace(/\.js$/, '').toUpperCase()]);
+        // sites run under. Since M3 a handler is either <name>.js or a directory
+        // <name>/ holding index.js plus named parts, so the owning action is the
+        // FIRST path segment of a nested file: execute/slash_emission.js carries
+        // the EXECUTE contract-slash release and mints EXECUTE, not
+        // SLASH_EMISSION, which is not an action at all.
+        const owner = file.indexOf('/') === -1 ? file.replace(/\.js$/, '') : file.split('/')[0];
+        const names = new Set([owner.toUpperCase()]);
         // ...plus every name it RENAMES that same action row to. This is the
         // mechanism the old guard missed. A synthetic sub-action minted inside a
         // handler (sweep.js mints an ISSUE row) is deliberately NOT collected:
@@ -187,8 +192,17 @@ describe('escrow journal writer: attribution exhaustiveness @regression', functi
     it('every action an escrow-pushing handler can mint has a frozen attribution rule', function(){
         const dir = path.resolve(__dirname, '../../src/actions');
         const all = new Set();
-        for(const f of fs.readdirSync(dir)){
-            if(!f.endsWith('.js')) continue;
+        // Recursive since M3: the nine largest handlers became directories, and the
+        // EXECUTE contract-slash release now lives in a named part beside its
+        // index.js, so a flat read would stop seeing the one site this guard was
+        // widened to catch and would pass vacuously.
+        const handlerFiles = (d, prefix) => fs.readdirSync(d, { withFileTypes: true })
+            .flatMap(e => e.isDirectory()
+                ? handlerFiles(path.join(d, e.name), prefix + e.name + '/')
+                : (e.name.endsWith('.js') ? [prefix + e.name] : []));
+        for(const f of handlerFiles(dir, '')){
+            // index.js at the TOP of the directory is the dispatch loader, not a handler.
+            if(f === 'index.js') continue;
             const src = fs.readFileSync(path.join(dir, f), 'utf8');
             // Two ways a handler writes an escrow row: the escrows[] array it hands to
             // processTransactionLedgerChanges, and a direct db.createEscrow under its own
@@ -613,7 +627,7 @@ describe('escrow journal writer: block-path wiring @regression', function(){
     it('the writer never consults family aggregates, status predicates, or a clock', function(){
         // The failure mode this design retired: recomputing what "locked" means.
         // Comments are stripped so prose about the old design cannot trip it.
-        const src  = fs.readFileSync(path.resolve(__dirname, '../../src/escrowJournalWriter.js'), 'utf8');
+        const src  = fs.readFileSync(path.resolve(__dirname, '../../src/consensus/escrowJournalWriter.js'), 'utf8');
         const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
         for(const banned of ['getOrderAmountsRemaining', 'getDispenserAmountRemaining', 'getDispenserInfo',
                              'getAddressEscrows', "status = 'open'", 'bet_status'])

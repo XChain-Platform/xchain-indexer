@@ -20,8 +20,8 @@ const sinon  = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 const { getTestConfig } = require('../../fixtures/config');
 
-const Deploy      = require('../../../src/actions/deploy.js');
-const DeployChunk = require('../../../src/actions/deploy_chunk.js');
+const Deploy      = require('../../../src/actions/deploy/index.js');
+const DeployChunk = require('../../../src/actions/deploy/deploy_chunk.js');
 
 const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const CODE   = 'module.exports = { run: function() { return 1; } };';

@@ -26,7 +26,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 const { getTestConfig } = require('../../fixtures/config');
-const Execute = require('../../../src/actions/execute.js');
+const Execute = require('../../../src/actions/execute/index.js');
 
 // Mirror of xchain-vm HostFaultError (we don't depend on xchain-vm here).
 class HostFaultError extends Error {

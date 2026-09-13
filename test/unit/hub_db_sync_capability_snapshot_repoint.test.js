@@ -14,7 +14,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon = require('sinon');
 
-const HubDbSync = require('../../src/hub_db_sync.js');
+const HubDbSync = require('../../src/hub/hub_db_sync.js');
 
 // A bootstrap never dropped capability_snapshots rows the current hub does not carry
 // (#1837). The table has no `network` column, so _mirrorNetworkScope returns null and

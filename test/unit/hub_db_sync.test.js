@@ -14,7 +14,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon = require('sinon');
 
-const HubDbSync = require('../../src/hub_db_sync.js');
+const HubDbSync = require('../../src/hub/hub_db_sync.js');
 
 // Build a HubDbSync whose enabled flag is true (needs both a hub URL and a hub DB),
 // backed by a stubbed doQuery we drive per-test to simulate the local price mirror.
@@ -2366,7 +2366,7 @@ describe('HubDbSync anchor-attest maturity-horizon bound @regression @tier1', fu
 
 // ── The per-table, per-chain height watermark: the wire contract ──
 describe('HubDbSync height watermark wire contract @regression @tier1', function () {
-    const { sanitizeHeights, heightsAdvanced } = require('../../src/hub_db_sync.js');
+    const { sanitizeHeights, heightsAdvanced } = require('../../src/hub/hub_db_sync.js');
 
     it('sanitizeHeights keeps only non-negative safe integers, upper-casing the chain', function () {
         assert.deepStrictEqual(
@@ -2501,7 +2501,7 @@ describe('HubDbSync height watermark wire contract @regression @tier1', function
 // block loop's 900 s ceiling would ever fire, which is delivery-side and cannot clear a
 // producer-side freeze.
 describe('watermarkStallVerdict height dimension @regression @tier1', function () {
-    const { watermarkStallVerdict } = require('../../src/hub_db_sync.js');
+    const { watermarkStallVerdict } = require('../../src/hub/hub_db_sync.js');
     const BASE = { stallMs: 1000, exitMs: 2000, pollMode: false, schemaMismatch: false,
                    lastAdvanceAt: null, resyncAt: null, hubTipTs: 0, streamWatermark: 0,
                    heightsLastAdvanceAt: null, heightsShort: false };

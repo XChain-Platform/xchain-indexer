@@ -27,8 +27,8 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert       = require('assert');
 const sinon        = require('sinon');
-const HubClient    = require('../../src/hub_client.js');
-const HubPushQueue = require('../../src/hub_push_queue.js');
+const HubClient    = require('../../src/hub/hub_client.js');
+const HubPushQueue = require('../../src/hub/hub_push_queue.js');
 
 // The rejection _call builds from a hub envelope carrying { code, message }.
 function rpcError(code, message){

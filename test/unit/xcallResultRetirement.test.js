@@ -38,7 +38,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 
 const { createMockIndexer } = require('../fixtures/mocks');
-const Xcall = require('../../src/actions/xcall.js');
+const Xcall = require('../../src/actions/xcall/index.js');
 const PROTO = require('../../src/protocol/constants.js');
 
 const GRACE  = PROTO.XCALL_RESULT_ORPHAN_GRACE_SECONDS;

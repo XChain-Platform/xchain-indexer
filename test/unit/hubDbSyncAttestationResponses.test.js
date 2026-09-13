@@ -47,7 +47,7 @@
 const assert = require('assert');
 const sinon  = require('sinon');
 
-const HubDbSync = require('../../src/hub_db_sync.js');
+const HubDbSync = require('../../src/hub/hub_db_sync.js');
 const FROZEN    = HubDbSync.HUB_SYNC_WATERMARK_GRACE_S;
 
 const GRACE_ENV = 'HUB_SYNC_ATTEST_RESPONSE_GRACE_S';

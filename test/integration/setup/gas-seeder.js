@@ -65,7 +65,7 @@ const GAS_TICK = 'XCHAIN';
 // The synthetic-transaction prefix the settle pass stamps on the row it creates
 // (bridge_settle.js BRIDGE_TX_PREFIX). Read from the module so the fixture can
 // never drift from the pass on the one literal a parity capture normalizes by.
-const { BRIDGE_TX_PREFIX, recordSettlement } = require('../../../src/bridge_settle.js');
+const { BRIDGE_TX_PREFIX, recordSettlement } = require('../../../src/consensus/bridge_settle.js');
 
 // Pending system seeds, keyed by block index. Registered by seedGas when the
 // bridge-shaped path is chosen and applied by the harness block loop

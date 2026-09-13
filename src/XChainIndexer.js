@@ -23,22 +23,22 @@ const fs        = require('fs');
 const path      = require('path');
 const config    = require('./config.js');
 const changes   = require('./protocol_changes.js');
-const protocolTime = require('./protocol_time.js');
+const protocolTime = require('./consensus/protocol_time.js');
 const database  = require('./db');
-const actions   = require('./actions.js');
+const actions   = require('./actions/index.js');
 const util      = require('./utility.js');
 const rollback  = require('./rollback.js');
-const mapper    = require('./mapper.js');
+const mapper    = require('./chain/mapper.js');
 const stateCommitment   = require('./stateCommitment.js');
-const retention         = require('./retention.js');
+const retention         = require('./chain/retention.js');
 const stateCommitAct    = require('./state_commitment_activation.js');
-const HubClient    = require('./hub_client.js');
-const HubDbSync    = require('./hub_db_sync.js');
+const HubClient    = require('./hub/hub_client.js');
+const HubDbSync    = require('./hub/hub_db_sync.js');
 // The frozen call-barrier grace and its resolver, shared with the direct-hub-DB
 // (no-mirror) call-presence barrier so both paths open on the SAME constant.
 const { HUB_SYNC_WATERMARK_GRACE_S, resolveWatermarkGrace,
-        HUB_SYNC_BARRIER_HOLD_CEILING_S, resolveBarrierHoldCeilingMs } = require('./hub_db_sync.js');
-const anchorRewardDerive = require('./anchor_reward_derive.js');
+        HUB_SYNC_BARRIER_HOLD_CEILING_S, resolveBarrierHoldCeilingMs } = require('./hub/hub_db_sync.js');
+const anchorRewardDerive = require('./consensus/anchor_reward_derive.js');
 // The anchor-attest maturity-horizon bound (the parent barrier spec's D-B) and the
 // mirror-admission family's consumer gate. Both are read HERE rather than inside
 // hub_db_sync.js for the horizon half: the caller computes a plain number and passes it, so
@@ -46,15 +46,15 @@ const anchorRewardDerive = require('./anchor_reward_derive.js');
 const { ANCHOR_ATTEST_ARRIVAL_MARGIN_S, ANCHOR_REWARD_MIRROR_MATURITY,
         isAnchorAttestBarrierHorizonActive } = require('./anchor_reward_activation.js');
 const { isMirrorAdmissionConsumerActive } = require('./mirror_admission_activation.js');
-const AnchorProofClient  = require('./anchor_proof_client.js');
-const bridgeSettle       = require('./bridge_settle.js');
-const rollcallClose      = require('./rollcall_close.js');
-const { RollcallProofClient } = require('./rollcall_proof_client.js');
-const HubPushQueue = require('./hub_push_queue.js');
-const UtxoTracker  = require('./UtxoTracker.js');
-const Genesis      = require('./genesis.js');
-const { collapseOutputFanout } = require('./output_fanout.js');
-const { blockMayReadPrice }    = require('./priceReadPredicate.js');
+const AnchorProofClient  = require('./consensus/anchor_proof_client.js');
+const bridgeSettle       = require('./consensus/bridge_settle.js');
+const rollcallClose      = require('./consensus/rollcall_close.js');
+const { RollcallProofClient } = require('./consensus/rollcall_proof_client.js');
+const HubPushQueue = require('./hub/hub_push_queue.js');
+const UtxoTracker  = require('./chain/UtxoTracker.js');
+const Genesis      = require('./chain/genesis.js');
+const { collapseOutputFanout } = require('./chain/output_fanout.js');
+const { blockMayReadPrice }    = require('./chain/priceReadPredicate.js');
 const trainActivation          = require('./train_activation.js');
 
 // Hub->indexer config poll cadence (ms). This is the sole staleness / propagation bound for the
@@ -1178,7 +1178,7 @@ class XChainIndexer {
         this._startStateTreeMetric();
 
         // Start the state-retention pruner. DEFAULT OFF: inert unless
-        // STATE_ROOT_RETENTION_BLOCKS is set (see src/retention.js + the
+        // STATE_ROOT_RETENTION_BLOCKS is set (see src/chain/retention.js + the
         // data-retention page under components/indexer/ in xchain-documentation).
         // Phase-2 node reclaim, when opted in, runs
         // under the db transaction mutex so it cannot interleave with block-root inserts.
@@ -1381,7 +1381,7 @@ class XChainIndexer {
                 // Get a list of any transactions in this block from the decoder database
                 let blockTransactions = await this.decoderDb.getDecoderBlockData(blockToParse);
 
-                // Collapse the reader-side per-output fan-out (see src/output_fanout.js).
+                // Collapse the reader-side per-output fan-out (see src/chain/output_fanout.js).
                 // getDecoderBlockData emits one row per stored native-coin output, each carrying
                 // the same tx data; without this, a data-bearing action whose transaction also
                 // pays a dispenser and/or a fee-destination output would be executed once per

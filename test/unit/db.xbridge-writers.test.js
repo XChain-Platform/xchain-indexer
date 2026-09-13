@@ -45,7 +45,7 @@ const { createMockDb, createBaseData, createTokenInfo } = require('../fixtures/m
 const Utility  = require('../../src/utility.js');
 const configjs = require('../../src/config.js');
 const Database = require('../../src/db');
-const XBridge  = require('../../src/actions/xbridge.js');
+const XBridge  = require('../../src/actions/xbridge/index.js');
 
 const SOURCE      = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const DEST        = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
