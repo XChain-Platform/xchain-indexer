@@ -1021,6 +1021,15 @@ class HubDbSync {
         // would open and settle a block against mirror data we refused to apply.
         // Cleared on a clean re-bootstrap (which only drains when versions match).
         this._schemaMismatchSeen = false;
+        // Set when a live apply FAILED (the write did not land, or the handler threw).
+        // Independent of the schema latch and needed for the same reason: the message
+        // handler's catch logs and continues, so without this the very next heartbeat
+        // certifies the stream as caught-up over a row this mirror never wrote, and the
+        // settlement barriers open on it. Cleared only by a clean re-bootstrap drain,
+        // exactly where _schemaMismatchSeen is cleared. The watermark-stall detector is
+        // the bound: a frozen watermark under a live hub tip forces one resync and then
+        // hands the process to its supervisor, so the latch cannot wedge silently.
+        this._applyFailureSeen = false;
 
         // Live price_snapshots events are BUFFERED, not applied, until the
         // current connection's price_snapshots bootstrap has fully drained
@@ -1203,8 +1212,16 @@ class HubDbSync {
     // subscription. A heights map installed early would certify exactly that gap, and a
     // barrier re-keyed onto it would open over it. Returns nothing; the caller has no decision
     // left to make.
+    //
+    // Every latch here is a refusal to certify coverage the mirror does not have: the
+    // bootstrap has not drained, the hub is broadcasting a row shape we refuse to apply, or a
+    // live apply FAILED. Without the last one the socket handler's catch would log the failure
+    // and continue, and the very next heartbeat would advance both watermarks over a row that
+    // was never written, opening the settlement barriers on it. The caller records the hub's
+    // claimed tip BEFORE this gate, because a tip the gate refuses is exactly the evidence the
+    // stall detector runs on.
     _handleWatermarkFrame(event) {
-        if (!this._bootstrapDrained || this._schemaMismatchSeen) return;
+        if (!this._bootstrapDrained || this._schemaMismatchSeen || this._applyFailureSeen) return;
         // Heights first, so waiters released by the seconds advance below already see the
         // fresh map rather than the previous frame's.
         this._noteHeights((event || {}).heights);
@@ -1537,6 +1554,10 @@ class HubDbSync {
                 // mismatch parks the bootstrap), so any earlier live mismatch is
                 // resolved: re-open the watermark gate.
                 this._schemaMismatchSeen = false;
+                // Same reasoning for the apply-failure latch: a clean full drain re-wrote
+                // every table from the hub, so whatever a live apply failed to write is
+                // present again and the gate may re-open.
+                this._applyFailureSeen = false;
                 if (this._pollMode) {
                     // Poll-mode fail-closed (#2476): the REST snapshot endpoints are
                     // append-only, so a poll cycle observes new-id INSERTs but can NEVER
@@ -3422,6 +3443,30 @@ class HubDbSync {
         return true;
     }
 
+    // Run ONE mirror WRITE through a query primitive that FAILS LOUDLY.
+    //
+    // The indexer's hubDb is the shared Db wrapper, whose doQuery swallows a
+    // non-transactional query error and returns its `[]` default (db.js, the M-17
+    // fork hazard). A swallowed write is then indistinguishable from a landed one
+    // at the call site: the row is dropped, the caller returns normally, and the
+    // next heartbeat certifies the stream as caught up over data this mirror never
+    // wrote, which the VM oracle reads and the settlement barriers trust.
+    // doQueryStrict is that same query with the swallow removed, and it already
+    // carries every consensus-input read for this reason; writes belong on it too.
+    // Reads deliberately stay on doQuery: an empty result is a legitimate answer
+    // there and must not become a throw.
+    //
+    // Resolved per call rather than hard-coded because this module is vendored
+    // byte-identical into xchain-explorer, where hubDb is HubMirrorPool: a minimal
+    // pool with doQuery only, which already lets a query error propagate. Either
+    // surface therefore gives a write the same fail-loud shape, and a test double
+    // that provides neither keeps its own semantics instead of throwing on absence.
+    async _applyWrite(query, args) {
+        if (typeof this.hubDb.doQueryStrict === 'function')
+            return await this.hubDb.doQueryStrict(query, args);
+        return await this.hubDb.doQuery(query, args);
+    }
+
     // Apply a row to the local hub DB (INSERT IGNORE to keep idempotent).
     // Columns are FILTERED to the local mirror table's schema: the hub may serve
     // columns the mirror deliberately does not carry (e.g. state_checkpoints'
@@ -3488,7 +3533,7 @@ class HubDbSync {
         if (table === 'price_snapshots' && cols.includes('status')) {
             // priceUpsertSql(cols, 1) is this branch's original statement, moved out so the
             // bootstrap's multi-row batch emits the same ODKU body by construction.
-            await this.hubDb.doQuery(priceUpsertSql(cols, 1), args);
+            await this._applyWrite(priceUpsertSql(cols, 1), args);
             return;
         }
 
@@ -3551,7 +3596,7 @@ class HubDbSync {
                 sets.push('`push_generation` = GREATEST(COALESCE(`push_generation`, 0), COALESCE(VALUES(`push_generation`), 0))');
             let query = 'INSERT INTO cross_chain_calls (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
                       + ' ON DUPLICATE KEY UPDATE ' + sets.join(', ');
-            await this.hubDb.doQuery(query, args);
+            await this._applyWrite(query, args);
             return;
         }
 
@@ -3580,7 +3625,7 @@ class HubDbSync {
             sets.push('push_generation = IF(VALUES(`push_generation`) >= `push_generation`, VALUES(`push_generation`), `push_generation`)');
             let query = 'INSERT INTO oracle_prices (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
                       + ' ON DUPLICATE KEY UPDATE ' + sets.join(', ');
-            await this.hubDb.doQuery(query, args);
+            await this._applyWrite(query, args);
             return;
         }
 
@@ -3657,14 +3702,14 @@ class HubDbSync {
                 sets.push('anchor_txid = COALESCE(anchor_txid, VALUES(anchor_txid))');
                 let query = 'INSERT INTO cross_chain_matches (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
                           + ' ON DUPLICATE KEY UPDATE ' + sets.join(', ');
-                await this.hubDb.doQuery(query, args);
+                await this._applyWrite(query, args);
                 return;
             }
             // Older hub (or a mirror whose local table lacks effective_time/status): no
             // version to compare, so keep the narrow anchor-stamp upgrade and never guess.
             let query = 'INSERT INTO cross_chain_matches (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
                       + ' ON DUPLICATE KEY UPDATE anchor_txid = COALESCE(anchor_txid, VALUES(anchor_txid))';
-            await this.hubDb.doQuery(query, args);
+            await this._applyWrite(query, args);
             return;
         }
 
@@ -3684,13 +3729,13 @@ class HubDbSync {
         if (table === 'attestation_responses' && cols.includes('batch_action_index')) {
             let query = 'INSERT INTO attestation_responses (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
                       + ' ON DUPLICATE KEY UPDATE batch_action_index = COALESCE(batch_action_index, VALUES(batch_action_index))';
-            await this.hubDb.doQuery(query, args);
+            await this._applyWrite(query, args);
             if (row.batch_action_index != null) await this._linkAppliedResponseToBatch(row);
             return;
         }
 
         let query = 'INSERT IGNORE INTO ' + table + ' (' + cols.join(', ') + ') VALUES (' + placeholders + ')';
-        await this.hubDb.doQuery(query, args);
+        await this._applyWrite(query, args);
     }
 
     // Carry a stamped batch link onto the local ATTEST v1 row the applier minted for this
@@ -3896,7 +3941,7 @@ class HubDbSync {
                 if (fenced) p.push(gen);
                 return p;
             };
-            await this.hubDb.doQuery(
+            await this._applyWrite(
                 'DELETE FROM cross_chain_matches WHERE ' + leg('a', 'a_push_generation') + ' OR ' + leg('b', 'b_push_generation'),
                 legArgs().concat(legArgs()));
             await this._refreshMatchSyncTimestamp();
@@ -3912,7 +3957,7 @@ class HubDbSync {
             let args = [event.source_chain, from];
             if (bounded) args.push(to);
             if (fenced) args.push(gen);
-            await this.hubDb.doQuery('DELETE FROM cross_chain_calls WHERE ' + tail, args);
+            await this._applyWrite('DELETE FROM cross_chain_calls WHERE ' + tail, args);
             await this._refreshCallSyncTimestamp();
             return;
         }
@@ -3925,7 +3970,7 @@ class HubDbSync {
         let args = [event.source_chain, from];
         if (bounded) args.push(to);
         if (fenced) args.push(gen);
-        await this.hubDb.doQuery(query, args);
+        await this._applyWrite(query, args);
         // bridge_transfers gates a block-loop barrier on a cached MAX(effective_time), so a
         // retraction that removed the row holding the maximum has to re-read it here; a
         // scalar left high would open the bridge barrier over transfers that are gone.
@@ -4803,6 +4848,10 @@ class HubDbSync {
                 }
             } catch (err) {
                 console.warn('HubDbSync: failed to replay buffered price_snapshots event:', err);
+                // The event stays at the head of the buffer and the table reports
+                // not-drained, but the watermark gate has its own key: latch here too so a
+                // heartbeat arriving before the retry cannot certify coverage.
+                this._applyFailureSeen = true;
                 return false;
             }
             this._pendingPriceEvents.shift();
@@ -4930,6 +4979,12 @@ class HubDbSync {
                         }
                     } catch (err) {
                         console.warn('HubDbSync: failed to handle WebSocket message:', err);
+                        // Latch the failure so the watermark gate stays shut. A row we did
+                        // not apply is a hole, and without the latch a later heartbeat
+                        // would certify the stream over it. A throw from the heartbeat
+                        // branch latches too, which is the fail-closed direction: only a
+                        // clean re-bootstrap drain re-opens the gate.
+                        this._applyFailureSeen = true;
                     }
                 });
             });
