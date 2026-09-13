@@ -154,9 +154,7 @@ const RESOLVERS = {
     // CROSSED mapping: see the header. order_matches ticks are the standing
     // order's give/get; give_action_index is the incoming match's action_index.
     ORDER_MATCH: async function(db, row){
-        const om = await one(db,
-            'SELECT give_action_index, get_action_index, give_tick_id, get_tick_id ' +
-            'FROM order_matches WHERE action_index = ?', [row.action_index],
+        const om = one(await db.getOrderMatchLegs(row.action_index), row.action_index,
             'ORDER_MATCH row without an order_matches record');
         if(String(om.give_tick_id) === String(om.get_tick_id))
             throw new Error('escrowJournal: ambiguous ORDER_MATCH attribution (give and get tick are equal) at action ' + row.action_index);
@@ -167,9 +165,7 @@ const RESOLVERS = {
 
     // STRAIGHT mapping: swap_matches ticks are the incoming match's give/get.
     SWAP_MATCH: async function(db, row){
-        const sm = await one(db,
-            'SELECT give_action_index, get_action_index, give_tick_id, get_tick_id ' +
-            'FROM swap_matches WHERE action_index = ?', [row.action_index],
+        const sm = one(await db.getSwapMatchLegs(row.action_index), row.action_index,
             'SWAP_MATCH row without a swap_matches record');
         if(String(sm.give_tick_id) === String(sm.get_tick_id))
             throw new Error('escrowJournal: ambiguous SWAP_MATCH attribution (give and get tick are equal) at action ' + row.action_index);
@@ -179,8 +175,7 @@ const RESOLVERS = {
     },
 
     CROSS_SETTLE: async function(db, row){
-        const s = await one(db,
-            'SELECT local_action_index FROM cross_chain_settlements WHERE action_index = ?', [row.action_index],
+        const s = one(await db.getCrossChainSettlementLocalAction(row.action_index), row.action_index,
             'CROSS_SETTLE row without a cross_chain_settlements record');
         return sourceOf(db, s.local_action_index);
     },
@@ -194,13 +189,7 @@ const RESOLVERS = {
     // Emitted ORDER/SWAP/DISPENSER/VOTE actions never reach here: each emission is minted its
     // own action_index under its own action name, so its rows resolve under that name's rule.
     EXECUTE: async function(db, row){
-        const rows = await db.doQuery(
-            'SELECT 1 AS ok FROM contract_slash_debits d ' +
-            "LEFT JOIN contract_stakes   cs ON (d.target_table = 'contract_stakes'   AND cs.action_index = d.stake_action_index) " +
-            "LEFT JOIN contract_unstakes cu ON (d.target_table = 'contract_unstakes' AND cu.action_index = d.stake_action_index) " +
-            'INNER JOIN index_addresses a ON a.id = COALESCE(cs.source_id, cu.source_id) ' +
-            'WHERE d.execution_index = ? AND a.address = ? AND COALESCE(cs.tick_id, cu.tick_id) = ? LIMIT 1',
-            [row.action_index, row.address, row.tick_id]);
+        const rows = await db.getContractSlashReleaseMatch(row.action_index, row.address, row.tick_id);
         if(!rows || rows.length !== 1)
             throw new Error('escrowJournal: EXECUTE escrow row at action ' + row.action_index +
                             ' is not a contract-slash release for ' + row.address + '/' + row.tick +
@@ -216,17 +205,18 @@ for(const action of Object.keys(DISPENSER_FAMILY)){
     RESOLVERS[action] = async function(db, row){
         // The create carries the dispenser on its OWN action_index; the rest
         // carry a foreign key to it.
-        const d = await one(db,
-            'SELECT ' + spec.fk + ' AS dispenser_action_index FROM ' + spec.table + ' WHERE action_index = ?',
-            [row.action_index], action + ' row without a ' + spec.table + ' record');
+        const d = one(await db.getDispenserFamilyReference(spec.table, spec.fk, row.action_index),
+            row.action_index, action + ' row without a ' + spec.table + ' record');
         return sourceOf(db, d.dispenser_action_index);
     };
 }
 
-async function one(db, sql, args, what){
-    const rows = await db.doQuery(sql, args);
+// Exactly one row or halt. The judgement stays here rather than in the db mixin because
+// the halt message names the action and the attribution that could not be made, which is
+// a fact about the attribution rule, not about the query.
+function one(rows, actionIndex, what){
     if(!rows || rows.length !== 1)
-        throw new Error('escrowJournal: ' + what + ' (action ' + args[0] + ', ' + (rows ? rows.length : 0) + ' rows)');
+        throw new Error('escrowJournal: ' + what + ' (action ' + actionIndex + ', ' + (rows ? rows.length : 0) + ' rows)');
     return rows[0];
 }
 
@@ -234,10 +224,7 @@ async function one(db, sql, args, what){
 // authoritative source (see actions.sql); a lock whose creating action has none
 // is not attributable and halts rather than guesses.
 async function sourceOf(db, actionIndex){
-    const rows = await db.doQuery(
-        'SELECT addr.address AS address FROM actions a ' +
-        'INNER JOIN index_addresses addr ON addr.id = a.source_id ' +
-        'WHERE a.action_index = ?', [actionIndex]);
+    const rows = await db.getActionSourceAddress(actionIndex);
     if(!rows || rows.length !== 1 || rows[0].address == null)
         throw new Error('escrowJournal: no attributable source for lock action ' + actionIndex);
     return rows[0].address;
@@ -248,28 +235,11 @@ async function sourceOf(db, actionIndex){
 // address/tick/action refs do not resolve, so callers must pair this with
 // escrowRowCount and treat any difference as a halt, not a curiosity.
 async function escrowRows(db, blockIndex){
-    const scoped = (blockIndex !== undefined && blockIndex !== null);
-    return (await db.doQuery(
-        'SELECT e.action_index AS action_index, ia.action AS action_name, ' +
-        '       addr.address AS address, t.tick AS tick, e.tick_id AS tick_id, e.amount AS amount ' +
-        'FROM escrows e ' +
-        'INNER JOIN actions a          ON a.action_index = e.action_index ' +
-        'INNER JOIN index_actions ia   ON ia.id = a.action_id ' +
-        'INNER JOIN index_addresses addr ON addr.id = e.address_id ' +
-        'INNER JOIN index_tickers t    ON t.id = e.tick_id ' +
-        (scoped ? 'WHERE a.block_index = ? ' : '') +
-        'ORDER BY e.action_index',
-        scoped ? [blockIndex] : [])) || [];
+    return await db.getEscrowLedgerRows(blockIndex);
 }
 
 async function escrowRowCount(db, blockIndex){
-    const scoped = (blockIndex !== undefined && blockIndex !== null);
-    const rows = await db.doQuery(
-        'SELECT COUNT(*) AS n FROM escrows e ' +
-        'INNER JOIN actions a ON a.action_index = e.action_index' +
-        (scoped ? ' WHERE a.block_index = ?' : ''),
-        scoped ? [blockIndex] : []);
-    return Number(rows && rows.length ? rows[0].n : 0);
+    return await db.countEscrowLedgerRows(blockIndex);
 }
 
 // Locker address for one escrow row (frozen rules above). Exported for the
@@ -295,7 +265,8 @@ function chunked(list, size){
     for(let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
     return out;
 }
-function placeholders(list){ return list.map(() => '?').join(','); }
+// The placeholder-list builder that pairs with chunked() lives beside the statements it
+// fills, in src/db/escrow_journal.js, because every IN and VALUES list is built there.
 
 // Latest journal value for a SET of keys: Map of `address \t tick` -> bc string,
 // '0' when the key is absent or tombstoned. The read is unbounded in height
@@ -324,21 +295,7 @@ function placeholders(list){ return list.map(() => '?').join(','); }
 // while the single-row form errored on the identical value. Resolving here and
 // throwing by name keeps the writer fail-loud under every sql_mode.
 async function indexIds(db, addresses, ticks){
-    const addrIds = new Map();
-    for(const chunk of chunked(Array.from(new Set(addresses)), KEY_CHUNK)){
-        const rows = await db.doQuery(
-            'SELECT a.id AS id, a.address AS address FROM index_addresses a WHERE a.address IN (' + placeholders(chunk) + ')',
-            chunk);
-        for(const r of (rows || [])) addrIds.set(String(r.address), r.id);
-    }
-    const tickIds = new Map();
-    for(const chunk of chunked(Array.from(new Set(ticks)), KEY_CHUNK)){
-        const rows = await db.doQuery(
-            'SELECT t.id AS id, t.tick AS tick FROM index_tickers t WHERE t.tick IN (' + placeholders(chunk) + ')',
-            chunk);
-        for(const r of (rows || [])) tickIds.set(String(r.tick), r.id);
-    }
-    return { addrIds, tickIds };
+    return await db.resolveEscrowJournalIndexIds(addresses, ticks);
 }
 
 async function priorTotals(db, keys){
@@ -359,13 +316,7 @@ async function priorTotals(db, keys){
     const tList = Array.from(new Set(Array.from(byIdPair.keys()).map(p => p.split('\t')[1])));
     for(const aChunk of chunked(aList, KEY_CHUNK)){
         for(const tChunk of chunked(tList, KEY_CHUNK)){
-            const rows = await db.doQuery(
-                'SELECT j.address_id AS address_id, j.tick_id AS tick_id, j.locked_amount AS locked_amount ' +
-                'FROM escrow_leaf_journal j ' +
-                'INNER JOIN (SELECT address_id, tick_id, MAX(id) AS id FROM escrow_leaf_journal ' +
-                '            WHERE address_id IN (' + placeholders(aChunk) + ') AND tick_id IN (' + placeholders(tChunk) + ') ' +
-                '            GROUP BY address_id, tick_id) m ON m.id = j.id',
-                aChunk.concat(tChunk));
+            const rows = await db.getLatestEscrowJournalRows(aChunk, tChunk);
             for(const r of (rows || [])){
                 const key = byIdPair.get(String(r.address_id) + '\t' + String(r.tick_id));
                 if(key === undefined) continue;                // cross-product row for a key we did not ask about
@@ -435,9 +386,7 @@ async function writeEscrowJournal(db, blockIndex, opts){
         const byTick = new Map();
         for(const s of sums.values())
             byTick.set(s.tick, byTick.get(s.tick) === undefined ? s.amount : bc.bcstr(bc.bcadd(byTick.get(s.tick), s.amount, SCALE)));
-        const ledger = await db.doQuery(
-            'SELECT t.tick AS tick, CAST(SUM(CAST(e.amount AS DECIMAL(60,18))) AS CHAR) AS total ' +
-            'FROM escrows e INNER JOIN index_tickers t ON t.id = e.tick_id GROUP BY e.tick_id', []);
+        const ledger = await db.getEscrowLedgerTotalsByTick();
         for(const l of (ledger || [])){
             const ours = byTick.get(l.tick);
             if(ours === undefined || !eq(ours, l.total))
@@ -486,14 +435,8 @@ async function writeEscrowJournal(db, blockIndex, opts){
     // One multi-row INSERT per chunk rather than one per key. The VALUES list keeps
     // the loop's order, so the AUTO_INCREMENT ids that idx_latest walks backwards are
     // assigned exactly as the per-key inserts assigned them.
-    for(const chunk of chunked(pending, KEY_CHUNK)){
-        const args = [];
-        for(const p of chunk) args.push(p.address_id, p.tick_id, p.locked, blockIndex);
-        await db.doQuery(
-            'INSERT INTO escrow_leaf_journal (address_id, tick_id, locked_amount, block_index) VALUES ' +
-            chunk.map(() => '(?, ?, ?, ?)').join(', '),
-            args);
-    }
+    for(const chunk of chunked(pending, KEY_CHUNK))
+        await db.insertEscrowJournalRows(chunk, blockIndex);
     return written;
 }
 

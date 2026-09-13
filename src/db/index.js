@@ -3739,6 +3739,7 @@ const MIXIN_FILES = [
     './dispensers.js',
     './dispenses.js',
     './dividends.js',
+    './escrow_journal.js',
     './escrows.js',
     './events.js',
     './fees.js',

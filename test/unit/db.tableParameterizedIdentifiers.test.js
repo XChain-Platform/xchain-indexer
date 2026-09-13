@@ -26,6 +26,8 @@
 
 const assert = require('assert');
 const misc   = require('../../src/db/misc');
+const escrowJournal = require('../../src/db/escrow_journal');
+const writer = require('../../src/escrowJournalWriter');
 
 // A recording connection. Nothing here validates anything, so any statement that
 // reaches `issued` got past the guard under test.
@@ -89,6 +91,44 @@ describe('db misc mixin: table-parameterized identifiers @regression', function 
         const db = { async doQuery(){ return []; } };
         db.countRowsInTable = misc.countRowsInTable.bind(db);
         assert.strictEqual(await db.countRowsInTable('tokens'), 0);
+    });
+
+});
+
+describe('db escrow_journal mixin: the dispenser-family identifiers @regression', function () {
+
+    // Both the TABLE and the FOREIGN KEY COLUMN vary by dispenser action, so both are
+    // spliced. They come from the frozen DISPENSER_FAMILY map, and the assertion is what
+    // keeps that the only thing they can be.
+    function recordingDb(){
+        const issued = [];
+        const db = { issued, async doQuery(sql, args){ issued.push({ sql, args }); return []; } };
+        db.getDispenserFamilyReference = escrowJournal.getDispenserFamilyReference.bind(db);
+        return db;
+    }
+
+    it('refuses a hostile table or column and issues nothing', async function () {
+        for(const bad of ['dispensers; DROP TABLE escrows', 'dispensers`', 'a b', '', null, 7]){
+            const db = recordingDb();
+            await assert.rejects(() => db.getDispenserFamilyReference(bad, 'action_index', 1),
+                /invalid SQL identifier/, 'table accepted ' + JSON.stringify(bad));
+            await assert.rejects(() => db.getDispenserFamilyReference('dispensers', bad, 1),
+                /invalid SQL identifier/, 'column accepted ' + JSON.stringify(bad));
+            assert.deepEqual(db.issued, [], 'a refused identifier must issue no statement');
+        }
+    });
+
+    it('every frozen DISPENSER_FAMILY entry passes the assertion and binds its action', async function () {
+        const db = recordingDb();
+        for(const action of Object.keys(writer.DISPENSER_FAMILY)){
+            const spec = writer.DISPENSER_FAMILY[action];
+            await db.getDispenserFamilyReference(spec.table, spec.fk, 42);
+        }
+        assert.equal(db.issued.length, Object.keys(writer.DISPENSER_FAMILY).length);
+        for(const q of db.issued){
+            assert.match(q.sql, /^SELECT [A-Za-z0-9_]+ AS dispenser_action_index FROM [A-Za-z0-9_]+ WHERE action_index = \?$/);
+            assert.deepEqual(q.args, [42]);
+        }
     });
 
 });

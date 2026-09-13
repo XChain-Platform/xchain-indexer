@@ -37,6 +37,16 @@ const path   = require('path');
 
 const M = require('../../src/merkle.js');
 const W = require('../../src/escrowJournalWriter.js');
+const escrowJournalMixin = require('../../src/db/escrow_journal.js');
+
+// The writer reaches the ledger through the db/escrow_journal methods, so the stub below
+// carries the REAL ones bound over its own doQuery. Every SQL branch it matches on is
+// therefore the statement that ships, including the fail-loud id resolution.
+function bindEscrowJournalReads(db){
+    for(const m of Reflect.ownKeys(escrowJournalMixin))
+        db[m] = escrowJournalMixin[m].bind(db);
+    return db;
+}
 
 // Minimal honest stand-ins for the two util behaviours the writer leans on.
 const mathjs = require('mathjs');
@@ -59,7 +69,7 @@ const T2 = 'BRAVO';
 function makeDb(state){
     state = state || {};
     const unindexed = new Set(state.unindexed || []);
-    const db = {
+    const db = bindEscrowJournalReads({
         util: UTIL,
         escrows:  state.escrows  || [],   // {action_index, action_name, address, tick, tick_id, amount, block_index}
         matches:  state.matches  || {},   // action_index -> {give_action_index, get_action_index, give_tick_id, get_tick_id}
@@ -144,7 +154,7 @@ function makeDb(state){
                 return this.sources[args[0]] ? [{ address: this.sources[args[0]] }] : [];
             throw new Error('stub: unrecognized query: ' + sql.slice(0, 80));
         }
-    };
+    });
     return db;
 }
 
