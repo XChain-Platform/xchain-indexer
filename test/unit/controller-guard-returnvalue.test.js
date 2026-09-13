@@ -61,6 +61,8 @@ describe('runControllerGuard: guard returnValue parsing (royalty payoutLegs) @re
         // contract_hash INNER JOIN; doQuery backs the per-action emission-position offset.
         db.createContractExecution   = sinon.stub().resolves();
         db.doQuery                   = sinon.stub().resolves([{ cnt: 0 }]);
+        db.countContractEmissionsForExecution =
+            require('../../src/db/contracts').countContractEmissionsForExecution.bind(db);
         indexer.vm    = { execute: sinon.stub().resolves(vmResult) };
         indexer.hubDb = null;
         return new Execute(indexer);

@@ -75,6 +75,25 @@ const TIEBREAKERS = [
 // entry here is a deliberate, reviewed act.
 const ALLOWLIST = [
     {
+        clause: 'block_index ASC, checkpoint_seq DESC',
+        reason: 'getMirroredStateCheckpointCandidates: the query pins chain and network, and ' +
+                'state_checkpoints carries UNIQUE KEY uq_chain_seq (chain, network, ' +
+                'checkpoint_seq) (src/sql/state_checkpoints.sql), so within the filtered set ' +
+                'checkpoint_seq is unique per row and the two terms are already a total order.'
+    },
+    {
+        clause: 'a.block_index ASC, a.checkpoint_seq DESC',
+        reason: 'getEarliestValidAnchorCheckpoint: anchor_actions has no unique key over ' +
+                '(chain, network, checkpoint_seq), so a tie IS reachable here, but only ' +
+                'between rows of identical CONTENT. ANCHOR\'s replay guard (src/actions/' +
+                'anchor.js) refuses a seq below the recorded max and admits an equal one only ' +
+                'as an exact replay, which is signature-bound to identical content; the v1 ' +
+                'head that legitimately shares a seq is excluded by this query\'s version ' +
+                'and state_root IS NOT NULL filters. Every column the method selects is part ' +
+                'of that signed content, so an arbitrary tie-break returns the same VALUES ' +
+                'and the selected checkpoint is the same on every node.'
+    },
+    {
         clause: 'block_index DESC',
         reason: 'getPreviousBlockTimes: block_index is the PRIMARY KEY of blocks, so it is ' +
                 'unique by definition and no tie is possible. The window it returns feeds the ' +
