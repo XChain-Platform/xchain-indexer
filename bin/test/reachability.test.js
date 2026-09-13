@@ -69,16 +69,16 @@ describe('bin/reachability.js', function () {
         });
 
         it('does not count a module reached only from its own suite', () => {
-            const gate = report.files['src/reward-push-gate.js'];
-            assert.strictEqual(gate.reachableFromIndexerRuntime, false);
-            assert.strictEqual(gate.reachableFromTooling, false);
-            assert.strictEqual(gate.testOnly, true);
+            const lint = report.files['src/vm_exec_lint_activation.js'];
+            assert.strictEqual(lint.reachableFromIndexerRuntime, false);
+            assert.strictEqual(lint.reachableFromTooling, false);
+            assert.strictEqual(lint.testOnly, true);
         });
 
         it('keeps a module whose only caller is a kept non-runtime file', () => {
             const history = report.files['src/capability_min_stake_history.js'];
             assert.strictEqual(history.reachableFromIndexerRuntime, false);
-            assert.deepStrictEqual(history.requiredByInRepo, ['src/recovery.js']);
+            assert.deepStrictEqual(history.requiredByInRepo, ['bin/recovery.js']);
         });
     });
 
@@ -96,7 +96,22 @@ describe('bin/reachability.js', function () {
         it('condemns only what nothing on the platform holds', () => {
             const orphans = Object.keys(report.files)
                 .filter((f) => report.files[f].unreferencedAcrossPlatform);
-            assert.deepStrictEqual(orphans, ['src/reward-push-gate.js']);
+            assert.deepStrictEqual(orphans, []);
+
+            // NEGATIVE CONTROL, and the reason an empty list above is a result
+            // rather than a silence. Every remaining candidate is cleared by the
+            // sibling sweep alone, so the same predicate over the same tree must
+            // still condemn when that sweep is withheld. Without this half a
+            // detector that had stopped computing the flag would read identically.
+            const local = reach.analyse({ siblings: false });
+            const withheld = Object.keys(local.files)
+                .filter((f) => local.files[f].unreferencedAcrossPlatform);
+            assert.deepStrictEqual(withheld, [
+                'src/utf8mb4Columns.js',
+                'src/vm_exec_lint_activation.js',
+                'src/xchainPrice.js',
+                'src/xchainPriceQuery.js',
+            ], 'the four test-only modules are candidates that only the sibling sweep clears');
         });
     });
 });
