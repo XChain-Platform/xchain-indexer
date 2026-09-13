@@ -35,7 +35,7 @@
  *   TEST_DECODER_DB=cverify_pe_decoder TEST_INDEXER_DB=cverify_pe_indexer \
  *   TEST_INDEXER_DB_B=cverify_pe_indexer_b \
  *   XCHAIN_DECODER_SQL_PATH=<xchain-decoder/src/sql> INDEXER_COIN=BTC INDEXER_NETWORK=regtest \
- *   npx mocha --no-config --exit test/integration/scenarios/16-controller-permissions.test.js
+ *   npx mocha --no-config --exit test/integration/scenarios/16_controller_permissions.test.js
  ********************************************************************/
 'use strict';
 

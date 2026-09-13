@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * test/integration/archive-replay-watermarks.test.js
+ * test/integration/archive_replay_watermarks.test.js
  *
  * Runs db.getArchiveReplayWatermarks() against a REAL MariaDB.
  *
@@ -58,7 +58,7 @@ const DB_NAME = process.env.TEST_ARCHIVE_WATERMARKS_DB || 'xchain_archive_waterm
 
 const SQL_DIR = path.join(__dirname, '../../src/sql');
 // Strip `--` line comments with the PRODUCT's own stripper, for the reason
-// recovery-id-determinism.test.js documents: the licence banner starts `--***`
+// recovery_id_determinism.test.js documents: the licence banner starts `--***`
 // with no whitespace, which MySQL does not treat as a comment, so a verbatim
 // send is errno 1064 on the first line.
 const stripSqlLineComments = Database.prototype.stripSqlLineComments;

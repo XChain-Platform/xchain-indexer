@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * test/integration/markets-native-coin-migration.test.js
+ * test/integration/markets_native_coin_migration.test.js
  *
  * Drives 2026-09-10-markets-native-coin-side.sql against a REAL MariaDB.
  *

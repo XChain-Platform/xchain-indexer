@@ -63,7 +63,7 @@
  * env below is read at config-build time:
  *   TEST_DB_HOST=127.0.0.1 TEST_DB_PORT=... TEST_DB_USER=... TEST_DB_PASS=... \
  *   npx mocha --no-config --timeout 120000 \
- *     test/integration/scenarios/18-fullnode-reward-determinism.test.js
+ *     test/integration/scenarios/18_fullnode_reward_determinism.test.js
  ********************************************************************/
 
 'use strict';

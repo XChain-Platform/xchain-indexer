@@ -27,7 +27,7 @@
  * (no memoization) and address validation is chain-agnostic; see test/integration/setup/multi-chain.js.
  *
  * Run with the usual TEST_DB_* env pointing at a disposable MariaDB:
- *   INDEXER_COIN=BTC INDEXER_NETWORK=regtest npx mocha --no-config test/integration/scenarios/11-multi-chain.test.js
+ *   INDEXER_COIN=BTC INDEXER_NETWORK=regtest npx mocha --no-config test/integration/scenarios/11_multi_chain.test.js
  */
 
 'use strict';

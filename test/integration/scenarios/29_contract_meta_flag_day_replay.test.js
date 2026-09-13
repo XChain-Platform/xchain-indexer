@@ -61,7 +61,7 @@
  *   TEST_DECODER_DB=<db> TEST_INDEXER_DB=<db> TEST_INDEXER_DB_B=<db> \
  *   XCHAIN_DECODER_SQL_PATH=<xchain-decoder/src/sql> \
  *   npx mocha --no-config --no-package --exit \
- *       test/integration/scenarios/29-contract-meta-flag-day-replay.test.js
+ *       test/integration/scenarios/29_contract_meta_flag_day_replay.test.js
  ********************************************************************/
 'use strict';
 

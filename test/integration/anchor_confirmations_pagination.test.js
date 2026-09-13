@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * test/integration/anchor-confirmations-pagination.test.js
+ * test/integration/anchor_confirmations_pagination.test.js
  *
  * getanchorconfirmations and its anchor-by-txid pagination SQL
  * (ANCHOR_BY_TXID_SQL / ANCHOR_BY_TXID_AFTER_SQL, src/actions/anchor/anchor_action_query.js) had no

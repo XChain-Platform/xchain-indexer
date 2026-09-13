@@ -33,7 +33,7 @@
  *
  * Run with the disposable test DB (handoff runbook):
  *   TEST_DB_HOST=127.0.0.1 TEST_DB_PORT=13307 TEST_DB_USER=root TEST_DB_PASS=mvhtest \
- *   INDEXER_COIN=BTC INDEXER_NETWORK=regtest npx mocha test/integration/scenarios/09-decoder-read-contract.test.js
+ *   INDEXER_COIN=BTC INDEXER_NETWORK=regtest npx mocha test/integration/scenarios/09_decoder_read_contract.test.js
  */
 
 'use strict';

@@ -33,7 +33,7 @@
  *   TEST_DB_HOST=127.0.0.1 TEST_DB_PORT=3306 TEST_DB_USER=<u> TEST_DB_PASS=<pw> \
  *   TEST_DECODER_DB=cv_x_decoder TEST_INDEXER_DB=cv_x_indexer TEST_INDEXER_DB_B=cv_x_indexer_b \
  *   XCHAIN_DECODER_SQL_PATH=<xchain-decoder/src/sql> INDEXER_COIN=LTC INDEXER_NETWORK=regtest \
- *   npx mocha --no-config --exit test/integration/scenarios/26-cross-chain-royalty.test.js
+ *   npx mocha --no-config --exit test/integration/scenarios/26_cross_chain_royalty.test.js
  ********************************************************************/
 'use strict';
 

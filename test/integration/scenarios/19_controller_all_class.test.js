@@ -28,7 +28,7 @@
  *   TEST_DECODER_DB=cv_all_decoder TEST_INDEXER_DB=cv_all_indexer \
  *   TEST_INDEXER_DB_B=cv_all_indexer_b \
  *   XCHAIN_DECODER_SQL_PATH=<xchain-decoder/src/sql> INDEXER_COIN=BTC INDEXER_NETWORK=regtest \
- *   npx mocha --no-config --exit test/integration/scenarios/19-controller-all-class.test.js
+ *   npx mocha --no-config --exit test/integration/scenarios/19_controller_all_class.test.js
  ********************************************************************/
 'use strict';
 

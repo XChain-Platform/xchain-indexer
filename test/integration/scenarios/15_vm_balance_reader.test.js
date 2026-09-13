@@ -30,7 +30,7 @@
  * Run with the disposable test DB (handoff runbook), Node 22:
  *   TEST_DB_HOST=127.0.0.1 TEST_DB_PORT=13307 TEST_DB_USER=root TEST_DB_PASS=mvhtest \
  *   INDEXER_COIN=BTC INDEXER_NETWORK=regtest \
- *   npx mocha test/integration/scenarios/15-vm-balance-reader.test.js
+ *   npx mocha test/integration/scenarios/15_vm_balance_reader.test.js
  */
 
 'use strict';

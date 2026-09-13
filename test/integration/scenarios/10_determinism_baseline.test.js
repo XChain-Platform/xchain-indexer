@@ -31,7 +31,7 @@
  * Regenerate after an INTENTIONAL consensus change (review the diff!), using
  * usual TEST_DB_* env pointing at a disposable MariaDB:
  *   REGEN_INDEXER_STATE_BASELINE=1 INDEXER_COIN=BTC INDEXER_NETWORK=regtest \
- *   npx mocha --no-config test/integration/scenarios/10-determinism-baseline.test.js
+ *   npx mocha --no-config test/integration/scenarios/10_determinism_baseline.test.js
  */
 
 'use strict';

@@ -57,7 +57,7 @@ const DB_PASS = process.env.TEST_DB_PASS;            // undefined => self-skip
 const DB_NAME = process.env.TEST_HUB_MIRROR_DB || 'xchain_hub_mirror_rebuilt';
 
 const SQL_DIR = path.join(__dirname, '../../src/sql');
-// The product's own stripper, for the reason archive-replay-watermarks.test.js documents:
+// The product's own stripper, for the reason archive_replay_watermarks.test.js documents:
 // the licence banner starts `--***` with no whitespace, which MySQL does not treat as a
 // comment, so a verbatim send is errno 1064 on the first line.
 const stripSqlLineComments = Database.prototype.stripSqlLineComments;

@@ -12941,31 +12941,31 @@
       "fileCount": 5,
       "titleCount": 125,
       "files": {
-        "test/mutation/suites/tier1-action-mutations.test.js": "409aca643332bd7f",
-        "test/mutation/suites/tier1-math-mutations.test.js": "104fe69449f11fd7",
-        "test/mutation/suites/tier1-validation-mutations.test.js": "2508f462d3577ead",
-        "test/mutation/suites/tier2-balance-mutations.test.js": "2c43cc6818a10107",
-        "test/mutation/suites/tier2-state-mutations.test.js": "8bb74067ba0602a4"
+        "test/mutation/suites/tier1_action_mutations.test.js": "409aca643332bd7f",
+        "test/mutation/suites/tier1_math_mutations.test.js": "104fe69449f11fd7",
+        "test/mutation/suites/tier1_validation_mutations.test.js": "2508f462d3577ead",
+        "test/mutation/suites/tier2_balance_mutations.test.js": "2c43cc6818a10107",
+        "test/mutation/suites/tier2_state_mutations.test.js": "8bb74067ba0602a4"
       }
     },
     "test:mutation:report": {
       "fileCount": 5,
       "titleCount": 125,
       "files": {
-        "test/mutation/suites/tier1-action-mutations.test.js": "409aca643332bd7f",
-        "test/mutation/suites/tier1-math-mutations.test.js": "104fe69449f11fd7",
-        "test/mutation/suites/tier1-validation-mutations.test.js": "2508f462d3577ead",
-        "test/mutation/suites/tier2-balance-mutations.test.js": "2c43cc6818a10107",
-        "test/mutation/suites/tier2-state-mutations.test.js": "8bb74067ba0602a4"
+        "test/mutation/suites/tier1_action_mutations.test.js": "409aca643332bd7f",
+        "test/mutation/suites/tier1_math_mutations.test.js": "104fe69449f11fd7",
+        "test/mutation/suites/tier1_validation_mutations.test.js": "2508f462d3577ead",
+        "test/mutation/suites/tier2_balance_mutations.test.js": "2c43cc6818a10107",
+        "test/mutation/suites/tier2_state_mutations.test.js": "8bb74067ba0602a4"
       }
     },
     "test:mutation:tier1": {
       "fileCount": 3,
       "titleCount": 96,
       "files": {
-        "test/mutation/suites/tier1-action-mutations.test.js": "409aca643332bd7f",
-        "test/mutation/suites/tier1-math-mutations.test.js": "104fe69449f11fd7",
-        "test/mutation/suites/tier1-validation-mutations.test.js": "2508f462d3577ead"
+        "test/mutation/suites/tier1_action_mutations.test.js": "409aca643332bd7f",
+        "test/mutation/suites/tier1_math_mutations.test.js": "104fe69449f11fd7",
+        "test/mutation/suites/tier1_validation_mutations.test.js": "2508f462d3577ead"
       }
     },
     "test:nodb": {

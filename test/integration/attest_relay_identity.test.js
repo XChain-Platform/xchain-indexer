@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * test/integration/attest-relay-identity.test.js
+ * test/integration/attest_relay_identity.test.js
  *
  * Runs the relay-identity exactly-once lookup against a REAL MariaDB
  * and applies its migration to a real schema.
@@ -26,7 +26,7 @@
  * `request_status <> 'rejected'` exclusion selects the rows the guard's safety
  * argument assumes, or that a JS Number binds to a BIGINT UNSIGNED without
  * silently matching a neighbouring row. This is the same gap already
- * paid for once (commit 94f1a8f); anchor-reward-late-publisher.test.js next door
+ * paid for once (commit 94f1a8f); anchor_reward_late_publisher.test.js next door
  * is its remediation and this file follows its conventions deliberately.
  *
  * WHAT IT PINS, each being something a stub cannot falsify:
@@ -79,7 +79,7 @@ const DB_NAME = process.env.TEST_ATTEST_RELAY_DB || 'xchain_attest_relay_identit
 const SQL_DIR = path.join(__dirname, '../../src/sql');
 const MIGRATION = path.join(SQL_DIR, 'migrations', '2026-08-11-attests-relay-identity-index.sql');
 // Strip `--` line comments with the PRODUCT's own stripper, for the reason
-// recovery-id-determinism.test.js documents: the licence banner starts `--***` with
+// recovery_id_determinism.test.js documents: the licence banner starts `--***` with
 // no whitespace, which MySQL does not treat as a comment, so a verbatim send is
 // errno 1064 on the first line.
 const stripSqlLineComments = Database.prototype.stripSqlLineComments;

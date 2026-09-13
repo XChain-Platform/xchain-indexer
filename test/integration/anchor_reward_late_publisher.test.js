@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * test/integration/anchor-reward-late-publisher.test.js
+ * test/integration/anchor_reward_late_publisher.test.js
  *
  * Runs the anchor-reward derive fetch gate against a REAL MariaDB.
  *
@@ -61,7 +61,7 @@ const DB_NAME = process.env.TEST_ANCHOR_REWARD_DB || 'xchain_anchor_reward_late_
 
 const SQL_DIR = path.join(__dirname, '../../src/sql');
 // Strip `--` line comments with the PRODUCT's own stripper, for the reason
-// recovery-id-determinism.test.js documents: the licence banner starts `--***` with
+// recovery_id_determinism.test.js documents: the licence banner starts `--***` with
 // no whitespace, which MySQL does not treat as a comment, so a verbatim send is
 // errno 1064 on the first line.
 const stripSqlLineComments = Database.prototype.stripSqlLineComments;

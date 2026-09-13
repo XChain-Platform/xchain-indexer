@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * test/integration/anchor-reward-round-qualifier.test.js
+ * test/integration/anchor_reward_round_qualifier.test.js
  *
  * Runs the ARCHIVE reward's ledger key against a REAL MariaDB.
  *
