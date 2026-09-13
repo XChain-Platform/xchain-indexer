@@ -53,7 +53,9 @@ const dispenserAmountPositivity = require('../dispenser_amount_positivity_activa
 
 class Dispenser {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions     = action;
         this.config      = action.config;
         this.decoderDb   = action.decoderDb;
@@ -108,7 +110,20 @@ class Dispenser {
         }
     }
 
+    // Handle parsing the DISPENSER transaction
     async parse(params, data, error){
+        /*****************************************************************
+         * DEBUGGING - Force params
+         ****************************************************************/
+        // Example payloads by FORMAT version:
+        // let str    = "0|BTC|JDOG|1|10|BTC||0.01|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev||||||Creating JDOG dispensers at 0.01 BTC each";
+        // let str    = "1|1234|Closing JDOG Dispenser";
+        // let str    = "2|1234|100||||Refilling with 100";
+        // let str    = "2|1234|||9876|5432|Updating allow/block lists";
+        // params = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
+
+        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
@@ -177,6 +192,9 @@ class Dispenser {
         // Clone the raw data for storage in dispensers table
         let dispenser = Object.assign({}, data);
 
+        /*****************************************************************
+         * TICK / COIN / FIAT Validations
+         ****************************************************************/
         // Validate GIVE_COIN is valid
         if(!error && format==0 && !this.config['COINS'].includes(data['GIVE_COIN']))
             error = 'invalid: GIVE_COIN (unsupported COIN network)';
@@ -220,6 +238,9 @@ class Dispenser {
         if(!error && format==0 && usingOracle && !this.util.isCryptoAddress(data['ORACLE_ADDRESS']))
             error = 'invalid: ORACLE_ADDRESS (format)';
 
+        /*****************************************************************
+         * FORMAT Validations
+         ****************************************************************/
         // Verify GIVE_AMOUNT format
         if(!error && format==0 && !this.util.isNull(data['GIVE_AMOUNT']) && giveTokenInfo && !this.util.isValidAmountFormat(giveTokenInfo['DECIMALS'], data['GIVE_AMOUNT'], data['BLOCK_TIME']))
             error = "invalid: GIVE_AMOUNT (format)";
@@ -415,6 +436,9 @@ class Dispenser {
         }
 
 
+        /*****************************************************************
+         * General Validations
+         ****************************************************************/
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';

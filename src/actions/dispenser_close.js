@@ -23,7 +23,9 @@ const ownershipCancelGate = require('../dispenser_ownership_cancel_activation.js
 
 class Dispenser_Close {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -32,6 +34,7 @@ class Dispenser_Close {
         this.mapper    = action.mapper;
     }
 
+    // Handle closing a dispenser
     async parse(params, data, error){
 
         // Get info on the dispenser.

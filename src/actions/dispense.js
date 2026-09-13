@@ -25,7 +25,9 @@ const tallyScaleActivation = require('../dispense_payment_tally_scale_activation
 
 class Dispense {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -34,6 +36,7 @@ class Dispense {
         this.mapper    = action.mapper;
     }
 
+    // Handle parsing the DISPENSE transaction
     async parse(params, data, error){
 
         // Save some details from the dispense request
