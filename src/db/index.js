@@ -3284,36 +3284,6 @@ class Database {
         return this.readEffectiveControllerMap('address_controllers', 'address_id', address_id, atBlock, atActionIndex);
     }
 
-    // Create record in `withdrawals` table
-    async createWithdrawal(data){
-        data             = this.normalizeDataValues(data);
-        let status_id    = await this.createStatus(data['STATUS']);
-        let source_id    = await this.getAddressId(data['SOURCE']);
-        let tick_id      = await this.createTicker(data['TICK']);
-        let action_index = data['ACTION_INDEX'];
-        let contract_index = data['CONTRACT_ACTION_INDEX'];
-        let amount       = data['AMOUNT'];
-        let block_index  = data['BLOCK_INDEX'];
-        let query  = "SELECT action_index FROM withdrawals WHERE action_index=? LIMIT 1";
-        let args   = [action_index];
-        let exists = false;
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
-        if(exists){
-            query = `UPDATE withdrawals SET
-                        contract_index=?, source_id=?, tick_id=?, amount=?, status_id=?, block_index=?
-                    WHERE action_index=?`;
-            args = [contract_index, source_id, tick_id, amount, status_id, block_index, action_index];
-        } else {
-            query = `INSERT INTO withdrawals
-                        (contract_index, source_id, tick_id, amount, status_id, block_index, action_index)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)`;
-            args = [contract_index, source_id, tick_id, amount, status_id, block_index, action_index];
-        }
-        await this.doQuery(query, args);
-    }
-
     /*****************************************************************
      * VM Integration - Savepoints
      ****************************************************************/
@@ -3994,6 +3964,7 @@ for(const mixin of [
     require('./tokens.js'),
     require('./transactions.js'),
     require('./votes.js'),
+    require('./withdrawals.js'),
 ]){
     const descriptors = Object.getOwnPropertyDescriptors(mixin);
     for(const key of Reflect.ownKeys(descriptors)) descriptors[key].enumerable = false;
