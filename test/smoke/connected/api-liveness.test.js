@@ -30,6 +30,9 @@ const helmet     = require('helmet');
 const cors       = require('cors');
 const jsonRouter = require('express-json-rpc-router');
 
+// ---------------------------------------------------------------------------
+// Helper: POST a JSON-RPC request and return { status, body }
+// ---------------------------------------------------------------------------
 function postJsonRpc(port, method) {
     return new Promise((resolve, reject) => {
         const body = JSON.stringify({ jsonrpc: '2.0', method, id: 1 });
@@ -59,6 +62,9 @@ function postJsonRpc(port, method) {
     });
 }
 
+// ---------------------------------------------------------------------------
+// Test suite
+// ---------------------------------------------------------------------------
 describe('Smoke: API liveness', function () {
     this.timeout(5000);
 

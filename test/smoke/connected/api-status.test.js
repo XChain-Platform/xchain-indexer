@@ -57,6 +57,9 @@ function atProcessableTip(isSynced, stallReason, stallClearsAtMs, now){
     return !!isSynced || waitingOnFutureBlock(stallReason, stallClearsAtMs, now);
 }
 
+// ---------------------------------------------------------------------------
+// Helper: GET a path and return { status, body }
+// ---------------------------------------------------------------------------
 function getJson(port, path) {
     return new Promise((resolve, reject) => {
         const req = http.request({
@@ -138,6 +141,9 @@ function buildApp(indexer) {
     return app;
 }
 
+// ---------------------------------------------------------------------------
+// Test suite
+// ---------------------------------------------------------------------------
 describe('Smoke: REST /status', function () {
     this.timeout(5000);
 
