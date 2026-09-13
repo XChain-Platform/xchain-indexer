@@ -18,7 +18,7 @@
  *
  ********************************************************************/
 
-const divergenceMetrics = require('../chain/dispenserDivergenceMetrics.js');
+const divergenceMetrics = require('../chain/dispenser_divergence_metrics.js');
 const ownershipCancelGate = require('../dispenser_ownership_cancel_activation.js');
 
 class Dispenser_Close {

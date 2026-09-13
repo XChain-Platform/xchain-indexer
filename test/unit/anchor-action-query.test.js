@@ -33,7 +33,7 @@ function dbSource(){
 
 const { CHECKPOINT_VERSIONS, CHECKPOINT_SECTION_VERSIONS, ANCHOR_ACTIONS_SQL,
         validateAnchorActionParams, selectAnchorRow,
-        buildAnchorActionResponse } = require('../../src/actions/anchor/anchor-action-query');
+        buildAnchorActionResponse } = require('../../src/actions/anchor/anchor_action_query');
 const { ARCHIVE_HEAD_VERSIONS } = require('../../src/stateHash.js');
 
 const CONFIG = { COIN: 'DOGE', NETWORK: 'regtest' };
@@ -456,7 +456,7 @@ describe('anchor-action-query: ANCHOR_ACTIONS_SQL', function () {
 describe('anchor-action-query: getanchorconfirmations', function () {
     const { ANCHOR_BY_TXID_SQL, ANCHOR_BY_TXID_AFTER_SQL, ANCHOR_ROW_LIMIT,
             validateAnchorConfirmationsParams,
-            buildAnchorConfirmationsResponse } = require('../../src/actions/anchor/anchor-action-query');
+            buildAnchorConfirmationsResponse } = require('../../src/actions/anchor/anchor_action_query');
 
     function txidRow(overrides) {
         return Object.assign({

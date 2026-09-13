@@ -72,7 +72,7 @@ const srb     = require('../src/snapshot_reorg_buffer.js');
 const cmsh    = require('../src/capability_min_stake_history.js');
 const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
         ARCHIVE_HEAD_GATE_SQL, dedupeArchiveChunks,
-        archiveChunkCoverage } = require('../src/actions/anchor/anchor-action-query.js');
+        archiveChunkCoverage } = require('../src/actions/anchor/anchor_action_query.js');
 // Archive-head version set, spliced rather than hand-copied: recovery must replay the
 // SAME heads the live mirror path reads, so a new publisher-bearing version added to
 // ARCHIVE_HEAD_VERSIONS cannot reach one path and silently skip the other.
@@ -464,13 +464,13 @@ class AnchorRecovery {
     // not populate it at all, so enforcing binding there would condemn honest archives and
     // halt disaster recovery. Below the flag day nothing changes, byte for byte.
     //
-    // Existence semantics (LIMIT 1 on a matching row), never stake-source.js's
+    // Existence semantics (LIMIT 1 on a matching row), never stake_source.js's
     // `ORDER BY action_index DESC LIMIT 1` single-answer form: a key legitimately backed by
     // two sources must pass under EACH of them, and picking only the latest would reject an
     // honest archive.
     //
     // Deliberately NOT added here: the revocation and permanent-slash exclusions
-    // stake-source.js carries. Those are QUALIFICATION predicates and belong to
+    // stake_source.js carries. Those are QUALIFICATION predicates and belong to
     // _verifyCompleteness; applying them here would make this probe stricter than the set the
     // archive was built from. Known residual: a source's own revoked or slashed key still
     // binds to that source and passes. Same reasoning as the existence guard above.
@@ -501,7 +501,7 @@ class AnchorRecovery {
     // the second tried only when the first finds nothing: a DELEGATED signing key holds no
     // `stakes` row of its own, so a stakes-only probe would reject every honest archive that
     // carries a delegated-only validator. Join-shaped like _hasDirectStake rather than
-    // id-lookup-shaped like stake-source.js, so it answers on a bare doQuery handle.
+    // id-lookup-shaped like stake_source.js, so it answers on a bare doQuery handle.
     async hasBoundStake(pubkey, source, atBlock){
         let at   = Number(atBlock);
         let args = [pubkey, source, at, at];

@@ -450,7 +450,7 @@ module.exports = {
         // Even after the genesis-path optimizations (intern cache + read-skip in genesis.js /
         // issue.js), the full BTC CSV derivation measured ~124 min on commodity hardware. That
         // path is now the FALLBACK/generator only - normal full-parse nodes import the precomputed
-        // state dump (minutes, see genesisDump.js) - but the watchdog must still cover the CSV
+        // state dump (minutes, see genesis_dump.js) - but the watchdog must still cover the CSV
         // fallback on a slower DB, so it is set to 4h. See genesis.js.
         config['GENESIS_BLOCK']            = 0;     // 0 = disabled; pinned per chain in coins/<COIN>.js
         config['GENESIS_LEDGER_HASH']      = null;  // sha256 hex of the bundled CSV; null = skip verify
@@ -487,7 +487,7 @@ module.exports = {
         // crediting anything and requires it on mainnet.
         config['GENESIS_AIRDROP_SET_HASH']       = airdropEnv ? (process.env.GENESIS_AIRDROP_SET_HASH || null) : null;
 
-        // Precomputed genesis state dump (genesisDump.js). When this artifact is present at
+        // Precomputed genesis state dump (genesis_dump.js). When this artifact is present at
         // GENESIS_DUMP_PATH, inject() bulk-imports it (minutes) instead of re-deriving the
         // ~240k-action genesis ledger through the pipeline (~1h); the importer verifies the
         // file against GENESIS_DUMP_HASH (sha256 of the UNCOMPRESSED content) and re-checks the

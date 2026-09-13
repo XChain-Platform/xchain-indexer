@@ -51,10 +51,10 @@ const bridgeSettle       = require('./consensus/bridge_settle.js');
 const rollcallClose      = require('./consensus/rollcall_close.js');
 const { RollcallProofClient } = require('./consensus/rollcall_proof_client.js');
 const HubPushQueue = require('./hub/hub_push_queue.js');
-const UtxoTracker  = require('./chain/UtxoTracker.js');
+const UtxoTracker  = require('./chain/utxo_tracker.js');
 const Genesis      = require('./chain/genesis.js');
 const { collapseOutputFanout } = require('./chain/output_fanout.js');
-const { blockMayReadPrice }    = require('./chain/priceReadPredicate.js');
+const { blockMayReadPrice }    = require('./chain/price_read_predicate.js');
 const trainActivation          = require('./train_activation.js');
 
 // Hub->indexer config poll cadence (ms). This is the sole staleness / propagation bound for the
@@ -1201,7 +1201,7 @@ class XChainIndexer {
         // That fallback is a TEST AFFORDANCE and NOT a production path. The real Database
         // always defines apiView(), so against a live indexer the raw-db branch is unreachable; a
         // production handle without it is a wiring bug to fix, not a case to serve. Do not spread this
-        // shape to the federation READ sites in api.js and stake-source.js: there a silent raw-db
+        // shape to the federation READ sites in api.js and stake_source.js: there a silent raw-db
         // fallback would re-open exactly the dirty read REORG-1 and federation READ isolation exist
         // to prevent. When a
         // test double trips over a missing apiView, the fix belongs to the DOUBLE (give it
@@ -1435,7 +1435,7 @@ class XChainIndexer {
                 // hub DB is the hub itself, always current).
                 //
                 // The time-keyed barrier is NOT conditioned on the
-                // NATIVE_FEE_PRICE_TIME_GATE flag-day. It was originally introduced as the
+                // NATIVE_FEE_PRICE_TIME_GATE flag-day. It was first introduced as the
                 // twin of that gate's fee-validation change (H-3: db.getLatestPrice
                 // selectByTime), but native fees are not the only time-keyed reader of
                 // price_snapshots. FIAT dispenser settlement reads the table bounded on
@@ -1495,7 +1495,7 @@ class XChainIndexer {
                 // or after it and burns the full timeout every time. A block that reads no
                 // price is byte-identical against a current mirror and a stale one, so that
                 // wait buys nothing. blockMayReadPrice is a deliberate over-approximation
-                // (see priceReadPredicate.js): any transaction at all means wait, and the
+                // (see price_read_predicate.js): any transaction at all means wait, and the
                 // end-of-block passes, which can run the VM on a transaction-free block, are
                 // caught fail-closed at the read itself by db._assertPriceBarrierNotSkipped().
                 // Safe without a flag day because a skipped barrier changes no hashed value,

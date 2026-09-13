@@ -432,7 +432,7 @@ const xbridge            = require('./xbridge/index.js');
 // Full-node possession-proof verdict (verified-validator tier)
 const nodeproof          = require('./nodeproof.js');
 const rollcall           = require('./rollcall/index.js');
-const PreflightMemo      = require('../chain/preflightMemo.js');
+const PreflightMemo      = require('../chain/preflight_memo.js');
 
 class Actions {
 

@@ -25,7 +25,7 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const assert = require('assert');
 const sinon  = require('sinon');
-const { getStakeSourceByPubkey } = require('../../src/api/stake-source');
+const { getStakeSourceByPubkey } = require('../../src/api/stake_source');
 const { getTestConfig } = require('../fixtures/config');
 const Utility           = require('../../src/utility');
 const Database          = require('../../src/db');

@@ -326,7 +326,7 @@ describe('batched COINPAY resolves its own payment output @regression @tier1', f
 
     describe('ledger shape', function () {
 
-        // Spec row 30 SPLIT the probe contract this case used to pin: a probe now READS
+        // Spec row 30 SPLIT the probe contract this case once pinned: a probe now READS
         // the output set (it is inside the same batch) and writes nothing. The old
         // assertion (payee B skipping as a destination mismatch) was the false negative,
         // and the full case lives in feeProbeBatchedCoinpayParity.test.js.

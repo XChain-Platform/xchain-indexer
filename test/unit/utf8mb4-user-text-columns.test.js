@@ -50,7 +50,7 @@ const MIG_DIR = path.join(SQL_DIR, 'migrations');
 // The ruled scope of the 2026-08-19 pass: columns that ingest free-form wire text. The two
 // groups it deliberately excluded - contracts.code and the grammar-constrained raw fields -
 // were widened later by the 2026-09-02 pair and are covered by their own sibling suite,
-// utf8mb4-raw-wire-fields.test.js, driven from src/chain/utf8mb4Columns.js. Still absent from
+// utf8mb4-raw-wire-fields.test.js, driven from src/chain/utf8mb4_columns.js. Still absent from
 // both, each for a reason recorded in that module: index_addresses.address (the consensus
 // preimages pin COLLATE utf8_bin on it), contract_state.* (height-gated collation
 // flag-day), and polls.callback_params (its ADD COLUMN migration is checksum-immutable at

@@ -70,7 +70,7 @@ describe('federation READ connection isolation @regression @tier1', function () 
     const bodies = extractHandlerBodies(API_SRC);
 
     // getstakesourcebypubkey delegates its whole implementation to
-    // src/api/stake-source.js (getStakeSourceByPubkey), which is where the apiView()
+    // src/api/stake_source.js (getStakeSourceByPubkey), which is where the apiView()
     // routing and its own runtime test live; it has no inline DB access to guard.
     const DELEGATED = new Set(['getstakesourcebypubkey']);
 
@@ -79,7 +79,7 @@ describe('federation READ connection isolation @regression @tier1', function () 
             assert.ok(bodies[name], 'no handler found for federation-read method: ' + name);
     });
 
-    it('getstakesourcebypubkey delegates to stake-source.js (apiView routing lives there)', function () {
+    it('getstakesourcebypubkey delegates to stake_source.js (apiView routing lives there)', function () {
         assert.match(bodies['getstakesourcebypubkey'], /getStakeSourceByPubkey\s*\(\s*indexer/,
             'getstakesourcebypubkey must delegate to getStakeSourceByPubkey(indexer, ...)');
     });

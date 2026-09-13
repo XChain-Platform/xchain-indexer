@@ -131,7 +131,7 @@ describe('bin/reachability.js', function () {
             // Path order, not an arbitrary list: the verdict is keyed by sorted
             // path, so moving a module into a feature directory moves its row.
             assert.deepStrictEqual(withheld, [
-                'src/chain/utf8mb4Columns.js',
+                'src/chain/utf8mb4_columns.js',
                 'src/consensus/xchainPrice.js',
                 'src/consensus/xchainPriceQuery.js',
                 'src/vm_exec_lint_activation.js',

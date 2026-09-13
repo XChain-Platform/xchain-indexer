@@ -36,20 +36,20 @@ const XChainIndexer = require('./XChainIndexer');
 const jsonRouter    = require('express-json-rpc-router');
 const { buildHealthResponse, committedView, inFlightBlockIndex } = require('./api/health');
 const { createShutdown, createIndexerDrain } = require('./api/shutdown');
-const { getStakeSourceByPubkey } = require('./api/stake-source');
-const anchorActionQuery = require('./actions/anchor/anchor-action-query');
-const priceBatchQuery   = require('./api/price-batch-query');
-const reorgHistoryQuery = require('./api/reorg-history-query');
-const { stampGiveDecimals } = require('./api/crossChainOfferDecimals');
+const { getStakeSourceByPubkey } = require('./api/stake_source');
+const anchorActionQuery = require('./actions/anchor/anchor_action_query');
+const priceBatchQuery   = require('./api/price_batch_query');
+const reorgHistoryQuery = require('./api/reorg_history_query');
+const { stampGiveDecimals } = require('./api/cross_chain_offer_decimals');
 const merkle        = require('./consensus/merkle');
 const stateSubtree  = require('./state_subtree_activation');
 const srb           = require('./snapshot_reorg_buffer.js');      // CANONICAL_REORG_BUFFER, to reconstruct the raw request height
 const gatesFilter   = require('./actions/attest/rollcall_gates_filter.js');      // rules-aware attestation capability filter
 const crypto        = require('crypto');
 const { installObservability } = require('./observability');   // default-off /metrics + structured log shim
-const { installIndexerMetrics } = require('./api/indexerMetrics');  // poll-freshness heartbeat gauge
+const { installIndexerMetrics } = require('./api/indexer_metrics');  // poll-freshness heartbeat gauge
 const { parseCorsOrigin } = require('./api/corsOrigin.js');
-const { installCrashHandlers } = require('./actions/anchor/diagnosticEvents.js');
+const { installCrashHandlers } = require('./actions/anchor/diagnostic_events.js');
 
 // Constant-time API-key comparison. A plain `!==` short-circuits at the first
 // mismatching byte, leaking the key that guards reward-forging writes through
@@ -1088,7 +1088,7 @@ async function startApi(){
                 // Give-side decimal grid: the hub quantizes each cross-chain
                 // fill on the grid of the leg that gives it, and declines the match outright
                 // rather than guessing when it is absent. Resolution lives in
-                // crossChainOfferDecimals.js (it delegates to the same getTokenInfo
+                // cross_chain_offer_decimals.js (it delegates to the same getTokenInfo
                 // order_match.js uses, so the two grids cannot drift).
                 await stampGiveDecimals(db, indexer.util, indexer.config['COIN_DECIMALS'], merged, latest);
                 return {
@@ -1649,7 +1649,7 @@ async function startApi(){
         // not-yet-anchored checkpoint from a positively-detected txid forge.
         //
         // The candidate rows are read with doQuery + the SQL owned by
-        // anchor-action-query.js rather than a db.js accessor, keeping this read
+        // anchor_action_query.js rather than a db.js accessor, keeping this read
         // surface isolated (db.js is under concurrent edit). db.js's single-row
         // getAnchorActionByCheckpoint is superseded by this path and should be
         // folded back here once db.js is free.

@@ -6,7 +6,7 @@
     "siblingsRoot": "..",
     "note": "M3 wave-1 baseline for row 37 (repaired tool: root-var, helper, shell-var, shell-arg and computed-require idioms added). The indexer working tree was CLEAN at e8ae831e when this lane started; by the time the repaired tool could run, lanes MAP+CODEMOD, ROW-7+8 and CROSS-REPO were already mid-move in the same tree, so the exists flags here are of a tree in motion, not of e8ae831e. indexerSrcFilesAtBaseSha is the stable answer: a reference whose path is in that list and absent from the tree at the barrier is a MISSED repoint. Sibling repos only: the platform-tooling sweep is opt-in (--include-platform-tooling plus SIBLING_MAP_EXTRA_DIRS) and is excluded from this pin, so platformToolingSwept is empty here.",
     "indexerSrcFilesAtBaseSha": [
-      "src/UtxoTracker.js",
+      "src/utxo_tracker.js",
       "src/XChainIndexer.js",
       "src/actions.js",
       "src/actions/README.md",
@@ -65,7 +65,7 @@
       "src/actions/xexec.js",
       "src/addressRefFields.js",
       "src/amount_representability_activation.js",
-      "src/anchor-action-query.js",
+      "src/anchor_action_query.js",
       "src/anchor_activation.js",
       "src/anchor_proof_client.js",
       "src/anchor_reward_activation.js",
@@ -108,7 +108,7 @@
       "src/contractStateSubtree.js",
       "src/contract_meta.js",
       "src/corsOrigin.js",
-      "src/crossChainOfferDecimals.js",
+      "src/cross_chain_offer_decimals.js",
       "src/cross_chain_royalty_activation.js",
       "src/db/actions.js",
       "src/db/addresses.js",
@@ -173,10 +173,10 @@
       "src/db/withdrawals.js",
       "src/db/xbridges.js",
       "src/db/xcalls.js",
-      "src/diagnosticEvents.js",
+      "src/diagnostic_events.js",
       "src/dispense_cancelling_match_activation.js",
       "src/dispense_payment_tally_scale_activation.js",
-      "src/dispenserDivergenceMetrics.js",
+      "src/dispenser_divergence_metrics.js",
       "src/dispenser_amount_positivity_activation.js",
       "src/dispenser_caps_activation.js",
       "src/dispenser_freshness_activation.js",
@@ -191,13 +191,13 @@
       "src/escrowLeafSubtree.js",
       "src/gated_handoff_ref_activation.js",
       "src/genesis.js",
-      "src/genesisDump.js",
+      "src/genesis_dump.js",
       "src/health.js",
       "src/hub-schema-version.js",
       "src/hub_client.js",
       "src/hub_db_sync.js",
       "src/hub_push_queue.js",
-      "src/indexerMetrics.js",
+      "src/indexer_metrics.js",
       "src/ledger_amount_precision_activation.js",
       "src/list_edit_resolution_activation.js",
       "src/list_owner_activation.js",
@@ -213,9 +213,9 @@
       "src/oracle_snapshot_age_causality_activation.js",
       "src/oracle_stale_round_visibility_activation.js",
       "src/output_fanout.js",
-      "src/preflightMemo.js",
-      "src/price-batch-query.js",
-      "src/priceReadPredicate.js",
+      "src/preflight_memo.js",
+      "src/price_batch_query.js",
+      "src/price_read_predicate.js",
       "src/price_batch_compression.js",
       "src/price_batching_floor_activation.js",
       "src/price_fee_batch_landed_activation.js",
@@ -227,7 +227,7 @@
       "src/protocolAddressRoles.js",
       "src/protocol_changes.js",
       "src/protocol_time.js",
-      "src/reorg-history-query.js",
+      "src/reorg_history_query.js",
       "src/reservedRoots.js",
       "src/retention.js",
       "src/retraction_signing_activation.js",
@@ -459,7 +459,7 @@
       "src/sql/withdrawals.sql",
       "src/sql/xbridges.sql",
       "src/sql/xcalls.sql",
-      "src/stake-source.js",
+      "src/stake_source.js",
       "src/stake_key_reuse_activation.js",
       "src/stake_weight_collation_activation.js",
       "src/stake_weighted_quorum.js",
@@ -475,7 +475,7 @@
       "src/token_bridge_activation.js",
       "src/token_policy_activation.js",
       "src/train_activation.js",
-      "src/utf8mb4Columns.js",
+      "src/utf8mb4_columns.js",
       "src/utility.js",
       "src/vm_deploy_lint_pkg3_activation.js",
       "src/vm_exec_lint_activation.js",
@@ -5263,7 +5263,7 @@
         }
       ]
     },
-    "src/api/stake-source.js": {
+    "src/api/stake_source.js": {
       "exists": true,
       "referenceCount": 3,
       "referringRepos": [
@@ -5276,7 +5276,7 @@
           "line": 59,
           "kind": "text",
           "form": "text",
-          "raw": "src/api/stake-source.js"
+          "raw": "src/api/stake_source.js"
         },
         {
           "repo": "xchain-e2e-test",
@@ -5284,7 +5284,7 @@
           "line": 60,
           "kind": "text",
           "form": "text",
-          "raw": "src/api/stake-source.js"
+          "raw": "src/api/stake_source.js"
         },
         {
           "repo": "xchain-e2e-test",
@@ -5292,7 +5292,7 @@
           "line": 61,
           "kind": "text",
           "form": "text",
-          "raw": "src/api/stake-source.js"
+          "raw": "src/api/stake_source.js"
         }
       ]
     },
@@ -5839,7 +5839,7 @@
         }
       ]
     },
-    "src/chain/priceReadPredicate.js": {
+    "src/chain/price_read_predicate.js": {
       "exists": true,
       "referenceCount": 1,
       "referringRepos": [
@@ -5852,7 +5852,7 @@
           "line": 465,
           "kind": "text",
           "form": "helper",
-          "raw": "src/chain/priceReadPredicate.js",
+          "raw": "src/chain/price_read_predicate.js",
           "via": "sibling"
         }
       ]
@@ -5874,7 +5874,7 @@
         }
       ]
     },
-    "src/chain/utf8mb4Columns.js": {
+    "src/chain/utf8mb4_columns.js": {
       "exists": true,
       "referenceCount": 1,
       "referringRepos": [
@@ -5887,7 +5887,7 @@
           "line": 1068,
           "kind": "text",
           "form": "helper",
-          "raw": "src/chain/utf8mb4Columns.js",
+          "raw": "src/chain/utf8mb4_columns.js",
           "via": "indexerFile"
         }
       ]
@@ -9405,7 +9405,7 @@
         }
       ]
     },
-    "src/dispenserDivergenceMetrics.js": {
+    "src/dispenser_divergence_metrics.js": {
       "exists": false,
       "referenceCount": 6,
       "referringRepos": [
@@ -9419,7 +9419,7 @@
           "line": 3343,
           "kind": "text",
           "form": "text",
-          "raw": "src/dispenserDivergenceMetrics.js"
+          "raw": "src/dispenser_divergence_metrics.js"
         },
         {
           "repo": "xchain-decoder",
@@ -9427,7 +9427,7 @@
           "line": 513,
           "kind": "text",
           "form": "text",
-          "raw": "src/dispenserDivergenceMetrics.js"
+          "raw": "src/dispenser_divergence_metrics.js"
         },
         {
           "repo": "xchain-node",
@@ -9435,7 +9435,7 @@
           "line": 3000,
           "kind": "text",
           "form": "text",
-          "raw": "src/dispenserDivergenceMetrics.js"
+          "raw": "src/dispenser_divergence_metrics.js"
         },
         {
           "repo": "xchain-node",
@@ -9443,7 +9443,7 @@
           "line": 513,
           "kind": "text",
           "form": "text",
-          "raw": "src/dispenserDivergenceMetrics.js"
+          "raw": "src/dispenser_divergence_metrics.js"
         },
         {
           "repo": "xchain-node",
@@ -9451,7 +9451,7 @@
           "line": 3278,
           "kind": "text",
           "form": "text",
-          "raw": "src/dispenserDivergenceMetrics.js"
+          "raw": "src/dispenser_divergence_metrics.js"
         },
         {
           "repo": "xchain-node",
@@ -9459,7 +9459,7 @@
           "line": 513,
           "kind": "text",
           "form": "text",
-          "raw": "src/dispenserDivergenceMetrics.js"
+          "raw": "src/dispenser_divergence_metrics.js"
         }
       ]
     },
@@ -14396,7 +14396,7 @@
         }
       ]
     },
-    "src/stake-source.js": {
+    "src/stake_source.js": {
       "exists": false,
       "referenceCount": 3,
       "referringRepos": [
@@ -14409,7 +14409,7 @@
           "line": 59,
           "kind": "text",
           "form": "text",
-          "raw": "src/stake-source.js"
+          "raw": "src/stake_source.js"
         },
         {
           "repo": "xchain-node",
@@ -14417,7 +14417,7 @@
           "line": 60,
           "kind": "text",
           "form": "text",
-          "raw": "src/stake-source.js"
+          "raw": "src/stake_source.js"
         },
         {
           "repo": "xchain-node",
@@ -14425,7 +14425,7 @@
           "line": 61,
           "kind": "text",
           "form": "text",
-          "raw": "src/stake-source.js"
+          "raw": "src/stake_source.js"
         }
       ]
     },

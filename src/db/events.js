@@ -23,7 +23,7 @@ const path    = require('path');
 // Single decoder for the decoder's REORG event payload, shared with the getreorghistory RPC
 // so the array-of-{block_index, block_hash} contract is defined once. Pure leaf module (no
 // requires of its own), so no cycle.
-const reorgHistoryQuery = require('../api/reorg-history-query');
+const reorgHistoryQuery = require('../api/reorg_history_query');
 
 module.exports = {
 

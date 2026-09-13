@@ -61,7 +61,7 @@
         "price-batch-query (getpricebatches) db.getPriceBatchesOverlappingRange asks only for valid version-0 batch rows overlapping the range",
         "price-batch-query (getpricebatches) db.getPriceBatchesOverlappingRange binds status, last_round, first_round, limit in that order"
       ],
-      "why": "src/price-batch-query.js exported PRICE_BATCHES_SQL as a string for api.js to run, which left the file's last statement outside src/db. Row 5 moved it verbatim into getPriceBatchesOverlappingRange() on the prices mixin, so the inner describe names the method instead of the vanished constant. Every one of the six assertions in the old case survives verbatim in the renamed one, now read off the SQL the method actually issues through a recording stub rather than off an exported string; the second title is NEW coverage the move made reachable, pinning the bind order (status, last, first, limit) and the backwards range comparison that a text assertion on a constant could never see. Net: one title renamed, one added, none lost."
+      "why": "src/price_batch_query.js exported PRICE_BATCHES_SQL as a string for api.js to run, which left the file's last statement outside src/db. Row 5 moved it verbatim into getPriceBatchesOverlappingRange() on the prices mixin, so the inner describe names the method instead of the vanished constant. Every one of the six assertions in the old case survives verbatim in the renamed one, now read off the SQL the method actually issues through a recording stub rather than off an exported string; the second title is NEW coverage the move made reachable, pinning the bind order (status, last, first, limit) and the backwards range comparison that a text assertion on a constant could never see. Net: one title renamed, one added, none lost."
     },
     {
       "row": 5,
@@ -79,7 +79,7 @@
         "db.getReorgEventsSince parameterizes since_id and limit (no interpolation)",
         "db.getReorgEventsSince reads only REORG events, newest first, bounded"
       ],
-      "why": "src/reorg-history-query.js exported REORG_EVENTS_SQL for api.js to run against the decoder database, leaving the file's only SQL outside src/db. Row 5 moved it verbatim to getReorgEventsSince() on the events mixin, called on decoderDb. The describe was named `reorg-history-query: REORG_EVENTS_SQL` and is now `db.getReorgEventsSince`, which is why both full titles move together: the two cases pair one for one, the assertions are unchanged (code = 'REORG', ORDER BY id DESC, LIMIT ?, two placeholders) and are now read off the SQL the method issues, with a deepStrictEqual on the bind order added inside the existing case. Net: two titles renamed, none lost, no case removed."
+      "why": "src/reorg_history_query.js exported REORG_EVENTS_SQL for api.js to run against the decoder database, leaving the file's only SQL outside src/db. Row 5 moved it verbatim to getReorgEventsSince() on the events mixin, called on decoderDb. The describe was named `reorg-history-query: REORG_EVENTS_SQL` and is now `db.getReorgEventsSince`, which is why both full titles move together: the two cases pair one for one, the assertions are unchanged (code = 'REORG', ORDER BY id DESC, LIMIT ?, two placeholders) and are now read off the SQL the method issues, with a deepStrictEqual on the bind order added inside the existing case. Net: two titles renamed, none lost, no case removed."
     }
   ],
   "compare_rows": 23,

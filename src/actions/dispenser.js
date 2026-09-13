@@ -43,7 +43,7 @@
  *
  ********************************************************************/
 
-const divergenceMetrics = require('../chain/dispenserDivergenceMetrics.js');
+const divergenceMetrics = require('../chain/dispenser_divergence_metrics.js');
 const dispenserFreshness = require('../dispenser_freshness_activation.js');
 const dispenserFreshnessShape = require('../dispenser_freshness_shape_activation.js');
 const dispenserCaps = require('../dispenser_caps_activation.js');

@@ -20,7 +20,7 @@
  *
  * validator_rewards is block-scoped replicated/hashed state, so the source_id
  * stored during block processing must equal the source the ANCHOR archive pins
- * and recovery restores (resolved by stake-source.js getStakeSourceByPubkey with
+ * and recovery restores (resolved by stake_source.js getStakeSourceByPubkey with
  * the same predicates). A loose "latest stake by action_index" resolution diverges
  * from the archive and breaks byte-identical recovery. These tests assert the
  * writers use the strict predicates: no recording-block_index gate, slash exclusion

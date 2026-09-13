@@ -39,7 +39,7 @@ const { getTestConfig }      = require('../fixtures/config');
 const Utility                = require('../../src/utility');
 const Database               = require('../../src/db');
 const XChainIndexer          = require('../../src/XChainIndexer');
-const { blockMayReadPrice }  = require('../../src/chain/priceReadPredicate');
+const { blockMayReadPrice }  = require('../../src/chain/price_read_predicate');
 const { rethrowIfInfraFault } = require('../../src/consensus/fault_guard');
 
 const INDEXER_SRC = fs.readFileSync(

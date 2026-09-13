@@ -84,7 +84,7 @@ const PROOF_STALL_REASON = {
 // The ANCHOR wire version that carries a checkpoint SECTION in its own right. Version 1 is the
 // archive head, which carries its WRAPPER checkpoint's identity rather than being one, and
 // version 2 is a continuation chunk with no identity at all. Kept as a local constant rather
-// than imported from anchor-action-query.js's CHECKPOINT_VERSIONS, which deliberately admits
+// than imported from anchor_action_query.js's CHECKPOINT_VERSIONS, which deliberately admits
 // the archive head for the getanchoraction read: an archive head's state_root columns are NULL
 // (see sql/anchor_actions.sql), so admitting it here would select a rootless "checkpoint" that
 // fails CHECKPOINT_ROOTLESS and turn a provable transfer into a refusal.

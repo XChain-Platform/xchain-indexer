@@ -21,7 +21,7 @@
  * seq and a replayed older checkpoint passed the _parseCheckpoint staleness
  * guard, getting recorded STATUS='valid' into the permanent anchor_actions
  * record. The fix builds the filter from the shared CHECKPOINT_VERSIONS
- * constant (anchor-action-query.js), same as getAnchorActionByCheckpoint.
+ * constant (anchor_action_query.js), same as getAnchorActionByCheckpoint.
  * These tests pin that the query and the constant can never drift again.
  */
 
@@ -36,7 +36,7 @@ const sinon  = require('sinon');
 const { getTestConfig }       = require('../fixtures/config');
 const Utility                 = require('../../src/utility');
 const Database                = require('../../src/db');
-const { CHECKPOINT_VERSIONS } = require('../../src/actions/anchor/anchor-action-query');
+const { CHECKPOINT_VERSIONS } = require('../../src/actions/anchor/anchor_action_query');
 
 function makeDb() {
     const config  = getTestConfig();

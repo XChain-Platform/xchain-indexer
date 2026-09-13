@@ -36,7 +36,7 @@ const fs     = require('fs');
 const path   = require('path');
 
 const Database = require('../../src/db');
-const q        = require('../../src/actions/anchor/anchor-action-query.js');
+const q        = require('../../src/actions/anchor/anchor_action_query.js');
 
 const SQL_DIR = path.join(__dirname, '..', '..', 'src', 'sql');
 
@@ -55,7 +55,7 @@ function definitionColumns() {
 }
 
 // alias -> table, from `FROM <table> <alias>` / `JOIN <table> <alias>` (the shape every
-// query in anchor-action-query.js uses).
+// query in anchor_action_query.js uses).
 function aliasMap(sql) {
     const map = {};
     for (const m of String(sql).matchAll(/\b(?:FROM|JOIN)\s+(\w+)\s+(\w+)\b/gi)) {

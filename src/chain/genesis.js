@@ -79,13 +79,13 @@ class Genesis {
         // Fast path: if a precomputed state dump is present, bulk-import it instead of
         // re-deriving the ledger through the pipeline. The importer verifies the artifact
         // against GENESIS_DUMP_HASH and re-checks the recomputed block hashes (see
-        // genesisDump.js), so the imported state is provably the canonical genesis state.
+        // genesis_dump.js), so the imported state is provably the canonical genesis state.
         let dumpFile = this.config['GENESIS_DUMP_PATH'];
         if(dumpFile && fs.existsSync(dumpFile)){
             console.log('GENESIS: importing precomputed dump for ' + this.config['COIN'] + ' at block ' + blockToParse + ' from ' + dumpFile);
             if(this.util.isNull(this.config['GENESIS_DUMP_HASH']))
                 console.warn('GENESIS: GENESIS_DUMP_HASH is not pinned; importing on the dump-recorded block hashes only (no content-hash anchor).');
-            let GenesisDump = require('./genesisDump');
+            let GenesisDump = require('./genesis_dump');
             let res = await (new GenesisDump(this.indexerDb, this.util, this.config)).read(dumpFile);
             console.log('GENESIS: imported ' + res.rowsImported + ' rows (block hashes verified)');
             return;

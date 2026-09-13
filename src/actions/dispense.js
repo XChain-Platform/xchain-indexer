@@ -18,7 +18,7 @@
   *
  ********************************************************************/
 
-const divergenceMetrics = require('../chain/dispenserDivergenceMetrics.js');
+const divergenceMetrics = require('../chain/dispenser_divergence_metrics.js');
 const dispenserCaps = require('../dispenser_caps_activation.js');
 const dispenserAmountPositivity = require('../dispenser_amount_positivity_activation.js');
 const tallyScaleActivation = require('../dispense_payment_tally_scale_activation.js');

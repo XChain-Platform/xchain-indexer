@@ -14,7 +14,7 @@
  *
  * Pure helpers for the getreorghistory RPC (api.js), extracted for unit testing
  * because startApi() is not importable (it opens DB connections). Mirrors the
- * anchor-action-query.js layout: request validation, the SQL, and the row ->
+ * anchor_action_query.js layout: request validation, the SQL, and the row ->
  * response mapping.
  *
  * WHY THIS EXISTS (REORG-OLDHASH-UNVERIFIED-1):

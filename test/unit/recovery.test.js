@@ -771,7 +771,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         });
 
         it('admits a key legitimately backed by TWO sources under either of them', async function () {
-            // Existence semantics, not stake-source.js's "latest row wins": picking one
+            // Existence semantics, not stake_source.js's "latest row wins": picking one
             // answer per key would condemn an honest archive that names the other source.
             let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
             let staked  = oracleKeys.concat(crossKeys).map(k => k.pubkey);

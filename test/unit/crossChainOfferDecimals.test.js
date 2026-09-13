@@ -32,7 +32,7 @@
 'use strict';
 
 const assert = require('assert');
-const { stampGiveDecimals } = require('../../src/api/crossChainOfferDecimals');
+const { stampGiveDecimals } = require('../../src/api/cross_chain_offer_decimals');
 
 // Minimal util stand-in: only isNull is used, with the same semantics as src/utility.js.
 const util = { isNull: (v) => (v === null || v === undefined) };

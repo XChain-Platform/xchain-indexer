@@ -17,7 +17,7 @@
 const assert        = require('assert');
 const { EventEmitter } = require('events');
 
-const diag          = require('../../src/actions/anchor/diagnosticEvents.js');
+const diag          = require('../../src/actions/anchor/diagnostic_events.js');
 const observability = require('../../src/observability');
 const XChainDB      = require('../../src/db');
 

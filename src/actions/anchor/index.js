@@ -67,8 +67,8 @@ const arKey   = require('./anchor_reward_key.js');
 const abas    = require('../../archive_batch_author_activation.js');
 const ahug    = require('../../archive_head_unverified_gate_activation.js');
 const aact    = require('../../anchor_activation.js');
-const aaq     = require('./anchor-action-query.js');
-const diag    = require('./diagnosticEvents.js');
+const aaq     = require('./anchor_action_query.js');
+const diag    = require('./diagnostic_events.js');
 
 const ALLOWED_CHAINS = ['BTC', 'LTC', 'DOGE'];
 

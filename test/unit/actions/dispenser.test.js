@@ -900,7 +900,7 @@ describe('Dispenser action handler @regression @tier2', function () {
         describe('oracle-shape flag-day (malformed tracker reply must not grant freshness)', function () {
 
             const shapeGate  = require('../../../src/dispenser_freshness_shape_activation.js');
-            const RealTracker = require('../../../src/chain/UtxoTracker.js');
+            const RealTracker = require('../../../src/chain/utxo_tracker.js');
             const SHAPE_KEY   = 'BTC:mainnet';
             const ARMED_AT    = 400;   // below the 961000 freshness height, so the tracker path still runs
 

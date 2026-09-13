@@ -19,7 +19,7 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const Utility       = require('../../src/utility.js');
 const Actions       = require('../../src/actions/index.js');
-const PreflightMemo = require('../../src/chain/preflightMemo.js');
+const PreflightMemo = require('../../src/chain/preflight_memo.js');
 
 const FEE_DEST    = 'feeDestinationAddr111111111111111';
 const PLACEHOLDER = 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';

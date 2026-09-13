@@ -29,7 +29,7 @@ const sinon  = require('sinon');
 
 const Utility       = require('../../src/utility.js');
 const Actions       = require('../../src/actions/index.js');
-const PreflightMemo = require('../../src/chain/preflightMemo.js');
+const PreflightMemo = require('../../src/chain/preflight_memo.js');
 const Batch         = require('../../src/actions/batch.js');
 const Dispenser     = require('../../src/actions/dispenser.js');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../fixtures/mocks');

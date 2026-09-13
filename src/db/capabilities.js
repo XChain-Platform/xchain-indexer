@@ -40,7 +40,7 @@ module.exports = {
     // blockIndex: block height when the reward was earned
     // Resolve the source_id (index_addresses id) of the active staking source
     // backing `pubkey_id` at `blockIndex`, or null. Active-row predicates are
-    // IDENTICAL to stake-source.js getStakeSourceByPubkey (and thus to
+    // IDENTICAL to stake_source.js getStakeSourceByPubkey (and thus to
     // _effectiveCapabilitySetSql membership): status=valid, activation/deactivation
     // window, stake-key revocation, permanent slash. Reward writers MUST use this so
     // the source_id stored during block processing matches the source the ANCHOR

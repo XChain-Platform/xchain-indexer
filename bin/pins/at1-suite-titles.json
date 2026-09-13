@@ -754,7 +754,7 @@
       "federation READ connection isolation @regression @tier1 getreorghistory resolves its DB through apiView()",
       "federation READ connection isolation @regression @tier1 getrollcallsigners makes no bare indexerDb/decoderDb read call (would join the block tx)",
       "federation READ connection isolation @regression @tier1 getrollcallsigners resolves its DB through apiView()",
-      "federation READ connection isolation @regression @tier1 getstakesourcebypubkey delegates to stake-source.js (apiView routing lives there)",
+      "federation READ connection isolation @regression @tier1 getstakesourcebypubkey delegates to stake_source.js (apiView routing lives there)",
       "federation READ connection isolation @regression @tier1 getstakeweightsbycapability makes no bare indexerDb/decoderDb read call (would join the block tx)",
       "federation READ connection isolation @regression @tier1 getstakeweightsbycapability resolves its DB through apiView()"
     ],

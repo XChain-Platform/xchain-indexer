@@ -20,7 +20,7 @@
  * dirty read the REORG-1 guards exist to prevent.
  *
  * The concrete failure this guards: an e2e double carrying only
- * doQuery/getPubkeyId/getStatusId hit stake-source.js and died on
+ * doQuery/getPubkeyId/getStatusId hit stake_source.js and died on
  * "indexer.indexerDb.apiView is not a function". The fix went to the DOUBLE, not
  * to the call site. This suite keeps that decision from eroding: the fallback
  * stays unreachable against the real Database, its three sites stay documented

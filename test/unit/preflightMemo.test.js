@@ -5,7 +5,7 @@
 // eviction, and key construction. Pure - no DB, no dlopen.
 
 const assert = require('assert');
-const PreflightMemo = require('../../src/chain/preflightMemo.js');
+const PreflightMemo = require('../../src/chain/preflight_memo.js');
 
 describe('PreflightMemo @regression', function () {
 

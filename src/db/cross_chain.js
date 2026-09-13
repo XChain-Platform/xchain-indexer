@@ -27,7 +27,7 @@ const { ATTEST_MAX_EXPIRIES_PER_BLOCK,
         CROSS_SETTLE_MAX_PER_BLOCK,
         ORACLE_VM_ROUND_WINDOW,
         ORACLE_VM_MAX_ROWS } = require('../protocol/constants.js');
-const diag = require('../actions/anchor/diagnosticEvents.js');
+const diag = require('../actions/anchor/diagnostic_events.js');
 
 module.exports = {
 

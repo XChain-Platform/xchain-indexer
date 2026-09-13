@@ -30,7 +30,7 @@ const { ATTEST_MAX_EXPIRIES_PER_BLOCK,
 const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS,
         ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
         ARCHIVE_ANCHOR_BY_CONTENT_SQL, selectArchiveHeadRow,
-        dedupeArchiveChunks } = require('../actions/anchor/anchor-action-query');
+        dedupeArchiveChunks } = require('../actions/anchor/anchor_action_query');
 // The ATTEST batch wire versions, taken from the codec rather than written as literals
 // here, so the chunk read and the parser cannot disagree about which versions are chunks.
 const abw = require('../actions/attest/attest_batch_wire.js');

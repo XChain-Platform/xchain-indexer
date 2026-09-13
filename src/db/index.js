@@ -49,7 +49,7 @@ const tokenPolicyActivation = require('../token_policy_activation');
 const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS,
         ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
         ARCHIVE_ANCHOR_BY_CONTENT_SQL, selectArchiveHeadRow,
-        dedupeArchiveChunks } = require('../actions/anchor/anchor-action-query');
+        dedupeArchiveChunks } = require('../actions/anchor/anchor_action_query');
 const { rethrowIfInfraFault } = require('../consensus/fault_guard');
 // The frozen anchor/archive reward heights: the derive flag-day and the fleet-agreed
 // mirror-completeness watermark. Recovery-restored rewards claim their ORIGINAL derive
@@ -2963,7 +2963,7 @@ class Database {
     // chunk that landed before its parent v1 carries legitimate archive
     // bytes. Mirrors rollback.js's valid-chunk self-join and the recovery.js
     // v1 status filter. #3075 added the authorship term and moved the whole
-    // query into anchor-action-query.js (ARCHIVE_CHUNK_SET_SQL), which
+    // query into anchor_action_query.js (ARCHIVE_CHUNK_SET_SQL), which
     // recovery._verifyBatch now requires verbatim, so the two can no longer
     // drift by hand-copy: only chunks authored by the CANONICAL archive head
     // count, which is what stops a junk chunk broadcast BEFORE the head (stored

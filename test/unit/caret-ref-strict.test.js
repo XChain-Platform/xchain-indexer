@@ -33,7 +33,7 @@
  *      would rewrite persisted rows, since handlers store their cloned data
  *      even for invalid actions) with the verdict travelling beside it;
  *   4. handler-level proof on MINT and DISPENSER that the flag-day converts a
- *      previously-accepted / format-check-dependent reference into a reject.
+ *      otherwise-accepted / format-check-dependent reference into a reject.
  *
  * DB pool is stubbed, so this runs without MariaDB (Node 22).
  *********************************************************************/

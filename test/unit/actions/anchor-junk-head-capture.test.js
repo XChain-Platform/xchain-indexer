@@ -264,7 +264,7 @@ describe('ANCHOR archive batch capture by a junk head @regression @tier1', funct
     // The author-scoped chunk set is the half that decides what actually reassembles
     // (live path AND recovery share it), so pin the properties it must not lose.
     it('the author-scoped chunk query keeps every filter the canonical-head one has', function () {
-        const q = require('../../../src/actions/anchor/anchor-action-query.js');
+        const q = require('../../../src/actions/anchor/anchor_action_query.js');
         const one = (sql) => String(sql).replace(/\s+/g, ' ').trim();
         const scoped = one(q.ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL);
         assert.match(scoped, /c\.version = 2/i);

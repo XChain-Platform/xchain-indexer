@@ -17,7 +17,7 @@
  * the 2026-08-19 pass widened. This one covers the two groups that pass deliberately left
  * behind and that the 2026-09-02 pair widens: contracts.code (plus its chunked twin
  * deploy_chunks.code_part) and the raw wire fields an action persists even when it fails
- * validation. src/chain/utf8mb4Columns.js is the single list all three paths read.
+ * validation. src/chain/utf8mb4_columns.js is the single list all three paths read.
  *
  * Four arms, because a charset needs both schema paths, the right apply mode, and the live
  * ingest to agree:
@@ -46,7 +46,7 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../fixtures/config');
 const Utility           = require('../../src/utility');
 const Database          = require('../../src/db');
-const widenSet          = require('../../src/chain/utf8mb4Columns');
+const widenSet          = require('../../src/chain/utf8mb4_columns');
 
 const SQL_DIR = path.join(__dirname, '..', '..', 'src', 'sql');
 const MIG_DIR = path.join(SQL_DIR, 'migrations');
@@ -203,7 +203,7 @@ describe('the grammar-constrained raw wire columns hold a 4-byte character @regr
                            '\n    definition: ' + spec);
         }
         assert.deepStrictEqual(wrong, [],
-            'These columns disagree with src/chain/utf8mb4Columns.js, so the module no longer describes what a ' +
+            'These columns disagree with src/chain/utf8mb4_columns.js, so the module no longer describes what a ' +
             'fresh install gets and the xchain-sync replica widen would issue the wrong MODIFY:\n' + wrong.join('\n'));
     });
 

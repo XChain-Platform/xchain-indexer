@@ -26,7 +26,7 @@ const { buildStateHashData, ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } =
 const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS,
         ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
         ARCHIVE_ANCHOR_BY_CONTENT_SQL, selectArchiveHeadRow,
-        dedupeArchiveChunks } = require('../actions/anchor/anchor-action-query');
+        dedupeArchiveChunks } = require('../actions/anchor/anchor_action_query');
 // The validator_rewards ledger-key qualifier rule, shared with the two JS writers so the
 // SQL predicate here and they cannot disagree about which reward type is qualified.
 const arKey = require('../actions/anchor/anchor_reward_key.js');
@@ -235,7 +235,7 @@ module.exports = {
     // replay guard. Only status 'valid'/'unverified' rows count (an 'invalid: ...'
     // replay attempt must not poison the watermark).
     async getMaxAnchorCheckpointSeq(chain, network){
-        // Version set is the single source of truth in anchor-action-query.js
+        // Version set is the single source of truth in anchor_action_query.js
         // (shared with getAnchorActionByCheckpoint + the RPC) so the replay
         // watermark can never drift from the checkpoint-bearing definition
         // (a hand-copied literal here once omitted a live checkpoint version, freezing the guard).
@@ -263,7 +263,7 @@ module.exports = {
     // landed on-chain, with the matching payload, at DOGE depth, before trusting an
     // anchor-gossip stamp/reward (the block_index_doge column carries the DOGE height).
     async getAnchorActionByCheckpoint(chain, network, block_index, checkpoint_seq){
-        // Version set is the single source of truth in anchor-action-query.js (shared
+        // Version set is the single source of truth in anchor_action_query.js (shared
         // with the RPC + tests) so the SQL filter can never drift from it.
         let versions = ANCHOR_CHECKPOINT_VERSIONS;
         let query = `SELECT a.action_index, a.version, a.chain, a.network, a.block_index,
@@ -350,7 +350,7 @@ module.exports = {
         let scoped = (author !== undefined && author !== null);
         // Version set from ARCHIVE_HEAD_VERSIONS, never a hand-copied literal, for the
         // reason getArchiveReplayWatermarks states above: this is the same earliest-head
-        // pick as ARCHIVE_HEAD_AUTHOR_SQL in anchor-action-query.js, and it feeds the
+        // pick as ARCHIVE_HEAD_AUTHOR_SQL in anchor_action_query.js, and it feeds the
         // consensus-visible geometry/CRC verdict in anchor.js _parseContinuation. A
         // hand-copied set drifts the moment a new publisher-bearing head version is
         // added, and the two head picks would then disagree fleet-wide.
