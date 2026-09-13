@@ -37,7 +37,6 @@ const Database = require('./db');
 const config   = require('./config.js');
 const Utility  = require('./utility.js');
 
-const { CONFIG_ENV } = require('./config.js');
 // Parse `--file <name>` / `--file=<name>` / `-f <name>` occurrences into a list of
 // migration filenames to scope the run to. Values may be comma-separated. Returns []
 // when no targeting flag is present (the default apply-everything behavior).
@@ -68,11 +67,11 @@ function parseFileTargets(argv){
 }
 
 async function main(){
-    const host = CONFIG_ENV.INDEXER_DB_HOST;
-    const port = CONFIG_ENV.INDEXER_DB_PORT;
-    const name = CONFIG_ENV.INDEXER_DB_NAME;
-    const user = CONFIG_ENV.INDEXER_DB_USER;
-    const pass = CONFIG_ENV.INDEXER_DB_PASS;
+    const host = process.env.INDEXER_DB_HOST;
+    const port = process.env.INDEXER_DB_PORT;
+    const name = process.env.INDEXER_DB_NAME;
+    const user = process.env.INDEXER_DB_USER;
+    const pass = process.env.INDEXER_DB_PASS;
     if(!host || !name || !user){
         console.error('migrate: INDEXER_DB_HOST / INDEXER_DB_NAME / INDEXER_DB_USER must be set (load the service .env).');
         process.exit(2);

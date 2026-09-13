@@ -67,7 +67,6 @@ const ed25519 = require('./ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
 
-const { CONFIG_ENV } = require('../config.js');
 // The block loop's stall reason for a proof that cannot be obtained yet. The '_barrier'
 // suffix is load-bearing: health.js keys its mirror-barrier class on it (isMirrorBarrierReason
 // in XChainIndexer.js), so a proof stall reads as the mirror-lag stall it is rather than as a
@@ -346,7 +345,7 @@ async function selectCheckpoint(row, ctx){
 async function fetchEscrowProof(row, ctx, checkpoint, escrowAddress){
     const endpoint = resolveOriginEndpoint(row.src_chain, ctx.config);
     if(!endpoint.url) return null;
-    const timeoutMs = parseInt(CONFIG_ENV.BRIDGE_PROOF_TIMEOUT_MS || '15000', 10);
+    const timeoutMs = parseInt(process.env.BRIDGE_PROOF_TIMEOUT_MS || '15000', 10);
 
     // THE HEIGHT IS THE CHECKPOINT'S OWN, never row.snapshot_block and never a tip. The handler
     // builds its answer at the exact height given: it reads state_tree_roots there and proves

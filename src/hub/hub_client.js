@@ -24,7 +24,6 @@ const http  = require('http');
 const https = require('https');
 const url   = require('url');
 
-const { CONFIG_ENV } = require('../config.js');
 // Name the hub rejections a REPLAY can never turn into an acceptance.
 // A push can fail INSIDE a successful JSON-RPC envelope: PriceAggregator returns
 // { accepted:false, reason } and api.js returns { error:'...' } as an ordinary method
@@ -131,8 +130,8 @@ function hubRejectionReason(result){
 class HubClient {
 
     constructor(hubUrl, apiKey, configUrl, configApiKey){
-        this.hubUrl = hubUrl || CONFIG_ENV.HUB_API_URL || '';
-        this.apiKey = apiKey || CONFIG_ENV.HUB_API_KEY || '';
+        this.hubUrl = hubUrl || process.env.HUB_API_URL || '';
+        this.apiKey = apiKey || process.env.HUB_API_KEY || '';
         // The config oracle is not reachable over the mirror feed. getallconfigs returns
         // every service's connection parameters, DB user and password included, so the hub
         // keeps it off the public feed port: api.js admits only FEED_RPC_METHODS there and
@@ -142,19 +141,19 @@ class HubClient {
         // once a minute forever, silently freezing the hub-supplied params at their startup
         // values. Point HUB_CONFIG_URL at a private hub API port to separate the two roles.
         // Unset, both fall back to the feed values, so a single-hub deployment is unchanged.
-        this.configUrl    = configUrl    || CONFIG_ENV.HUB_CONFIG_URL     || this.hubUrl;
-        this.configApiKey = configApiKey || CONFIG_ENV.HUB_CONFIG_API_KEY || this.apiKey;
+        this.configUrl    = configUrl    || process.env.HUB_CONFIG_URL     || this.hubUrl;
+        this.configApiKey = configApiKey || process.env.HUB_CONFIG_API_KEY || this.apiKey;
         // Interim credential scoping: when the hub gates its retraction rails
         // (push*reorg) behind a dedicated HUB_REORG_API_KEY, the reorg pushes
         // must carry that key; everything else keeps the bulk key.
         // Unset = legacy single-key behavior.
-        this.reorgApiKey = CONFIG_ENV.HUB_REORG_API_KEY || this.apiKey;
+        this.reorgApiKey = process.env.HUB_REORG_API_KEY || this.apiKey;
         this.enabled = !!this.hubUrl;
         // Tracked separately from `enabled`: a deployment may carry a config oracle
         // without a push endpoint, and the config poll must not be gated on the feed.
         this.configEnabled = !!this.configUrl;
         // Wall-clock ceiling for a single _call; see HUB_CALL_DEADLINE_MS.
-        let deadline = Number(CONFIG_ENV.HUB_CALL_DEADLINE_MS);
+        let deadline = Number(process.env.HUB_CALL_DEADLINE_MS);
         this.callDeadlineMs = Number.isFinite(deadline) && deadline > 0 ? deadline : HUB_CALL_DEADLINE_MS;
     }
 

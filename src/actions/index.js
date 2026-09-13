@@ -161,7 +161,7 @@ function isBatchProbeForbiddenSubAction(action){
 // comfortably above a healthy block's processing time, so on a healthy venue nothing changes.
 // Raising it past the hop cap re-creates the 502 it removes.
 function feeQuoteAcquireBudgetMs(){
-    return parseInt(CONFIG_ENV.INDEXER_FEEQUOTE_ACQUIRE_TIMEOUT_MS, 10) || 2000;
+    return parseInt(process.env.INDEXER_FEEQUOTE_ACQUIRE_TIMEOUT_MS, 10) || 2000;
 }
 
 // True for the give-up thrown by a bounded transaction-mutex acquire (db._acquireTxLock).
@@ -434,7 +434,6 @@ const nodeproof          = require('./nodeproof.js');
 const rollcall           = require('./rollcall/index.js');
 const PreflightMemo      = require('../chain/preflight_memo.js');
 
-const { CONFIG_ENV } = require('../config.js');
 class Actions {
 
     constructor(indexer){
@@ -456,7 +455,7 @@ class Actions {
         // Public validity-first pre-flight verdict memo, keyed on
         // (action, params, source, blockIndex); a new tip changes the key.
         this._preflightMemo = new PreflightMemo(
-            parseInt(CONFIG_ENV.INDEXER_PREFLIGHT_MEMO_MAX, 10) || 256);
+            parseInt(process.env.INDEXER_PREFLIGHT_MEMO_MAX, 10) || 256);
 
         // Create action instances and pass database connections
         this.actionAddress         = new address(this);
@@ -1406,12 +1405,12 @@ class Actions {
                 note:              action + ' carries no protocol fee (settlement/lifecycle action); no native fee output required'
             });
 
-        let maxPending = parseInt(CONFIG_ENV.INDEXER_FEEQUOTE_MAX_PENDING, 10) || 8;
+        let maxPending = parseInt(process.env.INDEXER_FEEQUOTE_MAX_PENDING, 10) || 8;
         if((this._feeQuotePending || 0) >= maxPending)
             return Object.assign(base, { valid: false, busy: true, retryable: true,
                 error: 'fee quote busy (' + maxPending + ' quotes already pending); retry shortly' });
 
-        let timeoutMs = parseInt(CONFIG_ENV.INDEXER_FEEQUOTE_TIMEOUT_MS, 10) || 10000;
+        let timeoutMs = parseInt(process.env.INDEXER_FEEQUOTE_TIMEOUT_MS, 10) || 10000;
         let acquireMs = feeQuoteAcquireBudgetMs();
         this._feeQuotePending = (this._feeQuotePending || 0) + 1;
         let run;
@@ -1661,12 +1660,12 @@ class Actions {
         let cached     = this._preflightMemo.get(memoKey);
         if(cached) return Object.assign({}, cached, { cached: true });
 
-        let maxPending = parseInt(CONFIG_ENV.INDEXER_FEEQUOTE_MAX_PENDING, 10) || 8;
+        let maxPending = parseInt(process.env.INDEXER_FEEQUOTE_MAX_PENDING, 10) || 8;
         if((this._feeQuotePending || 0) >= maxPending)
             return Object.assign(base, { valid: null, busy: true, retryable: true,
                 error: 'pre-flight busy (' + maxPending + ' dry-runs already pending); retry shortly' });
 
-        let timeoutMs = parseInt(CONFIG_ENV.INDEXER_FEEQUOTE_TIMEOUT_MS, 10) || 10000;
+        let timeoutMs = parseInt(process.env.INDEXER_FEEQUOTE_TIMEOUT_MS, 10) || 10000;
         let acquireMs = feeQuoteAcquireBudgetMs();
         this._feeQuotePending = (this._feeQuotePending || 0) + 1;
         let run;

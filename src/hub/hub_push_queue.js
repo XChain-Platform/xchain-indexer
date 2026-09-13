@@ -1,4 +1,3 @@
-const { CONFIG_ENV } = require('../config.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -53,12 +52,12 @@ class HubPushQueue {
         this.hubClient = indexer.hubClient;
 
         // How often the poller wakes to drain due rows.
-        this.intervalMs    = opts.intervalMs    || parseInt(CONFIG_ENV.HUB_PUSH_RETRY_INTERVAL_MS) || 30000;
+        this.intervalMs    = opts.intervalMs    || parseInt(process.env.HUB_PUSH_RETRY_INTERVAL_MS) || 30000;
         // Backoff schedule: wait grows as base * 2^(attempts-1), capped at max.
-        this.baseBackoffMs = opts.baseBackoffMs || parseInt(CONFIG_ENV.HUB_PUSH_RETRY_BASE_MS)     || 30000;
-        this.maxBackoffMs  = opts.maxBackoffMs  || parseInt(CONFIG_ENV.HUB_PUSH_RETRY_MAX_MS)      || 600000;  // 10 min cap
+        this.baseBackoffMs = opts.baseBackoffMs || parseInt(process.env.HUB_PUSH_RETRY_BASE_MS)     || 30000;
+        this.maxBackoffMs  = opts.maxBackoffMs  || parseInt(process.env.HUB_PUSH_RETRY_MAX_MS)      || 600000;  // 10 min cap
         // Stop retrying a row after this many attempts (~30 min with defaults).
-        this.maxAttempts   = opts.maxAttempts   || parseInt(CONFIG_ENV.HUB_PUSH_MAX_ATTEMPTS)      || 10;
+        this.maxAttempts   = opts.maxAttempts   || parseInt(process.env.HUB_PUSH_MAX_ATTEMPTS)      || 10;
         // Rows pulled per drain tick.
         this.batchSize     = opts.batchSize     || 50;
         // How long a terminal `failed` row survives before the drain sweeps it, and
@@ -67,10 +66,10 @@ class HubPushQueue {
         // operational table with no ceiling. The window is wide enough
         // that the failed count getStats publishes still describes recent reality.
         // Set HUB_PUSH_FAILED_RETENTION_SECONDS=0 to keep terminal rows forever.
-        let retentionEnv = parseInt(CONFIG_ENV.HUB_PUSH_FAILED_RETENTION_SECONDS);
+        let retentionEnv = parseInt(process.env.HUB_PUSH_FAILED_RETENTION_SECONDS);
         this.failedRetentionSec = (opts.failedRetentionSec != null) ? opts.failedRetentionSec
             : (Number.isFinite(retentionEnv) ? retentionEnv : 7 * 24 * 3600);
-        this.pruneIntervalMs = opts.pruneIntervalMs || parseInt(CONFIG_ENV.HUB_PUSH_PRUNE_INTERVAL_MS) || 3600000;
+        this.pruneIntervalMs = opts.pruneIntervalMs || parseInt(process.env.HUB_PUSH_PRUNE_INTERVAL_MS) || 3600000;
         this._lastPruneMs = 0;
 
         this.timer    = null;
