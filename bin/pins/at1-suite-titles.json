@@ -13102,7 +13102,7 @@
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
         "test/regression/mariadb_runtime_floor_regression.test.js": "f8121d24a4f6ad22",
         "test/regression/retraction_signing_activation.test.js": "d2abb915f37af8a8",
-        "test/smoke/connected/db-connectivity.test.js": "89418977b7589e82",
+        "test/smoke/connected/db_connectivity.test.js": "89418977b7589e82",
         "test/smoke/connected/lifecycle.test.js": "7c6d8b564e036d3e",
         "test/unit/ActionManifestConformance.test.js": "0b9782a7fca562f7",
         "test/unit/ConsensusPrimitiveConformance.test.js": "3dc96db208ce539e",
@@ -13727,7 +13727,7 @@
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
         "test/regression/mariadb_runtime_floor_regression.test.js": "f8121d24a4f6ad22",
         "test/regression/retraction_signing_activation.test.js": "d2abb915f37af8a8",
-        "test/smoke/connected/db-connectivity.test.js": "89418977b7589e82",
+        "test/smoke/connected/db_connectivity.test.js": "89418977b7589e82",
         "test/smoke/connected/lifecycle.test.js": "7c6d8b564e036d3e",
         "test/unit/ActionManifestConformance.test.js": "0b9782a7fca562f7",
         "test/unit/ConsensusPrimitiveConformance.test.js": "3dc96db208ce539e",
@@ -14132,9 +14132,9 @@
       "fileCount": 7,
       "titleCount": 27,
       "files": {
-        "test/smoke/connected/api-liveness.test.js": "f3a2ad12daae92d0",
-        "test/smoke/connected/api-status.test.js": "93a9e28a9ef0f0b2",
-        "test/smoke/connected/db-connectivity.test.js": "89418977b7589e82",
+        "test/smoke/connected/api_liveness.test.js": "f3a2ad12daae92d0",
+        "test/smoke/connected/api_status.test.js": "93a9e28a9ef0f0b2",
+        "test/smoke/connected/db_connectivity.test.js": "89418977b7589e82",
         "test/smoke/connected/lifecycle.test.js": "7c6d8b564e036d3e",
         "test/smoke/unit/config.test.js": "8f5afef4db97a893",
         "test/smoke/unit/handlers.test.js": "817446897676d65c",
@@ -14145,9 +14145,9 @@
       "fileCount": 4,
       "titleCount": 20,
       "files": {
-        "test/smoke/connected/api-liveness.test.js": "f3a2ad12daae92d0",
-        "test/smoke/connected/api-status.test.js": "93a9e28a9ef0f0b2",
-        "test/smoke/connected/db-connectivity.test.js": "89418977b7589e82",
+        "test/smoke/connected/api_liveness.test.js": "f3a2ad12daae92d0",
+        "test/smoke/connected/api_status.test.js": "93a9e28a9ef0f0b2",
+        "test/smoke/connected/db_connectivity.test.js": "89418977b7589e82",
         "test/smoke/connected/lifecycle.test.js": "7c6d8b564e036d3e"
       }
     },

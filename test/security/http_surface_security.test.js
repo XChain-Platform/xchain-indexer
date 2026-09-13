@@ -243,7 +243,7 @@ describe('HTTP-surface security: JSON-RPC API perimeter', function () {
             {
                 // PUSH-ANCHOR endgame: the retired rail is no longer a method at all, so
                 // the perimeter has nothing to gate. The real app answers -32601 here
-                // (test/security/http-surface/auth-gate.test.js drives that); this mirror
+                // (test/security/http-surface/auth_gate.test.js drives that); this mirror
                 // has a permissive stand-in router, so all it can honestly assert is that
                 // the GATE no longer claims the name. Pinning it stops the name being
                 // quietly re-added to WRITE_METHODS without a handler behind it.
