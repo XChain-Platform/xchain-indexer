@@ -3670,51 +3670,6 @@ class Database {
         results = await this.doQuery(query, args);
     }
 
-    // Create/Update record in `messages` table
-    async createMessage(data){
-        data                  = this.normalizeDataValues(data);
-        let destination_id    = await this.createAddress(data['DESTINATION']);
-        let status_id         = await this.createStatus(data['STATUS']);
-        let action_index      = data['ACTION_INDEX'];
-        let coin              = data['COIN'];
-        let encryption_method = data['ENCRYPTION_METHOD'];
-        let encryption_key    = data['ENCRYPTION_KEY'];
-        let encrypted_message = data['ENCRYPTED_MESSAGE'];
-        let plaintext_message = data['PLAINTEXT_MESSAGE'];
-        // Check if record already exists for this message
-        let query  = `SELECT
-                            action_index
-                        FROM
-                            messages
-                        WHERE
-                            action_index=?`;
-        let args = [action_index];
-        let exists = false;
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
-        if(exists){
-            // UPDATE record
-            query = `UPDATE
-                        messages
-                    SET
-                        coin=?,
-                        encryption_method=?,
-                        encryption_key=?,
-                        encrypted_message=?,
-                        plaintext_message=?,
-                        destination_id=?,
-                        status_id=?
-                    WHERE
-                        action_index=?`;
-        } else {
-            // INSERT record
-            query = `INSERT INTO messages (coin, encryption_method, encryption_key, encrypted_message, plaintext_message, destination_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?)`;
-        }
-        args    = [coin, encryption_method, encryption_key, encrypted_message, plaintext_message, destination_id, status_id, action_index];
-        results = await this.doQuery(query, args);
-    }
-
     // Create/Update a poll record (VOTE v0). Keyed by the create action_index,
     // which is the poll's id. OPTIONS are stored as a JSON array, index-addressed
     // by ballots. Defaults (max_selections=1, tally_mode=approval,
@@ -9921,6 +9876,7 @@ for(const mixin of [
     require('./lists.js'),
     require('./mappings.js'),
     require('./markets.js'),
+    require('./messages.js'),
 ]){
     const descriptors = Object.getOwnPropertyDescriptors(mixin);
     for(const key of Reflect.ownKeys(descriptors)) descriptors[key].enumerable = false;
