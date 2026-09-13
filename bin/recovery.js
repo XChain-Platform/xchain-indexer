@@ -916,11 +916,11 @@ class AnchorRecovery {
                 let idMark = hasId ? '?, ' : '';
                 let idVal  = hasId ? [Number(m.id)] : [];
                 // finalizing_view rides the archive (MATCH_KEYS) and feeds the EQUIV
-                // signing canonical (_matchCanonical) exactly as for calls below.
+                // signing canonical (matchCanonical) exactly as for calls below.
                 // Dropping it lands view>0 matches at view 0 and forks re-verification.
                 // a_payout_legs/b_payout_legs ride the archive (MATCH_KEYS, omit-when-null)
                 // at/above the CROSS_CHAIN_ROYALTY flag-day; they feed the signing canonical
-                // (_matchCanonical), so dropping them would fork re-verification exactly like
+                // (matchCanonical), so dropping them would fork re-verification exactly like
                 // dropping finalizing_view. Pre-royalty archives carry no key → null.
                 await this.db.doQuery(
                     `INSERT INTO cross_chain_matches
