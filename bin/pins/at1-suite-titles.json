@@ -12278,8 +12278,8 @@
       "fileCount": 14,
       "titleCount": 142,
       "files": {
-        "test/boundary/retraction-signing-activation.test.js": "1b40427e0e4dee1e",
-        "test/boundary/utxo-tracker-heights.test.js": "cc69dc79f84383cb",
+        "test/boundary/retraction_signing_activation.test.js": "1b40427e0e4dee1e",
+        "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/unit/boundary/addresses/validation.test.js": "b305b96d41dc31c0",
         "test/unit/boundary/amounts/supply-limits.test.js": "730f6fb4b46e1646",
         "test/unit/boundary/batch/composition-limits.test.js": "d4ec762692d1bdc6",
@@ -13060,8 +13060,8 @@
       "fileCount": 425,
       "titleCount": 8495,
       "files": {
-        "test/boundary/retraction-signing-activation.test.js": "1b40427e0e4dee1e",
-        "test/boundary/utxo-tracker-heights.test.js": "cc69dc79f84383cb",
+        "test/boundary/retraction_signing_activation.test.js": "1b40427e0e4dee1e",
+        "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block-resilience.test.js": "c4308b650669ed74",
         "test/e2e/scenarios/01-token-lifecycle.test.js": "4365faef2b0a9c54",
         "test/e2e/scenarios/02-order-lifecycle.test.js": "0d895f3bfea03346",
@@ -13685,8 +13685,8 @@
       "fileCount": 425,
       "titleCount": 8495,
       "files": {
-        "test/boundary/retraction-signing-activation.test.js": "1b40427e0e4dee1e",
-        "test/boundary/utxo-tracker-heights.test.js": "cc69dc79f84383cb",
+        "test/boundary/retraction_signing_activation.test.js": "1b40427e0e4dee1e",
+        "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block-resilience.test.js": "c4308b650669ed74",
         "test/e2e/scenarios/01-token-lifecycle.test.js": "4365faef2b0a9c54",
         "test/e2e/scenarios/02-order-lifecycle.test.js": "0d895f3bfea03346",
