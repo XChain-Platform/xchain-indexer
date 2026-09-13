@@ -426,6 +426,7 @@ class Send {
             if(sameTick && !error)
                 baseGasBalances = this.util.debitBalances(Object.assign({}, balances), tokenInfo['TICK_ID'], send['AMOUNT']);
 
+            // Run the token's controller guard, if bound, before the transfer settles
             if(!error && tokenInfo){
                 let result = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {
                     actionType:  'SEND',

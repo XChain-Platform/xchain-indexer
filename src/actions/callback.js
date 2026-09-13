@@ -239,6 +239,7 @@ class Callback {
         if(!error && !this.util.hasBalance(balances, callbackTokenInfo['TICK_ID'], totalCallbackTickAmount))
             error = 'invalid: insufficient funds (CALLBACK_TICK)';
 
+        // Adjust balances to reduce by CALLBACK_TICK total amount
         if(!error)
             balances = this.util.debitBalances(balances, callbackTokenInfo['TICK_ID'], totalCallbackTickAmount);
 

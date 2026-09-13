@@ -275,6 +275,7 @@ class Vote {
             // EXECUTE. Refunded to the creator at finalization (precise gas-cost
             // metering from the escrow is deferred, mirroring ATTEST gas_escrow).
             gasEscrow = this.util.isNull(data['GAS_ESCROW']) ? '0' : String(data['GAS_ESCROW']).trim();
+            // Verify GAS_ESCROW is a non-negative amount
             if(!error && (!this.util.isNumeric(gasEscrow) || this.util.bclt(gasEscrow, 0)))
                 error = 'invalid: GAS_ESCROW (non-negative amount)';
             // Funding check covers DEPOSIT + GAS_ESCROW together (both in GAS).
@@ -370,6 +371,7 @@ class Vote {
 
             if(entries.length === 0)
                 error = 'invalid: BALLOT (empty)';
+            // Verify the ballot does not select more options than MAX_SELECTIONS allows
             if(!error && entries.length > Number(poll.max_selections))
                 error = 'invalid: BALLOT (exceeds MAX_SELECTIONS)';
 

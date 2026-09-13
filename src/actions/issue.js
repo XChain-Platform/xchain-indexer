@@ -903,6 +903,7 @@ class Issue {
                !this.util.isNull(issue['BRIDGE_CHAINS']) && String(issue['BRIDGE_CHAINS']) != String(tokenInfo['BRIDGE_CHAINS']))
                 error = 'invalid: BRIDGE_CHAINS (locked)';
 
+            // Verify MIN_DEPTH cannot be changed once LOCK_BRIDGE is set (mirrors the BRIDGE_CHAINS lock above)
             if(!error && format === 7 && tokenInfo && tokenInfo['LOCK_BRIDGE']==1 &&
                !this.util.isNull(issue['MIN_DEPTH']) && String(issue['MIN_DEPTH']) != String(tokenInfo['MIN_DEPTH']))
                 error = 'invalid: MIN_DEPTH (locked)';

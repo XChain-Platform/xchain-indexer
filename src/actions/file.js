@@ -135,6 +135,7 @@ class File {
 
         let isGated = (!this.util.isNull(data['GATE_TICKER']) && String(data['GATE_TICKER']).length > 0);
 
+        // Validate the gated-content fields, but only when this FILE is actually gated
         if(!error && isGated){
             // ENCRYPTION_METHOD must be 1 (AES-256-GCM) in v1
             if(Number(data['ENCRYPTION_METHOD']) !== 1)
@@ -179,6 +180,7 @@ class File {
                         error = 'invalid: GATE_MIN_AMOUNT';
                     else if(!/[1-9]/.test(raw))
                         error = 'invalid: GATE_MIN_AMOUNT';   // every zero spelling
+                    // Verify GATE_MIN_AMOUNT does not use more decimal places than the tick (or the fixed threshold scale) allows
                     if(!error){
                         // Divisibility: the STATE-dependent half the SDK cannot do.
                         // Bounded at min(tick divisibility, THRESHOLD_SCALE) because a

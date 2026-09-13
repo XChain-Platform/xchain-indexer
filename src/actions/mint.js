@@ -219,6 +219,7 @@ class Mint {
         // settlement. SOURCE pays the bounded guard gas, billed as a GAS debit in the valid block
         // below (updateTokens there recomputes GAS supply, so the per-block sanityCheck stays balanced).
         let guardFee = 0;
+        // Run the token's controller guard, if bound, before the mint settles
         if(!error && tokenInfo){
             let gasTick     = this.config['GAS'];
             let gasInfo     = await this.indexerDb.getTokenInfo(gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
