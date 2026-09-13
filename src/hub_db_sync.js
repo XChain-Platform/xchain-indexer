@@ -655,6 +655,30 @@ function priceUpsertSql(cols, rowCount) {
 // hub serves; at hourly rounds across a handful of pairs this is decades of history,
 // so the cap only ever trips on a pathological table. Above it the pass degrades to
 // the round-ceiling rule, which needs no set at all.
+// Run ONE mirror WRITE through a query primitive that FAILS LOUDLY.
+//
+// The indexer's hubDb is the shared Db wrapper, whose doQuery swallows a
+// non-transactional query error and returns its `[]` default (db.js, the M-17
+// fork hazard). A swallowed write is then indistinguishable from a landed one
+// at the call site: the row is dropped, the caller returns normally, and the
+// next heartbeat certifies the stream as caught up over data this mirror never
+// wrote, which the VM oracle reads and the settlement barriers trust.
+// doQueryStrict is that same query with the swallow removed, and it already
+// carries every consensus-input read for this reason; writes belong on it too.
+// Reads deliberately stay on doQuery: an empty result is a legitimate answer
+// there and must not become a throw.
+//
+// Resolved per call rather than hard-coded because this module is vendored
+// byte-identical into xchain-explorer, where hubDb is HubMirrorPool: a minimal
+// pool with doQuery only, which already lets a query error propagate. Either
+// surface therefore gives a write the same fail-loud shape, and a test double
+// that provides neither keeps its own semantics instead of throwing on absence.
+async function applyMirrorWrite(hubDb, query, args) {
+    if (typeof hubDb.doQueryStrict === 'function')
+        return await hubDb.doQueryStrict(query, args);
+    return await hubDb.doQuery(query, args);
+}
+
 const PRICE_FINALIZED_KEY_CAP = 500000;
 
 // ── price_snapshots bootstrap bound ──────────────────────────────────────────
@@ -3443,29 +3467,6 @@ class HubDbSync {
         return true;
     }
 
-    // Run ONE mirror WRITE through a query primitive that FAILS LOUDLY.
-    //
-    // The indexer's hubDb is the shared Db wrapper, whose doQuery swallows a
-    // non-transactional query error and returns its `[]` default (db.js, the M-17
-    // fork hazard). A swallowed write is then indistinguishable from a landed one
-    // at the call site: the row is dropped, the caller returns normally, and the
-    // next heartbeat certifies the stream as caught up over data this mirror never
-    // wrote, which the VM oracle reads and the settlement barriers trust.
-    // doQueryStrict is that same query with the swallow removed, and it already
-    // carries every consensus-input read for this reason; writes belong on it too.
-    // Reads deliberately stay on doQuery: an empty result is a legitimate answer
-    // there and must not become a throw.
-    //
-    // Resolved per call rather than hard-coded because this module is vendored
-    // byte-identical into xchain-explorer, where hubDb is HubMirrorPool: a minimal
-    // pool with doQuery only, which already lets a query error propagate. Either
-    // surface therefore gives a write the same fail-loud shape, and a test double
-    // that provides neither keeps its own semantics instead of throwing on absence.
-    async _applyWrite(query, args) {
-        if (typeof this.hubDb.doQueryStrict === 'function')
-            return await this.hubDb.doQueryStrict(query, args);
-        return await this.hubDb.doQuery(query, args);
-    }
 
     // Apply a row to the local hub DB (INSERT IGNORE to keep idempotent).
     // Columns are FILTERED to the local mirror table's schema: the hub may serve
@@ -3533,7 +3534,7 @@ class HubDbSync {
         if (table === 'price_snapshots' && cols.includes('status')) {
             // priceUpsertSql(cols, 1) is this branch's original statement, moved out so the
             // bootstrap's multi-row batch emits the same ODKU body by construction.
-            await this._applyWrite(priceUpsertSql(cols, 1), args);
+            await applyMirrorWrite(this.hubDb, priceUpsertSql(cols, 1), args);
             return;
         }
 
@@ -3596,7 +3597,7 @@ class HubDbSync {
                 sets.push('`push_generation` = GREATEST(COALESCE(`push_generation`, 0), COALESCE(VALUES(`push_generation`), 0))');
             let query = 'INSERT INTO cross_chain_calls (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
                       + ' ON DUPLICATE KEY UPDATE ' + sets.join(', ');
-            await this._applyWrite(query, args);
+            await applyMirrorWrite(this.hubDb, query, args);
             return;
         }
 
@@ -3625,7 +3626,7 @@ class HubDbSync {
             sets.push('push_generation = IF(VALUES(`push_generation`) >= `push_generation`, VALUES(`push_generation`), `push_generation`)');
             let query = 'INSERT INTO oracle_prices (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
                       + ' ON DUPLICATE KEY UPDATE ' + sets.join(', ');
-            await this._applyWrite(query, args);
+            await applyMirrorWrite(this.hubDb, query, args);
             return;
         }
 
@@ -3702,14 +3703,14 @@ class HubDbSync {
                 sets.push('anchor_txid = COALESCE(anchor_txid, VALUES(anchor_txid))');
                 let query = 'INSERT INTO cross_chain_matches (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
                           + ' ON DUPLICATE KEY UPDATE ' + sets.join(', ');
-                await this._applyWrite(query, args);
+                await applyMirrorWrite(this.hubDb, query, args);
                 return;
             }
             // Older hub (or a mirror whose local table lacks effective_time/status): no
             // version to compare, so keep the narrow anchor-stamp upgrade and never guess.
             let query = 'INSERT INTO cross_chain_matches (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
                       + ' ON DUPLICATE KEY UPDATE anchor_txid = COALESCE(anchor_txid, VALUES(anchor_txid))';
-            await this._applyWrite(query, args);
+            await applyMirrorWrite(this.hubDb, query, args);
             return;
         }
 
@@ -3729,13 +3730,13 @@ class HubDbSync {
         if (table === 'attestation_responses' && cols.includes('batch_action_index')) {
             let query = 'INSERT INTO attestation_responses (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
                       + ' ON DUPLICATE KEY UPDATE batch_action_index = COALESCE(batch_action_index, VALUES(batch_action_index))';
-            await this._applyWrite(query, args);
+            await applyMirrorWrite(this.hubDb, query, args);
             if (row.batch_action_index != null) await this._linkAppliedResponseToBatch(row);
             return;
         }
 
         let query = 'INSERT IGNORE INTO ' + table + ' (' + cols.join(', ') + ') VALUES (' + placeholders + ')';
-        await this._applyWrite(query, args);
+        await applyMirrorWrite(this.hubDb, query, args);
     }
 
     // Carry a stamped batch link onto the local ATTEST v1 row the applier minted for this
@@ -3941,7 +3942,7 @@ class HubDbSync {
                 if (fenced) p.push(gen);
                 return p;
             };
-            await this._applyWrite(
+            await applyMirrorWrite(this.hubDb, 
                 'DELETE FROM cross_chain_matches WHERE ' + leg('a', 'a_push_generation') + ' OR ' + leg('b', 'b_push_generation'),
                 legArgs().concat(legArgs()));
             await this._refreshMatchSyncTimestamp();
@@ -3957,7 +3958,7 @@ class HubDbSync {
             let args = [event.source_chain, from];
             if (bounded) args.push(to);
             if (fenced) args.push(gen);
-            await this._applyWrite('DELETE FROM cross_chain_calls WHERE ' + tail, args);
+            await applyMirrorWrite(this.hubDb, 'DELETE FROM cross_chain_calls WHERE ' + tail, args);
             await this._refreshCallSyncTimestamp();
             return;
         }
@@ -3970,7 +3971,7 @@ class HubDbSync {
         let args = [event.source_chain, from];
         if (bounded) args.push(to);
         if (fenced) args.push(gen);
-        await this._applyWrite(query, args);
+        await applyMirrorWrite(this.hubDb, query, args);
         // bridge_transfers gates a block-loop barrier on a cached MAX(effective_time), so a
         // retraction that removed the row holding the maximum has to re-read it here; a
         // scalar left high would open the bridge barrier over transfers that are gone.

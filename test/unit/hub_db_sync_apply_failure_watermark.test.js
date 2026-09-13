@@ -85,9 +85,9 @@ describe('HubDbSync mirror-write confirmation and the apply-failure watermark la
             const hubDb = { doQuery: sinon.stub().resolves([]), doQueryStrict: sinon.stub().resolves([]) };
             const sync  = makeSync(hubDb);
 
-            const out = await sync._applyWrite('SELECT 1', []);
-            assert.ok(hubDb.doQueryStrict.calledOnce, 'sanity: _applyWrite is the write path');
-            assert.deepStrictEqual(out, []);
+            await sync._applyRow('policy_snapshots', ROW);
+            assert.ok(hubDb.doQueryStrict.calledOnce, 'sanity: the row write takes the strict path');
+            assert.strictEqual(hubDb.doQuery.callCount, 0, 'sanity: the write never touches doQuery');
 
             // The read helpers this module uses for column probes call hubDb.doQuery
             // directly and are untouched by the write routing.
