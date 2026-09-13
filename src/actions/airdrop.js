@@ -33,7 +33,9 @@
 
 class Airdrop {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -51,7 +53,25 @@ class Airdrop {
         this.listTypes = [1,2];
     }
 
+    // Handle parsing the AIRDROP transaction
     async parse(params, data, error){
+        /*****************************************************************
+         * DEBUGGING - Force params
+         ****************************************************************/
+        // Example payloads by FORMAT version:
+        // Single Airdrop
+        // let str = '0|AIRDROPTEST1|1|1257|test'; // ADDRESS LIST
+        // let str = '0|AIRDROPTEST2|1|1191|test'; // TICK LIST
+        // Multi-Airdrop (brief)
+        // let str = '1|1257|AIRDROPTEST1|1|AIRDROPTEST2|2|test brief';
+        // Multi-Airdrop (Full)
+        // let str = '2|AIRDROPTEST1|1|1257|AIRDROPTEST2|2|1191|test full';
+        // Multi-Airdrop (Full) w multiple memos
+        // let str = '3|AIRDROPTEST1|1|1257|memo1|AIRDROPTEST2|2|1191|memo2';
+        // params = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
+
+        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
@@ -59,6 +79,7 @@ class Airdrop {
         // [TICK, AMOUNT, LIST, MEMO] per airdrop leg.
         let airdrops = [];
 
+        // Extract memo
         let memo = null;
         let last = params.length - 1;
         for(let idx in params)
@@ -94,6 +115,7 @@ class Airdrop {
                 ticks[tick] = await this.indexerDb.getTokenInfo(tick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         }
 
+        // Get source address balances and preferences
         let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let preferences = await this.indexerDb.getAddressPreferences(data['SOURCE'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
@@ -102,16 +124,24 @@ class Airdrop {
         let gasTick = this.config['GAS'];
         let gasInfo = await this.indexerDb.getTokenInfo(gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
+        // Create the fees object
         let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
 
+        // Store original error value
         let origError = error;
+        // Array of credits and debits
         let credits = [],
             debits  = [];
 
+        // Loop through airdrops and process each
         for(let idx in airdrops){
+            // Parse in the airdrop information
             let info = airdrops[idx];
             error = origError; // each leg validates independently against the original error state
 
+            // Reset error to the original value
+
+            // Copy base transaction data object
             let airdrop = data;
 
             // Guard gas fee billed to SOURCE for this leg (0 = uncontrolled token)
@@ -123,32 +153,52 @@ class Airdrop {
             // below deterministic for consensus.
             let recipients = new Set();
 
+            // Placeholder for list and list type
             let type = false,
                 list = null;
 
+            // Update transaction data object with airdrop values
             airdrop['TICK']              = info[0];
             airdrop['AMOUNT']            = info[1];
             airdrop['LIST_ACTION_INDEX'] = info[2];
             airdrop['MEMO']              = info[3];
 
+            // Get information on token
             let tokenInfo = ticks[airdrop['TICK']];
 
             // Convert NUMBER fields from string to number so comparisons below are mathematical, not lexical.
             if(!error)
                 data = this.util.setNumberFormats(data);
 
+            /*****************************************************************
+             * TICK Validations
+             ****************************************************************/
+
+            // Validate TICK exists
             if(!error && !tokenInfo)
                 error = 'invalid: TICK (unknown)';
 
+            /*************************************************************
+             * FORMAT Validations
+             ************************************************************/
+
+            // Verify AMOUNT format
             if(!error && !this.util.isNull(airdrop['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], airdrop['AMOUNT'], data['BLOCK_TIME']))
                 error = "invalid: AMOUNT (format)";
 
+            // Verify LIST format
             if(!error && !this.util.isNull(airdrop['LIST_ACTION_INDEX']) && !this.util.isNumeric(airdrop['LIST_ACTION_INDEX']))
                 error = "invalid: LIST_ACTION_INDEX (format)";
 
+            /*************************************************************
+             * General Validations
+             ************************************************************/
+
+            // Verify SOURCE is not sleeping
             if(!error && await this.indexerDb.isActionAllowed(airdrop['SOURCE'], null, airdrop['BLOCK_INDEX']) == false)
                 error = 'invalid: SOURCE (sleeping)';
 
+            // Verify TICK is not sleeping
             if(!error && await this.indexerDb.isActionAllowed(null, airdrop['TICK'], airdrop['BLOCK_INDEX']) == false)
                 error = 'invalid: TICK (sleeping)';
 
@@ -160,17 +210,21 @@ class Airdrop {
             if(!error && String(airdrop['MEMO']).indexOf(';')!=-1)
                 error = 'invalid: MEMO (semicolon)';
 
+            // Verify MEMO is shorter than MAX_MEMO_LENGTH
             if(!error && String(airdrop['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
                 error = 'invalid: MEMO (length)';
 
+            // Lookup list information
             if(!error){
                 type = await this.indexerDb.getListType(airdrop['LIST_ACTION_INDEX']);
                 list = await this.indexerDb.getList(airdrop['LIST_ACTION_INDEX'], data['BLOCK_INDEX']);
             }
 
+            // Verify LIST exist
             if(!error && type===false)
                 error = 'invalid: LIST (unknown)';
 
+            // Verify LIST type is supported
             if(!error && !this.listTypes.includes(type))
                 error = 'invalid: LIST TYPE (unsupported)';
 
@@ -189,15 +243,18 @@ class Airdrop {
             if(!error && type==2)
                 recipients = new Set(list);
 
+            // Verify TICK action is allowed from SOURCE (allow/block lists)
             if(!error && await this.indexerDb.isActionAllowed(airdrop['SOURCE'], airdrop['TICK']) == false)
                 error = 'invalid: SOURCE (not authorized)';
 
+            // Verify SOURCE has enough balances to cover airdrop AMOUNT
             if(!error && await this.util.hasBalance(balances, tokenInfo['TICK_ID'], airdrop['AMOUNT']) == false)
                 error = 'invalid: insufficient funds';
 
+            // Build out array of recipient addresses that are allowed to receive the airdrop
             // Fetch TICK's allow/block lists ONCE before the recipient loop, then check membership in
             // memory via Sets (matching isActionAllowed's no-block_index behavior) so each recipient
-            // costs an O(1) hash probe instead of an O(n) scan, previously O(recipients x list).
+            // costs an O(1) hash probe instead of an O(n) scan, not O(recipients x list).
             // Determinism rides on `recipients` iteration order, which Sets preserve; an empty list
             // stays truthy as a Set exactly as it was as an array, so an empty ALLOW_LIST still
             // approves nobody.
@@ -207,21 +264,27 @@ class Airdrop {
             let recipientAllowList = hasAllowList ? new Set(await this.indexerDb.getList(tokenInfo['ALLOW_LIST'], data['BLOCK_INDEX'])) : null;
             let recipientBlockList = hasBlockList ? new Set(await this.indexerDb.getList(tokenInfo['BLOCK_LIST'], data['BLOCK_INDEX'])) : null;
 
+            // Verify airdrop is allowed to recipient (allow/block lists)
             for(let address of recipients){
                 if(approved.has(address))
                     continue;
                 let allowed = true;
+                // False if we have an ALLOW_LIST and address is NOT on it
                 if(allowed && recipientAllowList && !recipientAllowList.has(address))
                     allowed = false;
+                // False if we have a BLOCK_LIST and address IS on it
                 if(allowed && recipientBlockList && recipientBlockList.has(address))
                     allowed = false;
                 if(allowed)
                     approved.add(address);
             }
+            // Update recipients list to only do airdrops to addresses which allow it
             recipients = approved;
 
+            // Determine total DEBIT
             airdrop['DEBIT'] = (!error) ? this.util.bcmul(recipients.size, airdrop['AMOUNT'], tokenInfo['DECIMALS']) : 0;
 
+            // Determine total transaction FEE
             let unifiedFees = await this.actions.protocolChanges.isEnabled('UNIFIED_FEES', data['BLOCK_INDEX']);
             if(unifiedFees){
                 // Unified gas schedule: per-recipient gas
@@ -239,6 +302,7 @@ class Airdrop {
             // The airdrop DEBIT to recipients is unaffected.
             fees['AMOUNT'] = this.util.feeForAction(fees['AMOUNT'], data);
 
+            // Verify SOURCE has enough balances to cover TICK total DEBIT amount
             if(!error && !this.util.hasBalance(balances, tokenInfo['TICK_ID'], airdrop['DEBIT']))
                 error = 'invalid: insufficient funds (TICK)';
 
@@ -273,6 +337,7 @@ class Airdrop {
                 }
             }
 
+            // Validate fee payment (native coin or XCHAIN balance)
             if(!error && this.util.bcgt(fees['AMOUNT'], 0)){
                 let paymentMode = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']);
                 if(paymentMode === 'native'){
@@ -302,6 +367,7 @@ class Airdrop {
             if(!error)
                 balances = legBalances;
 
+            // Determine final status
             let status = (error) ? error : 'valid';
             data['STATUS'] = airdrop['STATUS'] = status;
 
@@ -311,10 +377,13 @@ class Airdrop {
 
             this.util.addAddressTicker(data['SOURCE'], airdrop['TICK']);
 
+            // If we are charging a fee, store the SOURCE and fees TICK in addresses list
             if(this.util.bcgt(fees['AMOUNT'], 0))
                 this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
 
+            // If this was a valid transaction, then add records to the credits and debits array
             if(status=='valid'){
+                // Add ticker, amount, and address to debits array
                 debits.push([airdrop['TICK'], airdrop['DEBIT'], data['SOURCE']]);
 
                 // Bill the controller-guard gas to SOURCE (a GAS burn with no offsetting credit). The
@@ -325,23 +394,31 @@ class Airdrop {
                     this.util.addAddressTicker(data['SOURCE'], gasTick);
                 }
 
+                // Handle any transaction FEE according the users's ADDRESS preferences
                 [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
 
+                // Loop through recipient addresses
                 for(let address of recipients){
+                    // Store the recipient ADDRESS and TICK in addresses list
                     this.util.addAddressTicker(address, airdrop['TICK']);
+                    // Credit address with TICK AMOUNT
                     credits.push([airdrop['TICK'], airdrop['AMOUNT'], address]);
                 }
             }
         }
 
+        // Process any transaction ledger changes (credits / debits)
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
+        // Get a list of tickers & addresses
         let tickers   = this.util.getTickersList(),
             addresses = Object.keys(this.util.getAddressesList());
 
+        // Update address balances and token supply
         await this.indexerDb.updateBalances(addresses);
         await this.indexerDb.updateTokens(tickers);
 
+        // Create action mappings
         await this.mapper.createMappings(data);
     }
 }
