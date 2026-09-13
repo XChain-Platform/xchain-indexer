@@ -33,20 +33,6 @@
 const PRICE_BATCHES_DEFAULT_LIMIT = 500;
 const PRICE_BATCHES_MAX_LIMIT     = 1000;
 
-// Valid batch rows overlapping the closed round range [?, ?]. The parameters are
-// (last_round, first_round, limit): a batch overlaps when it starts at or before
-// the range's end AND ends at or after the range's start. round_number is the
-// batch's FIRST_ROUND on a batch row (prices.sql), so the indexed column drives
-// the scan; batch_first_round is the authoritative field and is what is returned.
-const PRICE_BATCHES_SQL =
-    'SELECT action_index, batch_first_round, batch_last_round, round_count ' +
-    'FROM prices ' +
-    'WHERE version = 0 AND validation_status = ? ' +
-    'AND batch_first_round IS NOT NULL AND batch_last_round IS NOT NULL ' +
-    'AND batch_first_round <= ? AND batch_last_round >= ? ' +
-    'ORDER BY batch_first_round ASC, action_index ASC ' +
-    'LIMIT ?';
-
 function isRound(v) {
     return Number.isSafeInteger(v) && v >= 0;
 }
@@ -101,7 +87,6 @@ function buildPriceBatchesResponse(latestBlockIndex, rows, v) {
 }
 
 module.exports = {
-    PRICE_BATCHES_SQL,
     PRICE_BATCHES_DEFAULT_LIMIT,
     PRICE_BATCHES_MAX_LIMIT,
     validatePriceBatchParams,

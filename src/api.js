@@ -1578,8 +1578,8 @@ async function startApi(){
             let db = indexer.indexerDb.apiView();
             try {
                 let latest = await db.getLatestBlockIndex();
-                let rows   = await db.doQuery(priceBatchQuery.PRICE_BATCHES_SQL,
-                    ['valid', v.last_round, v.first_round, v.limit]);
+                let rows   = await db.getPriceBatchesOverlappingRange(
+                    'valid', v.last_round, v.first_round, v.limit);
                 return priceBatchQuery.buildPriceBatchesResponse(latest, rows, v);
             } catch (err) {
                 console.error('getpricebatches error:', err);

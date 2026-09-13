@@ -17,8 +17,9 @@
 'use strict';
 
 const assert = require('assert');
-const { PRICE_BATCHES_SQL, PRICE_BATCHES_DEFAULT_LIMIT, PRICE_BATCHES_MAX_LIMIT,
+const { PRICE_BATCHES_DEFAULT_LIMIT, PRICE_BATCHES_MAX_LIMIT,
         validatePriceBatchParams, buildPriceBatchesResponse } = require('../../src/price-batch-query');
+const pricesMixin = require('../../src/db/prices');
 
 describe('price-batch-query (getpricebatches)', function () {
 
@@ -50,15 +51,35 @@ describe('price-batch-query (getpricebatches)', function () {
         });
     });
 
-    describe('PRICE_BATCHES_SQL', function () {
-        it('asks only for valid version-0 batch rows overlapping the range', function () {
-            assert.ok(/version = 0/.test(PRICE_BATCHES_SQL));
-            assert.ok(/validation_status = \?/.test(PRICE_BATCHES_SQL));
-            assert.ok(/batch_first_round <= \?/.test(PRICE_BATCHES_SQL));
-            assert.ok(/batch_last_round >= \?/.test(PRICE_BATCHES_SQL));
-            assert.ok(/LIMIT \?/.test(PRICE_BATCHES_SQL));
-            // Four placeholders, in the order api.js binds them: status, last, first, limit.
-            assert.strictEqual((PRICE_BATCHES_SQL.match(/\?/g) || []).length, 4);
+    describe('db.getPriceBatchesOverlappingRange', function () {
+        // Drive the mixin method with a recording stub rather than asserting on an exported
+        // string: this captures the SQL the method actually issues AND the bind order, which
+        // is the half that a text assertion on the constant could never see.
+        function capture(args) {
+            let seen = null;
+            const self = { async doQuery(sql, params) { seen = { sql, params }; return [{ action_index: 7 }]; } };
+            return pricesMixin.getPriceBatchesOverlappingRange.apply(self, args).then(rows => ({ seen, rows }));
+        }
+
+        it('asks only for valid version-0 batch rows overlapping the range', async function () {
+            let { seen } = await capture(['valid', 60, 40, 3]);
+            assert.ok(/version = 0/.test(seen.sql));
+            assert.ok(/validation_status = \?/.test(seen.sql));
+            assert.ok(/batch_first_round <= \?/.test(seen.sql));
+            assert.ok(/batch_last_round >= \?/.test(seen.sql));
+            assert.ok(/LIMIT \?/.test(seen.sql));
+            assert.strictEqual((seen.sql.match(/\?/g) || []).length, 4);
+        });
+
+        it('binds status, last_round, first_round, limit in that order', async function () {
+            // The range reads backwards on purpose: a batch overlaps [first,last] when it
+            // STARTS at or before last and ENDS at or after first. Swapping these two binds
+            // silently returns only batches strictly inside the range.
+            let { seen, rows } = await capture(['valid', 60, 40, 3]);
+            assert.deepStrictEqual(seen.params, ['valid', 60, 40, 3]);
+            assert.strictEqual(seen.sql.indexOf('batch_first_round <= ?') <
+                               seen.sql.indexOf('batch_last_round >= ?'), true);
+            assert.deepStrictEqual(rows, [{ action_index: 7 }]);
         });
     });
 
