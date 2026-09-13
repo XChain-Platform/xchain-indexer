@@ -13,8 +13,9 @@
  * The reachability sweep and the sibling reference map, driven against the real
  * tree rather than a fixture. The verdicts these two produce decide what the
  * restructure deletes, so the assertions are about files whose status is
- * independently known: src/api.js runs in the container, src/db.js is required
- * transitively from it, and a module reached only from its own suite is not.
+ * independently known: src/api.js runs in the container, src/db/index.js is
+ * required transitively from it, and a module reached only from its own suite
+ * is not.
  *
  * This suite is outside test/ on purpose: every npm test script globs from
  * test/, and the pass pins those scripts' collected titles. Run it directly:

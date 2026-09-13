@@ -147,8 +147,8 @@ function git(...args){
 // here got this wrong twice over: stripping only whole comment lines split a
 // CREATE TABLE in half on a semicolon inside a trailing column comment
 // ("state_root; NULL pre flag-day"), and even the fixed regex was not
-// quote-aware, so a `--` inside a quoted DDL string would be eaten. db.js's
-// version handles both, and its comment names the exact hazard ("so a ';'
+// quote-aware, so a `--` inside a quoted DDL string would be eaten. The version
+// in db/index.js handles both, and its comment names the exact hazard ("so a ';'
 // appearing inside comment prose is never mistaken for a statement terminator").
 const stripSqlLineComments = Database.prototype.stripSqlLineComments;
 
