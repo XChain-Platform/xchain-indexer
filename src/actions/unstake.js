@@ -215,19 +215,24 @@ class Unstake {
         data['TARGET_CONTRACT_INDEX'] = params[2];
         data['TICK']                  = params[3];
 
+        // Convert NUMBER fields from string value to number value
         if(!error)
             data = this.util.setNumberFormats(data);
 
+        // Verify SIGNING_PUBKEY is provided (it names the stake being unwound)
         if(!error && this.util.isNull(data['SIGNING_PUBKEY']))
             error = 'invalid: SIGNING_PUBKEY (required)';
+        // Verify SIGNING_PUBKEY is 64 hex characters (Ed25519)
         if(!error && !/^[0-9a-fA-F]{64}$/.test(String(data['SIGNING_PUBKEY'])))
             error = 'invalid: SIGNING_PUBKEY (format)';
+        // Verify TARGET_CONTRACT_INDEX is provided (a v1 unstake is scoped to one contract)
         if(!error && this.util.isNull(data['TARGET_CONTRACT_INDEX']))
             error = 'invalid: TARGET_CONTRACT_INDEX (required)';
         // Gated by CONTRACT_INDEX_CANONICAL: reject non-canonical leading zeros at/after the flag-day.
         let idxRe = (await this.actions.protocolChanges.isEnabled('CONTRACT_INDEX_CANONICAL', data['BLOCK_INDEX'])) ? /^[1-9]\d*$/ : /^[0-9]+$/;
         if(!error && (!idxRe.test(String(data['TARGET_CONTRACT_INDEX'])) || Number(data['TARGET_CONTRACT_INDEX']) <= 0))
             error = 'invalid: TARGET_CONTRACT_INDEX (format)';
+        // Verify TICK is provided (one contract can hold stakes in several tokens, so the unstake must say which)
         if(!error && this.util.isNull(data['TICK']))
             error = 'invalid: TICK (required)';
 
@@ -284,8 +289,10 @@ class Unstake {
             }
             if(!error && !this.util.bcgt(amountStr, '0'))
                 error = 'invalid: AMOUNT (must be greater than 0)';
+            // Verify AMOUNT is no larger than what is actually staked (an over-ask is rejected, never trimmed to fit)
             if(!error && this.util.bcgt(amountStr, totalAmount))
                 error = 'invalid: AMOUNT (exceeds active stake)';
+            // An AMOUNT below the staked total is a partial unstake; asking for the exact total stays a full sweep
             if(!error && this.util.bclt(amountStr, totalAmount))
                 requestedAmount = this.util.bcformat(amountStr, tickDecimals);
         }

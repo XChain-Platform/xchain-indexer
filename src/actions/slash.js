@@ -244,6 +244,7 @@ class Slash {
         // (3) BOTH signatures verify against OFFENDER_PUBKEY over the FULL signed bytes.
         if(!error && !ed25519.verify(msgA, String(sigA), offender))
             error = 'invalid: SIG_A (does not verify)';
+        // Verify SIG_B is the offender's own signature over MSG_B
         if(!error && !ed25519.verify(msgB, String(sigB), offender))
             error = 'invalid: SIG_B (does not verify)';
 
@@ -284,6 +285,7 @@ class Slash {
         // CAPABILITY is derived, never trusted: the submitter declares it and must match.
         if(!error && String(data['CAPABILITY']) !== capability)
             error = 'invalid: CAPABILITY (does not match engine)';
+        // Verify the offender was actually in the signing set for this slot (a non-member cannot equivocate in it)
         if(!error){
             // XCONFIG is authorized by the WHOLE federation (getActiveValidators), every other
             // engine by its capability-scoped snapshot. Both return [{pubkey,...}] at the block.

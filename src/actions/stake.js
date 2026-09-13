@@ -90,6 +90,7 @@ class Stake {
         // AMOUNT must be a positive 8-decimal string
         if(!error && (this.util.isNull(data['AMOUNT']) || !/^[0-9]+(\.[0-9]{1,8})?$/.test(String(data['AMOUNT']))))
             error = 'invalid: AMOUNT (format)';
+        // Verify AMOUNT is greater than zero (an empty stake would bond nothing)
         if(!error && !this.util.bcgt(data['AMOUNT'], '0'))
             error = 'invalid: AMOUNT (must be greater than 0)';
 
@@ -235,16 +236,20 @@ class Stake {
         data['TARGET_CONTRACT_INDEX'] = params[3];
         data['TICK']                  = params[4];
 
+        // Convert NUMBER fields from string value to number value
         if(!error)
             data = this.util.setNumberFormats(data);
 
         // Basic field presence
         if(!error && (this.util.isNull(data['AMOUNT'])))
             error = 'invalid: AMOUNT (required)';
+        // Verify SIGNING_PUBKEY is provided (the key the stake is recorded under)
         if(!error && this.util.isNull(data['SIGNING_PUBKEY']))
             error = 'invalid: SIGNING_PUBKEY (required)';
+        // Verify TARGET_CONTRACT_INDEX is provided (a v3 stake must name the contract it is staked against)
         if(!error && this.util.isNull(data['TARGET_CONTRACT_INDEX']))
             error = 'invalid: TARGET_CONTRACT_INDEX (required)';
+        // Verify TICK is provided (a v3 stake can lock any token, so it must say which one)
         if(!error && this.util.isNull(data['TICK']))
             error = 'invalid: TICK (required)';
 
