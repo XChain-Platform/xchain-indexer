@@ -39,7 +39,7 @@ const swq = require('../../src/stake_weighted_quorum.js');
 
 const { createMockIndexer, createBaseData } = require('../fixtures/mocks');
 const Attest         = require('../../src/actions/attest.js');
-const AnchorRecovery = require('../../src/recovery.js');
+const AnchorRecovery = require('../../bin/recovery.js');
 
 const HUB_DIR = path.resolve(__dirname, '../../../xchain-hub');
 const SDK_DIR = path.resolve(__dirname, '../../../xchain-sdk');

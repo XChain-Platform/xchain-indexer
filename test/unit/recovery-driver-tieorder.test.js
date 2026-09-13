@@ -45,7 +45,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 
-const AnchorRecovery = require('../../src/recovery.js');
+const AnchorRecovery = require('../../bin/recovery.js');
 const Utility        = require('../../src/utility.js');
 
 // Extract the trailing ORDER BY clause (columns + directions) of a query, or '' if none.

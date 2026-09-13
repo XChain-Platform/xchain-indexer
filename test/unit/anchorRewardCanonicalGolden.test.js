@@ -156,11 +156,14 @@ describe('XANCPUB reward canonical: derive copy vs the frozen wire format @regre
             'archive round id must not collide with the per-chain XANCPUB round id');
     });
 
-    // Load-bearing and, until now, asserted nowhere: this copy takes the chain VERBATIM
-    // out of reward_type (`String(row.reward_type).slice('anchor_'.length)`), while
-    // Anchor.prototype._rewardCanonical upper-cases d.CHAIN. The two agree only because
-    // every mirrored row carries an uppercase chain (see the invariant note in
-    // src/reward-push-gate.js). If that ever stops holding, the strings fork silently.
+    // Load-bearing: the mirror copy in src/anchor_reward_derive.js takes the chain
+    // VERBATIM out of reward_type (`String(row.reward_type).slice('anchor_'.length)`),
+    // while Anchor.prototype._rewardCanonical in src/actions/anchor.js upper-cases
+    // d.CHAIN. The two produce the same signed string only for as long as every mirrored
+    // row carries an uppercase chain; reward_type lives in a utf8_general_ci column, so a
+    // mixed-case row would compare equal there and still fork the canonical here. If that
+    // invariant ever stops holding, the strings fork silently and this case is what
+    // catches it.
     //
     // This test is NOT a request to normalize the case here: doing so would alter a
     // signed-string derivation, which is a protocol decision and a flag-day, not test

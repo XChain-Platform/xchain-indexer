@@ -19,7 +19,7 @@
  * continuation chunks (v2).
  * Parsed rows land in anchor_actions: the permanent on-chain record that
  * makes every checkpoint + the complete match archive recoverable from a
- * full chain parse alone (src/recovery.js). Live indexers keep settling
+ * full chain parse alone (bin/recovery.js). Live indexers keep settling
  * from the hub mirror. ANCHOR has NO ledger effect (no credits/debits/
  * escrows) and charges NO protocol fee (validator action, like PRICE v0).
  *

@@ -22,7 +22,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 
-const AnchorRecovery = require('../../src/recovery.js');
+const AnchorRecovery = require('../../bin/recovery.js');
 const Utility        = require('../../src/utility.js');
 
 // Publisher-faithful archive builder shared with the recovery-determinism e2e

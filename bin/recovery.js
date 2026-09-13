@@ -42,7 +42,7 @@
  * a match archived as `finalized` and later re-archived as `retracted` ends
  * recovered as retracted.
  *
- *   node src/recovery.js [--dry-run] [--skip-stake-verification [--i-understand-unverified]]
+ *   node bin/recovery.js [--dry-run] [--skip-stake-verification [--i-understand-unverified]]
  *
  * Reads INDEXER_DB_* from the service environment (.env). Point it at the
  * DOGE indexer DB. The default stake cross-check requires BTC_INDEXER_DB_NAME
@@ -51,9 +51,9 @@
  * Pre-BTC-reindex reward-restore workflow: the reward restore runs BEFORE the
  * BTC reindex, when the stakes table is empty and the cross-check would wrongly
  * fail every batch. That is the ONE legitimate writing skip; run it with
- *   node src/recovery.js --skip-stake-verification --i-understand-unverified
+ *   node bin/recovery.js --skip-stake-verification --i-understand-unverified
  * then, AFTER the BTC reindex, run a verifying dry-run pass to confirm:
- *   node src/recovery.js --dry-run
+ *   node bin/recovery.js --dry-run
  * A bare --skip-stake-verification (no --i-understand-unverified) is forced to a
  * dry run so an unverified run can never write settlement-bearing rows by accident.
  *
@@ -61,22 +61,22 @@
 
 const zlib    = require('zlib');
 const crypto  = require('crypto');
-const ed25519 = require('./ed25519.js');
-const swq     = require('./stake_weighted_quorum.js');
-const eq      = require('./equivocation_header.js');
-const ccr     = require('./cross_chain_royalty_activation.js');
-const ar      = require('./anchor_reward_activation.js');
-const rca     = require('./rollcall_activation.js');
-const abas    = require('./archive_batch_author_activation.js');
-const srb     = require('./snapshot_reorg_buffer.js');
-const cmsh    = require('./capability_min_stake_history.js');
+const ed25519 = require('../src/ed25519.js');
+const swq     = require('../src/stake_weighted_quorum.js');
+const eq      = require('../src/equivocation_header.js');
+const ccr     = require('../src/cross_chain_royalty_activation.js');
+const ar      = require('../src/anchor_reward_activation.js');
+const rca     = require('../src/rollcall_activation.js');
+const abas    = require('../src/archive_batch_author_activation.js');
+const srb     = require('../src/snapshot_reorg_buffer.js');
+const cmsh    = require('../src/capability_min_stake_history.js');
 const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
         ARCHIVE_HEAD_GATE_SQL, dedupeArchiveChunks,
-        archiveChunkCoverage } = require('./anchor-action-query.js');
+        archiveChunkCoverage } = require('../src/anchor-action-query.js');
 // Archive-head version set, spliced rather than hand-copied: recovery must replay the
 // SAME heads the live mirror path reads, so a new publisher-bearing version added to
 // ARCHIVE_HEAD_VERSIONS cannot reach one path and silently skip the other.
-const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('./stateHash.js');
+const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../src/stateHash.js');
 
 // Capabilities whose archived snapshot is re-resolvable from the BTC capability stakes.
 // Both cross-checks gate on this one set (_verifyStakes for its delegated-key admission,
@@ -1206,9 +1206,9 @@ module.exports = AnchorRecovery;
 if(require.main === module){
     const dotenv = require('dotenv');
     dotenv.config();
-    const Database = require('./db.js');
-    const config   = require('./config.js');
-    const Utility  = require('./utility.js');
+    const Database = require('../src/db.js');
+    const config   = require('../src/config.js');
+    const Utility  = require('../src/utility.js');
 
     (async () => {
         const host = process.env.INDEXER_DB_HOST;

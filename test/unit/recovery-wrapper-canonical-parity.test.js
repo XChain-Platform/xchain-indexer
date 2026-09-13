@@ -28,7 +28,7 @@
 
 const assert = require('assert');
 
-const AnchorRecovery = require('../../src/recovery.js');
+const AnchorRecovery = require('../../bin/recovery.js');
 const Anchor          = require('../../src/actions/anchor.js');
 
 describe('recovery._wrapperCanonical: independent byte-parity (ITEM 2729)', function(){
