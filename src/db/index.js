@@ -6238,25 +6238,6 @@ class Database {
         return { total: this.util.bcstr(totalSlashed), releases: Array.from(releases, ([address, amount]) => ({ address, amount })) };
     }
 
-    // Record a slash event row. Caller has already deducted from contract_stakes/contract_unstakes
-    // (via slashContractStake) and credited the destination address.
-    async createSlashEvent(data){
-        data                  = this.normalizeDataValues(data);
-        let execution_index   = data['EXECUTION_INDEX'];
-        let target_contract_index = Number(data['TARGET_CONTRACT_INDEX']);
-        let signing_pubkey_id = data['SIGNING_PUBKEY_ID'];
-        let tick_id           = data['TICK_ID'];
-        let amount            = data['AMOUNT'];
-        let destination_id    = data['DESTINATION_ID'];
-        let block_index       = data['BLOCK_INDEX'];
-        let query = `INSERT INTO slash_events
-                        (execution_index, target_contract_index, signing_pubkey_id, tick_id,
-                         amount, destination_id, block_index)
-                     VALUES (?, ?, ?, ?, ?, ?, ?)`;
-        await this.doQuery(query, [execution_index, target_contract_index, signing_pubkey_id, tick_id,
-                                   amount, destination_id, block_index]);
-    }
-
     /*
      * Programmable policy layer - controller bindings (token_controllers / address_controllers).
      *
@@ -7038,6 +7019,7 @@ for(const mixin of [
     require('./rewards.js'),
     require('./rollcalls.js'),
     require('./sends.js'),
+    require('./slashes.js'),
 ]){
     const descriptors = Object.getOwnPropertyDescriptors(mixin);
     for(const key of Reflect.ownKeys(descriptors)) descriptors[key].enumerable = false;
