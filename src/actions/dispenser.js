@@ -570,6 +570,7 @@ class Dispenser {
         // Validate LIST fields (ALLOW_LIST / BLOCK_LIST)
         if(!error){
             for(let name of this.config['LIST_FIELDS']){
+                // Only check a LIST field that was actually set to a list ID
                 if(!error && !this.util.isNull(data[name]) && this.util.isNumeric(data[name])){
                     // Get LIST type and information
                     let type = await this.indexerDb.getListType(data[name]);
@@ -596,6 +597,7 @@ class Dispenser {
         // Calculate total fee for this dispenser (expiration + ownership-escrow premium, create only)
         fees['AMOUNT'] = 0;
 
+        // Only work out the fee while the dispenser is still valid
         if(!error){
             let unifiedFees = await this.actions.protocolChanges.isEnabled('UNIFIED_FEES', data['BLOCK_INDEX']);
             if(unifiedFees){

@@ -190,8 +190,10 @@ class Bet {
             // Verify REFUND_WINDOW: optional (defaulted), integer seconds within bounds
             if(!error && this.util.isNull(data['REFUND_WINDOW']))
                 data['REFUND_WINDOW'] = this.config['DEFAULT_BET_REFUND_WINDOW'];
+            // Verify REFUND_WINDOW is a whole number of seconds
             if(!error && (!this.util.isNumeric(data['REFUND_WINDOW']) || !this.util.isInteger(data['REFUND_WINDOW'])))
                 error = 'invalid: REFUND_WINDOW (format)';
+            // Verify REFUND_WINDOW falls between the configured minimum and maximum
             if(!error && (this.util.bclt(data['REFUND_WINDOW'], this.config['MIN_BET_REFUND_WINDOW']) || this.util.bcgt(data['REFUND_WINDOW'], this.config['MAX_BET_REFUND_WINDOW'])))
                 error = 'invalid: REFUND_WINDOW (range)';
 
@@ -208,6 +210,7 @@ class Bet {
             // supported (address) type
             if(!error){
                 for(let name of ['ALLOW_LIST', 'BLOCK_LIST']){
+                    // Only check a LIST field that was actually provided
                     if(!error && !this.util.isNull(data[name])){
                         let type = await this.indexerDb.getListType(data[name]);
                         if(type===false)
@@ -272,6 +275,7 @@ class Bet {
                 error = 'invalid: AMOUNT (format)';
             if(!error && !this.util.bcgt(data['AMOUNT'], 0))
                 error = 'invalid: AMOUNT (must be positive)';
+            // Verify AMOUNT meets the feed's minimum stake, when the oracle set one
             if(!error && !this.util.isNull(feedInfo['MIN_AMOUNT']) && this.util.bclt(data['AMOUNT'], feedInfo['MIN_AMOUNT']))
                 error = 'invalid: AMOUNT (below feed minimum)';
 
@@ -313,6 +317,7 @@ class Bet {
             if(!error && !this.util.bclt(data['BLOCK_TIME'], feedInfo['EXPIRE_AT']))
                 error = 'invalid: FEED_ACTION_INDEX (refund window expired)';
             let outcomeCount = feedInfo ? String(feedInfo['OUTCOMES']).split(',').length : 0;
+            // Verify OUTCOME is an integer inside the feed's outcome range
             if(!error && (this.util.isNull(data['OUTCOME']) || !this.util.isNumeric(data['OUTCOME']) || !this.util.isInteger(data['OUTCOME']) || Number(data['OUTCOME']) < 0 || Number(data['OUTCOME']) >= outcomeCount))
                 error = 'invalid: OUTCOME (range)';
         }

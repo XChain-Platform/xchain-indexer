@@ -317,6 +317,7 @@ class Dispense {
             if(!error && this.util.isNull(dispenser['FIAT'])){
                 if(this.util.bclt(available, dispenser['GET_AMOUNT']))
                     error = 'invalid: GET_AMOUNT (insufficient funds)';
+                // Only work out the fill multiplier once the funds check above has passed
                 if(!error){
                     // Saturating, not throwing: this ratio is attacker-chosen on both sides.
                     // GET_AMOUNT is validated only against GET_TICK's DECIMALS, and a tick may
@@ -438,6 +439,7 @@ class Dispense {
                     if(getTokenAllowList.length){
                         if(!error && !getTokenAllowList.includes(data['SOURCE']))
                             error = 'invalid: DESTINATION (GET_TOKEN allow list)';
+                        // Verify GET_ADDRESS is also on the GET_TOKEN allow list
                         if(!error && !getTokenAllowList.includes(dispenser['GET_ADDRESS']))
                             error = 'invalid: GET_ADDRESS (GET_TOKEN allow list)';
                     }
@@ -445,6 +447,7 @@ class Dispense {
                     if(getTokenBlockList.length){
                         if(!error && getTokenBlockList.includes(data['SOURCE']))
                             error = 'invalid: DESTINATION (GET_TOKEN block list)';
+                        // Verify GET_ADDRESS is not on the GET_TOKEN block list
                         if(!error && getTokenBlockList.includes(dispenser['GET_ADDRESS']))
                             error = 'invalid: GET_ADDRESS (GET_TOKEN block list)';
                     }
@@ -452,6 +455,7 @@ class Dispense {
                     if(giveTokenAllowList.length){
                         if(!error && !giveTokenAllowList.includes(data['SOURCE']))
                             error = 'invalid: DESTINATION (GIVE_TOKEN allow list)';
+                        // Verify GET_ADDRESS is also on the GIVE_TOKEN allow list
                         if(!error && !giveTokenAllowList.includes(dispenser['GET_ADDRESS']))
                             error = 'invalid: GET_ADDRESS (GIVE_TOKEN allow list)';
                     }
@@ -459,6 +463,7 @@ class Dispense {
                     if(giveTokenBlockList.length){
                         if(!error && giveTokenBlockList.includes(data['SOURCE']))
                             error = 'invalid: DESTINATION (GIVE_TOKEN block list)';
+                        // Verify GET_ADDRESS is not on the GIVE_TOKEN block list
                         if(!error && giveTokenBlockList.includes(dispenser['GET_ADDRESS']))
                             error = 'invalid: GET_ADDRESS (GIVE_TOKEN block list)';
                     }
@@ -466,6 +471,7 @@ class Dispense {
                     if(dispenserAllowList.length){
                         if(!error && !dispenserAllowList.includes(data['SOURCE']))
                             error = 'invalid: DESTINATION (dispenser allow list)';
+                        // Verify GET_ADDRESS is also on the dispenser's own allow list
                         if(!error && !dispenserAllowList.includes(dispenser['GET_ADDRESS']))
                             error = 'invalid: GET_ADDRESS (dispenser allow list)';
                     }
@@ -473,6 +479,7 @@ class Dispense {
                     if(dispenserBlockList.length){
                         if(!error && dispenserBlockList.includes(data['SOURCE']))
                             error = 'invalid: DESTINATION (DISPENSER block list)';
+                        // Verify GET_ADDRESS is not on the dispenser's own block list
                         if(!error && dispenserBlockList.includes(dispenser['GET_ADDRESS']))
                             error = 'invalid: GET_ADDRESS (DISPENSER block list)';
                     }
