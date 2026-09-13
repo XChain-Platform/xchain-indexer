@@ -88,6 +88,8 @@ dotenv.config();
 // installObservability does not run until ~160 lines further down.
 const { patchConsole } = require('./observability');
 const { getLogger } = require('./observability/index.js');
+const fs   = require('fs');
+const path = require('path');
 patchConsole({
     service: 'xchain-indexer',
     version: require('../package.json').version,
@@ -241,8 +243,6 @@ let _rollcallManifestHash = null;
 function rollcallManifestHash(){
     if(_rollcallManifestHash !== null) return _rollcallManifestHash;
     try {
-        const fs   = require('fs');
-        const path = require('path');
         const p    = path.join(__dirname, '..', 'test', 'fixtures', 'action-manifest.json');
         _rollcallManifestHash = crypto.createHash('sha256')
             .update(fs.readFileSync(p)).digest('hex');

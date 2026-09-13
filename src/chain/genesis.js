@@ -45,6 +45,7 @@ const path   = require('path');
 const crypto = require('crypto');
 
 const { getLogger } = require('../observability/index.js');
+let GenesisDump = require('./genesis_dump');
 // Every lock a bridged row carries (xchain-token-bridge.md section 6). The copy is keyless
 // by design, so these are set once at creation and can never be changed afterwards: nobody
 // can mint it, rename it, sleep it or attach a callback to it. LOCK_MAX_SUPPLY is NOT in the
@@ -86,7 +87,6 @@ class Genesis {
             getLogger().info('GENESIS: importing precomputed dump for ' + this.config['COIN'] + ' at block ' + blockToParse + ' from ' + dumpFile);
             if(this.util.isNull(this.config['GENESIS_DUMP_HASH']))
                 getLogger().warn('GENESIS: GENESIS_DUMP_HASH is not pinned; importing on the dump-recorded block hashes only (no content-hash anchor).');
-            let GenesisDump = require('./genesis_dump');
             let res = await (new GenesisDump(this.indexerDb, this.util, this.config)).read(dumpFile);
             getLogger().info('GENESIS: imported ' + res.rowsImported + ' rows (block hashes verified)');
             return;

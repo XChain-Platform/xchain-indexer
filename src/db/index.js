@@ -63,6 +63,7 @@ const { isMirrorAdmissionConsumerActive } = require('../mirror_admission_activat
 const { requireStakeWeight, normalizeStakeAmount, AUTO_DEDUP_TABLES, recordShapeDrift, txEpochStore, usesCapabilitySnapshot, opensBackslashEscape } = require('./shared.js');
 
 const { getLogger } = require('../observability/index.js');
+const crypto        = require('crypto');
 class Database {
 
     constructor(host, port, dbName, user, pass, indexer) {
@@ -435,7 +436,6 @@ class Database {
     }
 
     async runMigrationsInner(opts = {}){
-        const crypto        = require('crypto');
         const includeManual = !!opts.includeManual;
         const only          = (opts.only == null) ? null
             : new Set([].concat(opts.only).map(s => String(s).trim()).filter(Boolean));

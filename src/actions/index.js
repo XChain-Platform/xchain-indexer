@@ -267,8 +267,6 @@ function collectVmRuntimeEnv(loadError){
         bindingPath: null,
         bindingFormat: null
     };
-    const fs   = require('fs');
-    const path = require('path');
 
     const sniff = (candidate) => {
         try {
@@ -435,6 +433,8 @@ const rollcall           = require('./rollcall/index.js');
 const PreflightMemo      = require('../chain/preflight_memo.js');
 
 const { getLogger } = require('../observability/index.js');
+const fs   = require('fs');
+const path = require('path');
 class Actions {
 
     constructor(indexer){
