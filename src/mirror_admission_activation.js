@@ -445,6 +445,19 @@ function isAdmissionEra(network, eraBlock){
  * @returns {string} '' or '|' + encodeAdmitBlocks(map)
  */
 function admissionCanonicalField(label, network, eraBlock, map){
+    let value = admissionCanonicalValue(label, network, eraBlock, map);
+    return value === null ? '' : '|' + value;
+}
+
+/**
+ * The admission map as a canonical VALUE rather than a pipe-appended tail: null below the
+ * activation, the encoded map at or above it, with the same two refusals as the field
+ * form. This is the spelling a JSON-shaped canonical (the PRICE batch) carries under its
+ * own key, where a '|' tail would be a byte inside a string rather than a delimiter. One
+ * era gate for both spellings, so the two carriers can never disagree about which era a
+ * row is in.
+ */
+function admissionCanonicalValue(label, network, eraBlock, map){
     let era = isAdmissionEra(network, eraBlock);
     let has = (map !== null && map !== undefined);
     if(era && !has)
@@ -453,8 +466,45 @@ function admissionCanonicalField(label, network, eraBlock, map){
     if(!era && has)
         throw new Error(label + ': legacy-era row at block ' + String(eraBlock) + ' on ' + String(network) +
             ' was handed admit_blocks ' + JSON.stringify(map) + '; refusing to build an admission-era canonical');
-    if(!era) return '';
-    return '|' + encodeAdmitBlocks(map);
+    if(!era) return null;
+    return encodeAdmitBlocks(map);
+}
+
+// ---------------------------------------------------------------------------
+// The mirror columns a stored map is read back from
+// ---------------------------------------------------------------------------
+
+// One nullable BIGINT UNSIGNED column per chain the federation serves (C28), spelled
+// `admit_block_<code lower-cased>` in every mirror table's DDL. The hub writes them at
+// finalization and every mirror client reads them back to rebuild the signed field, so the
+// list lives in the twin rather than on one side: a chain the hub writes and an indexer does
+// not read back is a row every indexer refuses (the rebuilt field misses a chain and no
+// signature verifies), fail-closed but still an outage. Adding a chain adds it here and in
+// the mirror .sql twins; it does NOT make rows signed before that chain existed admissible
+// on it (C38), which is why the map is read from the columns actually set and never from
+// this list.
+const ADMIT_COLUMN_CHAINS = Object.freeze(['BTC', 'LTC', 'DOGE']);
+
+/**
+ * The admission map a stored or mirrored row carries in its per-chain columns, or null
+ * for a legacy row (every column NULL or absent). Throws on a column that is set but is
+ * not a usable height, because a row whose stored map cannot be spelled must never reach
+ * a canonical: refusing here keeps the bad row out of every signature check downstream.
+ */
+function columnsAdmitBlocks(row){
+    let r = row || {};
+    let map = null;
+    for(let c of ADMIT_COLUMN_CHAINS){
+        let v = r['admit_block_' + c.toLowerCase()];
+        if(v === null || v === undefined) continue;
+        let h = Number(v);
+        if(!Number.isSafeInteger(h) || h < 0)
+            throw new Error('mirror_admission_activation: admit_block_' + c.toLowerCase() + ' = ' +
+                JSON.stringify(v) + ' is not a usable admission height');
+        if(map === null) map = {};
+        map[c] = h;
+    }
+    return map;
 }
 
 module.exports = {
@@ -479,4 +529,7 @@ module.exports = {
     decodeAdmitBlocks,
     isAdmissionEra,
     admissionCanonicalField,
+    admissionCanonicalValue,
+    ADMIT_COLUMN_CHAINS,
+    columnsAdmitBlocks,
 };

@@ -9,7 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - The PRICE v0 verifier rebuilds the round's per-chain admission map from the canonical behind the mirror-admission activation, byte-matching the hub's two builders.  
-- The admission canonical encoder moved into the activation twin, so the hub and every indexer build the signed field from one definition per repo.
+- The admission canonical encoder moved into the activation twin, so the hub and every indexer build the signed field from one definition per repo.  
+- The PRICE batch action carries a declared per-round admission slot behind the mirror-admission activation, verified against the batch canonical and forwarded to the hub as signed.
+
+### Changed
+- The match, call, bridge, policy and attest-response verifiers rebuild the hub's signed admission map from the mirrored row's admission columns behind the mirror-admission activation, refusing an admission-era row that carries none.  
+- The mirrored match, call, bridge, policy and attest-response selects and the attest-response bind predicate bind by admission height above the consumer activation, with a legacy row still binding by effective time at every height.  
+- The direct-hub-DB call-presence barrier scopes its coverage read to this coin and, above the activation, waits on the hub's persisted admission height floor instead of the hub clock.
 
 ### Fixed
 - The eleven mirror-completeness barriers admit mirrored rows by a per-chain height watermark instead of the block's timestamp, so a future-stamped block no longer holds the block loop.  

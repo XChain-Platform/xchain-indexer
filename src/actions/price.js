@@ -14,17 +14,23 @@
  *
  * XChain Platform Action - PRICE
  *
- * Three versions:
- *   v0: Validator COIN/FIAT snapshot (PBFT-signed by price-capable validators)
- *       Format: PRICE|0|ROUND|TIMESTAMP|BTC_BLOCK_HEIGHT|PAIR_COUNT|PAIR_ID|PAIR_PRICE|...|SIG_COUNT|PUBKEY|SIG|...
+ * Three versions, two of them live on the wire:
+ *   v0: the RETIRED per-round validator snapshot. Its former wire,
+ *       PRICE|0|ROUND|TIMESTAMP|BTC_BLOCK_HEIGHT|PAIR_COUNT|PAIR_ID|PAIR_PRICE|...|SIG_COUNT|PUBKEY|SIG|...,
+ *       is no longer parsed: VERSION 0 now names the batch form below, whose round bodies
+ *       keep the v0 shape. ed25519.buildPriceV0Payload survives as the per-round canonical
+ *       the hub-to-hub push path still signs and verifies.
  *   v1: User TOKEN/FIAT oracle price (no staking required)
  *       Format: PRICE|1|COIN|TICK|FIAT|VALUE|FEE|MEMO
  *   v2: Validator BATCH snapshot - one signed action carrying an hourly window of
  *       full v0-shaped round bodies, in either of two wire forms
  *       Format: PRICE|0|FIRST_ROUND|LAST_ROUND|BTC_BLOCK_HEIGHT|ROUND_COUNT|
- *                 ROUND|TIMESTAMP|ANCHOR_HEIGHT|PAIR_COUNT|pair|price|... (x ROUND_COUNT)
+ *                 ROUND|TIMESTAMP|ANCHOR_HEIGHT|PAIR_COUNT|pair|price|...[|ADMIT_BLOCKS] (x ROUND_COUNT)
  *                 |SIG_COUNT|PUBKEY|SIG|...
  *               PRICE|0|Z|<base64 of deflateRaw(everything after "PRICE|0|" above)>
+ *       ADMIT_BLOCKS is the round's admission map (CODE:digits in ASCII order, comma-joined),
+ *       a declared slot present exactly when the round's OWN anchor is in the mirror
+ *       admission era and absent below it; a batch never straddles that activation.
  *
  * v0 validation:
  *   1. Each PUBKEY must have an active price capability stake
@@ -43,6 +49,7 @@ const priceScale    = require('../price_scale_activation.js');
 const priceSigTally = require('../price_sig_tally_activation.js');
 const priceV2       = require('../price_batch_compression.js');
 const priceRange    = require('../price_zero_validity_activation.js');
+const adm           = require('../mirror_admission_activation.js');
 
 class Price {
 
@@ -232,7 +239,19 @@ class Price {
                     }
                     // btcBlockHeight (camel) is the shape buildPriceBatchPayload reads; the snake
                     // spelling is produced once, below, for storage and the hub push.
-                    rounds.push({ round: round, timestamp: timestamp, btcBlockHeight: anchor, pairs: pairs });
+                    let entry = { round: round, timestamp: timestamp, btcBlockHeight: anchor, pairs: pairs };
+                    // The ADMIT_BLOCKS slot: declared, and read only when THIS round's own anchor
+                    // is in the admission era. Below the activation there is no slot and a
+                    // trailing field invalidates the action exactly as it always has, so no map
+                    // can be smuggled onto this wire ahead of the flag day. Decoded strictly: the
+                    // decoder accepts only the one canonical spelling, so a map that would not
+                    // rebuild the signed bytes is refused here rather than failing every signature.
+                    if(adm.isAdmissionEra(this.config['NETWORK'], anchor)){
+                        let map = adm.decodeAdmitBlocks(fields[idx++]);
+                        if(map === null) throw new Error('invalid ADMIT_BLOCKS at index ' + i);
+                        entry.admitBlocks = map;
+                    }
+                    rounds.push(entry);
                 }
 
                 // THE HEADER ANCHOR IS CONSTRAINED TO THE LAST ROUND'S OWN ANCHOR (section 4).
@@ -282,10 +301,15 @@ class Price {
             let network     = this.config['NETWORK'];
             let firstAnchor = rounds[0].btcBlockHeight;
             let lastAnchor  = rounds[rounds.length - 1].btcBlockHeight;
+            //
+            // The mirror admission activation is a third such gate: each round carries its
+            // own map era-keyed on its own anchor, and every round in one batch sits in one
+            // era, so a straddling window is invalid here exactly as at the other two.
             if(priceSigTally.isPriceSigTallyVerifyFirstActive(firstAnchor, network) !==
                priceSigTally.isPriceSigTallyVerifyFirstActive(lastAnchor, network) ||
                swq.isStakeWeightedQuorumActive(firstAnchor, network) !==
-               swq.isStakeWeightedQuorumActive(lastAnchor, network))
+               swq.isStakeWeightedQuorumActive(lastAnchor, network) ||
+               adm.isAdmissionEra(network, firstAnchor) !== adm.isAdmissionEra(network, lastAnchor))
                 error = 'invalid: batch straddles an oracle flag day';
         }
 
@@ -294,12 +318,13 @@ class Price {
         // receiveValidatedBatch destructure). Built once so the stored row and the pushed
         // payload can never describe two different batches. Empty unless the body was read
         // to the end, so a half-consumed round list never reaches the row or the hub.
-        let roundsWire = !bodyParsed ? [] : rounds.map(r => ({
-            round:            r.round,
-            timestamp:        r.timestamp,
-            btc_block_height: r.btcBlockHeight,
-            pairs:            r.pairs
-        }));
+        let roundsWire = !bodyParsed ? [] : rounds.map(r => {
+            let w = { round: r.round, timestamp: r.timestamp, btc_block_height: r.btcBlockHeight, pairs: r.pairs };
+            // Forwarded as parsed, never rebuilt from this node's own view: the producer signed
+            // THIS map and the hub re-verifies the same bytes this node verified.
+            if(r.admitBlocks !== undefined) w.admit_blocks = r.admitBlocks;
+            return w;
+        });
 
         // 4. SIGNATURE VERIFICATION over the batch canonical.
         //
@@ -308,7 +333,8 @@ class Price {
         // every honest batch fails.
         let qualifiedSigners = [];
         if(!error){
-            let payload    = ed25519.buildPriceBatchPayload(firstRound, lastRound, btcBlockHeight, rounds);
+            let payload    = ed25519.buildPriceBatchPayload(firstRound, lastRound, btcBlockHeight, rounds,
+                                                            this.config['NETWORK']);
             let validSigs  = 0;
             let seenPubkey = new Set();
 

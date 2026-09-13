@@ -44,7 +44,6 @@ const crypto = require('crypto');
 const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../fixtures/mocks');
-const Price = require('../../src/actions/price.js');
 const swq   = require('../../src/stake_weighted_quorum.js');
 
 // The regtest producer activation this suite arms, keyed on the ROUND's own BTC anchor.
@@ -52,8 +51,10 @@ const ADMIT_AT  = 799000;
 const LEGACY_AT = ADMIT_AT - 1;
 const NETWORK   = 'regtest';
 
-// Every module in this repo that closes over the activation.
-const ARMED_MODULES = ['../../src/mirror_admission_activation.js', '../../src/ed25519.js'];
+// Every module in this repo that closes over the activation: the parser reads the era to
+// decide whether a round has a slot, so it is armed with the twin or it never reads one.
+const ARMED_MODULES = ['../../src/mirror_admission_activation.js', '../../src/ed25519.js',
+                       '../../src/actions/price.js'];
 // The hub's verifier twin, so the round trip is driven across the repo boundary the wire
 // actually crosses rather than inside one repo's own idea of the bytes.
 const HUB_MODULES = [
@@ -80,6 +81,7 @@ function armTwins() {
 
     const act     = require('../../src/mirror_admission_activation.js');
     const ed      = require('../../src/ed25519.js');
+    const Price   = require('../../src/actions/price.js');
     const hubAgg  = hubPaths ? require('../../../xchain-hub/src/PriceAggregator.js') : null;
 
     function restore() {
@@ -89,7 +91,7 @@ function armTwins() {
         if (savedEnv === undefined) delete process.env.XC_MIRROR_ADMISSION_ACTIVATION;
         else process.env.XC_MIRROR_ADMISSION_ACTIVATION = savedEnv;
     }
-    return { act, ed, hubAgg, restore };
+    return { act, ed, Price, hubAgg, restore };
 }
 
 // ---------------------------------------------------------------------------
@@ -104,15 +106,19 @@ function signWith(id, payload) {
     return crypto.sign(null, Buffer.from(payload, 'utf8'), id.privateKey).toString('hex');
 }
 
-// `extraPerRound` appends a field after each round's pairs, which is how an admission
-// field would have to ride this wire.
-function batchBody(batch, extraPerRound) {
+// A round's ADMIT_BLOCKS slot rides after its pairs, spelled through the encoder, exactly
+// when the round carries a map; `slotOverride` replaces that spelling (a malformed slot) and
+// `extraPerRound` appends an UNDECLARED field after every round, which is how a map would
+// have had to ride this wire before the slot existed.
+function batchBody(batch, opts = {}) {
     const out = [String(batch.firstRound), String(batch.lastRound),
                  String(batch.btcBlockHeight), String(batch.rounds.length)];
     for (const r of batch.rounds) {
         out.push(String(r.round), String(r.timestamp), String(r.btcBlockHeight), String(r.pairs.length));
         for (const p of r.pairs) out.push(String(p.pair), String(p.price));
-        if (extraPerRound) out.push(extraPerRound);
+        if (r.admitBlocks && !opts.dropSlot)
+            out.push(opts.slotOverride !== undefined ? opts.slotOverride : armed.act.encodeAdmitBlocks(r.admitBlocks));
+        if (opts.extraPerRound) out.push(opts.extraPerRound);
     }
     out.push(String(batch.sigs.length));
     for (const s of batch.sigs) out.push(s.pubkey, s.sig);
@@ -120,16 +126,22 @@ function batchBody(batch, extraPerRound) {
 }
 const wireParams = body => ['2'].concat(body);
 
-function twoRounds(anchorBase) {
-    return [0, 1].map(i => ({
-        round:          100 + i,
-        timestamp:      1700000000 + (i * 600),
-        btcBlockHeight: anchorBase + i,
-        pairs: [{ pair: 'BTC/USD', price: '50000.00' }, { pair: 'LTC/USD', price: '95.5' }]
-    }));
+// Two rounds at [anchorBase, anchorBase + 1]; maps[i], when given, is round i's map.
+function twoRounds(anchorBase, maps) {
+    return [0, 1].map(i => {
+        let r = {
+            round:          100 + i,
+            timestamp:      1700000000 + (i * 600),
+            btcBlockHeight: anchorBase + i,
+            pairs: [{ pair: 'BTC/USD', price: '50000.00' }, { pair: 'LTC/USD', price: '95.5' }]
+        };
+        if (maps && maps[i] !== undefined) r.admitBlocks = maps[i];
+        return r;
+    });
 }
+const MAPS = [{ BTC: 799004, DOGE: 5000004 }, { LTC: 2400004, BTC: 799005 }];
 
-describe('the admission map has no carrier on the on-chain price wire (row 17)', function () {
+describe('the admission map rides the on-chain price wire one slot per round (rows 17 and 26)', function () {
 
     before(function () { armed = armTwins(); });
     after(function () { if (armed) armed.restore(); armed = null; });
@@ -201,13 +213,13 @@ describe('the admission map has no carrier on the on-chain price wire (row 17)',
             const firstRound     = rounds[0].round;
             const lastRound      = rounds[rounds.length - 1].round;
             const btcBlockHeight = rounds[rounds.length - 1].btcBlockHeight;
-            const payload = armed.ed.buildPriceBatchPayload(firstRound, lastRound, btcBlockHeight, rounds);
+            const payload = armed.ed.buildPriceBatchPayload(firstRound, lastRound, btcBlockHeight, rounds, NETWORK);
             return { firstRound, lastRound, btcBlockHeight, rounds, payload,
                      sigs: ids.map(id => ({ pubkey: id.pubkey, sig: signWith(id, payload) })) };
         }
 
         function newHandler() {
-            return new Price({
+            return new armed.Price({
                 config: indexer.config, util: indexer.util, mapper: indexer.mapper,
                 decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb, hubClient
             });
@@ -236,68 +248,101 @@ describe('the admission map has no carrier on the on-chain price wire (row 17)',
 
         afterEach(function () { sinon.restore(); });
 
-        function validBatch(anchorBase) {
+        function validBatch(anchorBase, maps) {
             const id = newIdentity();
             capable.add(id.pubkey);
-            return signBatch(twoRounds(anchorBase === undefined ? ADMIT_AT : anchorBase), [id]);
+            return signBatch(twoRounds(anchorBase === undefined ? ADMIT_AT : anchorBase, maps), [id]);
         }
 
         const batchData = (over = {}) => createBaseData({ ACTION: 'PRICE', FORMAT: 0, BLOCK_INDEX: 100, ...over });
 
-        it('THE MEASURED GAP: an admission-era batch is accepted with no map anywhere on it', async function () {
+        it('THE CARRIER: an admission-era batch carries one map per round, parsed, stored and pushed as signed', async function () {
             const data = batchData();
-            await newHandler().parse(wireParams(batchBody(validBatch(ADMIT_AT))), data, null);
+            await newHandler().parse(wireParams(batchBody(validBatch(ADMIT_AT, MAPS))), data, null);
             assert.strictEqual(data['STATUS'], 'valid');
-            // Neither the stored row nor the hub push carries an admission height, above the
-            // activation, because the wire has no slot for one. This is the gap row 17 names
-            // and it is what the hub's own batch refusal exists to keep from becoming
-            // silent legacy rows. When the batch canonical gains the field, THIS case is the
-            // one that flips, and it should flip deliberately.
-            assert.strictEqual(/admit/.test(String(data['ROUNDS_JSON'])), false);
-        });
-
-        it('pins the price_batch push key set, which carries no admit_blocks today', async function () {
-            const data = batchData();
-            await newHandler().parse(wireParams(batchBody(validBatch(ADMIT_AT))), data, null);
+            const stored = JSON.parse(data['ROUNDS_JSON']);
+            assert.deepStrictEqual(stored.map(r => r.admit_blocks), MAPS,
+                'the stored round bodies do not carry the maps the wire carried');
 
             const [pushType, payload] = indexer.indexerDb.enqueueHubPushTx.firstCall.args;
             assert.strictEqual(pushType, 'price_batch');
-            // The hub destructures exactly these names and an unnamed key is dropped in
-            // silence, so the key SET is the interface and a test is the only thing that
-            // pins it. admit_blocks is absent on purpose: the batch canonical does not
-            // cover it, so a map here would be an unsigned field a relay could rewrite.
+            // The top-level key SET is unchanged (the hub destructures exactly these names);
+            // the map rides INSIDE each round, which the hub passes through whole.
             assert.deepStrictEqual(Object.keys(payload).sort(), [
                 'action_index', 'block_index', 'block_time', 'btc_block_height',
                 'first_round', 'last_round', 'push_generation', 'rounds', 'sigs', 'source_chain'
             ]);
             for (const r of payload.rounds)
                 assert.deepStrictEqual(Object.keys(r).sort(),
-                    ['btc_block_height', 'pairs', 'round', 'timestamp']);
+                    ['admit_blocks', 'btc_block_height', 'pairs', 'round', 'timestamp']);
+            assert.deepStrictEqual(payload.rounds.map(r => r.admit_blocks), MAPS);
         });
 
-        it('the batch canonical has no slot for a map, so one could not be signed if it rode', function () {
-            const b = validBatch(ADMIT_AT);
-            // Hand every round a map. The builder takes {round, timestamp, btcBlockHeight,
-            // pairs} and nothing else, so the bytes are identical with and without it: an
-            // admission map on this wire is invisible to every signature over it.
-            const withMap = b.rounds.map(r => Object.assign({ admit_blocks: { BTC: 799004 } }, r));
-            assert.strictEqual(
-                armed.ed.buildPriceBatchPayload(b.firstRound, b.lastRound, b.btcBlockHeight, withMap),
-                b.payload,
-                'the batch canonical moved for a map it does not claim to carry');
+        it('the hub verifier rebuilds the SAME bytes from the pushed rounds, across the repo boundary', function () {
+            const b   = validBatch(ADMIT_AT, MAPS);
+            const agg = new armed.hubAgg({ db: null, network: NETWORK, getPeerManager: () => ({}) });
+            // The hub's ingest shape: snake-cased rounds with admit_blocks, as the push carries them.
+            const pushed = b.rounds.map(r => ({ round: r.round, timestamp: r.timestamp,
+                btcBlockHeight: r.btcBlockHeight, pairs: r.pairs, admitBlocks: r.admitBlocks }));
+            assert.strictEqual(agg._buildPriceBatchPayload(b.firstRound, b.lastRound, b.btcBlockHeight, pushed), b.payload);
+            // And the map is the LAST key of each round, spelled through the one encoder.
+            const body = JSON.parse(b.payload.slice(b.payload.indexOf('{')));
+            assert.deepStrictEqual(Object.keys(body.rounds[0]), ['round', 'timestamp', 'btc_block_height', 'pairs', 'admit_blocks']);
+            assert.strictEqual(body.rounds[0].admit_blocks, 'BTC:799004,DOGE:5000004');
+            assert.strictEqual(body.rounds[1].admit_blocks, 'BTC:799005,LTC:2400004');
         });
 
-        it('a trailing admission field on the wire INVALIDATES the batch, rather than being ignored', async function () {
-            // The positional parser consumes exactly the fields the format declares, so an
-            // undeclared trailing field shifts SIG_COUNT and the action is refused. That is
-            // the fail-closed direction: nobody can smuggle a map onto this wire ahead of
-            // the format change, and the format change is a flag day by construction.
+        it('an admission-era batch with NO slot is invalid: the missing field shifts SIG_COUNT and nothing pushes', async function () {
             const data = batchData();
-            await newHandler().parse(wireParams(batchBody(validBatch(ADMIT_AT), 'BTC:799004')), data, null);
+            await newHandler().parse(wireParams(batchBody(validBatch(ADMIT_AT, MAPS), { dropSlot: true })), data, null);
             assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
             assert.strictEqual(/^invalid: /.test(data['STATUS']), true, data['STATUS']);
-            assert.strictEqual(indexer.indexerDb.enqueueHubPushTx.called, false,
-                'an unparseable batch was pushed to the hub');
+            assert.strictEqual(indexer.indexerDb.enqueueHubPushTx.called, false);
+        });
+
+        it('a non-canonical spelling in the slot is refused by name, before any signature is read', async function () {
+            const data = batchData();
+            await newHandler().parse(wireParams(batchBody(validBatch(ADMIT_AT, MAPS), { slotOverride: 'DOGE:5000004,BTC:799004' })), data, null);
+            assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
+            assert.strictEqual(data['STATUS'], 'invalid: invalid ADMIT_BLOCKS at index 0');
+            assert.strictEqual(indexer.indexerDb.enqueueHubPushTx.called, false);
+        });
+
+        it('a map edited on the wire fails every signature, so the slot cannot be used to rewrite one', async function () {
+            const data = batchData();
+            const b = validBatch(ADMIT_AT, MAPS);
+            b.rounds[1].admitBlocks = { LTC: 2400004, BTC: 799006 };   // signed 799005
+            await newHandler().parse(wireParams(batchBody(b)), data, null);
+            assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
+            assert.strictEqual(indexer.indexerDb.enqueueHubPushTx.called, false);
+        });
+
+        it('a window straddling the activation is invalid, so no batch carries a mixed set', async function () {
+            const data = batchData();
+            // round 100 at LEGACY_AT (no slot), round 101 at ADMIT_AT (slot): a mixed set.
+            await newHandler().parse(wireParams(batchBody(validBatch(LEGACY_AT, [undefined, MAPS[1]]))), data, null);
+            assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
+            assert.strictEqual(data['STATUS'], 'invalid: batch straddles an oracle flag day');
+        });
+
+        it('the canonical refuses in both directions: an era round with no map, a legacy round with one', function () {
+            const era = twoRounds(ADMIT_AT);
+            assert.throws(() => armed.ed.buildPriceBatchPayload(100, 101, ADMIT_AT + 1, era, NETWORK),
+                          /admission-era row at block 799000 .* has no admit_blocks/);
+            const legacy = twoRounds(LEGACY_AT - 10, MAPS);
+            assert.throws(() => armed.ed.buildPriceBatchPayload(100, 101, LEGACY_AT - 9, legacy, NETWORK),
+                          /legacy-era row .* was handed admit_blocks/);
+            // And a caller that omits the network rebuilds LEGACY bytes: an era batch then fails
+            // to verify rather than verifying as legacy, which is the fail-closed direction.
+            assert.strictEqual(/admit/.test(armed.ed.buildPriceBatchPayload(100, 101, LEGACY_AT - 9, twoRounds(LEGACY_AT - 10))), false);
+        });
+
+        it('below the activation there is no slot: a trailing field still INVALIDATES the batch', async function () {
+            const data = batchData();
+            await newHandler().parse(wireParams(batchBody(validBatch(LEGACY_AT - 10), { extraPerRound: 'BTC:799004' })), data, null);
+            assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
+            assert.strictEqual(/^invalid: /.test(data['STATUS']), true, data['STATUS']);
+            assert.strictEqual(indexer.indexerDb.enqueueHubPushTx.called, false);
         });
 
         it('a batch below the activation is on exactly the same road, so nothing regressed', async function () {
@@ -305,6 +350,10 @@ describe('the admission map has no carrier on the on-chain price wire (row 17)',
             await newHandler().parse(wireParams(batchBody(validBatch(LEGACY_AT - 10))), data, null);
             assert.strictEqual(data['STATUS'], 'valid');
             assert.strictEqual(indexer.indexerDb.enqueueHubPushTx.calledOnce, true);
+            const [, payload] = indexer.indexerDb.enqueueHubPushTx.firstCall.args;
+            for (const r of payload.rounds)
+                assert.deepStrictEqual(Object.keys(r).sort(), ['btc_block_height', 'pairs', 'round', 'timestamp']);
+            assert.strictEqual(/admit/.test(String(data['ROUNDS_JSON'])), false);
         });
     });
 });

@@ -112,7 +112,18 @@ function buildPriceV0Payload(round, timestamp, pairs, network, btcBlockHeight, a
 // ungated and every network it runs on already has EQUIV active). The unwrapped bare-JSON form is also the exact shape that
 // breaks SLASH's "an ORACLE-tagged canonical always carries `round`" invariant, which is
 // why v2 carries its own engine tag. Do NOT "fix" this into a v0-style gate.
-function buildPriceBatchPayload(firstRound, lastRound, btcBlockHeight, rounds) {
+//
+// Each round carries ITS OWN admission map (`admitBlocks`), era-keyed on that round's own
+// anchor and never on the batch anchor: the map means "the heights at which THIS round's
+// producer observed each chain", and the rounds in an hourly window were opened at
+// different tips, so one map for the batch would sign a claim no producer made. In the
+// admission era the entry gains a LAST key, `admit_blocks`, holding the same canonical
+// spelling the v0 field uses (CODE:digits in ASCII order, comma-joined); below it the
+// entry is byte-identical to the pre-admission form and a map is refused. `network` is
+// half the activation key and absent reads INERT, so a caller that omits it rebuilds the
+// legacy bytes and an admission-era batch then fails to verify rather than verifying
+// as legacy.
+function buildPriceBatchPayload(firstRound, lastRound, btcBlockHeight, rounds, network) {
     let sortedRounds = [...rounds]
         .sort((a, b) => parseInt(a.round) - parseInt(b.round))
         .map(r => {
@@ -122,12 +133,16 @@ function buildPriceBatchPayload(firstRound, lastRound, btcBlockHeight, rounds) {
                 if (a.pair > b.pair) return 1;
                 return 0;
             });
-            return {
+            let entry = {
                 round:            parseInt(r.round),
                 timestamp:        parseInt(r.timestamp),
                 btc_block_height: parseInt(r.btcBlockHeight),
                 pairs:            sortedPairs
             };
+            let admit = adm.admissionCanonicalValue('buildPriceBatchPayload', network, parseInt(r.btcBlockHeight),
+                                                    r.admitBlocks === undefined ? null : r.admitBlocks);
+            if (admit !== null) entry.admit_blocks = admit;
+            return entry;
         });
     let raw = JSON.stringify({
         first_round:      parseInt(firstRound),
