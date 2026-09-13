@@ -2757,17 +2757,8 @@ class Utility {
         // capabilityRows and contractRows preserve action_index order; re-query for tick/amount/address.
         if(sweep.capabilityRows.length > 0 || sweep.contractRows.length > 0){
             // Re-fetch with action_index so each credit gets its own action_index trail
-            let placeholdersCap = sweep.capabilityRows.map(() => '?').join(',');
-            let placeholdersCon = sweep.contractRows.map(() => '?').join(',');
             if(sweep.capabilityRows.length > 0){
-                let rows = await db.doQuery(
-                    `SELECT u.action_index, u.amount, a.address AS source_address
-                     FROM unstakes u
-                         LEFT JOIN index_addresses a ON (a.id = u.source_id)
-                     WHERE u.action_index IN (${placeholdersCap})
-                     ORDER BY u.action_index ASC`,
-                    sweep.capabilityRows
-                );
+                let rows = await db.getMaturedUnstakeCreditRows(sweep.capabilityRows);
                 let gas = db.config['GAS'];
                 for(let row of rows){
                     if(!this.bcgt(row.amount, '0')) continue;
@@ -2782,15 +2773,7 @@ class Utility {
                 }
             }
             if(sweep.contractRows.length > 0){
-                let rows = await db.doQuery(
-                    `SELECT cu.action_index, cu.amount, a.address AS source_address, t.tick AS tick
-                     FROM contract_unstakes cu
-                         LEFT JOIN index_addresses a ON (a.id = cu.source_id)
-                         LEFT JOIN index_tickers   t ON (t.id = cu.tick_id)
-                     WHERE cu.action_index IN (${placeholdersCon})
-                     ORDER BY cu.action_index ASC`,
-                    sweep.contractRows
-                );
+                let rows = await db.getMaturedContractUnstakeCreditRows(sweep.contractRows);
                 for(let row of rows){
                     if(!this.bcgt(row.amount, '0')) continue;
                     let creditIndex = await completionAttribution(row.action_index);
