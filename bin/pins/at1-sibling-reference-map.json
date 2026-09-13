@@ -18,13 +18,13 @@
     "xchain-wallet",
     "xchain-websites"
   ],
-  "distinctPathCount": 135,
-  "existingPathCount": 129,
-  "referenceCount": 1547,
+  "distinctPathCount": 136,
+  "existingPathCount": 128,
+  "referenceCount": 1559,
   "referenceCountByKind": {
-    "require": 91,
+    "require": 90,
     "join": 90,
-    "text": 1366
+    "text": 1379
   },
   "dynamicReferenceCount": 3,
   "paths": {
@@ -355,7 +355,7 @@
         {
           "repo": "xchain-sdk",
           "file": "xchain-sdk/src/preflight/constants.js",
-          "line": 230,
+          "line": 243,
           "kind": "text",
           "raw": "src/actions.js"
         },
@@ -652,7 +652,7 @@
         {
           "repo": "xchain-sdk",
           "file": "xchain-sdk/src/preflight/INDEXER-MAP.md",
-          "line": 1504,
+          "line": 1576,
           "kind": "text",
           "raw": "src/actions/"
         },
@@ -2300,14 +2300,14 @@
         {
           "repo": "xchain-sdk",
           "file": "xchain-sdk/src/preflight/checks/dispenser.js",
-          "line": 125,
+          "line": 144,
           "kind": "text",
           "raw": "src/actions/dispenser.js"
         },
         {
           "repo": "xchain-sdk",
           "file": "xchain-sdk/src/preflight/checks/dispenser.js",
-          "line": 150,
+          "line": 169,
           "kind": "text",
           "raw": "src/actions/dispenser.js"
         },
@@ -4469,7 +4469,7 @@
         {
           "repo": "xchain-sdk",
           "file": "xchain-sdk/src/preflight/INDEXER-MAP.md",
-          "line": 1381,
+          "line": 1453,
           "kind": "text",
           "raw": "src/coins/"
         },
@@ -4498,7 +4498,7 @@
     },
     "src/config.js": {
       "exists": true,
-      "referenceCount": 109,
+      "referenceCount": 110,
       "referringRepos": [
         "xchain-contracts",
         "xchain-decoder",
@@ -5166,8 +5166,15 @@
         },
         {
           "repo": "xchain-sdk",
+          "file": "xchain-sdk/src/preflight/constants.js",
+          "line": 116,
+          "kind": "text",
+          "raw": "src/config.js"
+        },
+        {
+          "repo": "xchain-sdk",
           "file": "xchain-sdk/src/preflight/INDEXER-MAP.md",
-          "line": 1518,
+          "line": 1590,
           "kind": "text",
           "raw": "src/config.js"
         },
@@ -5403,7 +5410,7 @@
       ]
     },
     "src/configs/BTC.js": {
-      "exists": true,
+      "exists": false,
       "referenceCount": 2,
       "referringRepos": [
         "xchain-dashboard",
@@ -5468,6 +5475,22 @@
           "line": 20,
           "kind": "text",
           "raw": "src/consensus_rules_digest.js"
+        }
+      ]
+    },
+    "src/consolidation_leg_amount_activation.js": {
+      "exists": true,
+      "referenceCount": 1,
+      "referringRepos": [
+        "xchain-sdk"
+      ],
+      "referrers": [
+        {
+          "repo": "xchain-sdk",
+          "file": "xchain-sdk/src/preflight/checks/send.js",
+          "line": 59,
+          "kind": "text",
+          "raw": "src/consolidation_leg_amount_activation.js"
         }
       ]
     },
@@ -6408,7 +6431,7 @@
         {
           "repo": "xchain-sdk",
           "file": "xchain-sdk/src/preflight/INDEXER-MAP.md",
-          "line": 266,
+          "line": 338,
           "kind": "text",
           "raw": "src/db.js"
         },
@@ -6513,14 +6536,14 @@
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/src/ClientRollback.js",
-          "line": 35,
+          "line": 40,
           "kind": "text",
           "raw": "src/db.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/src/ClientRollback.js",
-          "line": 99,
+          "line": 104,
           "kind": "text",
           "raw": "src/db.js"
         },
@@ -6534,14 +6557,14 @@
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/src/db.js",
-          "line": 1346,
+          "line": 1352,
           "kind": "text",
           "raw": "src/db.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/src/db.js",
-          "line": 1800,
+          "line": 1806,
           "kind": "text",
           "raw": "src/db.js"
         },
@@ -6569,21 +6592,21 @@
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/test/unit/rollback-coverage.test.js",
-          "line": 394,
+          "line": 435,
           "kind": "text",
           "raw": "src/db.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/test/unit/rollback-coverage.test.js",
-          "line": 410,
+          "line": 451,
           "kind": "text",
           "raw": "src/db.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/test/unit/rollback-coverage.test.js",
-          "line": 433,
+          "line": 474,
           "kind": "text",
           "raw": "src/db.js"
         },
@@ -7407,7 +7430,7 @@
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/test/unit/rollback-coverage.test.js",
-          "line": 341,
+          "line": 382,
           "kind": "text",
           "raw": "src/hub_db_sync.js"
         }
@@ -7788,12 +7811,13 @@
     },
     "src/protocol_changes.js": {
       "exists": true,
-      "referenceCount": 39,
+      "referenceCount": 40,
       "referringRepos": [
         "xchain-decoder",
         "xchain-documentation",
         "xchain-explorer",
         "xchain-node",
+        "xchain-sdk",
         "xchain-vm",
         "xchain-wallet",
         "xchain-websites"
@@ -8017,6 +8041,13 @@
           "raw": "src/protocol_changes.js"
         },
         {
+          "repo": "xchain-sdk",
+          "file": "xchain-sdk/src/preflight/checks/batch.js",
+          "line": 315,
+          "kind": "text",
+          "raw": "src/protocol_changes.js"
+        },
+        {
           "repo": "xchain-vm",
           "file": "xchain-vm/src/gateway-emit.js",
           "line": 53,
@@ -8105,8 +8136,8 @@
       ]
     },
     "src/recovery.js": {
-      "exists": true,
-      "referenceCount": 24,
+      "exists": false,
+      "referenceCount": 22,
       "referringRepos": [
         "xchain-documentation",
         "xchain-e2e-test",
@@ -8169,20 +8200,6 @@
           "repo": "xchain-hub",
           "file": "xchain-hub/src/snapshot_reorg_buffer.js",
           "line": 36,
-          "kind": "text",
-          "raw": "src/recovery.js"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/EquivCheckpointCanonical.test.js",
-          "line": 49,
-          "kind": "require",
-          "raw": "src/recovery.js"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/EquivCheckpointCanonical.test.js",
-          "line": 62,
           "kind": "text",
           "raw": "src/recovery.js"
         },
@@ -8350,7 +8367,7 @@
     },
     "src/rollback.js": {
       "exists": true,
-      "referenceCount": 86,
+      "referenceCount": 96,
       "referringRepos": [
         "xchain-hub",
         "xchain-node",
@@ -8738,119 +8755,161 @@
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/src/ClientRollback.js",
-          "line": 146,
+          "line": 154,
           "kind": "text",
           "raw": "src/rollback.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/src/ClientRollback.js",
-          "line": 165,
+          "line": 173,
           "kind": "text",
           "raw": "src/rollback.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/src/ClientRollback.js",
-          "line": 219,
+          "line": 227,
           "kind": "text",
           "raw": "src/rollback.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/src/ClientRollback.js",
-          "line": 281,
+          "line": 289,
           "kind": "text",
           "raw": "src/rollback.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/src/ClientRollback.js",
-          "line": 309,
+          "line": 317,
           "kind": "text",
           "raw": "src/rollback.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/src/ClientRollback.js",
-          "line": 326,
+          "line": 334,
           "kind": "text",
           "raw": "src/rollback.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/src/ClientRollback.js",
-          "line": 481,
+          "line": 495,
           "kind": "text",
           "raw": "src/rollback.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/src/ClientRollback.js",
-          "line": 494,
+          "line": 536,
           "kind": "text",
           "raw": "src/rollback.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/src/ClientRollback.js",
-          "line": 520,
+          "line": 607,
           "kind": "text",
           "raw": "src/rollback.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/src/ClientRollback.js",
-          "line": 626,
+          "line": 620,
           "kind": "text",
           "raw": "src/rollback.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/src/ClientRollback.js",
-          "line": 732,
+          "line": 658,
           "kind": "text",
           "raw": "src/rollback.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/src/ClientRollback.js",
-          "line": 774,
+          "line": 742,
           "kind": "text",
           "raw": "src/rollback.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/src/ClientRollback.js",
-          "line": 793,
+          "line": 773,
           "kind": "text",
           "raw": "src/rollback.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/src/ClientRollback.js",
-          "line": 818,
+          "line": 820,
           "kind": "text",
           "raw": "src/rollback.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/src/ClientRollback.js",
-          "line": 843,
+          "line": 836,
           "kind": "text",
           "raw": "src/rollback.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/src/ClientRollback.js",
-          "line": 983,
+          "line": 874,
           "kind": "text",
           "raw": "src/rollback.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/src/ClientRollback.js",
-          "line": 1150,
+          "line": 893,
+          "kind": "text",
+          "raw": "src/rollback.js"
+        },
+        {
+          "repo": "xchain-sync",
+          "file": "xchain-sync/src/ClientRollback.js",
+          "line": 918,
+          "kind": "text",
+          "raw": "src/rollback.js"
+        },
+        {
+          "repo": "xchain-sync",
+          "file": "xchain-sync/src/ClientRollback.js",
+          "line": 943,
+          "kind": "text",
+          "raw": "src/rollback.js"
+        },
+        {
+          "repo": "xchain-sync",
+          "file": "xchain-sync/src/ClientRollback.js",
+          "line": 1083,
+          "kind": "text",
+          "raw": "src/rollback.js"
+        },
+        {
+          "repo": "xchain-sync",
+          "file": "xchain-sync/src/ClientRollback.js",
+          "line": 1250,
+          "kind": "text",
+          "raw": "src/rollback.js"
+        },
+        {
+          "repo": "xchain-sync",
+          "file": "xchain-sync/src/ClientRollback.js",
+          "line": 1286,
+          "kind": "text",
+          "raw": "src/rollback.js"
+        },
+        {
+          "repo": "xchain-sync",
+          "file": "xchain-sync/src/ClientRollback.js",
+          "line": 1296,
           "kind": "text",
           "raw": "src/rollback.js"
         },
@@ -8905,8 +8964,29 @@
         },
         {
           "repo": "xchain-sync",
+          "file": "xchain-sync/test/unit/ClientRollback.test.js",
+          "line": 494,
+          "kind": "text",
+          "raw": "src/rollback.js"
+        },
+        {
+          "repo": "xchain-sync",
+          "file": "xchain-sync/test/unit/ClientRollback.test.js",
+          "line": 521,
+          "kind": "text",
+          "raw": "src/rollback.js"
+        },
+        {
+          "repo": "xchain-sync",
           "file": "xchain-sync/test/unit/deactivation-block-mirror.test.js",
           "line": 14,
+          "kind": "text",
+          "raw": "src/rollback.js"
+        },
+        {
+          "repo": "xchain-sync",
+          "file": "xchain-sync/test/unit/deactivation-block-mirror.test.js",
+          "line": 99,
           "kind": "text",
           "raw": "src/rollback.js"
         },
@@ -8920,42 +9000,49 @@
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/test/unit/rollback-coverage.test.js",
-          "line": 206,
+          "line": 207,
           "kind": "text",
           "raw": "src/rollback.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/test/unit/rollback-coverage.test.js",
-          "line": 313,
+          "line": 314,
           "kind": "text",
           "raw": "src/rollback.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/test/unit/rollback-coverage.test.js",
-          "line": 337,
+          "line": 340,
           "kind": "text",
           "raw": "src/rollback.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/test/unit/rollback-coverage.test.js",
-          "line": 364,
+          "line": 378,
           "kind": "text",
           "raw": "src/rollback.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/test/unit/rollback-coverage.test.js",
-          "line": 646,
+          "line": 405,
           "kind": "text",
           "raw": "src/rollback.js"
         },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/test/unit/rollback-coverage.test.js",
-          "line": 651,
+          "line": 687,
+          "kind": "text",
+          "raw": "src/rollback.js"
+        },
+        {
+          "repo": "xchain-sync",
+          "file": "xchain-sync/test/unit/rollback-coverage.test.js",
+          "line": 692,
           "kind": "text",
           "raw": "src/rollback.js"
         }
@@ -11015,7 +11102,7 @@
     },
     "src/utility.js": {
       "exists": true,
-      "referenceCount": 121,
+      "referenceCount": 122,
       "referringRepos": [
         "xchain-decoder",
         "xchain-e2e-test",
@@ -11674,7 +11761,14 @@
         {
           "repo": "xchain-sdk",
           "file": "xchain-sdk/src/preflight/numeric.js",
-          "line": 58,
+          "line": 48,
+          "kind": "text",
+          "raw": "src/utility.js"
+        },
+        {
+          "repo": "xchain-sdk",
+          "file": "xchain-sdk/src/preflight/numeric.js",
+          "line": 85,
           "kind": "text",
           "raw": "src/utility.js"
         },

@@ -1,0 +1,27 @@
+{
+  "note": "The declared delta between the suite title map as first pinned and the map at the end of milestone M1. AT2 reads identity THROUGH this file: every difference the compare reported is listed here with the row that caused it, so a difference that is not listed is a regression rather than a restructure. bin/suite-title-map.js --rename-map consumes a flat {oldPath: newPath} object; M1 moved no collected test file, so its rename set is empty and the compare needs no --rename-map argument.",
+  "milestone": "M1",
+  "date": "2026-09-13",
+  "pin_before_sha256": "de142db0133560d13f0fd7def8abce4dbbc5fd84c873485d1744ad525d8a26df",
+  "pin_before_rev": "0d216edd",
+  "pin_after_rev": "37b86938",
+  "renames": {},
+  "titleDeltas": [
+    {
+      "row": 3,
+      "file": "test/unit/protocol-address-roles.test.js",
+      "scripts": ["test", "test:integration"],
+      "dropped": "protocolAddressRoles (consensus hash canonicalization) covers every hashed special address in src/configs/*.js",
+      "added": "protocolAddressRoles (consensus hash canonicalization) covers every hashed special address in the coin bundles",
+      "why": "row 3 folded the per-coin config shims into the coins registry and deleted src/configs/, so the title names the bundles it now walks. The assertion is unchanged: the same addresses are canonicalized from the same registry."
+    }
+  ],
+  "compare_rows": 4,
+  "compare_rows_explained": "one title rename in one file, reported once per script tier that collects the file (test and test:integration), as a dropped title plus an added title each.",
+  "rows_folded_before_the_first_pin": [
+    {
+      "row": 2,
+      "detail": "the eight canonicalizeRewardType() naming titles and the four pushvalidatorrewards is retired outright titles were already at their M1 values when the first pin was minted at 0d216edd, so they produce no difference here."
+    }
+  ]
+}

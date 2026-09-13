@@ -3141,6 +3141,12 @@
       "coverage ratchet floors fails the job on a shortfall rather than only reporting it",
       "coverage ratchet floors ships the coverage:check script the CI coverage job invokes"
     ],
+    "4419d7ba08b430c7": [
+      "protocolAddressRoles (consensus hash canonicalization) canonicalizes a known special address to its role and passes others through",
+      "protocolAddressRoles (consensus hash canonicalization) covers every hashed special address in the coin bundles",
+      "protocolAddressRoles (consensus hash canonicalization) exports the expected role-field set",
+      "protocolAddressRoles (consensus hash canonicalization) maps no address to two different roles (no collision)"
+    ],
     "44b1c187a6ea4b21": [
       "VM execute-time lint activation predicate @regression @tier1 each mainnet coin is gated by its OWN key, never by a bare network fallback",
       "VM execute-time lint activation predicate @regression @tier1 mainnet is ARMED AT GENESIS for every coin: active at every height",
@@ -7271,12 +7277,6 @@
       "the dry-run wedge: quote a tick, reject it, broadcast another @regression a COMMITTED block keeps using the memo (no per-action re-read regression)",
       "the dry-run wedge: quote a tick, reject it, broadcast another @regression the broadcast block records the REAL tick, not the quoted one",
       "the dry-run wedge: quote a tick, reject it, broadcast another @regression the freed ADDRESS id behaves the same way (the shape both LTC wedges took)"
-    ],
-    "9e89626798406e38": [
-      "protocolAddressRoles (consensus hash canonicalization) canonicalizes a known special address to its role and passes others through",
-      "protocolAddressRoles (consensus hash canonicalization) covers every hashed special address in src/configs/*.js",
-      "protocolAddressRoles (consensus hash canonicalization) exports the expected role-field set",
-      "protocolAddressRoles (consensus hash canonicalization) maps no address to two different roles (no collision)"
     ],
     "9ea42ee3d549b330": [
       "assignActionAddressIds: pre-handler-error skip (#4888) @regression @tier1 does NOT intern any id when the action was rejected before the handler",
@@ -12178,7 +12178,7 @@
         "test/unit/price_pair_activation.test.js": "ec6404e13c7335df",
         "test/unit/price_sig_tally_activation.test.js": "278e64e07e154190",
         "test/unit/pricesV2BatchStorage.test.js": "42701a0abce29a62",
-        "test/unit/protocol-address-roles.test.js": "9e89626798406e38",
+        "test/unit/protocol-address-roles.test.js": "4419d7ba08b430c7",
         "test/unit/protocolChangeRegistryPrototype.test.js": "9227d0e83b5535c1",
         "test/unit/protocol_changes.test.js": "24f03714b9c06bf5",
         "test/unit/protocol_time.test.js": "92dde67ddb12e9ab",
@@ -12792,7 +12792,7 @@
         "test/unit/price_pair_activation.test.js": "ec6404e13c7335df",
         "test/unit/price_sig_tally_activation.test.js": "278e64e07e154190",
         "test/unit/pricesV2BatchStorage.test.js": "42701a0abce29a62",
-        "test/unit/protocol-address-roles.test.js": "9e89626798406e38",
+        "test/unit/protocol-address-roles.test.js": "4419d7ba08b430c7",
         "test/unit/protocolChangeRegistryPrototype.test.js": "9227d0e83b5535c1",
         "test/unit/protocol_changes.test.js": "24f03714b9c06bf5",
         "test/unit/protocol_time.test.js": "92dde67ddb12e9ab",
