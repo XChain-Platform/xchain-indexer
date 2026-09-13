@@ -3989,49 +3989,6 @@ class Database {
         results = await this.doQuery(query, args);
     }
 
-    // Create/Update record in `links` table
-    async createLink(data){
-        data                   = this.normalizeDataValues(data);
-        let coin1_id           = await this.createCoin(data['COIN1']);
-        let coin2_id           = await this.createCoin(data['COIN2']);
-        let memo_id            = await this.createMemo(data['MEMO']);
-        let status_id          = await this.createStatus(data['STATUS']);
-        let action_index       = data['ACTION_INDEX'];
-        let coin1_action_index = data['COIN1_ACTION_INDEX'];
-        let coin2_action_index = data['COIN2_ACTION_INDEX'];
-        // Check if record already exists for this link
-        let query  = `SELECT
-                            action_index
-                        FROM
-                            links
-                        WHERE
-                            action_index=?`;
-        let args = [action_index];
-        let exists = false;
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
-        if(exists){
-            // UPDATE record
-            query = `UPDATE
-                        links
-                    SET
-                        coin1_id=?,
-                        coin1_action_index=?,
-                        coin2_id=?,
-                        coin2_action_index=?,
-                        memo_id=?,
-                        status_id=?
-                    WHERE 
-                        action_index=?`;
-        } else {
-            // INSERT record
-            query = `INSERT INTO links (coin1_id, coin1_action_index, coin2_id, coin2_action_index, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
-        }
-        args    = [coin1_id, coin1_action_index, coin2_id, coin2_action_index, memo_id, status_id, action_index];
-        results = await this.doQuery(query, args);
-    }
-
     // Create/Update record in `messages` table
     async createMessage(data){
         data                  = this.normalizeDataValues(data);
@@ -10668,6 +10625,7 @@ for(const mixin of [
     require('./hub_pushes.js'),
     require('./index_tables.js'),
     require('./issues.js'),
+    require('./links.js'),
 ]){
     const descriptors = Object.getOwnPropertyDescriptors(mixin);
     for(const key of Reflect.ownKeys(descriptors)) descriptors[key].enumerable = false;
