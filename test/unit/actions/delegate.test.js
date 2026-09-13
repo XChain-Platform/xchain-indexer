@@ -40,6 +40,14 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
         db.getPubkeyId              = sinon.stub().resolves(null);   // pubkey unknown → no collision
         db.getStatusId              = sinon.stub().resolves(1);
         db.doQuery                  = sinon.stub().resolves([]);     // contract stake lookup, empty by default
+        // The five contract-scope checks are the real db mixin methods over that stubbed
+        // doQuery, not stubs of their own, so the SQL assertions below still read the text
+        // the shipped methods issue and the call counts still count real statements.
+        const delegationsMixin = require('../../../src/db/delegations');
+        for(const m of ['hasActiveContractStakeForDelegation', 'isSigningPubkeyUsedByContractStake',
+                        'isSigningPubkeyUsedByContractDelegation', 'hasActiveContractDelegation',
+                        'deactivateContractDelegation'])
+            db[m] = delegationsMixin[m].bind(db);
     }
 
     function delegateData(overrides = {}) {

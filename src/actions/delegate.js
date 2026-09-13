@@ -185,14 +185,9 @@ class Delegate {
             } else {
                 let valid_id = await this.indexerDb.getStatusId('valid');
                 let tick_id  = await this.indexerDb.getTickerId(data['TICK']);
-                let rows = await this.indexerDb.doQuery(
-                    `SELECT 1 FROM contract_stakes
-                     WHERE target_contract_index=? AND source_id=? AND tick_id=? AND status_id=?
-                       AND activation_block <= ? AND deactivation_block IS NULL
-                     LIMIT 1`,
-                    [Number(data['TARGET_CONTRACT_INDEX']), sourceId, tick_id, valid_id, data['BLOCK_INDEX']]
-                );
-                if(rows.length === 0)
+                let backed = await this.indexerDb.hasActiveContractStakeForDelegation(
+                    Number(data['TARGET_CONTRACT_INDEX']), sourceId, tick_id, valid_id, data['BLOCK_INDEX']);
+                if(!backed)
                     error = 'invalid: SOURCE (no active contract stake)';
             }
         }
@@ -203,19 +198,10 @@ class Delegate {
             let valid_id = await this.indexerDb.getStatusId('valid');
             let pubkey_id = await this.indexerDb.getPubkeyId(String(data['SIGNING_PUBKEY']).toLowerCase());
             if(pubkey_id !== null){
-                let csRows = await this.indexerDb.doQuery(
-                    `SELECT 1 FROM contract_stakes WHERE signing_pubkey_id=? AND status_id=? LIMIT 1`,
-                    [pubkey_id, valid_id]
-                );
-                if(csRows.length > 0){
+                if(await this.indexerDb.isSigningPubkeyUsedByContractStake(pubkey_id, valid_id)){
                     error = 'invalid: SIGNING_PUBKEY (already in use by contract stake)';
-                } else {
-                    let cdRows = await this.indexerDb.doQuery(
-                        `SELECT 1 FROM contract_delegations WHERE signing_pubkey_id=? AND status_id=? LIMIT 1`,
-                        [pubkey_id, valid_id]
-                    );
-                    if(cdRows.length > 0)
-                        error = 'invalid: SIGNING_PUBKEY (already in use by contract delegation)';
+                } else if(await this.indexerDb.isSigningPubkeyUsedByContractDelegation(pubkey_id, valid_id)){
+                    error = 'invalid: SIGNING_PUBKEY (already in use by contract delegation)';
                 }
             }
         }
@@ -378,15 +364,10 @@ class Delegate {
             if(source_id === null || pubkey_id === null || tick_id === null){
                 error = 'invalid: no active contract delegation';
             } else {
-                let rows = await this.indexerDb.doQuery(
-                    `SELECT 1 FROM contract_delegations
-                     WHERE target_contract_index=? AND source_id=? AND signing_pubkey_id=? AND tick_id=?
-                       AND status_id=? AND activation_block <= ?
-                       AND (deactivation_block IS NULL OR deactivation_block > ?)
-                     LIMIT 1`,
-                    [Number(data['TARGET_CONTRACT_INDEX']), source_id, pubkey_id, tick_id, valid_id, data['BLOCK_INDEX'], data['BLOCK_INDEX']]
-                );
-                if(rows.length === 0)
+                let active = await this.indexerDb.hasActiveContractDelegation(
+                    Number(data['TARGET_CONTRACT_INDEX']), source_id, pubkey_id, tick_id, valid_id,
+                    data['BLOCK_INDEX']);
+                if(!active)
                     error = 'invalid: no active contract delegation';
             }
         }
@@ -410,12 +391,8 @@ class Delegate {
             let valid_id  = await this.indexerDb.getStatusId('valid');
             let pubkey_id = await this.indexerDb.getPubkeyId(String(data['SIGNING_PUBKEY']).toLowerCase());
             let tick_id   = await this.indexerDb.getTickerId(data['TICK']);
-            await this.indexerDb.doQuery(
-                `UPDATE contract_delegations SET deactivation_block=?
-                 WHERE target_contract_index=? AND signing_pubkey_id=? AND tick_id=?
-                   AND status_id=? AND deactivation_block IS NULL`,
-                [deactivationBlock, Number(data['TARGET_CONTRACT_INDEX']), pubkey_id, tick_id, valid_id]
-            );
+            await this.indexerDb.deactivateContractDelegation(
+                deactivationBlock, Number(data['TARGET_CONTRACT_INDEX']), pubkey_id, tick_id, valid_id);
         }
 
         this.util.addAddressTicker(data['SOURCE'], data['TICK']);

@@ -173,4 +173,63 @@ module.exports = {
             [pubkeyId, validId, blockIndex, blockIndex, blockIndex]);
     },
 
+
+    // Does an ACTIVE contract stake back this (contract, source, tick) at this height? A
+    // DELEGATE v1 needs one: without it the delegation row it writes has no deactivation
+    // block and outlives the stake once the cooldown sweeps the tokens out, leaving a
+    // contract-signer authority with nothing staked behind it.
+    async hasActiveContractStakeForDelegation(targetContractIndex, sourceId, tickId, validId, blockIndex){
+        let rows = await this.doQuery(
+            `SELECT 1 FROM contract_stakes
+                     WHERE target_contract_index=? AND source_id=? AND tick_id=? AND status_id=?
+                       AND activation_block <= ? AND deactivation_block IS NULL
+                     LIMIT 1`,
+            [targetContractIndex, sourceId, tickId, validId, blockIndex]);
+        return rows.length > 0;
+    },
+
+    // Is this signing pubkey already claimed by a contract STAKE? Half of the DELEGATE v1
+    // collision check, which is scoped to contract rows only: the same pubkey may be a
+    // capability validator and a contract staker, and only reuse inside contract scope is
+    // refused.
+    async isSigningPubkeyUsedByContractStake(pubkeyId, validId){
+        let rows = await this.doQuery(
+            `SELECT 1 FROM contract_stakes WHERE signing_pubkey_id=? AND status_id=? LIMIT 1`,
+            [pubkeyId, validId]);
+        return rows.length > 0;
+    },
+
+    // The other half of that collision check: already claimed by a contract DELEGATION.
+    async isSigningPubkeyUsedByContractDelegation(pubkeyId, validId){
+        let rows = await this.doQuery(
+            `SELECT 1 FROM contract_delegations WHERE signing_pubkey_id=? AND status_id=? LIMIT 1`,
+            [pubkeyId, validId]);
+        return rows.length > 0;
+    },
+
+    // Is there an ACTIVE contract delegation to revoke at this height? DELEGATE v3 refuses
+    // when there is not. Active spans the activation delay in both directions: already
+    // activated, and not yet deactivated as of this block.
+    async hasActiveContractDelegation(targetContractIndex, sourceId, pubkeyId, tickId, validId, blockIndex){
+        let rows = await this.doQuery(
+            `SELECT 1 FROM contract_delegations
+                     WHERE target_contract_index=? AND source_id=? AND signing_pubkey_id=? AND tick_id=?
+                       AND status_id=? AND activation_block <= ?
+                       AND (deactivation_block IS NULL OR deactivation_block > ?)
+                     LIMIT 1`,
+            [targetContractIndex, sourceId, pubkeyId, tickId, validId, blockIndex, blockIndex]);
+        return rows.length > 0;
+    },
+
+    // Stamp the revoking height onto the live contract delegation rows for this
+    // (contract, pubkey, tick). Only rows still open (deactivation_block IS NULL) are
+    // touched, so a second revoke cannot move a deactivation height already set.
+    async deactivateContractDelegation(deactivationBlock, targetContractIndex, pubkeyId, tickId, validId){
+        await this.doQuery(
+            `UPDATE contract_delegations SET deactivation_block=?
+                 WHERE target_contract_index=? AND signing_pubkey_id=? AND tick_id=?
+                   AND status_id=? AND deactivation_block IS NULL`,
+            [deactivationBlock, targetContractIndex, pubkeyId, tickId, validId]);
+    },
+
 };
