@@ -1,0 +1,30 @@
+{
+  "note": "The declared delta between the suite title map as pinned at AT1 and the map after row 4 of milestone M2, the db split. AT2 reads identity THROUGH this file: every difference the compare reports is listed here with the row that caused it, so a difference that is not listed is a regression rather than a restructure. Row 4 renames no test and changes no existing title; its only difference is one added file.",
+  "milestone": "M2",
+  "row": 4,
+  "date": "2026-09-13",
+  "pin_before_sha256": "43126c11fd28e776d29287028bc1162ddacc1a69212e429e586018ad93c8b285",
+  "pin_before_rev": "634dbe5f",
+  "renames": {},
+  "titleDeltas": [
+    {
+      "row": 4,
+      "file": "test/unit/db_prototype_install.test.js",
+      "scripts": [
+        "test",
+        "test:integration",
+        "test:regression",
+        "test:regression:fast",
+        "test:regression:full"
+      ],
+      "added": [
+        "Database prototype install @regression @tier1 carries every declared mixin method, non-enumerable, and nothing enumerable at all",
+        "Database prototype install @regression @tier1 keeps the methods out of a for-in walk over an object that inherits them",
+        "Database prototype install @regression @tier1 lets a mixin method be stubbed and restored on the prototype"
+      ],
+      "why": "the split installs the per-family mixins onto Database.prototype instead of declaring them in a class body, and nothing in the suite noticed the difference: making the install enumerable left 9679 passing and 0 failing. The invariant is a wire shape (an enumerable prototype puts several hundred method names into every for-in, Object.keys and JSON.stringify over an object that inherits it), so row 4 adds the guard the split needs. Falsified: deleting the enumerable:false line turns all three red, restoring the file byte-exact turns them green."
+    }
+  ],
+  "compare_rows": 5,
+  "compare_rows_explained": "one added file, reported once per script tier that collects test/unit/*.test.js."
+}
