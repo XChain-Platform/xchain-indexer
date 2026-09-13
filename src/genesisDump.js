@@ -74,12 +74,11 @@ class GenesisDump {
         // Discover the non-empty, non-excluded tables to carry.
         let tables = [];
         let rowCounts = {};
-        let allTables = (await this.db.doQuery('SHOW TABLES')).map(r => Object.values(r)[0]);
+        let allTables = await this.db.listTableNames();
         for(let t of allTables){
             if(EXCLUDE_TABLES.has(t))
                 continue;
-            let c = await this.db.doQuery('SELECT COUNT(*) AS c FROM `' + t + '`');
-            let n = (c.length > 0) ? Number(c[0].c) : 0;
+            let n = await this.db.countRowsInTable(t);
             if(n > 0){
                 tables.push(t);
                 rowCounts[t] = n;
@@ -105,13 +104,12 @@ class GenesisDump {
 
         for(let t of tables){
             // Column order from the table definition; reused verbatim on import.
-            let cols = (await this.db.doQuery('SHOW COLUMNS FROM `' + t + '`')).map(r => r.Field);
+            let cols = await this.db.listTableColumnNames(t);
             await writeLine({ t, cols });
             // Stream rows ordered by the table's primary/first column for stable bytes.
             // Every dumped table has a deterministic first column (id / action_index /
-            // tx_index) so ORDER BY 1 yields the same byte stream on every generation.
-            let colList = cols.map(c => '`' + c + '`').join(',');
-            let rows = await this.db.doQuery('SELECT ' + colList + ' FROM `' + t + '` ORDER BY 1 ASC');
+            // tx_index) so the read's ORDER BY 1 yields the same byte stream every time.
+            let rows = await this.db.readAllRowsByFirstColumn(t, cols);
             for(let row of rows)
                 await writeLine({ r: cols.map(c => this._scalar(row[c])) });
         }
@@ -246,21 +244,15 @@ class GenesisDump {
         return { ledger: h.ledger.hash, actions: h.actions.hash, state: h.state.hash, contracts: h.contracts.hash };
     }
 
-    // Multi-row parameterized INSERT for one table. Values are parameterized;
-    // the table + column identifiers cannot be, so re-assert their shape here
-    // (read() already validates, but keep the guard with the SQL-building site).
+    // Multi-row parameterized INSERT for one table. Values are parameterized; the table +
+    // column identifiers cannot be, so re-assert their shape here with the dump's own
+    // message (read() already validates, but a caller reaching this directly must not get
+    // past the shape check). The db method asserts again at the SQL-building site.
     async _insertBatch(table, cols, rows){
         this._assertIdentifier(table);
         for(let c of cols)
             this._assertIdentifier(c);
-        let colList = cols.map(c => '`' + c + '`').join(',');
-        let one     = '(' + cols.map(() => '?').join(',') + ')';
-        let sql     = 'INSERT INTO `' + table + '` (' + colList + ') VALUES ' + rows.map(() => one).join(',');
-        let args    = [];
-        for(let r of rows)
-            for(let v of r)
-                args.push(v);
-        await this.db.doQuery(sql, args);
+        await this.db.insertRowsIntoTable(table, cols, rows);
     }
 
     // Normalize a DB value for JSON. bigIntAsNumber=true (db.js) means BIGINTs

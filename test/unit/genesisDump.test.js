@@ -50,7 +50,7 @@ function buildDump(objs){
 // returns block hashes that match the dump's recorded meta for the happy path.
 function mockDb(expectedHashes){
     let inserts = [];
-    return {
+    const db = {
         inserts,
         async doQuery(sql, args){
             if(/^\s*INSERT/i.test(sql))
@@ -66,6 +66,10 @@ function mockDb(expectedHashes){
             };
         },
     };
+    // The batched INSERT is built by the real misc mixin method over this recording
+    // doQuery, so the SQL assertions below still read the statement that ships.
+    db.insertRowsIntoTable = require('../../src/db/misc').insertRowsIntoTable.bind(db);
+    return db;
 }
 
 const HASHES = { ledger: 'aa', actions: 'bb', state: 'cc', contracts: 'dd' };
