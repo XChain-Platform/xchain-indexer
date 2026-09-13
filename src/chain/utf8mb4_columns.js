@@ -87,7 +87,7 @@
  *     value anywhere to widen. This list is the WIDEN set, and an entry here would demand
  *     a dated MODIFY that has nothing to do.
  *
- * BYTE-ALIGNED TWIN: copied verbatim into xchain-sync/src/utf8mb4_columns.js (sync has no
+ * BYTE-ALIGNED TWIN: copied verbatim into xchain-sync/src/utf8mb4Columns.js (sync has no
  * dependency on this package by design; same convention as tableLifecycle.js /
  * stateHash.js). Edit here, then `cp` to the twin; the sync suite asserts byte-identity.
  *
