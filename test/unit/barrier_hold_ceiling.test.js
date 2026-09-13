@@ -194,7 +194,7 @@ describe('isMirrorBarrierReason @regression @tier1', function () {
 });
 
 // ── The indexer's reaction to a crossing ───────────────────────────────────────
-describe('XChainIndexer._noteBarrierHold @regression @tier1', function () {
+describe('XChainIndexer.noteBarrierHold @regression @tier1', function () {
 
     function makeIndexer(ceilingMs) {
         return {
@@ -399,7 +399,7 @@ describe('mirror-barrier hold is wired into the block loop @regression @tier1', 
     const INDEXER_SRC = fs.readFileSync(path.resolve(__dirname, '../../src/XChainIndexer.js'), 'utf8');
 
     it('the poll loop folds the hold once the catch-up loop stops', function () {
-        assert.ok(/this\._noteBarrierHold\(/.test(INDEXER_SRC),
+        assert.ok(/this\.noteBarrierHold\(/.test(INDEXER_SRC),
             'the block loop must call _noteBarrierHold or the ceiling is never measured');
     });
 

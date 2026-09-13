@@ -237,18 +237,18 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
         let m;
         while ((m = re.exec(INDEXER_SRC)) !== null) {
             const expr  = m[2];
-            const plain  = /_barrierClearsAt\(blockTime,\s*'([A-Za-z]+)'\)/.exec(expr);
-            const height = /_barrierClearsAtHeightAware\(blockTime,\s*'([A-Za-z]+)',\s*blockToParse\)/.exec(expr);
+            const plain  = /\bbarrierClearsAt\(blockTime,\s*'([A-Za-z]+)'\)/.exec(expr);
+            const height = /\bbarrierClearsAtHeightAware\(blockTime,\s*'([A-Za-z]+)',\s*blockToParse\)/.exec(expr);
             // The anchor barrier reads its grace through a BOUND-aware sibling, because its
             // predicate opens at min(blockTime, horizonBound) + grace. The field name still
             // travels in the call site, which is the pairing this scan exists to pin.
-            const anchor = /_anchorBarrierClearsAt\(\s*\n?\s*blockTime,\s*anchorHorizonBound,\s*blockToParse,\s*'([A-Za-z]+)'\)/.exec(expr);
+            const anchor = /\banchorBarrierClearsAt\(\s*\n?\s*blockTime,\s*anchorHorizonBound,\s*blockToParse,\s*'([A-Za-z]+)'\)/.exec(expr);
             // The direct-hub-DB call barrier has no HubDbSync to read a grace off, so it
             // keys on the indexer's own resolved field through its own helper. Map it to
             // that field so this test still pins WHICH grace the barrier uses. Its helper
             // takes the block height too (row 5): null above the admission activation,
             // the clock form below it, so it is height-aware like the mirrored members.
-            const direct = /_directCallBarrierClearsAt\(blockTime,\s*blockToParse\)/.test(expr);
+            const direct = /\bdirectCallBarrierClearsAt\(blockTime,\s*blockToParse\)/.test(expr);
             let field = null, kind = 'null';
             if (height)      { field = height[1]; kind = 'height-aware'; }
             else if (anchor) { field = anchor[1]; kind = 'bound-aware'; }
@@ -311,9 +311,9 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
         // unreachable on exactly the barrier whose stall is now remediable.
         const reKeyed = EXPECTED.filter(e => e[2] === 'height-aware' || e[2] === 'bound-aware');
         assert.strictEqual(reKeyed.length, 9, 'nine of the eleven hold points are re-keyed onto a height');
-        assert.ok(/_barrierClearsAtHeightAware\(blockTime, graceField, blockHeight\)\{[\s\S]{0,400}?_mirrorAdmissionActiveAt\(blockHeight\)\) return null;/.test(INDEXER_SRC),
+        assert.ok(/\bbarrierClearsAtHeightAware\(blockTime, graceField, blockHeight\)\{[\s\S]{0,400}?\bmirrorAdmissionActiveAt\(blockHeight\)\) return null;/.test(INDEXER_SRC),
             'the height-aware helper must return null while the admission consumer is armed');
-        assert.ok(/_anchorBarrierClearsAt\(blockTime, horizonBound, blockHeight, graceField\)\{[\s\S]{0,400}?_mirrorAdmissionActiveAt\(blockHeight\)\) return null;/.test(INDEXER_SRC),
+        assert.ok(/\banchorBarrierClearsAt\(blockTime, horizonBound, blockHeight, graceField\)\{[\s\S]{0,400}?\bmirrorAdmissionActiveAt\(blockHeight\)\) return null;/.test(INDEXER_SRC),
             'the anchor barrier\'s bound-aware helper must return null while the admission consumer is armed');
     });
 

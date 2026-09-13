@@ -27,7 +27,7 @@
  * actions the chain will not take.
  *
  * This is the gate that ties the copies together, mirroring the
- * cross-repo repin guard (consensus_params.test.js, the six CONTROLLER_GUARD
+ * cross-repo repin guard (consensus-params.test.js, the six CONTROLLER_GUARD
  * gate constants): read every sibling's constants file straight off disk and
  * assert value equality, rather than trusting three independent literal pins to
  * be edited in lockstep.
@@ -73,8 +73,8 @@ const GATED = Object.keys(GOLDEN);
 // than globbed so a repo that quietly deletes its copy reddens the others.
 const GUARD_PATHS = {
     'xchain-vm':      'test/determinism/xcall-constants-cross-repo.test.js',
-    'xchain-indexer': 'test/unit/xcall_constants_cross_repo.test.js',
-    'xchain-sdk':     'test/unit/xcall_constants_cross_repo.test.js'
+    'xchain-indexer': 'test/unit/xcall-constants-cross-repo.test.js',
+    'xchain-sdk':     'test/unit/xcall-constants-cross-repo.test.js'
 };
 const REPOS = Object.keys(GUARD_PATHS);
 

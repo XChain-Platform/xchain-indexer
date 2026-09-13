@@ -303,7 +303,7 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
             const rec   = new AnchorRecovery({}, { btcDb, verifyStakes: true, log: () => {} });
             // Pre-fix this threw "has no on-chain stake at block 1000 (fabricated set?)"
             // for B and the whole archive became unrecoverable.
-            await rec.verifyStakes(honestArchive, 'regtest');
+            await rec._verifyStakes(honestArchive, 'regtest');
             for(const c of btcDb.calls)
                 assert.strictEqual(c.block, BURIED, c.method + ' probed block ' + c.block + ', not the buried ' + BURIED);
         });
@@ -328,7 +328,7 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
                 capability: 'oracle_publish', snapshot_block: N,
                 signing_pubkey: 'f'.repeat(64), source: 'src_forged', amount: '5',
             }]);
-            await assert.rejects(() => rec.verifyStakes(forged, 'regtest'), /fabricated set\?/);
+            await assert.rejects(() => rec._verifyStakes(forged, 'regtest'), /fabricated set\?/);
         });
     });
 

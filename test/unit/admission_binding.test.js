@@ -247,7 +247,10 @@ function indexerTwins(h) {
 // The hub builders, driven on a stub `this` carrying only what each canonical reads.
 function hubBuilders(h) {
     const C = h.hub.Call.prototype;
-    const callThis = { sha256: C.sha256, _roundId: C._roundId };
+    // _sha256 is the HUB prototype private name this stub has to satisfy: the builder
+// under test lives in xchain-hub and calls this._sha256, so the key stays spelled
+// the hub way no matter what this repo renames its own methods to.
+    const callThis = { _sha256: C._sha256, _roundId: C._roundId };
     return {
         match:    (r) => h.hub.Dex.prototype._canonicalMatch.call({}, r, r.finalizing_view),
         dispatch: (r) => h.hub.Call.prototype._canonicalMatch.call(callThis, r, r.finalizing_view),

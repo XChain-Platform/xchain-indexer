@@ -269,7 +269,7 @@ class AnchorRecovery {
 
         // Optional but recommended: archived validator sets must be backed by
         // real on-chain BTC stakes. Fabricated sets cannot survive this.
-        if(this.verifyStakes && this.btcDb) await this.verifyStakes(snaps, v1.network);
+        if(this.verifyStakes && this.btcDb) await this._verifyStakes(snaps, v1.network);
 
         // Key-binding (REC-BIND-1): existence alone accepts an archive whose signing key
         // is real but attributed to SOMEONE ELSE'S staking source. Under weighted quorum
@@ -396,7 +396,10 @@ class AnchorRecovery {
     // from a raw re-resolution and an honest archive is condemned as fabricated,
     // unrecoverable. Flag-day gated (INERT on mainnet/testnet), so below the gate this
     // is the declared height unchanged and pre-flag-day archives read exactly as before.
-    async verifyStakes(snaps, network){
+    // Keeps its underscore: the constructor assigns the BOOLEAN option verifyStakes
+    // onto the instance, so a plain-named method here would be shadowed by that flag
+    // and every call would hit a boolean instead of a function.
+    async _verifyStakes(snaps, network){
         // A handle exposing only doQuery (unit fixtures, an embedder holding a raw query
         // handle) has no resolver, so stage 1 is the whole answer - exactly as
         // _verifyCompleteness degrades to skipping. The recovery bin always builds a

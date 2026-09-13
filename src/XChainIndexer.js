@@ -2117,7 +2117,7 @@ class XChainIndexer {
             // the block at the head of the queue. Fold that into the mirror-barrier hold so a
             // block that keeps being deferred across passes is measured against the named
             // ceiling instead of retrying forever behind identically-healthy-looking log
-            // lines. A no-op when nothing is stalled; see _noteBarrierHold.
+            // lines. A no-op when nothing is stalled; see noteBarrierHold.
             this.noteBarrierHold(this.util.isNull(lastIndexerBlock) ? null : Number(lastIndexerBlock) + 1);
 
             // Set flag to indicate fully synced and listening for block
