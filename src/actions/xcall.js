@@ -47,6 +47,7 @@ const crypto  = require('crypto');
 const ed25519 = require('../ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
+const ah      = require('../mirror_admission_activation.js');
 const { rethrowIfInfraFault } = require('./faultGuard.js');
 const { buildInjectedExecContext, SYNTH_TAGS } = require('./execContext.js');
 
@@ -351,6 +352,12 @@ class Xcall {
             crypto.createHash('sha256').update(String(r.return_payload_b64 == null ? '' : r.return_payload_b64), 'utf8').digest('hex'),
             String(r.effective_time)
         ].join('|');
+        // The admission map the hub signed, rebuilt from the mirrored row's admit_block_*
+        // columns and era-keyed on the ROW's snapshot_block, the same field and position the
+        // dispatch twin in xexec.js appends. Empty below the producer activation, so the
+        // legacy bytes are unchanged; a modern row with no columns REFUSES rather than
+        // rebuilding legacy bytes no honest quorum signed.
+        raw += ah.admissionCanonicalField('CrossChainCall', r.network, r.snapshot_block, ah.columnsAdmitBlocks(r));
         // EQUIV (WI-2 bump 2): TAG=XCALL, ROUND_ID = sha256('XCALLROUND|result|'+call_id)
         // (distinct from the dispatch key), VIEW = finalizing_view.
         if(eq.isEquivHeaderActive(r.snapshot_block, r.network))

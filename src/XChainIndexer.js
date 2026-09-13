@@ -736,7 +736,17 @@ class XChainIndexer {
     // FIRST open for a block, or null when that cannot be determined. The mirrored twin of
     // _barrierClearsAt, which cannot serve this path because it returns null without a
     // HubDbSync. Health verdict only: it gates no wait, no read and no write.
-    _directCallBarrierClearsAt(blockTime){
+    //
+    // Null above the mirror-admission activation at `blockHeight` (C8): the barrier is then
+    // height-keyed and no clock instant opens it, so a hold accumulates and the 900 s ceiling
+    // can fire exactly as it does for the mirrored twins. A caller that passes no height gets
+    // today's clock verdict, which keeps the existing one-argument shape meaningful.
+    _directCallBarrierClearsAt(blockTime, blockHeight){
+        // Guarded on the RAW height before _mirrorAdmissionActiveAt is reached, so the
+        // pre-train one-argument shape (and a hand-built harness with no config) reads inert
+        // without touching this.config. Number(null) is 0, and 0 is above an activation armed
+        // at height 0, which is why the guard is on the raw value and never a coerced one.
+        if(blockHeight !== null && blockHeight !== undefined && this._mirrorAdmissionActiveAt(blockHeight)) return null;
         blockTime = Number(blockTime);
         if(!this.hubDb || !Number.isFinite(blockTime)) return null;
         let graceS = Number(this.directCallGraceS);
@@ -744,11 +754,58 @@ class XChainIndexer {
         return (blockTime + graceS) * 1000;
     }
 
-    async _waitForDirectCallPresence(blockTime){
+    // Two forms, chosen by the mirror-admission consumer activation at `blockHeight` (C9):
+    //
+    //   BELOW it, today's clock form byte for byte: the local hub mirror covers block_time
+    //   (its highest finalized effective_time over calls touching THIS coin is at/after it),
+    //   or the hub's own clock has passed block_time + the call grace.
+    //
+    //   ABOVE it, the family's height form: the hub's persisted cross_chain_calls height
+    //   watermark for this chain is at or above B - ADMIT_MARGIN_BLOCKS[cross_chain_calls],
+    //   and the hub-clock escape is RETIRED. Nothing in that predicate reads t(B), which is
+    //   the point: a block stamped 7200 s ahead is height B like any other, and the only
+    //   thing that can hold the barrier is a watermark trailing B - margin, which is genuine
+    //   mirror lag.
+    //
+    // The coverage read is scoped to calls that touch THIS coin (target or source) at every
+    // height, matching the mirrored twin (_refreshCallSyncTimestamp): a global watermark
+    // could be bumped past block_time by an unrelated other-chain call and let this node
+    // proceed before every call effective for its coin was present, which is the same fork
+    // the mirrored path already closed. It is a wait and hashes nothing, so it is not gated
+    // on the activation. A caller with no configured coin falls back to the unscoped
+    // superset, which only ever waits longer.
+    //
+    // The height form's carrier is the floor the hub persists into the shared hub DB:
+    // `configs` with coin 'xchain', this network, module 'admission_watermark', param_name
+    // 'cross_chain_calls.<CHAIN>' and canonical digits for a value. It is written
+    // monotonically and only where it moved, so it sits at or below the hub's live claim and
+    // reading it AS the claim is conservative. An absent row, a non-digit value or a query
+    // error all read as NOT covered (fail closed), and the value is never coerced from a
+    // missing reading: Number(null) is 0, and 0 would certify a genesis-era mirror for every
+    // block.
+    async _waitForDirectCallPresence(blockTime, blockHeight){
         blockTime = Number(blockTime);
         if(!this.hubDb || !Number.isFinite(blockTime)) return;
         let timeoutMs = Number(this.callPresenceTimeoutMs);
         if(!Number.isFinite(timeoutMs) || timeoutMs <= 0) timeoutMs = 10000;
+        // The raw-height guard is what keeps the one-argument shape inert without reading
+        // this.config (see _directCallBarrierClearsAt).
+        let admission = blockHeight !== null && blockHeight !== undefined && this._mirrorAdmissionActiveAt(blockHeight);
+        let chain = (this.config && this.config['COIN']) ? String(this.config['COIN']).trim().toUpperCase() : '';
+        // Resolved here rather than at the top of the file so this row touches nothing
+        // outside its two methods; the module is already loaded by the require above.
+        let target = admission
+            ? (Number(blockHeight) - require('./mirror_admission_activation.js').admitMarginBlocks('cross_chain_calls'))
+            : null;
+        // The height tail every log line below carries ABOVE the activation, in the shape
+        // hub_db_sync._heightTail gives the mirrored twins; each line's prefix is untouched
+        // (C27), because a unit test and an operator's grep match on it.
+        let heightTail = (floor) => ' (admission height cross_chain_calls.' + (chain === '' ? 'unknown' : chain) +
+                                    ' at ' + (floor === null ? 'none' : floor) + ', needs ' + target + ')';
+        let coverageSql = "SELECT MAX(effective_time) AS ts, UNIX_TIMESTAMP() AS hub_now " +
+                          "FROM cross_chain_calls WHERE status = 'finalized'" +
+                          (chain ? " AND (target_chain = ? OR source_chain = ?)" : "");
+        let coverageArgs = chain ? [chain, chain] : [];
         // Grace for the hub-clock escape below. Resolved at startup (start()); the frozen
         // constant is the fallback so a hand-built caller (unit tests) and any future path
         // that skips start() still gets the protocol value rather than NaN, which would make
@@ -759,6 +816,7 @@ class XChainIndexer {
         let pollMs = 250;
         let lastTs  = null;         // last observed mirror watermark, for the timeout diagnostic
         let lastNow = null;         // last observed HUB clock, same
+        let lastFloor = null;       // last observed admission floor (height form), same
         while(true){
             // Coverage check: proceed the instant the local hub mirror covers block_time, i.e.
             // the highest finalized effective_time is at/after it, or there is nothing to wait on.
@@ -766,13 +824,27 @@ class XChainIndexer {
             // barrier waits (it never proceeds against an unread table).
             let covered = false;
             try {
+                if(admission){
+                    // THE HEIGHT FORM. Covered when the persisted floor for (cross_chain_calls,
+                    // this chain) has reached B - margin. No clock, no escape: the only thing
+                    // that holds this is a watermark that has not advanced, which is mirror lag.
+                    let rows = await this.hubDb.doQuery(
+                        "SELECT param_value FROM configs " +
+                        "WHERE coin = ? AND network = ? AND module = ? AND param_name = ?",
+                        ['xchain', String(this.config['NETWORK'] || ''), 'admission_watermark',
+                         'cross_chain_calls.' + chain]);
+                    lastFloor = null;
+                    if(chain !== '' && rows && rows.length > 0 && rows[0].param_value !== null && rows[0].param_value !== undefined){
+                        let raw = String(rows[0].param_value).trim();
+                        if(/^(?:0|[1-9][0-9]*)$/.test(raw) && Number.isSafeInteger(Number(raw))) lastFloor = Number(raw);
+                    }
+                    if(lastFloor !== null && lastFloor >= target) covered = true;
+                } else {
                 // UNIX_TIMESTAMP() rides along on the SAME query and the SAME connection as the
                 // watermark, so the escape below compares two readings taken at one instant from
                 // one clock. Reading the hub's clock separately (or substituting this node's)
                 // would let skew between them decide a consensus barrier.
-                let rows = await this.hubDb.doQuery(
-                    "SELECT MAX(effective_time) AS ts, UNIX_TIMESTAMP() AS hub_now " +
-                    "FROM cross_chain_calls WHERE status = 'finalized'");
+                let rows = await this.hubDb.doQuery(coverageSql, coverageArgs);
                 if(rows.length === 0 || rows[0].ts === null){
                     covered = true;                         // no finalized rows: nothing to wait on
                 } else {
@@ -816,6 +888,7 @@ class XChainIndexer {
                         }
                     }
                 }
+                }
             } catch(e){
                 // Table not ready / transient error: treat as not covered and keep waiting.
                 // Surface it once per distinct message so a persistent fault (schema change,
@@ -829,14 +902,18 @@ class XChainIndexer {
             if(covered) return;
             // Mirror is behind. Defer the block rather than proceed with a partial set: once the
             // bound is exhausted, throw so the caller retries this block from the top of the loop.
+            // The message keeps its byte-identical prefix and gains the height form only above
+            // the activation (C27), where the clock readings it names are simply never taken.
             if(Date.now() >= deadline)
                 this.util.throwError('direct call-presence barrier timed out after ' + timeoutMs +
                     'ms waiting for block_time ' + blockTime + ' (call mirror at ' + lastTs +
                     ', hub clock at ' + lastNow + ', escape at ' + (blockTime + graceS) + ')' +
+                    (admission ? heightTail(lastFloor) : '') +
                     (this._callPresenceLastErr ? ' [last query error: ' + this._callPresenceLastErr + ']' : ''));
             console.log('Waiting on hub call mirror: block_time ' + blockTime +
                 ' not yet covered (mirror at ' + lastTs + ', hub clock at ' + lastNow +
-                ', escape at ' + (blockTime + graceS) + '); retrying...');
+                ', escape at ' + (blockTime + graceS) + ')' +
+                (admission ? heightTail(lastFloor) : '') + '; retrying...');
             await this.util.sleep(Math.min(pollMs, Math.max(1, deadline - Date.now())));
         }
     }
@@ -1570,10 +1647,12 @@ class XChainIndexer {
                 // effective_time >= block_time) before processCrossChainCalls reads the table; a
                 // lagging mirror defers-and-retries (the barrier throws on timeout) so this node
                 // never injects a partial call set, while the already-current single-shared-DB
-                // (regtest) case clears on the first query with no added latency.
+                // (regtest) case clears on the first query with no added latency. Above the
+                // mirror-admission activation the same wait is keyed on the hub's persisted
+                // height watermark for this chain instead (C9), so blockToParse rides along.
                 if(!this.hubDbSync && this.hubDb){
                     try {
-                        await this._waitForDirectCallPresence(blockTime);
+                        await this._waitForDirectCallPresence(blockTime, blockToParse);
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (direct call-presence barrier): ', err);
                         this.stallReason = 'call_presence_barrier';
@@ -1584,7 +1663,8 @@ class XChainIndexer {
                         // barrier itself reads the hub's: the two are the same host in the
                         // single-host topology this barrier serves, and this value gates no
                         // wait, no read and no write (health verdict only, see _barrierClearsAt).
-                        this.stallClearsAt = this._directCallBarrierClearsAt(blockTime);
+                        // Null above the admission activation, where no clock instant opens it.
+                        this.stallClearsAt = this._directCallBarrierClearsAt(blockTime, blockToParse);
                         break;
                     }
                 }

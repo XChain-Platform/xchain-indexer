@@ -36,6 +36,7 @@ const ed25519 = require('../ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
 const ccr     = require('../cross_chain_royalty_activation.js');
+const ah      = require('../mirror_admission_activation.js');
 
 class Cross_Settle {
 
@@ -72,6 +73,14 @@ class Cross_Settle {
         // flag-day; below it the canonical is byte-identical to the legacy format.
         if(ccr.isCrossChainRoyaltyActive(m.snapshot_block, m.network))
             raw += '|' + String(m.a_payout_legs || '') + '|' + String(m.b_payout_legs || '');
+        // The admission map the hub signed, rebuilt from the mirrored row's own admit_block_*
+        // columns and era-keyed on the ROW's snapshot_block, exactly as the hub keys it. Below
+        // the producer activation the field is empty and these bytes are the legacy bytes; in
+        // the admission era a row with no columns set REFUSES (the field throws) rather than
+        // verifying as legacy, because the two eras never share a signature. Appended LAST so
+        // its '|' separator holds whatever the royalty gate did before it. Must byte-match the
+        // hub, which appends the same field in the same position.
+        raw += ah.admissionCanonicalField('CrossChainDex', m.network, m.snapshot_block, ah.columnsAdmitBlocks(m));
         // EQUIV (WI-2 bump 2): VIEW = the row's persisted finalizing_view (the view the
         // hub round finalized at; == pending.view when the quorum sigs were taken). TAG=XDEX,
         // ROUND_ID=match_id. Gate on the row's snapshot_block + network. Must byte-match the hub.

@@ -18,8 +18,29 @@
 const assert = require('assert');
 const crypto = require('crypto');
 const eq = require('../../src/equivocation_header.js');
-const Xexec = require('../../src/actions/xexec.js');
-const Xcall = require('../../src/actions/xcall.js');
+
+// THE LEGACY ARM, EXPLICITLY. The rows below carry no admission columns, which is a legacy
+// row only while the mirror-admission activation is inert; a process launched armed
+// (XC_MIRROR_ADMISSION_ACTIVATION set) makes both canonicals REFUSE them, correctly, so the
+// two action modules are required with the env unset and the cache put back at once. This
+// file drives the legacy bytes; admissionBinding.test.js drives the armed arm of the same
+// twins against the hub's builders. Same purge/re-require idiom as the price suites (row 25).
+function requireDisarmed(mods){
+    const paths = ['../../src/mirror_admission_activation.js'].concat(mods).map(m => require.resolve(m));
+    const saved = paths.map(p => [p, require.cache[p]]);
+    const savedEnv = process.env.XC_MIRROR_ADMISSION_ACTIVATION;
+    delete process.env.XC_MIRROR_ADMISSION_ACTIVATION;
+    for (const p of paths) delete require.cache[p];
+    try {
+        return mods.map(m => require(m));
+    } finally {
+        for (const [p, m] of saved) { if (m === undefined) delete require.cache[p]; else require.cache[p] = m; }
+        if (savedEnv === undefined) delete process.env.XC_MIRROR_ADMISSION_ACTIVATION;
+        else process.env.XC_MIRROR_ADMISSION_ACTIVATION = savedEnv;
+    }
+}
+// xexec requires xcall, so xcall is purged first and both are re-required in one pass.
+const [Xcall, Xexec] = requireDisarmed(['../../src/actions/xcall.js', '../../src/actions/xexec.js']);
 
 const mkAction = () => ({ config:{}, decoderDb:null, indexerDb:null, util:null, mapper:null });
 const xexec = new Xexec(mkAction());
@@ -67,5 +88,20 @@ describe('EQUIV XCALL canonical (WI-2 bump 2)', function () {
         assert.notStrictEqual(kd, kr);
         assert.strictEqual(kd, 'XCALL|' + sha('XCALLROUND|dispatch|' + CID) + '|0');
         assert.strictEqual(kr, 'XCALL|' + sha('XCALLROUND|result|' + CID) + '|0');
+    });
+
+    it('is driven in the legacy arm: a row handed admission columns is refused in BOTH phases', function () {
+        // Proves the disarm above took, so the byte assertions here cannot pass vacuously in
+        // a process that happened to be launched unarmed, and shows the era gate is wired
+        // into both twins rather than one.
+        const cols = { admit_block_btc: 104, admit_block_ltc: 404 };
+        assert.throws(() => xexec._canonical(Object.assign(dispatchRow('regtest', 100, 0), cols)),
+                      /refusing to build an admission-era canonical/);
+        assert.throws(() => xcall._resultCanonical(Object.assign(resultRow('regtest', 100, 0), cols)),
+                      /refusing to build an admission-era canonical/);
+        // NULL columns are the legacy row, byte for byte.
+        const nulls = { admit_block_btc: null, admit_block_ltc: null, admit_block_doge: null };
+        assert.strictEqual(xexec._canonical(Object.assign(dispatchRow('regtest', 100, 0), nulls)),
+                           xexec._canonical(dispatchRow('regtest', 100, 0)));
     });
 });

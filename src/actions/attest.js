@@ -68,6 +68,7 @@ const wid     = require('../attest_responsible_widening_activation.js');
 // The zero-conf flip, keyed on the REQUEST's own block. Read here for the fulfilled
 // fee split, which pays the verified signers rather than the widened set above it.
 const zc      = require('../attest_zero_conf_activation.js');
+const { columnsAdmitBlocks } = require('../mirror_admission_activation.js');
 const eq      = require('../equivocation_header.js');
 const srb     = require('../snapshot_reorg_buffer.js');
 // The rules-aware capability filter: drops a validator whose last rolled ROLLCALL
@@ -920,6 +921,10 @@ class Attest {
             meta:            row.meta,
             responseBodyBytes,
             effectiveTime:   Number(row.effective_time),
+            // The row's stored admission map (BTC-only on this rail), rebuilt from the
+            // mirrored column so the verifier reproduces the bytes the hub signed;
+            // null is the legacy row, and an admission-era row with none is refused.
+            admitBlocks:     columnsAdmitBlocks(row),
             atBlock:         data['BLOCK_INDEX'],
             gateBlock:       data['BLOCK_INDEX'],
             error:           null,

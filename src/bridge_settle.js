@@ -69,6 +69,7 @@ const crypto      = require('crypto');
 const ed25519     = require('./ed25519.js');
 const swq         = require('./stake_weighted_quorum.js');
 const eq          = require('./equivocation_header.js');
+const ah          = require('./mirror_admission_activation.js');
 const cpCheck     = require('./bridge_checkpoint_check.js');
 const proofClient = require('./bridge_proof_client.js');
 const Genesis     = require('./genesis.js');
@@ -146,6 +147,36 @@ function _int(v){
 function _sha256(s){ return crypto.createHash('sha256').update(String(s), 'utf8').digest('hex'); }
 
 /**
+ * The binding clause of a mirrored select at this pass's block, with its bindings.
+ *
+ * Below the consumer activation for (ctx.coin, ctx.network) at ctx.blockIndex this is
+ * `effective_time <= ?` byte for byte, one binding, so the SQL a pre-train node issues is the
+ * SQL this node issues. Above it, the C33 form for THIS chain's column, never a bare comparison
+ * on the nullable column: a bare `admit_block_<c> <= ?` evaluates to NULL for every legacy row
+ * and silently drops it, which is a silent consensus change. The IS NULL arm is what lets a row
+ * finalized below the producer activation, and a row whose map does not name this chain, bind
+ * exactly as they do today at every height (C38).
+ *
+ * The same clause text lives in db.js for the match, call and attest-response selects; the
+ * admission-binding suite pins the two spellings equal so they cannot drift apart.
+ *
+ * @param {Object} ctx - the pass context (coin, network, blockIndex, blockTime)
+ * @returns {{sql: string, args: Array}}
+ */
+function mirrorBindClause(ctx){
+    const blockTime = Number(ctx.blockTime);
+    const height    = ctx.blockIndex;
+    const active    = (height !== null && height !== undefined)
+                   && ah.isMirrorAdmissionConsumerActive(ctx.coin, ctx.network, height);
+    if(!active) return { sql: 'effective_time <= ?', args: [blockTime] };
+    const col = 'admit_block_' + String(ctx.coin).toLowerCase();
+    return {
+        sql:  '((' + col + ' IS NULL AND effective_time <= ?) OR (' + col + ' IS NOT NULL AND ' + col + ' <= ?))',
+        args: [blockTime, Number(height)]
+    };
+}
+
+/**
  * The signed content canonical of a transfer record, wrapped by the equivocation header.
  * MUST byte-match the hub's CrossChainBridgeEngine. Every field is String()-coerced and a
  * null is an empty string, the platform's canonical rule.
@@ -161,10 +192,16 @@ function transferCanonical(row){
         row.dest_chain || '', row.dest_address || '',
         String(row.amount), String(row.effective_time), row.network || ''
     ].join('|');
+    // The admission map the hub signed, rebuilt from the row's admit_block_* columns and
+    // era-keyed on the ROW's snapshot_block. A transfer is read by dest_chain alone, so the
+    // map names one chain. Empty below the producer activation (legacy bytes unchanged); a
+    // modern row with no columns REFUSES here rather than verifying as legacy.
+    const admitted = raw + ah.admissionCanonicalField('CrossChainBridge', row.network, row.snapshot_block,
+                                                      ah.columnsAdmitBlocks(row));
     if(eq.isEquivHeaderActive(row.snapshot_block, row.network))
         return eq.buildEquivCanonical(eq.ENGINE_TAGS.BRIDGE, row.transfer_id,
-                                      (row.finalizing_view != null ? row.finalizing_view : 0), raw);
-    return raw;
+                                      (row.finalizing_view != null ? row.finalizing_view : 0), admitted);
+    return admitted;
 }
 
 /**
@@ -183,10 +220,16 @@ function policyCanonical(row){
         String(row.origin_block), row.policy_hash || '',
         String(row.effective_time), row.network || ''
     ].join('|');
+    // A policy snapshot is the sharp case: its consuming select carries NO chain clause, so
+    // the hub stamps every chain the federation serves and this rebuilds exactly the columns
+    // that are set. A chain added after the row was signed is simply absent from its map and
+    // binds there by the legacy effective_time rule, safe by construction (C38).
+    const admitted = raw + ah.admissionCanonicalField('CrossChainPolicy', row.network, row.snapshot_block,
+                                                      ah.columnsAdmitBlocks(row));
     if(eq.isEquivHeaderActive(row.snapshot_block, row.network))
         return eq.buildEquivCanonical(eq.ENGINE_TAGS.POLICY, row.snapshot_id,
-                                      (row.finalizing_view != null ? row.finalizing_view : 0), raw);
-    return raw;
+                                      (row.finalizing_view != null ? row.finalizing_view : 0), admitted);
+    return admitted;
 }
 
 /**
@@ -1085,11 +1128,13 @@ async function processBridgeSettlePass(ctx){
  */
 async function dueBridgeTransfers(ctx){
     const db   = ctx.indexerDb;
+    // Bound by height in the admission era and by the clock below it (mirrorBindClause).
+    const bind = mirrorBindClause(ctx);
     const rows = await db._mirrorDb().doQuery(
         `SELECT * FROM bridge_transfers
-         WHERE status = 'finalized' AND network = ? AND effective_time <= ? AND dest_chain = ?
+         WHERE status = 'finalized' AND network = ? AND ${bind.sql} AND dest_chain = ?
          ORDER BY snapshot_block ASC, transfer_id ASC`,
-        [String(ctx.network), Number(ctx.blockTime), String(ctx.coin)]);
+        [String(ctx.network)].concat(bind.args, [String(ctx.coin)]));
     if(rows.length === 0) return [];
     const ids = rows.map(r => r.transfer_id);
     const settled = await db.doQuery(
@@ -1143,10 +1188,14 @@ async function dueBridgeTransfers(ctx){
  */
 async function duePolicySnapshots(ctx){
     const db   = ctx.indexerDb;
+    // No chain clause, deliberately: every chain reads every snapshot. In the admission era
+    // THIS chain's column decides, and a row whose map never named this chain has that column
+    // NULL and binds by the clock, which is C38's fail-closed direction for a chain added later.
+    const bind = mirrorBindClause(ctx);
     const rows = await db._mirrorDb().doQuery(
         `SELECT * FROM policy_snapshots
-         WHERE status = 'finalized' AND network = ? AND effective_time <= ?`,
-        [String(ctx.network), Number(ctx.blockTime)]);
+         WHERE status = 'finalized' AND network = ? AND ${bind.sql}`,
+        [String(ctx.network)].concat(bind.args));
     if(rows.length === 0) return [];
 
     const groupRank = new Map();
@@ -1188,6 +1237,7 @@ module.exports = {
     duePolicySnapshots,
     transferCanonical,
     policyCanonical,
+    mirrorBindClause,
     policyHash,
     verifyMembershipOrder,
     parseMembership,

@@ -32,6 +32,11 @@ const attestResponseMirror = require('./attest_response_mirror_activation.js');
 // of that height is this file's: above it the applier falls through an inert
 // candidate row to the next one instead of stranding the request until its deadline.
 const attestZeroConf = require('./attest_zero_conf_activation.js');
+// The mirror-admission flag day (the time-keyed mirror barrier family), CONSUMER side. Above
+// it for (this coin, network) at B a mirrored attest response binds by its signed admission
+// height rather than by effective_time <= t(B); below it the predicate is today's, byte for
+// byte. The other mirrored selects take the same rule in SQL (db.js, bridge_settle.js).
+const { isMirrorAdmissionConsumerActive, isRowReadableAt } = require('./mirror_admission_activation.js');
 // The amount-representability flag day. Gates the isValidAmountFormat rule that an
 // amount must denote the number the ledger credits, keyed on the processing block's
 // consensus timestamp so historical replay below the threshold is byte-identical.
@@ -2330,9 +2335,23 @@ class Utility {
     // same inert row every block until the deadline. Below the height the item is the
     // single choice above and carries no `candidates` key at all, so a mixed fleet
     // agrees byte for byte on every request below it (D11).
-    selectApplicableAttestationResponses(mirrorRows, requestRows, blockIndex, blockTime, network){
+    //
+    // ABOVE THE MIRROR-ADMISSION CONSUMER ACTIVATION for (coin, network) at B, the first
+    // clause is re-keyed (barrier family section 5.5): a row binds when its signed admission
+    // height for this chain is at or below B, and a row with NO admission height binds by
+    // effective_time <= t(B) exactly as today, at every height (C33, C38). Attest responses
+    // are read by BTC alone (the call-site guard in XChainIndexer), so the one column the hub
+    // stamps and this reads is admit_block_btc. Everything else in the predicate, the deadline
+    // clause, the pending and mirror-era clauses, the tie-break, the total order and the cap,
+    // is untouched by the flag day. `coin` defaults to this indexer's own, so the existing
+    // five-argument callers keep their meaning.
+    selectApplicableAttestationResponses(mirrorRows, requestRows, blockIndex, blockTime, network, coin){
         let block = Number(blockIndex);
         let time  = Number(blockTime);
+        let chain = (coin === undefined) ? (this.config && this.config['COIN']) : coin;
+        // Keyed on B as handed in, never on the coerced `block`: Number(null) is 0, and 0 is
+        // above an activation armed at height 0.
+        let admission = isMirrorAdmissionConsumerActive(chain, network, blockIndex);
         // Local request rows, keyed for lookup. Filtered to the ones a mirror row may
         // bind to at all, which is the same set the SQL bound selects; re-stated here
         // because THIS is the copy of the rule that is tested and falsified.
@@ -2371,7 +2390,13 @@ class Utility {
         for(let row of (mirrorRows || [])){
             let id = String(row.request_id || '').toLowerCase();
             if(!byId.has(id))                          continue;
-            if(!(Number(row.effective_time) <= time))  continue;
+            if(admission){
+                // The readable-at-B rule: admit_block_btc <= B, or the legacy clock rule
+                // for a row that carries no admission height. Both signed by the quorum.
+                if(!isRowReadableAt(row.admit_block_btc, blockIndex, row.effective_time, blockTime)) continue;
+            } else {
+                if(!(Number(row.effective_time) <= time))  continue;
+            }
             if(fallThroughIds.has(id)){
                 // Above the height nothing is discarded here: the loser of the tie-break
                 // is the FALL-THROUGH candidate, and discarding it is exactly the bug
@@ -2469,10 +2494,14 @@ class Utility {
                 block_index, ATTEST_MIRROR_APPLICABILITY_PAGE_ROWS, after);
             if(page.length === 0) break;
             let ids      = page.map(r => String(r.request_id || '').toLowerCase());
-            let mirrored = await db.getMirroredAttestationResponses(network, ids, block_time);
+            // The block index rides along so the read and the selector below key the
+            // admission era on the same B (the read's SQL clause and the selector's
+            // predicate are the two spellings of one rule).
+            let mirrored = await db.getMirroredAttestationResponses(network, ids, block_time, block_index);
             pendingSeen += page.length;
             mirrorSeen  += (mirrored || []).length;
-            for(let item of this.selectApplicableAttestationResponses(mirrored, page, block_index, block_time, network)){
+            for(let item of this.selectApplicableAttestationResponses(mirrored, page, block_index, block_time, network,
+                                                                      db.config['COIN'])){
                 applicable.push(item);
                 if(applicable.length >= cap) break;
             }
@@ -2497,7 +2526,12 @@ class Utility {
                 pendingSeen + ' pending request(s) and ' + mirrorSeen + ' mirror row(s), applied 0. ' +
                 'A mirror row binds only when its request is still pending, the deadline has not ' +
                 'passed, the flag day is active at the REQUEST\'s block, and effective_time <= ' +
-                block_time + '. If a row exists and none of those is the reason, the response is ' +
+                block_time +
+                // Above the admission activation the binding key is the height, so name it
+                // too; the line's prefix is untouched for whoever greps for it.
+                (isMirrorAdmissionConsumerActive(db.config['COIN'], network, block_index)
+                    ? ' (or, for a row carrying one, admit_block_btc <= ' + block_index + ')' : '') +
+                '. If a row exists and none of those is the reason, the response is ' +
                 'failing verification inside the handler and is inert.');
         }
 
@@ -2882,7 +2916,9 @@ class Utility {
         // protocol cap, which would silently gate-bypass in the ON direction.
         let cap     = capped ? require('./protocol/constants.js').CROSS_SETTLE_MAX_PER_BLOCK
                              : Number.MAX_SAFE_INTEGER;
-        let matches = await db.getEffectiveUnsettledMatches(coin, block_time, cap);
+        // block_index is the admission-era binding key (db._mirrorBindClause); below the
+        // activation the read ignores it and binds on block_time exactly as before.
+        let matches = await db.getEffectiveUnsettledMatches(coin, block_time, cap, block_index);
         for(let m of matches){
             let data = {};
             data['ACTION']      = 'CROSS_SETTLE';
@@ -2913,7 +2949,8 @@ class Utility {
         let cap     = require('./actions/xcall.js').XCALL_MAX_CALLS_PER_BLOCK;
 
         // 1. Inject executions for dispatches targeting this chain.
-        let dispatches = await db.getEffectiveUndispatchedCalls(coin, network, block_time, cap);
+        // block_index keys the admission era in both call reads (db._mirrorBindClause).
+        let dispatches = await db.getEffectiveUndispatchedCalls(coin, network, block_time, cap, block_index);
         for(let c of dispatches){
             let data = {};
             data['ACTION']      = 'XEXEC';
@@ -2943,7 +2980,7 @@ class Utility {
         // The probe reads the same index the capped query at step 3 uses.
         let mayExpire  = (await db.getExpiredCrossChainCallRequests(block_index, 1)).length > 0;
         let allResults = await db.getEffectiveUnprocessedCallResults(coin, network, block_time,
-                                    mayExpire ? Number.MAX_SAFE_INTEGER : cap);
+                                    mayExpire ? Number.MAX_SAFE_INTEGER : cap, block_index);
         let results = allResults.slice(0, cap);
         for(let r of results){
             let data = {};

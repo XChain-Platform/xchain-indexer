@@ -185,6 +185,9 @@ async function verifyAttestationResponse(input){
     // row already gets.
     let canonRaw = null;
     try {
+        // The admission-era keys ride with the request's own block (the era key) and the
+        // caller's map: a mirror row hands its stored map, the chain path has none, and
+        // an admission-era request with no map is a refusal here, never a legacy rebuild.
         canonRaw = buildResponseCanonicalRaw({
             requestId:     canonId,
             providerId:    String(providerId),
@@ -192,12 +195,19 @@ async function verifyAttestationResponse(input){
             status:        String(responseStatus),
             meta:          meta,
             effectiveTime: effectiveTime,
+            requestBlock:  declaredBlock,
+            network:       network,
+            admitBlocks:   (input.admitBlocks === undefined) ? null : input.admitBlocks,
         });
     } catch(e){
         // An error already set upstream (a pre-verification skip) always wins: this
         // row was never going to be verified anyway, and overwriting a more specific
-        // upstream reason with this one would lose it for no benefit.
-        if(!error) error = 'invalid: EFFECTIVE_TIME is not a canonical integer spelling';
+        // upstream reason with this one would lose it for no benefit. The admission
+        // refusal keeps its own name, or an operator hunts a spelling bug on a rail the
+        // activation just armed.
+        if(!error) error = /admit_blocks/.test(String(e && e.message))
+            ? 'invalid: ' + String(e.message)
+            : 'invalid: EFFECTIVE_TIME is not a canonical integer spelling';
     }
     let canonical = null;
     if(canonRaw !== null){

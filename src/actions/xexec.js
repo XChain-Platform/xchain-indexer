@@ -47,6 +47,7 @@ const crypto  = require('crypto');
 const ed25519 = require('../ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
+const ah      = require('../mirror_admission_activation.js');
 const { XCALL_MAX_HOPS } = require('./xcall.js');
 const { rethrowIfInfraFault } = require('./faultGuard.js');
 
@@ -78,6 +79,12 @@ class Xexec {
             c.method, this._sha256(String(c.params_json == null ? '' : c.params_json)),
             String(c.gas_limit), String(c.cross_hops), String(c.effective_time)
         ].join('|');
+        // The admission map the hub signed, rebuilt from the mirrored row's admit_block_*
+        // columns and era-keyed on the ROW's snapshot_block. Both phases carry it on the hub
+        // side, so both twins here do too: a dispatch that bound by height while its result
+        // bound by effective_time is the split the admission design removes. Empty below the
+        // producer activation (legacy bytes unchanged); a modern row with no columns REFUSES.
+        raw += ah.admissionCanonicalField('CrossChainCall', c.network, c.snapshot_block, ah.columnsAdmitBlocks(c));
         // EQUIV (WI-2 bump 2): TAG=XCALL, ROUND_ID = sha256('XCALLROUND|dispatch|'+call_id)
         // (phase folded in, so dispatch/result get distinct keys), VIEW = finalizing_view.
         if(eq.isEquivHeaderActive(c.snapshot_block, c.network))

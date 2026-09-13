@@ -245,13 +245,15 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
             const anchor = /_anchorBarrierClearsAt\(\s*\n?\s*blockTime,\s*anchorHorizonBound,\s*blockToParse,\s*'([A-Za-z]+)'\)/.exec(expr);
             // The direct-hub-DB call barrier has no HubDbSync to read a grace off, so it
             // keys on the indexer's own resolved field through its own helper. Map it to
-            // that field so this test still pins WHICH grace the barrier uses.
-            const direct = /_directCallBarrierClearsAt\(blockTime\)/.test(expr);
+            // that field so this test still pins WHICH grace the barrier uses. Its helper
+            // takes the block height too (row 5): null above the admission activation,
+            // the clock form below it, so it is height-aware like the mirrored members.
+            const direct = /_directCallBarrierClearsAt\(blockTime,\s*blockToParse\)/.test(expr);
             let field = null, kind = 'null';
             if (height)      { field = height[1]; kind = 'height-aware'; }
             else if (anchor) { field = anchor[1]; kind = 'bound-aware'; }
             else if (plain)  { field = plain[1];  kind = 'clock'; }
-            else if (direct) { field = 'directCallGraceS'; kind = 'clock'; }
+            else if (direct) { field = 'directCallGraceS'; kind = 'height-aware'; }
             pairs.push([m[1], field, kind]);
         }
         return pairs;
@@ -281,7 +283,7 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
         // is what makes such a barrier wedge forever: it leaves no time-keyed escape at
         // all. This one has one, resolved onto the indexer from the SAME frozen call
         // grace hub_db_sync uses.
-        ['call_presence_barrier',           'directCallGraceS',            'clock'],
+        ['call_presence_barrier',           'directCallGraceS',            'height-aware'],
         ['anchor_attest_barrier',           'anchorAttestWatermarkGraceS', 'bound-aware'],
         ['attest_response_sync_barrier',    'attestResponseWatermarkGraceS', 'height-aware'],
         ['snapshot_sync_barrier',           null,                          'null'],          // presence, not wall clock
@@ -308,7 +310,7 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
         // 'future_block_wait', keeps nextBarrierHold() at null and makes the 900 s ceiling
         // unreachable on exactly the barrier whose stall is now remediable.
         const reKeyed = EXPECTED.filter(e => e[2] === 'height-aware' || e[2] === 'bound-aware');
-        assert.strictEqual(reKeyed.length, 8, 'eight of the eleven hold points are re-keyed onto a height');
+        assert.strictEqual(reKeyed.length, 9, 'nine of the eleven hold points are re-keyed onto a height');
         assert.ok(/_barrierClearsAtHeightAware\(blockTime, graceField, blockHeight\)\{[\s\S]{0,400}?_mirrorAdmissionActiveAt\(blockHeight\)\) return null;/.test(INDEXER_SRC),
             'the height-aware helper must return null while the admission consumer is armed');
         assert.ok(/_anchorBarrierClearsAt\(blockTime, horizonBound, blockHeight, graceField\)\{[\s\S]{0,400}?_mirrorAdmissionActiveAt\(blockHeight\)\) return null;/.test(INDEXER_SRC),

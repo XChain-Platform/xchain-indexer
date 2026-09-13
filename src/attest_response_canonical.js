@@ -62,9 +62,29 @@
  * makes every mirror-era signature fail to verify, which presents as a dead
  * federation rather than as a missing feature, so the twin is test-pinned.
  *
+ * THE ADMISSION ERA (the time-keyed mirror barrier family, section 5.5). The hub
+ * appends one more field AFTER the twin's bytes and BEFORE the EQUIV wrapper: the
+ * row's per-chain admission map, '|' plus `CODE:digits` in ASCII order, era-keyed
+ * on the REQUEST's own block through the mirror-admission producer activation
+ * (AttestationConsensus._buildCanonical). The hub keeps this twin a pure function
+ * of the response fields and appends that field in the caller; the indexer's
+ * caller (attest_response_verify.js) is the verify-side twin of that builder and
+ * gets the same field here, keyed on the same block, from the mirrored row's own
+ * admit_block_btc column. A caller that passes no `requestBlock` is not
+ * admission-aware and gets the bytes above unchanged, which is what keeps this
+ * function output-identical to the hub copy over every input the twin suite
+ * drives. In the admission era a row handed no map REFUSES (the field throws),
+ * exactly as the hub refuses, so the two eras can never share a signature.
+ *
  ********************************************************************/
 
 'use strict';
+
+// Zero-require module; the encoder and the era gate are the same twin the hub signs with.
+const { admissionCanonicalField } = require('./mirror_admission_activation.js');
+
+// The label the hub's builder hands the era gate, so a refusal on either side reads the same.
+const ADMISSION_FIELD_LABEL = 'AttestationConsensus';
 
 // Separates the appended mirror-era field from the free-form `meta` that precedes
 // it. Never appears between the five legacy fields: adding one there would change
@@ -99,6 +119,17 @@ function isCanonicalIntSpelling(v){
 // the right failure here on both sides: a leader that cannot spell its own
 // effective time must not propose, and a verifier handed an unspellable one must
 // treat the row as unverifiable, which it does by skipping it.
+//
+// Three OPTIONAL keys select the admission era, and they are read only together:
+// `requestBlock` (the request's own block, the era key), `network` (the other half
+// of the activation key) and `admitBlocks` (the row's admission map, or null for a
+// legacy row). `requestBlock` undefined means the caller is not admission-aware and
+// the bytes are exactly the two-era form above; with it present the admission field
+// is appended after the effective time, the hub's own position, and its era gate
+// refuses in both directions (an admission-era row with no map, a legacy-era row
+// handed one). That refusal is a throw, for the same reason the spelling check is:
+// a verifier must treat the row as unverifiable rather than rebuild bytes no honest
+// quorum signed.
 function buildResponseCanonicalRaw(fields){
     let raw = String(fields.requestId)
             + String(fields.providerId)
@@ -106,14 +137,19 @@ function buildResponseCanonicalRaw(fields){
             + String(fields.status)
             + String(fields.meta || '');
     let et = fields.effectiveTime;
-    if(et === null || et === undefined) return raw;
-    if(!isCanonicalIntSpelling(et))
-        throw new Error('attest response canonical: effective_time is not a canonical integer spelling: ' + JSON.stringify(et));
-    return raw + MIRROR_FIELD_SEPARATOR + String(et);
+    if(et !== null && et !== undefined){
+        if(!isCanonicalIntSpelling(et))
+            throw new Error('attest response canonical: effective_time is not a canonical integer spelling: ' + JSON.stringify(et));
+        raw += MIRROR_FIELD_SEPARATOR + String(et);
+    }
+    if(fields.requestBlock === undefined) return raw;
+    let map = (fields.admitBlocks === undefined) ? null : fields.admitBlocks;
+    return raw + admissionCanonicalField(ADMISSION_FIELD_LABEL, fields.network, fields.requestBlock, map);
 }
 
 module.exports = {
     MIRROR_FIELD_SEPARATOR,
+    ADMISSION_FIELD_LABEL,
     isCanonicalIntSpelling,
     buildResponseCanonicalRaw
 };

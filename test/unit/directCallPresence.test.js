@@ -294,9 +294,38 @@ describe('XChainIndexer._waitForDirectCallPresence (direct-hub-DB call barrier)'
         });
     });
 
+    describe('coin scope (the mirrored twin already has it; the direct read gains it at every height)', function(){
+        it('scopes the coverage read to calls touching THIS coin when one is configured', async function(){
+            const self = ctx({ rows: [row(null)] });
+            self.config = { COIN: 'BTC', NETWORK: 'regtest' };
+            await run(self, NOW_S());
+            const [sql, args] = self._doQuery.firstCall.args;
+            assert.ok(/AND \(target_chain = \? OR source_chain = \?\)/.test(sql), 'a global MAX could be bumped by an unrelated other-chain call: ' + sql);
+            assert.deepStrictEqual(args, ['BTC', 'BTC']);
+        });
+
+        it('falls back to the unscoped superset with no coin configured, which only ever waits longer', async function(){
+            const self = ctx({ rows: [row(null)] });
+            await run(self, NOW_S());
+            const [sql, args] = self._doQuery.firstCall.args;
+            assert.ok(!/target_chain/.test(sql));
+            assert.deepStrictEqual(args, []);
+        });
+    });
+
     describe('_directCallBarrierClearsAt (health verdict)', function(){
-        const clearsAt = (self, bt) =>
-            XChainIndexer.prototype._directCallBarrierClearsAt.call(self, bt);
+        const clearsAt = (self, bt, height) =>
+            XChainIndexer.prototype._directCallBarrierClearsAt.call(self, bt, height);
+
+        it('keeps the clock verdict below the admission activation when handed a height', function(){
+            // Inert on every network in this train unless the regtest env arms it; the armed
+            // arm (null verdict, C8) is driven in admissionBinding.test.js.
+            const bt = NOW_S() + 3600;
+            const self = ctx({ graceS: 120 });
+            self.config = { COIN: 'BTC', NETWORK: 'mainnet' };
+            self._mirrorAdmissionActiveAt = XChainIndexer.prototype._mirrorAdmissionActiveAt;
+            assert.strictEqual(clearsAt(self, bt, 812000), (bt + 120) * 1000);
+        });
 
         it('reports the escape instant so /status can call the stall self-clearing', function(){
             const bt = NOW_S() + 3600;                 // a future-stamped block

@@ -118,6 +118,9 @@ const arKey = require('./anchor_reward_key.js');
 // height from here, so a restored row and a live-derived one carry the same stamp.
 const ar = require('./anchor_reward_activation.js');
 const diag = require('./diagnosticEvents.js');
+// The mirror-admission flag day, CONSUMER side (the time-keyed mirror barrier family): above
+// it the mirrored selects bind rows by their signed admission height instead of by the clock.
+const { isMirrorAdmissionConsumerActive } = require('./mirror_admission_activation.js');
 
 // A stake weight, as stake_weighted_quorum.bcnum accepts one (plain decimal string).
 // Kept identical to that predicate's pattern so this producer can never emit a row the
@@ -9751,19 +9754,22 @@ class Database {
         return rows.length > 0;
     }
 
-    async getEffectiveUnsettledMatches(coin, block_time, limit){
+    async getEffectiveUnsettledMatches(coin, block_time, limit, block_index){
         // network filter: a match only settles on the indexer of the network it was matched
         // + signed on (also bound into the signed canonical - see cross_settle._canonical).
         // ORDER BY (snapshot_block, match_id) - quorum-agreed row content, so the
         // settlement order is identical no matter which hub DB this indexer mirrors
         // (the hub-assigned id is per-hub AUTO_INCREMENT and MUST NOT order consensus
         // state).
+        // Bound by the clock below the admission activation and by this chain's signed
+        // admission height above it (_mirrorBindClause); `block_index` is that key.
         let network = this.config['NETWORK'];
+        let bind    = this._mirrorBindClause(block_time, block_index);
         let matches = await this._mirrorDb().doQuery(
             `SELECT * FROM cross_chain_matches
-             WHERE status = 'finalized' AND network = ? AND effective_time <= ? AND (a_chain = ? OR b_chain = ?)
+             WHERE status = 'finalized' AND network = ? AND ${bind.sql} AND (a_chain = ? OR b_chain = ?)
              ORDER BY snapshot_block ASC, match_id ASC`,
-            [network, block_time, coin, coin]);
+            [network].concat(bind.args, [coin, coin]));
         if(matches.length === 0) return [];
         let ids = matches.map(m => m.match_id);
         let placeholders = ids.map(() => '?').join(',');
@@ -10253,13 +10259,15 @@ class Database {
     // injection order is identical no matter which hub DB this indexer mirrors
     // (the hub-assigned id is per-hub AUTO_INCREMENT and MUST NOT order consensus
     // state). Cap per block (overflow carries forward; never dropped).
-    async getEffectiveUndispatchedCalls(coin, network, block_time, limit){
+    async getEffectiveUndispatchedCalls(coin, network, block_time, limit, block_index){
+        // Clock-bound below the admission activation, height-bound above it (_mirrorBindClause).
+        let bind  = this._mirrorBindClause(block_time, block_index);
         let calls = await this._mirrorDb().doQuery(
             `SELECT * FROM cross_chain_calls
              WHERE phase = 'dispatch' AND status = 'finalized' AND network = ?
-               AND target_chain = ? AND effective_time <= ?
+               AND target_chain = ? AND ${bind.sql}
              ORDER BY snapshot_block ASC, call_id ASC`,
-            [network, coin, block_time]);
+            [network, coin].concat(bind.args));
         if(calls.length === 0) return [];
         let ids = calls.map(c => c.call_id);
         let placeholders = ids.map(() => '?').join(',');
@@ -10291,26 +10299,29 @@ class Database {
     // path still materializes the full effective result set each tick (finalized result
     // rows accumulate on the mirror and are re-scanned every block), a residual cost that
     // a cross-database exclusion cannot address without a cross-DB join.
-    async getEffectiveUnprocessedCallResults(coin, network, block_time, limit){
+    async getEffectiveUnprocessedCallResults(coin, network, block_time, limit, block_index){
         let cap = Number(limit) || 25;
         let mirror = this._mirrorDb();
         if(mirror === this){
+            // The single-DB form aliases the table, so the clause is spelled on the alias.
+            let bind = this._mirrorBindClause(block_time, block_index, 'c');
             return await this.doQuery(
                 `SELECT c.* FROM cross_chain_calls c
                  WHERE c.phase = 'result' AND c.status = 'finalized' AND c.network = ?
-                   AND c.source_chain = ? AND c.effective_time <= ?
+                   AND c.source_chain = ? AND ${bind.sql}
                    AND NOT EXISTS (
                        SELECT 1 FROM cross_chain_call_callbacks k WHERE k.call_id = c.call_id)
                  ORDER BY c.snapshot_block ASC, c.call_id ASC
                  LIMIT ?`,
-                [network, coin, block_time, cap]);
+                [network, coin].concat(bind.args, [cap]));
         }
+        let bind    = this._mirrorBindClause(block_time, block_index);
         let results = await mirror.doQuery(
             `SELECT * FROM cross_chain_calls
              WHERE phase = 'result' AND status = 'finalized' AND network = ?
-               AND source_chain = ? AND effective_time <= ?
+               AND source_chain = ? AND ${bind.sql}
              ORDER BY snapshot_block ASC, call_id ASC`,
-            [network, coin, block_time]);
+            [network, coin].concat(bind.args));
         if(results.length === 0) return [];
         let ids = results.map(r => r.call_id);
         let placeholders = ids.map(() => '?').join(',');
@@ -15145,6 +15156,52 @@ class Database {
         return (this.indexer && this.indexer.hubDb) ? this.indexer.hubDb : this;
     }
 
+    // Whether this indexer binds mirrored rows by admission height at block B: the consumer
+    // side of the mirror-admission flag day for (COIN, NETWORK). A caller that passes no
+    // height reads as below the activation, which is today's clock form, so every existing
+    // call shape keeps its meaning; the block loop's callers all pass their block index.
+    _mirrorAdmissionActiveAt(blockHeight){
+        if(blockHeight === null || blockHeight === undefined) return false;
+        return isMirrorAdmissionConsumerActive(this.config['COIN'], this.config['NETWORK'], blockHeight);
+    }
+
+    // This chain's admission column on the mirrored cross-chain tables, `admit_block_<c>` in
+    // the hub's own DDL spelling, built from the configured coin and never from anything read
+    // off the wire. The columns arrive with the indexer's dated admission migration; nothing
+    // reads them below the activation, which is every network in this train.
+    _admitColumn(){
+        return 'admit_block_' + String(this.config['COIN'] || '').toLowerCase();
+    }
+
+    // The binding clause of a mirrored select at block B, with its bindings.
+    //
+    // Below the activation this is `effective_time <= ?`, byte for byte the text the select
+    // has always issued, with one binding. Above it, the C33 form for this chain's column:
+    //
+    //   (admit_block_<c> IS NULL AND effective_time <= ?) OR (admit_block_<c> IS NOT NULL AND admit_block_<c> <= ?)
+    //
+    // wrapped in one more pair of parentheses so it composes under the select's own ANDs, and
+    // NEVER a bare `admit_block_<c> <= ?`: a bare comparison on a nullable column evaluates to
+    // NULL for every legacy row and silently drops it, the silent consensus change this file's
+    // own eff_expiration case study documents. The IS NULL arm is the legacy-row rule and it
+    // holds at every height, so a row finalized below the producer activation, and a row whose
+    // map never named this chain, both bind exactly as they do today (C38).
+    //
+    // `alias` prefixes every column for a select that aliases its table; `column` overrides the
+    // chain column for the one table that carries a single fixed column (attestation_responses,
+    // BTC-only by its call-site guard). bridge_settle.js carries the same clause text for its
+    // two selects and the admission-binding suite pins the two spellings equal.
+    _mirrorBindClause(blockTime, blockHeight, alias, column){
+        let p   = alias ? alias + '.' : '';
+        if(!this._mirrorAdmissionActiveAt(blockHeight))
+            return { sql: p + 'effective_time <= ?', args: [blockTime] };
+        let col = p + (column || this._admitColumn());
+        return {
+            sql:  '((' + col + ' IS NULL AND ' + p + 'effective_time <= ?) OR (' + col + ' IS NOT NULL AND ' + col + ' <= ?))',
+            args: [blockTime, Number(blockHeight)]
+        };
+    }
+
     // Read the hub-mirrored qualifying validator set for a capability at a BTC-anchored
     // snapshot block. Presence in capability_snapshots = qualified (the hub only mirrors
     // pubkeys already past min_stake). Lets a non-BTC indexer resolve the cross_chain set.
@@ -17346,21 +17403,29 @@ class Database {
     //
     // Chunked because the id list is caller-sized; the chunks are re-joined by the
     // caller's own deterministic order, so chunk boundaries cannot be observed.
-    async getMirroredAttestationResponses(network, requestIds, blockTime){
+    //
+    // ABOVE THE MIRROR-ADMISSION CONSUMER ACTIVATION at `blockHeight` the time filter takes
+    // the C33 form on admit_block_btc (the one column the hub stamps on this table, because
+    // attest responses are read by BTC alone), and that column is read back so the selector
+    // and the verifier can rebuild the signed map from it. Below the activation the
+    // statement is byte for byte the one above, and the column is not named at all.
+    async getMirroredAttestationResponses(network, requestIds, blockTime, blockHeight){
         let ids = (requestIds || []).map(id => String(id || '').toLowerCase()).filter(id => id.length > 0);
         if(ids.length === 0) return [];
         let mirror = this._mirrorDb();
         let out    = [];
         const CHUNK = 500;
+        let bind      = this._mirrorBindClause(Number(blockTime), blockHeight, null, 'admit_block_btc');
+        let admitCols = this._mirrorAdmissionActiveAt(blockHeight) ? ', admit_block_btc' : '';
         for(let i = 0; i < ids.length; i += CHUNK){
             let chunk        = ids.slice(i, i + CHUNK);
             let placeholders = chunk.map(() => '?').join(',');
             let rows = await mirror.doQuery(
                 `SELECT request_id, provider_id, status, response_payload, response_hash, meta,
-                        effective_time, signer_pubkeys, signatures, widen, batch_action_index
+                        effective_time, signer_pubkeys, signatures, widen, batch_action_index${admitCols}
                  FROM attestation_responses
-                 WHERE network = ? AND effective_time <= ? AND request_id IN (${placeholders})`,
-                [String(network || ''), Number(blockTime)].concat(chunk));
+                 WHERE network = ? AND ${bind.sql} AND request_id IN (${placeholders})`,
+                [String(network || '')].concat(bind.args, chunk));
             for(let row of rows) out.push(row);
         }
         return out;

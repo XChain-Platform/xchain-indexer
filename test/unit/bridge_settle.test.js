@@ -37,7 +37,32 @@ const crypto = require('crypto');
 const eq     = require('../../src/equivocation_header.js');
 const swq    = require('../../src/stake_weighted_quorum.js');
 const CHK    = require('../../src/bridge_checkpoint_check.js');
-const BS     = require('../../src/bridge_settle.js');
+
+// THE LEGACY ARM, EXPLICITLY. Every row below is a regtest row with no admission columns,
+// which is a legacy row only while the mirror-admission activation is inert; in a process
+// launched armed (XC_MIRROR_ADMISSION_ACTIVATION set) the canonicals REFUSE such a row,
+// correctly, and every quorum case here would fail for a reason that is not its subject.
+// The activation freezes at require time, so the module under test is required with the
+// env unset and the require cache is put back at once: this file drives the legacy arm,
+// admissionBinding.test.js drives the armed one. The purge/re-require idiom is the same
+// one the price and follower-bound suites carry by hand (frontier row 25).
+function requireDisarmed(mod){
+    const twin  = require.resolve('../../src/mirror_admission_activation.js');
+    const target = require.resolve(mod);
+    const saved = [[twin, require.cache[twin]], [target, require.cache[target]]];
+    const savedEnv = process.env.XC_MIRROR_ADMISSION_ACTIVATION;
+    delete process.env.XC_MIRROR_ADMISSION_ACTIVATION;
+    delete require.cache[twin];
+    delete require.cache[target];
+    try {
+        return require(mod);
+    } finally {
+        for(const [p, m] of saved){ if(m === undefined) delete require.cache[p]; else require.cache[p] = m; }
+        if(savedEnv === undefined) delete process.env.XC_MIRROR_ADMISSION_ACTIVATION;
+        else process.env.XC_MIRROR_ADMISSION_ACTIVATION = savedEnv;
+    }
+}
+const BS     = requireDisarmed('../../src/bridge_settle.js');
 const PC     = require('../../src/bridge_proof_client.js');
 const M      = require('../../src/merkle.js');
 const SUB    = require('../../src/state_subtree_activation.js');
@@ -262,6 +287,15 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
             const c = BS.transferCanonical(makeTransfer([], { dest_address: 'nAttacker' }));
             assert.notStrictEqual(a, b);
             assert.notStrictEqual(a, c);
+        });
+
+        it('is driven in the legacy arm, and a legacy row handed admission columns is refused there', function(){
+            // The disarm above is what this file rests on; a suite that silently inherited a
+            // process-level arming would fail every quorum case for the wrong reason.
+            assert.throws(() => BS.transferCanonical(makeTransfer([], { admit_block_doge: SNAPSHOT + 4 })),
+                          /refusing to build an admission-era canonical/);
+            assert.strictEqual(BS.transferCanonical(makeTransfer([], { admit_block_doge: null, admit_block_btc: null })),
+                               BS.transferCanonical(makeTransfer([], {})), 'NULL columns are the legacy row');
         });
     });
 
