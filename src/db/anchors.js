@@ -380,4 +380,36 @@ module.exports = {
         await this.doQuery("UPDATE anchor_actions SET status_id = ? WHERE action_index = ?", [status_id, actionIndex]);
     },
 
+
+    // Lowest locally parsed ANCHOR section at or above a height whose quorum THIS node
+    // verified at parse time. status 'valid' only: 'unverified' means the row was stored
+    // without a signature check because no capability snapshot was on hand, and that is
+    // exactly the checkpoint a bridge proof must never be handed.
+    async getEarliestValidAnchorCheckpoint(version, chain, network, atOrAfterBlock){
+        return await this.doQuery(
+            `SELECT a.chain, a.network, a.block_index, a.checkpoint_seq, a.snapshot_block,
+                    a.state_root, a.state_root_version
+             FROM anchor_actions a
+             JOIN index_statuses s ON s.id = a.status_id
+             WHERE a.version = ? AND a.chain = ? AND a.network = ? AND a.block_index >= ?
+               AND a.state_root IS NOT NULL AND s.status = 'valid'
+             ORDER BY a.block_index ASC, a.checkpoint_seq DESC
+             LIMIT 1`,
+            [version, chain, network, atOrAfterBlock]);
+    },
+
+    // The hub-mirrored state_checkpoints candidates at or above a height, lowest first. The
+    // caller re-verifies each and keeps the first that passes, so this returns several rows
+    // rather than one: a row at the lowest qualifying height may fail re-verification, and
+    // the next candidate up is then the honest pick rather than a stall. Capped at 8 because
+    // it runs inside the block loop. Reads the mirror home, not the indexer's own tables.
+    async getMirroredStateCheckpointCandidates(chain, network, atOrAfterBlock){
+        return await this._mirrorDb().doQuery(
+            `SELECT * FROM state_checkpoints
+             WHERE chain = ? AND network = ? AND block_index >= ? AND state_root IS NOT NULL
+             ORDER BY block_index ASC, checkpoint_seq DESC
+             LIMIT 8`,
+            [chain, network, atOrAfterBlock]);
+    },
+
 };

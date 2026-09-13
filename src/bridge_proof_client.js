@@ -282,16 +282,8 @@ async function selectCheckpoint(row, ctx){
     // the check must never be handed.
     let anchors = [];
     try {
-        anchors = await db.doQuery(
-            `SELECT a.chain, a.network, a.block_index, a.checkpoint_seq, a.snapshot_block,
-                    a.state_root, a.state_root_version
-             FROM anchor_actions a
-             JOIN index_statuses s ON s.id = a.status_id
-             WHERE a.version = ? AND a.chain = ? AND a.network = ? AND a.block_index >= ?
-               AND a.state_root IS NOT NULL AND s.status = 'valid'
-             ORDER BY a.block_index ASC, a.checkpoint_seq DESC
-             LIMIT 1`,
-            [ANCHOR_SECTION_VERSION, chain, network, atOrAfter]);
+        anchors = await db.getEarliestValidAnchorCheckpoint(
+            ANCHOR_SECTION_VERSION, chain, network, atOrAfter);
     } catch(e){
         // An unreadable table is an absence, which stalls. It is never a refusal.
         anchors = [];
@@ -308,12 +300,7 @@ async function selectCheckpoint(row, ctx){
     // than a stall. Bounded, because this runs inside the block loop.
     let mirrored = [];
     try {
-        mirrored = await db._mirrorDb().doQuery(
-            `SELECT * FROM state_checkpoints
-             WHERE chain = ? AND network = ? AND block_index >= ? AND state_root IS NOT NULL
-             ORDER BY block_index ASC, checkpoint_seq DESC
-             LIMIT 8`,
-            [chain, network, atOrAfter]);
+        mirrored = await db.getMirroredStateCheckpointCandidates(chain, network, atOrAfter);
     } catch(e){
         mirrored = [];
     }

@@ -783,6 +783,14 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
             const { ctx } = makeCtx({ coin: 'DOGE' });
             ctx.indexerDb.doQuery = async (sql) => (/FROM anchor_actions/.test(sql) ? anchorRows : []);
             ctx.indexerDb._mirrorDb = () => ({ doQuery: async () => mirrorRows });
+            // The two reads are the real db mixin methods over those stubs, not stubs of their
+            // own, so the anchor leg still has to issue SQL naming anchor_actions to see a row
+            // and the mirrored leg still has to route through _mirrorDb() to see one.
+            const anchorsMixin = require('../../src/db/anchors');
+            ctx.indexerDb.getEarliestValidAnchorCheckpoint =
+                anchorsMixin.getEarliestValidAnchorCheckpoint.bind(ctx.indexerDb);
+            ctx.indexerDb.getMirroredStateCheckpointCandidates =
+                anchorsMixin.getMirroredStateCheckpointCandidates.bind(ctx.indexerDb);
             return ctx;
         }
 
