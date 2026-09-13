@@ -30,7 +30,9 @@
 
 class Sleep {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -43,11 +45,23 @@ class Sleep {
         this.formats[1] = 'VERSION|RESUME_BLOCK|TICK|MEMO';
     }
 
+    // Handle parsing the ADDRESS transaction
     async parse(params, data, error){
+        /*****************************************************************
+         * DEBUGGING - Force params
+         ****************************************************************/
+        // Example payloads by FORMAT version:
+        // let str = "0|791495|Pausing actions until block 791495";
+        // let str = "1|791495|JDOG|Pausing actions on JDOG until block 791495";
+        // params = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
+
+        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
+        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
@@ -55,13 +69,23 @@ class Sleep {
         if(!error)
             data = this.util.setNumberFormats(data);
 
+        // Get information on token (if any)
         let tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
+        // Set sleep type based off data format
         data['TYPE'] = (format==1) ? 'TICK' : 'ADDRESS';
 
+        /*****************************************************************
+         * TICK Validations
+         ****************************************************************/
+
+        // Validate TICK exists
         if(!error && data['TYPE']=='TICK' && !tokenInfo)
             error = 'invalid: TICK (unknown)';
 
+        /*****************************************************************
+         * FORMAT Validations
+         ****************************************************************/
         // Verify RESUME_BLOCK format
         if(!error && (this.util.isNull(data['RESUME_BLOCK']) || !this.util.isNumeric(data['RESUME_BLOCK'])))
             error = 'invalid: RESUME_BLOCK (format)';
@@ -109,16 +133,21 @@ class Sleep {
         if(!error && String(data['MEMO']).indexOf(';')!=-1)
             error = 'invalid: MEMO (semicolon)';
 
+        // Verify MEMO is shorter than MAX_MEMO_LENGTH
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
+        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
+        // Print status message
         console.log("\t SLEEP : " + data['TICK'] + ' : ' + data['RESUME_BLOCK'] + ' : ' + data['STATUS']);
 
+        // Create record in messages table
         await this.indexerDb.createSleep(data);
 
+        // Store the SOURCE and TICK in addresses list
         this.util.addAddressTicker(data['SOURCE'], data['TICK']);
 
         await this.mapper.createMappings(data);

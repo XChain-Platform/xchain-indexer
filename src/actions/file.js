@@ -48,7 +48,9 @@ const GATE_MIN_AMOUNT_MAX_LENGTH = 40;
 
 class File {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -56,6 +58,7 @@ class File {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
+        // Define list of known FORMATS
         this.formats = {};
         // Optional NINTH field, the unlock threshold: the eight-field form is
         // byte-identical, so historical FILEs replay unchanged.
@@ -78,11 +81,23 @@ class File {
 
     }
 
+    // Handle parsing the ADDRESS transaction
     async parse(params, data, error){
+        /*****************************************************************
+         * DEBUGGING - Force params
+         ****************************************************************/
+        // Example payloads by FORMAT version:
+        // let str = "0|test.txt|text/plain|Test File|This is a test upload";
+        // let str = "0|xchain.jpg|image/jpeg|XChain Logo|This is the official XChain Logo";
+        // params = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
+
+        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
+        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
@@ -190,9 +205,11 @@ class File {
            String(data['GATE_MIN_AMOUNT']).length > 0)
             error = 'invalid: GATE_MIN_AMOUNT';
 
+        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
+        // Print status message
         console.log("\t FILE : " + data['NAME'] + ' : ' + data['TYPE'] + ' : ' + (isGated ? ('GATE=' + data['GATE_TICKER'] + ' : ') : '') + data['STATUS']);
 
         // Persisted for every version; gated_files (below) is written only for valid v1 gated files
@@ -203,8 +220,10 @@ class File {
         if(isGated && status === 'valid')
             await this.indexerDb.createGatedFile(data);
 
+        // Store the SOURCE in addresses list
         this.util.addAddressTicker(data['SOURCE']);
 
+        // Create action mappings
         await this.mapper.createMappings(data);
 
     }

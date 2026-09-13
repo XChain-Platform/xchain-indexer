@@ -85,6 +85,7 @@ class Anchor {
         // The whole ANCHOR wire set. Membership here is what makes a version byte
         // parseable at all (the unknown-version check in parse() reads this object), so
         // adding a key is a consensus change and deleting one retires a wire.
+        // Per-version format strings
         this.formats = {};
         // v0 (checkpoint bundle): ONE anchor per network per cycle carrying every
         // checkpointed chain as a section. The section body runs from CHAIN through the
@@ -198,6 +199,7 @@ class Anchor {
         return base;
     }
 
+    // Dispatch on VERSION
     async parse(params, data, error){
         let format = data['FORMAT'];
 
