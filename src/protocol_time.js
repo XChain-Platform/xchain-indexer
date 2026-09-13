@@ -13,8 +13,15 @@
  * PROTOCOL TIME
  *
  * Everything time-keyed in the protocol (the price/oracle/fiat reads, and the
- * six mirror barriers in XChainIndexer.js) currently keys on a block's RAW
- * timestamp. That value is chosen by whoever mined the block, and Bitcoin
+ * ELEVEN mirror barrier hold points in XChainIndexer.js's block loop) currently
+ * keys on a block's RAW timestamp. Eleven is the measured count, not a guess:
+ * the price barrier is TWO members on one stallReason (a height-keyed one that
+ * is BTC-gated and a time-keyed one that runs on every chain), the direct
+ * hub-DB call-presence barrier is a full member on the hub's own clock, and the
+ * snapshot barrier is content-keyed but scope-FILTERED by t(B), so it moves with
+ * the match and call members or the three disagree about which rows are in
+ * scope. Earlier counts of six and eight are what those three omissions cost.
+ * That value is chosen by whoever mined the block, and Bitcoin
  * accepts it up to ~2h ahead of network-adjusted time. Two consequences, one
  * per network:
  *

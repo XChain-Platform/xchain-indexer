@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The admission canonical encoder moved into the activation twin, so the hub and every indexer build the signed field from one definition per repo.
 
 ### Fixed
+- The eleven mirror-completeness barriers admit mirrored rows by a per-chain height watermark instead of the block's timestamp, so a future-stamped block no longer holds the block loop.  
+- The anchor-reward barrier gains a maturity-horizon bound that can only open it earlier than the clock form it replaces.  
 - A NODEPROOF verdict now credits participation at the buried height the hub locked its claimant set at, so a source whose stake deactivated inside the reorg-buffer window keeps the epoch it answered; the eligible-verifier set and quorum divisor stay at the raw epoch, matching the hub.
 - The PRICE v0 payload builder now accepts a coinPair-keyed pair the same as a pair-keyed one, matching the hub's v0 payload builders byte for byte.
 - The leg-ordinal migration is renamed past every later migration in the tree so it no longer applies out of its dated position and no longer logs a backdating warning at boot.

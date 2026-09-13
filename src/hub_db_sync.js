@@ -56,6 +56,11 @@ const { HUB_SCHEMA_VERSION } = require('./hub-schema-version');
 const swq    = require('./stake_weighted_quorum.js');
 const { isRetractionSigningActive } = require('./retraction_signing_activation.js');
 const { priceEraFloorS, isPreBatchEraFloor } = require('./price_batching_floor_activation.js');
+// The mirror-admission family's consumer gate and its per-table margins. A FOURTH
+// CLIENT_FILES entry alongside price_batching_floor_activation.js and, like it,
+// dependency-free: the alternative threads an activation verdict through eleven predicate
+// signatures, their waiters and every one of their call sites.
+const { admitMarginBlocks, isMirrorAdmissionConsumerActive } = require('./mirror_admission_activation.js');
 
 let WebSocket = null;
 try {
@@ -322,19 +327,95 @@ function resolveWatermarkStallMs(raw, envKey, defaultS){
 //   - a hub tip at or behind our watermark means the hub has produced nothing we lack,
 //     which is the ordinary quiet-chain state and the reason a bare "unchanged for X"
 //     test cannot be used on its own.
+//
+// THE HEIGHT DIMENSION. Everything above measures the SECONDS watermark, and above the
+// mirror-admission activation that is no longer the value the barriers open on: they open
+// on the per-table height watermark. A hub whose `heights` map froze while its `ts` kept
+// ticking therefore reads 'ok' here forever, with only the block loop's 900 s hold ceiling
+// left as a remedy, and that ceiling is delivery-side and cannot clear a producer-side
+// freeze. So the height watermark is a SECOND stall dimension on the same two-stage ladder.
+//
+// It is measured against what the block loop actually asked for, not against a hub-reported
+// admission tip: the hub publishes `heights` but publishes no tip of its own on any of the
+// three carriers, so the comparator C20 names does not exist on the wire. `heightsShort` is
+// therefore set by the barrier itself, when a height comparison it evaluated came up short,
+// and cleared when the entry catches up. That is strictly the case the operator cares about
+// (this node is being held by a height watermark that is not moving) and it needs nothing
+// the hub does not already send.
+//
+// Either dimension can raise the alarm, each measured from ITS OWN last advance, and stage 1
+// fires on whichever crosses the window first. With the height dimension idle this is byte
+// for byte today's rule.
 function watermarkStallVerdict(state, now){
     const s = state || {};
     if(!(s.stallMs > 0))                                   return 'ok';
     if(s.pollMode || s.schemaMismatch)                     return 'ok';
-    if(s.lastAdvanceAt == null)                            return 'ok';
-    if(!(Number(s.hubTipTs) > Number(s.streamWatermark)))  return 'ok';
+
+    const tsFrozen = (s.lastAdvanceAt != null) &&
+                     (Number(s.hubTipTs) > Number(s.streamWatermark));
+    // A mirror that has never received a heights map is a cold start on this axis too, not
+    // a stall, exactly as a null lastAdvanceAt is on the seconds axis.
+    const heightFrozen = (s.heightsLastAdvanceAt != null) && !!s.heightsShort;
+    if(!tsFrozen && !heightFrozen)                         return 'ok';
+
     // Stage 1 measures from the last real advance; stage 2 measures from the remedy, so
     // a resync that is still draining is given its own full window rather than being
     // charged the time that produced it.
-    if(s.resyncAt == null)
-        return ((now - s.lastAdvanceAt) >= s.stallMs) ? 'resync' : 'ok';
+    if(s.resyncAt == null){
+        const stamps = [];
+        if(tsFrozen)     stamps.push(s.lastAdvanceAt);
+        if(heightFrozen) stamps.push(s.heightsLastAdvanceAt);
+        const since = Math.min.apply(null, stamps);
+        return ((now - since) >= s.stallMs) ? 'resync' : 'ok';
+    }
     if(!(s.exitMs > 0))                                    return 'ok';
     return ((now - s.resyncAt) >= s.exitMs) ? 'exit' : 'ok';
+}
+
+// Normalise a wire `heights` object into the shape the barriers read, dropping anything that
+// is not a usable height. Returns null when the carrier stamped no object at all, which the
+// caller treats as "clear", and an object (possibly empty) otherwise.
+//
+// STRICTLY typed, and that is deliberate. `Number('')`, `Number(null)`, `Number([])` and
+// `Number(false)` are all 0, so a coercing reader would turn every one of those into a
+// genesis-height claim that satisfies no block but LOOKS like an entry, and `Number('12')`
+// would let the wire decide a consensus barrier's evidence in a type the hub never sends.
+// A height is a non-negative safe integer NUMBER; everything else is absence.
+function sanitizeHeights(raw){
+    if(!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const out = {};
+    for(const table of Object.keys(raw)){
+        const entry = raw[table];
+        if(!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+        const chains = {};
+        for(const chain of Object.keys(entry)){
+            const h = entry[chain];
+            if(typeof h !== 'number' || !Number.isSafeInteger(h) || h < 0) continue;
+            const c = String(chain).trim().toUpperCase();
+            if(c !== '') chains[c] = h;
+        }
+        // A table whose every entry was refused is kept as an EMPTY object rather than
+        // dropped: both defer, and keeping it says "the hub published this table and none of
+        // it was usable" instead of "the hub never mentioned it".
+        out[String(table)] = chains;
+    }
+    return out;
+}
+
+// True when any (table, chain) entry in `next` is strictly higher than in `prev`. A map that
+// only loses entries, or only republishes the same numbers, has not advanced: the stall
+// detector's window must keep running through a hub that is repeating itself.
+function heightsAdvanced(prev, next){
+    const before = prev || {};
+    for(const table of Object.keys(next || {})){
+        const nextChains = next[table] || {};
+        const prevChains = before[table] || {};
+        for(const chain of Object.keys(nextChains)){
+            const was = prevChains[chain];
+            if(typeof was !== 'number' || nextChains[chain] > was) return true;
+        }
+    }
+    return false;
 }
 
 // ── signed-retraction verification helpers ───────────────────────────
@@ -907,6 +988,34 @@ class HubDbSync {
         // Reset on disconnect; re-set after the reconnect re-bootstrap drains.
         this._bootstrapDrained = false;
         this._readyWatermark   = null;
+
+        // ── The per-table, per-chain HEIGHT watermark, the mirror-admission family's
+        // completeness evidence ────────────────────────────────────────────────────
+        //
+        // Keyed table then UPPER-CASE chain code, each value a non-negative safe integer:
+        // the greatest height on that chain such that every consensus round for that table
+        // which opened at an observed admission tip at or below it has TERMINATED (finalized
+        // and broadcast, or abandoned). Above the activation that is what every barrier
+        // certifies against, in place of the seconds watermark.
+        //
+        // FAIL-CLOSED BY ABSENCE, at every granularity: no object, no table key, no chain key
+        // inside a table, a non-finite value or a hub that never served one all read as NOT
+        // satisfied, so the barrier defers exactly as it does today. An empty object is a
+        // legitimate publication and is not the same as "not yet published"; both defer.
+        //
+        // Gated on the same bootstrap drain as the seconds watermark and cleared on
+        // disconnect, for the same reason: a heights map certifies rounds the hub has
+        // BROADCAST, and until the REST bootstrap has drained, this node does not hold the
+        // rows those rounds produced.
+        this.heightWatermarks       = {};
+        this._readyHeights          = null;   // captured off the ready frame, installed at drain
+        this._pendingBootstrapHeights = null; // the newest REST snapshot page's map, same
+        this._heightsLastAdvanceAt  = null;   // null until a usable map has been installed once
+        // The highest target (B - margin) each (table, chain) barrier came up short at, so the
+        // stall detector can see a heights map that froze while `ts` kept ticking. Set by the
+        // predicate itself because the hub publishes no admission tip of its own on any
+        // carrier; cleared per entry the moment the published height reaches the target.
+        this._heightShortfalls      = {};
         // Set when a live row event is rejected for a schema_version mismatch. While
         // true the watermark heartbeat must NOT advance, or the price-sync barrier
         // would open and settle a block against mirror data we refused to apply.
@@ -1064,12 +1173,142 @@ class HubDbSync {
         this._releaseAttestResponseWaiters();
     }
 
+    // The same re-evaluation, driven by a HEIGHT advance rather than a seconds advance.
+    // Above the activation the height watermark is what satisfies every waiter above, and it
+    // can move on a frame whose `ts` did not: without this a block released by a height
+    // advance would still sit out the rest of its 60 s timeout on every single advance.
+    _releaseHeightWaiters() {
+        this._releasePriceWaiters();
+        this._releasePriceTimeWaiters();
+        this._releaseOracleWaiters();
+        this._releaseMatchWaiters();
+        this._releaseCallWaiters();
+        this._releaseBridgeWaiters();
+        this._releasePolicyWaiters();
+        this._releaseAnchorAttestWaiters();
+        this._releaseAttestResponseWaiters();
+    }
+
     // Record the newest tip the hub has claimed in a heartbeat, independently of whether
     // the watermark gate accepted it. A refused tip is exactly the evidence the stall
     // detector runs on, so it must be kept even when it changes nothing else.
     _noteHubTip(ts) {
         const t = Number(ts);
         if (Number.isFinite(t) && t > this._hubTipTs) this._hubTipTs = t;
+    }
+
+    // Apply one heartbeat frame's two watermarks. Extracted from the socket handler so the
+    // GATE is unit-drivable: both values are certifications about what this mirror holds, and
+    // both are wrong until the REST bootstrap has drained the rows produced before the
+    // subscription. A heights map installed early would certify exactly that gap, and a
+    // barrier re-keyed onto it would open over it. Returns nothing; the caller has no decision
+    // left to make.
+    _handleWatermarkFrame(event) {
+        if (!this._bootstrapDrained || this._schemaMismatchSeen) return;
+        // Heights first, so waiters released by the seconds advance below already see the
+        // fresh map rather than the previous frame's.
+        this._noteHeights((event || {}).heights);
+        this._advanceWatermark((event || {}).ts);
+    }
+
+    // ── The height watermark: consumer side ────────────────────────────────────
+    //
+    // Install the `heights` object off whichever carrier delivered it (the watermark
+    // heartbeat, the ready frame, or a REST snapshot page). Returns true when any entry
+    // actually advanced, which is what the stall detector measures its window from.
+    //
+    // A carrier with no usable object CLEARS the map rather than leaving the previous one
+    // standing. That is the whole fail-closed rule in one line: an older hub, or one that has
+    // stopped publishing, must make this node defer, not coast on a claim nobody is renewing.
+    _noteHeights(raw) {
+        const next = sanitizeHeights(raw);
+        if (next === null) {
+            this.heightWatermarks = {};
+            return false;
+        }
+        const advanced = heightsAdvanced(this.heightWatermarks, next);
+        this.heightWatermarks = next;
+        // Stamp the first install too: until one lands, the height axis is a COLD START and
+        // the stall detector must stay quiet on it, exactly as a null lastAdvanceAt does on
+        // the seconds axis.
+        if (advanced || this._heightsLastAdvanceAt == null) this._heightsLastAdvanceAt = Date.now();
+        this._reconcileHeightShortfalls();
+        if (advanced) this._releaseHeightWaiters();
+        return advanced;
+    }
+
+    // This indexer's own chain code, normalised the way the hub keys the map. Null when the
+    // mirror was built without a coin, which reads as no admission evidence at all.
+    _admissionChain() {
+        if (this.coin === null || this.coin === undefined) return null;
+        const c = String(this.coin).trim().toUpperCase();
+        return c === '' ? null : c;
+    }
+
+    // Whether the CONSUMER side of the admission flag day is armed for this chain at block B.
+    // Inert (which is every network in this train) means every predicate below reduces to the
+    // clock form it has today, byte for byte.
+    admissionActiveAt(blockHeight) {
+        if (blockHeight === null || blockHeight === undefined) return false;
+        return isMirrorAdmissionConsumerActive(this.coin, this.network, blockHeight);
+    }
+
+    // The published height for one (table, chain), or null when there is no usable entry.
+    // Null is never coerced to zero anywhere in this file: a zero would certify a genesis-era
+    // mirror as complete for every block, which is the fail-OPEN this design may not have.
+    _publishedHeight(table, chain) {
+        const entry = this.heightWatermarks[table];
+        if (!entry || typeof entry !== 'object') return null;
+        const h = entry[chain];
+        return (typeof h === 'number' && Number.isSafeInteger(h) && h >= 0) ? h : null;
+    }
+
+    // The family's barrier comparison, identical for every member: heights[table][C] >= B -
+    // ADMIT_MARGIN_BLOCKS[table]. Nothing here reads t(B), which is the point of the whole
+    // design: heights do not move with a miner's stamp, so a block stamped 7200 s ahead is
+    // height B like any other.
+    //
+    // A shortfall is RECORDED rather than merely returned, because the mirror's own stall
+    // detector has no other way to see a heights map that froze while `ts` kept ticking.
+    _heightSatisfied(table, blockHeight) {
+        const chain = this._admissionChain();
+        const b = Number(blockHeight);
+        if (chain === null || !Number.isFinite(b)) return false;
+        const target = b - admitMarginBlocks(table);
+        const key = table + '|' + chain;
+        const h = this._publishedHeight(table, chain);
+        if (h === null || h < target) {
+            if (!(this._heightShortfalls[key] >= target)) this._heightShortfalls[key] = target;
+            return false;
+        }
+        delete this._heightShortfalls[key];
+        return true;
+    }
+
+    // Drop every shortfall the newly installed map has caught up with, so a mirror that
+    // recovers stops being reported as stalled without waiting for another block to ask.
+    _reconcileHeightShortfalls() {
+        for (const key of Object.keys(this._heightShortfalls)) {
+            const split = key.lastIndexOf('|');
+            const h = this._publishedHeight(key.slice(0, split), key.slice(split + 1));
+            if (h !== null && h >= this._heightShortfalls[key]) delete this._heightShortfalls[key];
+        }
+    }
+
+    // True while at least one height comparison this node actually made is still short.
+    _heightsShort() {
+        return Object.keys(this._heightShortfalls).length > 0;
+    }
+
+    // The height clause appended to a timed-out barrier's message ABOVE the activation. The
+    // message's existing prefix is untouched: two unit tests and the api-status smoke match on
+    // it, and an operator greps for it.
+    _heightTail(table, blockHeight) {
+        const chain = this._admissionChain();
+        const h = (chain === null) ? null : this._publishedHeight(table, chain);
+        return ' (admission height ' + table + '.' + (chain === null ? 'unknown' : chain) +
+               ' at ' + (h === null ? 'none' : h) +
+               ', needs ' + (Number(blockHeight) - admitMarginBlocks(table)) + ')';
     }
 
     // Sample the stall condition once and act on the verdict. Split from the timer so a
@@ -1086,13 +1325,22 @@ class HubDbSync {
             lastAdvanceAt:   this._lastWatermarkAdvanceAt,
             resyncAt:        this._watermarkStallResyncAt,
             hubTipTs:        this._hubTipTs,
-            streamWatermark: this.streamWatermark
+            streamWatermark: this.streamWatermark,
+            // The height dimension (C20): a `heights` map that froze while `ts` kept ticking
+            // holds every re-keyed barrier and is invisible to the comparison above.
+            heightsLastAdvanceAt: this._heightsLastAdvanceAt,
+            heightsShort:         this._heightsShort()
         }, now);
         if (verdict === 'ok') return verdict;
 
-        const frozenS = Math.round((now - this._lastWatermarkAdvanceAt) / 1000);
+        const frozenFrom = (this._lastWatermarkAdvanceAt == null)
+            ? this._heightsLastAdvanceAt : this._lastWatermarkAdvanceAt;
+        const frozenS = Math.round((now - frozenFrom) / 1000);
         const shape   = 'stream watermark frozen at ' + this.streamWatermark + ' for ' + frozenS +
-                        's while the hub heartbeat tip reached ' + this._hubTipTs;
+                        's while the hub heartbeat tip reached ' + this._hubTipTs +
+                        (this._heightsShort()
+                            ? '; height watermark short at ' + JSON.stringify(this._heightShortfalls)
+                            : '');
 
         if (verdict === 'resync') {
             this._watermarkStallResyncAt = now;
@@ -1256,6 +1504,7 @@ class HubDbSync {
         try {
             let marks = [];
             let allDrained = true;
+            this._pendingBootstrapHeights = null;
             // price_snapshots bootstraps LAST so EVERY per-block barrier that gates block
             // processing (oracle, cross-chain match, cross-chain call, capability snapshot)
             // arms its empty-mirror fast path before the one heavy table drains. Each of those
@@ -1302,6 +1551,11 @@ class HubDbSync {
                     console.warn('HubDbSync: poll-mode mirror: watermark frozen, WS unavailable, ' +
                         'upserts/retractions cannot be received; settlement barriers will not certify');
                 } else {
+                    // Install the height map from whichever carrier served one this drain,
+                    // preferring the snapshot pages over the ready frame because they are the
+                    // later statement. Neither means CLEAR, the fail-closed direction: a hub
+                    // that publishes no heights cannot certify a re-keyed barrier.
+                    this._noteHeights(this._pendingBootstrapHeights || this._readyHeights);
                     this._advanceWatermark(Math.min.apply(null, marks));
                 }
             } else if (this.running) {
@@ -1330,7 +1584,8 @@ class HubDbSync {
     // rather than a zeroed shape that would read as a live mirror stalled at genesis.
     mirrorStatus() {
         if (!this.enabled) {
-            return { configured: false, connected: false, bootstrapped: false, streamWatermark: null, tables: {} };
+            return { configured: false, connected: false, bootstrapped: false, streamWatermark: null,
+                     tables: {}, heights: {} };
         }
         let tables = {};
         // HUB_STATE_TABLES rides the global streamWatermark, not a per-table
@@ -1356,7 +1611,18 @@ class HubDbSync {
             hubTipTs: this._hubTipTs,
             watermarkFrozenMs: (this._lastWatermarkAdvanceAt == null)
                 ? null : (Date.now() - this._lastWatermarkAdvanceAt),
-            tables: tables
+            tables: tables,
+            // The per-table per-chain height watermark, beside the seconds one. Additive,
+            // node-local and hashed by nothing: it exists so an operator can read "the hub's
+            // heights map for my chain stopped at H while I need B - margin" off /status
+            // instead of inferring it from deferral logs.
+            heights: this.heightWatermarks,
+            // The comparisons that came up short, and how long the map has been quiet. Null
+            // age means no heights map has ever been installed, which is a cold start on this
+            // axis rather than a stall.
+            heightShortfalls: Object.assign({}, this._heightShortfalls),
+            heightsFrozenMs: (this._heightsLastAdvanceAt == null)
+                ? null : (Date.now() - this._heightsLastAdvanceAt)
         };
     }
 
@@ -1722,6 +1988,13 @@ class HubDbSync {
             // The LAST page's watermark is the hub's most recent "complete through ts"
             // statement covering everything fetched so far.
             if (Number.isFinite(Number(result.watermark))) watermark = Number(result.watermark);
+            // The height watermark rides every snapshot page too, immediately after `count`.
+            // Stashed rather than installed: like the seconds watermark it is only true of a
+            // mirror that has FULLY drained, and _bootstrapAll owns that verdict. Without a
+            // carrier here a poll-mode or reconnecting mirror would never establish a
+            // baseline at all and would defer every block forever above the activation.
+            const pageHeights = sanitizeHeights(result.heights);
+            if (pageHeights !== null) this._pendingBootstrapHeights = pageHeights;
             if (applyErrors > 0) break;                      // hole hit: stop paging, retry from it
             if (result.rows.length < PAGE_LIMIT) break;      // short page = drained
         }
@@ -2799,6 +3072,13 @@ class HubDbSync {
     //      the tip proceed deterministically through an oracle round gap, while a
     //      genuinely-behind mirror (hub unreachable → watermark frozen) still
     //      defers). blockTime may be absent (legacy callers), so then only case 1.
+    //   3. ADMISSION ERA (the mirror-admission family's consumer flag day): the hub's height
+    //      watermark for price_snapshots on this chain has reached B - ADMIT_MARGIN_BLOCKS,
+    //      so every round whose admission height can be at or below B has terminated and been
+    //      broadcast. Above the activation this REPLACES case 2 rather than joining it: case 2
+    //      is the one clause in this predicate that reads t(B), and removing t(B) from every
+    //      member's predicate is the entire point of the change. Case 1 is untouched, because
+    //      it was already a height comparison.
     _priceSyncSatisfied(blockHeight, blockTime) {
         // A mirror that was bounded and has since been asked for a block below its
         // floor holds neither case: its height says "caught up" while rounds that block can
@@ -2806,6 +3086,8 @@ class HubDbSync {
         // mirror, so this costs nothing on the default path.
         if (this._priceMirrorRefloor) return false;
         if (this.priceSyncHeight >= blockHeight) return true;
+        if (this.admissionActiveAt(blockHeight))
+            return this.priceBootstrapped && this._heightSatisfied('price_snapshots', blockHeight);
         if (this.priceBootstrapped && Number.isFinite(blockTime) &&
             this.streamWatermark >= blockTime + this.priceWatermarkGraceS) return true;
         return false;
@@ -2872,7 +3154,9 @@ class HubDbSync {
                 this._priceWaiters = this._priceWaiters.filter(w => w !== waiter);
                 reject(new Error('price sync barrier timed out after ' + ms + 'ms waiting for block ' +
                                  blockHeight + ' (price mirror at ' + this.priceSyncHeight +
-                                 ', stream watermark at ' + this.streamWatermark + ')'));
+                                 ', stream watermark at ' + this.streamWatermark + ')' +
+                                 (this.admissionActiveAt(blockHeight)
+                                     ? this._heightTail('price_snapshots', blockHeight) : '')));
             }, ms);
             this._priceWaiters.push(waiter);
         });
@@ -2891,7 +3175,18 @@ class HubDbSync {
     //      instant, so the eligible set is FINAL. This is also what lets a
     //      chain proceed deterministically when no rounds exist yet, while a
     //      genuinely-behind mirror (hub unreachable → watermark frozen) defers.
-    _priceTimeSyncSatisfied(blockTime) {
+    //   3. ADMISSION ERA: the price_snapshots height watermark for this chain has reached
+    //      B - margin. This member has NO height case below the activation at all (that is
+    //      what makes it the one that runs on every chain while member 1 is BTC-gated), so
+    //      above it BOTH clock cases are replaced: a round's block_timestamp is a time, and
+    //      comparing one against t(B) is exactly the question the binding-rule change retires.
+    _priceTimeSyncSatisfied(blockTime, blockHeight = null) {
+        // Evaluated BEFORE the blockTime guard below, deliberately: above the activation an
+        // unreadable t(B) is not a reason to certify anything, and falling through to that
+        // `return true` would be a fail-OPEN on the one axis that may never have one.
+        if (this.admissionActiveAt(blockHeight))
+            return !this._priceMirrorRefloor && this.priceBootstrapped &&
+                   this._heightSatisfied('price_snapshots', blockHeight);
         if (!Number.isFinite(blockTime)) return true;       // nothing to gate on
         if (this._priceMirrorRefloor)    return false;      // see _priceSyncSatisfied
         if (this.priceBootstrapped && this.priceSyncMaxTimestamp >= blockTime) return true;
@@ -2905,7 +3200,7 @@ class HubDbSync {
         if (this._priceTimeWaiters.length === 0) return;
         let stillWaiting = [];
         for (let w of this._priceTimeWaiters) {
-            if (this._priceTimeSyncSatisfied(w.ts)) {
+            if (this._priceTimeSyncSatisfied(w.ts, w.height)) {
                 clearTimeout(w.timer);
                 w.resolve(this.priceSyncMaxTimestamp);
             } else {
@@ -2924,27 +3219,33 @@ class HubDbSync {
     // never settle or validate against a stale local mirror. Runs on BTC too, ADDITIVELY
     // with the height-keyed waitForPriceSyncHeight barrier above, which is retained for
     // the height-selected fee query below the flag-day (XChainIndexer.js:877-932).
-    waitForPriceSyncTime(blockTime, timeoutMs) {
+    //
+    // `blockHeight` is B, the block being processed on THIS chain, and it is what the
+    // admission-era predicate compares. Optional so the six single-argument unit callers and
+    // any hand-built caller keep today's behaviour exactly.
+    waitForPriceSyncTime(blockTime, timeoutMs, blockHeight = null) {
         blockTime = Number(blockTime);
         if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.priceSyncMaxTimestamp);
         // PRE-BATCH ERA, same escape and same ordering as the height barrier above.
         if (isPreBatchEraFloor(blockTime, this._priceEraFloorS)) return Promise.resolve(this.priceSyncMaxTimestamp);
         this._notePriceMirrorFloor(blockTime);            // same check as the height barrier
-        if (this._priceTimeSyncSatisfied(blockTime))       return Promise.resolve(this.priceSyncMaxTimestamp);
+        if (this._priceTimeSyncSatisfied(blockTime, blockHeight)) return Promise.resolve(this.priceSyncMaxTimestamp);
 
         let ms = parseInt(timeoutMs);
         if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
         return new Promise((resolve, reject) => {
-            let waiter = { ts: blockTime, resolve: resolve, timer: null };
+            let waiter = { ts: blockTime, height: blockHeight, resolve: resolve, timer: null };
             waiter.timer = setTimeout(async () => {
                 // Same self-heal as waitForPriceSyncHeight: re-read the mirror
                 // before giving up, in case a refresh was missed on a stream edge.
                 try { await this._refreshPriceSyncHeight(); } catch (e) { /* fall through to reject */ }
-                if (this._priceTimeSyncSatisfied(blockTime)) return;   // resolved by the refresh
+                if (this._priceTimeSyncSatisfied(blockTime, blockHeight)) return;   // resolved by the refresh
                 this._priceTimeWaiters = this._priceTimeWaiters.filter(w => w !== waiter);
                 reject(new Error('price time-sync barrier timed out after ' + ms + 'ms waiting for block time ' +
                                  blockTime + ' (mirror max round timestamp ' + this.priceSyncMaxTimestamp +
-                                 ', stream watermark at ' + this.streamWatermark + ')'));
+                                 ', stream watermark at ' + this.streamWatermark + ')' +
+                                 (this.admissionActiveAt(blockHeight)
+                                     ? this._heightTail('price_snapshots', blockHeight) : '')));
             }, ms);
             this._priceTimeWaiters.push(waiter);
         });
@@ -2978,8 +3279,15 @@ class HubDbSync {
     //   1. The mirror has been read and holds no oracle prices at all; nothing to gate on.
     //   2. The mirror holds prices whose newest effective_at is at or past this block's time,
     //      so every price effective at or before blockTime is already local.
-    _oracleSyncSatisfied(blockTime) {
+    //   3. ADMISSION ERA: the oracle_prices height watermark for this chain has reached
+    //      B - 1 (this rail's margin is one block: effective_at stays the ECONOMIC filter,
+    //      including the 24 h lock window, and admission is what the barrier certifies).
+    //      The empty-mirror case above survives unchanged, because it is a content escape
+    //      and not a clock: a mirror holding no row at all holds none whatever arrives next.
+    _oracleSyncSatisfied(blockTime, blockHeight = null) {
         if (this.oracleBootstrapped && this.oracleSyncTimestamp === null) return true;
+        if (this.admissionActiveAt(blockHeight))
+            return this.oracleBootstrapped && this._heightSatisfied('oracle_prices', blockHeight);
         if (this.oracleSyncTimestamp !== null && this.oracleSyncTimestamp >= blockTime) return true;
         // Stream watermark: the hub has sent us every row it produced through
         // blockTime + grace, so the set of prices effective at or before this
@@ -2995,7 +3303,7 @@ class HubDbSync {
         if (this._oracleWaiters.length === 0) return;
         let stillWaiting = [];
         for (let w of this._oracleWaiters) {
-            if (this._oracleSyncSatisfied(w.ts)) {
+            if (this._oracleSyncSatisfied(w.ts, w.height)) {
                 clearTimeout(w.timer);
                 w.resolve(this.oracleSyncTimestamp);
             } else {
@@ -3015,15 +3323,15 @@ class HubDbSync {
     // waitForPriceSyncHeight this comparison is meaningful (and required) on every chain.
     // Resolves immediately when sync is disabled (single-host: the local hub DB is the hub
     // itself, always current) or when the mirror is known to hold no oracle prices at all.
-    waitForOracleSyncTimestamp(blockTime, timeoutMs) {
+    waitForOracleSyncTimestamp(blockTime, timeoutMs, blockHeight = null) {
         blockTime = Number(blockTime);
         if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.oracleSyncTimestamp);
-        if (this._oracleSyncSatisfied(blockTime))          return Promise.resolve(this.oracleSyncTimestamp);
+        if (this._oracleSyncSatisfied(blockTime, blockHeight)) return Promise.resolve(this.oracleSyncTimestamp);
 
         let ms = parseInt(timeoutMs);
         if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
         return new Promise((resolve, reject) => {
-            let waiter = { ts: blockTime, resolve: resolve, timer: null };
+            let waiter = { ts: blockTime, height: blockHeight, resolve: resolve, timer: null };
             waiter.timer = setTimeout(async () => {
                 // Self-heal before giving up, same as waitForPriceSyncHeight: the in-memory
                 // oracleSyncTimestamp only advances when a stream/bootstrap event drives
@@ -3033,10 +3341,12 @@ class HubDbSync {
                 // present. Re-read the DB here; _refreshOracleSyncTimestamp resolves+clears
                 // this waiter via _releaseOracleWaiters if the mirror has since caught up.
                 try { await this._refreshOracleSyncTimestamp(); } catch (e) { /* fall through to reject */ }
-                if (this._oracleSyncSatisfied(blockTime)) return;   // already resolved by the refresh
+                if (this._oracleSyncSatisfied(blockTime, blockHeight)) return;   // already resolved by the refresh
                 this._oracleWaiters = this._oracleWaiters.filter(w => w !== waiter);
                 reject(new Error('oracle sync barrier timed out after ' + ms + 'ms waiting for block_time ' +
-                                 blockTime + ' (oracle mirror at ' + this.oracleSyncTimestamp + ')'));
+                                 blockTime + ' (oracle mirror at ' + this.oracleSyncTimestamp + ')' +
+                                 (this.admissionActiveAt(blockHeight)
+                                     ? this._heightTail('oracle_prices', blockHeight) : '')));
             }, ms);
             this._oracleWaiters.push(waiter);
         });
@@ -3709,8 +4019,15 @@ class HubDbSync {
         this._releaseMatchWaiters();
     }
 
-    _matchSyncSatisfied(blockTime) {
+    // ADMISSION ERA: the cross_chain_matches height watermark for this chain has reached
+    // B - 4 (the default margin, which is the producers' existing DEFAULT_RELAY_MARGIN_BLOCKS
+    // carried onto the admission axis with the seconds conversion deleted). It replaces BOTH
+    // clock cases: a match's effective_time is a time, and the row's admission height is what
+    // binds it above the flag day. The empty-mirror escape survives: it is content, not clock.
+    _matchSyncSatisfied(blockTime, blockHeight = null) {
         if (this.matchBootstrapped && this.matchSyncTimestamp === null) return true;
+        if (this.admissionActiveAt(blockHeight))
+            return this.matchBootstrapped && this._heightSatisfied('cross_chain_matches', blockHeight);
         if (this.matchSyncTimestamp !== null && this.matchSyncTimestamp >= blockTime) return true;
         // Stream watermark: matches are stamped with the hub's wall clock at
         // finalization and broadcast immediately, so a watermark past this
@@ -3727,7 +4044,7 @@ class HubDbSync {
         if (this._matchWaiters.length === 0) return;
         let stillWaiting = [];
         for (let w of this._matchWaiters) {
-            if (this._matchSyncSatisfied(w.ts)) {
+            if (this._matchSyncSatisfied(w.ts, w.height)) {
                 clearTimeout(w.timer);
                 w.resolve(this.matchSyncTimestamp);
             } else {
@@ -3742,15 +4059,15 @@ class HubDbSync {
     // every operator of this chain settles the same matches at the same block. Rejects after
     // timeoutMs so the caller can DEFER the block and retry; never settle against a stale
     // match mirror. Resolves immediately when sync is disabled or the mirror holds no matches.
-    waitForMatchSync(blockTime, timeoutMs) {
+    waitForMatchSync(blockTime, timeoutMs, blockHeight = null) {
         blockTime = Number(blockTime);
         if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.matchSyncTimestamp);
-        if (this._matchSyncSatisfied(blockTime))           return Promise.resolve(this.matchSyncTimestamp);
+        if (this._matchSyncSatisfied(blockTime, blockHeight)) return Promise.resolve(this.matchSyncTimestamp);
 
         let ms = parseInt(timeoutMs);
         if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
         return new Promise((resolve, reject) => {
-            let waiter = { ts: blockTime, resolve: resolve, timer: null };
+            let waiter = { ts: blockTime, height: blockHeight, resolve: resolve, timer: null };
             waiter.timer = setTimeout(async () => {
                 // Self-heal before giving up, same as waitForPriceSyncHeight: a missed
                 // refresh on a stream/reconnect edge can leave matchSyncTimestamp stale
@@ -3758,10 +4075,12 @@ class HubDbSync {
                 // _refreshMatchSyncTimestamp resolves+clears this waiter via
                 // _releaseMatchWaiters if the mirror has since caught up.
                 try { await this._refreshMatchSyncTimestamp(); } catch (e) { /* fall through to reject */ }
-                if (this._matchSyncSatisfied(blockTime)) return;   // already resolved by the refresh
+                if (this._matchSyncSatisfied(blockTime, blockHeight)) return;   // already resolved by the refresh
                 this._matchWaiters = this._matchWaiters.filter(w => w !== waiter);
                 reject(new Error('match sync barrier timed out after ' + ms + 'ms waiting for block_time ' +
-                                 blockTime + ' (match mirror at ' + this.matchSyncTimestamp + ')'));
+                                 blockTime + ' (match mirror at ' + this.matchSyncTimestamp + ')' +
+                                 (this.admissionActiveAt(blockHeight)
+                                     ? this._heightTail('cross_chain_matches', blockHeight) : '')));
             }, ms);
             this._matchWaiters.push(waiter);
         });
@@ -3795,8 +4114,12 @@ class HubDbSync {
         this._releaseCallWaiters();
     }
 
-    _callSyncSatisfied(blockTime) {
+    // ADMISSION ERA: the cross_chain_calls height watermark for this chain has reached
+    // B - 4, replacing both clock cases exactly as the match member above.
+    _callSyncSatisfied(blockTime, blockHeight = null) {
         if (this.callBootstrapped && this.callSyncTimestamp === null) return true;
+        if (this.admissionActiveAt(blockHeight))
+            return this.callBootstrapped && this._heightSatisfied('cross_chain_calls', blockHeight);
         if (this.callSyncTimestamp !== null && this.callSyncTimestamp >= blockTime) return true;
         // Stream watermark escape: a relay row is broadcast the moment the hub
         // finalizes it, so a watermark past this block's time plus the grace means
@@ -3817,7 +4140,7 @@ class HubDbSync {
         if (this._callWaiters.length === 0) return;
         let stillWaiting = [];
         for (let w of this._callWaiters) {
-            if (this._callSyncSatisfied(w.ts)) {
+            if (this._callSyncSatisfied(w.ts, w.height)) {
                 clearTimeout(w.timer);
                 w.resolve(this.callSyncTimestamp);
             } else {
@@ -3831,15 +4154,15 @@ class HubDbSync {
     // cross_chain_calls copy holds every relay row effective at or before this block's
     // time, so every operator injects/delivers the same calls at the same block. Rejects
     // after timeoutMs so the caller can DEFER the block and retry.
-    waitForCallSync(blockTime, timeoutMs) {
+    waitForCallSync(blockTime, timeoutMs, blockHeight = null) {
         blockTime = Number(blockTime);
         if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.callSyncTimestamp);
-        if (this._callSyncSatisfied(blockTime))            return Promise.resolve(this.callSyncTimestamp);
+        if (this._callSyncSatisfied(blockTime, blockHeight)) return Promise.resolve(this.callSyncTimestamp);
 
         let ms = parseInt(timeoutMs);
         if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
         return new Promise((resolve, reject) => {
-            let waiter = { ts: blockTime, resolve: resolve, timer: null };
+            let waiter = { ts: blockTime, height: blockHeight, resolve: resolve, timer: null };
             waiter.timer = setTimeout(async () => {
                 // Self-heal before giving up, same as waitForPriceSyncHeight: a missed
                 // refresh on a stream/reconnect edge can leave callSyncTimestamp stale
@@ -3847,10 +4170,12 @@ class HubDbSync {
                 // _refreshCallSyncTimestamp resolves+clears this waiter via
                 // _releaseCallWaiters if the mirror has since caught up.
                 try { await this._refreshCallSyncTimestamp(); } catch (e) { /* fall through to reject */ }
-                if (this._callSyncSatisfied(blockTime)) return;   // already resolved by the refresh
+                if (this._callSyncSatisfied(blockTime, blockHeight)) return;   // already resolved by the refresh
                 this._callWaiters = this._callWaiters.filter(w => w !== waiter);
                 reject(new Error('call sync barrier timed out after ' + ms + 'ms waiting for block_time ' +
-                                 blockTime + ' (call mirror at ' + this.callSyncTimestamp + ')'));
+                                 blockTime + ' (call mirror at ' + this.callSyncTimestamp + ')' +
+                                 (this.admissionActiveAt(blockHeight)
+                                     ? this._heightTail('cross_chain_calls', blockHeight) : '')));
             }, ms);
             this._callWaiters.push(waiter);
         });
@@ -3889,8 +4214,12 @@ class HubDbSync {
         this._releaseBridgeWaiters();
     }
 
-    _bridgeSyncSatisfied(blockTime) {
+    // ADMISSION ERA: the bridge_transfers height watermark for this chain has reached B - 4,
+    // replacing both clock cases exactly as the match and call members above.
+    _bridgeSyncSatisfied(blockTime, blockHeight = null) {
         if (this.bridgeBootstrapped && this.bridgeSyncTimestamp === null) return true;
+        if (this.admissionActiveAt(blockHeight))
+            return this.bridgeBootstrapped && this._heightSatisfied('bridge_transfers', blockHeight);
         if (this.bridgeSyncTimestamp !== null && this.bridgeSyncTimestamp >= blockTime) return true;
         // Stream watermark escape: a transfer is broadcast the moment the hub finalizes it,
         // and its effective_time is stamped FORWARD (now + the destination's relay margin
@@ -3909,7 +4238,7 @@ class HubDbSync {
         if (this._bridgeWaiters.length === 0) return;
         let stillWaiting = [];
         for (let w of this._bridgeWaiters) {
-            if (this._bridgeSyncSatisfied(w.ts)) {
+            if (this._bridgeSyncSatisfied(w.ts, w.height)) {
                 clearTimeout(w.timer);
                 w.resolve(this.bridgeSyncTimestamp);
             } else {
@@ -3924,25 +4253,27 @@ class HubDbSync {
     // so every operator of this chain mints the same bridged credits at the same block.
     // Rejects after timeoutMs so the caller can DEFER the block and retry; never mint
     // against a stale transfer mirror.
-    waitForBridgeSync(blockTime, timeoutMs) {
+    waitForBridgeSync(blockTime, timeoutMs, blockHeight = null) {
         blockTime = Number(blockTime);
         if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.bridgeSyncTimestamp);
-        if (this._bridgeSyncSatisfied(blockTime))          return Promise.resolve(this.bridgeSyncTimestamp);
+        if (this._bridgeSyncSatisfied(blockTime, blockHeight)) return Promise.resolve(this.bridgeSyncTimestamp);
 
         let ms = parseInt(timeoutMs);
         if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
         return new Promise((resolve, reject) => {
-            let waiter = { ts: blockTime, resolve: resolve, timer: null };
+            let waiter = { ts: blockTime, height: blockHeight, resolve: resolve, timer: null };
             waiter.timer = setTimeout(async () => {
                 // Self-heal before giving up, same as the match and call barriers: a missed
                 // refresh on a stream/reconnect edge can leave bridgeSyncTimestamp stale
                 // behind a mirror that is actually current. _refreshBridgeSyncTimestamp
                 // resolves and clears this waiter via _releaseBridgeWaiters if so.
                 try { await this._refreshBridgeSyncTimestamp(); } catch (e) { /* fall through to reject */ }
-                if (this._bridgeSyncSatisfied(blockTime)) return;  // already resolved by the refresh
+                if (this._bridgeSyncSatisfied(blockTime, blockHeight)) return;  // already resolved by the refresh
                 this._bridgeWaiters = this._bridgeWaiters.filter(w => w !== waiter);
                 reject(new Error('bridge sync barrier timed out after ' + ms + 'ms waiting for block_time ' +
-                                 blockTime + ' (bridge mirror at ' + this.bridgeSyncTimestamp + ')'));
+                                 blockTime + ' (bridge mirror at ' + this.bridgeSyncTimestamp + ')' +
+                                 (this.admissionActiveAt(blockHeight)
+                                     ? this._heightTail('bridge_transfers', blockHeight) : '')));
             }, ms);
             this._bridgeWaiters.push(waiter);
         });
@@ -3974,8 +4305,15 @@ class HubDbSync {
         this._releasePolicyWaiters();
     }
 
-    _policySyncSatisfied(blockTime) {
+    // ADMISSION ERA: the policy_snapshots height watermark for this chain has reached B - 4.
+    // This is the rail where the per-chain MAP matters most: a policy snapshot's read scope is
+    // EVERY chain with no clause at all, so its map must name every chain the federation
+    // serves, and a chain the map omits binds by the legacy rule on this rail rather than
+    // being admitted by somebody else's height.
+    _policySyncSatisfied(blockTime, blockHeight = null) {
         if (this.policyBootstrapped && this.policySyncTimestamp === null) return true;
+        if (this.admissionActiveAt(blockHeight))
+            return this.policyBootstrapped && this._heightSatisfied('policy_snapshots', blockHeight);
         if (this.policySyncTimestamp !== null && this.policySyncTimestamp >= blockTime) return true;
         // Stream watermark escape, exactly as above. Note the cached scalar is a MAX over a
         // column that is NOT monotonic across policy_seq: a later seq can carry an EARLIER
@@ -3992,7 +4330,7 @@ class HubDbSync {
         if (this._policyWaiters.length === 0) return;
         let stillWaiting = [];
         for (let w of this._policyWaiters) {
-            if (this._policySyncSatisfied(w.ts)) {
+            if (this._policySyncSatisfied(w.ts, w.height)) {
                 clearTimeout(w.timer);
                 w.resolve(this.policySyncTimestamp);
             } else {
@@ -4007,21 +4345,23 @@ class HubDbSync {
     // so every operator of this chain materializes the same membership at the same block.
     // Rejects after timeoutMs so the caller can DEFER the block and retry; never materialize
     // a token policy against a stale snapshot mirror.
-    waitForPolicySync(blockTime, timeoutMs) {
+    waitForPolicySync(blockTime, timeoutMs, blockHeight = null) {
         blockTime = Number(blockTime);
         if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.policySyncTimestamp);
-        if (this._policySyncSatisfied(blockTime))          return Promise.resolve(this.policySyncTimestamp);
+        if (this._policySyncSatisfied(blockTime, blockHeight)) return Promise.resolve(this.policySyncTimestamp);
 
         let ms = parseInt(timeoutMs);
         if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
         return new Promise((resolve, reject) => {
-            let waiter = { ts: blockTime, resolve: resolve, timer: null };
+            let waiter = { ts: blockTime, height: blockHeight, resolve: resolve, timer: null };
             waiter.timer = setTimeout(async () => {
                 try { await this._refreshPolicySyncTimestamp(); } catch (e) { /* fall through to reject */ }
-                if (this._policySyncSatisfied(blockTime)) return;  // already resolved by the refresh
+                if (this._policySyncSatisfied(blockTime, blockHeight)) return;  // already resolved by the refresh
                 this._policyWaiters = this._policyWaiters.filter(w => w !== waiter);
                 reject(new Error('policy sync barrier timed out after ' + ms + 'ms waiting for block_time ' +
-                                 blockTime + ' (policy mirror at ' + this.policySyncTimestamp + ')'));
+                                 blockTime + ' (policy mirror at ' + this.policySyncTimestamp + ')' +
+                                 (this.admissionActiveAt(blockHeight)
+                                     ? this._heightTail('policy_snapshots', blockHeight) : '')));
             }, ms);
             this._policyWaiters.push(waiter);
         });
@@ -4037,12 +4377,36 @@ class HubDbSync {
     // ledger hash differs from its peers' for the same BTC block, which is exactly the
     // divergence the maturity re-keying exists to remove.
     //
+    // TWO INDEPENDENT COMPLETENESS CERTIFICATES, and this member is the only one that carries
+    // both. It is the only member whose rows already bind by HEIGHT rather than by a signed
+    // time (the derive pass reads exactly `snapshot_block <= B - ANCHOR_REWARD_MIRROR_MATURITY`),
+    // and it is also the one member where the family's height rule is measurably WORSE than
+    // the clock it replaces, because the hub cannot advance that rail's height watermark past
+    // a snapshot whose deferred reward-attest entry is still queued and that queue's TTL is
+    // 6 h against today's 7320 s. So both are kept and EITHER satisfies:
+    //
+    //   THE HORIZON BOUND. The derive pass at B reads only rows whose snapshot_block is 144
+    //   blocks back, and the hub wrote every one of those no later than
+    //   time(snapshot_block) + its whole measured write-lag envelope. So a watermark past
+    //   horizonTime + ANCHOR_ATTEST_ARRIVAL_MARGIN_S certifies the same completeness the
+    //   block's own stamp does, and does it from a stamp roughly a day old that no miner of
+    //   THIS block chose. The min() is what makes this safe to reason about: the target can
+    //   only ever be EARLIER than blockTime, so every case that passes today keeps passing
+    //   and nothing that defers today starts committing.
+    //
+    //   THE HEIGHT WATERMARK. Above the mirror-admission activation, an
+    //   anchor_reward_attestations entry at or past B - 144 says every round that could stamp
+    //   a row admissible at B has terminated, which is the same claim with no clock in it.
+    //
+    // Keeping both is R3 (b), and the OR is what preserves the horizon form's strict-relaxation
+    // property: a height watermark held by one stuck DOGE anchor cannot make this barrier hold
+    // a block the clock form would have released.
+    //
     // No row-content watermark is possible here. These rows carry no effective_time, and
     // their arrival is governed by DOGE confirmation depth and hub failover, neither of
-    // which is comparable to a BTC block height or time. So the barrier gates on the STREAM
+    // which is comparable to a BTC block height or time. So the clock half gates on the STREAM
     // watermark alone: "the hub has told me I hold everything it produced up to this
-    // block's time." That is a strictly stronger claim than the maturity window needs (the
-    // rows in question were written roughly a day earlier), which is the point.
+    // block's time (or up to the maturity horizon, whichever is earlier)."
     //
     // Disabled sync is satisfied by definition: with no mirror the indexer reads the hub's
     // MariaDB directly, so there is no delivery lag to wait out. Poll mode is NOT satisfied
@@ -4050,18 +4414,30 @@ class HubDbSync {
     // poll cannot observe an in-place upsert), and the barrier's timeout then defers the
     // block, which is the correct fail-closed outcome for a node that cannot certify
     // completeness at all.
-    _anchorAttestSyncSatisfied(blockTime) {
+    // `horizonBound` is time(B - 144) + ANCHOR_ATTEST_ARRIVAL_MARGIN_S, computed by the caller
+    // and passed as a NUMBER so this module gains no dependency on the activation module or
+    // the margin constant. A null or non-finite bound is the LEGACY form, fail-closed, and it
+    // has to be: `Number(false)` is 0, and the decoder returns literal `false` for a block it
+    // cannot serve, so a coercing guard would silently open this barrier at
+    // `watermark >= margin + grace` on every decoder gap above height 144.
+    _anchorAttestSyncSatisfied(blockTime, horizonBound = null, blockHeight = null) {
         if (!this.enabled) return true;
         blockTime = Number(blockTime);
         if (!Number.isFinite(blockTime)) return true;
-        return this.streamWatermark >= blockTime + this.anchorAttestWatermarkGraceS;
+        if (this.admissionActiveAt(blockHeight) &&
+            this._heightSatisfied('anchor_reward_attestations', blockHeight)) return true;
+        // typeof, not Number(): `Number(false)` is 0 and passes a bare isFinite check, and
+        // `false` is exactly what getBlockTime returns for a block it cannot serve.
+        let usable = (typeof horizonBound === 'number') && Number.isFinite(horizonBound);
+        let target = usable ? Math.min(blockTime, horizonBound) : blockTime;
+        return this.streamWatermark >= target + this.anchorAttestWatermarkGraceS;
     }
 
     _releaseAnchorAttestWaiters() {
         if (!this._anchorAttestWaiters || this._anchorAttestWaiters.length === 0) return;
         let stillWaiting = [];
         for (let w of this._anchorAttestWaiters) {
-            if (this._anchorAttestSyncSatisfied(w.ts)) {
+            if (this._anchorAttestSyncSatisfied(w.ts, w.bound, w.height)) {
                 clearTimeout(w.timer);
                 w.resolve(this.streamWatermark);
             } else {
@@ -4075,20 +4451,30 @@ class HubDbSync {
     // mirror is certified caught up through blockTime; rejects after timeoutMs so the
     // caller DEFERS the block and retries it (never advancing past a maturity boundary it
     // cannot prove it holds the rows for).
-    waitForAnchorAttestationSync(blockTime, timeoutMs) {
+    waitForAnchorAttestationSync(blockTime, timeoutMs, horizonBound = null, blockHeight = null) {
         blockTime = Number(blockTime);
         if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.streamWatermark);
-        if (this._anchorAttestSyncSatisfied(blockTime))    return Promise.resolve(this.streamWatermark);
+        if (this._anchorAttestSyncSatisfied(blockTime, horizonBound, blockHeight))
+            return Promise.resolve(this.streamWatermark);
 
         let ms = parseInt(timeoutMs);
         if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
+        const boundApplied = (typeof horizonBound === 'number') && Number.isFinite(horizonBound);
         return new Promise((resolve, reject) => {
-            let waiter = { ts: blockTime, resolve: resolve, timer: null };
+            let waiter = { ts: blockTime, bound: horizonBound, height: blockHeight, resolve: resolve, timer: null };
             waiter.timer = setTimeout(() => {
                 this._anchorAttestWaiters = this._anchorAttestWaiters.filter(w => w !== waiter);
+                // The prefix through `block_time <t>` is byte-identical to what it has always
+                // been: two unit tests and an operator's grep both key on it. The horizon
+                // clause is added only when a bound actually applied, so the message says
+                // which rule held the block rather than leaving the reader to guess.
                 reject(new Error('anchor-reward attestation mirror barrier timed out after ' + ms +
                                  'ms waiting for block_time ' + blockTime +
-                                 ' (stream watermark at ' + this.streamWatermark + ')'));
+                                 (boundApplied ? ' (horizon bound ' + horizonBound + ', stream watermark at ' +
+                                                 this.streamWatermark + ')'
+                                               : ' (stream watermark at ' + this.streamWatermark + ')') +
+                                 (this.admissionActiveAt(blockHeight)
+                                     ? this._heightTail('anchor_reward_attestations', blockHeight) : '')));
             }, ms);
             this._anchorAttestWaiters.push(waiter);
         });
@@ -4118,8 +4504,19 @@ class HubDbSync {
     //
     // Disabled sync is satisfied by definition: with no mirror the indexer reads the hub's
     // MariaDB directly, so there is no delivery lag to wait out.
-    _attestResponseSyncSatisfied(blockTime) {
+    // ADMISSION ERA: the attestation_responses height watermark for this chain has reached
+    // B - 1. The margin is ONE block, not the default four, because that rail's 120 s forward
+    // margin was itself chosen to be as short as the propagation window allows: callback
+    // latency is what the attest-response design exists to remove.
+    //
+    // It REPLACES the watermark comparison rather than joining it, and there is still no
+    // escape of any kind: an empty mirror is indistinguishable from a mirror that has not
+    // been told about the row binding at this very block, so absence defers here as it always
+    // has, now under the height rule instead of the clock.
+    _attestResponseSyncSatisfied(blockTime, blockHeight = null) {
         if (!this.enabled) return true;
+        if (this.admissionActiveAt(blockHeight))
+            return this._heightSatisfied('attestation_responses', blockHeight);
         blockTime = Number(blockTime);
         if (!Number.isFinite(blockTime)) return true;
         return this.streamWatermark >= blockTime + this.attestResponseWatermarkGraceS;
@@ -4129,7 +4526,7 @@ class HubDbSync {
         if (!this._attestResponseWaiters || this._attestResponseWaiters.length === 0) return;
         let stillWaiting = [];
         for (let w of this._attestResponseWaiters) {
-            if (this._attestResponseSyncSatisfied(w.ts)) {
+            if (this._attestResponseSyncSatisfied(w.ts, w.height)) {
                 clearTimeout(w.timer);
                 w.resolve(this.streamWatermark);
             } else {
@@ -4143,20 +4540,22 @@ class HubDbSync {
     // is certified caught up through blockTime; rejects after timeoutMs so the caller
     // DEFERS the block and retries it, never binding a response set it cannot prove is
     // complete.
-    waitForAttestationResponseSync(blockTime, timeoutMs) {
+    waitForAttestationResponseSync(blockTime, timeoutMs, blockHeight = null) {
         blockTime = Number(blockTime);
         if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.streamWatermark);
-        if (this._attestResponseSyncSatisfied(blockTime))  return Promise.resolve(this.streamWatermark);
+        if (this._attestResponseSyncSatisfied(blockTime, blockHeight)) return Promise.resolve(this.streamWatermark);
 
         let ms = parseInt(timeoutMs);
         if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
         return new Promise((resolve, reject) => {
-            let waiter = { ts: blockTime, resolve: resolve, timer: null };
+            let waiter = { ts: blockTime, height: blockHeight, resolve: resolve, timer: null };
             waiter.timer = setTimeout(() => {
                 this._attestResponseWaiters = this._attestResponseWaiters.filter(w => w !== waiter);
                 reject(new Error('attestation response mirror barrier timed out after ' + ms +
                                  'ms waiting for block_time ' + blockTime +
-                                 ' (stream watermark at ' + this.streamWatermark + ')'));
+                                 ' (stream watermark at ' + this.streamWatermark + ')' +
+                                 (this.admissionActiveAt(blockHeight)
+                                     ? this._heightTail('attestation_responses', blockHeight) : '')));
             }, ms);
             this._attestResponseWaiters.push(waiter);
         });
@@ -4181,19 +4580,44 @@ class HubDbSync {
     // blockTime for this coin has its cross_chain snapshot mirrored locally. A query
     // error (table not ready) reads as NOT satisfied so the barrier waits rather than
     // letting a block settle against a missing snapshot.
-    async _snapshotSyncSatisfied(blockTime) {
+    //
+    // THE SCOPE FILTER MOVES WITH MEMBERS 4 AND 5, and that is not optional (C7). This barrier
+    // is content-keyed, so it never stalls on a future stamp, but its "which rows are in
+    // scope" filter is `effective_time <= t(B)`, the very predicate the admission era
+    // replaces. Left on the clock while the match and call members bind by height, one node's
+    // snapshot scope disagrees with its own match set, and a match settles at a height its
+    // peers do not agree on: a FORK rather than a stall.
+    //
+    // The admission-era filter is the C33 form and never a bare comparison on a nullable
+    // column: `(admit_block_<c> IS NULL AND effective_time <= ?) OR (admit_block_<c> IS NOT
+    // NULL AND admit_block_<c> <= ?)`. A bare `admit_block_<c> <= ?` evaluates to NULL for
+    // every legacy row, silently drops it from the scope, and is a silent consensus change;
+    // this codebase carries the written case study of exactly that failure. The rule holds at
+    // EVERY height, so a row finalized below the producer activation and a row whose map
+    // simply does not name this chain both bind here exactly as they do today.
+    async _snapshotSyncSatisfied(blockTime, blockHeight = null) {
         if (!this.enabled) return true;
         blockTime = Number(blockTime);
-        if (!Number.isFinite(blockTime)) return true;
+        const admission = this.admissionActiveAt(blockHeight);
+        if (!admission && !Number.isFinite(blockTime)) return true;
+        if (admission && !Number.isFinite(Number(blockHeight))) return false;   // fail closed
         try {
-            // Any finalized, effective match (for this coin) whose snapshot_block has no
+            // The scope clause and its bindings, one per table alias. Below the activation
+            // this is the byte-identical `effective_time <= ?` the barrier has always used.
+            const scope = (alias) => admission
+                ? '(' + alias + '.' + this._admitColumn() + ' IS NULL AND ' + alias + '.effective_time <= ?) OR (' +
+                  alias + '.' + this._admitColumn() + ' IS NOT NULL AND ' + alias + '.' + this._admitColumn() + ' <= ?)'
+                : alias + '.effective_time <= ?';
+            const scopeArgs = admission ? [blockTime, Number(blockHeight)] : [blockTime];
+
+            // Any finalized, in-scope match (for this coin) whose snapshot_block has no
             // mirrored cross_chain capability_snapshots row → not yet satisfied. coin is
             // optional: without it, fall back to a (safe) superset over all chains.
             let coinClause = this.coin ? 'AND (m.a_chain = ? OR m.b_chain = ?)' : '';
-            let args = this.coin ? [blockTime, this.coin, this.coin] : [blockTime];
+            let args = this.coin ? scopeArgs.concat([this.coin, this.coin]) : scopeArgs.slice();
             let missing = await this.hubDb.doQuery(
                 "SELECT 1 FROM cross_chain_matches m " +
-                "WHERE m.status = 'finalized' AND m.effective_time <= ? " + coinClause + " " +
+                "WHERE m.status = 'finalized' AND (" + scope('m') + ") " + coinClause + " " +
                 "AND NOT EXISTS (SELECT 1 FROM capability_snapshots s " +
                 "                WHERE s.snapshot_block = m.snapshot_block AND s.capability = 'cross_chain') " +
                 "LIMIT 1", args);
@@ -4202,10 +4626,10 @@ class HubDbSync {
             // (dispatches targeting it + results it originated); xexec.js /
             // xcall.processResult verify signatures against these snapshots.
             let callClause = this.coin ? 'AND (c.target_chain = ? OR c.source_chain = ?)' : '';
-            let callArgs = this.coin ? [blockTime, this.coin, this.coin] : [blockTime];
+            let callArgs = this.coin ? scopeArgs.concat([this.coin, this.coin]) : scopeArgs.slice();
             let missingCalls = await this.hubDb.doQuery(
                 "SELECT 1 FROM cross_chain_calls c " +
-                "WHERE c.status = 'finalized' AND c.effective_time <= ? " + callClause + " " +
+                "WHERE c.status = 'finalized' AND (" + scope('c') + ") " + callClause + " " +
                 "AND NOT EXISTS (SELECT 1 FROM capability_snapshots s " +
                 "                WHERE s.snapshot_block = c.snapshot_block AND s.capability = 'cross_chain') " +
                 "LIMIT 1", callArgs);
@@ -4215,11 +4639,22 @@ class HubDbSync {
         }
     }
 
+    // This chain's admission column on the mirrored cross-chain tables, `admit_block_<c>` in
+    // the hub's own DDL spelling. Built from the coin rather than interpolated from anything
+    // that reaches this process over the wire, exactly like RETRACTION_COLUMNS above: a column
+    // name is never taken from a frame. The columns themselves arrive with the indexer's dated
+    // admission migration; nothing reads them below the activation, which is every network in
+    // this train.
+    _admitColumn() {
+        const chain = this._admissionChain();
+        return 'admit_block_' + (chain === null ? 'btc' : chain.toLowerCase());
+    }
+
     async _releaseSnapshotWaiters() {
         if (this._snapshotWaiters.length === 0) return;
         let stillWaiting = [];
         for (let w of this._snapshotWaiters) {
-            if (await this._snapshotSyncSatisfied(w.ts)) {
+            if (await this._snapshotSyncSatisfied(w.ts, w.height)) {
                 clearTimeout(w.timer);
                 w.resolve(true);
             } else {
@@ -4233,15 +4668,15 @@ class HubDbSync {
     // coin has its capability snapshot mirrored. Rejects after timeoutMs so the caller
     // DEFERS the block (counter not advanced) and retries; never settling a match whose
     // snapshot is missing. Resolves immediately when sync is disabled or already satisfied.
-    async waitForSnapshotSync(blockTime, timeoutMs) {
+    async waitForSnapshotSync(blockTime, timeoutMs, blockHeight = null) {
         blockTime = Number(blockTime);
         if (!this.enabled || !Number.isFinite(blockTime)) return true;
-        if (await this._snapshotSyncSatisfied(blockTime))     return true;
+        if (await this._snapshotSyncSatisfied(blockTime, blockHeight)) return true;
 
         let ms = parseInt(timeoutMs);
         if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
         return new Promise((resolve, reject) => {
-            let waiter = { ts: blockTime, resolve: resolve, timer: null };
+            let waiter = { ts: blockTime, height: blockHeight, resolve: resolve, timer: null };
             waiter.timer = setTimeout(async () => {
                 // Self-heal before giving up, same intent as the scalar barriers above.
                 // Snapshot-presence is set-dependent (recomputed by a live query rather
@@ -4250,7 +4685,7 @@ class HubDbSync {
                 // waiter armed until the timeout. Re-evaluate against the mirror here;
                 // _releaseSnapshotWaiters resolves+clears this waiter if satisfied now.
                 try { await this._releaseSnapshotWaiters(); } catch (e) { /* fall through to reject */ }
-                if (await this._snapshotSyncSatisfied(blockTime)) return;   // already resolved by the refresh
+                if (await this._snapshotSyncSatisfied(blockTime, blockHeight)) return;   // already resolved by the refresh
                 this._snapshotWaiters = this._snapshotWaiters.filter(w => w !== waiter);
                 reject(new Error('snapshot sync barrier timed out after ' + ms + 'ms waiting for block_time ' +
                                  blockTime + ' (a cross-chain match is missing its capability snapshot)'));
@@ -4455,6 +4890,11 @@ class HubDbSync {
                     // this subscription may not be local yet. Bootstrap responses
                     // carry their own watermark (advanced only on a full drain).
                     if (event.watermark) this._readyWatermark = Number(event.watermark);
+                    // Same rule for the height map it carries: stashed, not installed. It is
+                    // the fallback the drain installs when the snapshot pages carried none,
+                    // which is what keeps a reconnect from waiting a whole heartbeat interval
+                    // for its first heights map.
+                    this._readyHeights = sanitizeHeights(event.heights);
                     settle(resolve, event);
                     return;
                 }
@@ -4481,7 +4921,7 @@ class HubDbSync {
                             // refuses is the evidence the stall detector runs on: without
                             // it a frozen watermark is indistinguishable from a quiet hub.
                             this._noteHubTip(event.ts);
-                            if (this._bootstrapDrained && !this._schemaMismatchSeen) this._advanceWatermark(event.ts);
+                            this._handleWatermarkFrame(event);
                         } else if (event.type === 'row:inserted' || event.type === 'row:deleted') {
                             // Schema fail-closed check, price-event buffering
                             // (#2422), and the apply-and-refresh path all live
@@ -4502,6 +4942,12 @@ class HubDbSync {
                 // close the heartbeat gate (and freeze the watermark) until the
                 // reconnect re-bootstrap has drained the gap.
                 this._bootstrapDrained = false;
+                // The height watermark dies with the socket for the same reason the heartbeat
+                // gate does: it certifies delivery on THIS connection, and rows produced while
+                // disconnected have not arrived. A stale map left standing would let a
+                // re-keyed barrier open over exactly that gap.
+                this.heightWatermarks = {};
+                this._readyHeights    = null;
                 // Price events buffered for the drain die with the socket: their
                 // inserts re-page via the re-bootstrap and their deletions are
                 // redelivered by the hub's deferred-retraction path (item 5296).
@@ -4840,6 +5286,11 @@ module.exports.HUB_SYNC_WATERMARK_STALL_EXIT_S = HUB_SYNC_WATERMARK_STALL_EXIT_S
 module.exports.WATERMARK_STALL_CHECK_MS        = WATERMARK_STALL_CHECK_MS;
 module.exports.resolveWatermarkStallMs         = resolveWatermarkStallMs;
 module.exports.watermarkStallVerdict           = watermarkStallVerdict;
+
+// The height watermark's two pure helpers, exported so the wire-shape rules (what counts as
+// a height, what counts as an advance) are drivable without a socket, a DB or a real clock.
+module.exports.sanitizeHeights                 = sanitizeHeights;
+module.exports.heightsAdvanced                 = heightsAdvanced;
 // The batch's chunk size and the drain's progress cadence, plus the shared upsert
 // builder: exported so the test can prove the batched statement and the per-row
 // statement are the same statement, which is the only thing keeping the ODKU body

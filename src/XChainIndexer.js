@@ -39,6 +39,13 @@ const HubDbSync    = require('./hub_db_sync.js');
 const { HUB_SYNC_WATERMARK_GRACE_S, resolveWatermarkGrace,
         HUB_SYNC_BARRIER_HOLD_CEILING_S, resolveBarrierHoldCeilingMs } = require('./hub_db_sync.js');
 const anchorRewardDerive = require('./anchor_reward_derive.js');
+// The anchor-attest maturity-horizon bound (the parent barrier spec's D-B) and the
+// mirror-admission family's consumer gate. Both are read HERE rather than inside
+// hub_db_sync.js for the horizon half: the caller computes a plain number and passes it, so
+// the mirror client stays dependency-free and re-vendorable into the explorer unchanged.
+const { ANCHOR_ATTEST_ARRIVAL_MARGIN_S, ANCHOR_REWARD_MIRROR_MATURITY,
+        isAnchorAttestBarrierHorizonActive } = require('./anchor_reward_activation.js');
+const { isMirrorAdmissionConsumerActive } = require('./mirror_admission_activation.js');
 const AnchorProofClient  = require('./anchor_proof_client.js');
 const bridgeSettle       = require('./bridge_settle.js');
 const rollcallClose      = require('./rollcall_close.js');
@@ -431,6 +438,18 @@ class XChainIndexer {
         // startup, never inside the block loop, so an invalid regtest override throws at boot
         // (resolveWatermarkGrace's contract) instead of wedging the tip mid-run.
         this.directCallGraceS = null;
+
+        // Arrival margin (seconds) for the anchor-attest barrier's MATURITY HORIZON bound.
+        // Resolved in start() beside directCallGraceS and for the identical reason: it is a
+        // consensus input (it moves which nodes may advance past a maturity boundary), so it
+        // is resolved ONCE at startup through resolveWatermarkGrace's regtest-only contract
+        // rather than re-read inside the block loop, and an invalid regtest override throws at
+        // boot instead of stamping NaN into the bound and wedging the tip.
+        //
+        // Deliberately NOT a member of HUB_SYNC_WATERMARK_GRACE_S: the armed-mirror venue
+        // enumerates that table's keys and pins every one to 0, which would silently zero this
+        // margin on every venue run and make the horizon bound an unconditional relaxation.
+        this.anchorAttestArrivalMarginS = null;
     }
 
     // Handle indicating if indexer is synced
@@ -569,6 +588,82 @@ class XChainIndexer {
         let graceS = Number(this.hubDbSync[graceField]);
         if(!Number.isFinite(graceS)) graceS = 0;
         return (blockTime + graceS) * 1000;
+    }
+
+    // The same verdict for a barrier that may have been RE-KEYED onto a height.
+    //
+    // Above the mirror-admission activation the answer is null, and that null is load-bearing
+    // rather than cosmetic. stallClearsAt exists to name the first instant a CLOCK-keyed
+    // barrier can open; a height-keyed one has no such instant, because nothing in its
+    // predicate moves with wall clock. Reporting `blockTime + grace` anyway would be a lie
+    // with consequences: waitingOnFutureBlock() would answer 'future_block_wait' until that
+    // instant, nextBarrierHold() would refuse to accumulate a hold, and the 900 s ceiling
+    // could never fire on the one barrier whose stall is now genuine mirror lag and IS
+    // remediable by a resync. Null is what turns this stall from "healthy, self-clearing" into
+    // "measurable, attributable and self-remedying", which is the whole point of the re-keying.
+    //
+    // Keyed on B, the block being processed, exactly as the predicate is.
+    _barrierClearsAtHeightAware(blockTime, graceField, blockHeight){
+        if(this._mirrorAdmissionActiveAt(blockHeight)) return null;
+        return this._barrierClearsAt(blockTime, graceField);
+    }
+
+    // The anchor-attest barrier's clear instant, bound-aware.
+    //
+    // It MUST move with the predicate, and the reason is not cosmetic. The predicate now opens
+    // at min(blockTime, horizonBound) + grace; leaving this on blockTime + grace would leave
+    // waitingOnFutureBlock() answering 'future_block_wait' for up to two hours after the
+    // barrier itself could open, nextBarrierHold() would stay null across that whole window,
+    // and the 900 s hold ceiling could never fire on the one barrier the horizon bound was
+    // added to un-stall. The grace field is passed by NAME so _barrierClearsAt stays the only
+    // reader of a grace and the barrier-to-grace wiring scan still sees which one this is.
+    _anchorBarrierClearsAt(blockTime, horizonBound, blockHeight, graceField){
+        // Height-keyed above the activation: no clock instant exists, so null, per C8.
+        if(this._mirrorAdmissionActiveAt(blockHeight)) return null;
+        blockTime = Number(blockTime);
+        if(!Number.isFinite(blockTime)) return null;
+        let usable = (typeof horizonBound === 'number') && Number.isFinite(horizonBound);
+        return this._barrierClearsAt(usable ? Math.min(blockTime, horizonBound) : blockTime, graceField);
+    }
+
+    // Whether this chain binds mirrored rows by admission height at block B. Inert on every
+    // network in this train, in which case every barrier above behaves exactly as it does now.
+    _mirrorAdmissionActiveAt(blockHeight){
+        if(blockHeight === null || blockHeight === undefined) return false;
+        return isMirrorAdmissionConsumerActive(this.config['COIN'], this.config['NETWORK'], blockHeight);
+    }
+
+    // The anchor-attest barrier's MATURITY HORIZON bound for block B, or null when it does not
+    // apply. Read through decoderDb.getBlockTime, the one seam every protocol-time read in this
+    // loop already flows through, so the horizon resolves as median-time-past wherever the
+    // block's own time does and the two can never key on different clocks.
+    //
+    // Ordering matters and is not incidental: this runs BEFORE the block's own getBlockTime
+    // read, because that read is a single-entry memo keyed by height. Called after it, this
+    // would evict the memo, and protocol_changes.js re-reads getBlockTime(B) later in the same
+    // block, so every block would pay an extra query (twelve on the networks resolving MTP).
+    //
+    // Returns null, never a coerced number, for: a block below the maturity span (no row can
+    // have snapshot_block <= B - 144 < 0, so both forms are safe there), an inert activation,
+    // and a horizon the decoder cannot serve. That last one is the sharp case: getBlockTime
+    // returns literal `false` for an absent blocks row, and `Number(false)` is 0, so a coercing
+    // guard here would hand the predicate a bound of `0 + margin` and open the barrier at
+    // `watermark >= margin + grace` on any decoder gap above height 144.
+    async _anchorAttestHorizonBound(blockToParse){
+        if(!this.hubDbSync) return null;
+        let b = Number(blockToParse);
+        if(!Number.isFinite(b) || (b - ANCHOR_REWARD_MIRROR_MATURITY) < 0) return null;
+        if(!isAnchorAttestBarrierHorizonActive(this.config['NETWORK'], b)) return null;
+        let margin = Number(this.anchorAttestArrivalMarginS);
+        if(!Number.isFinite(margin)) margin = ANCHOR_ATTEST_ARRIVAL_MARGIN_S;
+        let horizonTime = await this.decoderDb.getBlockTime(b - ANCHOR_REWARD_MIRROR_MATURITY);
+        // The `false` sentinel is rejected BY IDENTITY before any coercion, because that is
+        // the whole trap: Number(false) is 0 and sails through an isFinite guard. A BIGINT the
+        // driver hands back as a digit string is still a real stamp and is accepted.
+        if(typeof horizonTime === 'boolean' || horizonTime === null || horizonTime === undefined) return null;
+        let ht = Number(horizonTime);
+        if(!Number.isFinite(ht)) return null;
+        return ht + margin;
     }
 
     // Fold one poll-loop pass into the mirror-barrier hold, and act when it crosses the
@@ -756,6 +851,11 @@ class XChainIndexer {
         // constant, same env override, same regtest-only rules as the mirrored path.
         this.directCallGraceS = resolveWatermarkGrace(
             HUB_SYNC_WATERMARK_GRACE_S.call, 'HUB_SYNC_CALL_GRACE_S', this.config['NETWORK']);
+
+        // Same shape, same contract, for the anchor-attest maturity-horizon margin: honoured
+        // on regtest, throws on a non-integer there, IGNORED with a warning off regtest.
+        this.anchorAttestArrivalMarginS = resolveWatermarkGrace(
+            ANCHOR_ATTEST_ARRIVAL_MARGIN_S, 'HUB_SYNC_ANCHOR_ATTEST_ARRIVAL_MARGIN_S', this.config['NETWORK']);
 
         // Create instance of the utility class, sharing the indexer's single
         // config object (NOT a fresh getConfig()) so a later hub overlay can't
@@ -1225,6 +1325,12 @@ class XChainIndexer {
                 // node wait for wall clock or read a still-growing mirror window. rawBlockTime
                 // is the block's own stamp, and is what gets PERSISTED and published, so the
                 // timestamp a user sees on a block stays the real one.
+                // The anchor-attest barrier's maturity-horizon bound, resolved BEFORE the
+                // block's own protocol-time read below: getBlockTime memoizes exactly one
+                // height, and taking the horizon afterwards would evict the memo that
+                // protocol_changes.js re-reads later in this same block.
+                let anchorHorizonBound = await this._anchorAttestHorizonBound(blockToParse);
+
                 let blockTime    = await this.decoderDb.getBlockTime(blockToParse);
                 let rawBlockTime = await this.decoderDb.getRawBlockTime(blockToParse);
 
@@ -1335,7 +1441,7 @@ class XChainIndexer {
                 }
                 if(this.hubDbSync && mayReadPrice){
                     try {
-                        await this.hubDbSync.waitForPriceSyncTime(blockTime, this.priceSyncTimeoutMs);
+                        await this.hubDbSync.waitForPriceSyncTime(blockTime, this.priceSyncTimeoutMs, blockToParse);
                     } catch(err){
                         // Same defer semantics as the height barrier above.
                         console.warn('Deferring block ' + blockToParse + ' (price time-sync): ', err);
@@ -1345,7 +1451,7 @@ class XChainIndexer {
                         // passes blockTime + grace; both advance only as real time does. Record
                         // that instant so a future-stamped block is not reported as a wedge
                         // while the wait is expected and self-clearing.
-                        this.stallClearsAt = this._barrierClearsAt(blockTime, 'priceWatermarkGraceS');
+                        this.stallClearsAt = this._barrierClearsAtHeightAware(blockTime, 'priceWatermarkGraceS', blockToParse);
                         break;
                     }
                 }
@@ -1365,14 +1471,14 @@ class XChainIndexer {
                 // here either, and the choke-point assertion covers the rest.
                 if(this.hubDbSync && mayReadPrice){
                     try {
-                        await this.hubDbSync.waitForOracleSyncTimestamp(blockTime, this.priceSyncTimeoutMs);
+                        await this.hubDbSync.waitForOracleSyncTimestamp(blockTime, this.priceSyncTimeoutMs, blockToParse);
                     } catch(err){
                         // Defer the block (same retry semantics as the price barrier above): the
                         // counter is not advanced, so this block is retried rather than settled
                         // against a stale oracle copy. No transaction is open yet.
                         console.warn('Deferring block ' + blockToParse + ' (oracle sync): ', err);
                         this.stallReason = 'oracle_sync_barrier';
-                        this.stallClearsAt = this._barrierClearsAt(blockTime, 'oracleWatermarkGraceS');
+                        this.stallClearsAt = this._barrierClearsAtHeightAware(blockTime, 'oracleWatermarkGraceS', blockToParse);
                         break;
                     }
                 }
@@ -1383,11 +1489,11 @@ class XChainIndexer {
                 // disabled or the mirror holds no cross-chain matches.
                 if(this.hubDbSync){
                     try {
-                        await this.hubDbSync.waitForMatchSync(blockTime, this.priceSyncTimeoutMs);
+                        await this.hubDbSync.waitForMatchSync(blockTime, this.priceSyncTimeoutMs, blockToParse);
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (cross-chain match sync): ', err);
                         this.stallReason = 'match_sync_barrier';
-                        this.stallClearsAt = this._barrierClearsAt(blockTime, 'matchWatermarkGraceS');
+                        this.stallClearsAt = this._barrierClearsAtHeightAware(blockTime, 'matchWatermarkGraceS', blockToParse);
                         break;
                     }
                 }
@@ -1398,7 +1504,7 @@ class XChainIndexer {
                 // sync is disabled or the mirror holds no relay rows.
                 if(this.hubDbSync){
                     try {
-                        await this.hubDbSync.waitForCallSync(blockTime, this.priceSyncTimeoutMs);
+                        await this.hubDbSync.waitForCallSync(blockTime, this.priceSyncTimeoutMs, blockToParse);
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (cross-chain call sync): ', err);
                         this.stallReason = 'call_sync_barrier';
@@ -1407,7 +1513,7 @@ class XChainIndexer {
                         // (hub_db_sync.js HUB_SYNC_WATERMARK_GRACE_S.call). Keying the health
                         // verdict on the match value would mis-time the wedge discriminator the
                         // moment the two constants diverge or a regtest override moves one.
-                        this.stallClearsAt = this._barrierClearsAt(blockTime, 'callWatermarkGraceS');
+                        this.stallClearsAt = this._barrierClearsAtHeightAware(blockTime, 'callWatermarkGraceS', blockToParse);
                         break;
                     }
                 }
@@ -1420,7 +1526,7 @@ class XChainIndexer {
                 // on. No-op when sync is disabled or the mirror holds no transfers.
                 if(this.hubDbSync){
                     try {
-                        await this.hubDbSync.waitForBridgeSync(blockTime, this.priceSyncTimeoutMs);
+                        await this.hubDbSync.waitForBridgeSync(blockTime, this.priceSyncTimeoutMs, blockToParse);
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (bridge transfer sync): ', err);
                         this.stallReason = 'bridge_sync_barrier';
@@ -1428,7 +1534,7 @@ class XChainIndexer {
                         // engine is a third producer with its own effective_time stamping rule,
                         // and sharing another table's grace couples two producers' timing, the
                         // documented mistake the call barrier was split out to end.
-                        this.stallClearsAt = this._barrierClearsAt(blockTime, 'bridgeWatermarkGraceS');
+                        this.stallClearsAt = this._barrierClearsAtHeightAware(blockTime, 'bridgeWatermarkGraceS', blockToParse);
                         break;
                     }
                 }
@@ -1441,11 +1547,11 @@ class XChainIndexer {
                 // would let one node admit a transfer another node's membership refuses.
                 if(this.hubDbSync){
                     try {
-                        await this.hubDbSync.waitForPolicySync(blockTime, this.priceSyncTimeoutMs);
+                        await this.hubDbSync.waitForPolicySync(blockTime, this.priceSyncTimeoutMs, blockToParse);
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (policy snapshot sync): ', err);
                         this.stallReason = 'policy_sync_barrier';
-                        this.stallClearsAt = this._barrierClearsAt(blockTime, 'policyWatermarkGraceS');
+                        this.stallClearsAt = this._barrierClearsAtHeightAware(blockTime, 'policyWatermarkGraceS', blockToParse);
                         break;
                     }
                 }
@@ -1494,11 +1600,12 @@ class XChainIndexer {
                 // boundary with a stale mirror.
                 if(this.hubDbSync && this.config['COIN'] === 'BTC'){
                     try {
-                        await this.hubDbSync.waitForAnchorAttestationSync(blockTime, this.priceSyncTimeoutMs);
+                        await this.hubDbSync.waitForAnchorAttestationSync(blockTime, this.priceSyncTimeoutMs, anchorHorizonBound, blockToParse);
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (anchor-reward attestation mirror): ', err);
                         this.stallReason = 'anchor_attest_barrier';
-                        this.stallClearsAt = this._barrierClearsAt(blockTime, 'anchorAttestWatermarkGraceS');
+                        this.stallClearsAt = this._anchorBarrierClearsAt(
+                            blockTime, anchorHorizonBound, blockToParse, 'anchorAttestWatermarkGraceS');
                         break;
                     }
                 }
@@ -1516,11 +1623,11 @@ class XChainIndexer {
                 // because all attestation stake and every request lives on BTC.
                 if(this.hubDbSync && this.config['COIN'] === 'BTC'){
                     try {
-                        await this.hubDbSync.waitForAttestationResponseSync(blockTime, this.priceSyncTimeoutMs);
+                        await this.hubDbSync.waitForAttestationResponseSync(blockTime, this.priceSyncTimeoutMs, blockToParse);
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (attestation response mirror): ', err);
                         this.stallReason = 'attest_response_sync_barrier';
-                        this.stallClearsAt = this._barrierClearsAt(blockTime, 'attestResponseWatermarkGraceS');
+                        this.stallClearsAt = this._barrierClearsAtHeightAware(blockTime, 'attestResponseWatermarkGraceS', blockToParse);
                         break;
                     }
                 }
@@ -1531,7 +1638,7 @@ class XChainIndexer {
                 // for a missing snapshot. Defers the block on timeout, same as the barriers above.
                 if(this.hubDbSync){
                     try {
-                        await this.hubDbSync.waitForSnapshotSync(blockTime, this.priceSyncTimeoutMs);
+                        await this.hubDbSync.waitForSnapshotSync(blockTime, this.priceSyncTimeoutMs, blockToParse);
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (cross-chain snapshot sync): ', err);
                         this.stallReason = 'snapshot_sync_barrier';

@@ -357,7 +357,7 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
     it('mirrorStatus reports an honest disabled shape when no hub is configured', function () {
         const sync = new HubDbSync(null, {});
         assert.deepStrictEqual(sync.mirrorStatus(),
-            { configured: false, connected: false, bootstrapped: false, streamWatermark: null, tables: {} });
+            { configured: false, connected: false, bootstrapped: false, streamWatermark: null, tables: {}, heights: {} });
     });
 
     it('mirrorStatus reports disconnected while enabled and no socket has opened', function () {

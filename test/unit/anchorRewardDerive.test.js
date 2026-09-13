@@ -377,3 +377,90 @@ describe('anchor_reward_derive (BTC-side derivation) @regression @tier2', functi
         });
     });
 });
+
+// ── The derive-set identity fixture ──
+//
+// The anchor-attest barrier gained a maturity-horizon bound and, above the mirror-admission
+// activation, a height-keyed release rule. Both are node-local WAIT decisions: they change
+// WHEN a node reaches a block, never WHICH rows it derives once it is there. That is the
+// property the whole barrier change rests on, and it is the one a unit case can pin
+// exactly, so it is pinned here rather than asserted in a comment.
+//
+// It is driven by running the identical fixture twice, once with the barrier's activation
+// INERT and once ARMED through the shared regtest env seam, and comparing the derive pass's
+// reads and writes argument for argument. Arming genuinely reaches this module's graph (the
+// activation map's regtest slot resolves through the same resolver at require time), so a
+// constant moved or a maturity re-keyed by that arming would show up here as a diff.
+describe('anchor-reward derive set is INVARIANT under the barrier change @regression @tier1', function () {
+    const cfg = { COIN: 'BTC', NETWORK: 'regtest' };
+    const MODULES = [
+        '../../src/mirror_admission_activation.js',
+        '../../src/anchor_reward_activation.js',
+        '../../src/anchor_reward_derive.js'
+    ];
+
+    beforeEach(function () { sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false); });
+    afterEach(function () { sinon.restore(); });
+
+    // Run the fixture against one instance of the derive module and return everything it
+    // read and wrote, as plain data.
+    async function runFixture(deriveMod, keys, row) {
+        const db = stubDb(keys, [row]);
+        const minted = await deriveMod.deriveAnchorRewards(db, cfg, maturedAt(0), stubProof());
+        return {
+            minted: minted,
+            pendingArgs: db.getPendingAnchorRewardAttestations.args,
+            rewardArgs:  db.createValidatorReward.args,
+            maturity:    deriveMod.ANCHOR_REWARD_MIRROR_MATURITY
+        };
+    }
+
+    function withArmedActivation(fn) {
+        const paths    = MODULES.map(m => require.resolve(m));
+        const saved    = paths.map(p => [p, require.cache[p]]);
+        const savedEnv = process.env.XC_MIRROR_ADMISSION_ACTIVATION;
+        for (const p of paths) delete require.cache[p];
+        process.env.XC_MIRROR_ADMISSION_ACTIVATION = '0';
+        try {
+            return fn(require('../../src/anchor_reward_derive.js'),
+                      require('../../src/anchor_reward_activation.js'));
+        } finally {
+            for (const [p, mod] of saved) {
+                if (mod === undefined) delete require.cache[p]; else require.cache[p] = mod;
+            }
+            if (savedEnv === undefined) delete process.env.XC_MIRROR_ADMISSION_ACTIVATION;
+            else process.env.XC_MIRROR_ADMISSION_ACTIVATION = savedEnv;
+        }
+    }
+
+    it('derives the identical set, at the identical height, armed or inert', async function () {
+        const keys = [makeKey()];
+        const row  = makeRow(keys, { round_reference: 11, snapshot_block: 0 });
+
+        const inert = await runFixture(derive, keys, row);
+        const armed = await withArmedActivation(async (armedDerive, armedAct) => {
+            // The arming is real, or the comparison below proves nothing.
+            assert.strictEqual(armedAct.isAnchorAttestBarrierHorizonActive('regtest', 1000), true);
+            assert.strictEqual(require('../../src/anchor_reward_activation.js')
+                .ANCHOR_ATTEST_BARRIER_ACTIVATION.regtest, 0);
+            return runFixture(armedDerive, keys, row);
+        });
+
+        assert.strictEqual(armed.maturity, inert.maturity, 'the maturity constant must not move');
+        assert.deepStrictEqual(armed.pendingArgs, inert.pendingArgs,
+            'the derive pass must read the same (network, watermark) at the same block');
+        assert.deepStrictEqual(armed.rewardArgs, inert.rewardArgs,
+            'and mint the same reward, for the same round, at the same block_index');
+        assert.strictEqual(armed.minted, inert.minted);
+        assert.strictEqual(inert.minted, 1, 'the fixture must actually mint, or this compares two zeroes');
+    });
+
+    it('the inert maps really are inert, so today\'s fleet sees no change at all', function () {
+        assert.strictEqual(ar.ANCHOR_ATTEST_BARRIER_ACTIVATION.mainnet, null);
+        assert.strictEqual(ar.ANCHOR_ATTEST_BARRIER_ACTIVATION.testnet, null);
+        assert.strictEqual(ar.isAnchorAttestBarrierHorizonActive('mainnet', 10 ** 9), false);
+        assert.strictEqual(ar.isAnchorAttestBarrierHorizonActive('testnet', 10 ** 9), false);
+        assert.strictEqual(ar.isAnchorAttestBarrierHorizonActive('regtest', 10 ** 9), false,
+            'inert by default: the regtest slot arms only through its env seam');
+    });
+});
