@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -146,7 +147,7 @@ class Unstake {
         data['STATUS'] = status;
 
         // Print status message
-        console.log("\t UNSTAKE : pubkey=" + String(data['SIGNING_PUBKEY']).substring(0, 16) + '... : amount=' + this.util.logAmount(data['AMOUNT']) + ' : ' + data['STATUS']);
+        getLogger().info("\t UNSTAKE : pubkey=" + String(data['SIGNING_PUBKEY']).substring(0, 16) + '... : amount=' + this.util.logAmount(data['AMOUNT']) + ' : ' + data['STATUS']);
 
         // Create record in unstakes table
         await this.indexerDb.createUnstake(data);
@@ -330,7 +331,7 @@ class Unstake {
         data['STATUS'] = status;
 
         // Print status message
-        console.log("\t UNSTAKE v1 : pubkey=" + String(data['SIGNING_PUBKEY']).substring(0, 16) +
+        getLogger().info("\t UNSTAKE v1 : pubkey=" + String(data['SIGNING_PUBKEY']).substring(0, 16) +
             '... : target=' + data['TARGET_CONTRACT_INDEX'] +
             ' : tick=' + data['TICK'] +
             ' : amount=' + data['AMOUNT'] +

@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -145,7 +146,7 @@ class Message {
         data['STATUS'] = status;
 
         // Print status message
-        console.log("\t MESSAGE : " + data['DESTINATION'] + ' : ' + data['STATUS']);
+        getLogger().info("\t MESSAGE : " + data['DESTINATION'] + ' : ' + data['STATUS']);
 
         // Create record in messages table
         await this.indexerDb.createMessage(data);

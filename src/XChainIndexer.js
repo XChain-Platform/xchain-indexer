@@ -57,6 +57,7 @@ const { collapseOutputFanout } = require('./chain/output_fanout.js');
 const { blockMayReadPrice }    = require('./chain/price_read_predicate.js');
 const trainActivation          = require('./train_activation.js');
 
+const { getLogger } = require('./observability/index.js');
 // Hub->indexer config poll cadence (ms). This is the sole staleness / propagation bound for the
 // live-polled governance overlay: nothing else refreshes it, so an overlay older than a small
 // multiple of this interval means the hub is unreachable. Overridable via
@@ -545,7 +546,7 @@ class XChainIndexer {
                 if(entry.id != null) await this.indexerDb.markHubPushDelivered(entry.id);
             } catch(err){
                 // Live delivery failed; the durable row stays for HubPushQueue's backoff retry.
-                console.warn('Staged hub push ' + entry.pushType + ' row ' + entry.id +
+                getLogger().warn('Staged hub push ' + entry.pushType + ' row ' + entry.id +
                     ' live delivery failed; HubPushQueue will retry:', err && err.message);
                 // A 429 says the hub is refusing this IP for the rest of its window, so the
                 // remaining staged entries would each buy one more rejection and one more
@@ -685,7 +686,7 @@ class XChainIndexer {
     // rather than an inline process.exit so a test can observe the decision without
     // taking the runner down with it.
     fatalExit(reason){
-        console.error('Fatal indexer error: ' + reason);
+        getLogger().error('Fatal indexer error: ' + reason);
         process.exit(1);
     }
 
@@ -709,7 +710,7 @@ class XChainIndexer {
         if(!hold.notified){
             hold.notified = true;
             this.barrierCeilingHits++;
-            console.error('Mirror-barrier hold ceiling reached: block ' + blockToParse + ' has been held at ' +
+            getLogger().error('Mirror-barrier hold ceiling reached: block ' + blockToParse + ' has been held at ' +
                 hold.reason + ' for ' + Math.round(barrierHoldMs(hold, now) / 1000) + 's, past the ' +
                 Math.round(this.barrierHoldCeilingMs / 1000) + 's ceiling (HUB_SYNC_BARRIER_HOLD_CEILING_S, default ' +
                 HUB_SYNC_BARRIER_HOLD_CEILING_S + 's). The block is still deferring, which is correct. ' +
@@ -880,7 +881,7 @@ class XChainIndexer {
                         lastNow = (hubNow === null || hubNow === undefined) ? null : Number(hubNow);
                         if(Number.isFinite(lastNow) && lastNow >= blockTime + graceS){
                             covered = true;
-                            console.log('Direct call-presence barrier: hub clock ' + lastNow +
+                            getLogger().info('Direct call-presence barrier: hub clock ' + lastNow +
                                 ' is past block_time ' + blockTime + ' + ' + graceS + 's grace ' +
                                 '(call mirror at ' + lastTs + '); proceeding.');
                         }
@@ -894,7 +895,7 @@ class XChainIndexer {
                 // instead of looking identical to it for the whole timeout window.
                 if(this._callPresenceLastErr !== e.message){
                     this._callPresenceLastErr = e.message;
-                    console.error('direct call-presence query error (treating as not covered): ' + e.message);
+                    getLogger().error('direct call-presence query error (treating as not covered): ' + e.message);
                 }
             }
             if(covered) return;
@@ -908,7 +909,7 @@ class XChainIndexer {
                     ', hub clock at ' + lastNow + ', escape at ' + (blockTime + graceS) + ')' +
                     (admission ? heightTail(lastFloor) : '') +
                     (this._callPresenceLastErr ? ' [last query error: ' + this._callPresenceLastErr + ']' : ''));
-            console.log('Waiting on hub call mirror: block_time ' + blockTime +
+            getLogger().info('Waiting on hub call mirror: block_time ' + blockTime +
                 ' not yet covered (mirror at ' + lastTs + ', hub clock at ' + lastNow +
                 ', escape at ' + (blockTime + graceS) + ')' +
                 (admission ? heightTail(lastFloor) : '') + '; retrying...');
@@ -918,7 +919,7 @@ class XChainIndexer {
 
     // Handle starting up the XChain indexer
     async start(){
-        console.log('Starting up ' + this.name + ' v' + this.version + '...');
+        getLogger().info('Starting up ' + this.name + ' v' + this.version + '...');
 
         // Get indexer configuration
         this.config = config.getConfig();
@@ -943,7 +944,7 @@ class XChainIndexer {
         // the same object. Construction above guarantees it; this catches a future
         // refactor that reintroduces the divergence without bricking startup.
         if(this.util.config !== this.config)
-            console.error('CONFIG WIRING BUG: indexer.config and util.config are not the same object; a hub overlay could desync consensus reads.');
+            getLogger().error('CONFIG WIRING BUG: indexer.config and util.config are not the same object; a hub overlay could desync consensus reads.');
 
         // Verify the bundled canonical coin files against CONSENSUS_CONFIG_PIN before
         // processing any block. A null pin (mainnet, pre-arm) skips; a mismatch on an
@@ -1046,10 +1047,10 @@ class XChainIndexer {
                     '(local DB holds the synced hub copy).');
             }
             if(allowLocal){
-                console.log('Hub DB not set; local price source acknowledged via INDEXER_ALLOW_LOCAL_PRICE_SOURCE. ' +
+                getLogger().info('Hub DB not set; local price source acknowledged via INDEXER_ALLOW_LOCAL_PRICE_SOURCE. ' +
                     'Hub-owned price/oracle tables will be read from the local indexer DB (single-host mode).');
             } else {
-                console.warn('WARNING: HUB_DB_HOST / HUB_DB_NAME not set. Hub-owned price/oracle tables ' +
+                getLogger().warn('WARNING: HUB_DB_HOST / HUB_DB_NAME not set. Hub-owned price/oracle tables ' +
                     'will be read from the local indexer DB. Expected for single-host setups; on a distributed ' +
                     'node this indicates a hub DB misconfiguration and fee/price data may be stale or absent. ' +
                     'Set INDEXER_ALLOW_LOCAL_PRICE_SOURCE=true to acknowledge an intentional single-host node.');
@@ -1071,7 +1072,7 @@ class XChainIndexer {
         // Create xchain-utxo-tracker client (used by DISPENSER fresh-address check)
         this.utxoTracker = new UtxoTracker(this.utxoTrackerUrl, this.utxoTrackerPort);
         if(!this.utxoTracker.enabled)
-            console.log('WARNING: UTXO_TRACKER_URL / UTXO_TRACKER_API_PORT not set. DISPENSER fresh-address check will reject all non-owner dispensers');
+            getLogger().info('WARNING: UTXO_TRACKER_URL / UTXO_TRACKER_API_PORT not set. DISPENSER fresh-address check will reject all non-owner dispensers');
 
         // Create instance of the actions class and pass database connection instances to it
         this.actions = new actions(this);
@@ -1098,17 +1099,17 @@ class XChainIndexer {
         try {
             let migRows = await this.decoderDb.countDecoderSchemaMigrationsTable(this.decoderDbName);
             if(!migRows || migRows[0].cnt === 0){
-                console.warn('Decoder DB ' + this.decoderDbName + ': schema_migrations table not found. ' +
+                getLogger().warn('Decoder DB ' + this.decoderDbName + ': schema_migrations table not found. ' +
                     'Decoder has not completed first boot. Block processing will retry until decoder is ready.');
             } else {
                 let txRows = await this.decoderDb.countDecoderTransactionsTable(this.decoderDbName);
                 if(!txRows || txRows[0].cnt === 0){
-                    console.warn('Decoder DB ' + this.decoderDbName + ': transactions table not found. ' +
+                    getLogger().warn('Decoder DB ' + this.decoderDbName + ': transactions table not found. ' +
                         'Decoder schema may be partially applied. Block processing will retry until decoder is ready.');
                 }
             }
         } catch(e){
-            console.warn('Decoder DB ' + this.decoderDbName + ': schema check failed (non-fatal):', e.message);
+            getLogger().warn('Decoder DB ' + this.decoderDbName + ': schema check failed (non-fatal):', e.message);
         }
 
         // Verify the Indexer database exists
@@ -1156,7 +1157,7 @@ class XChainIndexer {
 
             if(this.hubDbSync){
                 this.hubDbSync.start().catch(err => {
-                    console.warn('HubDbSync: start failed:', err.message);
+                    getLogger().warn('HubDbSync: start failed:', err.message);
                 });
             }
         }
@@ -1258,7 +1259,7 @@ class XChainIndexer {
                     if(minReorgBlock === null || reorg.block_index < minReorgBlock)
                         minReorgBlock = reorg.block_index;
                 }
-                console.log("Detected " + unprocessedReorgs.length + " block reorganization(s); deepest at block #", minReorgBlock);
+                getLogger().info("Detected " + unprocessedReorgs.length + " block reorganization(s); deepest at block #", minReorgBlock);
                 if(!this.util.isNull(lastIndexerBlock) && lastIndexerBlock >= minReorgBlock){
                     await this.rollback.rollback(minReorgBlock);
                     // Re-read the resume cursor: rollback() deleted every block >=
@@ -1313,7 +1314,7 @@ class XChainIndexer {
             if(this.synced === false && !this.util.isNull(lastIndexerBlock)){
                 let startBlock = this.util.bcadd(lastIndexerBlock,1)
                 if(this.util.bclt(startBlock, lastDecoderBlock))
-                    console.log('Resuming block parsing at block ' + startBlock + '...');
+                    getLogger().info('Resuming block parsing at block ' + startBlock + '...');
             }
 
             // Loop through blocks until indexer has parsed lastDecoderBlock. The stopFlag check
@@ -1349,7 +1350,7 @@ class XChainIndexer {
                                             ? await indexerReorgView.getLastProcessedReorgWitness() : null;
                     let midReorgs = await this.decoderDb.getReorgsSince(lastProcessedReorgId, midCursorWitness);
                     if(midReorgs.length > 0){
-                        console.log('Detected a decoder reorg mid-catch-up; breaking to handle it before block ' + (Number(lastIndexerBlock) + 1));
+                        getLogger().info('Detected a decoder reorg mid-catch-up; breaking to handle it before block ' + (Number(lastIndexerBlock) + 1));
                         break;
                     }
                 }
@@ -1508,7 +1509,7 @@ class XChainIndexer {
                         // Defer the block: lastIndexerBlock is not advanced, so the outer loop
                         // retries this same block after the sleep interval rather than processing
                         // it against a stale price copy. No transaction is open yet.
-                        console.warn('Deferring block ' + blockToParse + ' (price sync): ', err);
+                        getLogger().warn('Deferring block ' + blockToParse + ' (price sync): ', err);
                         this.stallReason = 'price_sync_barrier';
                         this.stallClearsAt = null;          // the height case can clear early
                         break;
@@ -1519,7 +1520,7 @@ class XChainIndexer {
                         await this.hubDbSync.waitForPriceSyncTime(blockTime, this.priceSyncTimeoutMs, blockToParse);
                     } catch(err){
                         // Same defer semantics as the height barrier above.
-                        console.warn('Deferring block ' + blockToParse + ' (price time-sync): ', err);
+                        getLogger().warn('Deferring block ' + blockToParse + ' (price time-sync): ', err);
                         this.stallReason = 'price_sync_barrier';
                         // This barrier waits on WALL CLOCK. It is satisfied once a
                         // round at/past blockTime is mirrored, or the hub's stream watermark
@@ -1551,7 +1552,7 @@ class XChainIndexer {
                         // Defer the block (same retry semantics as the price barrier above): the
                         // counter is not advanced, so this block is retried rather than settled
                         // against a stale oracle copy. No transaction is open yet.
-                        console.warn('Deferring block ' + blockToParse + ' (oracle sync): ', err);
+                        getLogger().warn('Deferring block ' + blockToParse + ' (oracle sync): ', err);
                         this.stallReason = 'oracle_sync_barrier';
                         this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'oracleWatermarkGraceS', blockToParse);
                         break;
@@ -1566,7 +1567,7 @@ class XChainIndexer {
                     try {
                         await this.hubDbSync.waitForMatchSync(blockTime, this.priceSyncTimeoutMs, blockToParse);
                     } catch(err){
-                        console.warn('Deferring block ' + blockToParse + ' (cross-chain match sync): ', err);
+                        getLogger().warn('Deferring block ' + blockToParse + ' (cross-chain match sync): ', err);
                         this.stallReason = 'match_sync_barrier';
                         this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'matchWatermarkGraceS', blockToParse);
                         break;
@@ -1581,7 +1582,7 @@ class XChainIndexer {
                     try {
                         await this.hubDbSync.waitForCallSync(blockTime, this.priceSyncTimeoutMs, blockToParse);
                     } catch(err){
-                        console.warn('Deferring block ' + blockToParse + ' (cross-chain call sync): ', err);
+                        getLogger().warn('Deferring block ' + blockToParse + ' (cross-chain call sync): ', err);
                         this.stallReason = 'call_sync_barrier';
                         // callWatermarkGraceS, NOT the match grace: _callSyncSatisfied waits on
                         // the call grace, and the two producers stamp effective_time differently
@@ -1603,7 +1604,7 @@ class XChainIndexer {
                     try {
                         await this.hubDbSync.waitForBridgeSync(blockTime, this.priceSyncTimeoutMs, blockToParse);
                     } catch(err){
-                        console.warn('Deferring block ' + blockToParse + ' (bridge transfer sync): ', err);
+                        getLogger().warn('Deferring block ' + blockToParse + ' (bridge transfer sync): ', err);
                         this.stallReason = 'bridge_sync_barrier';
                         // bridgeWatermarkGraceS, never the match or call grace: the bridge
                         // engine is a third producer with its own effective_time stamping rule,
@@ -1624,7 +1625,7 @@ class XChainIndexer {
                     try {
                         await this.hubDbSync.waitForPolicySync(blockTime, this.priceSyncTimeoutMs, blockToParse);
                     } catch(err){
-                        console.warn('Deferring block ' + blockToParse + ' (policy snapshot sync): ', err);
+                        getLogger().warn('Deferring block ' + blockToParse + ' (policy snapshot sync): ', err);
                         this.stallReason = 'policy_sync_barrier';
                         this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'policyWatermarkGraceS', blockToParse);
                         break;
@@ -1652,7 +1653,7 @@ class XChainIndexer {
                     try {
                         await this.waitForDirectCallPresence(blockTime, blockToParse);
                     } catch(err){
-                        console.warn('Deferring block ' + blockToParse + ' (direct call-presence barrier): ', err);
+                        getLogger().warn('Deferring block ' + blockToParse + ' (direct call-presence barrier): ', err);
                         this.stallReason = 'call_presence_barrier';
                         // The barrier now HAS a time-keyed escape (hub clock >= block_time +
                         // call grace), so this stall does have a first-clearable instant and
@@ -1680,7 +1681,7 @@ class XChainIndexer {
                     try {
                         await this.hubDbSync.waitForAnchorAttestationSync(blockTime, this.priceSyncTimeoutMs, anchorHorizonBound, blockToParse);
                     } catch(err){
-                        console.warn('Deferring block ' + blockToParse + ' (anchor-reward attestation mirror): ', err);
+                        getLogger().warn('Deferring block ' + blockToParse + ' (anchor-reward attestation mirror): ', err);
                         this.stallReason = 'anchor_attest_barrier';
                         this.stallClearsAt = this.anchorBarrierClearsAt(
                             blockTime, anchorHorizonBound, blockToParse, 'anchorAttestWatermarkGraceS');
@@ -1703,7 +1704,7 @@ class XChainIndexer {
                     try {
                         await this.hubDbSync.waitForAttestationResponseSync(blockTime, this.priceSyncTimeoutMs, blockToParse);
                     } catch(err){
-                        console.warn('Deferring block ' + blockToParse + ' (attestation response mirror): ', err);
+                        getLogger().warn('Deferring block ' + blockToParse + ' (attestation response mirror): ', err);
                         this.stallReason = 'attest_response_sync_barrier';
                         this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'attestResponseWatermarkGraceS', blockToParse);
                         break;
@@ -1718,7 +1719,7 @@ class XChainIndexer {
                     try {
                         await this.hubDbSync.waitForSnapshotSync(blockTime, this.priceSyncTimeoutMs, blockToParse);
                     } catch(err){
-                        console.warn('Deferring block ' + blockToParse + ' (cross-chain snapshot sync): ', err);
+                        getLogger().warn('Deferring block ' + blockToParse + ' (cross-chain snapshot sync): ', err);
                         this.stallReason = 'snapshot_sync_barrier';
                         this.stallClearsAt = null;          // snapshot presence, not wall clock
                         break;
@@ -1940,7 +1941,7 @@ class XChainIndexer {
                     // epoch fence, not this handler, is what prevents the zombie's writes from
                     // landing; this only keeps the abandoned promise's rejection quiet.
                     blockProcessing.catch((e) => {
-                        console.warn('Abandoned block-processing promise for block ' + blockToParse +
+                        getLogger().warn('Abandoned block-processing promise for block ' + blockToParse +
                             ' settled after watchdog: ' + (e && e.message ? e.message : e));
                     });
 
@@ -1991,7 +1992,7 @@ class XChainIndexer {
 
                     // Log the total parse time for this block
                     let parseTime = this.util.getTimer(debugTimer);
-                    console.log('Block Parsed' + "\t: " + lastIndexerBlock + ' [ledger:' + ledger + ' actions:' + actions + ' contracts:' + contracts + '] (' + parseTime + ')');
+                    getLogger().info('Block Parsed' + "\t: " + lastIndexerBlock + ' [ledger:' + ledger + ' actions:' + actions + ' contracts:' + contracts + '] (' + parseTime + ')');
 
                     // Push chain tip to hub (fire-and-forget; never blocks indexing).
                     // Network is included so multi-network hubs scope tips correctly
@@ -2052,7 +2053,7 @@ class XChainIndexer {
                     // indexer halted + alerting until the operator fixes the host. The block
                     // watchdog surfaces the stall (no silent freeze).
                     if(error && error.code === 'EXECUTOR_UNAVAILABLE'){
-                        console.error(`HOST FAULT at block ${lastIndexerBlock}: VM executor unavailable. ` +
+                        getLogger().error(`HOST FAULT at block ${lastIndexerBlock}: VM executor unavailable. ` +
                             `HALTING block processing (not committing; a fabricated result would fork). ` +
                             `Retrying after ${this.config['BLOCK_CHECK_INTERVAL']}ms; will resume when the host recovers.`);
                         this.stallReason = 'vm_executor_unavailable';
@@ -2064,7 +2065,7 @@ class XChainIndexer {
                         // node's reward set differ from its peers' at a height they all agree
                         // on. Both fork the COLLECT rail, so the block is left uncommitted and
                         // retried, loudly, until DOGE visibility returns.
-                        console.error('ANCHOR REWARD PROOF UNAVAILABLE at block ' + lastIndexerBlock + ': ' +
+                        getLogger().error('ANCHOR REWARD PROOF UNAVAILABLE at block ' + lastIndexerBlock + ': ' +
                             (error && error.message) + ' HALTING block processing (not committing; an ' +
                             'unproven or partial reward set would fork). Retrying after ' +
                             this.config['BLOCK_CHECK_INTERVAL'] + 'ms.');
@@ -2080,7 +2081,7 @@ class XChainIndexer {
                         // forged, and mint nothing where its peers mint. Defer and retry, the
                         // way the sync barriers above defer, with the barrier-shaped stall
                         // reason so /status classifies it as mirror lag rather than a wedge.
-                        console.warn('BRIDGE ESCROW PROOF UNAVAILABLE at block ' + lastIndexerBlock + ': ' +
+                        getLogger().warn('BRIDGE ESCROW PROOF UNAVAILABLE at block ' + lastIndexerBlock + ': ' +
                             (error && error.message) + ' Deferring the block (not committing; an ' +
                             'unproven mint is exactly what D2 exists to stop). Retrying after ' +
                             this.config['BLOCK_CHECK_INTERVAL'] + 'ms.');
@@ -2093,7 +2094,7 @@ class XChainIndexer {
                         // from the entire federation being absent, and acting on it would evict
                         // every validator at once. Deferring is the only outcome that keeps this
                         // node's verdict identical to its peers'.
-                        console.error('ROLLCALL PROOF UNAVAILABLE at block ' + lastIndexerBlock + ': ' +
+                        getLogger().error('ROLLCALL PROOF UNAVAILABLE at block ' + lastIndexerBlock + ': ' +
                             (error && error.message) + ' HALTING block processing (not committing; ' +
                             'silence is not absence). Retrying after ' +
                             this.config['BLOCK_CHECK_INTERVAL'] + 'ms.');
@@ -2123,7 +2124,7 @@ class XChainIndexer {
             // Set flag to indicate fully synced and listening for block
             if(!this.synced && !this.util.bclt(lastIndexerBlock, lastDecoderBlock)){
                 this.synced = true;
-                console.log('Listening for blocks...');
+                getLogger().info('Listening for blocks...');
             }
 
             // Sleep for BLOCK_CHECK_INTERVAL before checking for new transaction data
@@ -2139,7 +2140,7 @@ class XChainIndexer {
         try {
             let { ok, configs, seq, watermark, coinConsensusHashes } = this.unwrapHubConfigResponse(await this.hubClient.getAllConfigs());
             if(!ok){
-                console.warn('XChainIndexer: hub config overlay skipped, hub returned no usable config (using local defaults)');
+                getLogger().warn('XChainIndexer: hub config overlay skipped, hub returned no usable config (using local defaults)');
                 return;
             }
             this.checkHubConsensusHash(coinConsensusHashes);
@@ -2148,7 +2149,7 @@ class XChainIndexer {
             this.lastHubConfigWatermark = watermark;
             this.lastHubConfigFetchAt = Date.now();
         } catch(err) {
-            console.warn('XChainIndexer: hub config overlay failed, using local defaults:', err);
+            getLogger().warn('XChainIndexer: hub config overlay failed, using local defaults:', err);
         }
     }
 
@@ -2164,7 +2165,7 @@ class XChainIndexer {
         if(!hubHash) return;
         let localHash = require('./coins').consensusHash(coin, network);
         if(hubHash !== localHash)
-            console.error('CONSENSUS HASH MISMATCH: hub serves ' + hubHash + ' for ' + coin + '/' + network +
+            getLogger().error('CONSENSUS HASH MISMATCH: hub serves ' + hubHash + ' for ' + coin + '/' + network +
                 ' but this node bundles ' + localHash + '. The hub config diverges from this node; not applying hub consensus values (they are pinned-verify-only). Upgrade the lagging side.');
     }
 
@@ -2249,7 +2250,7 @@ class XChainIndexer {
                 try {
                     this.config[key] = JSON.parse(val);
                 } catch(e) {
-                    console.warn('XChainIndexer: failed to JSON-parse hub param ' + key + ':', e);
+                    getLogger().warn('XChainIndexer: failed to JSON-parse hub param ' + key + ':', e);
                 }
             } else if(typeof val === 'object'){
                 this.config[key] = val;
@@ -2351,7 +2352,7 @@ class XChainIndexer {
             // Loud on the transition, then periodic, so the announcement cannot be missed
             // and cannot drown the log during a long rolling-upgrade window.
             if((this._trainActivationHaltLogTick++ % 60) === 0)
-                console.error('XChainIndexer: TRAIN ACTIVATION PENDING - ' + verdict.reason);
+                getLogger().error('XChainIndexer: TRAIN ACTIVATION PENDING - ' + verdict.reason);
             return false;
         }
 
@@ -2359,7 +2360,7 @@ class XChainIndexer {
         // halt across a restart would apply it. The marker is written once (the read below
         // is what keeps a deferring loop from inserting one row per poll).
         if((this._trainActivationHaltLogTick++ % 60) === 0)
-            console.error('XChainIndexer: TRAIN ACTIVATION HALT at block ' + blockToParse + ' - ' + verdict.reason +
+            getLogger().error('XChainIndexer: TRAIN ACTIVATION HALT at block ' + blockToParse + ' - ' + verdict.reason +
                 ' REQUIRED OPERATOR ACTION: update this node to the platform version that carries the ' +
                 'required rule set. Clearing the marker by hand is not a supported path.');
         this.stallReason   = 'train_activation_halt: ' + verdict.reason;
@@ -2386,7 +2387,7 @@ class XChainIndexer {
             }).slice(0, 250);
             await this.indexerDb.recordTrainActivationHaltEvent(payload);
         } catch(e){
-            console.warn('XChainIndexer: could not record the TRAIN_ACTIVATION_HALT marker (' +
+            getLogger().warn('XChainIndexer: could not record the TRAIN_ACTIVATION_HALT marker (' +
                 (e && e.message) + '); the halt still holds.');
         }
     }
@@ -2399,12 +2400,12 @@ class XChainIndexer {
             halted = !!(probe && probe.halted);
             var payload = probe ? probe.payload : null;
         } catch(e){
-            console.warn('XChainIndexer: REORG_HALT probe failed (non-fatal), keeping last known state (' +
+            getLogger().warn('XChainIndexer: REORG_HALT probe failed (non-fatal), keeping last known state (' +
                 this.decoderReorgHalted + '): ' + (e && e.message));
             return this.decoderReorgHalted;
         }
         if(halted && !this.decoderReorgHalted){
-            console.error('XChainIndexer: DECODER REORG HALT detected - the decoder wrote a durable ' +
+            getLogger().error('XChainIndexer: DECODER REORG HALT detected - the decoder wrote a durable ' +
                 'REORG_HALT marker (a reorg it could not safely rewind) and will not advance. The ' +
                 'indexer is now blocked behind it and will present as idle/lagging until resolved. ' +
                 'OPERATOR ACTION: a full decoder resync (clean reindex of decoder+indexer) always ' +
@@ -2415,10 +2416,10 @@ class XChainIndexer {
         } else if(halted){
             // Periodic reminder while it stays halted (every ~60 polls), not every tick.
             if((this._reorgHaltLogTick++ % 60) === 0)
-                console.error('XChainIndexer: decoder still REORG-HALTED; resync the decoder or clear ' +
+                getLogger().error('XChainIndexer: decoder still REORG-HALTED; resync the decoder or clear ' +
                     'the reviewed halt with `xchain-node clear-reorg-halt`.');
         } else if(!halted && this.decoderReorgHalted){
-            console.warn('XChainIndexer: decoder halt is no longer live; a newer REORG_HALT_CLEARED ' +
+            getLogger().warn('XChainIndexer: decoder halt is no longer live; a newer REORG_HALT_CLEARED ' +
                 'marker supersedes it, or the halt marker is absent.');
         }
         this.decoderReorgHalted = halted;
@@ -2473,11 +2474,11 @@ class XChainIndexer {
         }
         if(typeof hash !== 'string' || !/^[0-9a-f]{64}$/.test(hash)) return null;
         this.btcChainId = hash;
-        console.log('Chain identity  : BTC block 1 is ' + hash + ' (stamped on this hub\'s cross-chain rows)');
+        getLogger().info('Chain identity  : BTC block 1 is ' + hash + ' (stamped on this hub\'s cross-chain rows)');
         // Authoritative for this node: a hub advertising another chain never overrides it.
         if(this.hubDbSync && typeof this.hubDbSync.setExpectedBtcChainId === 'function'){
             try { await this.hubDbSync.setExpectedBtcChainId(hash, 'local'); }
-            catch(e){ console.warn('HubDbSync: could not set the local chain identity:', e.message); }
+            catch(e){ getLogger().warn('HubDbSync: could not set the local chain identity:', e.message); }
         }
         return this.btcChainId;
     }
@@ -2508,7 +2509,7 @@ class XChainIndexer {
             let fiatWindow = parseInt((this.config || {})['FIAT_DISPENSER_PRICE_WINDOW']) || 86400;
             return Number(blockTime) - (2 * fiatWindow) - SLOP_SECONDS;
         } catch(e){
-            console.warn('XChainIndexer: price mirror horizon unavailable (' + (e && e.message) +
+            getLogger().warn('XChainIndexer: price mirror horizon unavailable (' + (e && e.message) +
                 '); the hub price mirror will bootstrap in full');
             return null;
         }
@@ -2534,7 +2535,7 @@ class XChainIndexer {
                 // signal, or a persistently config-DB-failing hub reports healthy while the
                 // live-polled params are frozen.
                 if(!ok){
-                    console.warn('XChainIndexer: hub config poll returned no usable config; not refreshing freshness signal');
+                    getLogger().warn('XChainIndexer: hub config poll returned no usable config; not refreshing freshness signal');
                     return;
                 }
                 // Re-check hub/node consensus-config drift on every poll (not only at startup),
@@ -2575,7 +2576,7 @@ class XChainIndexer {
                 let hubReset = (seq < (this.lastHubConfigSeq || 0)) ||
                                (watermark > 0 && watermark < (this.lastHubConfigWatermark || 0));
                 if(hubReset){
-                    console.error('XChainIndexer: HUB CONFIG REGRESSION: hub served seq ' + seq +
+                    getLogger().error('XChainIndexer: HUB CONFIG REGRESSION: hub served seq ' + seq +
                                   '/watermark ' + watermark + ', below last-seen ' + this.lastHubConfigSeq +
                                   '/' + this.lastHubConfigWatermark +
                                   ' (hub restart or restore from an older snapshot); re-applying hub config and resetting the cursor.');
@@ -2594,10 +2595,10 @@ class XChainIndexer {
                     // Only announce an actual advance; an equal-watermark redelivery re-merge
                     // is a steady-state no-op on a watermark-bearing hub and must not log-spam.
                     if(seqAdvanced || watermarkAdvanced)
-                        console.log('XChainIndexer: applied hub config update (committed seq ' + seq + ', watermark ' + watermark + ')');
+                        getLogger().info('XChainIndexer: applied hub config update (committed seq ' + seq + ', watermark ' + watermark + ')');
                 }
             } catch(err) {
-                console.warn('XChainIndexer: hub config poll failed, keeping current config:', err.message || err);
+                getLogger().warn('XChainIndexer: hub config poll failed, keeping current config:', err.message || err);
             } finally {
                 this._hubConfigPollRunning = false;
             }
@@ -2624,7 +2625,7 @@ class XChainIndexer {
                     (sql, args) => this.indexerDb.poolQuery(sql, args),
                     this.config['COIN'], this.config['NETWORK']);
                 if(stats.totalNodes === 0) return;   // pre-activation / empty store: nothing to report
-                console.log('[METRIC] ' + JSON.stringify({
+                getLogger().info('[METRIC] ' + JSON.stringify({
                     metric: 'state_tree_orphan_nodes', component: 'indexer',
                     chain: this.config['COIN'], network: this.config['NETWORK'],
                     total_nodes: stats.totalNodes, reachable_nodes: stats.reachableNodes,
@@ -2635,14 +2636,14 @@ class XChainIndexer {
                     ts: Date.now()
                 }));
             } catch(err) {
-                console.warn('XChainIndexer: state_tree orphan-metric failed for ' +
+                getLogger().warn('XChainIndexer: state_tree orphan-metric failed for ' +
                     this.config['COIN'] + '/' + this.config['NETWORK'] + ':', err.message || err);
             } finally {
                 this._stateTreeMetricRunning = false;
             }
         }, intervalMs);
         if(this._stateTreeMetricTimer.unref) this._stateTreeMetricTimer.unref();
-        console.log('XChainIndexer: state_tree orphan-metric started (interval ' + intervalMs + 'ms)');
+        getLogger().info('XChainIndexer: state_tree orphan-metric started (interval ' + intervalMs + 'ms)');
     }
 
     // Periodic state-retention sweep. DEFAULT OFF: parseRetentionConfig returns
@@ -2675,18 +2676,18 @@ class XChainIndexer {
                 const rootsDeleted = result.roots && result.roots.deleted ? result.roots.deleted : 0;
                 const nodesDeleted = result.nodes && result.nodes.deleted ? result.nodes.deleted : 0;
                 if(rootsDeleted > 0 || nodesDeleted > 0){
-                    console.log('State retention: pruned ' + rootsDeleted + ' root(s) and reclaimed ' +
+                    getLogger().info('State retention: pruned ' + rootsDeleted + ' root(s) and reclaimed ' +
                         nodesDeleted + ' orphan node(s) for ' + this.config['COIN'] + '/' + this.config['NETWORK']);
                 }
             } catch(err) {
-                console.warn('XChainIndexer: state-retention sweep failed for ' +
+                getLogger().warn('XChainIndexer: state-retention sweep failed for ' +
                     this.config['COIN'] + '/' + this.config['NETWORK'] + ':', err.message || err);
             } finally {
                 this._stateRetentionRunning = false;
             }
         }, cfg.intervalMs);
         if(this._stateRetentionTimer.unref) this._stateRetentionTimer.unref();
-        console.log('XChainIndexer: state-retention started (keep ' + cfg.rootKeepBlocks +
+        getLogger().info('XChainIndexer: state-retention started (keep ' + cfg.rootKeepBlocks +
             ' root-blocks, node-reclaim ' + (cfg.nodeReclaimEnabled ? 'ON' : 'off') +
             ', interval ' + cfg.intervalMs + 'ms)');
     }

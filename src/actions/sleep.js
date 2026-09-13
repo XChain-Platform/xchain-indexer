@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -142,7 +143,7 @@ class Sleep {
         data['STATUS'] = status;
 
         // Print status message
-        console.log("\t SLEEP : " + data['TICK'] + ' : ' + data['RESUME_BLOCK'] + ' : ' + data['STATUS']);
+        getLogger().info("\t SLEEP : " + data['TICK'] + ' : ' + data['RESUME_BLOCK'] + ' : ' + data['STATUS']);
 
         // Create record in messages table
         await this.indexerDb.createSleep(data);

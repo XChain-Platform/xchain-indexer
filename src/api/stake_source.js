@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -60,7 +61,7 @@ async function getStakeSourceByPubkey(indexer, { pubkey, block_index }){
         }
         return { source: (rows && rows.length > 0) ? String(rows[0].source) : null };
     } catch (err) {
-        console.error('getstakesourcebypubkey error:', err);
+        getLogger().error('getstakesourcebypubkey error:', err);
         return { error: 'failed to resolve stake source' };
     }
 }

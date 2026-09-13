@@ -62,6 +62,7 @@ const { resolveRootDiscriminator } = require('../../consensus/batch_root_discrim
 // cross-service regression suite, which reads the value exported at the bottom
 // of this module.
 const PROTO = require('../../protocol/constants.js');
+const { getLogger } = require('../../observability/index.js');
 const MAX_CODE_SIZE = PROTO.MAX_CODE_SIZE;
 
 // Maximum chunks a chunked DEPLOY (v2/v3) may assemble. Vendored from
@@ -845,7 +846,7 @@ class Deploy {
         data['STATUS'] = status;
 
         // Print status message
-        console.log("\t DEPLOY : hash=" + codeHash + ' : gas=' + totalGas +
+        getLogger().info("\t DEPLOY : hash=" + codeHash + ' : gas=' + totalGas +
             (floatWarnings.length > 0 ? ' : FLOAT_WARNINGS=' + floatWarnings.length : '') +
             ' : ' + data['STATUS']);
 

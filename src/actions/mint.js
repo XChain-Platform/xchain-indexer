@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -245,7 +246,7 @@ class Mint {
         data['STATUS'] = mint['STATUS'] = status;
 
         // Print status message
-        console.log("\t MINT : " + data['TICK'] + ' : '  +  this.util.logAmount(data['AMOUNT']) + ' : ' + data['STATUS']);
+        getLogger().info("\t MINT : " + data['TICK'] + ' : '  +  this.util.logAmount(data['AMOUNT']) + ' : ' + data['STATUS']);
 
         // Create record in mints table
         await this.indexerDb.createMint(mint);

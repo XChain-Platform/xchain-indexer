@@ -70,6 +70,7 @@ const aact    = require('../../anchor_activation.js');
 const aaq     = require('./anchor_action_query.js');
 const diag    = require('./diagnostic_events.js');
 
+const { getLogger } = require('../../observability/index.js');
 const ALLOWED_CHAINS = ['BTC', 'LTC', 'DOGE'];
 
 class Anchor {
@@ -479,7 +480,7 @@ class Anchor {
                         rewardRound, rewardType,
                         Number(data['BLOCK_INDEX']), Number(data['ACTION_INDEX']), rewardQual);
             } else {
-                console.warn('\t ANCHOR v' + format + ' : publisher-attestation quorum not met or PUBLISHER not in oracle_publish set; reward skipped (anchor still valid)');
+                getLogger().warn('\t ANCHOR v' + format + ' : publisher-attestation quorum not met or PUBLISHER not in oracle_publish set; reward skipped (anchor still valid)');
             }
         }
 
@@ -498,7 +499,7 @@ class Anchor {
         data['PUBLISHER_ATTESTATIONS'] = (publisherSigs.length > 0) ? JSON.stringify(publisherSigs) : null;
         if(!data['STATUS']) data['STATUS'] = (error) ? error : 'valid';
 
-        console.log("\t ANCHOR v" + format + " : " + data['CHAIN'] + '/' + data['NETWORK'] +
+        getLogger().info("\t ANCHOR v" + format + " : " + data['CHAIN'] + '/' + data['NETWORK'] +
                     ' @ ' + data['BLOCK_INDEX_CHECKPOINTED'] + ' seq ' + data['CHECKPOINT_SEQ'] +
                     ' batch ' + data['MATCH_BATCH_SEQ'] + ' (' + data['MATCH_COUNT'] + ' matches, ' + data['TOTAL_CHUNKS'] + ' chunk(s))' +
                     ' : ' + data['STATUS']);
@@ -557,7 +558,7 @@ class Anchor {
                 for(let c of ordered) b64 += c.archive_b64;
                 let crc = this.archiveCrc(b64);
                 if(crc === null || crc !== String(data['BATCH_CRC32'])){
-                    console.warn("\t ANCHOR v" + format + " : batch " + data['MATCH_BATCH_SEQ'] + ' head-side reassembly CRC mismatch, flagging invalid_archive');
+                    getLogger().warn("\t ANCHOR v" + format + " : batch " + data['MATCH_BATCH_SEQ'] + ' head-side reassembly CRC mismatch, flagging invalid_archive');
                     diag.noteAnchorFailed({
                         chain:           data['CHAIN'],
                         reason:          'invalid_archive: head-side reassembly CRC mismatch',
@@ -815,7 +816,7 @@ class Anchor {
                         rewardRound, 'anchor_bundle',
                         Number(data['BLOCK_INDEX']), Number(data['ACTION_INDEX']), rewardQual);
             } else {
-                console.warn('\t ANCHOR v0 : publisher-attestation quorum not met or PUBLISHER not in oracle_publish set; reward skipped (bundle still valid)');
+                getLogger().warn('\t ANCHOR v0 : publisher-attestation quorum not met or PUBLISHER not in oracle_publish set; reward skipped (bundle still valid)');
             }
         }
 
@@ -826,7 +827,7 @@ class Anchor {
         data['PUBLISHER_ATTESTATIONS'] = (publisherSigs.length > 0) ? JSON.stringify(publisherSigs) : null;
         if(!data['STATUS']) data['STATUS'] = (error) ? error : 'valid';
 
-        console.log("\t ANCHOR v0 : " + data['NETWORK'] + ' @ snapshot ' + data['SNAPSHOT_BLOCK'] +
+        getLogger().info("\t ANCHOR v0 : " + data['NETWORK'] + ' @ snapshot ' + data['SNAPSHOT_BLOCK'] +
                     ' (' + sections.length + ' section(s): ' + sections.map(s => s.CHAIN).join(',') + ')' +
                     ' : ' + data['STATUS']);
 
@@ -997,7 +998,7 @@ class Anchor {
 
         if(!data['STATUS']) data['STATUS'] = (error) ? error : 'valid';
 
-        console.log("\t ANCHOR v2 : batch " + data['MATCH_BATCH_SEQ'] + ' chunk ' + data['CHUNK_INDEX'] +
+        getLogger().info("\t ANCHOR v2 : batch " + data['MATCH_BATCH_SEQ'] + ' chunk ' + data['CHUNK_INDEX'] +
                     '/' + data['TOTAL_CHUNKS'] + ' : ' + data['STATUS']);
 
         // A continuation chunk carries no chain of its own; the batch seq is what
@@ -1034,7 +1035,7 @@ class Anchor {
                 for(let c of ordered) b64 += c.archive_b64;
                 let crc = this.archiveCrc(b64);
                 if(crc === null || crc !== String(parent.batch_crc32)){
-                    console.warn("\t ANCHOR v2 : batch " + data['MATCH_BATCH_SEQ'] + ' reassembly CRC mismatch, flagging invalid_archive');
+                    getLogger().warn("\t ANCHOR v2 : batch " + data['MATCH_BATCH_SEQ'] + ' reassembly CRC mismatch, flagging invalid_archive');
                     diag.noteAnchorFailed({
                         chain:           parent.chain,
                         reason:          'invalid_archive: reassembly CRC mismatch',

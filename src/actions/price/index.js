@@ -51,6 +51,7 @@ const priceV2       = require('./price_batch_compression.js');
 const priceRange    = require('../../price_zero_validity_activation.js');
 const adm           = require('../../mirror_admission_activation.js');
 
+const { getLogger } = require('../../observability/index.js');
 class Price {
 
     constructor(action){
@@ -428,7 +429,7 @@ class Price {
         data['VALIDATION_STATUS'] = validation;
         data['STATUS'] = error || 'valid';
 
-        console.log("\t PRICE v0 : rounds=" + firstRound + '-' + lastRound + ' count=' + roundCount + ' sigs=' + sigCount + ' : ' + data['STATUS']);
+        getLogger().info("\t PRICE v0 : rounds=" + firstRound + '-' + lastRound + ' count=' + roundCount + ' sigs=' + sigCount + ' : ' + data['STATUS']);
 
         await this.indexerDb.createPrice(data);
 
@@ -522,7 +523,7 @@ class Price {
         data['STATUS'] = error || 'valid';
 
         // Print status message
-        console.log("\t PRICE v1 : " + data['V1_COIN'] + '/' + data['V1_TICK'] + '/' + data['V1_FIAT'] + ' = ' + data['V1_VALUE'] + ' : ' + data['STATUS']);
+        getLogger().info("\t PRICE v1 : " + data['V1_COIN'] + '/' + data['V1_TICK'] + '/' + data['V1_FIAT'] + ' = ' + data['V1_VALUE'] + ' : ' + data['STATUS']);
 
         // Create record in prices table
         await this.indexerDb.createPrice(data);

@@ -34,6 +34,7 @@
 const consolidationLegAmount = require('../consolidation_leg_amount_activation.js');
 const gatedHandoffRef        = require('../gated_handoff_ref_activation.js');
 
+const { getLogger } = require('../observability/index.js');
 class Send {
 
     // Handle constructing a class instance
@@ -515,7 +516,7 @@ class Send {
             let status = (error) ? error : 'valid';
             data['STATUS'] = send['STATUS'] = status;
 
-            console.log("\t SEND : " + send['TICK'] + ' : ' + this.util.logAmount(send['AMOUNT']) + ' : ' + send['DESTINATION'] + ' : '+ data['STATUS']);
+            getLogger().info("\t SEND : " + send['TICK'] + ' : ' + this.util.logAmount(send['AMOUNT']) + ' : ' + send['DESTINATION'] + ' : '+ data['STATUS']);
 
             await this.indexerDb.createSend(send);
 

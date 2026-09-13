@@ -31,6 +31,7 @@
 
 const consolidationLegAmount = require('../consolidation_leg_amount_activation.js');
 
+const { getLogger } = require('../observability/index.js');
 class Destroy {
 
     // Handle constructing a class instance
@@ -276,7 +277,7 @@ class Destroy {
             data['STATUS'] = destroy['STATUS'] = status;
     
             // Print status message 
-            console.log("\t DESTROY : " + destroy['TICK'] + ' : ' + this.util.logAmount(destroy['AMOUNT']) + ' : ' + destroy['MEMO'] + ' : '+ data['STATUS']);
+            getLogger().info("\t DESTROY : " + destroy['TICK'] + ' : ' + this.util.logAmount(destroy['AMOUNT']) + ' : ' + destroy['MEMO'] + ' : '+ data['STATUS']);
     
             // Create record in destroys table
             await this.indexerDb.createDestroy(destroy);

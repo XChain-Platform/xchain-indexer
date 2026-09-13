@@ -28,6 +28,7 @@
 // statements, so it is imported where they live.
 const { ARCHIVE_HEAD_VERSIONS } = require('../../stateHash.js');
 
+const { getLogger } = require('../../observability/index.js');
 // The anchor_actions STATEMENTS live in src/db/anchor_sql.js, beside the tables they
 // name, and are re-exported below so every existing caller keeps importing them from
 // here. They are constants rather than mixin methods because three layers run the
@@ -323,7 +324,7 @@ function buildAnchorConfirmationsResponse(config, latest, rows) {
             // carries at most one section per ALLOWED_CHAINS, so reaching it means a limit or
             // a section-count assumption changed and this rule needs revisiting.
             if (cut === 0)
-                console.error('anchor confirmations: action_index ' + probeAction + ' spans more than ' +
+                getLogger().error('anchor confirmations: action_index ' + probeAction + ' spans more than ' +
                               ANCHOR_ROW_LIMIT + ' rows; cannot cut the page on an action boundary, ' +
                               'so its later sections are omitted from the walk');
             else

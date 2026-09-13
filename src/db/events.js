@@ -25,6 +25,7 @@ const path    = require('path');
 // requires of its own), so no cycle.
 const reorgHistoryQuery = require('../api/reorg_history_query');
 
+const { getLogger } = require('../observability/index.js');
 module.exports = {
 
     // The getreorghistory page: recent decoder REORG events above `sinceId`. Newest-first,
@@ -119,7 +120,7 @@ module.exports = {
             // signal. Log LOUD (the decoder REORG contract is [{block_index, block_hash}]) so a
             // payload-shape drift pages the operator instead of rotting.
             if(!Number.isFinite(block_index)){
-                console.error('getReorgsSince: DROPPING malformed REORG event id=' + row.id +
+                getLogger().error('getReorgsSince: DROPPING malformed REORG event id=' + row.id +
                     ' (afterId=' + afterId + '): payload yields no finite block_index, so it has no ' +
                     'rollback target and the cursor may later pass this id and miss the rollback. ' +
                     'Expected decoder contract [{block_index, block_hash}]; got data=' +
@@ -242,11 +243,11 @@ module.exports = {
                 } catch(e){ /* legacy row */ }
             }
             if(!hasNewFormat)
-                console.warn('Reorg cursor invariant: all REORG event markers are legacy (no decoder_event_id). ' +
+                getLogger().warn('Reorg cursor invariant: all REORG event markers are legacy (no decoder_event_id). ' +
                     'The next reorg detection would replay the full decoder reorg history. A clean genesis reindex ' +
                     'is recommended to restore the new-format cursor.');
         } catch(e){
-            console.warn('Reorg cursor invariant probe failed (non-fatal):', e.message);
+            getLogger().warn('Reorg cursor invariant probe failed (non-fatal):', e.message);
         }
     },
 

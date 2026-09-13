@@ -38,6 +38,7 @@ const crypto = require('crypto');
 // (MAX_DEPLOY_CHUNKS / MAX_DEPLOYCHUNK_PART_BYTES); kept in lockstep with the SDK
 // validator + splitter by the cross-service regression suite.
 const PROTO = require('../../protocol/constants.js');
+const { getLogger } = require('../../observability/index.js');
 const MAX_DEPLOY_CHUNKS         = PROTO.MAX_DEPLOY_CHUNKS;
 const MAX_DEPLOYCHUNK_PART_BYTES = PROTO.MAX_DEPLOYCHUNK_PART_BYTES;
 
@@ -235,7 +236,7 @@ class DeployChunk {
         data['STATUS'] = status;
 
         // Print status message
-        console.log("\t DEPLOY v4 : hash=" + data['CODE_HASH'] + ' : ' + chunkIndex + '/' + totalChunks +
+        getLogger().info("\t DEPLOY v4 : hash=" + data['CODE_HASH'] + ' : ' + chunkIndex + '/' + totalChunks +
             ' : bytes=' + partBytes + ' : ' + data['STATUS']);
 
         // Persist the chunk (stored valid or invalid so the explorer can surface its status;

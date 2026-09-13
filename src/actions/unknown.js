@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -43,7 +44,7 @@ class Unknown {
         data['STATUS'] = status;
 
         // Print status message
-        console.log("\t UNKNOWN : " + data['STATUS']);
+        getLogger().info("\t UNKNOWN : " + data['STATUS']);
 
         // Store the SOURCE in addresses list
         this.util.addAddressTicker(data['SOURCE']);

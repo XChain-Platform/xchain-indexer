@@ -28,6 +28,7 @@ const path = require('path');
 // set getCoinConfig() merges over its own defaults.
 const coinAdapter = require('./coins/to_indexer_config.js');
 
+const { getLogger } = require('./observability/index.js');
 // Parse a non-negative integer from an env var, falling back to defaultVal when
 // the value is absent, empty, or non-numeric. Unlike `parseInt(x) || default`,
 // this preserves 0 as a valid configured value.
@@ -67,7 +68,7 @@ function resolveCoinpayExpiration(frozen, envKey, network){
     if(override === undefined || override === '') return frozen;
     if(network !== 'regtest'){
         if(String(override) !== String(frozen))
-            console.log('WARNING: ' + envKey + ' is set but IGNORED on ' + String(network) +
+            getLogger().info('WARNING: ' + envKey + ' is set but IGNORED on ' + String(network) +
                 '; using the frozen protocol constant ' + frozen + 's. The COINPay expiration ' +
                 'window is a consensus input (a per-node value forks settlement) and is not ' +
                 'operator-tunable off regtest.');

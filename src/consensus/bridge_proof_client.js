@@ -67,6 +67,7 @@ const ed25519 = require('./ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
 
+const { getLogger } = require('../observability/index.js');
 // The block loop's stall reason for a proof that cannot be obtained yet. The '_barrier'
 // suffix is load-bearing: health.js keys its mirror-barrier class on it (isMirrorBarrierReason
 // in XChainIndexer.js), so a proof stall reads as the mirror-lag stall it is rather than as a
@@ -363,7 +364,7 @@ async function fetchEscrowProof(row, ctx, checkpoint, escrowAddress){
             tick:        String(row.tick)
         }, Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 15000);
     } catch(e){
-        console.warn('\t XBRIDGE : getbridgeescrowproof unreachable on ' + row.src_chain + ': ' + (e && e.message));
+        getLogger().warn('\t XBRIDGE : getbridgeescrowproof unreachable on ' + row.src_chain + ': ' + (e && e.message));
         return null;
     }
     // An {error} answer is the handler saying it cannot PROVE the key at that height: no

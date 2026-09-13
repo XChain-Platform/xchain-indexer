@@ -21,6 +21,7 @@
 
 const path    = require('path');
 
+const { getLogger } = require('../observability/index.js');
 module.exports = {
 
     // ── Full-node possession proofs (NODEPROOF / verified-validator tier) ──────
@@ -40,7 +41,7 @@ module.exports = {
     async createNodeProofVerification(pubkeyHex, challengeId, epochHeight, targetHeight, actionIndex, blockIndex, setBlock){
         let pubkey_id = await this.getPubkeyId(String(pubkeyHex).toLowerCase());
         if(pubkey_id === null){
-            console.warn('createNodeProofVerification: unknown pubkey ' + pubkeyHex);
+            getLogger().warn('createNodeProofVerification: unknown pubkey ' + pubkeyHex);
             return false;
         }
         // Source = the staking address active at the set-resolution block, strict
@@ -49,7 +50,7 @@ module.exports = {
         let sourceBlock = (setBlock === undefined || setBlock === null) ? blockIndex : setBlock;
         let source_id = await this._resolveActiveStakeSourceId(pubkey_id, sourceBlock);
         if(source_id === null || source_id === undefined){
-            console.warn('createNodeProofVerification: no active stake or delegation for pubkey ' + pubkeyHex + ' at block ' + sourceBlock);
+            getLogger().warn('createNodeProofVerification: no active stake or delegation for pubkey ' + pubkeyHex + ' at block ' + sourceBlock);
             return false;
         }
         let query = `INSERT IGNORE INTO full_node_verifications
@@ -91,7 +92,7 @@ module.exports = {
         let rows = await this.doQuery(query, [low, blockIndex, limit]);
         let truncated = rows.length >= limit;
         if(truncated)
-            console.warn('getVerifiedFullNodeSet hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' - full-node verifier set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
+            getLogger().warn('getVerifiedFullNodeSet hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' - full-node verifier set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
         let result = rows.map(r => ({
             pubkey:    String(r.pubkey),
             source:    r.source == null ? '' : String(r.source),

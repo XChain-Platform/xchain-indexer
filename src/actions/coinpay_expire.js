@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -76,7 +77,7 @@ class Coinpay_Expire {
                 coinOrder   = getOrderInfo;
                 sellerOrder = giveOrderInfo;
             } else {
-                console.log("\t COINPAY_EXPIRE (skip): ambiguous native roles for match " + obligationInfo['ACTION_INDEX']);
+                getLogger().info("\t COINPAY_EXPIRE (skip): ambiguous native roles for match " + obligationInfo['ACTION_INDEX']);
                 return;
             }
         } else if(this.util.isNull(giveOrderInfo['GIVE_TICK']) || giveOrderInfo['GIVE_TICK'] == this.config['COIN']){
@@ -123,7 +124,7 @@ class Coinpay_Expire {
         data['STATUS'] = 'valid';
 
         // Print status message
-        console.log("\t COINPAY_EXPIRE : " + this.config['COIN'] + ':' + obligationInfo['ACTION_INDEX'] + ' : ' + data['STATUS']);
+        getLogger().info("\t COINPAY_EXPIRE : " + this.config['COIN'] + ':' + obligationInfo['ACTION_INDEX'] + ' : ' + data['STATUS']);
 
         // Array of credits, debits, and escrows
         let credits = [],

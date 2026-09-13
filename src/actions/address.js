@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -195,7 +196,7 @@ class Address {
         data['STATUS'] = status;
 
         // Print status message
-        console.log("\t ADDRESS : " + data['SOURCE'] + ' : ' + data['STATUS']);
+        getLogger().info("\t ADDRESS : " + data['SOURCE'] + ' : ' + data['STATUS']);
 
         // Every ADDRESS action writes its `addresses` row, valid or not: that row is the audit trail a
         // client reads the verdict from, so a refused one reads back its `invalid: ...` reason instead of

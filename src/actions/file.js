@@ -44,6 +44,7 @@
 // gated_files.gate_min_amount column width), and the fixed comparison scale the
 // wallet uses. Vendored byte-identical from xchain-documentation/protocol/constants.js.
 const { THRESHOLD_SCALE } = require('../protocol/constants.js');
+const { getLogger } = require('../observability/index.js');
 const GATE_MIN_AMOUNT_MAX_LENGTH = 40;
 
 class File {
@@ -215,7 +216,7 @@ class File {
         data['STATUS'] = status;
 
         // Print status message
-        console.log("\t FILE : " + data['NAME'] + ' : ' + data['TYPE'] + ' : ' + (isGated ? ('GATE=' + data['GATE_TICKER'] + ' : ') : '') + data['STATUS']);
+        getLogger().info("\t FILE : " + data['NAME'] + ' : ' + data['TYPE'] + ' : ' + (isGated ? ('GATE=' + data['GATE_TICKER'] + ' : ') : '') + data['STATUS']);
 
         // Persisted for every version; gated_files (below) is written only for valid v1 gated files
         await this.indexerDb.createFile(data);

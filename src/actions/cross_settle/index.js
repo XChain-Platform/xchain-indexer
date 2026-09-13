@@ -38,6 +38,7 @@ const eq      = require('../../equivocation_header.js');
 const ccr     = require('../../cross_chain_royalty_activation.js');
 const ah      = require('../../mirror_admission_activation.js');
 
+const { getLogger } = require('../../observability/index.js');
 class Cross_Settle {
 
     constructor(action){
@@ -101,7 +102,7 @@ class Cross_Settle {
         // its row is mirrored in. getEffectiveUnsettledMatches already filters on
         // network; this is the security boundary's belt-and-suspenders guard.
         if(String(m.network || '') !== String(this.config['NETWORK'] || '')){
-            console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : network mismatch (' + m.network + ' != ' + this.config['NETWORK'] + ') : skipping');
+            getLogger().warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : network mismatch (' + m.network + ' != ' + this.config['NETWORK'] + ') : skipping');
             return;
         }
 
@@ -141,7 +142,7 @@ class Cross_Settle {
             : await this.indexerDb.getSwapInfo(counterpartyCoin, localActionIndex);
         if(!localInfo && await this.indexerDb.isActionIndexParsed(localActionIndex)){
             this._dismissed.set(m.match_id, { block: blockIndex });
-            console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : local ' + localKind + ' ' + coin + ':' + localActionIndex + ' is an indexed action but not a cross-chain ' + localKind + ' : dismissed until a reorg below block ' + blockIndex);
+            getLogger().warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : local ' + localKind + ' ' + coin + ':' + localActionIndex + ' is an indexed action but not a cross-chain ' + localKind + ' : dismissed until a reorg below block ' + blockIndex);
             return;
         }
 
@@ -164,7 +165,7 @@ class Cross_Settle {
             // the residual race / single-host path. The match stays unsettled + effective and
             // retries on a later block. NOT an error. (Deterministic quorum-N under PARTIAL
             // snapshot arrival is sealed separately by the multi-node design; presence here.)
-            console.log("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : capability snapshot not synced : deferring');
+            getLogger().info("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : capability snapshot not synced : deferring');
             return;
         }
 
@@ -199,7 +200,7 @@ class Cross_Settle {
         if(!quorumMet){
             // Genuinely insufficient quorum (the snapshot IS present). Do not
             // record a settlement; a malformed/forged match never settles.
-            console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : insufficient ' + (weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + N + ')') + ' : skipping');
+            getLogger().warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : insufficient ' + (weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + N + ')') + ' : skipping');
             return;
         }
 
@@ -213,7 +214,7 @@ class Cross_Settle {
         // above (the dismissal probe), once per block.
         let swapInfo = localInfo;
         if(!swapInfo){
-            console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : local offer ' + coin + ':' + localActionIndex + ' not found : skipping');
+            getLogger().warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : local offer ' + coin + ':' + localActionIndex + ' not found : skipping');
             return;
         }
         if(swapInfo['SWAP_STATUS'] !== 'open'){
@@ -221,7 +222,7 @@ class Cross_Settle {
             // settlement so we stop re-evaluating it, but move no funds. The record is
             // anchored to a real internal action row so a reorg (which may revive the
             // offer's open status) drops it and the match re-applies.
-            console.log("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : offer ' + coin + ':' + localActionIndex + ' not open (' + swapInfo['SWAP_STATUS'] + ') : recording no-op settlement');
+            getLogger().info("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : offer ' + coin + ':' + localActionIndex + ' not open (' + swapInfo['SWAP_STATUS'] + ') : recording no-op settlement');
             await this.recordNoopSettlement(data, m, localActionIndex);
             return;
         }
@@ -231,7 +232,7 @@ class Cross_Settle {
         data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
         data['STATUS'] = 'valid';
 
-        console.log("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : release ' +
+        getLogger().info("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : release ' +
                     giveAmount + ' ' + coin + ':' + (giveTick || coin) + ' → ' + payoutAddr + ' : ' + data['STATUS']);
 
         let credits = [], debits = [], escrows = [];
@@ -321,14 +322,14 @@ class Cross_Settle {
         if(orderInfo === undefined)
             orderInfo = await this.indexerDb.getOrderInfo(counterpartyCoin, localActionIndex);
         if(!orderInfo){
-            console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : local order ' + coin + ':' + localActionIndex + ' not found : skipping');
+            getLogger().warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : local order ' + coin + ':' + localActionIndex + ' not found : skipping');
             return;
         }
         if(orderInfo['ORDER_STATUS'] !== 'open'){
             // Terminal already (fully filled by a prior pass, cancelled, or expired). Record
             // the settlement so we stop re-evaluating it but move no funds (same
             // reorg-anchored no-op record as the swap leg above).
-            console.log("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : order ' + coin + ':' + localActionIndex + ' not open (' + orderInfo['ORDER_STATUS'] + ') : recording no-op settlement');
+            getLogger().info("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : order ' + coin + ':' + localActionIndex + ' not open (' + orderInfo['ORDER_STATUS'] + ') : recording no-op settlement');
             await this.recordNoopSettlement(data, m, localActionIndex);
             return;
         }
@@ -346,12 +347,12 @@ class Cross_Settle {
             let giveRemaining = orderInfo['GIVE_REMAINING'];
             if(giveRemaining !== undefined && giveRemaining !== null){
                 if(this.util.bclte(giveRemaining, 0)){
-                    console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : order ' + coin + ':' + localActionIndex + ' has no give remaining : recording no-op settlement');
+                    getLogger().warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : order ' + coin + ':' + localActionIndex + ' has no give remaining : recording no-op settlement');
                     await this.recordNoopSettlement(data, m, localActionIndex);
                     return;
                 }
                 if(this.util.bclt(giveRemaining, giveAmount)){
-                    console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : fill ' + giveAmount + ' exceeds give remaining ' + giveRemaining + ' on order ' + coin + ':' + localActionIndex + ' : clamping release to escrow');
+                    getLogger().warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : fill ' + giveAmount + ' exceeds give remaining ' + giveRemaining + ' on order ' + coin + ':' + localActionIndex + ' : clamping release to escrow');
                     giveAmount = giveRemaining;
                 }
             }
@@ -361,7 +362,7 @@ class Cross_Settle {
         data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
         data['STATUS'] = 'valid';
 
-        console.log("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : order fill release ' +
+        getLogger().info("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : order fill release ' +
                     giveAmount + ' ' + coin + ':' + (giveTick || coin) + ' → ' + payoutAddr + ' : ' + data['STATUS']);
 
         let credits = [], debits = [], escrows = [];

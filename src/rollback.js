@@ -39,6 +39,7 @@ const { archiveAuthorScopeJoin } = require('./archive_rollback_author_scope_acti
 // continuation are what make an `attests` row part of a batch, and naming them from the
 // wire module keeps the reorg query and the parser reading the same two numbers.
 const abw       = require('./actions/attest/attest_batch_wire.js');
+const { getLogger } = require('./observability/index.js');
 // Byte-identical copy of actions/attest.js's ATTEST_BATCH_COMPLETION_STAMP, the marker a
 // completing v6 continuation appends to the verdict it stamps on a surviving v5 head. The
 // reorg reset below restores ONLY marked stamps; the constant is duplicated rather than
@@ -142,7 +143,7 @@ class Rollback {
         let genesisBlock = this.config['GENESIS_BLOCK'];
         if(genesisBlock && Number(block_index) <= Number(genesisBlock)){
             let msg = 'Rollback to block ' + block_index + ' refused: at/below GENESIS_BLOCK ' + genesisBlock + ' (would destroy the bootstrapped genesis ledger)';
-            console.error(msg);
+            getLogger().error(msg);
             throw new Error(msg);
         }
 
@@ -157,7 +158,7 @@ class Rollback {
         if(this.indexer) this.indexer.stallReason = 'reorg_rollback';
 
         // Notify user of start of rollback
-        console.log('Starting rollback to block ' + block_index + '...');
+        getLogger().info('Starting rollback to block ' + block_index + '...');
 
         // Source-chain reorg fence (item 5308): this chain's monotonic push generation is bumped so
         // that rows re-published by forward replay carry the NEW generation while the orphaned rows
@@ -1738,7 +1739,7 @@ class Rollback {
                         // HubPushQueue to retry with backoff. A dropped retraction would otherwise
                         // leave orphaned 'finalized' hub rows serving fleet-wide (stale prices, XCALL
                         // relay rows eligible for re-injection, matches eligible for settlement).
-                        console.warn('Rollback: live ' + r.pushType + ' failed; durable row ' + r.id +
+                        getLogger().warn('Rollback: live ' + r.pushType + ' failed; durable row ' + r.id +
                             ' will be retried by HubPushQueue:', err && err.message);
                     }
                 }
@@ -1752,7 +1753,7 @@ class Rollback {
         // back action range, the staged hub retractions, and elapsed time.
         const elapsedMs     = Date.now() - rollbackStartedAt;
         const retractionIds = stagedRetractions.map(r => r.pushType + '#' + r.id);
-        console.log('Rollback complete: to block ' + block_index +
+        getLogger().info('Rollback complete: to block ' + block_index +
             ', action range [' + firstActionIndex + ', ' + lastActionIndex + ']' +
             ', staged retractions ' + (retractionIds.length ? retractionIds.join(', ') : 'none') +
             ', elapsed ' + elapsedMs + 'ms');

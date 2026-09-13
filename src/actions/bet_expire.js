@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -65,7 +66,7 @@ class Bet_Expire {
         data['STATUS'] = 'valid';
 
         // Print status message
-        console.log("\t BET_EXPIRE : " + this.config['COIN'] + ':' + feedInfo['ACTION_INDEX'] + ' : ' + data['STATUS']);
+        getLogger().info("\t BET_EXPIRE : " + this.config['COIN'] + ':' + feedInfo['ACTION_INDEX'] + ' : ' + data['STATUS']);
 
         // Array of credits, debits, and escrows
         let credits = [],

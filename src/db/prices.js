@@ -24,6 +24,7 @@ const snapshotAgeCausality = require('../oracle_snapshot_age_causality_activatio
 const staleRoundVisibility = require('../oracle_stale_round_visibility_activation');
 const preloadCausality = require('../oracle_preload_causality_activation');
 const batchLandedFee = require('../price_fee_batch_landed_activation');
+const { getLogger } = require('../observability/index.js');
 // Per-block cap on the ATTEST deadline-expiry sweep. Vendored
 // byte-identical from xchain-documentation/protocol/constants.js, same convention
 // as the XCALL_MAX_CALLS_PER_BLOCK sibling it mirrors.
@@ -306,7 +307,7 @@ module.exports = {
         if(roundRows.length >= ORACLE_VM_MAX_ROWS){
             let oldestLoaded = Number(roundRows[roundRows.length - 1].round_number);
             roundFloor = oldestLoaded + 1;
-            console.error('[oracle snapshot] round set hit the ' + ORACLE_VM_MAX_ROWS +
+            getLogger().error('[oracle snapshot] round set hit the ' + ORACLE_VM_MAX_ROWS +
                 ' row ceiling at block ' + blockIndex + ' - the guaranteed window is ' +
                 'now rounds >= ' + roundFloor + ', short of the ' + ORACLE_VM_ROUND_WINDOW +
                 '-round window (too many coin pairs for the ceiling)');
@@ -361,7 +362,7 @@ module.exports = {
         if(landedActive && !Number.isFinite(landedTime)){
             if(!this._batchLandedNoTimeWarned){
                 this._batchLandedNoTimeWarned = true;
-                console.warn('WARNING: getLatestPrice: the landed-batch fee bound is armed but this call ' +
+                getLogger().warn('WARNING: getLatestPrice: the landed-batch fee bound is armed but this call ' +
                     'supplied no chain-derived block time (opts.blockTime); refusing to price ' +
                     coinPair + ' from the unbounded selection.');
             }

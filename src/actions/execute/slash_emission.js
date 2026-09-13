@@ -35,6 +35,7 @@
 
 const slashLedgerConsolidation = require('../../slash_ledger_consolidation_activation.js');
 
+const { getLogger } = require('../../observability/index.js');
 // Process a SLASH emission from inside the VM. The emission carries:
 //   { action: 'SLASH', params: { contractIndex, pubkey, token, amount } }
 // Authorization is implicit: the gateway's contractStakeData accessor is scoped
@@ -72,14 +73,14 @@ async function processSlashEmission(emission, data, slashPosition, slashLedger){
     if(pubkeyId === null){
         // pubkey is not known to index_pubkeys at all: not staked anywhere on this
         // chain. Nothing to deduct; log for auditability so the no-op is visible.
-        console.log('\t SLASH (no-op): pubkey not found in index_pubkeys: ' + pubkey +
+        getLogger().info('\t SLASH (no-op): pubkey not found in index_pubkeys: ' + pubkey +
             ' contract=' + contractIndex + ' token=' + token);
         return;
     }
     let tickId = await this.indexerDb.getTickerId(token);
     if(tickId === null){
         // token is unknown. Nothing to deduct; log for auditability.
-        console.log('\t SLASH (no-op): token not found: ' + token +
+        getLogger().info('\t SLASH (no-op): token not found: ' + token +
             ' pubkey=' + pubkey + ' contract=' + contractIndex);
         return;
     }
@@ -92,7 +93,7 @@ async function processSlashEmission(emission, data, slashPosition, slashLedger){
     if(!this.util.bcgt(slashed, '0')){
         // pubkey + token exist but no active stake on this contract to deduct.
         // Log the attempted vs actual amounts so the no-op is visible in the audit trail.
-        console.log('\t SLASH (no-op): zero slashed (no active stake): pubkey=' + pubkey +
+        getLogger().info('\t SLASH (no-op): zero slashed (no active stake): pubkey=' + pubkey +
             ' token=' + token + ' requested=' + amount + ' contract=' + contractIndex);
         return;
     }

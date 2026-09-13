@@ -24,6 +24,7 @@ const http  = require('http');
 const https = require('https');
 const url   = require('url');
 
+const { getLogger } = require('../observability/index.js');
 // Name the hub rejections a REPLAY can never turn into an acceptance.
 // A push can fail INSIDE a successful JSON-RPC envelope: PriceAggregator returns
 // { accepted:false, reason } and api.js returns { error:'...' } as an ordinary method
@@ -188,7 +189,7 @@ class HubClient {
             await this.call('pushchaintip', params);
         } catch (err) {
             // Best-effort: log and continue
-            console.warn('HubClient: pushChainTip failed:', err);
+            getLogger().warn('HubClient: pushChainTip failed:', err);
         }
     }
 
@@ -338,7 +339,7 @@ class HubClient {
             // Never silently: a rail the hub refuses on the payload is a standing condition
             // an operator has to clear, and this is the log line that says so. Worded like
             // the in-result branch below so one grep finds both.
-            console.warn('HubClient: ' + method + ' rejected terminally by the hub (' +
+            getLogger().warn('HubClient: ' + method + ' rejected terminally by the hub (' +
                 reason + '); dropping the queued row');
             return { error: reason };
         }
@@ -359,7 +360,7 @@ class HubClient {
             // Terminal: a replay carries the same payload into the same verdict, so keep
             // today's drop. Never silently, though: a rail stopped by the ingest fence is a
             // standing condition an operator has to clear, and this is the log line that says so.
-            console.warn('HubClient: ' + method + ' rejected terminally by the hub (' +
+            getLogger().warn('HubClient: ' + method + ' rejected terminally by the hub (' +
                 reason + '); dropping the queued row');
             return result;
         }

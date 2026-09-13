@@ -50,6 +50,7 @@ const http  = require('http');
 const https = require('https');
 const url   = require('url');
 
+const { getLogger } = require('../observability/index.js');
 // Attestation-bearing ANCHOR versions. A reward exists only for these; anything else on
 // the txid is a different anchor and cannot stand in as proof of this one.
 //
@@ -195,7 +196,7 @@ class AnchorProofClient {
             if(!result || result.error || !Array.isArray(result.anchors)) return null;
             return result;
         } catch(e){
-            console.warn('AnchorProofClient: getanchorconfirmations unreachable for ' + txid + ': ' + (e && e.message));
+            getLogger().warn('AnchorProofClient: getanchorconfirmations unreachable for ' + txid + ': ' + (e && e.message));
             return null;
         }
     }
@@ -292,7 +293,7 @@ class AnchorProofClient {
             // speaks. Judging the partial set it gave us is exactly the silent forfeit this
             // walk exists to remove, so treat it as the malformed reply it is.
             if(!Number.isInteger(next) || (after !== null && next <= after)){
-                console.warn('AnchorProofClient: ' + txid + ' reported truncated with an unusable ' +
+                getLogger().warn('AnchorProofClient: ' + txid + ' reported truncated with an unusable ' +
                              'page cursor (' + result.next_after_action_index + '); cannot complete the walk');
                 return 'unknown';
             }
@@ -303,7 +304,7 @@ class AnchorProofClient {
             // real anchor transaction (the txid is the hub's own ANCHOR tx, and a DOGE
             // transaction cannot carry this many anchor actions), so this is a peer fault or
             // a hostile answer, not a bound to tune. Refuse to judge a partial set.
-            console.error('AnchorProofClient: ' + txid + ' still truncated after ' + MAX_ANCHOR_PAGES +
+            getLogger().error('AnchorProofClient: ' + txid + ' still truncated after ' + MAX_ANCHOR_PAGES +
                           ' pages; refusing to judge a partial anchor set');
             return 'unknown';
         }

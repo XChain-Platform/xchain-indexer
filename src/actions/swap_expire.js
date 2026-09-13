@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -57,7 +58,7 @@ class Swap_Expire {
         data['STATUS'] = 'valid';
 
         // Print status message
-        console.log("\t SWAP_EXPIRE : " + this.config['COIN'] + ':' + swapInfo['ACTION_INDEX'] + ' : ' + data['STATUS']);
+        getLogger().info("\t SWAP_EXPIRE : " + this.config['COIN'] + ':' + swapInfo['ACTION_INDEX'] + ' : ' + data['STATUS']);
 
         // Array of credits, debits, and escrows
         let credits = [],

@@ -44,6 +44,7 @@ const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
 
+const { getLogger } = require('../observability/index.js');
 // Every lock a bridged row carries (xchain-token-bridge.md section 6). The copy is keyless
 // by design, so these are set once at creation and can never be changed afterwards: nobody
 // can mint it, rename it, sleep it or attach a callback to it. LOCK_MAX_SUPPLY is NOT in the
@@ -82,17 +83,17 @@ class Genesis {
         // genesis_dump.js), so the imported state is provably the canonical genesis state.
         let dumpFile = this.config['GENESIS_DUMP_PATH'];
         if(dumpFile && fs.existsSync(dumpFile)){
-            console.log('GENESIS: importing precomputed dump for ' + this.config['COIN'] + ' at block ' + blockToParse + ' from ' + dumpFile);
+            getLogger().info('GENESIS: importing precomputed dump for ' + this.config['COIN'] + ' at block ' + blockToParse + ' from ' + dumpFile);
             if(this.util.isNull(this.config['GENESIS_DUMP_HASH']))
-                console.warn('GENESIS: GENESIS_DUMP_HASH is not pinned; importing on the dump-recorded block hashes only (no content-hash anchor).');
+                getLogger().warn('GENESIS: GENESIS_DUMP_HASH is not pinned; importing on the dump-recorded block hashes only (no content-hash anchor).');
             let GenesisDump = require('./genesis_dump');
             let res = await (new GenesisDump(this.indexerDb, this.util, this.config)).read(dumpFile);
-            console.log('GENESIS: imported ' + res.rowsImported + ' rows (block hashes verified)');
+            getLogger().info('GENESIS: imported ' + res.rowsImported + ' rows (block hashes verified)');
             return;
         }
 
         let file = this.config['GENESIS_LEDGER_PATH'];
-        console.log('GENESIS: bootstrapping ' + this.config['COIN'] + ' name ownership at block ' + blockToParse + ' from ' + file);
+        getLogger().info('GENESIS: bootstrapping ' + this.config['COIN'] + ' name ownership at block ' + blockToParse + ' from ' + file);
 
         // Consensus checkpoint: verify the bundled manifest against the pinned hash.
         this.verifyManifest(file);
@@ -151,7 +152,7 @@ class Genesis {
             this.indexerDb._internCache = null;
         }
 
-        console.log('GENESIS: complete - ' + rows.length + ' names injected');
+        getLogger().info('GENESIS: complete - ' + rows.length + ' names injected');
     }
 
     // sha256 the manifest and compare to the pinned GENESIS_LEDGER_HASH. A null pin
@@ -163,7 +164,7 @@ class Genesis {
             return;
         let actual = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
         if(actual !== String(expected).toLowerCase()){
-            console.error('GENESIS FATAL: ledger hash mismatch for ' + file + ' (expected ' + expected + ', got ' + actual + '). Halting.');
+            getLogger().error('GENESIS FATAL: ledger hash mismatch for ' + file + ' (expected ' + expected + ', got ' + actual + '). Halting.');
             throw new Error('Genesis ledger hash mismatch');
         }
     }
@@ -192,11 +193,11 @@ class Genesis {
                 continue;
             // Protocol sanity (the handler rejects these too; skip + log rather than abort).
             if(tick.indexOf('|') !== -1 || tick.indexOf(';') !== -1){
-                console.warn('GENESIS skip (separator char in tick): ' + tick);
+                getLogger().warn('GENESIS skip (separator char in tick): ' + tick);
                 continue;
             }
             if(tick.length > this.config['MAX_TICK_LENGTH']){
-                console.warn('GENESIS skip (tick exceeds MAX_TICK_LENGTH): ' + tick);
+                getLogger().warn('GENESIS skip (tick exceeds MAX_TICK_LENGTH): ' + tick);
                 continue;
             }
             if(index.has(tick))
@@ -303,7 +304,7 @@ class Genesis {
         // operators on different nodes compare this one line to prove they armed the
         // identical airdrop set before any consensus action is derived.
         let setHash = this.airdropSetHash(buckets);
-        console.log('GENESIS: airdrop set-hash ' + setHash + ' (' + buckets.length + ' buckets, canonical order '
+        getLogger().info('GENESIS: airdrop set-hash ' + setHash + ' (' + buckets.length + ' buckets, canonical order '
             + buckets.map(b => b.name).join(',') + ')');
         // ENFORCE it. Until this check the set-hash was a log line and
         // nothing else: the per-bucket GENESIS_AIRDROP_HASHES pin each snapshot FILE, so two
@@ -314,7 +315,7 @@ class Genesis {
         // instead of forking it.
         if(pin){
             if(setHash !== String(pin).toLowerCase()){
-                console.error('GENESIS FATAL: airdrop set-hash mismatch (expected ' + pin + ', got ' + setHash + '). Halting.');
+                getLogger().error('GENESIS FATAL: airdrop set-hash mismatch (expected ' + pin + ', got ' + setHash + '). Halting.');
                 throw new Error('Genesis airdrop set-hash mismatch (expected ' + pin + ', got ' + setHash + ')');
             }
         } else if(this.config['NETWORK'] === 'mainnet'){
@@ -333,7 +334,7 @@ class Genesis {
                 total = this.util.bcadd(total, r.quantity, 8);
             if(!this.util.bcgt(total, 0))
                 throw new Error('GENESIS FATAL: airdrop snapshot ' + b.file + ' has no positive holder quantities');
-            console.log('GENESIS: airdrop bucket ' + b.name + ' - ' + rows.length + ' holders, '
+            getLogger().info('GENESIS: airdrop bucket ' + b.name + ' - ' + rows.length + ' holders, '
                 + b.amount + ' ' + tick + ' (snapshot block ' + snapshot + ')');
             let credited = 0;
             for(let r of rows){
@@ -343,7 +344,7 @@ class Genesis {
                 await this.creditIssue(gas, tick, r.address, credit, b.name, blockToParse, blockTime);
                 credited++;
             }
-            console.log('GENESIS: airdrop bucket ' + b.name + ' complete - ' + credited + ' credits');
+            getLogger().info('GENESIS: airdrop bucket ' + b.name + ' complete - ' + credited + ' credits');
         }
     }
 
@@ -411,7 +412,7 @@ class Genesis {
             return;
         let actual = crypto.createHash('sha256').update(fs.readFileSync(bucket.file)).digest('hex');
         if(actual !== String(bucket.hash).toLowerCase()){
-            console.error('GENESIS FATAL: airdrop snapshot hash mismatch for ' + bucket.file + ' (expected ' + bucket.hash + ', got ' + actual + '). Halting.');
+            getLogger().error('GENESIS FATAL: airdrop snapshot hash mismatch for ' + bucket.file + ' (expected ' + bucket.hash + ', got ' + actual + '). Halting.');
             throw new Error('Genesis airdrop snapshot hash mismatch');
         }
     }
@@ -436,7 +437,7 @@ class Genesis {
             if(address === '' || quantity === '')
                 continue;
             if(!this.util.isNumeric(quantity) || !this.util.bcgt(quantity, 0)){
-                console.warn('GENESIS skip (bad airdrop quantity): ' + address + ',' + quantity);
+                getLogger().warn('GENESIS skip (bad airdrop quantity): ' + address + ',' + quantity);
                 continue;
             }
             if(index.has(address)){
@@ -511,7 +512,7 @@ class Genesis {
         // FIRST action of that block, so the row provably cannot be there yet. The probe the
         // bridge needs (many in-legs, one row) would only add a read to the one block whose
         // replay every node has to reproduce, so genesis keeps the read it never had.
-        console.log('GENESIS: injecting gas token ' + tick + ' (decimals 8, max_supply 100000000, mint disabled) owned by GAS');
+        getLogger().info('GENESIS: injecting gas token ' + tick + ' (decimals 8, max_supply 100000000, mint disabled) owned by GAS');
         await this.injectProtocolToken(this.gasTokenParams(gas), {
             blockIndex:      blockToParse,
             blockTime:       blockTime,

@@ -48,6 +48,7 @@ const fs      = require('fs');
 const path    = require('path');
 const rca     = require('../rollcall_activation.js');
 
+const { getLogger } = require('../observability/index.js');
 // Raised by the epoch close when the DOGE side cannot be believed yet. Its own
 // class, deliberately NOT AnchorProofUnavailableError, so an operator reading a
 // stalled indexer can tell the two cross-chain rails apart at a glance.
@@ -98,7 +99,7 @@ class RollcallProofClient {
             let p = path.join(__dirname, '..', '..', 'test', 'fixtures', 'action-manifest.json');
             this._manifestHash = crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
         } catch(e){
-            console.error('RollcallProofClient: cannot read vendored action-manifest.json: ' + (e && e.message));
+            getLogger().error('RollcallProofClient: cannot read vendored action-manifest.json: ' + (e && e.message));
             this._manifestHash = null;
         }
         return this._manifestHash;

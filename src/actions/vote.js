@@ -34,6 +34,7 @@
 const { rethrowIfInfraFault } = require('../consensus/fault_guard.js');
 const { buildInjectedExecContext, SYNTH_EXEC_TX_HASH, SYNTH_TAGS } = require('../consensus/exec_context.js');
 
+const { getLogger } = require('../observability/index.js');
 class Vote {
 
     // Handle constructing a class instance
@@ -297,7 +298,7 @@ class Vote {
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
-        console.log("\t VOTE create : " + data['TICK'] + ' : ' + data['STATUS']);
+        getLogger().info("\t VOTE create : " + data['TICK'] + ' : ' + data['STATUS']);
 
         // Persist the poll only when valid; an invalid create writes no poll row
         // (the action itself is still recorded in `actions` with its status)
@@ -409,7 +410,7 @@ class Vote {
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
-        console.log("\t VOTE ballot : poll " + data['POLL_REF'] + ' : ' + data['STATUS']);
+        getLogger().info("\t VOTE ballot : poll " + data['POLL_REF'] + ' : ' + data['STATUS']);
 
         // Only a VALID ballot mutates the voter's standing ballot; an invalid one
         // is a no-op (leaves any prior valid ballot intact)
@@ -431,7 +432,7 @@ class Vote {
         // but a user-broadcast VOTE|2 cannot legitimately finalize a poll; reject it
         // (mirrors attest.js:454).
         if(!data['IS_SYNTHETIC']){
-            console.warn('\t VOTE v2 : rejected (user-broadcast not allowed for synthetic finalize)');
+            getLogger().warn('\t VOTE v2 : rejected (user-broadcast not allowed for synthetic finalize)');
             data['STATUS'] = 'invalid: VOTE v2 must be system-synthesized';
             return;
         }
@@ -478,7 +479,7 @@ class Vote {
                 if(Number.isInteger(cbDelay) && cbDelay > 0){
                     let dueBlock = parseInt(data['BLOCK_INDEX']) + cbDelay;
                     await this.indexerDb.setPollCallbackDue(poll.action_index, dueBlock);
-                    console.log("\t VOTE callback : poll " + poll.action_index + ' timelocked, due at block ' + dueBlock);
+                    getLogger().info("\t VOTE callback : poll " + poll.action_index + ' timelocked, due at block ' + dueBlock);
                 } else {
                     let cbIndex = await this.injectCallbackExecute(poll, data, result);
                     if(cbIndex) await this.indexerDb.setPollCallbackIndex(poll.action_index, cbIndex);
@@ -491,7 +492,7 @@ class Vote {
                ' winner=' + (this.util.isNull(result.winning_option) ? 'none' : result.winning_option) +
                (result.decided_early ? ' (early)' : ''))
             : 'no-op';
-        console.log("\t VOTE v2 finalize : poll " + pollIndex + ' @ ' +
+        getLogger().info("\t VOTE v2 finalize : poll " + pollIndex + ' @ ' +
                     data['EFFECTIVE_CLOSE_BLOCK'] + ' : ' + summary);
 
         await this.mapper.createMappings(data);
@@ -513,7 +514,7 @@ class Vote {
 
         let creator = await this.indexerDb.getAddressById(poll.deposit_address_id);
         if(this.util.isNull(creator)){
-            console.warn('\t VOTE escrow : missing creator for poll ' + poll.action_index + ', escrow left held');
+            getLogger().warn('\t VOTE escrow : missing creator for poll ' + poll.action_index + ', escrow left held');
             return;
         }
 
@@ -541,7 +542,7 @@ class Vote {
         await this.indexerDb.updateTokens(tickers);
         await this.indexerDb.setPollDepositResolved(poll.action_index, refunded ? 'refunded' : 'forfeited');
 
-        console.log("\t VOTE escrow : poll " + poll.action_index + ' released ' + held + ' ' + gas +
+        getLogger().info("\t VOTE escrow : poll " + poll.action_index + ' released ' + held + ' ' + gas +
                     ' (deposit ' + deposit + (refunded ? ' refund' : ' forfeit') + ', gas_escrow ' + gasEscrow + ' refund)');
     }
 
@@ -666,9 +667,9 @@ class Vote {
         try {
             await this.actions.actionExecute.parse(actionParams, emissionData, null);
             if(emissionData['STATUS'] && emissionData['STATUS'] !== 'valid')
-                console.warn('\t VOTE callback : execute non-valid (' + emissionData['STATUS'] + '), poll result stands');
+                getLogger().warn('\t VOTE callback : execute non-valid (' + emissionData['STATUS'] + '), poll result stands');
             await this.indexerDb.releaseSavepoint(savepoint);
-            console.log("\t VOTE callback : poll " + poll.action_index + ' -> contract ' +
+            getLogger().info("\t VOTE callback : poll " + poll.action_index + ' -> contract ' +
                         poll.callback_contract_index + '.' + poll.callback_method + ' (execute ' + emissionActionIndex + ')');
             return emissionActionIndex;
         } catch(e){
@@ -680,7 +681,7 @@ class Vote {
             // committing this validator's poll with a silently-dropped callback while
             // healthy peers apply it. A deterministic callback failure still stands.
             rethrowIfInfraFault(e);
-            console.warn('\t VOTE callback : execute threw (' + e.message + '), poll result stands');
+            getLogger().warn('\t VOTE callback : execute threw (' + e.message + '), poll result stands');
             return null;
         }
     }
@@ -734,7 +735,7 @@ class Vote {
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
-        console.log("\t VOTE delegate : " + data['TICK'] + ' -> ' +
+        getLogger().info("\t VOTE delegate : " + data['TICK'] + ' -> ' +
                     (clearing ? '(clear)' : data['DELEGATE_TO']) + ' : ' + status);
 
         // Only a valid action writes a delegation event row.

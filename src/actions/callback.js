@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -273,7 +274,7 @@ class Callback {
         data['STATUS'] = callback['STATUS'] = status;
 
         // Print status message
-        console.log("\t CALLBACK : " + data['TICK'] + ' : '  +  data['MEMO'] + ' : ' + data['STATUS']);
+        getLogger().info("\t CALLBACK : " + data['TICK'] + ' : '  +  data['MEMO'] + ' : ' + data['STATUS']);
 
         // Create record in callback table
         await this.indexerDb.createCallback(callback);

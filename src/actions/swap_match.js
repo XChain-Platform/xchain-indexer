@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -127,7 +128,7 @@ class Swap_Match {
                 data['STATUS'] = 'valid';
 
                 // Print status message
-                console.log("\t SWAP_MATCH : " + this.util.logAmount(swapInfo['GIVE_AMOUNT']) + ' ' + swapInfo['GIVE_COIN'] + ':' + swapInfo['GIVE_TICK'] + ' = '  +  this.util.logAmount(swapInfo['GET_AMOUNT']) + ' ' + swapInfo['GET_COIN'] + ':' + swapInfo['GET_TICK'] + ' : ' + data['STATUS']);
+                getLogger().info("\t SWAP_MATCH : " + this.util.logAmount(swapInfo['GIVE_AMOUNT']) + ' ' + swapInfo['GIVE_COIN'] + ':' + swapInfo['GIVE_TICK'] + ' = '  +  this.util.logAmount(swapInfo['GET_AMOUNT']) + ' ' + swapInfo['GET_COIN'] + ':' + swapInfo['GET_TICK'] + ' : ' + data['STATUS']);
 
                 // Array of credits, debits, and escrows
                 let credits = [],

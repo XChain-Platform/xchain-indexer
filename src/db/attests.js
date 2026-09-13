@@ -42,6 +42,7 @@ const ar = require('../anchor_reward_activation.js');
 // and every mixin read the same instance of each.
 const { ATTEST_BATCH_CHUNK_ROW_LIMIT } = require('./shared.js');
 
+const { getLogger } = require('../observability/index.js');
 module.exports = {
 
     // Build the read-only attestation-response snapshot the VM exposes through
@@ -183,7 +184,7 @@ module.exports = {
             // duplicate rather than splitting one request across two rows.
             let priorV0 = await this.doQuery("SELECT action_index FROM attests WHERE request_id=? AND version=0 LIMIT 1", [request_id]);
             if(priorV0.length > 0){
-                console.warn('createAttestationRequest: duplicate v0 for request_id=' + request_id +
+                getLogger().warn('createAttestationRequest: duplicate v0 for request_id=' + request_id +
                              ' (keeping action_index=' + priorV0[0].action_index + ', skipping ' + action_index + ')');
                 return;
             }

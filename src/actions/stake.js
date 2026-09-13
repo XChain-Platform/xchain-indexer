@@ -38,6 +38,7 @@
 
 const stakeKeyReuse = require('../stake_key_reuse_activation.js');
 
+const { getLogger } = require('../observability/index.js');
 class Stake {
 
     // Handle constructing a class instance
@@ -188,7 +189,7 @@ class Stake {
 
         // Print status message
         let label = (format === 2) ? 'STAKE topup' : 'STAKE';
-        console.log("\t " + label + " : amount=" + this.util.logAmount(data['AMOUNT']) + ' : pubkey=' + String(data['SIGNING_PUBKEY']).substring(0, 16) + '... : ' + data['STATUS']);
+        getLogger().info("\t " + label + " : amount=" + this.util.logAmount(data['AMOUNT']) + ' : pubkey=' + String(data['SIGNING_PUBKEY']).substring(0, 16) + '... : ' + data['STATUS']);
 
         // Create record in stakes table
         await this.indexerDb.createStake(data);
@@ -371,7 +372,7 @@ class Stake {
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
-        console.log("\t STAKE v3 : amount=" + this.util.logAmount(data['AMOUNT']) +
+        getLogger().info("\t STAKE v3 : amount=" + this.util.logAmount(data['AMOUNT']) +
             ' : pubkey=' + String(data['SIGNING_PUBKEY']).substring(0, 16) +
             '... : target=' + data['TARGET_CONTRACT_INDEX'] +
             ' : tick=' + data['TICK'] +

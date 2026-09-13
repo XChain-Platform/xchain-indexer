@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -74,7 +75,7 @@ class DispenserDivergenceMetrics {
     recordCancel(coin, block_index, action_index, address){
         this.track(block_index);
         this.bump('cancels');
-        console.log('\t DISPENSER_DIVERGENCE : CANCEL : ' + coin + ':' + action_index +
+        getLogger().info('\t DISPENSER_DIVERGENCE : CANCEL : ' + coin + ':' + action_index +
                     ' addr=' + address + ' block=' + block_index);
     }
 
@@ -87,7 +88,7 @@ class DispenserDivergenceMetrics {
         if(newer < older){ delta = 'shortened'; this.bump('editsShortened'); }
         else if(newer > older){ delta = 'lengthened'; this.bump('editsLengthened'); }
         this.bump('edits');
-        console.log('\t DISPENSER_DIVERGENCE : EDIT_EXPIRATION : ' + coin + ':' + action_index +
+        getLogger().info('\t DISPENSER_DIVERGENCE : EDIT_EXPIRATION : ' + coin + ':' + action_index +
                     ' addr=' + address + ' old=' + oldExpiration + ' new=' + newExpiration +
                     ' delta=' + delta + ' block=' + block_index);
     }
@@ -99,7 +100,7 @@ class DispenserDivergenceMetrics {
         this.track(block_index);
         if(reason === 'cancelled') this.bump('rejectedCancelled');
         else if(reason === 'expired') this.bump('rejectedExpired');
-        console.log('\t DISPENSER_DIVERGENCE : DISPENSE_REJECTED : ' + coin +
+        getLogger().info('\t DISPENSER_DIVERGENCE : DISPENSE_REJECTED : ' + coin +
                     ' addr=' + address + ' dispenser=' + action_index +
                     ' reason=' + reason + ' block=' + block_index);
     }
@@ -111,7 +112,7 @@ class DispenserDivergenceMetrics {
         let t = this.totals;
         // Only emit when the finished block actually saw divergence activity.
         if(b.cancels || b.edits || b.rejectedCancelled || b.rejectedExpired){
-            console.log('\t DISPENSER_DIVERGENCE : SUMMARY block=' + this.currentBlock +
+            getLogger().info('\t DISPENSER_DIVERGENCE : SUMMARY block=' + this.currentBlock +
                         ' cancels=' + b.cancels +
                         ' edits=' + b.edits + '(short=' + b.editsShortened + ',long=' + b.editsLengthened + ')' +
                         ' rejected(cancelled=' + b.rejectedCancelled + ',expired=' + b.rejectedExpired + ')' +

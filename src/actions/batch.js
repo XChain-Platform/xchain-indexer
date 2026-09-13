@@ -29,6 +29,7 @@
 const { rethrowIfInfraFault } = require('../consensus/fault_guard.js');
 
 
+const { getLogger } = require('../observability/index.js');
 // Resolved at CALL time, never at module load: actions/index.js requires this file while it is
 // still being evaluated, so a top-level require here would bind an empty exports object.
 function probeForbiddenSubAction(action){
@@ -971,7 +972,7 @@ class Batch {
         data['STATUS'] = batch['STATUS'] = status;
 
         // Print status message
-        console.log("\t BATCH : " + data['SOURCE'] + ' : ' + data['STATUS']);
+        getLogger().info("\t BATCH : " + data['SOURCE'] + ' : ' + data['STATUS']);
 
         // Create record in batches table
         await this.indexerDb.createBatch(batch);

@@ -75,6 +75,7 @@ const proofClient = require('./bridge_proof_client.js');
 const Genesis     = require('../chain/genesis.js');
 const { XBRIDGE_MAX_PER_BLOCK, XPOLICY_MAX_PER_BLOCK } = require('../protocol/constants.js');
 
+const { getLogger } = require('../observability/index.js');
 // Why a row did not apply. LOG reasons, never consensus verdict strings: an injected settle
 // leg writes no STATUS (actions/xbridge.js returns a system-injected v2/v5 untouched, so the
 // settle pass is the only writer of that row) and no canonical carries any of these. The
@@ -429,10 +430,10 @@ async function recordSettlement(indexerDb, actionIndex, id, kind, blockIndex, ro
 // storms the log and is what AT4's "exactly one refusal" rules out. Terminal call sites use
 // _warnOnce below instead of _warn.
 function log(kind, id, message){
-    console.log('\t ' + kind + ' : ' + String(id).substring(0, 16) + '... : ' + message);
+    getLogger().info('\t ' + kind + ' : ' + String(id).substring(0, 16) + '... : ' + message);
 }
 function warn(kind, id, message){
-    console.warn('\t ' + kind + ' : ' + String(id).substring(0, 16) + '... : ' + message);
+    getLogger().warn('\t ' + kind + ' : ' + String(id).substring(0, 16) + '... : ' + message);
 }
 
 // Per-process memo of the last TERMINAL refusal reason logged for (kind, id), so a row that sits

@@ -28,6 +28,7 @@ const arKey = require('../actions/anchor/anchor_reward_key.js');
 // height from here, so a restored row and a live-derived one carry the same stamp.
 const ar = require('../anchor_reward_activation.js');
 
+const { getLogger } = require('../observability/index.js');
 module.exports = {
 
     // The cheap gate shared by both recovery-reward triggers (the createAddress hook above and
@@ -192,14 +193,14 @@ module.exports = {
     async createValidatorReward(pubkeyHex, roundReference, rewardType, amount, blockIndex, upsert, deriveBlockIndex, roundQualifier){
         let pubkey_id = await this.getPubkeyId(String(pubkeyHex).toLowerCase());
         if(pubkey_id === null){
-            console.warn('createValidatorReward: unknown pubkey ' + pubkeyHex);
+            getLogger().warn('createValidatorReward: unknown pubkey ' + pubkeyHex);
             return false;
         }
         // Strict active-row source resolution at this reward's block, matching the
         // ANCHOR archive + recovery (see _resolveActiveStakeSourceId).
         let source_id = await this._resolveActiveStakeSourceId(pubkey_id, blockIndex);
         if(source_id === null || source_id === undefined){
-            console.warn('createValidatorReward: no active stake or delegation for pubkey ' + pubkeyHex + ' at block ' + blockIndex);
+            getLogger().warn('createValidatorReward: no active stake or delegation for pubkey ' + pubkeyHex + ' at block ' + blockIndex);
             return false;
         }
         // Insert the reward (idempotent via UNIQUE INDEX on

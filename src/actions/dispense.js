@@ -23,6 +23,7 @@ const dispenserCaps = require('../dispenser_caps_activation.js');
 const dispenserAmountPositivity = require('../dispenser_amount_positivity_activation.js');
 const tallyScaleActivation = require('../dispense_payment_tally_scale_activation.js');
 
+const { getLogger } = require('../observability/index.js');
 class Dispense {
 
     // Handle constructing a class instance
@@ -606,7 +607,7 @@ class Dispense {
                 dispenser['GIVE_REMAINING'] = this.util.bcsub(dispenser['GIVE_REMAINING'], dispense['GIVE_AMOUNT'], 64);
 
             // Print status message
-            console.log("\t DISPENSE : " + this.util.logAmount(dispense['GIVE_AMOUNT']) + ' ' + dispenser['GIVE_TICK'] + ' : ' + dispense['STATUS']);
+            getLogger().info("\t DISPENSE : " + this.util.logAmount(dispense['GIVE_AMOUNT']) + ' ' + dispenser['GIVE_TICK'] + ' : ' + dispense['STATUS']);
 
             // Create record in the dispenses table
             await this.indexerDb.createDispense(dispense);

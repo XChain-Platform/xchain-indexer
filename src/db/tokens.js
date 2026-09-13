@@ -22,6 +22,7 @@
 const path    = require('path');
 const ledgerPrecision = require('../ledger_amount_precision_activation');
 
+const { getLogger } = require('../observability/index.js');
 module.exports = {
 
     // Get token supply for a given ticker from tokens table
@@ -182,7 +183,7 @@ module.exports = {
             tokens.push(tickers);
         // Dump full list of tokens
         if(type==='boolean' && tickers===true){
-            console.log('Updating all tokens...');
+            getLogger().info('Updating all tokens...');
             let query = "SELECT t2.tick FROM tokens t1, index_tickers t2 WHERE t1.tick_id=t2.id";
             let results = await this.doQuery(query);
             if(results.length > 0)
@@ -359,12 +360,12 @@ module.exports = {
             let escrow  = this.util.bcnum((escrowsTotalById[tick_id] != null) ? escrowsTotalById[tick_id] : 0); // Supply from escrows
             let total   = this.util.bcadd(balance, escrow, decimals[tick]);        // Total (balances + escrows)
             if(String(token)!=String(ledger) || String(token)!=String(total)){
-                console.log("Tick,   tick_id =", tick, tick_id);
-                console.log("token   supply =", token);
-                console.log("ledger  supply =", ledger);  // Credits / Debits / Escrows
-                console.log("balance supply =", balance); // balances table
-                console.log("escrow  supply =", escrow);  // Escrows
-                console.log("total   supply =", total);   // balance + escrow
+                getLogger().info("Tick,   tick_id =", tick, tick_id);
+                getLogger().info("token   supply =", token);
+                getLogger().info("ledger  supply =", ledger);  // Credits / Debits / Escrows
+                getLogger().info("balance supply =", balance); // balances table
+                getLogger().info("escrow  supply =", escrow);  // Escrows
+                getLogger().info("total   supply =", total);   // balance + escrow
             }
             if(String(token)!=String(ledger))
                 this.util.throwError("SanityError: ledger supply does not match token supply : " + tick + " (" + ledger + " != " + token + ")");
@@ -432,7 +433,7 @@ module.exports = {
         let res   = await this.doQuery(query, [tick_id]);
         // One line per token, ever, because the WHERE excludes an already-set bit.
         if(res && res.affectedRows)
-            console.log('\t Token ' + tick + ' marked bridged at block ' + block_index);
+            getLogger().info('\t Token ' + tick + ' marked bridged at block ' + block_index);
     },
 
     /*

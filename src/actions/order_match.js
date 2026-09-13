@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -105,7 +106,7 @@ class Order_Match {
                    (String(orderInfo['GIVE_TICK']) !== String(matchInfo['GET_TICK'])  || String(orderInfo['GIVE_COIN']) !== String(matchInfo['GET_COIN']) ||
                     String(orderInfo['GET_TICK'])  !== String(matchInfo['GIVE_TICK']) || String(orderInfo['GET_COIN'])  !== String(matchInfo['GIVE_COIN']))){
                     if(this.debug)
-                        console.log('Skipping non-reciprocal match (tick/coin mismatch)', orderInfo['GIVE_TICK'], orderInfo['GET_TICK'], matchInfo['GIVE_TICK'], matchInfo['GET_TICK']);
+                        getLogger().info('Skipping non-reciprocal match (tick/coin mismatch)', orderInfo['GIVE_TICK'], orderInfo['GET_TICK'], matchInfo['GIVE_TICK'], matchInfo['GET_TICK']);
                     continue;
                 }
 
@@ -135,7 +136,7 @@ class Order_Match {
                                          String(orderInfo['GET_COIN']) === String(matchInfo['GIVE_COIN']));
                     if(!forwardMirror || !reverseMirror){
                         if(this.debug)
-                            console.log('Skipping non-reciprocal native match (leg mismatch)', orderInfo['GIVE_TICK'], orderInfo['GET_TICK'], matchInfo['GIVE_TICK'], matchInfo['GET_TICK']);
+                            getLogger().info('Skipping non-reciprocal native match (leg mismatch)', orderInfo['GIVE_TICK'], orderInfo['GET_TICK'], matchInfo['GIVE_TICK'], matchInfo['GET_TICK']);
                         continue;
                     }
                 }
@@ -146,28 +147,28 @@ class Order_Match {
 
                 // Display get/give remaining amounts
                 if(this.debug){
-                    console.log('ORDER - GET / GIVE remaining=', order['GIVE_REMAINING'], order['GET_REMAINING'])
-                    console.log('MATCH - GIVE / GET remaining=', match['GET_REMAINING'],  match['GIVE_REMAINING'])
+                    getLogger().info('ORDER - GET / GIVE remaining=', order['GIVE_REMAINING'], order['GET_REMAINING'])
+                    getLogger().info('MATCH - GIVE / GET remaining=', match['GET_REMAINING'],  match['GIVE_REMAINING'])
                 }
 
                 // Ignore if we have nothing left to GIVE
                 if(this.util.bclte(match['GIVE_REMAINING'], 0) || this.util.bclte(order['GIVE_REMAINING'], 0)){
                     if(this.debug)
-                        console.log('Skipping: negative GIVE quantity remaining ', match['GIVE_REMAINING'], order['GIVE_REMAINING']);
+                        getLogger().info('Skipping: negative GIVE quantity remaining ', match['GIVE_REMAINING'], order['GIVE_REMAINING']);
                     continue;
                 }
 
                 // Ignore if we have nothing left to GET
                 if(this.util.bclte(match['GET_REMAINING'], 0) || this.util.bclte(order['GET_REMAINING'], 0)){
                     if(this.debug)
-                        console.log('Skipping: negative GET quantity remaining ', match['GET_REMAINING'], order['GET_REMAINING']);
+                        getLogger().info('Skipping: negative GET quantity remaining ', match['GET_REMAINING'], order['GET_REMAINING']);
                     continue;
                 }
 
                 // Ignore price mismatches
                 if(this.util.bcgt(matchInfo['GET_PRICE'], orderInfo['GIVE_PRICE'])){
                     if(this.debug)
-                        console.log('Skipping due to price mismatch ', matchInfo['GET_PRICE'], orderInfo['GIVE_PRICE']);
+                        getLogger().info('Skipping due to price mismatch ', matchInfo['GET_PRICE'], orderInfo['GIVE_PRICE']);
                     continue;
                 }
 
@@ -217,14 +218,14 @@ class Order_Match {
                 // Ignore zero quantity GIVE
                 if(this.util.bclte(give_amount, 0)){
                     if(this.debug)
-                        console.log('Skipping zero quantity GIVE amount ', give_amount);
+                        getLogger().info('Skipping zero quantity GIVE amount ', give_amount);
                     continue;
                 }
 
                 // Ignore zero quantity GET
                 if(this.util.bclte(get_amount, 0)){
                     if(this.debug)
-                        console.log('Skipping zero quantity GET amount ', get_amount);
+                        getLogger().info('Skipping zero quantity GET amount ', get_amount);
                     continue;
                 }
 
@@ -239,7 +240,7 @@ class Order_Match {
                     let getEqual  = (!this.util.bcgt(get_amount,  expectedGet)  && !this.util.bclt(get_amount,  expectedGet));
                     if(!giveEqual || !getEqual){
                         if(this.debug)
-                            console.log('Skipping ownership match: amounts must be exact (single-fill)', give_amount, expectedGive, get_amount, expectedGet);
+                            getLogger().info('Skipping ownership match: amounts must be exact (single-fill)', give_amount, expectedGive, get_amount, expectedGet);
                         continue;
                     }
                 }
@@ -258,7 +259,7 @@ class Order_Match {
                    (matchInfoAllowList.length && !matchInfoAllowList.includes(orderInfo['GET_ADDRESS'])) ||
                    (matchInfoBlockList.length &&  matchInfoBlockList.includes(orderInfo['GET_ADDRESS']))){
                     if(this.debug)
-                        console.log('Skipping match due to allow/block list');
+                        getLogger().info('Skipping match due to allow/block list');
                     continue;
                 }
 
@@ -273,7 +274,7 @@ class Order_Match {
                 match['GET_REMAINING']  = this.util.bcsub(match['GET_REMAINING'],  give_amount, 64);
 
                 if(this.debug)
-                    console.log('FINAL - GET / GIVE remaining=',order['GIVE_REMAINING'],order['GET_REMAINING'])
+                    getLogger().info('FINAL - GET / GIVE remaining=',order['GIVE_REMAINING'],order['GET_REMAINING'])
 
                 // Detect if this is a native coin match (one side has null/empty TICK)
                 let isNativeCoinMatch = (this.util.isNull(orderInfo['GIVE_TICK']) ||
@@ -286,7 +287,7 @@ class Order_Match {
                 data['SETTLEMENT_TYPE'] = isNativeCoinMatch ? 'coinpay' : 'instant';
 
                 // Print status message
-                console.log("\t ORDER_MATCH : " + this.util.logAmount(give_amount) + ' ' + orderInfo['GIVE_COIN'] + ':' + (orderInfo['GIVE_TICK'] || orderInfo['GIVE_COIN']) + ' = '  + this.util.logAmount(get_amount) + ' ' + data['GET_COIN'] + ':' + (data['GET_TICK'] || data['GET_COIN']) + ' : ' + data['STATUS']);
+                getLogger().info("\t ORDER_MATCH : " + this.util.logAmount(give_amount) + ' ' + orderInfo['GIVE_COIN'] + ':' + (orderInfo['GIVE_TICK'] || orderInfo['GIVE_COIN']) + ' = '  + this.util.logAmount(get_amount) + ' ' + data['GET_COIN'] + ':' + (data['GET_TICK'] || data['GET_COIN']) + ' : ' + data['STATUS']);
 
                 // Array of credits, debits, and escrows
                 let credits = [],

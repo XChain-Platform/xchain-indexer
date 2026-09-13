@@ -25,6 +25,7 @@ const stakeWeightCollation = require('../stake_weight_collation_activation');
 // and every mixin read the same instance of each.
 const { usesCapabilitySnapshot } = require('./shared.js');
 
+const { getLogger } = require('../observability/index.js');
 module.exports = {
 
     /*
@@ -366,7 +367,7 @@ module.exports = {
         let rows = await this.doQuery(query, [...eff.args, limit]);
         let truncated = rows.length >= limit;
         if(truncated)
-            console.warn('getActiveValidators hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' - validator set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
+            getLogger().warn('getActiveValidators hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' - validator set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
         let result = rows.map(r => ({
             pubkey: String(r.pubkey),
             amount: (r.total === null || r.total === undefined) ? '0' : String(r.total)
@@ -445,7 +446,7 @@ module.exports = {
         let rows = await this.doQuery(query, [...eff.args, limit]);
         let truncated = rows.length >= limit;
         if(truncated)
-            console.warn('getValidatorsByCapability(' + capability + ') hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' - validator set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
+            getLogger().warn('getValidatorsByCapability(' + capability + ') hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' - validator set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
         let result = rows.map(r => ({
             pubkey: String(r.pubkey),
             amount: (r.total === null || r.total === undefined) ? '0' : String(r.total)

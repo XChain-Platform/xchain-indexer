@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -95,7 +96,7 @@ class Coinpay {
         // Each on-chain output is processed independently; only the output that actually
         // matches a pending obligation settles. Every other output early-exits as a no-op.
         if(!obligationInfo || obligationInfo['COINPAY_STATUS'] != 'pending_coinpay'){
-            console.log("\t COINPAY (skip): obligation " + data['ORDER_MATCH_ACTION_INDEX'] + " " + (obligationInfo ? "status=" + obligationInfo['COINPAY_STATUS'] : "not found"));
+            getLogger().info("\t COINPAY (skip): obligation " + data['ORDER_MATCH_ACTION_INDEX'] + " " + (obligationInfo ? "status=" + obligationInfo['COINPAY_STATUS'] : "not found"));
             await this.indexerDb.deleteActionIndex(data['ACTION_INDEX']);
             return;
         }
@@ -166,7 +167,7 @@ class Coinpay {
 
         // Early exit: if this output's destination does not match the payee address
         if(!payeeOutput && data['COIN_DESTINATION'] != payee){
-            console.log("\t COINPAY (skip): destination mismatch tx=" + data['COIN_DESTINATION'] + " payee=" + payee);
+            getLogger().info("\t COINPAY (skip): destination mismatch tx=" + data['COIN_DESTINATION'] + " payee=" + payee);
             await this.indexerDb.deleteActionIndex(data['ACTION_INDEX']);
             return;
         }
@@ -214,7 +215,7 @@ class Coinpay {
         // "one payment settles one obligation, not N" is enforced by refusing the later
         // command outright rather than by part-paying it.
         if(this.util.bclt(available, obligationInfo['COIN_AMOUNT'])){
-            console.log("\t COINPAY (skip): amount short tx=" + available + " owed=" + obligationInfo['COIN_AMOUNT']);
+            getLogger().info("\t COINPAY (skip): amount short tx=" + available + " owed=" + obligationInfo['COIN_AMOUNT']);
             await this.indexerDb.deleteActionIndex(data['ACTION_INDEX']);
             return;
         }
@@ -256,7 +257,7 @@ class Coinpay {
         }
 
         // Print status message
-        console.log("\t COINPAY : " + this.config['COIN'] + ':' + data['ORDER_MATCH_ACTION_INDEX'] + ' : ' + data['STATUS']);
+        getLogger().info("\t COINPAY : " + this.config['COIN'] + ':' + data['ORDER_MATCH_ACTION_INDEX'] + ' : ' + data['STATUS']);
 
         // Record the output this obligation actually settled against. On the legacy path
         // that is the row's own output, unchanged. On the per-payee path the row describes
@@ -312,7 +313,7 @@ class Coinpay {
                 coinOrder   = getOrderInfo;
                 sellerOrder = giveOrderInfo;
             } else {
-                console.log("\t COINPAY (skip): ambiguous native roles for match " + obligationInfo['ACTION_INDEX']);
+                getLogger().info("\t COINPAY (skip): ambiguous native roles for match " + obligationInfo['ACTION_INDEX']);
                 return;
             }
         } else if(this.util.isNull(giveOrderInfo['GIVE_TICK']) || giveOrderInfo['GIVE_TICK'] == this.config['COIN']){

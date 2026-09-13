@@ -24,6 +24,7 @@ const path    = require('path');
 // and every mixin read the same instance of each.
 const { CANONICAL_CARET_ID } = require('./shared.js');
 
+const { getLogger } = require('../observability/index.js');
 module.exports = {
 
     // Lookup a record in the `index_transactions` table and return record id
@@ -150,12 +151,12 @@ module.exports = {
             let addrOrphans = (a.length > 0) ? Number(a[0].c) : 0;
             let tickOrphans = (t.length > 0) ? Number(t[0].c) : 0;
             if(addrOrphans > 0 || tickOrphans > 0)
-                console.warn('Index id invariant: ' + addrOrphans + ' index_addresses and ' + tickOrphans +
+                getLogger().warn('Index id invariant: ' + addrOrphans + ' index_addresses and ' + tickOrphans +
                     ' index_tickers rows have a NULL block_index (out-of-band ids). These inflate the ' +
                     'deterministic id counter; a clean genesis reindex is required to restore the invariant.');
         } catch(e){
             // Tolerate a partially-migrated DB (column may not exist yet): degrade to silent.
-            console.warn('Index id invariant probe failed (non-fatal):', e.message);
+            getLogger().warn('Index id invariant probe failed (non-fatal):', e.message);
         }
     },
 
@@ -214,7 +215,7 @@ module.exports = {
                 // indexing has begun it would bump MAX(id) and offset the dense counter, so
                 // warn loudly: it must never happen during the indexing lifetime (#5052).
                 if(this.deterministicIndexingStarted)
-                    console.warn('Index id invariant: out-of-band index_addresses insert ("' + address +
+                    getLogger().warn('Index id invariant: out-of-band index_addresses insert ("' + address +
                         '") after deterministic indexing began; this offsets the id counter.');
                 let query = "INSERT IGNORE INTO index_addresses (`address`) values (?)";
                 await this.doQuery(query, [address]);
@@ -451,7 +452,7 @@ module.exports = {
                 // As with createAddress, an out-of-band insert after deterministic indexing began
                 // offsets the dense id counter and must never happen during indexing (#5052).
                 if(this.deterministicIndexingStarted)
-                    console.warn('Index id invariant: out-of-band index_tickers insert ("' + tick +
+                    getLogger().warn('Index id invariant: out-of-band index_tickers insert ("' + tick +
                         '") after deterministic indexing began; this offsets the id counter.');
                 let query = "INSERT IGNORE INTO index_tickers (tick) values (?)";
                 await this.doQuery(query, [tick]);

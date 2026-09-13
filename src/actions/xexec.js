@@ -55,6 +55,7 @@ const ah      = require('../mirror_admission_activation.js');
 const XCALL_MAX_HOPS = require('../protocol/constants.js').XCALL_MAX_HOPS;
 const { rethrowIfInfraFault } = require('../consensus/fault_guard.js');
 
+const { getLogger } = require('../observability/index.js');
 // Return payloads are mirrored to every indexer AND ANCHOR-archived on DOGE,
 // so they are hard-capped. Oversize yields status 'payload_too_large' with an
 // empty payload (deterministic truncation rule). Vendored single source of
@@ -110,7 +111,7 @@ class Xexec {
 
         // Network + target scope (belt-and-suspenders; the query pre-filters)
         if(String(c.network || '') !== String(this.config['NETWORK'] || '')){
-            console.warn("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : network mismatch (' + c.network + ' != ' + this.config['NETWORK'] + ') - skipping');
+            getLogger().warn("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : network mismatch (' + c.network + ' != ' + this.config['NETWORK'] + ') - skipping');
             return;
         }
         if(String(c.target_chain) !== String(coin)) return;                 // not our call
@@ -120,7 +121,7 @@ class Xexec {
         // re-checking here ensures a forged or corrupted mirror row cannot bypass it.
         // Under honest-majority this is never triggered; it guards the injection path.
         if(Number(c.cross_hops) > XCALL_MAX_HOPS){
-            console.warn("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : cross_hops (' + c.cross_hops + ') exceeds XCALL_MAX_HOPS (' + XCALL_MAX_HOPS + ') - skipping');
+            getLogger().warn("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : cross_hops (' + c.cross_hops + ') exceeds XCALL_MAX_HOPS (' + XCALL_MAX_HOPS + ') - skipping');
             return;
         }
 
@@ -138,7 +139,7 @@ class Xexec {
             // front-stop this (defer the whole block); this early-return is the
             // defensive guard for the residual race / single-host path. The dispatch
             // stays effective + unexecuted and retries on a later block. NOT an error.
-            console.log("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : capability snapshot not synced - deferring');
+            getLogger().info("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : capability snapshot not synced - deferring');
             return;
         }
 
@@ -178,7 +179,7 @@ class Xexec {
             let detail = weighted
                 ? 'insufficient signer stake (' + validSigners.length + ' valid signers of ' + N + ' snapshot keys)'
                 : 'insufficient valid signatures (' + validSigners.length + '/' + N + ')';
-            console.warn("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : ' + detail + ' - skipping');
+            getLogger().warn("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : ' + detail + ' - skipping');
             await this.indexerDb.recordCrossChainCallRejection(
                 String(c.call_id).toLowerCase(), 'quorum_not_met', detail, data['BLOCK_INDEX']);
             return;
@@ -277,10 +278,10 @@ class Xexec {
             // branch above via _mapFailureStatus.
             rethrowIfInfraFault(e);
             resultStatus = 'error';
-            console.warn("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : execution threw: ' + (e && e.message));
+            getLogger().warn("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : execution threw: ' + (e && e.message));
         }
 
-        console.log("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '...' +
+        getLogger().info("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '...' +
                     ' : ' + c.source_chain + ':' + c.source_contract_index +
                     ' → ' + coin + ':' + c.target_contract_index + ' . ' + c.method +
                     ' : gas=' + gasUsed + '/' + c.gas_limit +

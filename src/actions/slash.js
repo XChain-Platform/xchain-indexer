@@ -83,6 +83,7 @@ const ed25519 = require('../consensus/ed25519.js');
 const eq      = require('../equivocation_header.js');
 const srb     = require('../snapshot_reorg_buffer.js');
 
+const { getLogger } = require('../observability/index.js');
 // ENGINE_TAG → the membership label the locked snapshot governs that engine's signer
 // set under. For the five capability-scoped engines this is the staking capability whose
 // MIN_STAKE-qualified set signed the slot. XCONFIG is the exception: config-change PBFT is
@@ -314,7 +315,7 @@ class Slash {
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
-        console.log("\t SLASH : capability=" + String(data['CAPABILITY']) +
+        getLogger().info("\t SLASH : capability=" + String(data['CAPABILITY']) +
             ' : offender=' + offender.substring(0, 16) + '...' +
             ' : key=' + equivKey.substring(0, 24) + '...' +
             ' : ' + status);

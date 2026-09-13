@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -134,7 +135,7 @@ class Delegate {
         data['STATUS'] = status;
 
         // Print status message
-        console.log("\t DELEGATE : pubkey=" + data['SIGNING_PUBKEY'] + ' : ' + data['STATUS']);
+        getLogger().info("\t DELEGATE : pubkey=" + data['SIGNING_PUBKEY'] + ' : ' + data['STATUS']);
 
         // Create record in delegations table
         await this.indexerDb.createDelegation(data);
@@ -238,7 +239,7 @@ class Delegate {
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
-        console.log("\t DELEGATE v1 : pubkey=" + String(data['SIGNING_PUBKEY']).substring(0, 16) +
+        getLogger().info("\t DELEGATE v1 : pubkey=" + String(data['SIGNING_PUBKEY']).substring(0, 16) +
             '... : target=' + data['TARGET_CONTRACT_INDEX'] +
             ' : tick=' + data['TICK'] +
             ' : ' + data['STATUS']);
@@ -312,7 +313,7 @@ class Delegate {
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
-        console.log("\t DELEGATE v2 (revoke" + (stakeKeyMode ? ', stake key' : '') + ") : pubkey=" + data['SIGNING_PUBKEY'] + ' : ' + data['STATUS']);
+        getLogger().info("\t DELEGATE v2 (revoke" + (stakeKeyMode ? ', stake key' : '') + ") : pubkey=" + data['SIGNING_PUBKEY'] + ' : ' + data['STATUS']);
 
         let staking = this.config['STAKING'];
         let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
@@ -410,7 +411,7 @@ class Delegate {
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
-        console.log("\t DELEGATE v3 (contract revoke) : pubkey=" + String(data['SIGNING_PUBKEY']).substring(0,16) +
+        getLogger().info("\t DELEGATE v3 (contract revoke) : pubkey=" + String(data['SIGNING_PUBKEY']).substring(0,16) +
                     '... : target=' + data['TARGET_CONTRACT_INDEX'] +
                     ' : tick=' + data['TICK'] +
                     ' : ' + data['STATUS']);

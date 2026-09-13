@@ -18,6 +18,10 @@ const sinon  = require('sinon');
 
 const HubDbSync = require('../../src/hub/hub_db_sync.js');
 const { stallClassOf } = require('../../src/XChainIndexer.js');
+// The lifted block below logs through the observability shim, and a new Function
+// body carries none of the defining module's scope, so the accessor has to be
+// handed in as an argument the way the real module scope would supply it.
+const { getLogger } = require('../../src/observability');
 
 // A HubDbSync with enabled === true (needs both a hub URL and a hub DB). doQuery
 // answers every content query with an EMPTY result set, which is the state this
@@ -180,8 +184,8 @@ describe('attest_response_sync_barrier defer site @regression @tier1', function 
         const body = 'return (async function(blockTime, blockToParse){ for(;;){ ' +
                      extractBarrierBlock() + ' break; } }).call(this, blockTime, blockToParse);';
         // eslint-disable-next-line no-new-func
-        const fn = new Function('blockTime', 'blockToParse', body);
-        return fn.call(fakeIndexer, blockTime, blockToParse);
+        const fn = new Function('blockTime', 'blockToParse', 'getLogger', body);
+        return fn.call(fakeIndexer, blockTime, blockToParse, getLogger);
     }
 
     function makeIndexer(coin, barrierResult) {

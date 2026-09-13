@@ -62,6 +62,7 @@ const { isMirrorAdmissionConsumerActive } = require('../mirror_admission_activat
 // and every mixin read the same instance of each.
 const { requireStakeWeight, normalizeStakeAmount, AUTO_DEDUP_TABLES, recordShapeDrift, txEpochStore, usesCapabilitySnapshot, opensBackslashEscape } = require('./shared.js');
 
+const { getLogger } = require('../observability/index.js');
 class Database {
 
     constructor(host, port, dbName, user, pass, indexer) {
@@ -242,7 +243,7 @@ class Database {
                     throw new Error('verifyDatabase: non-retryable DB error for ' + this.dbName + ' (' + (e && (e.code || e.errno)) + '): ' + (e && e.message) + '. Check DB credentials/grants; not retrying.');
                 if(++attempt >= Database.DB_CONNECT_MAX_ATTEMPTS)
                     throw new Error('verifyDatabase: gave up after ' + attempt + ' attempts reaching ' + this.dbName + ': ' + (e && e.message));
-                console.error('Error checking if database ' + this.dbName + ' exists (attempt ' + attempt + '/' + Database.DB_CONNECT_MAX_ATTEMPTS + '):', e)
+                getLogger().error('Error checking if database ' + this.dbName + ' exists (attempt ' + attempt + '/' + Database.DB_CONNECT_MAX_ATTEMPTS + '):', e)
                 await this.util.sleep(5000); // Wait 5 seconds
             }
         }
@@ -261,7 +262,7 @@ class Database {
         // Validate database name to prevent SQL injection
         if(!/^[A-Za-z0-9_]+$/.test(this.dbName))
             throw new Error('Invalid database name: ' + this.dbName);
-        console.log("Creating " + this.dbName + " database!");
+        getLogger().info("Creating " + this.dbName + " database!");
         // Bounded retry (#3168): same fail-fast-on-auth / cap-transient policy as verifyDatabase.
         let attempt = 0;
         while(!databaseCreated){
@@ -275,7 +276,7 @@ class Database {
                     throw new Error('createDatabase: non-retryable DB error for ' + this.dbName + ' (' + (e && (e.code || e.errno)) + '): ' + (e && e.message) + '. Check DB credentials/grants; not retrying.');
                 if(++attempt >= Database.DB_CONNECT_MAX_ATTEMPTS)
                     throw new Error('createDatabase: gave up after ' + attempt + ' attempts creating ' + this.dbName + ': ' + (e && e.message));
-                console.error('Error creating database ' + this.dbName + ' (attempt ' + attempt + '/' + Database.DB_CONNECT_MAX_ATTEMPTS + '):', e)
+                getLogger().error('Error creating database ' + this.dbName + ' (attempt ' + attempt + '/' + Database.DB_CONNECT_MAX_ATTEMPTS + '):', e)
                 await this.util.sleep(5000); // Waiting 5 seconds
             }
         }
@@ -290,7 +291,7 @@ class Database {
         let db    = await this.getConnection();
         // One summary line instead of a per-table pair; error paths below still
         // name the table, so a failure stays attributable.
-        console.log('Verifying database and tables...');
+        getLogger().info('Verifying database and tables...');
         let checked = 0;
         let created = 0;
         // Collector for the undeclared-shape findings the two reconcilers raise, so the
@@ -326,8 +327,8 @@ class Database {
             }
         }
         await db.release();
-        console.log('Database and tables verified (' + checked + ' tables, ' + created + ' created).');
-        console.log(this.schemaShapeSummary());
+        getLogger().info('Database and tables verified (' + checked + ' tables, ' + created + ' created).');
+        getLogger().info(this.schemaShapeSummary());
         return true;
     }
 
@@ -467,7 +468,7 @@ class Database {
             // a combined box hosts many indexer DBs).
             const got = await conn.query('SELECT GET_LOCK(?, 30) AS l', [lockName]);
             if(!got || !got[0] || String(got[0].l) !== '1'){
-                console.warn('runMigrations: could not acquire lock ' + lockName + ' (another process is migrating). Skipping this run.');
+                getLogger().warn('runMigrations: could not acquire lock ' + lockName + ' (another process is migrating). Skipping this run.');
                 // #3162: flag the skip so callers do NOT read the empty applied/pending shape as
                 // a completed run. The operator CLI must not print "done" and exit 0 when nothing
                 // was even examined - the schema may still be un-migrated.
@@ -488,7 +489,7 @@ class Database {
                     await conn.query('UPDATE schema_migrations SET name = ? WHERE name = ?', [to, from]);
                     appliedByName.set(to, appliedByName.get(from));
                     appliedByName.delete(from);
-                    console.log('runMigrations: re-keyed ledger row ' + from + ' -> ' + to + ' (legacy migration renamed to dated form).');
+                    getLogger().info('runMigrations: re-keyed ledger row ' + from + ' -> ' + to + ' (legacy migration renamed to dated form).');
                 }
 
                 for(const file of files){
@@ -528,7 +529,7 @@ class Database {
                             const fromList = rebase ? [].concat(rebase.from) : [];
                             if(rebase && fromList.includes(appliedByName.get(file)) && checksum === rebase.to){
                                 await conn.query('UPDATE schema_migrations SET checksum = ? WHERE name = ?', [checksum, file]);
-                                console.log('runMigrations: rebaselined checksum for ' + file + ' (reviewed retag, executable SQL unchanged).');
+                                getLogger().info('runMigrations: rebaselined checksum for ' + file + ' (reviewed retag, executable SQL unchanged).');
                                 continue;
                             }
                             // Migrations are immutable once applied. A changed checksum means
@@ -556,7 +557,7 @@ class Database {
                                     : ' Review manually (set MIGRATION_STRICT_CHECKSUM=0 / omit to downgrade to a non-fatal log).';
                                 throw new Error(msg + hint);
                             }
-                            console.error(msg + ' Continuing on the diverged schema - review manually.');
+                            getLogger().error(msg + ' Continuing on the diverged schema - review manually.');
                         }
                         continue;
                     }
@@ -585,12 +586,12 @@ class Database {
                             [file, checksum, mode]
                         );
                         result.baselined.push(file);
-                        console.log('runMigrations: BASELINED ' + file + ' (recorded as applied, no statement run): ' + preconditionSkip);
+                        getLogger().info('runMigrations: BASELINED ' + file + ' (recorded as applied, no statement run): ' + preconditionSkip);
                         continue;
                     }
 
                     if(mode !== 'auto' && !includeManual){
-                        console.log('runMigrations: PENDING (gated, mode=' + mode + '): ' + file + ' - apply with `node src/migrate.js`.');
+                        getLogger().info('runMigrations: PENDING (gated, mode=' + mode + '): ' + file + ' - apply with `node src/migrate.js`.');
                         result.pending.push(file);
                         continue;
                     }
@@ -614,7 +615,7 @@ class Database {
                             // path and opt-in strict mode fail closed, passive startup logs and
                             // proceeds so a backdated commit cannot black-start the fleet.
                             if(includeManual || process.env.MIGRATION_STRICT_CHECKSUM === '1') throw new Error(msg);
-                            console.error(msg + ' Applying it anyway at this position - review manually.');
+                            getLogger().error(msg + ' Applying it anyway at this position - review manually.');
                         }
                     }
 
@@ -636,12 +637,12 @@ class Database {
                                 'Re-tag the file `-- xchain:migration mode=manual` and apply it deliberately via `node src/migrate.js`.');
                         }
                     }
-                    console.log('runMigrations: applying ' + file + ' (mode=' + mode + ', ' + statements.length + ' statement(s))...');
+                    getLogger().info('runMigrations: applying ' + file + ' (mode=' + mode + ', ' + statements.length + ' statement(s))...');
                     try {
                         for(const stmt of statements){ await conn.query(stmt); }
                     } catch(err){
                         // Schema is now in an unknown state - block startup rather than run on.
-                        console.error('runMigrations: FAILED applying ' + file + ': ' + (err && err.message));
+                        getLogger().error('runMigrations: FAILED applying ' + file + ': ' + (err && err.message));
                         throw err;
                     }
                     await conn.query(
@@ -649,7 +650,7 @@ class Database {
                         [file, checksum, mode]
                     );
                     result.applied.push(file);
-                    console.log('runMigrations: applied ' + file);
+                    getLogger().info('runMigrations: applied ' + file);
                 }
             } finally {
                 try { await conn.query('SELECT RELEASE_LOCK(?)', [lockName]); } catch(_){}
@@ -658,8 +659,8 @@ class Database {
             try { await conn.release(); } catch(_){}
         }
 
-        if(result.applied.length) console.log('runMigrations: ' + result.applied.length + ' migration(s) applied to ' + this.dbName + '.');
-        if(result.pending.length) console.log('runMigrations: ' + result.pending.length + ' manual migration(s) pending for ' + this.dbName + ' - run `node src/migrate.js` to apply.');
+        if(result.applied.length) getLogger().info('runMigrations: ' + result.applied.length + ' migration(s) applied to ' + this.dbName + '.');
+        if(result.pending.length) getLogger().info('runMigrations: ' + result.pending.length + ' manual migration(s) pending for ' + this.dbName + ' - run `node src/migrate.js` to apply.');
         return result;
     }
 
@@ -1286,7 +1287,7 @@ class Database {
             // Make it loud so a malformed source file can't hide. (Non-fatal: index
             // reconciliation and table creation are unaffected; the parse-coverage
             // unit test is the hard guardrail.)
-            console.warn('Schema drift check SKIPPED for `' + table + '`: could not parse columns from ' + file + ' - expected a `CREATE TABLE ... ) ENGINE ...` definition. Additive column/nullability drift will NOT auto-reconcile for this table until the SQL source is fixed.');
+            getLogger().warn('Schema drift check SKIPPED for `' + table + '`: could not parse columns from ' + file + ' - expected a `CREATE TABLE ... ) ENGINE ...` definition. Additive column/nullability drift will NOT auto-reconcile for this table until the SQL source is fixed.');
             return;
         }
         const live = await db.query(
@@ -1314,7 +1315,7 @@ class Database {
                 // it" (attest_validator_stats.id, 2026-08-19). Pinned by
                 // test/unit/schema_drift_column_order.test.js.
                 if(exp.notNull && !exp.hasDefault){
-                    console.log('Schema drift on ' + table + '.' + exp.name + ': column missing live, source is NOT NULL with no DEFAULT - cannot backfill existing rows safely. Skipping; add manually.');
+                    getLogger().info('Schema drift on ' + table + '.' + exp.name + ': column missing live, source is NOT NULL with no DEFAULT - cannot backfill existing rows safely. Skipping; add manually.');
                     continue;
                 }
                 // Place the column where the SQL source puts it, not at the tail. A bare
@@ -1330,7 +1331,7 @@ class Database {
                     if(liveByName.has(expected[j].name.toLowerCase())) anchor = expected[j].name;
                 }
                 const placement = anchor ? ' AFTER `' + anchor + '`' : ' FIRST';
-                console.log('Schema drift on ' + table + '.' + exp.name + ': column missing live. Adding column from SQL source' + (anchor ? ' after ' + anchor : ' first') + '.');
+                getLogger().info('Schema drift on ' + table + '.' + exp.name + ': column missing live. Adding column from SQL source' + (anchor ? ' after ' + anchor : ' first') + '.');
                 await db.query('ALTER TABLE `' + table + '` ADD COLUMN ' + exp.definition + placement);
                 liveByName.set(exp.name.toLowerCase(), { COLUMN_NAME: exp.name, IS_NULLABLE: exp.notNull ? 'NO' : 'YES', COLUMN_TYPE: '', COLUMN_KEY: '', EXTRA: '' });
                 continue;
@@ -1345,7 +1346,7 @@ class Database {
                 const isPk     = String(cur.COLUMN_KEY || '').toUpperCase() === 'PRI';
                 const isAutoInc = /auto_increment/i.test(String(cur.EXTRA || ''));
                 if(isPk || isAutoInc){
-                    console.log('Schema drift on ' + table + '.' + exp.name + ': live=NOT NULL, source=NULL - SKIPPING relax (' + (isPk ? 'PRIMARY KEY' : 'AUTO_INCREMENT') + ' column; a bare MODIFY would strip attributes).');
+                    getLogger().info('Schema drift on ' + table + '.' + exp.name + ': live=NOT NULL, source=NULL - SKIPPING relax (' + (isPk ? 'PRIMARY KEY' : 'AUTO_INCREMENT') + ' column; a bare MODIFY would strip attributes).');
                     continue;
                 }
                 // A MODIFY restates the whole column, so anything the statement omits is
@@ -1361,13 +1362,13 @@ class Database {
                 if(String(cur.GENERATION_EXPRESSION || '') !== '')                  lossy.push('generation expression');
                 if(/on update/i.test(String(cur.EXTRA || '')))                      lossy.push('ON UPDATE');
                 if(lossy.length){
-                    console.warn('Schema drift on ' + table + '.' + exp.name + ': live=NOT NULL, source=NULL - SKIPPING relax (a bare MODIFY would drop ' + lossy.join(', ') + '). Relax it in a dated migration that restates the full column instead.');
+                    getLogger().warn('Schema drift on ' + table + '.' + exp.name + ': live=NOT NULL, source=NULL - SKIPPING relax (a bare MODIFY would drop ' + lossy.join(', ') + '). Relax it in a dated migration that restates the full column instead.');
                     continue;
                 }
                 // Restate the live collation: it is a bare identifier (no quoting hazard) and
                 // omitting it re-collates an explicitly-collated column to the table default.
                 const collate = /^[A-Za-z0-9_]+$/.test(String(cur.COLLATION_NAME || '')) ? ' COLLATE ' + cur.COLLATION_NAME : '';
-                console.log('Schema drift on ' + table + '.' + exp.name + ': live=NOT NULL, source=NULL. Relaxing constraint.');
+                getLogger().info('Schema drift on ' + table + '.' + exp.name + ': live=NOT NULL, source=NULL. Relaxing constraint.');
                 await db.query('ALTER TABLE `' + table + '` MODIFY `' + exp.name + '` ' + cur.COLUMN_TYPE + collate + ' NULL');
             }
         }
@@ -1377,7 +1378,7 @@ class Database {
         // every boot instead of being found by a hand comparison across the fleet.
         const undeclared = this.undeclaredLiveColumns(expected, live);
         if(undeclared.length){
-            console.warn('Schema shape drift on ' + table + ': live column(s) ' + undeclared.join(', ') +
+            getLogger().warn('Schema shape drift on ' + table + ': live column(s) ' + undeclared.join(', ') +
                 ' are declared by NO SQL source. Not auto-healed (never DROP a column we did not create); ' +
                 'converge with a dated migration via node src/migrate.js, or restore the declaration to ' + file + '.');
             recordShapeDrift(this.schemaShapeDrift, table, 'columns', undeclared);
@@ -1465,7 +1466,7 @@ class Database {
                         const desc = drift.map(d =>
                             d.col + ' live ' + (d.have === null ? 'full-column' : '(' + d.have + ')') +
                             ' vs declared ' + (d.want === null ? 'full-column' : '(' + d.want + ')')).join('; ');
-                        console.warn('Schema drift on ' + table + ': index on (' + key + ') differs in prefix width: ' + desc +
+                        getLogger().warn('Schema drift on ' + table + ': index on (' + key + ') differs in prefix width: ' + desc +
                             '. Not auto-healed (UNIQUE index rebuild is gated manual); run the pending manual migration via node src/migrate.js to converge.');
                     }
                     continue;                                               // already satisfied
@@ -1485,7 +1486,7 @@ class Database {
                     const liveDesc = liveInfo
                         ? (liveInfo.unique ? 'UNIQUE' : liveInfo.fulltext ? 'FULLTEXT' : 'non-unique') + ' on (' + liveInfo.cols.join(',') + ')'
                         : 'a differently-defined index';
-                    console.warn('Schema drift on ' + table + ': declared ' + (idx.unique ? 'UNIQUE ' : idx.fulltext ? 'FULLTEXT ' : '') +
+                    getLogger().warn('Schema drift on ' + table + ': declared ' + (idx.unique ? 'UNIQUE ' : idx.fulltext ? 'FULLTEXT ' : '') +
                         'index ' + idx.name + ' on (' + key + ') cannot be applied - the name is already held by ' + liveDesc +
                         '. Not auto-healed (never DROP an index we did not create); apply a manual migration via node src/migrate.js to converge.');
                     continue;
@@ -1504,32 +1505,32 @@ class Database {
                 if(idx.fulltext){
                     // A FULLTEXT index takes no prefix widths or directions; MariaDB refuses
                     // both, so the heal names the columns bare.
-                    console.log('Schema drift on ' + table + ': missing FULLTEXT index ' + idx.name + ' (' + key + '). Adding.');
+                    getLogger().info('Schema drift on ' + table + ': missing FULLTEXT index ' + idx.name + ' (' + key + '). Adding.');
                     await db.query('ALTER TABLE `' + table + '` ADD FULLTEXT INDEX `' + idx.name + '` (' + idx.columns.map(c => '`' + c + '`').join(', ') + ')');
                     continue;
                 }
                 if(!idx.unique){
-                    console.log('Schema drift on ' + table + ': missing index ' + idx.name + ' (' + key + '). Adding.');
+                    getLogger().info('Schema drift on ' + table + ': missing index ' + idx.name + ' (' + key + '). Adding.');
                     await db.query('ALTER TABLE `' + table + '` ADD INDEX `' + idx.name + '` (' + colList + ')');
                     continue;
                 }
                 try {
-                    console.log('Schema drift on ' + table + ': missing UNIQUE index ' + idx.name + ' (' + key + '). Adding.');
+                    getLogger().info('Schema drift on ' + table + ': missing UNIQUE index ' + idx.name + ' (' + key + '). Adding.');
                     await db.query('ALTER TABLE `' + table + '` ADD UNIQUE INDEX `' + idx.name + '` (' + colList + ')');
                 } catch(e){
                     const dup = e && (Number(e.errno) === 1062 || /duplicate entry/i.test(e.message || ''));
-                    if(!dup){ console.log('  could not add UNIQUE index ' + idx.name + ' on ' + table + ': ' + (e && e.message)); continue; }
+                    if(!dup){ getLogger().info('  could not add UNIQUE index ' + idx.name + ' on ' + table + ': ' + (e && e.message)); continue; }
                     if(!AUTO_DEDUP_TABLES.has(table)){
-                        console.warn('  ' + table + '.' + idx.name + ': duplicate rows block the UNIQUE index, but ' + table + ' is NOT on the auto-dedup allow-list - skipping (no rows deleted). Apply a manual migration to resolve the duplicates.');
+                        getLogger().warn('  ' + table + '.' + idx.name + ': duplicate rows block the UNIQUE index, but ' + table + ' is NOT on the auto-dedup allow-list - skipping (no rows deleted). Apply a manual migration to resolve the duplicates.');
                         continue;
                     }
-                    console.log('  ' + table + '.' + idx.name + ': duplicate rows block the UNIQUE index - deduping (keep newest id per ' + key + ') then retrying.');
+                    getLogger().info('  ' + table + '.' + idx.name + ': duplicate rows block the UNIQUE index - deduping (keep newest id per ' + key + ') then retrying.');
                     if(!(await this.dedupeForUniqueIndex(db, table, idx.columns))) continue;
                     try {
                         await db.query('ALTER TABLE `' + table + '` ADD UNIQUE INDEX `' + idx.name + '` (' + colList + ')');
-                        console.log('  added ' + idx.name + ' after dedupe.');
+                        getLogger().info('  added ' + idx.name + ' after dedupe.');
                     } catch(e2){
-                        console.log('  ' + table + '.' + idx.name + ' still failing after dedupe - leaving as-is: ' + (e2 && e2.message));
+                        getLogger().info('  ' + table + '.' + idx.name + ' still failing after dedupe - leaving as-is: ' + (e2 && e2.message));
                     }
                 }
             }
@@ -1542,7 +1543,7 @@ class Database {
             const undeclared = this.undeclaredLiveIndexes(
                 expected.concat(this.parseInlineIndexes(data, table)), byName);
             if(undeclared.length){
-                console.warn('Schema shape drift on ' + table + ': live index(es) ' +
+                getLogger().warn('Schema shape drift on ' + table + ': live index(es) ' +
                     undeclared.map(i => (i.unique ? 'UNIQUE ' : i.fulltext ? 'FULLTEXT ' : '') + i.name + ' (' + i.columns.join(',') + ')').join('; ') +
                     ' are declared by NO SQL source. Not auto-healed (never DROP an index we did not create); ' +
                     'converge with a dated migration via node src/migrate.js, or restore the declaration to ' + file + '.');
@@ -1550,7 +1551,7 @@ class Database {
             }
         } catch(e){
             // Never abort startup over index reconciliation.
-            console.warn('reconcileTableIndexes(' + file + ') failed (non-fatal): ' + (e && e.message));
+            getLogger().warn('reconcileTableIndexes(' + file + ') failed (non-fatal): ' + (e && e.message));
         }
     }
 
@@ -1567,12 +1568,12 @@ class Database {
             "SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = ? AND table_name = ? AND COLUMN_NAME = 'id'",
             [this.dbName, table])).length > 0;
         if(!hasId){
-            console.log('  cannot dedupe ' + table + ' (no `id` column to pick a surviving row) - skipping unique-index add.');
+            getLogger().info('  cannot dedupe ' + table + ' (no `id` column to pick a surviving row) - skipping unique-index add.');
             return false;
         }
         const on  = columns.map(c => 't1.`' + c + '` = t2.`' + c + '`').join(' AND ');
         const res = await db.query('DELETE t1 FROM `' + table + '` t1 JOIN `' + table + '` t2 ON ' + on + ' AND t1.id < t2.id');
-        console.log('  deduped ' + table + ': removed ' + (res && res.affectedRows != null ? res.affectedRows : '?') + ' stale duplicate row(s).');
+        getLogger().info('  deduped ' + table + ': removed ' + (res && res.affectedRows != null ? res.affectedRows : '?') + ' stale duplicate row(s).');
         return true;
     }
 
@@ -1711,7 +1712,7 @@ class Database {
                 }
                 if(attempt >= MAX_ATTEMPTS) break;
                 const backoffMs = Math.min(30000, 500 * Math.pow(2, attempt - 1));
-                console.log('Error creating ' + table + ' (attempt ' + attempt + '/' + MAX_ATTEMPTS + '): ', err, '. Retrying in ' + backoffMs + 'ms...');
+                getLogger().info('Error creating ' + table + ' (attempt ' + attempt + '/' + MAX_ATTEMPTS + '): ', err, '. Retrying in ' + backoffMs + 'ms...');
                 await this.util.sleep(backoffMs);
             }
         }
@@ -1732,7 +1733,7 @@ class Database {
                 this.util.throwError('Circuit breaker open - database connections rejected until cooldown expires');
             // Cooldown expired, transition to half-open
             this.circuitState = 'half-open';
-            console.log('Circuit breaker half-open - attempting reconnection');
+            getLogger().info('Circuit breaker half-open - attempting reconnection');
         }
         var connection    = null;
         var attempts      = 0;
@@ -1746,7 +1747,7 @@ class Database {
                 if(this.circuitState === 'half-open'){
                     this.circuitState = 'closed';
                     this.circuitFailures = 0;
-                    console.log('Circuit breaker closed - database connection restored');
+                    getLogger().info('Circuit breaker closed - database connection restored');
                 }
                 this.circuitFailures = 0;
             } catch (e){
@@ -1764,7 +1765,7 @@ class Database {
                 let delay = Math.min(baseDelay * Math.pow(2, attempts - 1), maxDelay);
                 let jitter = Math.floor(Math.random() * delay * 0.3); // up to 30% jitter
                 let totalDelay = delay + jitter;
-                console.error('MariaDB connection attempt ' + attempts + '/' + maxAttempts + ' failed. Retrying in ' + totalDelay + 'ms...', e)
+                getLogger().error('MariaDB connection attempt ' + attempts + '/' + maxAttempts + ' failed. Retrying in ' + totalDelay + 'ms...', e)
                 connection = null;
                 await this.util.sleep(totalDelay);
             }
@@ -1976,7 +1977,7 @@ class Database {
     // Handle rolling back a SQL transaction and releasing the connection
     async rollbackTransaction(){
         if(this.transactionConnection != null){
-            console.log("rolling back");
+            getLogger().info("rolling back");
             try {
                 await this.transactionConnection.rollback();
             } finally {
@@ -2008,7 +2009,7 @@ class Database {
                 this.releaseTxLock();
                 return true;
             } catch (e){
-                console.error('Error committing transaction:', e)
+                getLogger().error('Error committing transaction:', e)
                 try {
                     await this.transactionConnection.rollback();
                 } finally {
@@ -2778,7 +2779,7 @@ class Database {
             let raw = await this.doQuery(capped.sql, capped.args);
             let truncated = raw.some(r => Number(r._sr) > maxSources);
             if(truncated)
-                console.warn(label + ' saw more than ' + maxSources + ' distinct staking sources at block ' + blockIndex + ' - snapshot truncated; stake-weighted quorum fails closed. Raise STAKE_WEIGHT_MAX_SOURCES (coordinated flag-day upgrade) if the federation has grown.');
+                getLogger().warn(label + ' saw more than ' + maxSources + ' distinct staking sources at block ' + blockIndex + ' - snapshot truncated; stake-weighted quorum fails closed. Raise STAKE_WEIGHT_MAX_SOURCES (coordinated flag-day upgrade) if the federation has grown.');
             let rows = (truncated ? raw.filter(r => Number(r._sr) <= maxSources) : raw).map(r => ({
                 pubkey: String(r.pubkey),
                 source: String(r.source),
@@ -2791,7 +2792,7 @@ class Database {
         let raw = await this.doQuery(query, [...sw.args, limit]);
         let truncated = raw.length >= limit;
         if(truncated)
-            console.warn(label + ' hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' - set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
+            getLogger().warn(label + ' hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' - set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
         let rows = raw.map(r => ({
             pubkey: String(r.pubkey),
             source: String(r.source),

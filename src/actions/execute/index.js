@@ -76,6 +76,7 @@ const { SYNTH_EXEC_TX_HASH } = require('../../consensus/exec_context.js');
 // Held as the module object rather than destructured so the call resolves at call time.
 const slashEmission = require('./slash_emission.js');
 
+const { getLogger } = require('../../observability/index.js');
 // Amount-bearing fields of every emittable action, mapping each amount param to the param
 // that names the tick it is denominated in. processEmission normalizes each to
 // that tick's decimals before dispatch, so a contract that computes an over-precise amount
@@ -577,7 +578,7 @@ class Execute {
         data['VM_GAS_BILLED']    = gasBilled;
 
         // Print status message
-        console.log("\t EXECUTE : contract=" + data['CONTRACT_ACTION_INDEX'] + ' : method=' + data['METHOD'] + ' : gas=' + gasBilled + ((Number(data['CALL_DEPTH']) || 0) > 0 ? ' : depth=' + data['CALL_DEPTH'] : '') + ' : ' + data['STATUS']);
+        getLogger().info("\t EXECUTE : contract=" + data['CONTRACT_ACTION_INDEX'] + ' : method=' + data['METHOD'] + ' : gas=' + gasBilled + ((Number(data['CALL_DEPTH']) || 0) > 0 ? ' : depth=' + data['CALL_DEPTH'] : '') + ' : ' + data['STATUS']);
 
         // Create execution record. GAS_USED is the BILLED gas (metered usage net
         // of callee refunds); GAS_LIMIT is this run's ceiling (the caller-funded

@@ -21,6 +21,7 @@
 const divergenceMetrics = require('../chain/dispenser_divergence_metrics.js');
 const ownershipCancelGate = require('../dispenser_ownership_cancel_activation.js');
 
+const { getLogger } = require('../observability/index.js');
 class Dispenser_Close {
 
     // Handle constructing a class instance
@@ -70,7 +71,7 @@ class Dispenser_Close {
             data['STATUS'] = 'valid';
 
             // Print status message
-            console.log("\t DISPENSER_CLOSE : " + this.config['COIN'] + ':' + dispenser['ACTION_INDEX'] + ' : ' + data['STATUS']);
+            getLogger().info("\t DISPENSER_CLOSE : " + this.config['COIN'] + ':' + dispenser['ACTION_INDEX'] + ' : ' + data['STATUS']);
 
             // Observability: a close carrying DISPENSER_STATUS='cancelled' is a
             // cancel (DISPENSER format 1) taking effect. Count it so the volume of

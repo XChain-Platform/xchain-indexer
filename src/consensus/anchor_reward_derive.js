@@ -57,6 +57,7 @@ const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
 const ar      = require('../anchor_reward_activation.js');
 const arKey   = require('../actions/anchor/anchor_reward_key.js');
+const { getLogger } = require('../observability/index.js');
 // No coin-registry require here on purpose: nothing inside the block transaction may read a
 // field the registry advertises as operator-tunable (see minConfirmations below).
 
@@ -253,7 +254,7 @@ async function deriveAnchorRewards(indexerDb, config, blockIndex, proof){
                     ' but its DOGE anchor ' + (row.doge_anchor_txid || '<none>') + ' could not be proven mined; ' +
                     'deferring the block (wire DOGE_INDEXER_URL on this indexer if this persists)');
             if(verdict !== 'verified'){
-                console.warn('anchor reward ' + row.reward_type + '/' + row.round_reference + ' publisher ' +
+                getLogger().warn('anchor reward ' + row.reward_type + '/' + row.round_reference + ' publisher ' +
                              String(row.publisher).toLowerCase() + ': DOGE anchor proof REJECTED (' +
                              (row.doge_anchor_txid || '<no txid>') + '); no reward derived');
                 continue;

@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -130,7 +131,7 @@ class Broadcast {
         data['STATUS'] = status;
 
         // Print status message
-        console.log("\t BROADCAST : " + data['MESSAGE'] + ' : ' +  data['VALUE'] + ' : ' + data['STATUS']);
+        getLogger().info("\t BROADCAST : " + data['MESSAGE'] + ' : ' +  data['VALUE'] + ' : ' + data['STATUS']);
 
         // Create record in broadcasts table
         await this.indexerDb.createBroadcast(data);

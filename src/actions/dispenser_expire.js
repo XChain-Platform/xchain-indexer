@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -61,7 +62,7 @@ class Dispenser_Expire {
             data['STATUS'] = 'valid';
 
             // Print status message
-            console.log("\t DISPENSER_EXPIRE : " + this.config['COIN'] + ':' + dispenser['ACTION_INDEX'] + ' : ' + data['STATUS']);
+            getLogger().info("\t DISPENSER_EXPIRE : " + this.config['COIN'] + ':' + dispenser['ACTION_INDEX'] + ' : ' + data['STATUS']);
 
             // Array of credits, debits, and escrows
             let credits = [],

@@ -87,6 +87,7 @@ dotenv.config();
 // exactly the lines an operator needs levelled and timestamped, and
 // installObservability does not run until ~160 lines further down.
 const { patchConsole } = require('./observability');
+const { getLogger } = require('./observability/index.js');
 patchConsole({
     service: 'xchain-indexer',
     version: require('../package.json').version,
@@ -101,7 +102,7 @@ const REQUIRED_ENV = [
 ];
 for(const key of REQUIRED_ENV){
     if(!process.env[key]){
-        console.error('Missing required environment variable: ' + key);
+        getLogger().error('Missing required environment variable: ' + key);
         process.exit(1);
     }
 }
@@ -151,9 +152,9 @@ const INDEXER_API_KEY = process.env.INDEXER_API_KEY || '';
 // opt-in operator decision rather than a silent breakage.
 const ALLOW_UNAUTHED = (process.env.INDEXER_ALLOW_UNAUTHENTICATED === 'true');
 if(!INDEXER_API_KEY && ALLOW_UNAUTHED)
-    console.warn('WARNING: INDEXER_API_KEY is not set and INDEXER_ALLOW_UNAUTHENTICATED=true; write and federation-read methods are UNAUTHENTICATED. Never use this in production.');
+    getLogger().warn('WARNING: INDEXER_API_KEY is not set and INDEXER_ALLOW_UNAUTHENTICATED=true; write and federation-read methods are UNAUTHENTICATED. Never use this in production.');
 else if(!INDEXER_API_KEY)
-    console.warn('WARNING: INDEXER_API_KEY is not set; write and federation-read methods will be REJECTED (fail-closed). Set INDEXER_API_KEY for a shared deployment, or INDEXER_ALLOW_UNAUTHENTICATED=true to allow keyless single-host/regtest access.');
+    getLogger().warn('WARNING: INDEXER_API_KEY is not set; write and federation-read methods will be REJECTED (fail-closed). Set INDEXER_API_KEY for a shared deployment, or INDEXER_ALLOW_UNAUTHENTICATED=true to allow keyless single-host/regtest access.');
 
 // feequotedryrun runs the REAL action handler with NO action deny-list: DEPLOY
 // constructor / full EXECUTE including emit subtrees, up to the VM CPU cap, while
@@ -249,7 +250,7 @@ function rollcallManifestHash(){
         // Fail LOUD rather than silently agreeing with every peer: a null hash can
         // never equal the caller's, so the close defers instead of trusting an
         // indexer whose manifest we could not read.
-        console.error('rollcallManifestHash: cannot read vendored action-manifest.json:', e.message);
+        getLogger().error('rollcallManifestHash: cannot read vendored action-manifest.json:', e.message);
         _rollcallManifestHash = null;
         return null;
     }
@@ -443,7 +444,7 @@ async function startApi(){
                     has_stake:   !!stake
                 };
             } catch (err) {
-                console.error('getownstake error:', err);
+                getLogger().error('getownstake error:', err);
                 return { error: 'failed to look up stake' };
             }
         },
@@ -474,7 +475,7 @@ async function startApi(){
                         : null,
                 };
             } catch (err) {
-                console.error('getlatestblock error:', err);
+                getLogger().error('getlatestblock error:', err);
                 return { error: 'failed to look up latest block' };
             }
         },
@@ -554,7 +555,7 @@ async function startApi(){
                     block_merkle_version: stored.block_merkle_root ? merkle.BLOCK_MERKLE_VERSION : null
                 };
             } catch (err) {
-                console.error('getblockhashes error:', err);
+                getLogger().error('getblockhashes error:', err);
                 return { error: 'failed to look up block hashes' };
             }
         },
@@ -580,7 +581,7 @@ async function startApi(){
             try {
                 return await indexer.actions.computeFeeQuote({ action, params, source, feeOutputSats });
             } catch (err) {
-                console.error('feequote error:', err);
+                getLogger().error('feequote error:', err);
                 return { error: 'failed to compute fee quote' };
             }
         },
@@ -634,7 +635,7 @@ async function startApi(){
                         : 'add a native-coin output of at least this amount to ' + oracleAddress
                 };
             } catch (err) {
-                console.error('oraclefeequote error:', err);
+                getLogger().error('oraclefeequote error:', err);
                 return { error: 'failed to compute oracle fee quote' };
             }
         },
@@ -660,7 +661,7 @@ async function startApi(){
             try {
                 return await indexer.actions.computePreflight({ action, params, source, feeMode });
             } catch (err) {
-                console.error('preflight error:', err);
+                getLogger().error('preflight error:', err);
                 return { error: 'failed to compute pre-flight' };
             }
         },
@@ -679,7 +680,7 @@ async function startApi(){
             try {
                 return await indexer.actions.computeFeeQuoteDryRun({ action, params, source, feeOutputs });
             } catch (err) {
-                console.error('feequotedryrun error:', err);
+                getLogger().error('feequotedryrun error:', err);
                 return { error: 'dry-run failed: ' + ((err && err.message) ? err.message : String(err)) };
             }
         },
@@ -693,7 +694,7 @@ async function startApi(){
             try {
                 return await indexer.actions.getFeeSchedule();
             } catch (err) {
-                console.error('feeschedule error:', err);
+                getLogger().error('feeschedule error:', err);
                 return { error: 'failed to fetch fee schedule' };
             }
         },
@@ -727,7 +728,7 @@ async function startApi(){
                     validators:  validators
                 };
             } catch (err) {
-                console.error('getactivevalidators error:', err);
+                getLogger().error('getactivevalidators error:', err);
                 return { error: 'failed to look up active validators' };
             }
         },
@@ -764,7 +765,7 @@ async function startApi(){
                     validators:   validators
                 };
             } catch (err) {
-                console.error('getactivestakeweights error:', err);
+                getLogger().error('getactivestakeweights error:', err);
                 return { error: 'failed to look up active stake weights' };
             }
         },
@@ -830,7 +831,7 @@ async function startApi(){
                         network: indexer.config['NETWORK'], stats: gatesStats
                     });
                     let line = gatesFilter.formatGatesFilterStats(gatesStats);
-                    if(line) console.log('getcapabilityvalidators: ' + line);
+                    if(line) getLogger().info('getcapabilityvalidators: ' + line);
                 }
                 // Confirm which threshold this snapshot actually filtered by, so a
                 // hub↔indexer MIN_STAKE mismatch is visible in the indexer log
@@ -838,7 +839,7 @@ async function startApi(){
                 let thresholdSource = (min_stake !== undefined && min_stake !== null)
                     ? String(min_stake) + ' (caller-supplied)'
                     : 'local-config';
-                console.log('getcapabilityvalidators: capability=' + capability +
+                getLogger().info('getcapabilityvalidators: capability=' + capability +
                     ' block=' + blk + ' min_stake=' + thresholdSource +
                     ' validators=' + validators.length);
                 return {
@@ -851,7 +852,7 @@ async function startApi(){
                     validators:  validators
                 };
             } catch (err) {
-                console.error('getcapabilityvalidators error:', err);
+                getLogger().error('getcapabilityvalidators error:', err);
                 return { error: 'failed to look up capability validators' };
             }
         },
@@ -907,7 +908,7 @@ async function startApi(){
                     validators:  validators
                 };
             } catch (err) {
-                console.error('getfullnodeverifiers error:', err);
+                getLogger().error('getfullnodeverifiers error:', err);
                 return { error: 'failed to look up full-node verifiers' };
             }
         },
@@ -940,7 +941,7 @@ async function startApi(){
                 let thresholdSource = (min_stake !== undefined && min_stake !== null)
                     ? String(min_stake) + ' (caller-supplied)'
                     : 'local-config';
-                console.log('getstakeweightsbycapability: capability=' + capability +
+                getLogger().info('getstakeweightsbycapability: capability=' + capability +
                     ' block=' + blk + ' min_stake=' + thresholdSource +
                     ' keys=' + validators.length + ' sources=' + sources.size);
                 return {
@@ -954,7 +955,7 @@ async function startApi(){
                     validators:  validators
                 };
             } catch (err) {
-                console.error('getstakeweightsbycapability error:', err);
+                getLogger().error('getstakeweightsbycapability error:', err);
                 return { error: 'failed to look up stake weights' };
             }
         },
@@ -992,7 +993,7 @@ async function startApi(){
                     requests:           rows
                 };
             } catch (err) {
-                console.error('getpendingattestation_requests error:', err);
+                getLogger().error('getpendingattestation_requests error:', err);
                 return { error: 'failed to look up pending attestation requests' };
             }
         },
@@ -1032,7 +1033,7 @@ async function startApi(){
                     requests:           rows
                 };
             } catch (err) {
-                console.error('getrelayedattestation_requests error:', err);
+                getLogger().error('getrelayedattestation_requests error:', err);
                 return { error: 'failed to look up relayed attestation requests' };
             }
         },
@@ -1083,7 +1084,7 @@ async function startApi(){
                 let merged = await db.getOpenCrossChainOffers(max, after_action_index, to_coin, blockTime);
                 let truncated = merged.truncated === true;
                 if(truncated)
-                    console.warn('getopencrosschainorders hit the cap of ' + max + ' at block ' + latest + ' - the open cross-chain book is truncated (newer offers dropped); the hub should page via next_cursor or raise its limit.');
+                    getLogger().warn('getopencrosschainorders hit the cap of ' + max + ' at block ' + latest + ' - the open cross-chain book is truncated (newer offers dropped); the hub should page via next_cursor or raise its limit.');
                 for(let o of merged) o.push_generation = pushGeneration;
                 // Give-side decimal grid: the hub quantizes each cross-chain
                 // fill on the grid of the leg that gives it, and declines the match outright
@@ -1101,7 +1102,7 @@ async function startApi(){
                     orders:             merged
                 };
             } catch (err) {
-                console.error('getopencrosschainorders error:', err);
+                getLogger().error('getopencrosschainorders error:', err);
                 return { error: 'failed to look up cross-chain orders' };
             }
         },
@@ -1129,7 +1130,7 @@ async function startApi(){
                     feeds:              rows
                 };
             } catch (err) {
-                console.error('getbetfeeds error:', err);
+                getLogger().error('getbetfeeds error:', err);
                 return { error: 'failed to look up bet feeds' };
             }
         },
@@ -1153,7 +1154,7 @@ async function startApi(){
                     pools:   pools
                 };
             } catch (err) {
-                console.error('getbetfeed error:', err);
+                getLogger().error('getbetfeed error:', err);
                 return { error: 'failed to look up bet feed' };
             }
         },
@@ -1178,7 +1179,7 @@ async function startApi(){
                     bets:               rows
                 };
             } catch (err) {
-                console.error('getbets error:', err);
+                getLogger().error('getbets error:', err);
                 return { error: 'failed to look up bets' };
             }
         },
@@ -1272,7 +1273,7 @@ async function startApi(){
                     transfers:          transfers
                 };
             } catch (err) {
-                console.error('getpendingbridgetransfers error:', err);
+                getLogger().error('getpendingbridgetransfers error:', err);
                 return { error: 'failed to look up pending bridge transfers' };
             }
         },
@@ -1294,7 +1295,7 @@ async function startApi(){
                     return { exists: false, network: indexer.config['NETWORK'], latest_block_index: latest };
                 return Object.assign({ exists: true, latest_block_index: latest }, row);
             } catch (err) {
-                console.error('getbridgetransfer error:', err);
+                getLogger().error('getbridgetransfer error:', err);
                 return { error: 'failed to look up bridge transfer' };
             }
         },
@@ -1313,7 +1314,7 @@ async function startApi(){
             try {
                 return await db.getBridgeBalances(String(tick));
             } catch (err) {
-                console.error('getbridgebalances error:', err);
+                getLogger().error('getbridgebalances error:', err);
                 return { error: 'failed to look up bridge balances' };
             }
         },
@@ -1339,7 +1340,7 @@ async function startApi(){
                     return { error: 'no provable escrow state at that block_index' };
                 return envelope;
             } catch (err) {
-                console.error('getbridgeescrowproof error:', err);
+                getLogger().error('getbridgeescrowproof error:', err);
                 return { error: 'failed to build escrow proof' };
             }
         },
@@ -1377,7 +1378,7 @@ async function startApi(){
                     origin_block: block
                 };
             } catch (err) {
-                console.error('gettokenpolicy error:', err);
+                getLogger().error('gettokenpolicy error:', err);
                 return { error: 'failed to look up token policy' };
             }
         },
@@ -1414,7 +1415,7 @@ async function startApi(){
                     policy_hash:  applied ? applied.policy_hash          : null
                 };
             } catch (err) {
-                console.error('getappliedpolicy error:', err);
+                getLogger().error('getappliedpolicy error:', err);
                 return { error: 'failed to look up applied policy' };
             }
         },
@@ -1451,7 +1452,7 @@ async function startApi(){
                     calls:              rows
                 };
             } catch (err) {
-                console.error('getpendingcrosschaincalls error:', err);
+                getLogger().error('getpendingcrosschaincalls error:', err);
                 return { error: 'failed to look up pending cross-chain calls' };
             }
         },
@@ -1506,7 +1507,7 @@ async function startApi(){
                     }
                 };
             } catch (err) {
-                console.error('getcrosschaincall error:', err);
+                getLogger().error('getcrosschaincall error:', err);
                 return { error: 'failed to look up cross-chain call' };
             }
         },
@@ -1552,7 +1553,7 @@ async function startApi(){
                     gas_used:             Number(row.gas_used)
                 };
             } catch (err) {
-                console.error('getcrosschaincallresult error:', err);
+                getLogger().error('getcrosschaincallresult error:', err);
                 return { error: 'failed to look up cross-chain call result' };
             }
         },
@@ -1581,7 +1582,7 @@ async function startApi(){
                     'valid', v.last_round, v.first_round, v.limit);
                 return priceBatchQuery.buildPriceBatchesResponse(latest, rows, v);
             } catch (err) {
-                console.error('getpricebatches error:', err);
+                getLogger().error('getpricebatches error:', err);
                 return { error: 'failed to look up price batches' };
             }
         },
@@ -1625,7 +1626,7 @@ async function startApi(){
                     confirmations:      (latest >= blockIndex) ? (latest - blockIndex + 1) : 0
                 };
             } catch (err) {
-                console.error('getactionconfirmations error:', err);
+                getLogger().error('getactionconfirmations error:', err);
                 return { error: 'failed to look up action confirmations' };
             }
         },
@@ -1668,7 +1669,7 @@ async function startApi(){
                 return anchorActionQuery.buildAnchorActionResponse(indexer.config, latest, row,
                     { checkpoint_anchored: Array.isArray(rows) && rows.length > 0 });
             } catch (err) {
-                console.error('getanchoraction error:', err);
+                getLogger().error('getanchoraction error:', err);
                 return { error: 'failed to look up anchor action' };
             }
         },
@@ -1784,7 +1785,7 @@ async function startApi(){
                     publishers: publishersOut
                 };
             } catch (err) {
-                console.error('getrollcallsigners error:', err);
+                getLogger().error('getrollcallsigners error:', err);
                 return { error: 'failed to look up rollcall signers' };
             }
         },
@@ -1803,7 +1804,7 @@ async function startApi(){
                            : await db.doQuery(anchorActionQuery.ANCHOR_BY_TXID_AFTER_SQL, [v.txid, v.after]);
                 return anchorActionQuery.buildAnchorConfirmationsResponse(indexer.config, latest, rows);
             } catch (err) {
-                console.error('getanchorconfirmations error:', err);
+                getLogger().error('getanchorconfirmations error:', err);
                 return { error: 'failed to look up anchor confirmations' };
             }
         },
@@ -1848,7 +1849,7 @@ async function startApi(){
                 return anchorActionQuery.buildArchiveAnchorResponse(
                     indexer.config, latest, found.head, found.chunks);
             } catch (err) {
-                console.error('getarchiveanchor error:', err);
+                getLogger().error('getarchiveanchor error:', err);
                 return { error: 'failed to look up archive anchor' };
             }
         },
@@ -1893,7 +1894,7 @@ async function startApi(){
                     { block_index: v.block_index, block_hash: v.block_hash },
                     { decoderReorgHalted });
             } catch (err) {
-                console.error('getreorghistory error:', err);
+                getLogger().error('getreorghistory error:', err);
                 return { error: 'failed to look up reorg history' };
             }
         },
@@ -1940,7 +1941,7 @@ async function startApi(){
                 let rows = await db.getRollcalls(max);
                 return { rollcalls: rows };
             } catch (err) {
-                console.error('getrollcalls error:', err);
+                getLogger().error('getrollcalls error:', err);
                 return { error: 'failed to look up roll calls' };
             }
         },
@@ -1961,7 +1962,7 @@ async function startApi(){
                 let rows = await db.getRollcallAbsencesBySource(source, max);
                 return { absences: rows };
             } catch (err) {
-                console.error('getrollcallabsences error:', err);
+                getLogger().error('getrollcallabsences error:', err);
                 return { error: 'failed to look up roll call absences' };
             }
         }
@@ -1974,7 +1975,7 @@ async function startApi(){
     if(!ENABLE_DRYRUN)
         delete jsonRpcController.feequotedryrun;
     else
-        console.warn('WARNING: feequotedryrun is ENABLED (regtest + INDEXER_ENABLE_DRYRUN). It runs the real VM in a rolled-back txn; keep this node isolated.');
+        getLogger().warn('WARNING: feequotedryrun is ENABLED (regtest + INDEXER_ENABLE_DRYRUN). It runs the real VM in a rolled-back txn; keep this node isolated.');
 
     // Plain REST status endpoint for monitoring tools that poll over a simple
     // GET: uptime checks, container liveness/readiness probes, and load-balancer
@@ -2121,14 +2122,14 @@ async function startApi(){
     // Start the server. The handle is kept so the shutdown drain below can stop
     // accepting connections and let in-flight requests finish.
     const server = app.listen(INDEXER_API_PORT, () => {
-      console.log('API listening on port ' + INDEXER_API_PORT);
+      getLogger().info('API listening on port ' + INDEXER_API_PORT);
     });
 
     // Start the Indexer (trap any errors and log them before exiting the indexer).
     // start() awaits the block loop, so this promise SETTLES when the loop breaks:
     // on a fatal error here, or on the stopFlag the drain sets at a block boundary.
     const indexerExited = indexer.start().catch((error) => {
-        console.error('Fatal indexer error:', error);
+        getLogger().error('Fatal indexer error:', error);
         indexerRunning = false;
         indexerError   = error;
         process.exit(1);

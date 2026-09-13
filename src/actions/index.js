@@ -434,6 +434,7 @@ const nodeproof          = require('./nodeproof.js');
 const rollcall           = require('./rollcall/index.js');
 const PreflightMemo      = require('../chain/preflight_memo.js');
 
+const { getLogger } = require('../observability/index.js');
 class Actions {
 
     constructor(indexer){
@@ -955,7 +956,7 @@ class Actions {
         // one block_index value and the rollback "WHERE block_index >= ?" delete cannot split
         // a block's ids. data['BLOCK_INDEX'] equals it today; warn loudly if it ever diverges.
         if(data['BLOCK_INDEX'] != this.indexerDb.blockIndex)
-            console.warn('Index id invariant: action BLOCK_INDEX (' + data['BLOCK_INDEX'] +
+            getLogger().warn('Index id invariant: action BLOCK_INDEX (' + data['BLOCK_INDEX'] +
                 ') != indexer blockIndex (' + this.indexerDb.blockIndex + '); stamping from indexer blockIndex.');
         // Assign each the next explicit dense id, in sorted order, stamped at this block.
         for(let addr of pending)
@@ -1071,7 +1072,7 @@ class Actions {
                         return (balance === null || balance === undefined) ? '0' : String(balance);
                     });
                 } catch(e){
-                    console.warn('dry-run fee-balance read failed: ' + ((e && e.message) ? e.message : e));
+                    getLogger().warn('dry-run fee-balance read failed: ' + ((e && e.message) ? e.message : e));
                     sourceFeeBalance = null;
                 }
             }
@@ -1085,7 +1086,7 @@ class Actions {
             // from surfacing as an unhandledRejection; the fence, not this handler, is what
             // stops the zombie's writes.
             dryRunProcessing.catch((e) => {
-                console.warn('Abandoned fee-quote dry-run settled after watchdog: ' +
+                getLogger().warn('Abandoned fee-quote dry-run settled after watchdog: ' +
                     ((e && e.message) ? e.message : e));
             });
             let resultData = await this.util.withTimeout(

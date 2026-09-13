@@ -42,6 +42,7 @@ const { isMirrorAdmissionConsumerActive, isRowReadableAt } = require('./mirror_a
 // consensus timestamp so historical replay below the threshold is byte-identical.
 const amountRepresentability = require('./amount_representability_activation.js');
 
+const { getLogger } = require('./observability/index.js');
 // Page size the mirror applier walks its applicability read in. NOT consensus and
 // deliberately not exported: it shapes how many rows a node holds at once, never which
 // rows bind (the read's order is total and the pages are disjoint slices of it), so
@@ -174,13 +175,13 @@ class Utility {
 
     // Throw an error and log to console
     throwError(error){
-        console.error('throwError:', error);
+        getLogger().error('throwError:', error);
         throw error;
     }
 
     // Log an error to the error.log file
     logError(error, info){
-        console.error('logError: ' + error, info);
+        getLogger().error('logError: ' + error, info);
     }
 
     // JSON.stringify with BigInt support. BigInts serialize as decimal strings.
@@ -261,7 +262,7 @@ class Utility {
         var niceString = (timeName!=null) ? timeName : 'Time';
         if(timeString!='')
             niceString += '\t: (' + timeString + ')';
-        console.log(niceString);
+        getLogger().info(niceString);
     }
 
     // Create nice human readable time string based on milliseconds
@@ -1665,7 +1666,7 @@ class Utility {
             priceDb = db;
             if(!this._hubDbFallbackWarned){
                 this._hubDbFallbackWarned = true;
-                console.warn('WARNING: getFeeOraclePrices: no hub DB configured (HUB_DB_HOST/HUB_DB_NAME unset); ' +
+                getLogger().warn('WARNING: getFeeOraclePrices: no hub DB configured (HUB_DB_HOST/HUB_DB_NAME unset); ' +
                     'falling back to the local indexer DB for price_snapshots/oracle_prices. ' +
                     'Expected for single-host deployments; on a distributed node this means price data may be ' +
                     'stale or absent. Set HUB_DB_HOST/HUB_DB_NAME, or INDEXER_ALLOW_LOCAL_PRICE_SOURCE=true to ' +
@@ -2541,7 +2542,7 @@ class Utility {
         // Logged only when there IS something pending, so a chain with no
         // attestation traffic stays quiet. Counts only: this runs per block.
         if(pendingSeen > 0 && applicable.length === 0){
-            console.log('processAttestationResponses: block ' + block_index + ' considered ' +
+            getLogger().info('processAttestationResponses: block ' + block_index + ' considered ' +
                 pendingSeen + ' pending request(s) and ' + mirrorSeen + ' mirror row(s), applied 0. ' +
                 'A mirror row binds only when its request is still pending, the deadline has not ' +
                 'passed, the flag day is active at the REQUEST\'s block, and effective_time <= ' +

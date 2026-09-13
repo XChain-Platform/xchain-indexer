@@ -90,6 +90,7 @@ const pmsh    = require('../../attestation/providerMinStakeHistory.js');
 const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
 const { buildInjectedExecContext, synthesizeTxHash, SYNTH_EXEC_TX_HASH, SYNTH_TAGS } = require('../../consensus/exec_context.js');
 
+const { getLogger } = require('../../observability/index.js');
 // The chain every `attestation` capability stake lives on, and therefore the only
 // chain whose heights can key a responsible set. Relay requests are materialized
 // here (v3) and nowhere else.
@@ -471,7 +472,7 @@ class Attest {
                     ? 'invalid: REDUNDANCY (rules-aware set ' + admissionSet.length + ' < ' + neededSlots + ' at request block)'
                     : 'invalid: REDUNDANCY (responsible set ' + admissionSet.length + ' < ' + neededSlots + ' at request block)';
                 let line = rgf.formatGatesFilterStats(gatesStats);
-                if(line) console.log("\t ATTEST v0 : " + line);
+                if(line) getLogger().info("\t ATTEST v0 : " + line);
             }
         }
 
@@ -542,7 +543,7 @@ class Attest {
         data['ORIGIN_ACTION_INDEX'] = (relayOrigin && data['REQUEST_STATUS'] === 'pending')
                                     ? data['ACTION_INDEX'] : null;
 
-        console.log("\t ATTEST v0 : id=" + (data['REQUEST_ID'] ? String(data['REQUEST_ID']).substring(0,16) + '...' : '?') +
+        getLogger().info("\t ATTEST v0 : id=" + (data['REQUEST_ID'] ? String(data['REQUEST_ID']).substring(0,16) + '...' : '?') +
                     ' : provider=' + data['PROVIDER_ID'] +
                     ' : contract=' + data['CONTRACT_INDEX'] +
                     ' : redundancy=' + data['REDUNDANCY'] +
@@ -736,7 +737,7 @@ class Attest {
             ? JSON.stringify(verifiedSigs.map(s => ({ pubkey: s.pubkey, sig: s.sig })))
             : null;
 
-        console.log("\t ATTEST v1 : id=" + String(requestId).substring(0,16) + '...' +
+        getLogger().info("\t ATTEST v1 : id=" + String(requestId).substring(0,16) + '...' +
                     ' : status=' + responseStatus +
                     ' : sigs=' + validSigs + '/' + (request ? request.redundancy : '?') +
                     ' : ' + data['STATUS']);
@@ -765,7 +766,7 @@ class Attest {
             // `expired` response is terminal and maps to `errored`.)
             const RETRYABLE_STATUSES = new Set(['no_quorum', 'timeout', 'provider_error']);
             if(RETRYABLE_STATUSES.has(String(responseStatus))){
-                console.log("\t ATTEST v1 : id=" + String(requestId).substring(0,16) + '...' +
+                getLogger().info("\t ATTEST v1 : id=" + String(requestId).substring(0,16) + '...' +
                             ' : retryable status=' + responseStatus + ', request left pending for retry');
             } else {
                 // Flip request status to its terminal value (resolved_block anchors
@@ -786,7 +787,7 @@ class Attest {
                 // produce a row whose origin_chain differs from this coin, so no separate
                 // activation check is needed and pre-activation replay is untouched.
                 if(this.isForeignOrigin(request)){
-                    console.log("\t ATTEST v1 : id=" + String(requestId).substring(0,16) + '...' +
+                    getLogger().info("\t ATTEST v1 : id=" + String(requestId).substring(0,16) + '...' +
                                 ' : origin=' + request.origin_chain + ', callback deferred to the relay leg');
                     await this.mapper.createMappings(data);
                     return;
@@ -803,7 +804,7 @@ class Attest {
                     // rather than commit a locally-dropped callback that forks
                     // contract_hash against healthy peers (see consensus/fault_guard.js).
                     rethrowIfInfraFault(e);
-                    console.warn('Attestation callback injection failed:', e);
+                    getLogger().warn('Attestation callback injection failed:', e);
                 }
             }
         }
@@ -851,7 +852,7 @@ class Attest {
         let request   = data['MIRROR_REQUEST'];
         let requestId = String((row && row.request_id) || '').toLowerCase();
         let skip = (why) => {
-            console.log("\t ATTEST mirror : id=" + requestId.substring(0,16) + '...' +
+            getLogger().info("\t ATTEST mirror : id=" + requestId.substring(0,16) + '...' +
                         ' : block=' + data['BLOCK_INDEX'] + ' : SKIPPED (' + why + ')');
         };
 
@@ -965,7 +966,7 @@ class Attest {
             ? JSON.stringify(verdict.verifiedSigs.map(s => ({ pubkey: s.pubkey, sig: s.sig })))
             : null;
 
-        console.log("\t ATTEST mirror : id=" + requestId.substring(0,16) + '...' +
+        getLogger().info("\t ATTEST mirror : id=" + requestId.substring(0,16) + '...' +
                     ' : status=' + data['RESPONSE_STATUS'] +
                     ' : sigs=' + verdict.validSigs + '/' + request.redundancy +
                     ' : effective=' + row.effective_time +
@@ -1001,7 +1002,7 @@ class Attest {
         // goes back as a v4 and the callback fires there (the same guard the chain path
         // has, for the same reason).
         if(this.isForeignOrigin(request)){
-            console.log("\t ATTEST mirror : id=" + requestId.substring(0,16) + '...' +
+            getLogger().info("\t ATTEST mirror : id=" + requestId.substring(0,16) + '...' +
                         ' : origin=' + request.origin_chain + ', callback deferred to the relay leg');
             await this.mapper.createMappings(data);
             return;
@@ -1015,7 +1016,7 @@ class Attest {
             // Infra faults halt the block rather than commit a locally-dropped callback
             // that forks contract_hash against healthy peers (consensus/fault_guard.js).
             rethrowIfInfraFault(e);
-            console.warn('Mirror-applied attestation callback injection failed:', e);
+            getLogger().warn('Mirror-applied attestation callback injection failed:', e);
         }
 
         await this.mapper.createMappings(data);
@@ -1028,7 +1029,7 @@ class Attest {
         // user-broadcast path can't legitimately produce v2; guard against accidental
         // synthesis from a user transaction.
         if(!data['IS_SYNTHETIC']){
-            console.warn('\t ATTEST v2 : rejected (user-broadcast not allowed for synthetic expire)');
+            getLogger().warn('\t ATTEST v2 : rejected (user-broadcast not allowed for synthetic expire)');
             data['STATUS'] = 'invalid: ATTEST v2 must be system-synthesized';
             return;
         }
@@ -1053,7 +1054,7 @@ class Attest {
 
         data['STATUS'] = 'valid';
 
-        console.log("\t ATTEST v2 : id=" + requestId.substring(0,16) + '...' +
+        getLogger().info("\t ATTEST v2 : id=" + requestId.substring(0,16) + '...' +
                     ' : deadline=' + request.deadline_block +
                     ' : block=' + data['BLOCK_INDEX']);
 
@@ -1080,7 +1081,7 @@ class Attest {
             // a driver-level fault (deadlock, lock-wait timeout) must halt the
             // block or this validator alone drops the stat rows (consensus/fault_guard.js).
             rethrowIfInfraFault(e);
-            console.warn('Attestation expire: missed_count update failed:', e);
+            getLogger().warn('Attestation expire: missed_count update failed:', e);
         }
 
         // Synthesize the callback EXECUTE so the contract can clean up (status='expired').
@@ -1094,7 +1095,7 @@ class Attest {
         } catch(e){
             // Same infra-fault gate as the response-path callback above (consensus/fault_guard.js).
             rethrowIfInfraFault(e);
-            console.warn('Attestation expiry callback failed:', e);
+            getLogger().warn('Attestation expiry callback failed:', e);
         }
 
         await this.mapper.createMappings(data);
@@ -1190,7 +1191,7 @@ class Attest {
         data['STATUS']     = error || 'valid';
         this.stampBatchColumns(data, head, 0);
 
-        console.log("\t ATTEST v5 : batch=" + String(data['REQUEST_ID']).substring(0,16) + '...' +
+        getLogger().info("\t ATTEST v5 : batch=" + String(data['REQUEST_ID']).substring(0,16) + '...' +
                     (head && head.ok ? ' : window=' + head.windowStart + '-' + head.windowEnd +
                                        ' rows=' + head.rowCount +
                                        ' anchor=' + head.btcBlockHeight +
@@ -1274,7 +1275,7 @@ class Attest {
         data['STATUS']     = error || 'valid';
         this.stampBatchColumns(data, chunk, chunk && chunk.ok ? chunk.chunkIndex : null);
 
-        console.log("\t ATTEST v6 : batch=" + String(data['REQUEST_ID']).substring(0,16) + '...' +
+        getLogger().info("\t ATTEST v6 : batch=" + String(data['REQUEST_ID']).substring(0,16) + '...' +
                     (chunk && chunk.ok ? ' : chunk=' + chunk.chunkIndex + '/' + chunk.totalChunks : '') +
                     ' : ' + data['STATUS']);
 
@@ -1400,7 +1401,7 @@ class Attest {
         }
 
         if(failure){
-            console.warn("\t ATTEST v6 : batch=" + String(head.batchKey).substring(0,16) + '...' +
+            getLogger().warn("\t ATTEST v6 : batch=" + String(head.batchKey).substring(0,16) + '...' +
                          ' : completed and failed, flagging the head : ' + failure);
             // The verdict carries the completion marker so a later reorg of THIS chunk can
             // tell an after-the-fact stamp from a head that was terminal when it was written,
@@ -1674,7 +1675,7 @@ class Attest {
             // Loud, because on a healthy federation this never happens: v0/v3 admission
             // already rejects an unknown PROVIDER_ID, so reaching here means either a
             // caller forgot the provider id or an operator overlay stripped the floor.
-            console.warn('Attestation responsible set: no provider stake floor for "' + pid +
+            getLogger().warn('Attestation responsible set: no provider stake floor for "' + pid +
                          '" at block ' + blockIndex + '; failing closed (empty responsible set)');
             return [];
         }
@@ -1811,7 +1812,7 @@ class Attest {
         // 'invalid' row so a v3 that strays onto an origin chain is treated exactly
         // as an unknown VERSION is: nothing persisted, nothing hashed.
         if(String(this.config['COIN']) !== HOME_CHAIN){
-            console.warn("\t ATTEST v3 : rejected (relay requests materialize on " + HOME_CHAIN + " only)");
+            getLogger().warn("\t ATTEST v3 : rejected (relay requests materialize on " + HOME_CHAIN + " only)");
             return;
         }
 
@@ -1951,7 +1952,7 @@ class Attest {
         data['STATUS']         = (error) ? error : 'valid';
         data['REQUEST_STATUS'] = (error) ? 'rejected' : 'pending';
 
-        console.log("\t ATTEST v3 : id=" + requestId.substring(0,16) + '...' +
+        getLogger().info("\t ATTEST v3 : id=" + requestId.substring(0,16) + '...' +
                     ' : origin=' + originChain + ':' + originAction +
                     ' : provider=' + providerId +
                     ' : redundancy=' + redundancy +
@@ -1993,7 +1994,7 @@ class Attest {
         // Never valid on the home chain: a home-chain request is fulfilled by a v1
         // in place and has nothing to relay to itself.
         if(String(this.config['COIN']) === HOME_CHAIN){
-            console.warn("\t ATTEST v4 : rejected (relay responses land on origin chains only)");
+            getLogger().warn("\t ATTEST v4 : rejected (relay responses land on origin chains only)");
             return;
         }
 
@@ -2086,7 +2087,7 @@ class Attest {
         // invite a reader to mistake one for the other.
         data['VALIDATOR_SIGNATURES'] = null;
 
-        console.log("\t ATTEST v4 : id=" + requestId.substring(0,16) + '...' +
+        getLogger().info("\t ATTEST v4 : id=" + requestId.substring(0,16) + '...' +
                     ' : home_response=' + homeResponseIdx +
                     ' : status=' + responseStatus +
                     ' : snapshot=' + snapshotBlock +
@@ -2115,7 +2116,7 @@ class Attest {
                     await this.indexerDb.setAttestationResponseCallbackIndex(data['ACTION_INDEX'], callbackActionIndex);
             } catch(e){
                 rethrowIfInfraFault(e);
-                console.warn('Attestation relay callback injection failed:', e);
+                getLogger().warn('Attestation relay callback injection failed:', e);
             }
         }
 
@@ -2163,7 +2164,7 @@ class Attest {
         let gas      = this.config['GAS'];
         let feePayer = String(request.fee_payer || '');
         if(!feePayer){
-            console.warn('Attestation fee settle: missing fee_payer for request ' + String(request.request_id).substring(0,16) + '..., fee left in escrow');
+            getLogger().warn('Attestation fee settle: missing fee_payer for request ' + String(request.request_id).substring(0,16) + '..., fee left in escrow');
             return;
         }
 
@@ -2249,14 +2250,14 @@ class Attest {
                     }
                 }
             }
-            console.log("\t ATTEST fee : " + feeAmount + ' ' + gas + ' → REWARD pool, split ' +
+            getLogger().info("\t ATTEST fee : " + feeAmount + ' ' + gas + ' → REWARD pool, split ' +
                         paid.length + ' way(s)' +
                         (this.util.bcgt(broadcastFee, '0') ? ', broadcast reimbursement ' + broadcastFee : '') +
                         ' [request ' + String(request.request_id).substring(0,16) + '...]');
         } else {
             // errored / expired: service not rendered, refund the payer
             credits.push([gas, feeAmount, feePayer]);
-            console.log("\t ATTEST fee : " + feeAmount + ' ' + gas + ' refunded to FEE_PAYER (' + terminalStatus + ')' +
+            getLogger().info("\t ATTEST fee : " + feeAmount + ' ' + gas + ' refunded to FEE_PAYER (' + terminalStatus + ')' +
                         ' [request ' + String(request.request_id).substring(0,16) + '...]');
         }
 
@@ -2302,7 +2303,7 @@ class Attest {
         }
 
         if(keys.length === 0){
-            console.warn('Attestation fee settle: no verified signatures on the fulfilled response for request ' +
+            getLogger().warn('Attestation fee settle: no verified signatures on the fulfilled response for request ' +
                          String(request.request_id).substring(0,16) +
                          '..., splitting among the recomputed responsible set instead');
             return responsible;
@@ -2373,11 +2374,11 @@ class Attest {
             // An infra fault must still fail the block loudly; anything else is a
             // no-reimbursement, not a settle failure.
             rethrowIfInfraFault(e);
-            console.warn('Attestation broadcast-fee reimbursement: oracle read failed, reimbursing 0:', e.message);
+            getLogger().warn('Attestation broadcast-fee reimbursement: oracle read failed, reimbursing 0:', e.message);
             return '0';
         }
         if(!prices || prices.error){
-            console.warn('Attestation broadcast-fee reimbursement: ' +
+            getLogger().warn('Attestation broadcast-fee reimbursement: ' +
                          ((prices && prices.error) || 'no prices') + '; reimbursing 0 [request ' +
                          String(request.request_id).substring(0,16) + '...]');
             return '0';
@@ -2409,7 +2410,7 @@ class Attest {
                 let parsed = JSON.parse(request.callback_params_json);
                 if(Array.isArray(parsed)) callbackParams = parsed;
             } catch(e){
-                console.warn('_injectCallbackExecute: malformed callback_params_json for request ' +
+                getLogger().warn('_injectCallbackExecute: malformed callback_params_json for request ' +
                              String(request.request_id).substring(0,16) + '..., using empty params:', e.message);
                 callbackParams = [];
             }
@@ -2470,7 +2471,7 @@ class Attest {
         try {
             await this.actions.actionExecute.parse(actionParams, emissionData, null);
             if(emissionData['STATUS'] && emissionData['STATUS'] !== 'valid'){
-                console.warn('Attestation callback execute returned non-valid status: ' + emissionData['STATUS']);
+                getLogger().warn('Attestation callback execute returned non-valid status: ' + emissionData['STATUS']);
             }
             await this.indexerDb.releaseSavepoint(savepoint);
             return emissionActionIndex;
@@ -2543,7 +2544,7 @@ class Attest {
         try {
             await this.actions.actionExecute.parse(actionParams, emissionData, null);
             if(emissionData['STATUS'] && emissionData['STATUS'] !== 'valid'){
-                console.warn('Attestation expiry callback returned non-valid status: ' + emissionData['STATUS']);
+                getLogger().warn('Attestation expiry callback returned non-valid status: ' + emissionData['STATUS']);
             }
             await this.indexerDb.releaseSavepoint(savepoint);
             return emissionActionIndex;

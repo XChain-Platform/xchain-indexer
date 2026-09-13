@@ -24,6 +24,7 @@ const mariadb = require('mariadb');
 const path    = require('path');
 const ledgerPrecision = require('../ledger_amount_precision_activation');
 
+const { getLogger } = require('../observability/index.js');
 module.exports = {
 
     // Get token supply for a given ticker from balances table
@@ -63,7 +64,7 @@ module.exports = {
             addrs.push(address);
         // Dump full list of addresses
         if(type==='boolean' && address===true){
-            console.log('Updating all balances...');
+            getLogger().info('Updating all balances...');
             let query = "SELECT address FROM index_addresses";
             let results = await this.doQuery(query);
             if(results.length > 0)

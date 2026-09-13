@@ -41,6 +41,7 @@
 // SDK and the wallet read the same map when they decide whether to offer an edit form.
 const listOwnerActivation = require('../list_owner_activation.js');
 
+const { getLogger } = require('../observability/index.js');
 class List {
 
     // Handle constructing a class instance
@@ -292,7 +293,7 @@ class List {
         data['STATUS'] = status;
 
         // Print status message
-        console.log("\t LIST : " + data['STATUS']);
+        getLogger().info("\t LIST : " + data['STATUS']);
 
         // Create record in lists table
         await this.indexerDb.createList(data);

@@ -35,6 +35,7 @@ const ed25519 = require('../consensus/ed25519.js');
 const eq      = require('../equivocation_header.js');
 const srb     = require('../snapshot_reorg_buffer.js');
 
+const { getLogger } = require('../observability/index.js');
 class NodeProof {
 
     constructor(action){
@@ -222,7 +223,7 @@ class NodeProof {
 
         data['STATUS'] = (error) ? error : 'valid';
 
-        console.log("\t NODEPROOF v0 : challenge=" + challengeId.substring(0, 16) + '...' +
+        getLogger().info("\t NODEPROOF v0 : challenge=" + challengeId.substring(0, 16) + '...' +
                     ' : epoch=' + epochHeight +
                     ' : pass=' + passList.length +
                     ' : sigs=' + validSigners +

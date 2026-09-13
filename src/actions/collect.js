@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -138,7 +139,7 @@ class Collect {
         data['STATUS'] = status;
 
         // Print status message
-        console.log("\t COLLECT : amount=" + this.util.logAmount(data['AMOUNT']) + ' : ' + data['STATUS']);
+        getLogger().info("\t COLLECT : amount=" + this.util.logAmount(data['AMOUNT']) + ' : ' + data['STATUS']);
 
         // Create record in reward_claims table
         await this.indexerDb.createRewardClaim(data);

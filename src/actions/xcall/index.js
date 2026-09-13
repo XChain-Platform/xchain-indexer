@@ -56,6 +56,7 @@ const { buildInjectedExecContext, SYNTH_TAGS } = require('../../consensus/exec_c
 // VM_MIN_CALL_GAS mirrors in execute.js). The VM enforces these at emit time;
 // this handler re-validates host-side (defense in depth).
 const PROTO = require('../../protocol/constants.js');
+const { getLogger } = require('../../observability/index.js');
 const XCALL_MIN_GAS             = PROTO.XCALL_MIN_GAS;             // = VM_MIN_CALL_GAS
 const XCALL_MAX_GAS             = PROTO.XCALL_MAX_GAS;             // target-side ceiling cap (calls are fee-less on the target chain)
 const XCALL_MAX_HOPS            = PROTO.XCALL_MAX_HOPS;            // user→Y = 1, Y→back = 2; further hops need a fresh user tx
@@ -294,7 +295,7 @@ class Xcall {
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
-        console.log("\t XCALL v0 : id=" + (data['CALL_ID'] ? String(data['CALL_ID']).substring(0,16) + '...' : '?') +
+        getLogger().info("\t XCALL v0 : id=" + (data['CALL_ID'] ? String(data['CALL_ID']).substring(0,16) + '...' : '?') +
                     ' : ' + this.config['COIN'] + ':' + data['CONTRACT_INDEX'] +
                     ' → ' + data['TARGET_CHAIN'] + ':' + data['TARGET_CONTRACT_INDEX'] +
                     ' . ' + data['METHOD'] +
@@ -310,7 +311,7 @@ class Xcall {
 
         // System-synthesized only; guard against accidental synthesis from a user tx.
         if(!data['IS_SYNTHETIC']){
-            console.warn('\t XCALL v2 : rejected (user-broadcast not allowed for synthetic expire)');
+            getLogger().warn('\t XCALL v2 : rejected (user-broadcast not allowed for synthetic expire)');
             data['STATUS'] = 'invalid: XCALL v2 must be system-synthesized';
             return;
         }
@@ -335,7 +336,7 @@ class Xcall {
 
         data['STATUS'] = 'valid';
 
-        console.log("\t XCALL v2 : id=" + callId.substring(0,16) + '...' +
+        getLogger().info("\t XCALL v2 : id=" + callId.substring(0,16) + '...' +
                     ' : deadline=' + request.deadline_block +
                     ' : block=' + data['BLOCK_INDEX']);
 
@@ -350,7 +351,7 @@ class Xcall {
             // halt so the block retries, instead of committing a locally-dropped
             // callback that forks contract_hash against healthy peers (consensus/fault_guard.js).
             rethrowIfInfraFault(e);
-            console.warn('XCALL expiry callback failed:', e);
+            getLogger().warn('XCALL expiry callback failed:', e);
         }
 
         await this.mapper.createMappings(data);
@@ -529,7 +530,7 @@ class Xcall {
             BLOCK_INDEX: data['BLOCK_INDEX']
         }, true);
 
-        console.log("\t XCALL result : id=" + callId.substring(0,16) + '...' +
+        getLogger().info("\t XCALL result : id=" + callId.substring(0,16) + '...' +
                     ' : undeliverable (' + reason + ') and aged out, retiring' +
                     ' : block=' + data['BLOCK_INDEX']);
 
@@ -557,12 +558,12 @@ class Xcall {
         let request = await this.indexerDb.getCrossChainCallRequestById(callId);
         if(!request){
             if(await this.retireUndeliverableResult(r, data, callId, null, 'no_request')) return;
-            console.warn("\t XCALL result : id=" + callId.substring(0,16) + '... : no matching local request, skipping');
+            getLogger().warn("\t XCALL result : id=" + callId.substring(0,16) + '... : no matching local request, skipping');
             return;
         }
         if(String(request.target_chain) !== String(r.target_chain)){
             if(await this.retireUndeliverableResult(r, data, callId, request, 'routing')) return;
-            console.warn("\t XCALL result : id=" + callId.substring(0,16) + '... : target_chain mismatch, skipping');
+            getLogger().warn("\t XCALL result : id=" + callId.substring(0,16) + '... : target_chain mismatch, skipping');
             return;
         }
 
@@ -570,13 +571,13 @@ class Xcall {
         let q = await this.verifyResultQuorum(r);
         if(!q.synced){
             // Snapshot not mirrored yet; defer (the barriers front-stop this; see xexec.js).
-            console.log("\t XCALL result : id=" + callId.substring(0,16) + '... : capability snapshot not synced, deferring');
+            getLogger().info("\t XCALL result : id=" + callId.substring(0,16) + '... : capability snapshot not synced, deferring');
             return;
         }
         let N = q.N, validSigners = q.validSigners;
         if(!q.quorumMet){
             if(await this.retireUndeliverableResult(r, data, callId, request, 'no_quorum')) return;
-            console.warn("\t XCALL result : id=" + callId.substring(0,16) + '... : insufficient ' + (q.weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + N + ')') + ', skipping');
+            getLogger().warn("\t XCALL result : id=" + callId.substring(0,16) + '... : insufficient ' + (q.weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + N + ')') + ', skipping');
             return;
         }
 
@@ -597,13 +598,13 @@ class Xcall {
         // result row is never re-evaluated (idempotency row below) but the contract
         // hears exactly one outcome.
         if(request.request_status !== 'pending'){
-            console.log("\t XCALL result : id=" + callId.substring(0,16) + '... : request already ' + request.request_status + ', recording skip');
+            getLogger().info("\t XCALL result : id=" + callId.substring(0,16) + '... : request already ' + request.request_status + ', recording skip');
             await this.indexerDb.recordCrossChainCallCallback(
                 data['ACTION_INDEX'], callId, 'skipped:' + request.request_status, data['BLOCK_INDEX']);
             return;
         }
 
-        console.log("\t XCALL result : id=" + callId.substring(0,16) + '...' +
+        getLogger().info("\t XCALL result : id=" + callId.substring(0,16) + '...' +
                     ' : from=' + r.target_chain + ' : status=' + resultStatus +
                     ' : sigs=' + validSigners.length + '/' + N);
 
@@ -619,7 +620,7 @@ class Xcall {
             // Infra faults must halt the block, not record a callback-less result
             // this validator alone commits (see consensus/fault_guard.js).
             rethrowIfInfraFault(e);
-            console.warn('XCALL result callback injection failed:', e);
+            getLogger().warn('XCALL result callback injection failed:', e);
         }
 
         await this.indexerDb.recordCrossChainCallCallback(
@@ -712,7 +713,7 @@ class Xcall {
         try {
             await this.actions.actionExecute.parse(actionParams, emissionData, null);
             if(emissionData['STATUS'] && emissionData['STATUS'] !== 'valid'){
-                console.warn('XCALL callback execute returned non-valid status: ' + emissionData['STATUS']);
+                getLogger().warn('XCALL callback execute returned non-valid status: ' + emissionData['STATUS']);
             }
             await this.indexerDb.releaseSavepoint(savepoint);
             return emissionActionIndex;

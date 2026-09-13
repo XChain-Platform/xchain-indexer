@@ -49,6 +49,7 @@ const rca     = require('../../rollcall_activation.js');
 const rga     = require('../../rollcall_gates_activation.js');
 const { buildRollcallCanonical } = require('./rollcall_canonical.js');
 
+const { getLogger } = require('../../observability/index.js');
 // One GATES token: '<module>.<EXPORT>', the identity form the digest emits.
 const GATE_TOKEN = /^[A-Za-z0-9_]+\.[A-Za-z0-9_]+$/;
 
@@ -227,7 +228,7 @@ class Rollcall {
 
         data['STATUS'] = (error) ? error : 'valid';
 
-        console.log("\t ROLLCALL v" + (v1 ? '1' : '0') + " : epoch=" + epochHeight +
+        getLogger().info("\t ROLLCALL v" + (v1 ? '1' : '0') + " : epoch=" + epochHeight +
                     " signers=" + verified.length + "/" + sigs.length +
                     (v1 ? " gates=" + gates.split(',').length : '') +
                     " publisher=" + publisher.substring(0, 16) + '...' +

@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -376,7 +377,7 @@ class Airdrop {
             let status = (error) ? error : 'valid';
             data['STATUS'] = airdrop['STATUS'] = status;
 
-            console.log("\t AIRDROP : " + airdrop['TICK'] + ' : ' + this.util.logAmount(airdrop['AMOUNT']) + ' : '+ airdrop['STATUS']);
+            getLogger().info("\t AIRDROP : " + airdrop['TICK'] + ' : ' + this.util.logAmount(airdrop['AMOUNT']) + ' : '+ airdrop['STATUS']);
 
             await this.indexerDb.createAirdrop(airdrop);
 

@@ -85,6 +85,7 @@ const { XPOLICY_MAX_MEMBERS } = require('../protocol/constants.js');
 // refuse identically, so nothing re-verdicts on the move.
 const { isReservedFutureRoot } = require('../consensus/reservedRoots.js');
 
+const { getLogger } = require('../observability/index.js');
 // The floor on a NEW top-level name at/above TICK_NAMESPACE_ACTIVATION (R8 (c)). Measured
 // on the FULL tick, so a child such as ABCD.X passes on its own length. Creation only:
 // every one-to-three character row issued before the flag keeps its owner, its supply and
@@ -1064,7 +1065,7 @@ class Issue {
         data['STATUS'] = issue['STATUS'] = status;
 
         // Print status message
-        console.log("\t ISSUE : " + data['TICK'] + ' : ' + data['STATUS']);
+        getLogger().info("\t ISSUE : " + data['TICK'] + ' : ' + data['STATUS']);
 
         // Create record in issues table
         await this.indexerDb.createIssue(issue);

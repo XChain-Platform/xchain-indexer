@@ -52,6 +52,7 @@ const swq     = require('../stake_weighted_quorum.js');
 const srb     = require('../snapshot_reorg_buffer.js');
 const { RollcallProofUnavailableError } = require('./rollcall_proof_client.js');
 
+const { getLogger } = require('../observability/index.js');
 // Deterministic ordering, byte-identical to StateAnchorPublisher.hashOrder in
 // xchain-hub: sort by SHA256(key ‖ pubkey) ascending. The hub elects the
 // publisher with this function and the BTC close pays the winner with it, so a
@@ -120,7 +121,7 @@ async function closeRollcallEpochs(indexerDb, config, blockIndex, proof, util){
     // query cap. Same fail-closed posture meetsStakeThreshold takes.
     if(truncated || !responsible || responsible.length === 0){
         await indexerDb.insertRollcall(epochHeight, snapshotBlock, closeBlock, 0, null);
-        console.log('\t ROLLCALL close : epoch=' + epochHeight + ' UNROLLED (' +
+        getLogger().info('\t ROLLCALL close : epoch=' + epochHeight + ' UNROLLED (' +
                     (truncated ? 'responsible set truncated' : 'no responsible validators') + ')');
         return 1;
     }
@@ -237,7 +238,7 @@ async function closeRollcallEpochs(indexerDb, config, blockIndex, proof, util){
           ' form=' + dropped.form + ' sig=' + dropped.sig + ' ' + (gatesActive ? 'v1' : 'v0') + ' epoch]'
         : '';
     if(!rolled){
-        console.log('\t ROLLCALL close : epoch=' + epochHeight + ' UNROLLED (present ' +
+        getLogger().info('\t ROLLCALL close : epoch=' + epochHeight + ' UNROLLED (present ' +
                     presentSources.size + '/' + allSources.size + ' sources, below threshold)' + droppedNote);
         return 1;
     }
@@ -310,7 +311,7 @@ async function closeRollcallEpochs(indexerDb, config, blockIndex, proof, util){
     for(let source of evictedSources)
         await evictSource(indexerDb, config, util, source, closeBlock);
 
-    console.log('\t ROLLCALL close : epoch=' + epochHeight + ' ROLLED (present ' +
+    getLogger().info('\t ROLLCALL close : epoch=' + epochHeight + ' ROLLED (present ' +
                 presentSources.size + '/' + allSources.size + ' sources, ' +
                 absentSources.length + ' absent, ' + evictedSources.length + ' evicted)' +
                 (leader ? ' leader=' + leader.substring(0, 16) + '...' : '') + droppedNote);

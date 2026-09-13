@@ -33,6 +33,7 @@
 
 const sweepZeroLeg = require('../sweep_zero_leg_activation.js');
 
+const { getLogger } = require('../observability/index.js');
 class Sweep {
 
     // Handle constructing a class instance
@@ -379,7 +380,7 @@ class Sweep {
         data['STATUS'] = sweep['STATUS'] = status;
 
         // Print status message
-        console.log("\t SWEEP : " + sweep['DESTINATION'] + ' : '+ sweep['STATUS']);
+        getLogger().info("\t SWEEP : " + sweep['DESTINATION'] + ' : '+ sweep['STATUS']);
 
         // Create record in sweeps table
         await this.indexerDb.createSweep(sweep);

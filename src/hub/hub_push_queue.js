@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -110,15 +111,15 @@ class HubPushQueue {
     start(){
         if(this.timer) return;
         if(!this.hubClient || !this.hubClient.enabled){
-            console.log('HubPushQueue: no hub configured, retry queue idle');
+            getLogger().info('HubPushQueue: no hub configured, retry queue idle');
             return;
         }
         this.timer = setInterval(() => {
-            this.drain().catch(err => console.warn('HubPushQueue: drain error:', err.message || err));
+            this.drain().catch(err => getLogger().warn('HubPushQueue: drain error:', err.message || err));
         }, this.intervalMs);
         // Never keep the process alive on the timer alone.
         if(this.timer.unref) this.timer.unref();
-        console.log('HubPushQueue: started (interval ' + this.intervalMs + 'ms, max ' + this.maxAttempts + ' attempts)');
+        getLogger().info('HubPushQueue: started (interval ' + this.intervalMs + 'ms, max ' + this.maxAttempts + ' attempts)');
     }
 
     stop(){
@@ -191,11 +192,11 @@ class HubPushQueue {
         try {
             let removed = await this.indexerDb.pruneFailedHubPushes(this.failedRetentionSec);
             if(removed > 0)
-                console.log('HubPushQueue: pruned ' + removed + ' failed row(s) older than ' +
+                getLogger().info('HubPushQueue: pruned ' + removed + ' failed row(s) older than ' +
                     this.failedRetentionSec + 's');
             return removed;
         } catch (err){
-            console.warn('HubPushQueue: failed-row prune error:', err.message || err);
+            getLogger().warn('HubPushQueue: failed-row prune error:', err.message || err);
             return 0;
         }
     }
@@ -230,7 +231,7 @@ class HubPushQueue {
         } catch (e){
             // A payload that can't be parsed can never be delivered; mark it
             // failed immediately so it stops cycling through the queue.
-            console.warn('HubPushQueue: row ' + row.id + ' has unparseable payload, marking failed');
+            getLogger().warn('HubPushQueue: row ' + row.id + ' has unparseable payload, marking failed');
             await this.indexerDb.recordHubPushAttempt(row.id, 'unparseable payload', 1);
             return;
         }
@@ -271,13 +272,13 @@ class HubPushQueue {
                 // live RPC failed. retractMatchRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
                 await this.hubClient.retractMatchRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
             } else {
-                console.warn('HubPushQueue: row ' + row.id + ' has unknown push_type "' + row.push_type + '", marking failed');
+                getLogger().warn('HubPushQueue: row ' + row.id + ' has unknown push_type "' + row.push_type + '", marking failed');
                 await this.indexerDb.recordHubPushAttempt(row.id, 'unknown push_type', 1);
                 return;
             }
             // Success (or a hub-side dedupe of a row it already has); drop it.
             await this.indexerDb.markHubPushDelivered(row.id);
-            console.log('HubPushQueue: delivered ' + row.push_type + ' row ' + row.id + ' (attempt ' + attemptNo + ')');
+            getLogger().info('HubPushQueue: delivered ' + row.push_type + ' row ' + row.id + ' (attempt ' + attemptNo + ')');
         } catch (err){
             let msg = String((err && err.message) || err).slice(0, 480);
             // A 429 is not a delivery attempt, it is the hub declining to look. Record
@@ -292,7 +293,7 @@ class HubPushQueue {
             if(err && err.rateLimited){
                 let waitMs = Number.isFinite(err.retryAfterMs) && err.retryAfterMs > 0 ? err.retryAfterMs : 60000;
                 this._throttledUntilMs = Date.now() + waitMs;
-                console.warn('HubPushQueue: hub rate-limited ' + row.push_type + ' row ' + row.id +
+                getLogger().warn('HubPushQueue: hub rate-limited ' + row.push_type + ' row ' + row.id +
                     '; holding the queue ' + Math.round(waitMs / 1000) + 's (' + msg + ')');
                 return;
             }
@@ -346,7 +347,7 @@ class HubPushQueue {
                  row.push_type === 'price_batch' || row.push_type === 'attest_batch');
             let cap = isDurable ? Number.MAX_SAFE_INTEGER : this.maxAttempts;
             await this.indexerDb.recordHubPushAttempt(row.id, msg, cap);
-            console.warn('HubPushQueue: push failed for row ' + row.id +
+            getLogger().warn('HubPushQueue: push failed for row ' + row.id +
                 ' (attempt ' + attemptNo + (isDurable ? '' : '/' + this.maxAttempts) + '): ' + msg);
         }
     }

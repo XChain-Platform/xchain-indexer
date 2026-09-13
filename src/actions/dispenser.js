@@ -51,6 +51,7 @@ const dispenserGiveAmount = require('../dispenser_give_amount_activation.js');
 const dispenserOraclePrice = require('../dispenser_oracle_price_activation.js');
 const dispenserAmountPositivity = require('../dispenser_amount_positivity_activation.js');
 
+const { getLogger } = require('../observability/index.js');
 class Dispenser {
 
     // Handle constructing a class instance
@@ -99,7 +100,7 @@ class Dispenser {
             // null answer the verdict above rests on.
             if(sync && sync.synced === true && sync.halted !== true && sync.lag !== null)
                 return;
-            console.log('DISPENSER_FRESHNESS_STALE : addr=' + data['GET_ADDRESS'] +
+            getLogger().info('DISPENSER_FRESHNESS_STALE : addr=' + data['GET_ADDRESS'] +
                         ' block=' + data['BLOCK_INDEX'] +
                         ' synced=' + (sync ? sync.synced : 'unknown') +
                         ' halted=' + (sync ? (sync.halted === true) : 'unknown') +
@@ -509,7 +510,7 @@ class Dispenser {
                         if(isFresh && !firstSeen)
                             await this.logStaleFreshness(data);
                     } catch (err) {
-                        console.log('WARNING: utxo-tracker get_first_seen failed for ' + data['GET_ADDRESS'] + ': ', err);
+                        getLogger().info('WARNING: utxo-tracker get_first_seen failed for ' + data['GET_ADDRESS'] + ': ', err);
                     }
                 }
                 let hasStanding = false;
@@ -691,11 +692,11 @@ class Dispenser {
 
         // Print status message
         if(format==0)
-            console.log("\t DISPENSER : " + this.util.logAmount(data['GIVE_AMOUNT']) + ' ' + this.config['COIN'] + ':' + data['GIVE_TICK'] + ' = '  +  this.util.logAmount(data['GET_AMOUNT']) + ' ' + data['GET_COIN'] + ':' + data['GET_TICK'] + ' : ' + data['STATUS']);
+            getLogger().info("\t DISPENSER : " + this.util.logAmount(data['GIVE_AMOUNT']) + ' ' + this.config['COIN'] + ':' + data['GIVE_TICK'] + ' = '  +  this.util.logAmount(data['GET_AMOUNT']) + ' ' + data['GET_COIN'] + ':' + data['GET_TICK'] + ' : ' + data['STATUS']);
         if(format==1)
-            console.log("\t DISPENSER_CANCEL : " + this.config['COIN'] + ':' + data['DISPENSER_ACTION_INDEX'] + ' : ' + data['STATUS']);
+            getLogger().info("\t DISPENSER_CANCEL : " + this.config['COIN'] + ':' + data['DISPENSER_ACTION_INDEX'] + ' : ' + data['STATUS']);
         if(format==2)
-            console.log("\t DISPENSER_EDIT : " + this.config['COIN'] + ':' + data['DISPENSER_ACTION_INDEX'] + ' : ' + data['STATUS']);
+            getLogger().info("\t DISPENSER_EDIT : " + this.config['COIN'] + ':' + data['DISPENSER_ACTION_INDEX'] + ' : ' + data['STATUS']);
  
         // Create record in dispensers table
         if(format==0)

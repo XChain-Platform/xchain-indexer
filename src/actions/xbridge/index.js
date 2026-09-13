@@ -72,6 +72,7 @@
 const xchainBridgeActivation = require('../../xchain_bridge_activation.js');
 const tokenBridgeActivation  = require('../../token_bridge_activation.js');
 
+const { getLogger } = require('../../observability/index.js');
 // Version bytes this build knows. `this.formats` holds only the four USER formats, so it
 // cannot answer "is this a known version": v2 and v5 are mirror-injected and carry no
 // wire format, yet a broadcast of one is refused BY NAME rather than as an unknown
@@ -339,7 +340,7 @@ class XBridge {
         xbridge['MIN_DEPTH'] = data['MIN_DEPTH'];
         xbridge['DEST_CHAIN']= data['DEST_CHAIN'];
 
-        console.log("\t XBRIDGE v" + format + " : " + ctx.tick + ' : ' + this.util.logAmount(data['AMOUNT']) +
+        getLogger().info("\t XBRIDGE v" + format + " : " + ctx.tick + ' : ' + this.util.logAmount(data['AMOUNT']) +
                     ' : ' + (data['DEST_CHAIN'] || ctx.origin || '') + ' : ' + status);
 
         // MISSING WRITER 1 (see the file header): the xbridges table and this method do
