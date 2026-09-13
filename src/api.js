@@ -513,10 +513,7 @@ async function startApi(){
                 if(!stored)
                     return { error: 'block not indexed: ' + target };
                 let blockHash = null;
-                let rows = await decoderDb.doQuery(
-                    'SELECT t.hash AS block_hash FROM blocks b ' +
-                    'LEFT JOIN index_transactions t ON (t.id = b.block_hash_id) WHERE b.block_index = ? LIMIT 1',
-                    [target]);
+                let rows = await decoderDb.getDecoderBlockHashRow(target);
                 if(rows.length > 0 && rows[0].block_hash) blockHash = String(rows[0].block_hash);
                 return {
                     coin:          indexer.config['COIN'],
@@ -1743,9 +1740,7 @@ async function startApi(){
                 let db = indexer.indexerDb.apiView();
 
                 let tipIndex = await db.getLatestBlockIndex();
-                let tipRow   = await db.doQuery(
-                    'SELECT block_time FROM blocks WHERE block_index = ?', [tipIndex]);
-                let tipTime  = (tipRow && tipRow[0]) ? parseInt(tipRow[0].block_time) : null;
+                let tipTime  = await db.getBlockTimeAtHeightOrNull(tipIndex);
 
                 let hcut = await db.getRollcallWindowCut(maxT);
 

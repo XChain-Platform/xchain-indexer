@@ -110,6 +110,30 @@ module.exports = {
         return (typeof hash === 'string' && hash !== '') ? hash.toLowerCase() : null;
     },
 
+    // The getblockhashes reporting read, which is deliberately NOT getDecoderBlockHash above.
+    // Three differences, each load-bearing for an endpoint that reports what this node can
+    // see rather than deciding anything: a LEFT JOIN, so a block the decoder has recorded
+    // without its transaction row yet reads as "hash not known" instead of as "no such
+    // block"; doQuery, so a decoder fault answers empty rather than throwing at a caller
+    // that is only rendering a response; and no case folding, so the hash is reported
+    // exactly as the decoder stored it.
+    async getDecoderBlockHashRow(blockIndex){
+        return await this.doQuery(
+            'SELECT t.hash AS block_hash FROM blocks b ' +
+            'LEFT JOIN index_transactions t ON (t.id = b.block_hash_id) WHERE b.block_index = ? LIMIT 1',
+            [blockIndex]);
+    },
+
+    // The rollcall-signers tip timestamp: the raw, unadjusted blocks.block_time at a height.
+    // getRawBlockTime above issues the same statement but is the CONSENSUS path, so it reads
+    // strictly (a fault must throw, not be read as "no such block") and memoizes the tip.
+    // This one is a report: it answers null on a fault and caches nothing, so a stale tip
+    // can never be served to a federation reader.
+    async getBlockTimeAtHeightOrNull(blockIndex){
+        let rows = await this.doQuery('SELECT block_time FROM blocks WHERE block_index = ?', [blockIndex]);
+        return (rows && rows[0]) ? parseInt(rows[0].block_time) : null;
+    },
+
     // The timestamps of the `span` blocks immediately below `block_index`, newest
     // first. Feeds the median-time-past calculation in getBlockTime. Returns what
     // exists rather than failing when fewer are available (a fresh chain near
