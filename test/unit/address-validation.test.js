@@ -14,6 +14,7 @@
 
 const assert = require('assert');
 
+// Set env before requiring Utility (it loads config in constructor)
 process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 

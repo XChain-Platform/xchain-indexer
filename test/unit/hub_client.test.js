@@ -18,6 +18,16 @@ const https     = require('https');
 const EventEmitter = require('events');
 const HubClient = require('../../src/hub_client.js');
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a fake http(s).request stub that invokes the response callback with a
+ * simulated IncomingMessage, then drives 'data'+'end' events to deliver the body.
+ *
+ * Returns { stub, fakeReq } so tests can inspect calls and emit errors.
+ */
 function buildHttpStub(responseBody){
     let fakeReq = new EventEmitter();
     fakeReq.write = sinon.stub();
@@ -25,6 +35,7 @@ function buildHttpStub(responseBody){
     fakeReq.destroy = sinon.stub().callsFake(function(err){ fakeReq.emit('error', err); });
 
     let stub = sinon.stub().callsFake(function(opts, cb){
+        // Schedule the response asynchronously to let req.write/end fire first
         setImmediate(() => {
             let fakeRes = new EventEmitter();
             cb(fakeRes);
@@ -38,16 +49,24 @@ function buildHttpStub(responseBody){
     return { stub, fakeReq };
 }
 
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
 describe('HubClient', function(){
 
     afterEach(function(){
         sinon.restore();
+        // Remove env vars that could bleed between tests
         delete process.env.HUB_API_URL;
         delete process.env.HUB_API_KEY;
         delete process.env.HUB_CONFIG_URL;
         delete process.env.HUB_CONFIG_API_KEY;
     });
 
+    // -----------------------------------------------------------------------
+    // constructor
+    // -----------------------------------------------------------------------
     describe('constructor', function(){
         it('uses provided hubUrl and marks enabled=true', function(){
             let c = new HubClient('http://hub.example.com', 'key1');
@@ -160,6 +179,9 @@ describe('HubClient', function(){
         });
     });
 
+    // -----------------------------------------------------------------------
+    // pushChainTip: public-method guard + _call stubbing
+    // -----------------------------------------------------------------------
     describe('pushChainTip()', function(){
         it('returns immediately without calling _call when not enabled', async function(){
             let c = new HubClient('', '');
@@ -189,6 +211,9 @@ describe('HubClient', function(){
         });
     });
 
+    // -----------------------------------------------------------------------
+    // pushPriceRound
+    // -----------------------------------------------------------------------
     describe('pushPriceRound()', function(){
         it('returns immediately without calling _call when not enabled', async function(){
             let c = new HubClient('', '');
@@ -216,6 +241,9 @@ describe('HubClient', function(){
         });
     });
 
+    // -----------------------------------------------------------------------
+    // pushOraclePrice
+    // -----------------------------------------------------------------------
     describe('pushOraclePrice()', function(){
         it('returns immediately without calling _call when not enabled', async function(){
             let c = new HubClient('', '');
@@ -316,6 +344,9 @@ describe('HubClient', function(){
         });
     });
 
+    // -----------------------------------------------------------------------
+    // retractPriceRange
+    // -----------------------------------------------------------------------
     describe('retractPriceRange()', function(){
         it('returns immediately without calling _call when not enabled', async function(){
             let c = new HubClient('', '');
@@ -365,6 +396,9 @@ describe('HubClient', function(){
         });
     });
 
+    // -----------------------------------------------------------------------
+    // retractXcallRange
+    // -----------------------------------------------------------------------
     describe('retractXcallRange()', function(){
         it('returns immediately without calling _call when not enabled', async function(){
             let c = new HubClient('', '');
@@ -392,6 +426,9 @@ describe('HubClient', function(){
         });
     });
 
+    // -----------------------------------------------------------------------
+    // retractMatchRange
+    // -----------------------------------------------------------------------
     describe('retractMatchRange()', function(){
         it('returns immediately without calling _call when not enabled', async function(){
             let c = new HubClient('', '');
@@ -471,6 +508,12 @@ describe('HubClient', function(){
         });
     });
 
+    // -----------------------------------------------------------------------
+    // _call internals: http.request mocking
+    //
+    // These tests drive the raw socket path via a fake http.request that
+    // returns an EventEmitter-shaped fake request and fires fake response events.
+    // -----------------------------------------------------------------------
     describe('_call() HTTP internals', function(){
         it('resolves with parsed result from a successful http response', async function(){
             let c = new HubClient('http://hub.example.com:3003', 'mykey');

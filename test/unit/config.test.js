@@ -162,6 +162,7 @@ describe('Config @regression @tier3', function () {
             process.env.INDEXER_COIN = 'LTC';
             process.env.INDEXER_NETWORK = 'regtest';
             delete require.cache[require.resolve('../../src/config.js')];
+            // Also clear the coin config cache
             try { delete require.cache[require.resolve('../../src/coins/to_indexer_config.js')]; } catch (e) {}
             config = require('../../src/config.js').getConfig();
         });
@@ -214,6 +215,10 @@ describe('Config @regression @tier3', function () {
         });
     });
 });
+
+// ---------------------------------------------------------------------------
+// Hub config overlay (_applyHubConfigOverlay)
+// ---------------------------------------------------------------------------
 
 describe('XChainIndexer hub config overlay', function () {
     const sinon = require('sinon');
@@ -306,6 +311,7 @@ describe('XChainIndexer hub config overlay', function () {
         // Should not throw
         await indexer._applyHubConfigOverlay();
 
+        // Local default is preserved
         assert.strictEqual(indexer.config.GAS_PRICE, localPrice);
     });
 
@@ -671,6 +677,7 @@ describe('XChainIndexer hub config overlay', function () {
         }
     });
 
+    // ─── parseIntMin0: non-negative integer env parsing ──────────────────
     describe('parseIntMin0 (BLOCK_CHECK_INTERVAL / BLOCK_PROCESS_TIMEOUT)', function () {
 
         function loadWith(env) {

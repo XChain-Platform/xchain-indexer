@@ -123,6 +123,9 @@ describe('Xcall (XCALL) @regression @tier3', function () {
         sinon.restore();
     });
 
+    // ───────────────────────────────────────────────────────────────────────
+    // v0: Request (VM emission only)
+    // ───────────────────────────────────────────────────────────────────────
     describe('v0: request', function () {
 
         function v0Data(overrides = {}) {
@@ -328,6 +331,7 @@ describe('Xcall (XCALL) @regression @tier3', function () {
             assert.match(data['STATUS'], /CONTRACT_INDEX \(unknown\)/);
         });
 
+        // ── Input-validation rejection paths (pre-quorum; no stake-weighted branch) ──
         // Validation is sequential (first error wins), so each case keeps every earlier
         // field valid and trips exactly one rule. A valid-format CALL_ID ('a'×64) is used
         // where the rejection fires before the derivation check (which never runs then).
@@ -401,6 +405,9 @@ describe('Xcall (XCALL) @regression @tier3', function () {
         });
     });
 
+    // ───────────────────────────────────────────────────────────────────────
+    // v2: Expire (system-synthesized) + exactly-once interlock
+    // ───────────────────────────────────────────────────────────────────────
     describe('v2: expire', function () {
 
         function v2Data(overrides = {}) {
@@ -451,6 +458,9 @@ describe('Xcall (XCALL) @regression @tier3', function () {
         });
     });
 
+    // ───────────────────────────────────────────────────────────────────────
+    // processResult: mirror-driven result delivery
+    // ───────────────────────────────────────────────────────────────────────
     describe('processResult', function () {
 
         function makeResultRow(overrides = {}) {

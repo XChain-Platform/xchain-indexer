@@ -146,6 +146,9 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         sinon.restore();
     });
 
+    // ───────────────────────────────────────────────────────────────────────
+    // v0: Request (VM emission only)
+    // ───────────────────────────────────────────────────────────────────────
     describe('v0: request', function () {
 
         function v0Data(overrides = {}) {
@@ -508,11 +511,13 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
     });
 
+    // ───────────────────────────────────────────────────────────────────────
     // v1: Response (validator broadcast). The security-critical path.
     //
     // NOTE on quorum: ATTEST v1 quorum is REDUNDANCY-based; a response is valid
     // when validSigs >= request.redundancy (attest.js _parseResponse). The
     // 2f+1 PBFT formula lives in PRICE v0, not here; see price.test.js.
+    // ───────────────────────────────────────────────────────────────────────
     describe('v1: response', function () {
 
         function v1Data(overrides = {}) {
@@ -534,6 +539,8 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             // Default: every signature verifies; capability present.
             sinon.stub(ed25519, 'verify').returns(true);
         });
+
+        // ── sig-list parser ──────────────────────────────────────────────
 
         it('parses a valid single signature → valid', async function () {
             indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
@@ -651,6 +658,8 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.ok(String(data['STATUS']).includes('invalid'));
         });
 
+        // ── duplicate-pubkey deduplication ───────────────────────────────
+
         it('does NOT count two signatures from the same pubkey twice toward quorum', async function () {
             // redundancy 2, but both sigs share PUBKEY_A → only 1 distinct valid sig → insufficient
             indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 2 }));
@@ -663,6 +672,8 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.ok(String(data['STATUS']).includes('insufficient'));
             assert.ok(executeStub.parse.notCalled, 'no callback injected without quorum');
         });
+
+        // ── quorum threshold (REDUNDANCY-based) ──────────────────────────
 
         it('meets quorum when validSigs equals REDUNDANCY → valid', async function () {
             // Universe = the two signers, redundancy 2 → both are responsible.
@@ -694,6 +705,8 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.strictEqual(data['VALID_SIGS'], 0);
             assert.ok(String(data['STATUS']).includes('insufficient'));
         });
+
+        // ── snapshot block selection ─────────────────────────────────────
 
         it('checks signer capability at the REQUEST snapshot block, not the response block', async function () {
             const request = makeRequestRow({ redundancy: 1, block_index: 90 });
@@ -861,6 +874,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             });
         });
 
+        // ── responsible-set membership (deterministic selection) ─────────
         //
         // Quorum requires signers from the request's deterministic responsible
         // set: top-REDUNDANCY validators ranked by SHA256(request_id || pubkey),
@@ -931,6 +945,8 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.strictEqual(data['VALID_SIGS'], 2 + WIDEN_AT_100, 'every responsible signer counts, headroom included');
         });
 
+        // ── callback injection ───────────────────────────────────────────
+
         it('injects exactly one EXECUTE callback on quorum success', async function () {
             indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
             const data = v1Data();
@@ -958,6 +974,8 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.ok(indexer.indexerDb.updateAttestationRequestStatus.calledWith(REQ_ID.toLowerCase(), 'errored'));
             assert.ok(executeStub.parse.calledOnce, 'callback still injected for a valid terminal non-ok response');
         });
+
+        // ── retryable statuses leave the request open for another PBFT round ──
 
         ['no_quorum', 'timeout', 'provider_error'].forEach(function (retryableStatus) {
             it(`leaves request pending (no status flip, no callback) for a valid '${retryableStatus}' response`, async function () {
@@ -1014,6 +1032,8 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.ok(indexer.indexerDb.createAttestationResponse.calledOnce, 'response row recorded');
             assert.ok(executeStub.parse.notCalled, 'no callback without quorum');
         });
+
+        // ── replay / request-state protection ────────────────────────────
 
         it('rejects a response to an already-resolved request (replay guard)', async function () {
             indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ request_status: 'fulfilled', redundancy: 1 }));
@@ -1091,6 +1111,9 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
     });
 
+    // ───────────────────────────────────────────────────────────────────────
+    // v2: Expire (system-synthesized)
+    // ───────────────────────────────────────────────────────────────────────
     describe('v2: expire', function () {
 
         function v2Data(overrides = {}) {
@@ -1133,7 +1156,9 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
     });
 
+    // ───────────────────────────────────────────────────────────────────────
     // E1: request fees (FEE_TICK|FEE_AMOUNT optional trailing fields)
+    // ───────────────────────────────────────────────────────────────────────
     describe('E1: request fees', function () {
 
         const FEE_PAYER = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH'; // createBaseData SOURCE
@@ -1557,6 +1582,9 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
     });
 
+    // ───────────────────────────────────────────────────────────────────────
+    // Version dispatch
+    // ───────────────────────────────────────────────────────────────────────
     describe('version dispatch', function () {
         it('rejects an unknown VERSION (no phase handler runs, no DB writes)', async function () {
             const data = createBaseData({ ACTION: 'ATTEST', FORMAT: 9 });
@@ -1568,6 +1596,9 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
     });
 
+    // ───────────────────────────────────────────────────────────────────────
+    // _injectCallbackExecute internal branches
+    // ───────────────────────────────────────────────────────────────────────
     describe('_injectCallbackExecute internal branches', function () {
 
         function v1Data(overrides = {}) {
@@ -1673,6 +1704,9 @@ describe('Attest (ATTEST) @regression @tier3', function () {
 
     });
 
+    // ───────────────────────────────────────────────────────────────────────
+    // _injectExpiredCallback internal branches (v2 expire path)
+    // ───────────────────────────────────────────────────────────────────────
     describe('_injectExpiredCallback internal branches', function () {
 
         function v2Data(overrides = {}) {
@@ -1795,9 +1829,11 @@ describe('Attest (ATTEST) @regression @tier3', function () {
 
     });
 
+    // ───────────────────────────────────────────────────────────────────────
     // STAKE_WEIGHTED_QUORUM: source-deduped responsible-set selection (WI-1)
     // The within-subset quorum stays count-based; only the SELECTION dedupes by
     // staking source so a source's delegated keys can't occupy multiple slots.
+    // ───────────────────────────────────────────────────────────────────────
     describe('STAKE_WEIGHTED_QUORUM: source-deduped responsible set', function () {
         beforeEach(function () {
             swq.isStakeWeightedQuorumActive.returns(true);   // already stubbed in outer beforeEach

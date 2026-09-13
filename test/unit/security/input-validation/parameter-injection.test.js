@@ -21,6 +21,10 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../..
 const Send  = require('../../../../src/actions/send.js');
 const Issue = require('../../../../src/actions/issue.js');
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 function makeActionsCtx(indexer) {
     return {
         config:          indexer.config,
@@ -40,6 +44,7 @@ const LOW_BLOCK   = 100;
 const SOURCE      = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const DESTINATION = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs';
 
+// Issue format 0 param builder
 function makeIssueParams(overrides = {}) {
     const defaults = {
         VERSION: '0', TICK: 'NEWTOKEN', MAX_SUPPLY: '1000', MAX_MINT: '100',
@@ -60,6 +65,10 @@ function makeIssueParams(overrides = {}) {
         m.MINT_START_BLOCK, m.MINT_STOP_BLOCK, m.LOCK_MINT, m.LOCK_MINT_SUPPLY,
         m.MEMO];
 }
+
+// ---------------------------------------------------------------------------
+// Suite
+// ---------------------------------------------------------------------------
 
 describe('Security: malformed parameter injection @regression @tier4', function () {
     let indexer, actionsCtx;

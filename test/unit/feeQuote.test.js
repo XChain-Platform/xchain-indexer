@@ -10,6 +10,7 @@
 
 const assert = require('assert');
 
+// Utility loads coin config in its constructor from these env vars.
 process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
@@ -19,6 +20,7 @@ const Actions = require('../../src/actions.js');
 const FEE_DEST    = 'feeDestinationAddr111111111111111';
 const PLACEHOLDER = 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
 
+// Utility with a known fee destination, tolerance band, gas schedule + price.
 function makeUtil(coin, feeDestination){
     let util = new Utility();
     util.config['COIN']                         = coin;
@@ -36,6 +38,8 @@ function makeUtil(coin, feeDestination){
     return util;
 }
 
+// Indexer DB stub. getLatestPrice ignores the staleness opts (mirrors nativeCoinFee.test.js);
+// a pair set to null models a missing/stale price.
 function makeDb({ prices = {}, blockIndex = 100, blockTime = 1000 } = {}){
     return {
         getLatestBlockIndex: async () => blockIndex,

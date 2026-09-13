@@ -50,6 +50,9 @@ const assert       = require('assert');
 const XChainIndexer = require('../../../src/XChainIndexer.js');
 const { waitUntil } = require('../../helpers/wait.js');
 
+// ---------------------------------------------------------------------------
+// Helper: build a fresh indexer from env credentials
+// ---------------------------------------------------------------------------
 function buildIndexer() {
     return new XChainIndexer(
         process.env.DECODER_DB_HOST, process.env.DECODER_DB_PORT, process.env.DECODER_DB_NAME,
@@ -59,6 +62,9 @@ function buildIndexer() {
     );
 }
 
+// ---------------------------------------------------------------------------
+// Helper: close the DB pools that start() opens inside the indexer
+// ---------------------------------------------------------------------------
 async function closeIndexerPools(indexer) {
     try {
         if (indexer.decoderDb && indexer.decoderDb.pool) await indexer.decoderDb.pool.end();
@@ -68,6 +74,9 @@ async function closeIndexerPools(indexer) {
     } catch (_) { /* ignore */ }
 }
 
+// ---------------------------------------------------------------------------
+// Test suite
+// ---------------------------------------------------------------------------
 describe('Smoke: indexer lifecycle @regression @tier3', function () {
 
     // -------------------------------------------------------------------------

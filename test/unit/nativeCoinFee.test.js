@@ -10,6 +10,7 @@
 
 const assert = require('assert');
 
+// Utility loads coin config in its constructor from these env vars.
 process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
@@ -18,6 +19,7 @@ const Utility = require('../../src/utility.js');
 const FEE_DEST     = 'feeDestinationAddr111111111111111';
 const PLACEHOLDER  = 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
 
+// Build a Utility instance with a known fee destination + tolerance/oracle config.
 function makeUtil(coin, feeDestination){
     let util = new Utility();
     util.config['COIN']                        = coin;
@@ -28,6 +30,7 @@ function makeUtil(coin, feeDestination){
     return util;
 }
 
+// Stub DB exposing getLatestPrice(pair). `prices` maps pair -> decimal string (or null = stale/missing).
 function priceStub(prices){
     return {
         getLatestPrice: async (pair) => {
@@ -113,6 +116,7 @@ describe('native coin fee @regression @tier1', function () {
 
         it('reads the BTC/USD pair when COIN is BTC', async function () {
             let util = makeUtil('BTC', FEE_DEST);
+            // 1.0 XCHAIN @ $1.00, BTC @ $50,000 => 0.00002 BTC
             let db   = priceStub({ 'XCHAIN/USD': '1.00000000', 'BTC/USD': '50000.00000000' });
             let r = await util.validateNativeCoinFee({ BLOCK_INDEX: 100, BLOCK_TIME: 1000, COIN: 'BTC' }, { AMOUNT: '1.0' }, db, [{ address: FEE_DEST, value: '0.00002000' }]);
             assert.strictEqual(r.valid, true);

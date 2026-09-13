@@ -28,6 +28,10 @@ const assert = require('assert');
 
 const { buildHealthResponse } = require('../../src/health');
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 // Build a stub indexer with sane defaults; override any field per-test. Both
 // DB connections default to a closed (healthy) circuit and the indexer is mid
 // catch-up (decoder ahead of the last indexed block) so `lag` is non-zero.
@@ -44,6 +48,9 @@ function makeIndexer(overrides = {}){
     }, overrides);
 }
 
+// Standard server-scoped args: running, no fatal error, indexer 10 blocks
+// behind the decoder tip, fixed clock. Returns a Promise (buildHealthResponse
+// is async to support the hub_push_queue stats fetch).
 function call(indexer, opts = {}){
     return buildHealthResponse(Object.assign({
         indexer,
@@ -53,6 +60,10 @@ function call(indexer, opts = {}){
         now:              1_000_000
     }, opts));
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 describe('health() response builder', function(){
 

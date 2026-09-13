@@ -38,6 +38,9 @@ const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = requ
 const { seedGas } = require('../setup/gas-seeder');
 const helpers = require('../setup/assertion-helpers');
 
+// ---------------------------------------------------------------------------
+// Addresses (30-char strings, safe for the indexer's address validation)
+// ---------------------------------------------------------------------------
 const ADDR1 = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD';
 const ADDR2 = 'mjifPngDYQ6HHPNQdGk1kQuFkJWEiQksQp';
 const ADDR3 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi';
@@ -45,6 +48,10 @@ const ADDR3 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi';
 // Base block time (Unix timestamp)
 const T0 = 1700000000;
 const BLK = 600; // seconds per block
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 /**
  * Delete decoder blocks >= blockIndex (and their transactions / outputs).
@@ -59,6 +66,10 @@ async function deleteDecoderBlocksFrom(blockIndex) {
     await decoderQuery('DELETE FROM transactions WHERE block_index >= ?', [blockIndex]);
     await decoderQuery('DELETE FROM blocks WHERE block_index >= ?', [blockIndex]);
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 describe('05 – Chain Reorganization @regression @tier3', function () {
     this.timeout(60000);

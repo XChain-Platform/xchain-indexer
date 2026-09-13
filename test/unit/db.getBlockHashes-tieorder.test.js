@@ -134,6 +134,7 @@ async function ledgerHash(creditRows, forceCols) {
 
 afterEach(function () { sinon.restore(); });
 
+// ---------------------------------------------------------------------------
 describe('Database.getBlockHashes() consensus tie-order determinism (ffd061a) @regression @tier1', function () {
 
     // (1) Structural guard: every SELECTed column of each tie-prone query must participate

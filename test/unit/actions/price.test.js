@@ -83,6 +83,9 @@ describe('Price (PRICE) @regression @tier3', function () {
         sinon.restore();
     });
 
+    // ───────────────────────────────────────────────────────────────────────
+    // v1 - user TOKEN/FIAT oracle price
+    // ───────────────────────────────────────────────────────────────────────
     describe('v1 - user oracle price', function () {
 
         // PRICE|1|COIN|TICK|FIAT|VALUE|FEE|MEMO
@@ -158,6 +161,10 @@ describe('Price (PRICE) @regression @tier3', function () {
         assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
         assert.ok(indexer.indexerDb.createPrice.calledOnce);
     });
+
+    // ───────────────────────────────────────────────────────────────────────
+    // Hub push paths (hubClient present)
+    // ───────────────────────────────────────────────────────────────────────
 
     describe('hub push - v1', function () {
         function v1Params(overrides = {}) {

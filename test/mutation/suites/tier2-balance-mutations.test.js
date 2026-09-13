@@ -28,6 +28,8 @@ const {
 
 const Database = require('../../../src/db');
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
 /**
  * Create a bound getTokenSupply method using a mock doQuery
  * that returns predetermined credits/debits/escrows values.
@@ -83,6 +85,8 @@ function createLedgerTestContext() {
 
     return { ctx, createLedgerChangeRecord: ctx.createLedgerChangeRecord, createCredit, createDebit, createEscrow, queries };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
 
