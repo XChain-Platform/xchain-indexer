@@ -1013,6 +1013,19 @@ module.exports = {
         await this.doQuery(query, args);
     },
 
+    // How many contract_emissions rows an execution has already recorded. Guard emissions
+    // share their host action's execution_index, so a caller offsets its next position by
+    // this count to keep (execution_index, position) globally unique; that is what makes
+    // the read-side ORDER BY a total order with no engine-dependent tie-break, and so no
+    // fork. Runs on the caller's connection, which is inside the guard's savepoint: a
+    // rolled-back guard's emissions must not be counted, or positions gap and diverge.
+    async countContractEmissionsForExecution(executionIndex){
+        let results = await this.doQuery(
+            'SELECT COUNT(*) AS cnt FROM contract_emissions WHERE execution_index=?',
+            [executionIndex]);
+        return (results.length > 0) ? Number(results[0].cnt) : 0;
+    },
+
     // Create a record in contract_emissions
     async createContractEmission(data){
         let query = `INSERT INTO contract_emissions

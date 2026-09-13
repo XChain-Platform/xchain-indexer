@@ -61,8 +61,12 @@ describe('runControllerGuard: guard emissions enter contract_hash @regression @t
         db.createContractState       = sinon.stub().resolves();
         db.createContractExecution   = sinon.stub().resolves();
         db.createContractEmission    = sinon.stub().resolves();
-        // The per-action emission counter that backs the position offset.
+        // The per-action emission counter that backs the position offset. The db method is
+        // the real one over a stubbed doQuery, so it still has to issue a COUNT over
+        // contract_emissions keyed on execution_index to see the prior guard's rows.
         db.doQuery                   = sinon.stub().resolves([{ cnt: priorEmissionCount }]);
+        db.countContractEmissionsForExecution =
+            require('../../src/db/contracts').countContractEmissionsForExecution.bind(db);
         indexer.vm    = { execute: sinon.stub().resolves({
             success: true, error: null, gasUsed: 100, returnValue: JSON.stringify({}),
             stateChanges: [], stateDeletes: [], emittedActions, logs: [],

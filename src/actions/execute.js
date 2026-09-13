@@ -890,11 +890,8 @@ class Execute {
             // the existing read-side ORDER BY (here and in the sync hasher) needs no
             // change. Rolled-back prior-guard emissions aren't counted, so positions
             // stay gap-free and deterministic across nodes.
-            let priorEmissions = await this.indexerDb.doQuery(
-                'SELECT COUNT(*) AS cnt FROM contract_emissions WHERE execution_index=?',
-                [hostData['ACTION_INDEX']]
-            );
-            let basePosition = (priorEmissions.length > 0) ? Number(priorEmissions[0].cnt) : 0;
+            let basePosition = await this.indexerDb.countContractEmissionsForExecution(
+                hostData['ACTION_INDEX']);
 
             // Parent execution row for this guard run (mirrors runContractExecution's
             // column set). Written inside the savepoint so a failed guard emission
@@ -1404,13 +1401,12 @@ class Execute {
         }
 
         // Credit destination address (BURN or user-specified)
-        let destQ = await this.indexerDb.doQuery(
-            'SELECT address FROM index_addresses WHERE id=? LIMIT 1',
-            [contractInfo.slash_destination_id]
-        );
-        if(destQ.length === 0)
+        // getAddressById issues this same lookup and already answers null for a missing row,
+        // so no second copy of it is minted here; the throw stays because a SLASH with no
+        // destination row must halt rather than credit nowhere.
+        let destAddress = await this.indexerDb.getAddressById(contractInfo.slash_destination_id);
+        if(destAddress === null)
             throw new Error('SLASH: destination address row missing');
-        let destAddress = destQ[0].address;
 
         // Release the escrow the stake was locked in BEFORE crediting the destination: a
         // contract stake LOCKS its tokens, so the credit below redirects them rather than

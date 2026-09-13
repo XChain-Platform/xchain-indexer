@@ -700,6 +700,11 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             // credits the slash destination.
             indexer.indexerDb.slashContractStake = sinon.stub().resolves({ total: '100', releases: [{ address: '1StakerXXXXXXXXXXXXXXXXXXXXXXXX', amount: '100' }] });
             indexer.indexerDb.doQuery            = sinon.stub().resolves([{ address: '1SlashDestXXXXXXXXXXXXXXXXXXXXX' }]);
+            // The destination resolve is the real db method over that stubbed doQuery, so the
+            // handler still has to go through index_addresses to find where a slash credits.
+            indexer.indexerDb.util = indexer.indexerDb.util || indexer.util;
+            indexer.indexerDb.getAddressById =
+                require('../../../src/db/index_tables').getAddressById.bind(indexer.indexerDb);
             indexer.indexerDb.createCredit       = sinon.stub().resolves();
             indexer.indexerDb.createEscrow       = sinon.stub().resolves();
             indexer.indexerDb.createSlashEvent   = sinon.stub().resolves();

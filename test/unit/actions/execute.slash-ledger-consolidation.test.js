@@ -62,6 +62,10 @@ describe('Execute._processSlashEmission multi-slash ledger conservation @regress
         db.getPubkeyId      = sinon.stub().callsFake(async (pk) => (pk === PUBKEY_A ? 7 : 8));
         db.getTickerId      = sinon.stub().resolves(3);
         db.doQuery          = sinon.stub().resolves([{ address: DEST }]);
+        // Real db method over the stubbed doQuery: the destination still resolves through
+        // index_addresses rather than being handed to the handler directly.
+        db.util             = db.util || indexer.util;
+        db.getAddressById   = require('../../../src/db/index_tables').getAddressById.bind(db);
         db.createCredit     = sinon.stub().resolves();
         db.createEscrow     = sinon.stub().resolves();
         db.createSlashEvent = sinon.stub().resolves();
