@@ -77,6 +77,7 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
     beforeEach(function () {
         indexer = createMockIndexer();
 
+        // Extra DB stubs needed by coinpay.js
         indexer.indexerDb.getCoinpayObligationInfo    = sinon.stub().resolves(makeObligation());
         indexer.indexerDb.getOrderMatchOrders         = sinon.stub().resolves({ give_action_index: 11, get_action_index: 10 });
         indexer.indexerDb.getOrderInfo                = sinon.stub();
@@ -107,6 +108,8 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
     afterEach(function () {
         sinon.restore();
     });
+
+    // ─── Early-exit paths (no matching/pending obligation) ────────────────
 
     describe('early-exit guard conditions', function () {
 
@@ -158,6 +161,8 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
 
     });
 
+    // ─── Format validation ────────────────────────────────────────────────
+
     describe('format validation', function () {
 
         it('rejects unknown VERSION', async function () {
@@ -173,6 +178,8 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
         });
 
     });
+
+    // ─── Valid settlement ─────────────────────────────────────────────────
 
     describe('valid settlement', function () {
 
@@ -246,6 +253,8 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
 
     });
 
+    // ─── Expiration ───────────────────────────────────────────────────────
+
     describe('obligation expiration', function () {
 
         it('rejects when BLOCK_TIME >= obligation EXPIRATION', async function () {
@@ -273,6 +282,8 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
         });
 
     });
+
+    // ─── Seller order finalisation ────────────────────────────────────────
 
     describe('seller order transition states', function () {
 
@@ -350,6 +361,8 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
 
     });
 
+    // ─── Guard: matchOrders / orderInfo null ─────────────────────────────────
+
     describe('null matchOrders / orderInfo guard', function () {
 
         it('returns early when getOrderMatchOrders returns falsy', async function () {
@@ -407,6 +420,8 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
         });
 
     });
+
+    // ─── Seller/coin order role determination ────────────────────────────────
 
     describe('seller vs coin order role determination', function () {
 
@@ -491,6 +506,8 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
         });
 
     });
+
+    // ─── Ownership delivery branch ────────────────────────────────────────────
 
     describe('ownership delivery (GIVE_OWNERSHIP=1)', function () {
 

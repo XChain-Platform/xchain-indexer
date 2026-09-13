@@ -20,6 +20,10 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fi
 
 const Mint = require('../../../src/actions/mint.js');
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 function makeActionsCtx(indexer) {
     return {
         config:          indexer.config,
@@ -35,14 +39,21 @@ function makeActionsCtx(indexer) {
     };
 }
 
+/**
+ * Build a data object for a MINT transaction.
+ */
 function makeData(overrides = {}) {
     return createBaseData(Object.assign({ ACTION: 'MINT', FORMAT: 0 }, overrides));
 }
 
+// Shared addresses
 const SOURCE      = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const DESTINATION = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs';
 const BLOCK       = 100;
 
+/**
+ * Build a minimal tokenInfo for a mintable token.
+ */
 function makeMintableToken(overrides = {}) {
     return createTokenInfo(Object.assign({
         TICK:             'TEST',
@@ -58,6 +69,10 @@ function makeMintableToken(overrides = {}) {
         BLOCK_INDEX:      50,   // token was issued at block 50, below current BLOCK=100
     }, overrides));
 }
+
+// ---------------------------------------------------------------------------
+// Suite
+// ---------------------------------------------------------------------------
 
 describe('Mint handler @regression @tier1', function () {
     let indexer, actionsCtx, handler;
@@ -77,6 +92,10 @@ describe('Mint handler @regression @tier1', function () {
     afterEach(function () {
         sinon.restore();
     });
+
+    // -----------------------------------------------------------------------
+    // Valid mint
+    // -----------------------------------------------------------------------
 
     describe('valid mint', function () {
 
@@ -126,6 +145,10 @@ describe('Mint handler @regression @tier1', function () {
             assert.strictEqual(indexer.util.bcformat(sourceCredit[1], 0), '50');
         });
     });
+
+    // -----------------------------------------------------------------------
+    // TICK validations
+    // -----------------------------------------------------------------------
 
     describe('TICK validations', function () {
 
@@ -178,6 +201,10 @@ describe('Mint handler @regression @tier1', function () {
         });
     });
 
+    // -----------------------------------------------------------------------
+    // LOCK_MINT
+    // -----------------------------------------------------------------------
+
     describe('LOCK_MINT', function () {
 
         it('LOCK_MINT=1 → invalid', async function () {
@@ -204,6 +231,10 @@ describe('Mint handler @regression @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid');
         });
     });
+
+    // -----------------------------------------------------------------------
+    // AMOUNT > MAX_MINT
+    // -----------------------------------------------------------------------
 
     describe('AMOUNT vs MAX_MINT', function () {
 
@@ -240,6 +271,10 @@ describe('Mint handler @regression @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid');
         });
     });
+
+    // -----------------------------------------------------------------------
+    // SUPPLY + AMOUNT > MAX_SUPPLY
+    // -----------------------------------------------------------------------
 
     describe('SUPPLY + AMOUNT > MAX_SUPPLY', function () {
 
@@ -279,6 +314,10 @@ describe('Mint handler @regression @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid');
         });
     });
+
+    // -----------------------------------------------------------------------
+    // MINT_ADDRESS_MAX
+    // -----------------------------------------------------------------------
 
     describe('MINT_ADDRESS_MAX', function () {
         // The mock gate resolves MINT_SELF_MINTED_ONLY active, so these exercise
@@ -382,6 +421,10 @@ describe('Mint handler @regression @tier1', function () {
         });
     });
 
+    // -----------------------------------------------------------------------
+    // MINT_START_BLOCK
+    // -----------------------------------------------------------------------
+
     describe('MINT_START_BLOCK', function () {
 
         it('before MINT_START_BLOCK → invalid', async function () {
@@ -421,6 +464,10 @@ describe('Mint handler @regression @tier1', function () {
         });
     });
 
+    // -----------------------------------------------------------------------
+    // MINT_STOP_BLOCK
+    // -----------------------------------------------------------------------
+
     describe('MINT_STOP_BLOCK', function () {
 
         it('after MINT_STOP_BLOCK → invalid', async function () {
@@ -459,6 +506,10 @@ describe('Mint handler @regression @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid');
         });
     });
+
+    // -----------------------------------------------------------------------
+    // DESTINATION
+    // -----------------------------------------------------------------------
 
     describe('DESTINATION', function () {
 
@@ -528,6 +579,10 @@ describe('Mint handler @regression @tier1', function () {
         });
     });
 
+    // -----------------------------------------------------------------------
+    // ADDRESS sleeping
+    // -----------------------------------------------------------------------
+
     describe('address sleeping', function () {
 
         it('SOURCE sleeping → invalid', async function () {
@@ -557,6 +612,10 @@ describe('Mint handler @regression @tier1', function () {
             assert.ok(data.STATUS.startsWith('invalid'));
         });
     });
+
+    // -----------------------------------------------------------------------
+    // MEMO validations
+    // -----------------------------------------------------------------------
 
     describe('MEMO validations', function () {
 
@@ -588,6 +647,10 @@ describe('Mint handler @regression @tier1', function () {
         });
     });
 
+    // -----------------------------------------------------------------------
+    // AMOUNT format
+    // -----------------------------------------------------------------------
+
     describe('AMOUNT format', function () {
 
         it('fractional AMOUNT for 0-decimal token → invalid', async function () {
@@ -611,6 +674,10 @@ describe('Mint handler @regression @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid');
         });
     });
+
+    // -----------------------------------------------------------------------
+    // createMint always called
+    // -----------------------------------------------------------------------
 
     describe('createMint is always called', function () {
 

@@ -53,6 +53,8 @@ describe('Batch @regression @tier3', function () {
         sinon.restore();
     });
 
+    // ─── Valid batch ──────────────────────────────────────────────────
+
     describe('valid batch', function () {
 
         it('commands split by semicolon, processAction called for each', async function () {
@@ -125,6 +127,8 @@ describe('Batch @regression @tier3', function () {
 
     });
 
+    // ─── Nested BATCH → invalid ───────────────────────────────────────
+
     describe('nested BATCH', function () {
 
         it('BATCH inside BATCH → invalid (limit exceeded)', async function () {
@@ -144,6 +148,8 @@ describe('Batch @regression @tier3', function () {
         });
 
     });
+
+    // ─── Action limits ────────────────────────────────────────────────
 
     describe('action limits', function () {
 
@@ -213,6 +219,8 @@ describe('Batch @regression @tier3', function () {
 
     });
 
+    // ─── Unknown/disabled actions ─────────────────────────────────────
+
     describe('action availability', function () {
 
         it('disabled action in batch → invalid', async function () {
@@ -223,6 +231,7 @@ describe('Batch @regression @tier3', function () {
                 TX_DATA: 'BATCH|0|UNKNOWNACTION|0',
             });
             indexer.indexerDb.isActionAllowed.resolves(true);
+            // isEnabled returns false for unknown action
             actionsCtx.protocolChanges.isEnabled.resolves(false);
 
             const params = ['0'];
@@ -368,6 +377,8 @@ describe('Batch @regression @tier3', function () {
         });
 
     });
+
+    // ─── Record creation ─────────────────────────────────────────────
 
     describe('record creation', function () {
 

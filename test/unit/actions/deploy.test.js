@@ -124,6 +124,8 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
         sinon.restore();
     });
 
+    // ─── Format validation ────────────────────────────────────────────────
+
     describe('format validation', function () {
 
         it('rejects an unknown VERSION', async function () {
@@ -139,6 +141,8 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
         });
 
     });
+
+    // ─── Code validations ─────────────────────────────────────────────────
 
     describe('code validations', function () {
 
@@ -184,6 +188,8 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
         });
 
     });
+
+    // ─── VM syntax rejection ──────────────────────────────────────────────
 
     describe('VM syntax validation', function () {
 
@@ -309,6 +315,8 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
         });
     });
 
+    // ─── SOURCE sleeping ──────────────────────────────────────────────────
+
     describe('source sleeping', function () {
 
         it('rejects when SOURCE is sleeping', async function () {
@@ -319,6 +327,8 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
         });
 
     });
+
+    // ─── DB record writes ─────────────────────────────────────────────────
 
     describe('record creation', function () {
 
@@ -348,6 +358,8 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
         });
 
     });
+
+    // ─── Constructor execution ────────────────────────────────────────────
 
     describe('constructor execution (FORMAT 0 + CONSTRUCTOR_PARAMS)', function () {
 
@@ -492,6 +504,8 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
         });
     });
 
+    // ─── FORMAT 1: staking config (COOLDOWN_BLOCKS + SLASH_DESTINATION) ──
+
     describe('FORMAT 1: staking config', function () {
 
         it('valid v1 with COOLDOWN_BLOCKS sets STATUS valid', async function () {
@@ -592,6 +606,8 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
 
     });
 
+    // ─── Hex decode failure (line 141-142) ───────────────────────────────
+
     describe('base64 decode failure', function () {
 
         it('rejects CODE_ENCODING that is not canonical base64', async function () {
@@ -606,6 +622,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
 
     });
 
+    // ─── CODE_ENCODING activation gate (hex below, base64 at/above) ──────
     //
     // Inline DEPLOY decodes CODE_ENCODING as base64 at/after the
     // DEPLOY_BASE64_CODE activation and as hex before it. The gate exists so a
@@ -678,6 +695,8 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
         });
 
     });
+
+    // ─── Native coin fee payment paths (lines 185-203) ───────────────────
 
     describe('native coin fee payment', function () {
 
@@ -763,6 +782,8 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
 
     });
 
+    // ─── Constructor state changes + rollback (lines 323-348) ────────────
+
     describe('constructor state changes and rollback', function () {
 
         it('constructor with stateChanges calls createContractState for each change (lines 322-330)', async function () {
@@ -833,6 +854,8 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
         });
 
     });
+
+    // ─── Constructor emissions (processed through the EXECUTE pipeline) ────
 
     describe('constructor emissions', function () {
 

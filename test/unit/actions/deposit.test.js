@@ -59,6 +59,8 @@ describe('Deposit (DEPOSIT) @regression @tier2', function () {
         sinon.restore();
     });
 
+    // ─── Format validation ────────────────────────────────────────────────
+
     describe('format validation', function () {
 
         it('rejects an unknown VERSION', async function () {
@@ -74,6 +76,8 @@ describe('Deposit (DEPOSIT) @regression @tier2', function () {
         });
 
     });
+
+    // ─── Contract validations ─────────────────────────────────────────────
 
     describe('contract validations', function () {
 
@@ -131,6 +135,8 @@ describe('Deposit (DEPOSIT) @regression @tier2', function () {
 
     });
 
+    // ─── Token validations ────────────────────────────────────────────────
+
     describe('token validations', function () {
 
         it('rejects when TICK does not exist', async function () {
@@ -162,6 +168,8 @@ describe('Deposit (DEPOSIT) @regression @tier2', function () {
 
     });
 
+    // ─── Sleeping checks ──────────────────────────────────────────────────
+
     describe('sleeping checks', function () {
 
         it('rejects when SOURCE is sleeping', async function () {
@@ -185,6 +193,8 @@ describe('Deposit (DEPOSIT) @regression @tier2', function () {
         });
 
     });
+
+    // ─── Valid settlement ─────────────────────────────────────────────────
 
     describe('valid deposit', function () {
 
@@ -219,6 +229,8 @@ describe('Deposit (DEPOSIT) @regression @tier2', function () {
         });
 
     });
+
+    // ─── Record always created ────────────────────────────────────────────
 
     describe('record always created', function () {
 

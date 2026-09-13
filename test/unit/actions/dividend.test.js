@@ -46,6 +46,8 @@ describe('Dividend @regression @tier2', function () {
         sinon.restore();
     });
 
+    // ─── Valid dividend ───────────────────────────────────────────────
+
     describe('valid dividend', function () {
 
         it('valid dividend: createDividend called with valid status', async function () {
@@ -134,6 +136,8 @@ describe('Dividend @regression @tier2', function () {
 
     });
 
+    // ─── Invalid: TICK / DIVIDEND_TICK not found ──────────────────────
+
     describe('TICK validations', function () {
 
         it('TICK not found → invalid', async function () {
@@ -172,6 +176,8 @@ describe('Dividend @regression @tier2', function () {
 
     });
 
+    // ─── Invalid: insufficient balance ───────────────────────────────
+
     describe('balance validations', function () {
 
         it('insufficient DIVIDEND_TICK balance to cover all holders → invalid', async function () {
@@ -196,6 +202,8 @@ describe('Dividend @regression @tier2', function () {
         });
 
     });
+
+    // ─── Allow/block list filtering ───────────────────────────────────
 
     describe('allow/block list filtering', function () {
 
@@ -274,6 +282,8 @@ describe('Dividend @regression @tier2', function () {
 
     });
 
+    // ─── Sleeping checks ──────────────────────────────────────────────
+
     describe('sleeping validations', function () {
 
         it('SOURCE sleeping → invalid', async function () {
@@ -300,6 +310,8 @@ describe('Dividend @regression @tier2', function () {
         });
 
     });
+
+    // ─── Record always created ────────────────────────────────────────
 
     describe('record creation', function () {
 
@@ -341,6 +353,7 @@ describe('Dividend @regression @tier2', function () {
 
     });
 
+    // ─── Fee model + native-coin payment branches ─────────────────────────
     describe('fee handling', function () {
 
         function setupValid() {

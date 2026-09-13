@@ -17,6 +17,8 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fi
 
 const Dispenser = require('../../../src/actions/dispenser.js');
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function makeActionsCtx(indexer) {
     return {
         config:          indexer.config,
@@ -35,6 +37,8 @@ function makeActionsCtx(indexer) {
 function makeParams(str) {
     return String(str).split('|');
 }
+
+// ─── Test suite ───────────────────────────────────────────────────────────────
 
 describe('Dispenser action handler @regression @tier2', function () {
     let indexer;
@@ -83,6 +87,8 @@ describe('Dispenser action handler @regression @tier2', function () {
     afterEach(function () {
         sinon.restore();
     });
+
+    // ─── Format 0: Create Dispenser ───────────────────────────────────────
 
     describe('Format 0 – Create Dispenser', function () {
 
@@ -263,6 +269,8 @@ describe('Dispenser action handler @regression @tier2', function () {
         });
     });
 
+    // ─── Format 1: Cancel Dispenser ───────────────────────────────────────
+
     describe('Format 1 – Cancel Dispenser', function () {
 
         function makeDispenserInfo(overrides = {}) {
@@ -392,6 +400,8 @@ describe('Dispenser action handler @regression @tier2', function () {
             sinon.assert.calledWith(indexer.indexerDb.updateActionIndex, sinon.match.any, 'DISPENSER_CANCEL');
         });
     });
+
+    // ─── Format 2: Edit Dispenser ─────────────────────────────────────────
 
     describe('Format 2 – Edit Dispenser', function () {
 
@@ -590,6 +600,8 @@ describe('Dispenser action handler @regression @tier2', function () {
         });
     });
 
+    // ─── Unknown format ────────────────────────────────────────────────────
+
     describe('Unknown format', function () {
         it('unknown VERSION returns invalid', async function () {
             const params = makeParams('9|BTC|JDOG|1||10|BTC||0.01|||');
@@ -600,6 +612,8 @@ describe('Dispenser action handler @regression @tier2', function () {
             assert.ok(data['STATUS'].includes('invalid'));
         });
     });
+
+    // ─── GET_ADDRESS != SOURCE validation (lines 268-282) ───────────────
 
     describe('GET_ADDRESS different from SOURCE validation (freshness)', function () {
 
@@ -999,6 +1013,8 @@ describe('Dispenser action handler @regression @tier2', function () {
         });
     });
 
+    // ─── LIST field validation (lines 304-314) ───────────────────────────
+
     describe('LIST field validation', function () {
 
         it('unknown ALLOW_LIST returns invalid', async function () {
@@ -1024,6 +1040,8 @@ describe('Dispenser action handler @regression @tier2', function () {
             assert.ok(data['STATUS'].includes('unsupported'));
         });
     });
+
+    // ─── Ownership dispenser create path (lines 438-442) ─────────────────
 
     describe('GIVE_OWNERSHIP=1 (ownership dispenser)', function () {
 
@@ -1062,6 +1080,8 @@ describe('Dispenser action handler @regression @tier2', function () {
         });
     });
 
+    // ─── Non-unified fee path (line 348-349) ─────────────────────────────
+
     describe('Non-unified expiration fee path', function () {
 
         it('legacy getExpirationFee path when UNIFIED_FEES disabled', async function () {
@@ -1076,6 +1096,8 @@ describe('Dispenser action handler @regression @tier2', function () {
             sinon.assert.calledOnce(indexer.indexerDb.createDispenser);
         });
     });
+
+    // ─── Native coin fee payment paths (lines 354-371) ───────────────────
 
     describe('Native coin fee payment path', function () {
 

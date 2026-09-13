@@ -17,6 +17,8 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fi
 
 const Order = require('../../../src/actions/order.js');
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function makeActionsCtx(indexer) {
     return {
         config:          indexer.config,
@@ -36,6 +38,8 @@ function makeActionsCtx(indexer) {
 function makeParams(str) {
     return String(str).split('|');
 }
+
+// ─── Test suite ───────────────────────────────────────────────────────────────
 
 describe('Order action handler @regression @tier2', function () {
     let indexer;
@@ -79,6 +83,8 @@ describe('Order action handler @regression @tier2', function () {
     afterEach(function () {
         sinon.restore();
     });
+
+    // ─── Format 0: Create Order ───────────────────────────────────────────
 
     describe('Format 0 – Create Order', function () {
 
@@ -371,6 +377,8 @@ describe('Order action handler @regression @tier2', function () {
         });
     });
 
+    // ─── Format 1: Cancel Order ───────────────────────────────────────────
+
     describe('Format 1 – Cancel Order', function () {
 
         function makeOrderInfo(overrides = {}) {
@@ -456,6 +464,8 @@ describe('Order action handler @regression @tier2', function () {
         });
     });
 
+    // ─── Format 2: Edit Order ─────────────────────────────────────────────
+
     describe('Format 2 – Edit Order', function () {
 
         function makeOrderInfo(overrides = {}) {
@@ -527,6 +537,8 @@ describe('Order action handler @regression @tier2', function () {
         });
     });
 
+    // ─── Unknown format ────────────────────────────────────────────────────
+
     describe('Unknown format', function () {
         it('unknown VERSION returns invalid', async function () {
             const params = makeParams('9|BTC|RAREPEPE|1|BTC|PEPECASH|10|||');
@@ -537,6 +549,8 @@ describe('Order action handler @regression @tier2', function () {
             assert.ok(data['STATUS'].includes('invalid'));
         });
     });
+
+    // ─── GET_ADDRESS contract address validation (lines 194-198) ────────────
 
     describe('GET_ADDRESS contract address validation', function () {
 
@@ -561,6 +575,8 @@ describe('Order action handler @regression @tier2', function () {
             assert.ok(data['STATUS'].includes('GET_ADDRESS'));
         });
     });
+
+    // ─── GET_OWNERSHIP bid validation (lines 232-238) ────────────────────
 
     describe('GET_OWNERSHIP=1 (bid for ownership)', function () {
 
@@ -599,6 +615,8 @@ describe('Order action handler @regression @tier2', function () {
         });
     });
 
+    // ─── LIST field validation (lines 288-298) ───────────────────────────
+
     describe('LIST field validation', function () {
 
         it('unknown ALLOW_LIST returns invalid', async function () {
@@ -626,6 +644,8 @@ describe('Order action handler @regression @tier2', function () {
         });
     });
 
+    // ─── Non-unified fee path (line 331-333) ──────────────────────────────
+
     describe('Non-unified expiration fee path', function () {
 
         it('non-unified fee path sets AMOUNT via getExpirationFee when EXPIRATION is provided', async function () {
@@ -642,6 +662,8 @@ describe('Order action handler @regression @tier2', function () {
             sinon.assert.calledOnce(indexer.indexerDb.createOrder);
         });
     });
+
+    // ─── Native coin fee payment path (lines 340-348) ────────────────────
 
     describe('Native coin fee payment', function () {
 
@@ -694,6 +716,8 @@ describe('Order action handler @regression @tier2', function () {
             assert.ok(data['STATUS'].includes('insufficient fee'));
         });
     });
+
+    // ─── Ownership-give order (lines 414-417) ────────────────────────────
 
     describe('GIVE_OWNERSHIP=1 (ownership order)', function () {
 
@@ -748,6 +772,8 @@ describe('Order action handler @regression @tier2', function () {
             assert.ok(data['STATUS'].includes('escrowed') || data['STATUS'].includes('ownership'));
         });
     });
+
+    // ─── Format 1 Cancel: two-phase and ownership-cancel paths ──────────
 
     describe('Format 1 – two-phase cancel and ownership-cancel paths', function () {
 
