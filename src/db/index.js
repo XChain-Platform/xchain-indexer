@@ -5172,17 +5172,6 @@ class Database {
     }
 
     /*
-     * Pubkeys table methods (address → pubkey mapping)
-     */
-
-    // Store an address_id → pubkey mapping in the pubkeys table (idempotent)
-    async createPubkey(address_id, pubkey){
-        if(!address_id || !pubkey) return;
-        let query = "INSERT IGNORE INTO pubkeys (address_id, pubkey) VALUES (?, ?)";
-        await this.doQuery(query, [address_id, String(pubkey)]);
-    }
-
-    /*
      * Staking action methods
      */
 
@@ -7712,6 +7701,7 @@ for(const mixin of [
     require('./orders.js'),
     require('./polls.js'),
     require('./prices.js'),
+    require('./pubkeys.js'),
 ]){
     const descriptors = Object.getOwnPropertyDescriptors(mixin);
     for(const key of Reflect.ownKeys(descriptors)) descriptors[key].enumerable = false;
