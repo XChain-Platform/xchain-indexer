@@ -287,16 +287,26 @@ module.exports = {
         return (c.length > 0) ? Number(c[0].c) : 0;
     },
 
-    // Every row of one table, ordered by its first column. ORDER BY 1 is deliberate and
-    // load-bearing: each dumped table's first column is its deterministic key (id /
-    // action_index / tx_index), so the row order, and therefore the artifact's sha256, is
-    // the same on every machine that generates it.
+    // Every row of one table, ordered by its first column and then by every remaining
+    // column. The first column is each table's natural key (id / action_index / tx_index),
+    // but that key is NOT unique on all of them: one action writes many credits, debits,
+    // sends and escrows rows under a single action_index, and the rollcall_* tables key on
+    // (epoch_height, pubkey). Ranking on the first column alone therefore leaves ties whose
+    // order the engine picks freely, and the dump's byte stream moves with it. Ordering on
+    // the FULL column list breaks every such tie on row CONTENT, so rows that still tie are
+    // equal in each dumped column and serialize to identical bytes; that is what makes the
+    // artifact's sha256 the same on every machine that generates it.
     async readAllRowsByFirstColumn(table, cols){
         assertSqlIdentifier(table);
         for(let c of cols)
             assertSqlIdentifier(c);
         let colList = cols.map(c => '`' + c + '`').join(',');
-        return await this.doQuery('SELECT ' + colList + ' FROM `' + table + '` ORDER BY 1 ASC');
+        // Ordinals rather than names: they point at the select list built right above, so the
+        // order clause cannot drift away from the columns actually dumped. Term 1 stays
+        // literal in the SQL text so the source-static ORDER BY audit can still read this
+        // clause rather than losing sight of it behind an assembled string.
+        let ties = cols.slice(1).map((c, i) => ', ' + (i + 2) + ' ASC').join('');
+        return await this.doQuery('SELECT ' + colList + ' FROM `' + table + '` ORDER BY 1 ASC' + ties);
     },
 
     // One multi-row INSERT into a caller-named table. Values are bound; only the table and

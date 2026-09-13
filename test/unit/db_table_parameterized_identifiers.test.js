@@ -83,8 +83,11 @@ describe('db misc mixin: table-parameterized identifiers @regression', function 
         assert.equal(db.issued[0].sql, 'INSERT INTO `tokens` (`id`,`tick_id`) VALUES (?,?),(?,?)');
         assert.deepEqual(db.issued[0].args, [1, 5, 2, 6]);
 
+        // The order clause carries one ordinal per selected column, never ordinal 1 alone:
+        // a table whose first column repeats (credits, sends, rollcall_gates) would otherwise
+        // leave the dump's row order, and so its sha256, up to the engine.
         await db.readAllRowsByFirstColumn('tokens', ['id', 'tick_id']);
-        assert.equal(db.issued[1].sql, 'SELECT `id`,`tick_id` FROM `tokens` ORDER BY 1 ASC');
+        assert.equal(db.issued[1].sql, 'SELECT `id`,`tick_id` FROM `tokens` ORDER BY 1 ASC, 2 ASC');
     });
 
     it('countRowsInTable reads zero from an empty result rather than NaN', async function () {

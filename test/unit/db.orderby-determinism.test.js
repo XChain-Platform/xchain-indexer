@@ -60,10 +60,17 @@ function dbSource(){
 
 // Columns that (as an ORDER BY term, in the context they appear in db.js) impose or
 // complete a deterministic total order. Per-row-unique keys (action_index, id,
-// tx_index, call_id, match_id) plus canonical/aggregation-unique keys that the
-// recurring determinism fixes settled on as the accepted tiebreakers.
+// tx_index, call_id, match_id, transfer_id) plus canonical/aggregation-unique keys
+// that the recurring determinism fixes settled on as the accepted tiebreakers.
+//
+// call_id, match_id and transfer_id are NOT the per-node AUTO_INCREMENT surrogates
+// their `_id` suffix suggests: each is a deterministic content hash carrying its own
+// UNIQUE key (cross_chain_calls.call_phase, cross_chain_matches.uq_match_id,
+// bridge_transfers.uq_transfer_id), identical on every node that mirrors the row. The
+// surrogates the suffix DOES cover (address_id, source_id, tick_id) stay rejected, and
+// the final test in this file is what holds that line.
 const TIEBREAKERS = [
-    'action_index', 'tx_index', 'call_id', 'match_id', 'option_index',
+    'action_index', 'tx_index', 'call_id', 'match_id', 'transfer_id', 'option_index',
     'chunk_index', 'execution_index', 'position', 'round_number', 'pubkey',
     'tick', 'source', 'state_key', 'address', 'epoch_height', 'vout',
     'seq_in_index', 'index_name', 'name'
@@ -74,6 +81,26 @@ const TIEBREAKERS = [
 // text (line-independent so it survives edits elsewhere in the file). Adding an
 // entry here is a deliberate, reviewed act.
 const ALLOWLIST = [
+    {
+        clause: 'policy_seq ASC',
+        reason: 'getEarlierFinalizedPolicySnapshots: the query pins network, origin_chain and ' +
+                'tick, and policy_snapshots carries UNIQUE KEY uq_policy_seq (network, ' +
+                'origin_chain, tick, policy_seq) (src/sql/policy_snapshots.sql), so within the ' +
+                'filtered set policy_seq is unique per row and the single term is already a ' +
+                'total order.'
+    },
+    {
+        clause: '1 ASC',
+        reason: 'readAllRowsByFirstColumn (the genesis dump read): a POSITIONAL clause, so no ' +
+                'column name can ever appear in it for this scan to recognize. The clause the ' +
+                'method issues is `1 ASC` followed by an ASC term for every remaining selected ' +
+                'column, and the select list is the table\'s whole column list, so the ordering ' +
+                'runs over the ENTIRE row content. Rows that still tie are equal in every ' +
+                'dumped column and serialize to identical bytes, which is exactly the property ' +
+                'the artifact\'s pinned sha256 depends on. Ranking on ordinal 1 alone would NOT ' +
+                'be deterministic: 28 dumped tables (credits, debits, sends, escrows and the ' +
+                'rollcall_* set among them) have a non-unique first column.'
+    },
     {
         clause: 'block_index ASC, checkpoint_seq DESC',
         reason: 'getMirroredStateCheckpointCandidates: the query pins chain and network, and ' +
