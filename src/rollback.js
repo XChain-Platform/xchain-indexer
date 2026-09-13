@@ -31,7 +31,7 @@ const lifecycle = require('./tableLifecycle.js');
 // For the market-pair sentinel only. db.js requires nothing from here, so this is
 // a one-way edge; the pair key has to be the same one Database.getMarkets builds or
 // the two collectors disagree about which markets a reorg must recompute.
-const Database  = require('./db.js');
+const Database  = require('./db');
 const ar        = require('./anchor_reward_activation.js');
 const { ARCHIVE_HEAD_VERSIONS_SQL } = require('./stateHash.js');
 const { archiveAuthorScopeJoin } = require('./archive_rollback_author_scope_activation.js');

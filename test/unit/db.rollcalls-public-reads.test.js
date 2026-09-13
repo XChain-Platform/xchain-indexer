@@ -36,6 +36,13 @@ const fs     = require('fs');
 const path   = require('path');
 const sinon  = require('sinon');
 const crypto = require('crypto');
+// The Database class is a directory of per-family mixins under src/db/, so a source
+// scan over it concatenates every file in a fixed order instead of reading one path.
+function dbSource(){
+    const dir = path.join(__dirname, '..', '..', 'src', 'db');
+    return fs.readdirSync(dir).sort().map(f => fs.readFileSync(path.join(dir, f), 'utf8')).join('\n');
+}
+
 
 const { getTestConfig } = require('../fixtures/config');
 const Utility           = require('../../src/utility');
@@ -153,7 +160,7 @@ describe('getRollcalls (JSON-RPC getrollcalls, BTC public read) @regression @tie
     });
 
     it('reads through doQueryStrict, the variant that does not collapse an error into []', function () {
-        const src = fs.readFileSync(path.join(__dirname, '../../src/db.js'), 'utf8');
+        const src = dbSource();
         const body = src.match(/async getRollcalls\(limit\)\{[\s\S]*?\n    \}/);
         assert.ok(body, 'getRollcalls must still be findable in db.js');
         assert.match(body[0], /this\.doQueryStrict\(/, 'getRollcalls must not fall back to doQuery');
@@ -243,7 +250,7 @@ describe('getRollcallAbsencesBySource (JSON-RPC getrollcallabsences, BTC public 
     });
 
     it('reads through doQueryStrict, the variant that does not collapse an error into []', function () {
-        const src = fs.readFileSync(path.join(__dirname, '../../src/db.js'), 'utf8');
+        const src = dbSource();
         const body = src.match(/async getRollcallAbsencesBySource\(source, limit\)\{[\s\S]*?\n    \}/);
         assert.ok(body, 'getRollcallAbsencesBySource must still be findable in db.js');
         assert.match(body[0], /this\.doQueryStrict\(/, 'the absences read must not fall back to doQuery');

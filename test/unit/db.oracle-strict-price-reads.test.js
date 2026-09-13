@@ -36,6 +36,15 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const sinon  = require('sinon');
+const fs     = require('fs');
+const path   = require('path');
+// The Database class is a directory of per-family mixins under src/db/, so a source
+// scan over it concatenates every file in a fixed order instead of reading one path.
+function dbSource(){
+    const dir = path.join(__dirname, '..', '..', 'src', 'db');
+    return fs.readdirSync(dir).sort().map(f => fs.readFileSync(path.join(dir, f), 'utf8')).join('\n');
+}
+
 
 const { getTestConfig } = require('../fixtures/config');
 const Utility           = require('../../src/utility');
@@ -167,7 +176,8 @@ describe('price-barrier-guarded reads fail loudly on a DB fault @regression @tie
         // instance, inside the block transaction, where doQuery already rethrows.
         // Converting it would be scope the fault class does not reach, so this pins
         // that it was deliberately left alone.
-        const src = require('fs').readFileSync(require.resolve('../../src/db.js'), 'utf8');
+        // The Database class is a directory of per-family mixins, so the scan reads all of it.
+        const src = dbSource();
         const fn  = src.slice(src.indexOf('async getCrossChainDataForVM('));
         const end = fn.indexOf('\n    async ', 1);
         assert.ok(/this\.doQuery\(/.test(end === -1 ? fn : fn.slice(0, end)),

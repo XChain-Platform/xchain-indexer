@@ -44,7 +44,7 @@ const sinon  = require('sinon');
 const { createMockDb, createBaseData, createTokenInfo } = require('../fixtures/mocks');
 const Utility  = require('../../src/utility.js');
 const configjs = require('../../src/config.js');
-const Database = require('../../src/db.js');
+const Database = require('../../src/db');
 const XBridge  = require('../../src/actions/xbridge.js');
 
 const SOURCE      = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';

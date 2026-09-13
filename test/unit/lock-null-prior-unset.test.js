@@ -64,7 +64,7 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../fixtu
 const { getTestConfig } = require('../fixtures/config');
 
 const Utility         = require('../../src/utility.js');
-const Database        = require('../../src/db.js');
+const Database        = require('../../src/db');
 const Issue           = require('../../src/actions/issue.js');
 const ProtocolChanges = require('../../src/protocol_changes.js');
 

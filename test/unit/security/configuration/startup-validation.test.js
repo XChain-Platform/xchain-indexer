@@ -44,7 +44,7 @@ describe('Security: database name validation @regression @tier4', function () {
 });
 
 describe('Security: connection pool timeout configuration @regression @tier4', function () {
-    const Database = require('../../../../src/db.js');
+    const Database = require('../../../../src/db');
     const { createMockIndexer } = require('../../../fixtures/mocks');
 
     function makeDb() {

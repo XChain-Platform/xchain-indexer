@@ -1206,7 +1206,7 @@ module.exports = AnchorRecovery;
 if(require.main === module){
     const dotenv = require('dotenv');
     dotenv.config();
-    const Database = require('../src/db.js');
+    const Database = require('../src/db');
     const config   = require('../src/config.js');
     const Utility  = require('../src/utility.js');
 

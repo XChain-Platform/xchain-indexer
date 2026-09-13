@@ -42,6 +42,13 @@ const stateHash = require('../../src/stateHash.js');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '../..', rel), 'utf8');
 
+// The Database class is a directory of per-family mixins, so a scan over the class
+// concatenates every file in a fixed order instead of reading one path.
+const readDb = () => {
+    const dir = path.join(__dirname, '../..', 'src', 'db');
+    return fs.readdirSync(dir).sort().map(f => fs.readFileSync(path.join(dir, f), 'utf8')).join('\n');
+};
+
 describe('Hash coverage guard @regression', function () {
 
     // The consensus block-hash preimage gathering lives in db.js getBlockHashes.
@@ -49,7 +56,7 @@ describe('Hash coverage guard @regression', function () {
     // so the FROM-table assertions below cannot accidentally match unrelated SQL
     // elsewhere in db.js.
     function blockHashBody(){
-        const src   = read('src/db.js');
+        const src   = readDb();
         const start = src.indexOf('async getBlockHashes(');
         const end   = src.indexOf('this._lastGatheredBlockRows', start);
         assert.ok(start !== -1 && end > start, 'db.js getBlockHashes body not found; update this guard\'s slicing');
@@ -116,7 +123,7 @@ describe('Hash coverage guard @regression', function () {
         // bind the note to the set of db.js methods that issue `UPDATE attests`
         // outside the action's own upsert (the create* methods key on the row's
         // own action_index and are action-derived, not in-place mutations).
-        const db      = read('src/db.js');
+        const db      = readDb();
         const methods = new Set();
         const methodRe = /^\s{4}async ([A-Za-z_]+)\(/gm;
         let m, starts = [];
@@ -360,7 +367,7 @@ describe('Hash coverage guard @regression', function () {
         // that omits coin silently computes WITHOUT the armed classes while its
         // conformance twin computes WITH them: a guaranteed divergence halt at
         // the activation height. Pin both production call sites.
-        const dbSrc = read('src/db.js');
+        const dbSrc = readDb();
         const call = dbSrc.match(/buildStateHashData\(this, block_index, \{[\s\S]{0,700}?\}\)/);
         assert.ok(call && /coin:\s*this\.config\['COIN'\]/.test(call[0]),
             "db.js getBlockHashes must pass coin: this.config['COIN'] to buildStateHashData");

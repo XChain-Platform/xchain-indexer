@@ -76,7 +76,7 @@ async function initIndexer(opts = {}) {
 
     // Replicate the initialization portion of start() without the while(true) loop
     const config   = require('../../../src/config.js');
-    const Database = require('../../../src/db.js');
+    const Database = require('../../../src/db');
     const Utility  = require('../../../src/utility.js');
     const ProtocolChanges = require('../../../src/protocol_changes.js');
     const Mapper   = require('../../../src/mapper.js');

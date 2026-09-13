@@ -34,6 +34,14 @@
 
 const assert = require('assert');
 const path   = require('path');
+const fs     = require('fs');
+// The Database class is a directory of per-family mixins under src/db/, so a source
+// scan over it concatenates every file in a fixed order instead of reading one path.
+function dbSource(){
+    const dir = path.join(__dirname, '..', '..', 'src', 'db');
+    return fs.readdirSync(dir).sort().map(f => fs.readFileSync(path.join(dir, f), 'utf8')).join('\n');
+}
+
 
 const Coinpay = require(path.resolve(__dirname, '../../src/actions/coinpay.js'));
 
@@ -80,8 +88,7 @@ describe('COINPAY settlement clears its ORDER_MATCH', () => {
 describe('updateOrderMatchStatus targets the match row', () => {
 
     it('updates order_matches by action_index and nothing else', () => {
-        const src = require('fs').readFileSync(
-            path.resolve(__dirname, '../../src/db.js'), 'utf8');
+        const src = dbSource();
         const start = src.indexOf('async updateOrderMatchStatus(');
         assert.ok(start > 0, 'updateOrderMatchStatus is missing from db.js');
         const body = src.slice(start, start + 500);

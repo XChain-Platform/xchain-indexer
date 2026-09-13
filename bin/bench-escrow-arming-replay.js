@@ -162,7 +162,7 @@ async function runSynthetic(sizes){
 async function runDb(opts){
     // Credentials come from the service environment exactly as the Stage A bench
     // and src/migrate.js read them: never from the command line, never printed.
-    const Database = require('../src/db.js');
+    const Database = require('../src/db');
     const config   = require('../src/config.js');
     const Utility  = require('../src/utility.js');
     const host = process.env.INDEXER_DB_HOST;

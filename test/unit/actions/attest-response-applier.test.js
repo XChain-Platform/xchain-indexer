@@ -36,7 +36,7 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Attest   = require('../../../src/actions/attest.js');
 const Utility  = require('../../../src/utility.js');
-const Database = require('../../../src/db.js');
+const Database = require('../../../src/db');
 const swq     = require('../../../src/stake_weighted_quorum.js');
 const attestAdmission = require('../../../src/attest_admission_activation.js');
 const attestBcastFee  = require('../../../src/attest_broadcast_fee_activation.js');

@@ -26,7 +26,7 @@ const {
     createMockIndexer, createBaseData, createTokenInfo, getTestConfig,
 } = require('../setup/harness');
 
-const Database = require('../../../src/db.js');
+const Database = require('../../../src/db');
 
 /**
  * Create a bound getTokenSupply method using a mock doQuery

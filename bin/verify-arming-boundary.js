@@ -152,7 +152,7 @@ function check(ok, label, detail){
     }
     console.log('# ' + opts.chain + '/' + opts.network + '  ' + SLOT + ' armed at ' + H);
 
-    const Database = require(path.join(SRC, 'db.js'));
+    const Database = require(path.join(SRC, 'db'));
     const config   = require(path.join(SRC, 'config.js'));
     const Utility  = require(path.join(SRC, 'utility.js'));
     const cfg  = config.getConfig(opts.chain, opts.network);

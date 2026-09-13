@@ -19,7 +19,7 @@ const { EventEmitter } = require('events');
 
 const diag          = require('../../src/diagnosticEvents.js');
 const observability = require('../../src/observability');
-const XChainDB      = require('../../src/db.js');
+const XChainDB      = require('../../src/db');
 
 describe('indexer failure-leg diagnostics @regression', function () {
 

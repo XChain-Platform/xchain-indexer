@@ -43,7 +43,7 @@
  */
 
 const assert   = require('assert');
-const Database = require('../../src/db.js');
+const Database = require('../../src/db');
 
 // A Database-shaped `this` with no connection: only the fields these two guards
 // actually read. `throwError` mirrors util's contract of rethrowing an Error
@@ -151,7 +151,7 @@ describe('the price barrier is scoped to consensus, not to "a context exists"', 
                 const full = path.join(dir, entry.name);
                 if (entry.isDirectory()) { walk(full); continue; }
                 if (!entry.name.endsWith('.js')) continue;
-                if (full.endsWith(path.join('src', 'db.js'))) continue; // the definition itself
+                if (full.endsWith(path.join('src', 'db', 'index.js'))) continue; // the definition itself
                 const text  = fs.readFileSync(full, 'utf8');
                 const lines = text.split('\n');
                 lines.forEach((line, i) => {

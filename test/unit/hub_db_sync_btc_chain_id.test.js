@@ -15,7 +15,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 
 const HubDbSync = require('../../src/hub_db_sync.js');
-const Database  = require('../../src/db.js');
+const Database  = require('../../src/db');
 
 // The three hub-mirrored cross-chain tables are scoped by `network` alone, and on regtest
 // one network name spans every Bitcoin chain a venue has ever had: a re-genesis that leaves

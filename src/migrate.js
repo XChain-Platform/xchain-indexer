@@ -33,7 +33,7 @@
 const dotenv   = require('dotenv');
 dotenv.config();
 
-const Database = require('./db.js');
+const Database = require('./db');
 const config   = require('./config.js');
 const Utility  = require('./utility.js');
 

@@ -44,7 +44,7 @@ const path   = require('path');
 describe('Regression: mariadb ESM runtime floor @regression', function () {
 
     const pkgPath = path.join(__dirname, '../../package.json');
-    const dbPath  = path.join(__dirname, '../../src/db.js');
+    const dbPath  = path.join(__dirname, '../../src/db/index.js');
 
     it('the pinned mariadb really is the ESM-only line this guard exists for', function () {
         // If mariadb ever ships CommonJS again the floor becomes arbitrary, and this

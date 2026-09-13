@@ -40,7 +40,7 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../fixtures/config');
 
 const Utility  = require('../../src/utility.js');
-const Database = require('../../src/db.js');
+const Database = require('../../src/db');
 
 function makeDb() {
     const config = getTestConfig();

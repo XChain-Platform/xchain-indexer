@@ -26,7 +26,7 @@
 const assert = require('assert');
 const config = require('../../src/config.js');
 const Utility = require('../../src/utility.js');
-const Database = require('../../src/db.js');
+const Database = require('../../src/db');
 
 describe('createContractPermission: permissions JSON integrity @regression @tier1', function () {
 

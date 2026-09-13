@@ -44,7 +44,7 @@ const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../fixtures/mocks');
 const List                  = require('../../src/actions/list.js');
-const Database              = require('../../src/db.js');
+const Database              = require('../../src/db');
 const listOwnerActivation   = require('../../src/list_owner_activation.js');
 const tokenPolicyActivation = require('../../src/token_policy_activation.js');
 

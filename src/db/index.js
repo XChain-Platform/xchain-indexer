@@ -32,63 +32,64 @@ if (NODE_MAJOR < 22 || (NODE_MAJOR === 22 && NODE_MINOR < 12)) {
         '--experimental-require-module.');
 }
 
+
 // Load required libraries
 const mariadb = require('mariadb');
 const fs      = require('fs');
 const path    = require('path');
 const { AsyncLocalStorage } = require('async_hooks');
-const { buildStateHashData, ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('./stateHash');
-const { canonicalizeHashAddress } = require('./protocolAddressRoles');
+const { buildStateHashData, ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../stateHash');
+const { canonicalizeHashAddress } = require('../protocolAddressRoles');
 // Single decoder for the decoder's REORG event payload, shared with the getreorghistory RPC
 // so the array-of-{block_index, block_hash} contract is defined once. Pure leaf module (no
 // requires of its own), so no cycle.
-const reorgHistoryQuery = require('./reorg-history-query');
-const protocolTime = require('./protocol_time');
-const swqCap = require('./swq_source_cap_activation');
-const dispenseCancellingMatch = require('./dispense_cancelling_match_activation');
-const stateKeyCollation = require('./state_key_collation_activation');
-const snapshotAgeCausality = require('./oracle_snapshot_age_causality_activation');
-const staleRoundVisibility = require('./oracle_stale_round_visibility_activation');
-const preloadCausality = require('./oracle_preload_causality_activation');
-const batchLandedFee = require('./price_fee_batch_landed_activation');
-const listEditResolution = require('./list_edit_resolution_activation');
-const caretRefStrict = require('./caret_ref_strict_activation');
-const ledgerPrecision = require('./ledger_amount_precision_activation');
-const dispenserSendCompare = require('./dispenser_send_amount_compare_activation');
-const stakeWeightCollation = require('./stake_weight_collation_activation');
-const slashGrid = require('./slash_grid_activation');
+const reorgHistoryQuery = require('../reorg-history-query');
+const protocolTime = require('../protocol_time');
+const swqCap = require('../swq_source_cap_activation');
+const dispenseCancellingMatch = require('../dispense_cancelling_match_activation');
+const stateKeyCollation = require('../state_key_collation_activation');
+const snapshotAgeCausality = require('../oracle_snapshot_age_causality_activation');
+const staleRoundVisibility = require('../oracle_stale_round_visibility_activation');
+const preloadCausality = require('../oracle_preload_causality_activation');
+const batchLandedFee = require('../price_fee_batch_landed_activation');
+const listEditResolution = require('../list_edit_resolution_activation');
+const caretRefStrict = require('../caret_ref_strict_activation');
+const ledgerPrecision = require('../ledger_amount_precision_activation');
+const dispenserSendCompare = require('../dispenser_send_amount_compare_activation');
+const stakeWeightCollation = require('../stake_weight_collation_activation');
+const slashGrid = require('../slash_grid_activation');
 // Token-policy inheritance: the flag day at which a LIST type-2 item, and the address-sleep
 // read that shares its validator, are judged against EVERY supported coin instead of only
 // this chain's. One issuer list has to be able to hold BTC, LTC and DOGE addresses, because
 // the policy on the origin row is the policy every bridged copy inherits.
-const tokenPolicyActivation = require('./token_policy_activation');
+const tokenPolicyActivation = require('../token_policy_activation');
 // Per-block cap on the ATTEST deadline-expiry sweep. Vendored
 // byte-identical from xchain-documentation/protocol/constants.js, same convention
 // as the XCALL_MAX_CALLS_PER_BLOCK sibling it mirrors.
 const { ATTEST_MAX_EXPIRIES_PER_BLOCK,
         CROSS_SETTLE_MAX_PER_BLOCK,
         ORACLE_VM_ROUND_WINDOW,
-        ORACLE_VM_MAX_ROWS } = require('./protocol/constants.js');
+        ORACLE_VM_MAX_ROWS } = require('../protocol/constants.js');
 const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS,
         ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
         ARCHIVE_ANCHOR_BY_CONTENT_SQL, selectArchiveHeadRow,
-        dedupeArchiveChunks } = require('./anchor-action-query');
-const { rethrowIfInfraFault } = require('./actions/faultGuard');
+        dedupeArchiveChunks } = require('../anchor-action-query');
+const { rethrowIfInfraFault } = require('../actions/faultGuard');
 // getbridgeescrowproof (base spec section 12, D2/D70): the proof-producing read shares
 // the SAME key/leaf derivation and the SAME persistent, content-addressed SMT the block
 // path commits, never a rebuilt in-memory tree, so a proof this method hands out can only
 // ever match what was actually committed.
-const bridgeMerkle = require('./merkle.js');
-const bridgeStateCommitment = require('./stateCommitment.js');
+const bridgeMerkle = require('../merkle.js');
+const bridgeStateCommitment = require('../stateCommitment.js');
 // state_root_version is a DERIVED-per-height quantity (api.js getblockhashes is the ONLY
 // place it is MINTED), never the static merkle.STATE_ROOT_VERSION constant: a static
 // comparison refuses every checkpoint cut once a sub-tree slot arms. getBridgeEscrowProof
 // re-derives it here as a guard against handing out an envelope built from a stale or
 // mis-migrated state_checkpoints row.
-const bridgeStateSubtree = require('./state_subtree_activation.js');
+const bridgeStateSubtree = require('../state_subtree_activation.js');
 // The ATTEST batch wire versions, taken from the codec rather than written as literals
 // here, so the chunk read and the parser cannot disagree about which versions are chunks.
-const abw = require('./attest_batch_wire.js');
+const abw = require('../attest_batch_wire.js');
 
 // Row limit on ONE publisher's chunk set for ONE ATTEST batch key, the archive rail's
 // ANCHOR_ROW_LIMIT / ARCHIVE_ANCHOR_ROW_LIMIT applied to the batch rail. Only ever
@@ -112,15 +113,15 @@ const ATTEST_BATCH_CHUNK_ROW_LIMIT = abw.ATTEST_BATCH_MAX_CHUNKS;
 
 // The validator_rewards ledger-key qualifier rule, shared with the two JS writers so the
 // SQL predicate here and they cannot disagree about which reward type is qualified.
-const arKey = require('./anchor_reward_key.js');
+const arKey = require('../anchor_reward_key.js');
 // The frozen anchor/archive reward heights: the derive flag-day and the fleet-agreed
 // mirror-completeness watermark. Recovery-restored rewards claim their ORIGINAL derive
 // height from here, so a restored row and a live-derived one carry the same stamp.
-const ar = require('./anchor_reward_activation.js');
-const diag = require('./diagnosticEvents.js');
+const ar = require('../anchor_reward_activation.js');
+const diag = require('../diagnosticEvents.js');
 // The mirror-admission flag day, CONSUMER side (the time-keyed mirror barrier family): above
 // it the mirrored selects bind rows by their signed admission height instead of by the clock.
-const { isMirrorAdmissionConsumerActive } = require('./mirror_admission_activation.js');
+const { isMirrorAdmissionConsumerActive } = require('../mirror_admission_activation.js');
 
 // A stake weight, as stake_weighted_quorum.bcnum accepts one (plain decimal string).
 // Kept identical to that predicate's pattern so this producer can never emit a row the
@@ -520,10 +521,10 @@ class Database {
         }
         return true;
     }
-    
+
     // Handle verifying all database tables exist
     async verifyTables(){
-        let dir   = path.join(__dirname, 'sql');
+        let dir   = path.join(__dirname, '..', 'sql');
         let files = fs.readdirSync(dir);
         let file  = null;
         let db    = await this.getConnection();
@@ -677,7 +678,7 @@ class Database {
         const includeManual = !!opts.includeManual;
         const only          = (opts.only == null) ? null
             : new Set([].concat(opts.only).map(s => String(s).trim()).filter(Boolean));
-        const dir           = path.join(__dirname, 'sql', 'migrations');
+        const dir           = path.join(__dirname, '..', 'sql', 'migrations');
         const result        = { applied: [], pending: [], baselined: [], lockSkipped: false };
 
         let files = [];
@@ -1513,7 +1514,7 @@ class Database {
     // comparing; do NOT reorder the CREATE INDEX statements in the definition files
     // to chase it (that would only converge installs bootstrapped after the edit).
     async alterTableForDrift(file, db){
-        const dir      = path.join(__dirname, 'sql');
+        const dir      = path.join(__dirname, '..', 'sql');
         const data     = fs.readFileSync(dir + '/' + file, "utf8");
         const table    = file.substring(0, file.indexOf('.sql'));
         const expected = this.parseExpectedColumns(data);
@@ -1662,7 +1663,7 @@ class Database {
     // index (the normal case) this is a single information_schema read and a no-op.
     async reconcileTableIndexes(file, db){
         try {
-            const dir      = path.join(__dirname, 'sql');
+            const dir      = path.join(__dirname, '..', 'sql');
             const data     = fs.readFileSync(dir + '/' + file, "utf8");
             const table    = file.substring(0, file.indexOf('.sql'));
             const expected = this.parseExpectedIndexes(data, table);
@@ -1922,7 +1923,7 @@ class Database {
     }
 
     async createTable(file){
-        const dir     = path.join(__dirname, 'sql');
+        const dir     = path.join(__dirname, '..', 'sql');
         const data    = fs.readFileSync(dir + '/' + file, "utf8");
         const table   = file.substring(0, file.indexOf('.sql'));
         // Quote-aware split into statements. A ';' inside a comment (prose
@@ -2234,7 +2235,7 @@ class Database {
             }
         }
     }
-    
+
     // Handle commiting a SQL transaction and releasing the connection
     async commitTransaction(){
         if(this.transactionConnection != null){
@@ -4509,7 +4510,6 @@ class Database {
         return supply;
     }
 
-
     // Handle getting a list of TICK holders and amounts
     // @param {tick}            string  Ticker name
     // @param {block_index}     integer Block Index 
@@ -5921,7 +5921,6 @@ class Database {
         }
     }
 
-
     // Validate that token supplys match credits/debits/balances information
     async sanityCheck(block_index){
         // Ignore any calls without a block index
@@ -6911,7 +6910,6 @@ class Database {
         }
         return id;
     }    
-
 
     // Lookup table associated with an action
     async getActionIndexTable(action_index){
@@ -8325,7 +8323,6 @@ class Database {
         results = await this.doQuery(query, args);
     }
 
-
     // Handle looking up potential order matches
     async findOrderMatches(data){
         let matches = false;
@@ -9294,7 +9291,6 @@ class Database {
         let query = `UPDATE order_matches SET status_id=? WHERE action_index=?`;
         await this.doQuery(query, [status_id, action_index]);
     }
-
 
     //////////////////////////////////////////////////////////////////////////
     // COINPay Methods
@@ -10576,7 +10572,6 @@ class Database {
         }
         return false;
     }
-
 
     // Create records in the 'mappings_actions' table
     async createActionMapping(action_index, type, value){
@@ -12204,7 +12199,6 @@ class Database {
         }));
     }
 
-
     // Create/Update record in `dispenses` table
     async createDispense(data){
         data                       = this.normalizeDataValues(data);
@@ -12990,7 +12984,6 @@ class Database {
             return { ACTION_INDEX: Number(results[0].action_index), REASON: results[0].status };
         return false;
     }
-
 
     // Return the address recorded as the canceller for a dispenser's most recent
     // 'cancelling' status row, or null if there isn't one. Used by dispenser_close
@@ -16779,6 +16772,7 @@ class Database {
         let row = await this.readLatestControllerEvent('token_controllers', 'tick_id', tick_id, action_class, atBlock, atActionIndex);
         return this.controllerEventIfGating(row, atBlock);
     }
+
     async getEffectiveAddressController(address_id, action_class, atBlock, atActionIndex){
         let row = await this.readLatestControllerEvent('address_controllers', 'address_id', address_id, action_class, atBlock, atActionIndex);
         return this.controllerEventIfGating(row, atBlock);
@@ -16795,6 +16789,7 @@ class Database {
         if(action_class === 'all') return null;
         return this.getEffectiveTokenController(tick_id, 'all', atBlock, atActionIndex);
     }
+
     async getEffectiveAddressControllerForGuard(address_id, action_class, atBlock, atActionIndex){
         let row = await this.getEffectiveAddressController(address_id, action_class, atBlock, atActionIndex);
         if(row) return row;
@@ -16807,9 +16802,11 @@ class Database {
     async getTokenControllers(tick_id, atBlock, atActionIndex){
         return this.readEffectiveControllerMap('token_controllers', 'tick_id', tick_id, atBlock, atActionIndex);
     }
+
     async getAddressControllers(address_id, atBlock, atActionIndex){
         return this.readEffectiveControllerMap('address_controllers', 'address_id', address_id, atBlock, atActionIndex);
     }
+
     async readEffectiveControllerMap(table, keyColumn, keyValue, atBlock, atActionIndex){
         let map  = new Map();
         let sql  = '';
@@ -18641,7 +18638,9 @@ class Database {
         let unclaimed = this.util.bcsub(totalRewards, totalClaimed, 18);
         return unclaimed;
     }
+
 }
+
 // Startup DB-connect resilience (#3168). Cap transient connect retries so a boot never
 // hangs silently forever; a non-retryable auth/grant error fails fast so pm2 surfaces it
 // (a crash-loop is a visible signal, an unbounded silent hang is not).

@@ -129,7 +129,7 @@ function codeIdentity(network) {
  * createBlock and read back only by the replication compare in another service.
  */
 async function readStateHash(opts) {
-    const Database = require('../src/db.js');
+    const Database = require('../src/db');
     const config   = require('../src/config.js');
     const Utility  = require('../src/utility.js');
 

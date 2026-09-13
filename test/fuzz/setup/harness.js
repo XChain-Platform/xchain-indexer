@@ -49,7 +49,7 @@ function makeFuzzActionsCtx(indexer) {
  * The real method reads this.config and this.util, so we bind those from a mock indexer.
  */
 function bindNormalize() {
-    const Database = require('../../../src/db.js');
+    const Database = require('../../../src/db');
     const indexer = createMockIndexer();
     const ctx = {
         config: indexer.config,

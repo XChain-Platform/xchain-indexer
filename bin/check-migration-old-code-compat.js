@@ -73,7 +73,7 @@ if(!OLD_REF || !DB_NAME || !process.env.DB_HOST){
     process.exit(2);
 }
 
-const Database = require(path.join(REPO, 'src/db.js'));
+const Database = require(path.join(REPO, 'src/db'));
 const config   = require(path.join(REPO, 'src/config.js'));
 const Utility  = require(path.join(REPO, 'src/utility.js'));
 

@@ -224,7 +224,7 @@ function tableRedirect(db, table){
 }
 
 async function openIndexerDb(opts){
-    const Database = require('../src/db.js');
+    const Database = require('../src/db');
     const config   = require('../src/config.js');
     const Utility  = require('../src/utility.js');
     const host = process.env.INDEXER_DB_HOST;
@@ -317,7 +317,7 @@ async function runDb(opts){
     // them: never from the command line, never printed. --db only picks the DATABASE
     // NAME (so one host can benchmark any of its chains); everything else is the
     // running indexer's own configuration.
-    const Database = require('../src/db.js');
+    const Database = require('../src/db');
     const config   = require('../src/config.js');
     const Utility  = require('../src/utility.js');
     const host = process.env.INDEXER_DB_HOST;

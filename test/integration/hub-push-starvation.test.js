@@ -32,7 +32,7 @@ const assert = require('assert');
 const path   = require('path');
 const fs     = require('fs');
 
-const Database = require('../../src/db.js');
+const Database = require('../../src/db');
 const {
     getConnectionParams,
     useFileDatabases,

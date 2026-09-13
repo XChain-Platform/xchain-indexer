@@ -48,7 +48,7 @@ const { destroyFileIndexers } = require('../setup/indexer-launcher');
 // (db.js Database needs only indexer.config + indexer.util).
 const config   = require('../../../src/config.js');
 const Utility  = require('../../../src/utility.js');
-const Database = require('../../../src/db.js');
+const Database = require('../../../src/db');
 
 // THE CONTRACT: the decoder columns the indexer's getDecoderBlockData() reads.
 // Keep this in lock-step with src/db.js:getDecoderBlockData. If you change the

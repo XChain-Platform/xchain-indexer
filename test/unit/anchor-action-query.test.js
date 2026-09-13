@@ -22,6 +22,15 @@
 'use strict';
 
 const assert = require('assert');
+const fs     = require('fs');
+const path   = require('path');
+// The Database class is a directory of per-family mixins under src/db/, so a source
+// scan over it concatenates every file in a fixed order instead of reading one path.
+function dbSource(){
+    const dir = path.join(__dirname, '..', '..', 'src', 'db');
+    return fs.readdirSync(dir).sort().map(f => fs.readFileSync(path.join(dir, f), 'utf8')).join('\n');
+}
+
 const { CHECKPOINT_VERSIONS, CHECKPOINT_SECTION_VERSIONS, ANCHOR_ACTIONS_SQL,
         validateAnchorActionParams, selectAnchorRow,
         buildAnchorActionResponse } = require('../../src/anchor-action-query');
@@ -367,7 +376,8 @@ describe('anchor-action-query: section vs co-located archive head', function () 
         // archive rows: narrowing it to the section family would lower the watermark and
         // re-admit replays. A hand-copied literal there froze the guard once already, so
         // this asserts the shared constant, not a number.
-        let src = require('fs').readFileSync(require.resolve('../../src/db.js'), 'utf8');
+        // The Database class is a directory of per-family mixins, so the scan reads all of it.
+        let src = dbSource();
         let body = src.slice(src.indexOf('async getMaxAnchorCheckpointSeq('));
         body = body.slice(0, body.indexOf('\n    }'));
         assert.match(body, /let versions = ANCHOR_CHECKPOINT_VERSIONS;/);

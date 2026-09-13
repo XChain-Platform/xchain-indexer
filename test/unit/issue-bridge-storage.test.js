@@ -37,7 +37,7 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 
-const Database              = require('../../src/db.js');
+const Database              = require('../../src/db');
 const Utility               = require('../../src/utility.js');
 const { getTestConfig }     = require('../fixtures/config');
 const tokenPolicyActivation = require('../../src/token_policy_activation.js');

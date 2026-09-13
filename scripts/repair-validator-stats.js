@@ -36,7 +36,7 @@ const crypto   = require('crypto');
 const dotenv   = require('dotenv');
 const path     = require('path');
 const config   = require('../src/config.js');
-const Database = require('../src/db.js');
+const Database = require('../src/db');
 const Utility  = require('../src/utility.js');
 
 dotenv.config();

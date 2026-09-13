@@ -22,7 +22,7 @@ const { execFileSync } = require('child_process');
 
 const MIGRATE = path.join(__dirname, '..', '..', 'src', 'migrate.js');
 
-const DB_PATH      = require.resolve('../../src/db.js');
+const DB_PATH      = require.resolve('../../src/db');
 const MIGRATE_PATH = require.resolve('../../src/migrate.js');
 const DOTENV_PATH  = require.resolve('dotenv');
 

@@ -71,7 +71,7 @@ const LOCAL_MODULES = [
     '../../src/actions/xexec.js',
     '../../src/actions/cross_settle.js',
     '../../src/bridge_settle.js',
-    '../../src/db.js',
+    '../../src/db',
     '../../src/utility.js',
     '../../src/XChainIndexer.js'
 ];
@@ -103,7 +103,7 @@ function load(activation) {
         Xexec:    require('../../src/actions/xexec.js'),
         Settle:   require('../../src/actions/cross_settle.js'),
         BS:       require('../../src/bridge_settle.js'),
-        Database: require('../../src/db.js'),
+        Database: require('../../src/db'),
         Utility:  require('../../src/utility.js'),
         Indexer:  require('../../src/XChainIndexer.js'),
         hub:      null

@@ -129,18 +129,26 @@ function sqlLiterals(fnSrc){
 function syncFile(rel){ return path.join(SYNC_ROOT, rel); }
 function indexerFile(rel){ return path.join(INDEXER_ROOT, rel); }
 
+// The indexer half of a twin may be a directory (the Database class is one file per
+// table family), in which case the scan reads every file in a fixed order.
+function indexerSource(rel){
+    const full = indexerFile(rel);
+    if(!fs.statSync(full).isDirectory()) return fs.readFileSync(full, 'utf8');
+    return fs.readdirSync(full).sort().map(f => fs.readFileSync(path.join(full, f), 'utf8')).join('\n');
+}
+
 describe('consensus block-hash conformance twins (static drift-lock) @regression', function(){
 
     function loadPair(ctx, syncRel, indexerRel){
         if(!requireSibling(ctx, syncFile(syncRel))) return null;
         return {
             sync:    fs.readFileSync(syncFile(syncRel), 'utf8'),
-            indexer: fs.readFileSync(indexerFile(indexerRel), 'utf8')
+            indexer: indexerSource(indexerRel)
         };
     }
 
     it('BLOCK_HASH_VERSION is identical across indexer db.js and sync BlockHasher.js', function(){
-        const pair = loadPair(this, 'src/BlockHasher.js', 'src/db.js');
+        const pair = loadPair(this, 'src/BlockHasher.js', 'src/db');
         if(!pair) return;
         const vSync    = pair.sync.match(/const BLOCK_HASH_VERSION = (\d+)/);
         const vIndexer = pair.indexer.match(/const BLOCK_HASH_VERSION = (\d+)/);
@@ -151,7 +159,7 @@ describe('consensus block-hash conformance twins (static drift-lock) @regression
     });
 
     it('every consensus SQL literal matches, in gathering order', function(){
-        const pair = loadPair(this, 'src/BlockHasher.js', 'src/db.js');
+        const pair = loadPair(this, 'src/BlockHasher.js', 'src/db');
         if(!pair) return;
         const syncFn    = stripComments(extractFunction(pair.sync,
             /async computeBlockHashes\(block_index, network, coin\)\{/, 'BlockHasher.js'));
@@ -174,7 +182,7 @@ describe('consensus block-hash conformance twins (static drift-lock) @regression
     });
 
     it('special-address canonicalization covers credits, debits and escrows on both sides', function(){
-        const pair = loadPair(this, 'src/BlockHasher.js', 'src/db.js');
+        const pair = loadPair(this, 'src/BlockHasher.js', 'src/db');
         if(!pair) return;
         const loopRe = /for \(const row of ledger\.(credits|debits|escrows)\)\s+row\.address = canonicalizeHashAddress\(row\.address\);/g;
         for(const [name, src] of [['db.js', pair.indexer], ['BlockHasher.js', pair.sync]]){
@@ -189,7 +197,7 @@ describe('consensus block-hash conformance twins (static drift-lock) @regression
     });
 
     it('the hash-assembly tail (chaining + hash_version fold) is identical', function(){
-        const pair = loadPair(this, 'src/BlockHasher.js', 'src/db.js');
+        const pair = loadPair(this, 'src/BlockHasher.js', 'src/db');
         if(!pair) return;
         const tailRe = /let tables = \[[^]*?tables\.forEach\(table => \{[^]*?\}\);/;
         const tSync    = pair.sync.match(tailRe);

@@ -16,7 +16,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 
-const Database             = require('../../src/db.js');
+const Database             = require('../../src/db');
 const { createMockIndexer } = require('../fixtures/mocks');
 
 function makeDb() {

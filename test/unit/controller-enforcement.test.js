@@ -452,7 +452,7 @@ describe('Programmable policy layer : Phase B enforcement @regression', function
     // so the actual composition is pinned. The exact getters stay fallback-free (bind validation needs
     // them) : that separation is what lets a specific class OVERRIDE an 'all' binding.
     describe("getEffective*ControllerForGuard : 'all' fallback (most-specific-wins)", function () {
-        const Database = require('../../src/db.js');
+        const Database = require('../../src/db');
         // fake `this`: exact getter returns the row registered for a (key, class), else null.
         function resolver(rowsByClass){
             return { getEffectiveTokenController: async (id, cls) => (cls in rowsByClass ? rowsByClass[cls] : null) };

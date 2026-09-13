@@ -141,7 +141,7 @@ function liveSet(rows){
 
 (async () => {
     const opts = parseArgs(process.argv);
-    const Database = require('../src/db.js');
+    const Database = require('../src/db');
     const config   = require('../src/config.js');
     const Utility  = require('../src/utility.js');
     const host = process.env.INDEXER_DB_HOST, port = process.env.INDEXER_DB_PORT;

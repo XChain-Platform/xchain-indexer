@@ -50,7 +50,13 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 
-const DB_PATH = path.join(__dirname, '..', '..', 'src', 'db.js');
+const DB_DIR = path.join(__dirname, '..', '..', 'src', 'db');
+
+// The Database class is a directory of per-family mixins, so the ORDER BY scan
+// concatenates every file in a fixed order instead of reading one path.
+function dbSource(){
+    return fs.readdirSync(DB_DIR).sort().map(f => fs.readFileSync(path.join(DB_DIR, f), 'utf8')).join('\n');
+}
 
 // Columns that (as an ORDER BY term, in the context they appear in db.js) impose or
 // complete a deterministic total order. Per-row-unique keys (action_index, id,
@@ -167,7 +173,7 @@ const allowSet = new Set(ALLOWLIST.map(a => a.clause));
 
 describe('src/db.js ORDER BY determinism (consensus hotspot invariant) @regression @tier1', function () {
 
-    const source    = fs.readFileSync(DB_PATH, 'utf8');
+    const source    = dbSource();
     const literals  = stringLiterals(source);
     const clauses   = orderByClauses(literals);
 

@@ -90,7 +90,7 @@ class FakePool {
  *   circuitCooldown   -- override circuit breaker cooldown ms (default 30000)
  */
 function createChaosDb(options = {}) {
-    const Database = require('../../../src/db.js');
+    const Database = require('../../../src/db');
     const config = getTestConfig();
     const util = new Utility();
 
