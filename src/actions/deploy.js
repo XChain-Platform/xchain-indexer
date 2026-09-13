@@ -134,6 +134,7 @@ class Deploy {
 
         // Validate that format is known
         let format = data['FORMAT'];
+        // Verify VERSION is a format this action recognizes
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
@@ -176,6 +177,7 @@ class Deploy {
         // applied further down, so the existing pairing/cooldown verdicts still win.
         let slashDestExplicit = hasStaking && !this.util.isNull(data['SLASH_DESTINATION']) && data['SLASH_DESTINATION'] !== 'BURN';
         let slashDestUnresolvable = false;
+        // Resolve an explicit SLASH_DESTINATION reference to its real address before checking it
         if(!error && slashDestExplicit){
             let slashRef = await this.indexerDb.resolveAddressRefChecked(data['SLASH_DESTINATION'], data['BLOCK_INDEX']);
             data['SLASH_DESTINATION'] = slashRef.value;
@@ -276,6 +278,7 @@ class Deploy {
         // below is the one this file has always taken.
         let pendingCodeHash = null;  // R2.3: land pending under the DECLARED hash
         let deferredError   = null;  // R2.2: a verdict the fee/sleeping rejects still win over
+        // Assemble the contract's code from its stored chunks when this deploy is chunked
         if(!error && isChunked){
             let declaredHash = String(data['CODE_HASH_PARAM']);
             // Assembly is the chunk store's routine so the deferred path at a completing
@@ -450,6 +453,7 @@ class Deploy {
         // a manifest from (the pending assembler's `code` is empty), and running the gates on
         // empty bytes would let a lint verdict pre-empt the pending landing.
         let floatWarnings = [];
+        // Check the contract's code for syntax and safety problems using the VM, skipped for a held pending deploy
         if(!error && !heldVerdict && this.actions.vm){
             // banned-async (async/await/Promise) is a consensus-gated deploy rule:
             // below the VM_BANNED_ASYNC flag-day such a contract was ACCEPTED, so a
@@ -526,6 +530,7 @@ class Deploy {
         let declaredMaxTakeBps  = null;   // number   | null
         let hasInitialize       = false;  // contract exports a callable constructor (DEPLOY_INIT_STRICT)
         let declaredMeta        = null;   // { name, description, version, json } | null (CONTRACT_META_REQUIRED)
+        // Read the contract's declared permissions, royalty cap and metadata from its code
         if(!error && !heldVerdict && this.actions.vm){
             // Read the manifest under THIS DEPLOY's block context, not pre-activation defaults:
             // the verdict hashes into deploy status, so resolving the VM's activation gates from
@@ -589,6 +594,7 @@ class Deploy {
              ************************************************************/
             let metaVerdict = contractMeta.evaluateContractMeta(manifestRead);
             declaredMeta = metaVerdict.meta;
+            // Verify the contract's required metadata (name, description, version) is present once this rule is active
             if(!error && metaVerdict.error && await this.actions.protocolChanges.isEnabled('CONTRACT_META_REQUIRED', data['BLOCK_INDEX']))
                 error = metaVerdict.error;
         }
@@ -627,6 +633,7 @@ class Deploy {
         // the base fee was validated and paid at the assembler, in the mode THAT transaction's
         // outputs decided, and the mode governs whether constructor gas is debited below.
         let feePaymentMode = paidFeePaymentMode === null ? 2 : Number(paidFeePaymentMode); // default: xchain balance
+        // Verify the deployer can pay the gas fee, either in native coin or the configured GAS token
         if(!error && !skipBaseFee && tokenInfo && this.util.bcgt(fee, 0)){
             let pmMode = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']);
             if(pmMode === 'native'){
@@ -688,6 +695,7 @@ class Deploy {
 
         // Create the contract's derived address (C:<CHAIN>:<action_index>)
         let contractAddress = 'C:' + this.config['CHAIN'] + ':' + data['ACTION_INDEX'];
+        // Only create the contract's address once every check above has passed
         if(!error)
             await this.indexerDb.createAddress(contractAddress);
 
@@ -721,6 +729,7 @@ class Deploy {
         // constructor's vm.execute and its emission context, which must agree exactly.
         let rootDiscrim = await resolveRootDiscriminator(this.actions.protocolChanges, data['BLOCK_INDEX'], data['TX_VOUT'], data['BATCH_POSITION']);
 
+        // Run the contract's constructor now, if this deploy needs one and the VM is available
         if(!error && runConstructor && this.actions.vm){
             // Derive deterministic block hash
             let blockHash = crypto.createHash('sha256')

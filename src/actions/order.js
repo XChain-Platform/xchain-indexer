@@ -75,6 +75,7 @@ class Order {
 
         // Validate that format is known
         let format = data['FORMAT'];
+        // Verify VERSION is a format this action recognizes
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
@@ -192,6 +193,7 @@ class Order {
 
         // Verify GIVE_AMOUNT format (use COIN_DECIMALS for native coin, token DECIMALS for tokens)
         let giveDecimals = isNativeCoinGive ? this.config['COIN_DECIMALS'] : (giveTokenInfo ? giveTokenInfo['DECIMALS'] : 0);
+        // Verify GIVE_AMOUNT is correctly formatted for its number of decimals
         if(!error && format==0 && !this.util.isNull(data['GIVE_AMOUNT']) && !this.util.isValidAmountFormat(giveDecimals, data['GIVE_AMOUNT'], data['BLOCK_TIME']))
             error = "invalid: GIVE_AMOUNT (format)";
 
@@ -199,6 +201,7 @@ class Order {
         // tokens). Skip for cross-chain: the GET token's DECIMALS live on another COIN
         // network, so the format is validated by the xchain-hub federation, not locally.
         let getDecimals = isNativeCoinGet ? this.config['COIN_DECIMALS'] : (getTokenInfo ? getTokenInfo['DECIMALS'] : 0);
+        // Verify GET_AMOUNT is correctly formatted for its number of decimals, skipped for cross-chain orders
         if(!error && format==0 && !isCrossChain && !this.util.isNull(data['GET_AMOUNT']) && !this.util.isValidAmountFormat(getDecimals, data['GET_AMOUNT'], data['BLOCK_TIME']))
             error = "invalid: GET_AMOUNT (format)";
 
@@ -241,6 +244,7 @@ class Order {
         // GIVE_OWNERSHIP / GET_OWNERSHIP must be 0 or 1
         if(!error && format==0 && ![0,1].includes(data['GIVE_OWNERSHIP']))
             error = "invalid: GIVE_OWNERSHIP (format)";
+        // Verify GET_OWNERSHIP is 0 or 1
         if(!error && format==0 && ![0,1].includes(data['GET_OWNERSHIP']))
             error = "invalid: GET_OWNERSHIP (format)";
 
@@ -315,6 +319,7 @@ class Order {
         // Validate LIST fields (ALLOW_LIST / BLOCK_LIST)
         if(!error){
             for(let name of this.config['LIST_FIELDS']){
+                // Only look up and validate this list field when it holds a numeric list id
                 if(!error && !this.util.isNull(data[name]) && this.util.isNumeric(data[name])){
                     // Get LIST type and information
                     let type = await this.indexerDb.getListType(data[name]);
@@ -341,6 +346,7 @@ class Order {
         // Calculate total fee for this order: expiration + ownership-escrow premium (create only)
         fees['AMOUNT'] = 0;
 
+        // Calculate the fee for this order, based on its expiration and any ownership escrow
         if(!error && (format==0 || format==2)){
             let unifiedFees = await this.actions.protocolChanges.isEnabled('UNIFIED_FEES', data['BLOCK_INDEX']);
             if(unifiedFees){
@@ -394,6 +400,7 @@ class Order {
         // (no proceeds yet); the royalty cut is taken at match time (order_match.js). Runs for both
         // amount and ownership listings of a real local token; SOURCE pays the bounded guard gas.
         let guardFee = 0;
+        // Run the GIVE token's controller guard before allowing this token to be listed for sale
         if(!error && format==0 && !isNativeCoinGive && giveTokenInfo){
             let gasInfo = await this.indexerDb.getTokenInfo(this.config['GAS'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
             let result  = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {

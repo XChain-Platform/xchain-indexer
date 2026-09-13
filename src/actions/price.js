@@ -74,6 +74,7 @@ class Price {
 
     async parse(params, data, error){
         let format = data['FORMAT'];
+        // Verify VERSION is a format this action recognizes
         if(!error && (format === null || format === undefined || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
 
@@ -122,6 +123,7 @@ class Price {
         // next node rejects, and the bounds it would bypass (ratio, size, canonical
         // base64) are consensus here, not presentational.
         let fields = params;
+        // Decompress the batch body first, when it arrived in the compressed wire form
         if(!error && params[1] === priceV2.PRICE_BATCH_COMPRESSION_MARKER){
             let inflated = priceV2.inflatePriceBatchBody(params[2]);
             if(!inflated.ok)
@@ -143,6 +145,7 @@ class Price {
         // storing that truncated list as `rounds_json` would publish a fiction that reads
         // like evidence (an equivocation or slash review inspects exactly this column).
         let bodyParsed = false;
+        // Parse the batch's window bounds and round list from the wire fields
         if(!error){
             try {
                 firstRound     = parseInt(fields[1]);
@@ -333,6 +336,7 @@ class Price {
         // byte-identical to it. Never inline the JSON here, or the three copies drift and
         // every honest batch fails.
         let qualifiedSigners = [];
+        // Verify the batch's signatures now that its structure and window are known good
         if(!error){
             let payload    = ed25519.buildPriceBatchPayload(firstRound, lastRound, btcBlockHeight, rounds,
                                                             this.config['NETWORK']);

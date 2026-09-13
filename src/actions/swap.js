@@ -73,6 +73,7 @@ class Swap {
 
         // Validate that format is known
         let format = data['FORMAT'];
+        // Verify VERSION is a format this action recognizes
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
@@ -213,6 +214,7 @@ class Swap {
         // GIVE_OWNERSHIP / GET_OWNERSHIP must be 0 or 1
         if(!error && format==0 && ![0,1].includes(data['GIVE_OWNERSHIP']))
             error = "invalid: GIVE_OWNERSHIP (format)";
+        // Verify GET_OWNERSHIP is 0 or 1
         if(!error && format==0 && ![0,1].includes(data['GET_OWNERSHIP']))
             error = "invalid: GET_OWNERSHIP (format)";
 
@@ -284,6 +286,7 @@ class Swap {
         // Validate LIST fields (ALLOW_LIST / BLOCK_LIST)
         if(!error){
             for(let name of this.config['LIST_FIELDS']){
+                // Only look up and validate this list field when it holds a numeric list id
                 if(!error && !this.util.isNull(data[name]) && this.util.isNumeric(data[name])){
                     // Get LIST type and information
                     let type = await this.indexerDb.getListType(data[name]);
@@ -310,6 +313,7 @@ class Swap {
         // Calculate total fee for this swap: expiration + ownership-escrow premium (create only)
         fees['AMOUNT'] = 0;
 
+        // Calculate the fee for this swap, based on its expiration and any ownership escrow
         if(!error && (format==0 || format==2)){
             let unifiedFees = await this.actions.protocolChanges.isEnabled('UNIFIED_FEES', data['BLOCK_INDEX']);
             if(unifiedFees){
@@ -363,6 +367,7 @@ class Swap {
         // (no proceeds yet); the royalty cut is taken at match (swap_match.js).
         // SOURCE pays the bounded guard gas (reserved up front).
         let guardFee = 0;
+        // Run the GIVE token's controller guard before allowing this token to be listed for sale
         if(!error && format==0 && giveTokenInfo){
             let gasInfo = await this.indexerDb.getTokenInfo(this.config['GAS'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
             let result  = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {

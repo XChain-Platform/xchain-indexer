@@ -849,11 +849,13 @@ class Batch {
 
         // Validate that format is known
         let format = data['FORMAT'];
+        // Verify VERSION is a format this action recognizes
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
         // Get list of commands
         let commands = String(data['TX_DATA']).split(';');
+        // Verify the batch contains at least one command
         if(!error && (this.util.isNull(commands) || commands.length < 1)){
             error = 'invalid: COMMAND (unknown)';
         } else {
@@ -917,6 +919,7 @@ class Batch {
             let action = String(command).split('|')[0];
             if(normalize)
                 action = this.normalizeSubAction(action);
+            // Verify this sub-command's action is currently enabled on the network
             if(!error && await this.protocolChanges.isEnabled(action, data['BLOCK_INDEX']) == false)
                 error = 'invalid: ACTION (unknown)';
         }

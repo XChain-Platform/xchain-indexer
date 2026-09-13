@@ -153,6 +153,7 @@ class DeployChunk {
         // CHUNK_INDEX / TOTAL_CHUNKS must be non-negative integers
         if(!error && !/^\d+$/.test(String(data['CHUNK_INDEX'])))
             error = 'invalid: CHUNK_INDEX (format)';
+        // Verify TOTAL_CHUNKS is a non-negative whole number
         if(!error && !/^\d+$/.test(String(data['TOTAL_CHUNKS'])))
             error = 'invalid: TOTAL_CHUNKS (format)';
 
@@ -173,6 +174,7 @@ class DeployChunk {
         // sha256-verifies the whole.
         if(!error && this.util.isNull(data['CODE_PART']))
             error = 'invalid: CODE_PART (required)';
+        // Verify CODE_PART only contains valid base64 characters
         if(!error && !/^[A-Za-z0-9+/]*={0,2}$/.test(String(data['CODE_PART'])))
             error = 'invalid: CODE_PART (base64)';
 
@@ -202,6 +204,7 @@ class DeployChunk {
 
         // Native coin or XCHAIN balance; mirrors deploy.js
         let feePaymentMode = 2; // default: xchain balance
+        // Verify the gas fee is paid, either in native coin or the configured GAS token
         if(!error && tokenInfo && this.util.bcgt(fee, 0)){
             let pmMode = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']);
             if(pmMode === 'native'){
