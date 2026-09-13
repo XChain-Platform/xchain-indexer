@@ -68,15 +68,6 @@ const REPO_ROOT = path.resolve(__dirname, '..');
  */
 const DYNAMIC_EDGES = [
     {
-        from: 'src/config.js',
-        // getConfig builds `configs/<COIN>.js` from the configured ticker and
-        // requires it, so every file in that directory is on the boot path even
-        // though no literal names it. The sibling directory src/coins/ is the
-        // canonical registry and is reached statically through its index.
-        toGlob: 'src/configs/*.js',
-        why: 'config.js resolves the per-coin config file from the chain ticker',
-    },
-    {
         from: 'src/consensus_rules_digest.js',
         // loadGateValues requires './<module>.js' for every SHARED_GATES row, so
         // the gate carriers are held by the digest and not by any literal. The
@@ -128,14 +119,6 @@ function edgesFrom(rel, fileSet) {
     }
     for (const edge of DYNAMIC_EDGES) {
         if (edge.from !== rel) continue;
-        if (edge.toGlob) {
-            const dir = path.posix.dirname(edge.toGlob);
-            const suffix = path.posix.basename(edge.toGlob).replace('*', '');
-            for (const f of fileSet) {
-                if (path.posix.dirname(f) === dir && f.endsWith(suffix)) out.add(f);
-            }
-            continue;
-        }
         // A declared edge that no longer resolves is louder as a thrown error
         // than as a file that quietly starts reading unreachable.
         for (const target of edge.toList()) if (fileSet.has(target)) out.add(target);

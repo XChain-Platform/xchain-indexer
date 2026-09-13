@@ -63,9 +63,14 @@ describe('bin/reachability.js', function () {
         });
 
         it('applies the declared dynamic edges the static walk cannot see', () => {
-            // configs/BTC.js has no literal requirer: config.js builds the path.
-            assert.strictEqual(report.files['src/configs/BTC.js'].reachableFromIndexerRuntime, true,
-                'the per-coin config is required by a computed path and is on the boot path');
+            // No literal names this gate carrier: the digest builds
+            // './<module>.js' from its SHARED_GATES rows, so withdrawing the
+            // declared edge drops both assertions below at once.
+            const gate = report.files['src/checkpoint_commitment_activation.js'];
+            assert.deepStrictEqual(gate.requiredByInRepo, ['src/consensus_rules_digest.js'],
+                'the gate carrier is held by the computed require and by nothing else');
+            assert.strictEqual(gate.reachableFromIndexerRuntime, true,
+                'a SHARED_GATES carrier is on the boot path through the digest');
         });
 
         it('does not count a module reached only from its own suite', () => {
