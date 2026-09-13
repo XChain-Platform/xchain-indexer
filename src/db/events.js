@@ -27,6 +27,19 @@ const reorgHistoryQuery = require('../reorg-history-query');
 
 module.exports = {
 
+    // The getreorghistory page: recent decoder REORG events above `sinceId`. Newest-first,
+    // the opposite of getReorgsSince above, because a caller checking whether a RECENT reorg
+    // happened must see the relevant rows before `limit` truncates the page. `id` is the
+    // decoder's monotonic events id, and the limit is bounded upstream so a peer can never
+    // make this node serialize an unbounded events scan.
+    //
+    // This one reads the DECODER schema: the caller invokes it on decoderDb, not indexerDb.
+    async getReorgEventsSince(sinceId, limit){
+        return await this.doQuery(
+            `SELECT id, data FROM events WHERE code = 'REORG' AND id > ? ORDER BY id DESC LIMIT ?`,
+            [sinceId, limit]);
+    },
+
     // `cursorWitness` (optional #2735): { time, hash } captured for the cursor's decoder REORG
     // event when the marker was recorded. Non-null enables the additive under-cursor check;
     // null (legacy marker) falls back to the pre-existing one-directional over-cursor guard.

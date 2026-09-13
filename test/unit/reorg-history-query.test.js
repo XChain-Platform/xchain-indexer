@@ -24,8 +24,9 @@
 'use strict';
 
 const assert = require('assert');
-const { REORG_EVENTS_SQL, MAX_LIMIT, DEFAULT_LIMIT, validateReorgHistoryParams,
+const { MAX_LIMIT, DEFAULT_LIMIT, validateReorgHistoryParams,
         parseReorgEvent, buildReorgHistoryResponse } = require('../../src/reorg-history-query');
+const eventsMixin = require('../../src/db/events');
 
 const H1 = 'a'.repeat(64);
 const H2 = 'b'.repeat(64);
@@ -188,14 +189,26 @@ describe('reorg-history-query: buildReorgHistoryResponse()', function () {
     });
 });
 
-describe('reorg-history-query: REORG_EVENTS_SQL', function () {
-    it('reads only REORG events, newest first, bounded', function () {
-        assert.match(REORG_EVENTS_SQL, /code = 'REORG'/);
-        assert.match(REORG_EVENTS_SQL, /ORDER BY id DESC/);
-        assert.match(REORG_EVENTS_SQL, /LIMIT \?/);
+describe('db.getReorgEventsSince', function () {
+    // Drive the mixin method with a recording stub: this pins the SQL it issues and the
+    // bind order together, which an assertion on an exported string cannot reach.
+    async function capture(sinceId, limit) {
+        let seen = null;
+        const self = { async doQuery(sql, params) { seen = { sql, params }; return []; } };
+        await eventsMixin.getReorgEventsSince.call(self, sinceId, limit);
+        return seen;
+    }
+
+    it('reads only REORG events, newest first, bounded', async function () {
+        let seen = await capture(0, 100);
+        assert.match(seen.sql, /code = 'REORG'/);
+        assert.match(seen.sql, /ORDER BY id DESC/);
+        assert.match(seen.sql, /LIMIT \?/);
     });
 
-    it('parameterizes since_id and limit (no interpolation)', function () {
-        assert.strictEqual((REORG_EVENTS_SQL.match(/\?/g) || []).length, 2);
+    it('parameterizes since_id and limit (no interpolation)', async function () {
+        let seen = await capture(41, 7);
+        assert.strictEqual((seen.sql.match(/\?/g) || []).length, 2);
+        assert.deepStrictEqual(seen.params, [41, 7]);
     });
 });

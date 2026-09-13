@@ -42,11 +42,6 @@ const BLOCK_HASH_RE = /^[0-9a-fA-F]{64}$/;
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT     = 1000;
 
-// Newest-first so a caller checking a RECENT reorg reads the relevant rows before
-// the limit truncates. `id` is the decoder's monotonic events id.
-const REORG_EVENTS_SQL =
-    `SELECT id, data FROM events WHERE code = 'REORG' AND id > ? ORDER BY id DESC LIMIT ?`;
-
 // Validate the getreorghistory request shape. Every param is optional.
 //   since_id     - only events with a higher decoder events id
 //   block_index  - only reorgs that orphaned a block at this exact height
@@ -144,6 +139,6 @@ function buildReorgHistoryResponse(rows, filter, opts) {
 }
 
 module.exports = {
-    BLOCK_HASH_RE, DEFAULT_LIMIT, MAX_LIMIT, REORG_EVENTS_SQL,
+    BLOCK_HASH_RE, DEFAULT_LIMIT, MAX_LIMIT,
     validateReorgHistoryParams, parseReorgEvent, buildReorgHistoryResponse
 };

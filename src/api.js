@@ -1880,7 +1880,7 @@ async function startApi(){
             // keeping every federation read on the pooled view removes the whole class.
             let db = indexer.decoderDb.apiView();
             try {
-                let rows = await db.doQuery(reorgHistoryQuery.REORG_EVENTS_SQL, [v.since_id, v.limit]);
+                let rows = await db.getReorgEventsSince(v.since_id, v.limit);
                 // Live REORG_HALT probe so the hub can tell "no recent reorgs" apart from
                 // "decoder halted, history frozen". Best-effort: a probe fault falls back to the
                 // indexer's last-known flag rather than failing the whole read.
