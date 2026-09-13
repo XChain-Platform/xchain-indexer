@@ -29,6 +29,8 @@ const { getStakeSourceByPubkey } = require('../../src/stake-source');
 const { getTestConfig } = require('../fixtures/config');
 const Utility           = require('../../src/utility');
 const Database          = require('../../src/db');
+const stakesMixin       = require('../../src/db/stakes');
+const delegationsMixin  = require('../../src/db/delegations');
 
 const PUB = 'ab'.repeat(32); // 64 hex chars
 
@@ -44,6 +46,13 @@ function makeIndexer({ pubkeyId = 7, validId = 1, doQuery } = {}) {
     // the behaviour assertions below still observe db.doQuery / db.getPubkeyId; the
     // pooled-isolation guarantee itself is exercised by the real-Database test below.
     db.apiView = () => db;
+    // The two resolver legs are real db mixin methods bound to the stubbed doQuery, not
+    // stubs of their own, so every assertion below still reads the SQL and the bind array
+    // the shipped methods actually issue.
+    db.getStakeSourceAddressBySigningPubkey =
+        stakesMixin.getStakeSourceAddressBySigningPubkey.bind(db);
+    db.getDelegationSourceAddressBySigningPubkey =
+        delegationsMixin.getDelegationSourceAddressBySigningPubkey.bind(db);
     return { indexer: { indexerDb: db }, db };
 }
 

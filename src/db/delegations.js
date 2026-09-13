@@ -154,4 +154,23 @@ module.exports = {
         return null;
     },
 
+
+    // The delegation leg of getstakesourcebypubkey: the source address a signing pubkey
+    // resolves to when no STAKE row claims it. Same active-row rules as the stake leg in
+    // db/stakes.js, minus the stake-key revocation clause, which has no delegation analogue.
+    async getDelegationSourceAddressBySigningPubkey(pubkeyId, validId, blockIndex){
+        return await this.doQuery(
+            `SELECT ia.address AS source FROM delegations d
+                 JOIN index_addresses ia ON ia.id = d.source_id
+                 WHERE d.signing_pubkey_id = ? AND d.status_id = ?
+                   AND d.activation_block <= ?
+                   AND (d.deactivation_block IS NULL OR d.deactivation_block > ?)
+                   AND NOT EXISTS (
+                       SELECT 1 FROM capability_slash_events cse
+                       WHERE cse.signing_pubkey_id = d.signing_pubkey_id
+                         AND cse.block_index <= ?)
+                 ORDER BY d.action_index DESC LIMIT 1`,
+            [pubkeyId, validId, blockIndex, blockIndex, blockIndex]);
+    },
+
 };

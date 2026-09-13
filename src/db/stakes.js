@@ -874,4 +874,37 @@ module.exports = {
         return { total: this.util.bcstr(totalSlashed), releases: Array.from(releases, ([address, amount]) => ({ address, amount })) };
     },
 
+
+    // The source address that a signing pubkey resolves to through a STAKE, as of a block.
+    // Backs the getstakesourcebypubkey federation RPC, whose delegation fallback lives in
+    // db/delegations.js.
+    //
+    // The predicates here mirror the effective-capability-set active-row rules exactly: a key
+    // COUNTED in the set at this block (and so earning the reward being archived) must always
+    // resolve, or the publisher defers a reward it can never settle and suppresses the whole
+    // archive. That means status, activation and deactivation window, stake-key revocation and
+    // permanent slash, and deliberately NOT the row's own recording block_index: an extra
+    // block_index filter here once left a key counted-but-unresolvable and blocked the publish.
+    async getStakeSourceAddressBySigningPubkey(pubkeyId, validId, blockIndex){
+        return await this.doQuery(
+            `SELECT ia.address AS source FROM stakes s
+             JOIN index_addresses ia ON ia.id = s.source_id
+             WHERE s.signing_pubkey_id = ? AND s.status_id = ?
+               AND s.activation_block <= ?
+               AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)
+               AND NOT EXISTS (
+                   SELECT 1 FROM stake_key_revocations r
+                   WHERE r.source_id = s.source_id
+                     AND r.signing_pubkey_id = s.signing_pubkey_id
+                     AND r.status_id = ?
+                     AND r.deactivation_block <= ?
+                     AND r.action_index > s.action_index)
+               AND NOT EXISTS (
+                   SELECT 1 FROM capability_slash_events cse
+                   WHERE cse.signing_pubkey_id = s.signing_pubkey_id
+                     AND cse.block_index <= ?)
+             ORDER BY s.action_index DESC LIMIT 1`,
+            [pubkeyId, validId, blockIndex, blockIndex, validId, blockIndex, blockIndex]);
+    },
+
 };
