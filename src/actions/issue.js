@@ -93,7 +93,9 @@ const MIN_NEW_TOP_LEVEL_TICK_LENGTH = 4;
 
 class Issue {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -101,6 +103,7 @@ class Issue {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
+        // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|TICK|MAX_SUPPLY|MAX_MINT|DECIMALS|DESCRIPTION|MINT_SUPPLY|TRANSFER|TRANSFER_SUPPLY|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|LOCK_SLEEP|LOCK_CALLBACK|CALLBACK_BLOCK|CALLBACK_TICK|CALLBACK_AMOUNT|ALLOW_LIST|BLOCK_LIST|MINT_ADDRESS_MAX|MINT_START_BLOCK|MINT_STOP_BLOCK|LOCK_MINT|LOCK_MINT_SUPPLY|MEMO';
         this.formats[1] = 'VERSION|TICK|DESCRIPTION|MEMO';
@@ -228,7 +231,18 @@ class Issue {
         }
     }
 
+    // Handle parsing the ISSUE transaction
     async parse(params, data, error){
+        /*****************************************************************
+         * DEBUGGING - Force params
+         ****************************************************************/
+        // Example payloads by FORMAT version:
+        // let str    = "0|JDOG|1000||18";
+        // params = String(str).split('|');
+        // data['SOURCE'] = this.config['ADDRESS']['BURN'];
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
+
+        // Validate that format is known
         let format = data['FORMAT'];
 
         // Token-bridge flag days, resolved once against THIS action's block so every check
@@ -247,6 +261,7 @@ class Issue {
         if(!error && (format===null || this.formats[format] === undefined || (Number(format)===7 && !tokenBridgeActive)))
             error = 'invalid: VERSION (unknown)';
 
+        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
@@ -268,8 +283,13 @@ class Issue {
                 error = 'invalid: TRANSFER_SUPPLY (unresolvable ^id)';
         }
 
+        // TODO: Decode any base64 tickers
+        // if(this.util.isBase64(data['TICK']))
+        //     $data['TICK'] = this.util.base64Decode(data['TICK']);
+        // Clone the raw data for storage in issues table
         let issue = Object.assign({}, data);
 
+        // Convert NUMBER fields from string value to number value so comparisons are mathematical
         if(!error)
             data = this.util.setNumberFormats(data);
 
@@ -883,6 +903,7 @@ class Issue {
                !this.util.isNull(issue['BRIDGE_CHAINS']) && String(issue['BRIDGE_CHAINS']) != String(tokenInfo['BRIDGE_CHAINS']))
                 error = 'invalid: BRIDGE_CHAINS (locked)';
 
+            // Verify MIN_DEPTH cannot be changed once LOCK_BRIDGE is set (mirrors the BRIDGE_CHAINS lock above)
             if(!error && format === 7 && tokenInfo && tokenInfo['LOCK_BRIDGE']==1 &&
                !this.util.isNull(issue['MIN_DEPTH']) && String(issue['MIN_DEPTH']) != String(tokenInfo['MIN_DEPTH']))
                 error = 'invalid: MIN_DEPTH (locked)';
@@ -1038,20 +1059,27 @@ class Issue {
         if(!error && (!fees['PAYMENT_MODE'] || fees['PAYMENT_MODE'] === 2))
             balances = this.util.debitBalances(balances, fees['TICK_ID'], fees['AMOUNT']);
 
+        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = issue['STATUS'] = status;
 
+        // Print status message
         console.log("\t ISSUE : " + data['TICK'] + ' : ' + data['STATUS']);
 
+        // Create record in issues table
         await this.indexerDb.createIssue(issue);
 
+        // Store the SOURCE and TICK in addresses list
         this.util.addAddressTicker(data['SOURCE'], data['TICK']);
 
+        // Store the TRANSFER_SUPPLY and TICK in addresses list
         if(!this.util.isNull(data['TRANSFER_SUPPLY']))
             this.util.addAddressTicker(data['TRANSFER_SUPPLY'], data['TICK']);
 
+        // If this was a valid transaction, then create the token record, and perform any additional actions
         if(status=='valid'){
 
+            // Array of credits and debits
             let credits = [],
                 debits  = [];
 
@@ -1097,23 +1125,29 @@ class Issue {
                 }
             }
 
+            // Credit MINT_SUPPLY to source address
             if(data['MINT_SUPPLY'])
                 credits.push([data['TICK'], data['MINT_SUPPLY'], data['SOURCE']]);
 
+            // Transfer MINT_SUPPLY to TRANSFER_SUPPLY address
             if(data['MINT_SUPPLY'] && data['TRANSFER_SUPPLY']){
                 debits.push([data['TICK'],  data['MINT_SUPPLY'], data['SOURCE']]);
                 credits.push([data['TICK'], data['MINT_SUPPLY'], data['TRANSFER_SUPPLY']]);
             }
 
+            // Process any transaction ledger changes (credits / debits)
             await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
+            // Get a list of tickers & addresses
             let tickers   = this.util.getTickersList(),
                 addresses = Object.keys(this.util.getAddressesList());
 
+            // Update address balances and token supply
             await this.indexerDb.updateBalances(addresses);
             await this.indexerDb.updateTokens(tickers);
         }
 
+        // Create action mappings
         await this.mapper.createMappings(data);
 
     }

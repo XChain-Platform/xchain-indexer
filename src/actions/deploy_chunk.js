@@ -47,6 +47,7 @@ class DeployChunk {
     // itself over). A carrier that completes a pending group runs THAT handler's deployment,
     // so a deferred deploy and an inline one are the same code, not two implementations.
     constructor(action, deploy){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -135,6 +136,7 @@ class DeployChunk {
     // validated the format is known, so there is no VERSION guard here.
     async parse(params, data, error){
 
+        // Extract params
         data['CODE_HASH']    = params[1];
         data['CHUNK_INDEX']  = params[2];
         data['TOTAL_CHUNKS'] = params[3];
@@ -151,6 +153,7 @@ class DeployChunk {
         // CHUNK_INDEX / TOTAL_CHUNKS must be non-negative integers
         if(!error && !/^\d+$/.test(String(data['CHUNK_INDEX'])))
             error = 'invalid: CHUNK_INDEX (format)';
+        // Verify TOTAL_CHUNKS is a non-negative whole number
         if(!error && !/^\d+$/.test(String(data['TOTAL_CHUNKS'])))
             error = 'invalid: TOTAL_CHUNKS (format)';
 
@@ -171,6 +174,7 @@ class DeployChunk {
         // sha256-verifies the whole.
         if(!error && this.util.isNull(data['CODE_PART']))
             error = 'invalid: CODE_PART (required)';
+        // Verify CODE_PART only contains valid base64 characters
         if(!error && !/^[A-Za-z0-9+/]*={0,2}$/.test(String(data['CODE_PART'])))
             error = 'invalid: CODE_PART (base64)';
 
@@ -193,12 +197,14 @@ class DeployChunk {
         let gasCost   = this.util.vmGasCost(schedule, 'DEPLOY_CARRIER', partBytes);
         let fee       = this.util.bcmul(gasCost, this.config['GAS_PRICE'], 8);
 
+        // Get source address balances (gas tick)
         let gas       = this.config['GAS'];
         let tokenInfo = await this.indexerDb.getTokenInfo(gas, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let balances  = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // Native coin or XCHAIN balance; mirrors deploy.js
         let feePaymentMode = 2; // default: xchain balance
+        // Verify the gas fee is paid, either in native coin or the configured GAS token
         if(!error && tokenInfo && this.util.bcgt(fee, 0)){
             let pmMode = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']);
             if(pmMode === 'native'){
@@ -220,12 +226,15 @@ class DeployChunk {
             }
         }
 
+        // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
+        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
+        // Print status message
         console.log("\t DEPLOY v4 : hash=" + data['CODE_HASH'] + ' : ' + chunkIndex + '/' + totalChunks +
             ' : bytes=' + partBytes + ' : ' + data['STATUS']);
 
@@ -242,8 +251,10 @@ class DeployChunk {
             BLOCK_INDEX  : data['BLOCK_INDEX']
         });
 
+        // Store the SOURCE and GAS tick in addresses list
         this.util.addAddressTicker(data['SOURCE'], gas);
 
+        // Array of credits and debits
         let credits = [],
             debits  = [];
 
@@ -306,14 +317,18 @@ class DeployChunk {
             }
         }
 
+        // Process any transaction ledger changes (credits / debits)
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
+        // Get a list of tickers & addresses
         let tickers   = this.util.getTickersList(),
             addresses = Object.keys(this.util.getAddressesList());
 
+        // Update address balances and token supply
         await this.indexerDb.updateBalances(addresses);
         await this.indexerDb.updateTokens(tickers);
 
+        // Create action mappings
         await this.mapper.createMappings(data);
     }
 }

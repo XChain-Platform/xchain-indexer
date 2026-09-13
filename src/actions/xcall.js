@@ -141,6 +141,7 @@ class Xcall {
     async parse(params, data, error){
 
         let format = data['FORMAT'];
+        // Verify VERSION is one this handler knows (only the v0 request and the v2 expire exist)
         if(!error && (format === null || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
 
@@ -169,24 +170,31 @@ class Xcall {
         // EMITTER carries the contract's action_index (set by execute.processEmission)
         data['CONTRACT_INDEX']        = data['EMITTER'];
 
+        // Put the numeric fields into their canonical number form before the checks below read them
         if(!error)
             data = this.util.setNumberFormats(data);
 
+        // Verify CALL_ID is present and is a 64-character hex hash
         if(!error && (!data['CALL_ID'] || !/^[0-9a-fA-F]{64}$/.test(String(data['CALL_ID']))))
             error = 'invalid: CALL_ID (format)';
 
+        // Verify TARGET_CHAIN is one of the chains this platform can call out to
         if(!error && (ALLOWED_CHAINS.indexOf(String(data['TARGET_CHAIN'])) === -1))
             error = 'invalid: TARGET_CHAIN (unknown)';
 
+        // Verify TARGET_CHAIN is not this chain (a same-chain call is a plain contract call, not XCALL)
         if(!error && String(data['TARGET_CHAIN']) === String(this.config['COIN']))
             error = 'invalid: TARGET_CHAIN (must differ from this chain)';
 
         let targetContract = parseInt(data['TARGET_CONTRACT_INDEX']);
+        // Verify TARGET_CONTRACT_INDEX names a contract (contract indexes are positive whole numbers)
         if(!error && (!Number.isInteger(targetContract) || targetContract <= 0))
             error = 'invalid: TARGET_CONTRACT_INDEX (must be a positive integer)';
 
+        // Verify METHOD was supplied (the call needs a function name to run on the far side)
         if(!error && this.util.isNull(data['METHOD']))
             error = 'invalid: METHOD (required)';
+        // Verify METHOD fits the 64-byte name limit
         if(!error && Buffer.byteLength(String(data['METHOD']), 'utf8') > 64)
             error = 'invalid: METHOD (too long)';
 
@@ -201,21 +209,26 @@ class Xcall {
         }
 
         let gasLimit = parseInt(data['GAS_LIMIT']);
+        // Verify GAS_LIMIT sits in the allowed range (the target chain runs the call fee-less, so its ceiling is capped)
         if(!error && (!Number.isInteger(gasLimit) || gasLimit < XCALL_MIN_GAS || gasLimit > XCALL_MAX_GAS))
             error = 'invalid: GAS_LIMIT (out of range [' + XCALL_MIN_GAS + ', ' + XCALL_MAX_GAS + '])';
 
+        // Verify CALLBACK_METHOD was supplied (every outcome comes back to the caller as a callback)
         if(!error && this.util.isNull(data['CALLBACK_METHOD']))
             error = 'invalid: CALLBACK_METHOD (required)';
+        // Verify CALLBACK_METHOD fits the 64-byte name limit
         if(!error && Buffer.byteLength(String(data['CALLBACK_METHOD']), 'utf8') > 64)
             error = 'invalid: CALLBACK_METHOD (too long)';
 
         let deadlineBlocks = parseInt(data['DEADLINE_BLOCKS']);
+        // Verify DEADLINE_BLOCKS sits in the allowed range (it has to cover both chains' confirmation depths plus relay rounds)
         if(!error && (!Number.isInteger(deadlineBlocks) ||
                       deadlineBlocks < XCALL_MIN_DEADLINE_BLOCKS || deadlineBlocks > XCALL_MAX_DEADLINE_BLOCKS))
             error = 'invalid: DEADLINE_BLOCKS (out of range [' + XCALL_MIN_DEADLINE_BLOCKS + ', ' + XCALL_MAX_DEADLINE_BLOCKS + '])';
         data['DEADLINE_BLOCK'] = parseInt(data['BLOCK_INDEX']) + (Number.isFinite(deadlineBlocks) ? deadlineBlocks : 0);
 
         let crossHops = parseInt(data['CROSS_HOPS']);
+        // Verify CROSS_HOPS is inside the hop budget (out and back only; a further hop needs a fresh user transaction)
         if(!error && (!Number.isInteger(crossHops) || crossHops < 1 || crossHops > XCALL_MAX_HOPS))
             error = 'invalid: CROSS_HOPS (out of range [1, ' + XCALL_MAX_HOPS + '])';
 

@@ -64,6 +64,7 @@ class Price {
         // Hub client for pushing validated PRICE data to xchain-hub
         this.hubClient = action.hubClient || null;
 
+        // Define list of known FORMATS
         this.formats = {};
         // v0 has variable-length params; the format string is informational
         this.formats[0] = 'VERSION|FIRST_ROUND|LAST_ROUND|BTC_BLOCK_HEIGHT|ROUND_COUNT|...|SIG_COUNT|...';
@@ -73,6 +74,7 @@ class Price {
 
     async parse(params, data, error){
         let format = data['FORMAT'];
+        // Verify VERSION is a format this action recognizes
         if(!error && (format === null || format === undefined || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
 
@@ -121,6 +123,7 @@ class Price {
         // next node rejects, and the bounds it would bypass (ratio, size, canonical
         // base64) are consensus here, not presentational.
         let fields = params;
+        // Decompress the batch body first, when it arrived in the compressed wire form
         if(!error && params[1] === priceV2.PRICE_BATCH_COMPRESSION_MARKER){
             let inflated = priceV2.inflatePriceBatchBody(params[2]);
             if(!inflated.ok)
@@ -142,6 +145,7 @@ class Price {
         // storing that truncated list as `rounds_json` would publish a fiction that reads
         // like evidence (an equivocation or slash review inspects exactly this column).
         let bodyParsed = false;
+        // Parse the batch's window bounds and round list from the wire fields
         if(!error){
             try {
                 firstRound     = parseInt(fields[1]);
@@ -332,6 +336,7 @@ class Price {
         // byte-identical to it. Never inline the JSON here, or the three copies drift and
         // every honest batch fails.
         let qualifiedSigners = [];
+        // Verify the batch's signatures now that its structure and window are known good
         if(!error){
             let payload    = ed25519.buildPriceBatchPayload(firstRound, lastRound, btcBlockHeight, rounds,
                                                             this.config['NETWORK']);
@@ -365,6 +370,7 @@ class Price {
                 }
                 if(!verifyFirst) seenPubkey.add(s.pubkey);
 
+                // Verify the validator's stake qualifies for the `price` capability at this block
                 let capable;
                 if(capableSet){
                     capable = capableSet.has(s.pubkey);
@@ -379,6 +385,7 @@ class Price {
                     continue;
                 }
 
+                // Verify the signature
                 if(!ed25519.verify(payload, s.sig, s.pubkey))
                     continue;
 
@@ -468,6 +475,7 @@ class Price {
     async _parseV1(params, data, error){
         data['VERSION'] = 1;
 
+        // Extract fields
         data['V1_COIN']  = params[1];
         data['V1_TICK']  = params[2];
         data['V1_FIAT']  = params[3];
@@ -475,12 +483,15 @@ class Price {
         data['V1_FEE']   = params[5];
         data['MEMO']     = params[6];
 
+        // Validate COIN
         if(!error && (!data['V1_COIN'] || !this.config['COINS'].includes(data['V1_COIN'])))
             error = 'invalid: COIN (unsupported)';
 
+        // Validate TICK
         if(!error && (!data['V1_TICK'] || data['V1_TICK'].length === 0 || data['V1_TICK'].length > this.config['MAX_TICK_LENGTH']))
             error = 'invalid: TICK (format)';
 
+        // Validate FIAT
         if(!error && (!data['V1_FIAT'] || this.util.isNull(this.config['FIATS'][data['V1_FIAT']])))
             error = 'invalid: FIAT (unsupported)';
 
@@ -505,12 +516,15 @@ class Price {
         if(!error && data['V1_FEE'] && (!/^[0-9]+(\.[0-9]{1,18})?$/.test(data['V1_FEE']) || this.util.bclt(data['V1_FEE'], '0') || this.util.bcgt(data['V1_FEE'], '1')))
             error = 'invalid: FEE (format)';
 
+        // Determine validation status
         let validation = error ? 'invalid' : 'valid';
         data['VALIDATION_STATUS'] = validation;
         data['STATUS'] = error || 'valid';
 
+        // Print status message
         console.log("\t PRICE v1 : " + data['V1_COIN'] + '/' + data['V1_TICK'] + '/' + data['V1_FIAT'] + ' = ' + data['V1_VALUE'] + ' : ' + data['STATUS']);
 
+        // Create record in prices table
         await this.indexerDb.createPrice(data);
 
         // Push to hub for cross-chain aggregation (Phase 4 implements full lock window logic)
@@ -544,6 +558,7 @@ class Price {
             this.indexerDb.stageHubPush({ id: pushId, pushType: 'oracle_price', payload });
         }
 
+        // Create action mappings
         await this.mapper.createMappings(data);
     }
 }

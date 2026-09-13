@@ -43,7 +43,9 @@ const listOwnerActivation = require('../list_owner_activation.js');
 
 class List {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -86,17 +88,33 @@ class List {
         return roles;
     }
 
+    // Handle parsing the LIST transaction
     async parse(params, data, error){
+        /*****************************************************************
+         * DEBUGGING - Force params
+         ****************************************************************/
+        // Example payloads by FORMAT version:
+        // let str = "0|1|JDOG|BRRR|TEST";
+        // let str = "0|2|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1FWDonkMbC6hL64JiysuggHnUAw2CKWszs|1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8";
+        // let str = "1|2|860dc04b2b59657005a0955f282043c04bc9d5520562d317119722956043ffee|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1FWDonkMbC6hL64JiysuggHnUAw2CKWszs";
+        // let str = "1|1|b21f92568cf4f892fdf9adf432bfe1900ec41f16a1514c851b54926bd2828950|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1FWDonkMbC6hL64JiysuggHnUAw2CKWszs|1FwkKA9cqpNRFTpVaokdRjT9Xamvebrwcu|bc1q50kxp76j9l0k9jgwasvcz4mcz0v03fv2y5pdxx|1Lfm6jXgCQi8LvjpgFHa2F4hdr1uJVa5t4";
+        // params = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
+
+        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
+        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
+        // Convert NUMBER fields from string value to number value so comparisons are mathematical
         if(!error)
             data = this.util.setNumberFormats(data);
 
+        // Define some placeholders
         let type    = null;
         let edit    = {};
         let list    = [];
@@ -204,6 +222,7 @@ class List {
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
+        // Handle building out some data arrays using list items
         if(!error){
 
             // Build out array of edit items and status for each
@@ -268,13 +287,17 @@ class List {
 
         }
 
+        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
+        // Print status message
         console.log("\t LIST : " + data['STATUS']);
 
+        // Create record in lists table
         await this.indexerDb.createList(data);
 
+        // Store the SOURCE in addresses list
         this.util.addAddressTicker(data['SOURCE']);
 
         // If this was a valid transaction, then create the list and edit records
@@ -293,6 +316,7 @@ class List {
                 await this.indexerDb.createListItemInvalid(data, item, invalid[item]);
         }
 
+        // Create action mappings
         await this.mapper.createMappings(data);
 
     }

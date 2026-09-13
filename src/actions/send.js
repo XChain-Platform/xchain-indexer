@@ -36,7 +36,9 @@ const gatedHandoffRef        = require('../gated_handoff_ref_activation.js');
 
 class Send {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -51,7 +53,27 @@ class Send {
         this.formats[3] = 'VERSION|TICK|AMOUNT|DESTINATION|MEMO|TICK|AMOUNT|DESTINATION|MEMO';
     }
 
+    // Handle parsing the SEND transaction
     async parse(params, data, error){
+        /*****************************************************************
+         * DEBUGGING - Force params
+         ****************************************************************/
+        // Example payloads by FORMAT version:
+        // let str = '0|JDOG|1|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev';
+        // let str = '0|JDOG|1|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|Testing Memos';
+        // let str = '1|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9';
+        // let str = '1|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|Testing Memos2';
+        // let str = '1|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|3|1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8';
+        // let str = '1|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|3|1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8|Testing Memos3';
+        // let str = '2|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|TEST|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9';
+        // let str = '2|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|TEST|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|Testing Memos4';
+        // let str = '2|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|TEST|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|BACON|3|1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8';
+        // let str = '2|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|TEST|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|BACON|3|1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8|Testing Memos5';
+        // let str = '3|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|Testing Memos1|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|Testing Memos11|TEST|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|Testing Memos2|BACON|3|1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8|Testing Memos3';
+        // params = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
+
+        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
@@ -146,6 +168,7 @@ class Send {
             keys[key] = [tick, amount, destination, memo];
         }
 
+        // Update sends using consolidated info
         sends = [];
         for(let key in keys)
             sends.push(keys[key]);
@@ -169,6 +192,7 @@ class Send {
                 destination, null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         }
 
+        // Get source address balances
         let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // Controller-bound token gas context. A SEND of a token whose `transfer` class is bound to
@@ -179,6 +203,7 @@ class Send {
         let gasInfo      = await this.indexerDb.getTokenInfo(gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let gasBalances  = await this.indexerDb.getAddressBalances(data['SOURCE'], gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
+        // Store original error value
         let origError = error;
 
         // SOURCE sleeping-state check is byte-identical for every leg (same SOURCE, same
@@ -202,11 +227,14 @@ class Send {
         // (Brief) to N recipients was paying up to 3N round-trips for one answer.
         let sourceTickAllowed = {};
 
+        // Array of credits and debits
         let credits = [],
             debits  = [];
 
+        // Loop through sends and process each
         for(let idx in sends){
 
+            // Parse in the send information
             let info = sends[idx];
 
             // Reset error to the original value (per-leg validation restarts from origError)
@@ -219,6 +247,7 @@ class Send {
             // object, which the multi-leg loop relies on for each leg's downstream calls.
             let send = data;
 
+            // Update transaction data object with send values
             send['TICK']        = info[0];
             send['AMOUNT']      = info[1];
             send['DESTINATION'] = info[2];
@@ -228,17 +257,32 @@ class Send {
             if(!error)
                 send = this.util.setNumberFormats(send);
 
+            // Get information on token
             let tokenInfo = ticks[send['TICK']];
 
+            /*****************************************************************
+             * TICK Validations
+             ****************************************************************/
+
+            // Validate TICK exists
             if(!error && !tokenInfo)
                 error = 'invalid: TICK (unknown)';
 
+            /*************************************************************
+             * FORMAT Validations
+             ************************************************************/
+
+            // Verify AMOUNT format
             if(!error && !this.util.isNull(send['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], send['AMOUNT'], data['BLOCK_TIME']))
                 error = "invalid: AMOUNT (format)";
 
+            // Verify DESTINATION address format
             if(!error && !this.util.isNull(send['DESTINATION']) && !this.util.isCryptoAddress(send['DESTINATION']))
                 error = "invalid: DESTINATION (format)";
 
+            /*************************************************************
+             * General Validations
+             ************************************************************/
             // Verify SOURCE is not sleeping (hoisted, byte-identical across legs)
             if(!error && sourceActionAllowed == false)
                 error = 'invalid: SOURCE (sleeping)';
@@ -271,12 +315,15 @@ class Send {
             if(!error && String(send['MEMO']).indexOf(';')!=-1)
                 error = 'invalid: MEMO (semicolon)';
 
+            // Verify MEMO is shorter than MAX_MEMO_LENGTH
             if(!error && String(send['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
                 error = 'invalid: MEMO (length)';
 
+            // Verify MEMO if destination address preferences require a memo
             if(!error && preferences[send['DESTINATION']]['REQUIRE_MEMO']==1 && this.util.isNull(send['MEMO']))
                 error = 'invalid: MEMO (required)';
 
+            // Verify SOURCE has enough balances to cover send AMOUNT
             if(!error && !this.util.hasBalance(balances, tokenInfo['TICK_ID'], send['AMOUNT']))
                 error = 'invalid: insufficient funds';
 
@@ -379,6 +426,7 @@ class Send {
             if(sameTick && !error)
                 baseGasBalances = this.util.debitBalances(Object.assign({}, balances), tokenInfo['TICK_ID'], send['AMOUNT']);
 
+            // Run the token's controller guard, if bound, before the transfer settles
             if(!error && tokenInfo){
                 let result = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {
                     actionType:  'SEND',
@@ -456,9 +504,11 @@ class Send {
                     guardFee = this.util.bcadd(guardFee, recip.guardFee, 8);
             }
 
+            // Adjust balances to reduce by SEND AMOUNT
             if(!error)
                 balances = this.util.debitBalances(balances, tokenInfo['TICK_ID'], send['AMOUNT']);
 
+            // Determine final status
             let status = (error) ? error : 'valid';
             data['STATUS'] = send['STATUS'] = status;
 
@@ -468,12 +518,16 @@ class Send {
 
             this.util.addAddressTicker(data['SOURCE'], send['TICK']);
 
+            // If this was a valid transaction, then add records to the credits and debits array
             if(status=='valid'){
 
+                // Store the DESTINATION and TICK in addresses list
                 this.util.addAddressTicker(send['DESTINATION'], send['TICK']);
 
+                // Add ticker and amount to debits array
                 debits.push([send['TICK'], send['AMOUNT'], send['SOURCE']]);
 
+                // Add ticker, amount, and destination to credits array
                 credits.push([send['TICK'], send['AMOUNT'], send['DESTINATION']]);
 
                 // Bill the controller-guard gas to SOURCE (in GAS). Reduce the
@@ -496,8 +550,10 @@ class Send {
             }
         }
 
+        // Process any transaction ledger changes (credits / debits)
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
+        // Get a list of tickers & addresses
         let tickers   = this.util.getTickersList(),
             addresses = Object.keys(this.util.getAddressesList());
 
@@ -509,8 +565,10 @@ class Send {
         await this.indexerDb.updateBalances(addresses);
         await this.indexerDb.updateTokens(tickers);
 
+        // Create action mappings
         await this.mapper.createMappings(data);
 
+        // Check if any sends triggered dispensers
         await this.util.processDispenserSends(this.actions, this.indexerDb, data);
 
     }

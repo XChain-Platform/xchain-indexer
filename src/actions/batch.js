@@ -37,7 +37,9 @@ function probeForbiddenSubAction(action){
 
 class Batch {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -45,8 +47,10 @@ class Batch {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
+        // Setup alias to protocol changes class
         this.protocolChanges = action.protocolChanges;
 
+        // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|COMMAND';
 
@@ -792,6 +796,7 @@ class Batch {
         return total;
     }
 
+    // Handle parsing the BATCH transaction
     async parse(params, data, error){
         // BATCH_SUBACTION_NORMALIZATION flag-day: when active, sub-actions get the same
         // alias rewrite + legacy VERSION-0 injection as top-level actions. Resolved once
@@ -813,6 +818,7 @@ class Batch {
         // Clone before mutation: this raw copy is what gets stored in the batches table.
         let batch = structuredClone(data);
 
+        // Define list of ACTIONS and count of usage within BATCH
         let actions = {};
 
         // The DISTINCT keys of `actions`, in the order their FIRST sub-command appears in the
@@ -833,11 +839,23 @@ class Batch {
         // Populated only under the flag: below it nothing reads it and no work is done.
         let mintTicks = [];
 
+        /*****************************************************************
+         * DEBUGGING - Force params
+         ****************************************************************/
+        // Example payloads by FORMAT version:
+        // data['TX_DATA'] = "BATCH|0|MINT|0|GAS|60;ISSUE|0|JDOGTEST";
+        // params = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
+
+        // Validate that format is known
         let format = data['FORMAT'];
+        // Verify VERSION is a format this action recognizes
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
+        // Get list of commands
         let commands = String(data['TX_DATA']).split(';');
+        // Verify the batch contains at least one command
         if(!error && (this.util.isNull(commands) || commands.length < 1)){
             error = 'invalid: COMMAND (unknown)';
         } else {
@@ -873,6 +891,7 @@ class Batch {
             }
         }
 
+        // Build out array of ACTIONs and count of times used in BATCH
         for(let command of commands){
             let action = String(command).split('|')[0];
             if(normalize)
@@ -891,10 +910,16 @@ class Batch {
             actions[action]++;
         }
 
+        /*****************************************************************
+         * General Validations
+         ****************************************************************/
+
+        // Verify all ACTION commands are valid
         for(let command of commands){
             let action = String(command).split('|')[0];
             if(normalize)
                 action = this.normalizeSubAction(action);
+            // Verify this sub-command's action is currently enabled on the network
             if(!error && await this.protocolChanges.isEnabled(action, data['BLOCK_INDEX']) == false)
                 error = 'invalid: ACTION (unknown)';
         }
@@ -916,10 +941,12 @@ class Batch {
             // and pays for no reads, exactly as the R4 pre-check below does.
             if(!error && limitsActive && action === 'MINT')
                 count = await this.maxMintsPerDistinctTick(mintTicks);
+            // Verify ACTION command limits
             if(!error && Object.keys(actionLimits).includes(action) && count > actionLimits[action])
                 error = 'invalid: ' + action  + ' (limit)';
         }
 
+        // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
@@ -939,15 +966,20 @@ class Batch {
         if(!error && limitsActive && await this.isGasProvablyUnaffordable(commands, data, normalize, weightsActive))
             error = 'invalid: GAS (insufficient)';
 
+        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = batch['STATUS'] = status;
 
+        // Print status message
         console.log("\t BATCH : " + data['SOURCE'] + ' : ' + data['STATUS']);
 
+        // Create record in batches table
         await this.indexerDb.createBatch(batch);
 
+        // Store the SOURCE in addresses list
         this.util.addAddressTicker(data['SOURCE']);
 
+        // Create action mappings
         await this.mapper.createMappings(data);
 
         if(status=='valid'){
@@ -1035,7 +1067,9 @@ class Batch {
             let batchPosition = -1;
             for(let command of commands){
                 batchPosition++;
+                // Parse command into params
                 params = String(command).split('|');
+                // Extract ACTION from params
                 let action = String(params.shift()).toUpperCase();
 
                 // Normalize the sub-action like a top-level action would be
@@ -1096,6 +1130,7 @@ class Batch {
                 // status. STATUS is a base key, so the field clear above never touches it.
                 if(isProbe) delete data['STATUS'];
 
+                // Process the specific ACTION commands
                 await this.actions.processAction(action, params, data, error);
 
                 if(isProbe){

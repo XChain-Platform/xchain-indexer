@@ -33,7 +33,9 @@ const consolidationLegAmount = require('../consolidation_leg_amount_activation.j
 
 class Destroy {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -48,7 +50,19 @@ class Destroy {
         this.formats[2] = 'VERSION|TICK|AMOUNT|MEMO|TICK|AMOUNT|MEMO';
     }
 
+    // Handle parsing the DESTROY transaction
     async parse(params, data, error){
+        /*****************************************************************
+         * DEBUGGING - Force params
+         ****************************************************************/
+        // Example payloads by FORMAT version:
+        // let str = '0|BRRR|1|foo';
+        // let str = '1|BRRR|1|GAS|10|bar';
+        // let str = '2|BRRR|1|foo|GAS|10|bar';
+        // params = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
+
+        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
@@ -164,6 +178,9 @@ class Destroy {
             // Get information on token
             let tokenInfo = ticks[destroy['TICK']];
 
+            /*****************************************************************
+             * TICK Validations
+             ****************************************************************/
             // Validate TICK exists
             if(!error && !tokenInfo)
                 error = 'invalid: TICK (unknown)';
@@ -190,10 +207,16 @@ class Destroy {
             if(!error && this.util.parseBridgedTick(destroy['TICK']))
                 error = 'invalid: TICK (use XBRIDGE v4)';
 
+            /*************************************************************
+             * FORMAT Validations
+             ************************************************************/
             // Verify AMOUNT format
             if(!error && !this.util.isNull(destroy['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], destroy['AMOUNT'], data['BLOCK_TIME']))
                 error = "invalid: AMOUNT (format)";
 
+            /*************************************************************
+             * General Validations
+             ************************************************************/
             // Verify SOURCE is not sleeping
             if(!error && await this.indexerDb.isActionAllowed(destroy['SOURCE'], null, destroy['BLOCK_INDEX']) == false)
                 error = 'invalid: SOURCE (sleeping)';

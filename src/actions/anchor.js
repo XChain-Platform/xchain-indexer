@@ -85,6 +85,7 @@ class Anchor {
         // The whole ANCHOR wire set. Membership here is what makes a version byte
         // parseable at all (the unknown-version check in parse() reads this object), so
         // adding a key is a consensus change and deleting one retires a wire.
+        // Per-version format strings
         this.formats = {};
         // v0 (checkpoint bundle): ONE anchor per network per cycle carrying every
         // checkpointed chain as a section. The section body runs from CHAIN through the
@@ -198,6 +199,7 @@ class Anchor {
         return base;
     }
 
+    // Dispatch on VERSION
     async parse(params, data, error){
         let format = data['FORMAT'];
 
@@ -211,6 +213,7 @@ class Anchor {
         if(!error && !aact.isAnchorActive(Number(data['BLOCK_INDEX']), this.config['NETWORK']))
             error = 'invalid: ANCHOR before activation';
 
+        // Verify VERSION is one this parser knows (the table in the constructor is the whole wire set)
         if(!error && (format === null || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
 
@@ -251,13 +254,16 @@ class Anchor {
         // Structural validation
         if(!error && ALLOWED_CHAINS.indexOf(data['CHAIN']) === -1)
             error = 'invalid: CHAIN (unknown)';
+        // Verify NETWORK is the one this node follows (a checkpoint cut for another network is not ours)
         if(!error && String(data['NETWORK']) !== String(this.config['NETWORK'] || ''))
             error = 'invalid: NETWORK (not this network)';
+        // Verify the checkpointed height, the sequence number and the snapshot block are plain whole numbers
         if(!error && (!/^[0-9]+$/.test(String(data['BLOCK_INDEX_CHECKPOINTED'])) ||
                       !/^[0-9]+$/.test(String(data['CHECKPOINT_SEQ'])) ||
                       !/^[0-9]+$/.test(String(data['SNAPSHOT_BLOCK']))))
             error = 'invalid: BLOCK_INDEX / CHECKPOINT_SEQ / SNAPSHOT_BLOCK (format)';
         for(let f of ['BLOCK_HASH', 'LEDGER_HASH', 'ACTIONS_HASH', 'CONTRACT_HASH']){
+            // Verify each committed hash is a 64-character lowercase hex digest
             if(!error && !/^[0-9a-f]{64}$/.test(String(data[f])))
                 error = 'invalid: ' + f + ' (format)';
         }
@@ -591,10 +597,13 @@ class Anchor {
         data['SNAPSHOT_BLOCK'] = params[2];
         data['SECTION_COUNT']  = params[3];
 
+        // Verify NETWORK is the one this node follows (a bundle cut for another network is not ours)
         if(!error && String(data['NETWORK']) !== String(this.config['NETWORK'] || ''))
             error = 'invalid: NETWORK (not this network)';
+        // Verify SNAPSHOT_BLOCK is a plain whole number
         if(!error && !/^[0-9]+$/.test(String(data['SNAPSHOT_BLOCK'])))
             error = 'invalid: SNAPSHOT_BLOCK (format)';
+        // Verify SECTION_COUNT is a whole number of at least one (a bundle with no sections commits nothing)
         if(!error && (!/^[0-9]+$/.test(String(data['SECTION_COUNT'])) || Number(data['SECTION_COUNT']) < 1))
             error = 'invalid: SECTION_COUNT (format)';
 
@@ -910,12 +919,15 @@ class Anchor {
         data['TOTAL_CHUNKS']    = params[3];
         data['ARCHIVE_B64']     = String(params[4] || '');
 
+        // Verify the batch number, the chunk number and the chunk total are plain whole numbers
         if(!error && (!/^[0-9]+$/.test(String(data['MATCH_BATCH_SEQ'])) ||
                       !/^[0-9]+$/.test(String(data['CHUNK_INDEX'])) ||
                       !/^[0-9]+$/.test(String(data['TOTAL_CHUNKS']))))
             error = 'invalid: MATCH_BATCH_SEQ / CHUNK_INDEX / TOTAL_CHUNKS (format)';
+        // Verify CHUNK_INDEX names a real continuation slot (the v1 head carries segment 0, so chunks run from 1)
         if(!error && (Number(data['CHUNK_INDEX']) < 1 || Number(data['CHUNK_INDEX']) >= Number(data['TOTAL_CHUNKS'])))
             error = 'invalid: CHUNK_INDEX (out of range)';
+        // Verify the chunk body is present and uses only URL-safe base64 characters
         if(!error && (!data['ARCHIVE_B64'] || !/^[0-9a-zA-Z_-]+$/.test(String(data['ARCHIVE_B64']))))
             error = 'invalid: ARCHIVE_B64_CHUNK (format)';
 

@@ -42,7 +42,9 @@
 
 class Swap {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -59,11 +61,23 @@ class Swap {
         this.listTypes = [2];
     }
 
+    // Handle parsing the SWAP transaction
     async parse(params, data, error){
+        /*****************************************************************
+         * DEBUGGING - Force params
+         ****************************************************************/
+        // Example payloads by FORMAT version:
+        // let str    = "0|JDOG|1|";
+        // params = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
+
+        // Validate that format is known
         let format = data['FORMAT'];
+        // Verify VERSION is a format this action recognizes
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
+        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
@@ -82,8 +96,10 @@ class Swap {
                 error = 'invalid: GET_ADDRESS (unresolvable ^id)';
         }
 
+        // Get information on the GIVE and GET tokens
         let giveTokenInfo = false;
         let getTokenInfo  = false;
+        // Look up the GIVE and GET token records that the checks below rely on
         if(format==0){
             giveTokenInfo = await this.indexerDb.getTokenInfo(data['GIVE_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
             if(data['GET_COIN']==this.config['COIN']){
@@ -114,24 +130,33 @@ class Swap {
         if(format==1 || format==2)
             swapInfo = await this.indexerDb.getSwapInfo(null, data['SWAP_ACTION_INDEX'])
 
+        // Get source address balances and preferences
         let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let preferences = await this.indexerDb.getAddressPreferences(data['SOURCE'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
+        // Create the fees object
         let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
 
         // Default GET_ADDRESS to SOURCE address if COIN networks are the same and GET_ADDRESS is not given
         if(this.config['COIN']==data['GET_COIN'] && this.util.isNull(data['GET_ADDRESS']))
             data['GET_ADDRESS'] = data['SOURCE'];
 
+        // Set EXPIRATION value if none is given
         if(format==0 && this.util.isNull(data['EXPIRATION']))
             data['EXPIRATION'] = this.util.getDefaultExpiration(data['BLOCK_TIME']);
 
         // Clone the raw data for storage in swap table
         let swap = Object.assign({}, data);
 
+        /*****************************************************************
+         * TICK & COIN Validations
+         ****************************************************************/
+
+        // Validate GIVE_COIN is valid
         if(!error && format==0 && !this.config['COINS'].includes(data['GIVE_COIN']))
             error = 'invalid: GIVE_COIN (unsupported COIN network)';
 
+        // Validate GET_COIN is valid
         if(!error && format==0 && !this.config['COINS'].includes(data['GET_COIN']))
             error = 'invalid: GET_COIN (unsupported COIN network)';
 
@@ -139,6 +164,7 @@ class Swap {
         if(!error && format==0 && this.config['COIN']!=data['GIVE_COIN'])
             error = "invalid: GIVE_COIN (network)";
 
+        // Validate GIVE_TICK exists
         if(!error && format==0 && !giveTokenInfo)
             error = 'invalid: GIVE_TICK (unknown)';
 
@@ -151,18 +177,27 @@ class Swap {
         if(!error && format==0 && !isCrossChain && !getTokenInfo)
             error = 'invalid: GET_TICK (unknown)';
 
+        /*****************************************************************
+         * FORMAT Validations
+         ****************************************************************/
+
+        // Verify GIVE_AMOUNT format
         if(!error && format==0 && !this.util.isNull(data['GIVE_AMOUNT']) && giveTokenInfo && !this.util.isValidAmountFormat(giveTokenInfo['DECIMALS'], data['GIVE_AMOUNT'], data['BLOCK_TIME']))
             error = "invalid: GIVE_AMOUNT (format)";
 
+        // Verify GET_AMOUNT format
         if(!error && format==0 && !this.util.isNull(data['GET_AMOUNT']) && getTokenInfo && !this.util.isValidAmountFormat(getTokenInfo['DECIMALS'], data['GET_AMOUNT'], data['BLOCK_TIME']))
             error = "invalid: GET_AMOUNT (format)";
 
+        // Verify GET_ADDRESS is given if COIN network differs from GET_COIN network
         if(!error && format==0 && this.config['COIN']!=data['GET_COIN'] && this.util.isNull(data['GET_ADDRESS']))
             error = "invalid: GET_ADDRESS";
 
+        // Verify GET_ADDRESS is valid for the given GET_COIN network
         if(!error && format==0 && !this.util.isNull(data['GET_ADDRESS']) && !this.util.isCryptoAddress(data['GET_ADDRESS'], data['GET_COIN']))
             error = "invalid: GET_ADDRESS (format)";
 
+        // Validate that EXPIRATION is an integer
         if(!error && !this.util.isNull(data['EXPIRATION']) && (!this.util.isNumeric(data['EXPIRATION']) || !this.util.isInteger(data['EXPIRATION'])))
             error = "invalid: EXPIRATION (format)";
 
@@ -173,9 +208,13 @@ class Swap {
            this.util.exceedsUnsignedColumn(data['EXPIRATION'], this.config['INTEGER_FIELDS']['EXPIRATION']))
             error = "invalid: EXPIRATION (format)";
 
+        /*****************************************************************
+         * Token Ownership Validations (format 0 only)
+         ****************************************************************/
         // GIVE_OWNERSHIP / GET_OWNERSHIP must be 0 or 1
         if(!error && format==0 && ![0,1].includes(data['GIVE_OWNERSHIP']))
             error = "invalid: GIVE_OWNERSHIP (format)";
+        // Verify GET_OWNERSHIP is 0 or 1
         if(!error && format==0 && ![0,1].includes(data['GET_OWNERSHIP']))
             error = "invalid: GET_OWNERSHIP (format)";
 
@@ -201,6 +240,9 @@ class Swap {
                 error = "invalid: GET_TICK (unknown)";
         }
 
+        /*****************************************************************
+         * General Validations
+         ****************************************************************/
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
@@ -217,6 +259,7 @@ class Swap {
         if(!error && !this.util.isNull(data['MEMO']) && String(data['MEMO']).indexOf(';')!=-1)
             error = 'invalid: MEMO (semicolon)';
 
+        // Verify MEMO is shorter than MAX_MEMO_LENGTH
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
@@ -224,6 +267,7 @@ class Swap {
         if(!error && format==0 && await this.indexerDb.isActionAllowed(data['SOURCE'], data['GIVE_TICK']) == false)
             error = 'invalid: SOURCE (not authorized)';
 
+        // Validate SWAP_ACTION_INDEX is valid SWAP
         if(!error && (format==1 || format==2) && !swapInfo)
             error = 'invalid: SWAP_ACTION_INDEX (unknown)';
 
@@ -231,21 +275,27 @@ class Swap {
         if(!error && (format==1 || format==2) && data['SOURCE']!=swapInfo['SOURCE'])
             error = 'invalid: SOURCE (not owner)';
 
+        // Validate SWAP_ACTION_INDEX is valid SWAP with a status of open
         if(!error && (format==1 || format==2) && swapInfo['SWAP_STATUS']!='open')
             error = 'invalid: SWAP_ACTION_INDEX (swap not open)';
 
+        // Validate that EXPIRATION is greater than current BLOCK_TIME
         if(!error && !this.util.isNull(data['EXPIRATION']) && this.util.bclte(data['EXPIRATION'], data['BLOCK_TIME']))
             error = "invalid: EXPIRATION (past)";
 
         // Validate LIST fields (ALLOW_LIST / BLOCK_LIST)
         if(!error){
             for(let name of this.config['LIST_FIELDS']){
+                // Only look up and validate this list field when it holds a numeric list id
                 if(!error && !this.util.isNull(data[name]) && this.util.isNumeric(data[name])){
+                    // Get LIST type and information
                     let type = await this.indexerDb.getListType(data[name]);
 
+                    // Verify LIST exist
                     if(!error && type===false)
                         error = 'invalid: ' + name + ' (unknown)';
 
+                    // Verify LIST type is supported
                     if(!error && !this.listTypes.includes(type))
                         error = 'invalid: ' + name + ' (unsupported)';
                 }
@@ -256,12 +306,14 @@ class Swap {
         if(!error && format==0 && !isOwnershipGive && !this.util.hasBalance(balances, giveTokenInfo['TICK_ID'], data['GIVE_AMOUNT']))
             error = 'invalid: insufficient funds (GIVE_AMOUNT)';
 
+        // Adjust balances to reduce by SWAP GIVE_AMOUNT (skip for ownership)
         if(!error && format==0 && !isOwnershipGive)
             balances = this.util.debitBalances(balances, giveTokenInfo['TICK_ID'], data['GIVE_AMOUNT']);
 
         // Calculate total fee for this swap: expiration + ownership-escrow premium (create only)
         fees['AMOUNT'] = 0;
 
+        // Calculate the fee for this swap, based on its expiration and any ownership escrow
         if(!error && (format==0 || format==2)){
             let unifiedFees = await this.actions.protocolChanges.isEnabled('UNIFIED_FEES', data['BLOCK_INDEX']);
             if(unifiedFees){
@@ -315,6 +367,7 @@ class Swap {
         // (no proceeds yet); the royalty cut is taken at match (swap_match.js).
         // SOURCE pays the bounded guard gas (reserved up front).
         let guardFee = 0;
+        // Run the GIVE token's controller guard before allowing this token to be listed for sale
         if(!error && format==0 && giveTokenInfo){
             let gasInfo = await this.indexerDb.getTokenInfo(this.config['GAS'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
             let result  = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {
@@ -360,12 +413,14 @@ class Swap {
             }
         }
 
+        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = swap['STATUS'] = status;
 
         // Set SWAP status to 'open' when creating a valid swap
         swap['SWAP_STATUS'] = (status=='valid') ? 'open' : 'invalid';
 
+        // Print status message
         if(format==0)
             console.log("\t SWAP : " + this.util.logAmount(data['GIVE_AMOUNT']) + ' ' + this.config['COIN'] + ':' + data['GIVE_TICK'] + ' = '  +  this.util.logAmount(data['GET_AMOUNT']) + ' ' + data['GET_COIN'] + ':' + data['GET_TICK'] + ' : ' + data['STATUS']);
         if(format==1)
@@ -373,6 +428,7 @@ class Swap {
         if(format==2)
             console.log("\t SWAP_EDIT : " + this.config['COIN'] + ':' + data['SWAP_ACTION_INDEX'] + ' : ' + data['STATUS']);
 
+        // Create record in swaps table
         if(format==0)
             await this.indexerDb.createSwap(swap);
 
@@ -388,18 +444,22 @@ class Swap {
             await this.indexerDb.createSwapEdit(swap);
         }
 
+        // Store the SOURCE, GIVE_TICK, and GET_TICK in addresses list
         if(format==0){
             this.util.addAddressTicker(data['SOURCE'], [data['GIVE_TICK'], data['GET_TICK']]);
         } else if(swapInfo) {
             this.util.addAddressTicker(swapInfo['SOURCE'], [swapInfo['GIVE_TICK'], swapInfo['GET_TICK']]);
         }
 
+        // Array of credits, debits, and escrows
         let credits = [],
             debits  = [],
             escrows = [];
 
+        // If this was a valid transaction, add GIVE_AMOUNT to escrow
         if(status=='valid'){
 
+            // If we are charging a fee, store the SOURCE and fees TICK in addresses list
             if(this.util.bcgt(fees['AMOUNT'], 0))
                 this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
 
@@ -411,10 +471,13 @@ class Swap {
                     // escrow_action_index until cancel / expire / match clears it.
                     await this.indexerDb.setTokenEscrow(data['GIVE_TICK'], data['ACTION_INDEX']);
                 } else {
+                    // Debit token from SOURCE
                     debits.push([data['GIVE_TICK'], data['GIVE_AMOUNT'], data['SOURCE']]);
+                    // Escrow token from SOURCE
                     escrows.push([data['GIVE_TICK'], data['GIVE_AMOUNT'], data['SOURCE']]);
                 }
 
+                // Create record in the swaps_statuses table
                 await this.indexerDb.createSwapStatus(data['ACTION_INDEX'], data['ACTION_INDEX'], 'open');
             }
 
@@ -426,6 +489,7 @@ class Swap {
                 } else {
                     // BigNumber-space negation, not JS unary minus (float truncation).
                     escrows.push([swapInfo['GIVE_TICK'],  this.util.bcsub(0, swapInfo['GIVE_AMOUNT'], 64),  swapInfo['SOURCE']]);
+                    // Credit token to SOURCE
                     credits.push([swapInfo['GIVE_TICK'], swapInfo['GIVE_AMOUNT'], swapInfo['SOURCE']]);
                 }
 
@@ -441,18 +505,23 @@ class Swap {
                 this.util.addAddressTicker(data['SOURCE'], this.config['GAS']);
             }
 
+            // Process any transaction ledger changes (credits / debits / escrows)
             await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
 
+            // Get a list of tickers & addresses
             let tickers   = this.util.getTickersList(),
                 addresses = Object.keys(this.util.getAddressesList());
 
+            // Update address balances and token supply
             await this.indexerDb.updateBalances(addresses);
             await this.indexerDb.updateTokens(tickers);
 
         }
 
+        // Create action mappings
         await this.mapper.createMappings(data);
 
+        // Reset the address/tickers/transactions list on each parse
         this.util.resetLists();
 
         // Check to see if we have a match for this swap.
