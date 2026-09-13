@@ -5378,32 +5378,6 @@ class Database {
         }
     }
 
-    // Create record in `batches` table
-    async createBatch(data){
-        data             = this.normalizeDataValues(data);
-        let status_id    = await this.createStatus(data['STATUS']);
-        let action_index = data['ACTION_INDEX'];
-        // Check if record already exists for this address
-        let query = "SELECT action_index FROM batches WHERE action_index=? LIMIT 1";
-        let args  = [action_index];
-        let exists = false;
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
-        if(exists){
-            query = `UPDATE
-                        batches
-                    SET
-                        status_id=?
-                    WHERE 
-                        action_index=?`;
-        } else {
-            query = "INSERT INTO batches (status_id, action_index) values (?, ?)";
-        }
-        args    = [status_id, action_index];
-        results = await this.doQuery(query, args);
-    }
-
     // Create/Update record in `sends` table
     async createSend(data){
         data               = this.normalizeDataValues(data);
@@ -17096,6 +17070,7 @@ for(const mixin of [
     require('./anchors.js'),
     require('./attests.js'),
     require('./balances.js'),
+    require('./batches.js'),
 ]){
     const descriptors = Object.getOwnPropertyDescriptors(mixin);
     for(const key of Reflect.ownKeys(descriptors)) descriptors[key].enumerable = false;
