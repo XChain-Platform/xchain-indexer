@@ -169,8 +169,8 @@ describe('bridge_checkpoint_check: D2 escrow cross-check', function(){
     // the bottom of this file.
     let cfgStub;
     beforeEach(function(){
-        const btc = require('../../src/configs/BTC.js');
-        cfgStub = sinon.stub(btc, 'getConfig').callsFake(function(network){
+        const btc = require('../../src/coins/to_indexer_config.js');
+        cfgStub = sinon.stub(btc, 'toIndexerConfig').callsFake(function(tick, network){
             const addr = ESCROW_ADDRS[network];
             return { ADDRESS: addr ? { BRIDGE_DOGE: addr } : {} };
         });
@@ -557,7 +557,7 @@ describe('bridge_checkpoint_check: D2 escrow cross-check', function(){
 
         it('refuses when the escrow role is absent from the origin chain config', function(){
             cfgStub.restore();
-            cfgStub = sinon.stub(require('../../src/configs/BTC.js'), 'getConfig')
+            cfgStub = sinon.stub(require('../../src/coins/to_indexer_config.js'), 'toIndexerConfig')
                 .callsFake(function(){ return { ADDRESS: { BURN: 'x' } }; });
             const out = CHK.verifyEscrowAgainstCheckpoint(buildRow(), buildCtx(buildProof('12.34567890')));
             assert.strictEqual(out.ok, false, 'an unresolved escrow must fail closed');
@@ -658,7 +658,7 @@ describe('bridge_checkpoint_check: the escrow address door', function(){
     // the BTC coin bundle and the config adapter's ADDRESS allowlist; until BOTH land the
     // role is absent and the resolver must say so rather than guess.
     it('resolves BRIDGE_<DEST> from the origin chain config, or nothing at all', function(){
-        const live = require('../../src/configs/BTC.js').getConfig('regtest');
+        const live = require('../../src/coins/to_indexer_config.js').toIndexerConfig('BTC', 'regtest');
         const expected = (live && live.ADDRESS && live.ADDRESS.BRIDGE_DOGE) || null;
         assert.strictEqual(CHK.resolveEscrowAddress('BTC', 'DOGE', 'regtest'), expected,
             'the resolver must return exactly what the coin config exposes for the role');

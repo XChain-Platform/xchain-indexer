@@ -15,16 +15,16 @@
  * XChain Indexer - COIN Config Adapter
  *
  * Maps the canonical coin definition (src/coins/<COIN>.js, the platform-wide
- * source of truth) into the exact shape the indexer's configs/<COIN>.js has
- * always returned, so config.js and every downstream consumer are unchanged.
- * Adding/auditing a coin happens in src/coins, never here.
+ * source of truth) into the exact shape config.js and every downstream consumer
+ * read. Adding/auditing a coin happens in the coin bundle beside this file,
+ * never here.
  *
  ********************************************************************/
 
-const coins = require('../coins');
+const coins = require('./index.js');
 
 // Build the indexer COIN config object for a coin/network from canonical data.
-// Shape is byte-identical to the legacy configs/<COIN>.js getConfig() output.
+// The key set is a fixed contract: config.js merges it over its own defaults.
 function toIndexerConfig(tick, network){
     const c      = coins.getCoinConfig(tick, network);
     const config = {};
@@ -69,7 +69,7 @@ function toIndexerConfig(tick, network){
         if(c.addresses[role]) config['ADDRESS'][role] = c.addresses[role];
     }
 
-    // BTC-only consensus blocks (absent on LTC/DOGE, matching the legacy files).
+    // BTC-only consensus blocks (absent from the LTC and DOGE bundles).
     if(c.CONFIG_SLASH) config['CONFIG_SLASH'] = c.CONFIG_SLASH;
     if(c.FULLNODE)     config['FULLNODE']     = c.FULLNODE;
 

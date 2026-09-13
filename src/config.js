@@ -16,12 +16,16 @@
  * 
  * This config file contains indexer specific configuration data
  * 
- * COIN specific configuration data is loaded from configs/<COIN>.js
+ * COIN specific configuration data is loaded from coins/<COIN>.js
  *
  ********************************************************************/
 
 const fs   = require('fs');
 const path = require('path');
+
+// The coin bundle is pure data; this adapter maps a coin/network pair into the key
+// set getCoinConfig() merges over its own defaults.
+const coinAdapter = require('./coins/to_indexer_config.js');
 
 // Parse a non-negative integer from an env var, falling back to defaultVal when
 // the value is absent, empty, or non-numeric. Unlike `parseInt(x) || default`,
@@ -104,12 +108,11 @@ module.exports = {
         let coinConfig = {};
 
         // Define COIN specific configuration file
-        let coinFile   = path.join(__dirname, 'configs', coin + '.js');
+        let coinFile   = path.join(__dirname, 'coins', coin + '.js');
 
-        // Load COIN specific configuration file, or throw error
+        // Load COIN specific configuration file, or throw error.
         if(fs.existsSync(coinFile)){
-            let cfg    = require(coinFile);
-            coinConfig = cfg.getConfig(network);
+            coinConfig = coinAdapter.toIndexerConfig(coin, network);
         } else {
             let error = 'Missing COIN config file : ' + coinFile;
             throw new Error(error);
@@ -437,7 +440,7 @@ module.exports = {
 
         // Genesis ledger bootstrap (Counterparty/Dogeparty name-ownership injection). The
         // consensus-critical GENESIS_BLOCK + GENESIS_LEDGER_HASH are pinned per-network in
-        // configs/<COIN>.js; these are the indexer-wide defaults plus the bundled-manifest
+        // coins/<COIN>.js; these are the indexer-wide defaults plus the bundled-manifest
         // path. A genesis block carries ~240k synthetic ISSUE/TRANSFER actions (BTC: 121,716
         // names x2 passes), far more than a normal block, so it gets its own watchdog.
         // Even after the genesis-path optimizations (intern cache + read-skip in genesis.js /
@@ -445,7 +448,7 @@ module.exports = {
         // path is now the FALLBACK/generator only - normal full-parse nodes import the precomputed
         // state dump (minutes, see genesisDump.js) - but the watchdog must still cover the CSV
         // fallback on a slower DB, so it is set to 4h. See genesis.js.
-        config['GENESIS_BLOCK']            = 0;     // 0 = disabled; pinned per chain in configs/<COIN>.js
+        config['GENESIS_BLOCK']            = 0;     // 0 = disabled; pinned per chain in coins/<COIN>.js
         config['GENESIS_LEDGER_HASH']      = null;  // sha256 hex of the bundled CSV; null = skip verify
         config['GENESIS_LEDGER_PATH']      = process.env.GENESIS_LEDGER_PATH || path.join(__dirname, '..', 'data', 'genesis', coin + '-ledger.csv');
         config['GENESIS_BLOCK_TIMEOUT_MS'] = parseIntMin0(process.env.GENESIS_BLOCK_TIMEOUT_MS, 14400000); // 4 hours
@@ -463,7 +466,7 @@ module.exports = {
         // below and the hub coin bundle's genesis.$envOverrides gating. These values are
         // consensus: they decide how much XCHAIN each snapshot holder mints and which
         // synthetic tx hash carries the credit, so on mainnet/testnet they come from the
-        // pinned coin bundle (src/coins/<COIN>.js, mapped by configs/_adapter.js, which
+        // pinned coin bundle (src/coins/<COIN>.js, mapped by coins/to_indexer_config.js, which
         // overrides everything set here) and never from a per-node export. Read at all off
         // regtest, two replay nodes holding byte-identical snapshot CSVs could still derive
         // different allocations and fork at the genesis block.

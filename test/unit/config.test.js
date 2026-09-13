@@ -162,7 +162,7 @@ describe('Config @regression @tier3', function () {
             process.env.INDEXER_COIN = 'LTC';
             process.env.INDEXER_NETWORK = 'regtest';
             delete require.cache[require.resolve('../../src/config.js')];
-            try { delete require.cache[require.resolve('../../src/configs/LTC.js')]; } catch (e) {}
+            try { delete require.cache[require.resolve('../../src/coins/to_indexer_config.js')]; } catch (e) {}
             config = require('../../src/config.js').getConfig();
         });
 
@@ -187,7 +187,7 @@ describe('Config @regression @tier3', function () {
             process.env.INDEXER_COIN = 'DOGE';
             process.env.INDEXER_NETWORK = 'regtest';
             delete require.cache[require.resolve('../../src/config.js')];
-            try { delete require.cache[require.resolve('../../src/configs/DOGE.js')]; } catch (e) {}
+            try { delete require.cache[require.resolve('../../src/coins/to_indexer_config.js')]; } catch (e) {}
             config = require('../../src/config.js').getConfig();
         });
 

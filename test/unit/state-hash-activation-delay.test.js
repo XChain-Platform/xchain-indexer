@@ -49,7 +49,7 @@ function resolveActivationDelay(config) {
 describe('state_hash source: ACTIVATION_DELAY_BLOCKS resolution', function () {
 
     for (const coin of ['BTC', 'LTC', 'DOGE']) {
-        const cfg = require('../../src/configs/' + coin + '.js').getConfig('mainnet');
+        const cfg = require('../../src/coins/to_indexer_config.js').toIndexerConfig(coin, 'mainnet');
 
         it(coin + ': the top-level ACTIVATION_DELAY_BLOCKS key is unset (the bug precondition)', function () {
             // If this ever becomes defined, the regression guard below is moot, but the

@@ -10,16 +10,16 @@
 
 // the genesis airdrop set is bundle data, not node environment.
 //
-// config.js used to read GENESIS_AIRDROP_PATHS / _HASHES / _AMOUNTS from the environment
-// on EVERY network, while its sibling GENESIS_DUMP_HASH was already regtest-only. Those
-// three values decide how much XCHAIN each snapshot holder mints and which synthetic tx
-// hash carries the credit, so two mainnet replay nodes holding byte-identical snapshot
-// CSVs could derive different allocations and fork at the genesis block while every
-// per-file sha256 pin verified clean.
+// An env-derived GENESIS_AIRDROP_PATHS / _HASHES / _AMOUNTS on EVERY network is a
+// consensus hazard, which is why only regtest may still supply them. Those three values
+// decide how much XCHAIN each snapshot holder mints and which synthetic tx hash carries
+// the credit, so two mainnet replay nodes holding byte-identical snapshot CSVs could
+// derive different allocations and fork at the genesis block while every per-file sha256
+// pin verified clean.
 //
 // The registration lives in the canonical coin bundle (src/coins/<COIN>.js, resolved by
 // coins/index.js, which honours the env vars for network === 'regtest' only) and reaches
-// the indexer through configs/_adapter.js. These tests hold BOTH halves: the env is inert
+// the indexer through coins/to_indexer_config.js. These tests hold BOTH halves: the env is inert
 // off regtest, and the bundle is what the indexer actually ends up configured with.
 
 const assert = require('assert');
@@ -108,7 +108,7 @@ describe('genesis airdrop config pinning @regression', function () {
         // The adapter is what carries genesis.airdrop* into the indexer's config keys; if it
         // ever stopped, the mainnet assertions above would still pass (config.js zeroes them
         // off regtest) while an ARMED bundle silently minted nothing. Pin the wiring itself.
-        const { toIndexerConfig } = require('../../src/configs/_adapter.js');
+        const { toIndexerConfig } = require('../../src/coins/to_indexer_config.js');
         const coins = require('../../src/coins');
         const real  = coins.getCoinConfig;
         coins.getCoinConfig = function(tick, network){

@@ -47,9 +47,9 @@ describe('XBRIDGE escrow constants (consensus)', function () {
 
     it('carries BRIDGE_<COIN> for every other coin, and none for itself, on every network', function () {
         for (const coin of COINS) {
-            const cfg = require('../../src/configs/' + coin + '.js');
+            const cfg = require('../../src/coins/to_indexer_config.js');
             for (const network of NETWORKS) {
-                const addr = cfg.getConfig(network).ADDRESS || {};
+                const addr = cfg.toIndexerConfig(coin, network).ADDRESS || {};
                 for (const other of COINS) {
                     const role = 'BRIDGE_' + other;
                     if (other === coin) {
@@ -68,9 +68,9 @@ describe('XBRIDGE escrow constants (consensus)', function () {
 
     it('every escrow literal is a valid address on its own chain and network', function () {
         for (const coin of COINS) {
-            const cfg = require('../../src/configs/' + coin + '.js');
+            const cfg = require('../../src/coins/to_indexer_config.js');
             for (const network of NETWORKS) {
-                const addr = cfg.getConfig(network).ADDRESS || {};
+                const addr = cfg.toIndexerConfig(coin, network).ADDRESS || {};
                 for (const other of COINS) {
                     if (other === coin) continue;
                     const a = addr['BRIDGE_' + other];
@@ -85,10 +85,10 @@ describe('XBRIDGE escrow constants (consensus)', function () {
 
     it('no escrow literal collides with another protocol role on the same chain', function () {
         for (const coin of COINS) {
-            const cfg = require('../../src/configs/' + coin + '.js');
+            const cfg = require('../../src/coins/to_indexer_config.js');
             const raw = require('../../src/coins/' + coin + '.js');
             for (const network of NETWORKS) {
-                const addr    = cfg.getConfig(network).ADDRESS || {};
+                const addr    = cfg.toIndexerConfig(coin, network).ADDRESS || {};
                 // EXPLORER is stripped by the indexer adapter, so read the bundle
                 // directly to cover it too.
                 const bundle  = raw.networks[network].addresses;
@@ -111,9 +111,9 @@ describe('XBRIDGE escrow constants (consensus)', function () {
 
     it('maps every escrow literal to its role token in the hash preimage', function () {
         for (const coin of COINS) {
-            const cfg = require('../../src/configs/' + coin + '.js');
+            const cfg = require('../../src/coins/to_indexer_config.js');
             for (const network of NETWORKS) {
-                const addr = cfg.getConfig(network).ADDRESS || {};
+                const addr = cfg.toIndexerConfig(coin, network).ADDRESS || {};
                 for (const other of COINS) {
                     if (other === coin) continue;
                     const role = 'BRIDGE_' + other;
@@ -142,7 +142,7 @@ describe('XBRIDGE escrow constants (consensus)', function () {
     it('prices XBRIDGE_BASE identically on every chain', function () {
         for (const coin of COINS) {
             for (const network of NETWORKS) {
-                const cfg = require('../../src/configs/' + coin + '.js').getConfig(network);
+                const cfg = require('../../src/coins/to_indexer_config.js').toIndexerConfig(coin, network);
                 // 5,000 gas = 0.05 XCHAIN at the initial GAS_PRICE (base spec D3),
                 // sized at SWEEP_BASE so the smallest bridge action still buys an
                 // above-dust native-coin fee output on LTC and DOGE.

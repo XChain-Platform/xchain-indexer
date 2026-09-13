@@ -79,6 +79,9 @@ const M = require('./merkle.js');
 // is the same module the block path and getblockhashes derive it from, so this check and the
 // value the fleet stamps into the signed checkpoint cannot come apart.
 const stateSubtree = require('./state_subtree_activation.js');
+// Escrow roles come from the coin bundle through this adapter. The call stays guarded
+// below because an unknown ticker is a caller error that must resolve to null, not throw.
+const coinAdapter = require('./coins/to_indexer_config.js');
 
 // Role prefix of the escrow address on the ORIGIN chain: one protocol address per
 // destination chain, ADDRESS.BRIDGE_<DEST_COIN> (spec section 5). Unspendable because no
@@ -186,7 +189,7 @@ function resolveEscrowAddress(originChain, destChain, network){
     if(!chain || !dest || !net) return null;
     if(!/^[A-Z]{2,10}$/.test(chain) || !/^[A-Z]{2,10}$/.test(dest)) return null;
     let conf;
-    try { conf = require('./configs/' + chain + '.js').getConfig(net); }
+    try { conf = coinAdapter.toIndexerConfig(chain, net); }
     catch(e){ return null; }
     const addresses = (conf && (conf.ADDRESS || conf.address)) || {};
     return _str(addresses[ESCROW_ROLE_PREFIX + dest]);

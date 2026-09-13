@@ -195,7 +195,7 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
 
     it('GAS_SCHEDULE + GAS_PRICE equal the golden on every chain (identical across BTC/LTC/DOGE)', function(){
         for(const coin of ['BTC', 'LTC', 'DOGE']){
-            const cfg = require('../../src/configs/' + coin + '.js').getConfig('regtest');
+            const cfg = require('../../src/coins/to_indexer_config.js').toIndexerConfig(coin, 'regtest');
             assert.strictEqual(cfg.GAS_PRICE, GOLDEN_GAS_PRICE, coin + ' GAS_PRICE drifted');
             assert.deepStrictEqual(cfg.GAS_SCHEDULE, GOLDEN_GAS_SCHEDULE, coin + ' GAS_SCHEDULE drifted');
         }
@@ -203,14 +203,14 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
 
     it('VALIDATOR_QUERY_LIMIT equals the golden on every chain (frozen node-local, not env-tunable)', function(){
         for(const coin of ['BTC', 'LTC', 'DOGE']){
-            const cfg = require('../../src/configs/' + coin + '.js').getConfig('regtest');
+            const cfg = require('../../src/coins/to_indexer_config.js').toIndexerConfig(coin, 'regtest');
             assert.strictEqual(cfg.VALIDATOR_QUERY_LIMIT, GOLDEN_VALIDATOR_QUERY_LIMIT, coin + ' VALIDATOR_QUERY_LIMIT drifted');
         }
     });
 
     it('node-local fee/oracle params equal the golden on every chain (per-chain + shared)', function(){
         for(const coin of ['BTC', 'LTC', 'DOGE']){
-            const cfg = require('../../src/configs/' + coin + '.js').getConfig('regtest');
+            const cfg = require('../../src/coins/to_indexer_config.js').toIndexerConfig(coin, 'regtest');
             for(const [k, v] of Object.entries(GOLDEN_FEE_PARAMS_SHARED))
                 assert.strictEqual(cfg[k], v, coin + ' ' + k + ' drifted (shared consensus param)');
             for(const [k, v] of Object.entries(GOLDEN_FEE_PARAMS_PER_CHAIN[coin]))
@@ -220,7 +220,7 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
 
     it('per-chain STAKING activation/cooldown equal the golden (node-local consensus)', function(){
         for(const coin of ['BTC', 'LTC', 'DOGE']){
-            const cfg = require('../../src/configs/' + coin + '.js').getConfig('regtest');
+            const cfg = require('../../src/coins/to_indexer_config.js').toIndexerConfig(coin, 'regtest');
             const g   = GOLDEN_STAKING_PER_CHAIN[coin];
             assert.ok(cfg.STAKING, coin + ' STAKING missing');
             assert.strictEqual(cfg.STAKING.ACTIVATION_DELAY_BLOCKS, g.ACTIVATION_DELAY_BLOCKS, coin + ' STAKING.ACTIVATION_DELAY_BLOCKS drifted');

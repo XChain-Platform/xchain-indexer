@@ -51,7 +51,7 @@ describe('Deferred chunked DEPLOY assembly @regression @tier2', function () {
     // scheduleOverrides is a fifth, narrow one: the gas-parity test neutralizes
     // VM_DEPLOY_PER_BYTE so DEPLOY_INLINE collapses to the same base DEPLOY_CHUNKED always
     // charges. Reassigned on THIS call's own config object only (never mutated in place),
-    // since src/configs/_adapter.js hands every getConfig() call the SAME cached
+    // since src/coins/to_indexer_config.js hands every getConfig() call the SAME cached
     // GAS_SCHEDULE object and an in-place edit would leak into every other test file.
     function build({ gateOn = true, balance = '1000', chunkRows = [], pendingAssembler = null, ctorGas = 5000, scheduleOverrides = null } = {}){
         const config = getTestConfig();

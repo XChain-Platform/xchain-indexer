@@ -32,11 +32,11 @@ const HASHED_ROLES = ['BURN', 'GAS', 'DONATE1', 'DONATE2', 'REWARD',
 
 describe('protocolAddressRoles (consensus hash canonicalization)', function () {
 
-    it('covers every hashed special address in src/configs/*.js', function () {
+    it('covers every hashed special address in the coin bundles', function () {
         for (const coin of COINS) {
-            const cfg = require('../../src/configs/' + coin + '.js');
+            const cfg = require('../../src/coins/to_indexer_config.js');
             for (const network of NETWORKS) {
-                const addr = (cfg.getConfig(network).ADDRESS) || {};
+                const addr = (cfg.toIndexerConfig(coin, network).ADDRESS) || {};
                 for (const role of HASHED_ROLES) {
                     const a = addr[role];
                     if (!a) continue;
@@ -53,9 +53,9 @@ describe('protocolAddressRoles (consensus hash canonicalization)', function () {
         // overwritten silently; re-derive and assert each address is single-valued.
         const seen = {};
         for (const coin of COINS) {
-            const cfg = require('../../src/configs/' + coin + '.js');
+            const cfg = require('../../src/coins/to_indexer_config.js');
             for (const network of NETWORKS) {
-                const addr = (cfg.getConfig(network).ADDRESS) || {};
+                const addr = (cfg.toIndexerConfig(coin, network).ADDRESS) || {};
                 for (const role of HASHED_ROLES) {
                     const a = addr[role];
                     if (!a) continue;
@@ -68,7 +68,7 @@ describe('protocolAddressRoles (consensus hash canonicalization)', function () {
     });
 
     it('canonicalizes a known special address to its role and passes others through', function () {
-        const btc = require('../../src/configs/BTC.js').getConfig('regtest').ADDRESS;
+        const btc = require('../../src/coins/to_indexer_config.js').toIndexerConfig('BTC', 'regtest').ADDRESS;
         assert.strictEqual(canonicalizeHashAddress(btc.DONATE1), 'DONATE1');
         assert.strictEqual(canonicalizeHashAddress(btc.GAS), 'GAS');
         // A plain user address is unchanged.

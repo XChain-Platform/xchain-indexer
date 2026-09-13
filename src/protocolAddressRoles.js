@@ -33,7 +33,7 @@
 //
 // xchain-sync/src/BlockHasher.js vendors a byte-identical copy of ROLE_BY_ADDRESS
 // and canonicalizeHashAddress; the indexer unit suite asserts this map matches
-// src/configs/*.js so config edits can never silently drift the consensus map.
+// the coin bundles so config edits can never silently drift the consensus map.
 
 // BRIDGE_<COIN> joins the hashed roles for the same reason REWARD is here: the
 // XBRIDGE escrow is an ordinary balance at a per-chain address, so a v0/v3 lock
@@ -41,6 +41,8 @@
 // otherwise hash differently on BTC than on DOGE. Adding a role moves no historical
 // hash: these addresses are new and hold nothing below XCHAIN_BRIDGE_ACTIVATION, so
 // no pre-activation ledger row can match one (base spec D10).
+const coinAdapter = require('./coins/to_indexer_config.js');
+
 const ROLE_FIELDS = ['BURN', 'GAS', 'DONATE1', 'DONATE2', 'REWARD',
                      'BRIDGE_BTC', 'BRIDGE_LTC', 'BRIDGE_DOGE'];
 const COINS       = ['BTC', 'LTC', 'DOGE'];
@@ -53,9 +55,8 @@ const NETWORKS    = ['mainnet', 'testnet', 'regtest'];
 function buildRoleByAddress() {
     const map = {};
     for (const coin of COINS) {
-        const cfg = require('./configs/' + coin + '.js');
         for (const network of NETWORKS) {
-            const conf = cfg.getConfig(network);
+            const conf = coinAdapter.toIndexerConfig(coin, network);
             const addr = (conf && (conf.ADDRESS || conf.address)) || {};
             for (const role of ROLE_FIELDS) {
                 const a = addr[role];
