@@ -47,6 +47,7 @@ class DeployChunk {
     // itself over). A carrier that completes a pending group runs THAT handler's deployment,
     // so a deferred deploy and an inline one are the same code, not two implementations.
     constructor(action, deploy){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -135,6 +136,7 @@ class DeployChunk {
     // validated the format is known, so there is no VERSION guard here.
     async parse(params, data, error){
 
+        // Extract params
         data['CODE_HASH']    = params[1];
         data['CHUNK_INDEX']  = params[2];
         data['TOTAL_CHUNKS'] = params[3];
@@ -193,6 +195,7 @@ class DeployChunk {
         let gasCost   = this.util.vmGasCost(schedule, 'DEPLOY_CARRIER', partBytes);
         let fee       = this.util.bcmul(gasCost, this.config['GAS_PRICE'], 8);
 
+        // Get source address balances (gas tick)
         let gas       = this.config['GAS'];
         let tokenInfo = await this.indexerDb.getTokenInfo(gas, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let balances  = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
@@ -220,12 +223,15 @@ class DeployChunk {
             }
         }
 
+        // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
+        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
+        // Print status message
         console.log("\t DEPLOY v4 : hash=" + data['CODE_HASH'] + ' : ' + chunkIndex + '/' + totalChunks +
             ' : bytes=' + partBytes + ' : ' + data['STATUS']);
 
@@ -242,8 +248,10 @@ class DeployChunk {
             BLOCK_INDEX  : data['BLOCK_INDEX']
         });
 
+        // Store the SOURCE and GAS tick in addresses list
         this.util.addAddressTicker(data['SOURCE'], gas);
 
+        // Array of credits and debits
         let credits = [],
             debits  = [];
 
@@ -306,14 +314,18 @@ class DeployChunk {
             }
         }
 
+        // Process any transaction ledger changes (credits / debits)
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
+        // Get a list of tickers & addresses
         let tickers   = this.util.getTickersList(),
             addresses = Object.keys(this.util.getAddressesList());
 
+        // Update address balances and token supply
         await this.indexerDb.updateBalances(addresses);
         await this.indexerDb.updateTokens(tickers);
 
+        // Create action mappings
         await this.mapper.createMappings(data);
     }
 }

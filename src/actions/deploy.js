@@ -81,7 +81,9 @@ const PENDING_ASSEMBLY_STATUS = 'pending: CODE_HASH (awaiting chunks)';
 
 class Deploy {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -127,8 +129,10 @@ class Deploy {
         this.chunkStore = new DeployChunk(action, this);
     }
 
+    // Handle parsing the DEPLOY transaction
     async parse(params, data, error){
 
+        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
@@ -149,6 +153,7 @@ class Deploy {
         let isRestCtor = (format === 0 || format === 2);
         let hasStaking = (format === 1 || format === 3);
 
+        // Extract params
         if(isChunked)
             data['CODE_HASH_PARAM'] = params[1];
         else
@@ -249,6 +254,7 @@ class Deploy {
         if(!error && slashDestUnresolvable && !this.util.isNull(data['SLASH_DESTINATION']))
             error = 'invalid: SLASH_DESTINATION (unresolvable ^id)';
 
+        // Convert NUMBER fields from string value to number value
         if(!error)
             data = this.util.setNumberFormats(data);
 
@@ -409,9 +415,11 @@ class Deploy {
         let heldVerdict   = pendingCodeHash !== null ? PENDING_ASSEMBLY_STATUS : deferredError;
         let landedPending = false;
 
+        // Verify code size
         if(!error && Buffer.byteLength(code, 'utf8') > this.MAX_CODE_SIZE)
             error = 'invalid: CODE_ENCODING (exceeds max size)';
 
+        // Verify GAS_LIMIT is provided and valid
         if(!error && (this.util.isNull(gasLimit) || !this.util.isNumeric(gasLimit)))
             error = 'invalid: GAS_LIMIT (required)';
 
@@ -599,6 +607,7 @@ class Deploy {
         let gasCost = this.util.vmGasCost(schedule, isChunked ? 'DEPLOY_CHUNKED' : 'DEPLOY_INLINE', codeBytes);
         let fee = this.util.bcmul(gasCost, this.config['GAS_PRICE'], 8);
 
+        // Get source address balances
         let gas = this.config['GAS'];
         let tokenInfo = await this.indexerDb.getTokenInfo(gas, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
@@ -814,6 +823,7 @@ class Deploy {
             status = 'valid';
         data['STATUS'] = status;
 
+        // Print status message
         console.log("\t DEPLOY : hash=" + codeHash + ' : gas=' + totalGas +
             (floatWarnings.length > 0 ? ' : FLOAT_WARNINGS=' + floatWarnings.length : '') +
             ' : ' + data['STATUS']);
@@ -826,6 +836,7 @@ class Deploy {
         // truncation on a permissive one. Same gate as createContractPermission below.
         let storedMeta = (status === 'valid' && declaredMeta) ? declaredMeta : null;
 
+        // Create record in contracts table
         await this.indexerDb.createContract({
             ACTION_INDEX      : data['ACTION_INDEX'],
             SOURCE            : data['SOURCE'],
@@ -842,6 +853,7 @@ class Deploy {
             META_JSON         : storedMeta ? storedMeta.json        : null
         });
 
+        // If constructor failed, delete the contract record
         if(constructorError)
             await this.indexerDb.deleteContract(data['ACTION_INDEX']);
 
@@ -982,6 +994,7 @@ class Deploy {
         // column stays NULL so a from-genesis replay writes exactly the row it wrote before.
         let recordFeePaymentMode = await this.actions.protocolChanges.isEnabled('DEPLOY_DEFERRED_ASSEMBLY', data['BLOCK_INDEX']);
 
+        // Create execution record
         await this.indexerDb.createContractExecution({
             ACTION_INDEX    : data['ACTION_INDEX'],
             CONTRACT_INDEX  : data['ACTION_INDEX'], // contract_index = its own action_index
@@ -1002,8 +1015,10 @@ class Deploy {
             FEE_PAYMENT_MODE       : recordFeePaymentMode ? feePaymentMode : null
         });
 
+        // Store the SOURCE and GAS tick in addresses list
         this.util.addAddressTicker(data['SOURCE'], gas);
 
+        // Array of credits and debits
         let credits = [],
             debits  = [];
 
@@ -1026,14 +1041,18 @@ class Deploy {
         if((!error || landedPending) && tokenInfo && feePaymentMode === 2)
             debits.push([gas, fee, data['SOURCE']]);
 
+        // Process any transaction ledger changes (credits / debits)
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
+        // Get a list of tickers & addresses
         let tickers   = this.util.getTickersList(),
             addresses = Object.keys(this.util.getAddressesList());
 
+        // Update address balances and token supply
         await this.indexerDb.updateBalances(addresses);
         await this.indexerDb.updateTokens(tickers);
 
+        // Create action mappings
         await this.mapper.createMappings(data);
     }
 }
