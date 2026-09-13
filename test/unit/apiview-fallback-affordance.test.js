@@ -14,7 +14,7 @@
  * Three sites read through `typeof db.apiView === 'function' ? db.apiView() : db`
  * so a minimal test double without apiView still runs: the reorg driver's
  * indexerReorgView (XChainIndexer.js), the rollback read phase (rollback.js) and
- * committedView() (health.js). Nothing else may take that shape. apiView() is
+ * committedView() (api/health.js). Nothing else may take that shape. apiView() is
  * what gives a read an independent pooled connection that sees only committed
  * state, so a silent raw-db fallback on a federation READ would re-open the
  * dirty read the REORG-1 guards exist to prevent.
@@ -37,8 +37,10 @@ const Database = require('../../src/db');
 const SRC_DIR = path.join(__dirname, '../../src');
 
 // The only files allowed to carry the guarded fallback, each mapped to the note
-// that has to survive beside it.
-const ALLOWED_SITES = ['XChainIndexer.js', 'rollback.js', 'health.js'];
+// that has to survive beside it. Written as src-relative paths and joined per
+// platform, because the health reader lives under the api feature directory and
+// a bare basename would neither match what the walk reports nor open the file.
+const ALLOWED_SITES = ['XChainIndexer.js', 'rollback.js', path.join('api', 'health.js')];
 
 // `typeof <anything>.apiView === 'function'` in either operand order.
 const FALLBACK_SHAPE = /typeof\s+[^;\n]*?\.apiView\s*===?\s*['"]function['"]|['"]function['"]\s*===?\s*typeof\s+[^;\n]*?\.apiView/;
