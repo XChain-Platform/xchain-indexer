@@ -2108,7 +2108,9 @@ describe('Database.getPendingHubPushes() @regression @tier1', function () {
 describe('Database capability snapshot methods @regression @tier1', function () {
     it('getCapabilitySnapshotValidators returns mapped results', async function () {
         const db = makeDb();
-        sinon.stub(db, 'doQuery').resolves([
+        // Consensus input read on the hub mirror: routed through doQueryStrict so a
+        // transient DB fault cannot collapse the capable set to empty on one node.
+        sinon.stub(db, 'doQueryStrict').resolves([
             { pubkey: 'aa', amount: '5000' },
             { pubkey: 'bb', amount: null }
         ]);
@@ -2121,13 +2123,13 @@ describe('Database capability snapshot methods @regression @tier1', function () 
 
     it('isPubkeyInCapabilitySnapshot returns true when row found', async function () {
         const db = makeDb();
-        sinon.stub(db, 'doQuery').resolves([{ 1: 1 }]);
+        sinon.stub(db, 'doQueryStrict').resolves([{ 1: 1 }]);
         assert.strictEqual(await db.isPubkeyInCapabilitySnapshot('aa', 'cross_chain', 100), true);
     });
 
     it('isPubkeyInCapabilitySnapshot returns false when no row', async function () {
         const db = makeDb();
-        sinon.stub(db, 'doQuery').resolves([]);
+        sinon.stub(db, 'doQueryStrict').resolves([]);
         assert.strictEqual(await db.isPubkeyInCapabilitySnapshot('aa', 'cross_chain', 100), false);
     });
 });

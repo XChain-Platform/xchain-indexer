@@ -31,8 +31,9 @@
  * membership) go through the one predicate so they cannot disagree about who is
  * capable. What these cases guard is that agreement.
  *
- * Mock-based (doQuery stubbed on both the indexer DB and the hub mirror); the SQL
- * itself is proven by the real-MariaDB drills that cover these queries.
+ * Mock-based (doQuery stubbed on the indexer DB, doQueryStrict on the hub mirror, since
+ * every mirrored capability read is a consensus input and goes through the strict
+ * reader); the SQL itself is proven by the real-MariaDB drills that cover these queries.
  */
 
 'use strict';
@@ -90,8 +91,9 @@ function dbFor(coin, network, localRows) {
         return MIRROR_ROWS;
     });
     // _mirrorDb() prefers indexer.hubDb, which is where the mirrored tables live in
-    // a distributed deployment.
-    db.indexer = { hubDb: { doQuery: mirror } };
+    // a distributed deployment. The mirror exposes ONLY doQueryStrict: a capability read
+    // that reached the swallowing doQuery would throw here instead of passing.
+    db.indexer = { hubDb: { doQueryStrict: mirror } };
     return { db, local, mirror };
 }
 

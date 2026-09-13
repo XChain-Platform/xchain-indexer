@@ -2371,6 +2371,19 @@ class Database {
             if(this.util.isNull(data[field]) || !this.util.isNumeric(data[field]))
                 data[field] = null;
         }
+        // Null any INTEGER-backed wire field the storage column cannot represent. The
+        // NUMBER_FIELDS pass above bounds TYPE, not MAGNITUDE, so a wire EXPIRATION of
+        // '18446744073709551616' survives it and reaches a BIGINT UNSIGNED bind: strict
+        // sql_mode throws inside the block transaction and the retry loop re-runs the same
+        // deterministic transaction forever, permissive sql_mode clamps and stores a value
+        // no other node stores. A negative value is the same hazard against an UNSIGNED
+        // column, and the action handlers write their row even when the action is invalid.
+        // See config['INTEGER_FIELDS'] for why the amount fields are excluded.
+        for(let field in this.config['INTEGER_FIELDS']){
+            if(this.util.isNull(data[field])) continue;
+            if(this.util.exceedsUnsignedColumn(data[field], this.config['INTEGER_FIELDS'][field]))
+                data[field] = null;
+        }
         // set LOCK field values to explicitly unlocked (0), locked (1), or null
         for(let field of this.config['LOCK_FIELDS']){
             // Convert bignumber/string lock values to plain integers before checking
@@ -2569,10 +2582,19 @@ class Database {
     // (doQueryStrict): a swallowed read fault must not masquerade as "not halted". Returns
     // { halted:boolean, payload:(string|null) } - the payload is the marker's `data` column
     // (operator context: why the decoder halted), null when not halted or absent.
+    //
+    // The NEWEST of REORG_HALT / REORG_HALT_CLEARED decides, mirroring the writer-side
+    // contract in xchain-decoder/src/db.js readReorgHaltState. `xchain-node clear-reorg-halt`
+    // clears a reviewed halt by writing a REORG_HALT_CLEARED row and never deletes the halt
+    // row, so the audit trail survives; selecting only REORG_HALT reads a cleared halt as
+    // live forever. A later halt writes a newer REORG_HALT row that is live again.
+    // Fail-closed: a row whose code is missing or unreadable still counts as halted, because
+    // "we could not tell" must never reach a caller as "not halted".
     async isReorgHalted(){
         let rows = await this.doQueryStrict(
-            `SELECT data FROM events WHERE code='REORG_HALT' ORDER BY id DESC LIMIT 1`);
+            `SELECT code, data FROM events WHERE code IN ('REORG_HALT','REORG_HALT_CLEARED') ORDER BY id DESC LIMIT 1`);
         if(rows.length === 0) return { halted: false, payload: null };
+        if(rows[0].code === 'REORG_HALT_CLEARED') return { halted: false, payload: null };
         return { halted: true, payload: (rows[0].data != null) ? String(rows[0].data) : null };
     }
 
@@ -9765,7 +9787,11 @@ class Database {
         // admission height above it (_mirrorBindClause); `block_index` is that key.
         let network = this.config['NETWORK'];
         let bind    = this._mirrorBindClause(block_time, block_index);
-        let matches = await this._mirrorDb().doQuery(
+        // doQueryStrict (not doQuery): a CONSENSUS input read on the hub mirror, which never
+        // holds a transaction, so doQuery turns a transient DB fault into an empty set on this
+        // node alone - peers settle the matches, this node does not, and the block hashes
+        // diverge. Throwing rolls the block back so it retries.
+        let matches = await this._mirrorDb().doQueryStrict(
             `SELECT * FROM cross_chain_matches
              WHERE status = 'finalized' AND network = ? AND ${bind.sql} AND (a_chain = ? OR b_chain = ?)
              ORDER BY snapshot_block ASC, match_id ASC`,
@@ -10324,7 +10350,11 @@ class Database {
     async getEffectiveUndispatchedCalls(coin, network, block_time, limit, block_index){
         // Clock-bound below the admission activation, height-bound above it (_mirrorBindClause).
         let bind  = this._mirrorBindClause(block_time, block_index);
-        let calls = await this._mirrorDb().doQuery(
+        // doQueryStrict (not doQuery): a CONSENSUS input read on the hub mirror, which never
+        // holds a transaction, so doQuery turns a transient DB fault into an empty dispatch set
+        // on this node alone - peers inject the XEXEC actions, this node does not, and the
+        // block hashes diverge. Throwing rolls the block back so it retries.
+        let calls = await this._mirrorDb().doQueryStrict(
             `SELECT * FROM cross_chain_calls
              WHERE phase = 'dispatch' AND status = 'finalized' AND network = ?
                AND target_chain = ? AND ${bind.sql}
@@ -10364,10 +10394,15 @@ class Database {
     async getEffectiveUnprocessedCallResults(coin, network, block_time, limit, block_index){
         let cap = Number(limit) || 25;
         let mirror = this._mirrorDb();
+        // doQueryStrict (not doQuery) on both branches: these are CONSENSUS input reads. The
+        // mirror branch never holds a transaction, so doQuery turns a transient DB fault into
+        // an empty result set on this node alone - peers record the callbacks, this node does
+        // not, and the block hashes diverge. The single-DB branch is strict for symmetry, so a
+        // later caller outside the block transaction cannot reintroduce the swallow.
         if(mirror === this){
             // The single-DB form aliases the table, so the clause is spelled on the alias.
             let bind = this._mirrorBindClause(block_time, block_index, 'c');
-            return await this.doQuery(
+            return await this.doQueryStrict(
                 `SELECT c.* FROM cross_chain_calls c
                  WHERE c.phase = 'result' AND c.status = 'finalized' AND c.network = ?
                    AND c.source_chain = ? AND ${bind.sql}
@@ -10378,7 +10413,7 @@ class Database {
                 [network, coin].concat(bind.args, [cap]));
         }
         let bind    = this._mirrorBindClause(block_time, block_index);
-        let results = await mirror.doQuery(
+        let results = await mirror.doQueryStrict(
             `SELECT * FROM cross_chain_calls
              WHERE phase = 'result' AND status = 'finalized' AND network = ?
                AND source_chain = ? AND ${bind.sql}
@@ -14535,7 +14570,10 @@ class Database {
                      FROM capability_snapshots
                      WHERE capability = ? AND snapshot_block = ?
                      ORDER BY signing_pubkey ASC, source ASC`;
-        let rows = await this._mirrorDb().doQuery(query, [capability, snapshotBlock]);
+        // doQueryStrict (not doQuery): a CONSENSUS input read on the hub mirror, which never
+        // holds a transaction, so doQuery turns a transient DB fault into an empty weight set,
+        // collapsing the stake-weighted quorum denominator S to 0 on this node alone.
+        let rows = await this._mirrorDb().doQueryStrict(query, [capability, snapshotBlock]);
         return rows.map(r => ({
             pubkey: String(r.pubkey),
             source: r.source == null ? '' : String(r.source),
@@ -15278,7 +15316,10 @@ class Database {
                      FROM capability_snapshots
                      WHERE capability = ? AND snapshot_block = ?
                      ORDER BY signing_pubkey ASC, source ASC`;
-        let rows = await this._mirrorDb().doQuery(query, [capability, snapshotBlock]);
+        // doQueryStrict (not doQuery): a CONSENSUS input read on the hub mirror, which never
+        // holds a transaction, so doQuery turns a transient DB fault into an empty capable set
+        // on this node alone, and its quorum verdict stops matching the fleet's.
+        let rows = await this._mirrorDb().doQueryStrict(query, [capability, snapshotBlock]);
         // Guard a NULL amount to '0' so all three snapshot read methods render it
         // identically: the sibling getCapabilitySnapshotWeights (r.weight == null ?
         // '0') and the BTC local path both coerce NULL to '0'; without this an
@@ -15294,7 +15335,10 @@ class Database {
         let query = `SELECT COUNT(DISTINCT signing_pubkey) AS cnt
                      FROM capability_snapshots
                      WHERE capability = ? AND snapshot_block = ?`;
-        let rows = await this._mirrorDb().doQuery(query, [capability, snapshotBlock]);
+        // doQueryStrict (not doQuery): a CONSENSUS input read on the hub mirror, which never
+        // holds a transaction, so doQuery turns a transient DB fault into N = 0, which is the
+        // quorum DENOMINATOR, on this node alone.
+        let rows = await this._mirrorDb().doQueryStrict(query, [capability, snapshotBlock]);
         return rows.length > 0 ? Number(rows[0].cnt) : 0;
     }
 
@@ -15302,7 +15346,10 @@ class Database {
     async isPubkeyInCapabilitySnapshot(pubkey, capability, snapshotBlock){
         let query = `SELECT 1 FROM capability_snapshots
                      WHERE capability = ? AND snapshot_block = ? AND signing_pubkey = ? LIMIT 1`;
-        let rows = await this._mirrorDb().doQuery(query, [capability, snapshotBlock, String(pubkey).toLowerCase()]);
+        // doQueryStrict (not doQuery): a CONSENSUS input read on the hub mirror, which never
+        // holds a transaction, so doQuery turns a transient DB fault into "not qualified" on
+        // this node alone, which is the answer that silently drops a capable signer.
+        let rows = await this._mirrorDb().doQueryStrict(query, [capability, snapshotBlock, String(pubkey).toLowerCase()]);
         return rows.length > 0;
     }
 
@@ -17482,7 +17529,10 @@ class Database {
         for(let i = 0; i < ids.length; i += CHUNK){
             let chunk        = ids.slice(i, i + CHUNK);
             let placeholders = chunk.map(() => '?').join(',');
-            let rows = await mirror.doQuery(
+            // doQueryStrict (not doQuery): a CONSENSUS input read on the hub mirror, which
+            // never holds a transaction, so doQuery turns a transient DB fault into a missing
+            // attestation chunk on this node alone, and the block hashes diverge.
+            let rows = await mirror.doQueryStrict(
                 `SELECT request_id, provider_id, status, response_payload, response_hash, meta,
                         effective_time, signer_pubkeys, signatures, widen, batch_action_index${admitCols}
                  FROM attestation_responses

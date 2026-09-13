@@ -33,7 +33,7 @@
  * data and, when it does fire, surfaces to the hub as an RPC error - which every
  * consensus caller already treats as "decline the round".
  *
- * Mock-based (doQuery stubbed); the SQL itself is proven by the real-MariaDB
+ * Mock-based (doQuery and doQueryStrict stubbed); the SQL itself is proven by the real-MariaDB
  * drills that cover these queries.
  */
 
@@ -64,6 +64,10 @@ function dbFor(rows) {
     const db = new Database('127.0.0.1', 3306, 'xchain_btc_regtest', 'u', 'p', { config, util });
     sinon.stub(db, 'getStatusId').resolves(1);
     sinon.stub(db, 'doQuery').resolves(rows || []);
+    // The hub-mirrored reader (getCapabilitySnapshotWeights) reads through
+    // doQueryStrict; the mirror handle is this same db on BTC, so both entry
+    // points hand back the same rows.
+    sinon.stub(db, 'doQueryStrict').resolves(rows || []);
     return db;
 }
 

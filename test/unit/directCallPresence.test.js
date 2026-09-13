@@ -67,7 +67,10 @@ function ctx(opts){
     });
     const sleepSpy = sinon.spy((ms) => sleep(ms));
     return {
-        hubDb: opts.noHubDb ? null : { doQuery },
+        // The probe reads through doQueryStrict, which is what keeps the "query error means
+        // NOT covered" catch reachable: doQuery swallows a non-transactional fault into [],
+        // and the barrier would read that empty result as "nothing to wait on".
+        hubDb: opts.noHubDb ? null : { doQuery, doQueryStrict: doQuery },
         callPresenceTimeoutMs: opts.timeoutMs != null ? opts.timeoutMs : 10000,
         // Left undefined by default so the barrier's fallback to the frozen constant is
         // what most tests exercise; start() sets it on a real indexer.
@@ -168,7 +171,7 @@ describe('XChainIndexer._waitForDirectCallPresence (direct-hub-DB call barrier)'
         // A query error must read as NOT covered: the barrier waits and then defers on timeout,
         // it never proceeds against an unread table.
         const self = ctx({ timeoutMs: 80 });
-        self.hubDb.doQuery = sinon.stub().rejects(new Error('table not ready'));
+        self.hubDb.doQueryStrict = sinon.stub().rejects(new Error('table not ready'));
         let threw = false;
         try { await run(self, NOW_S() + 3600); } catch(e){ threw = true; }
         assert.ok(threw, 'must defer (throw) on persistent table-not-ready, not proceed');

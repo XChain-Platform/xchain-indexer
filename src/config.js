@@ -318,6 +318,53 @@ module.exports = {
             'VALUE',
         ];
 
+        // Wire fields that land in an INTEGER database column, mapped to the largest value
+        // that column can hold. NUMBER_FIELDS normalizes a field to numeric-or-NULL but puts
+        // no bound on MAGNITUDE, so a wire value such as EXPIRATION='18446744073709551616'
+        // clears every format check and reaches a BIGINT UNSIGNED bind: under
+        // STRICT_TRANS_TABLES that throws inside the block transaction and the retry loop
+        // re-runs the same deterministic transaction forever (the same wedge shape recorded
+        // for CONTRACT_ACTION_INDEX above), and under a permissive sql_mode it clamps, which
+        // stores a different value on different nodes. normalizeDataValues nulls anything
+        // outside [0, max] for these fields.
+        //
+        // AMOUNT-style fields are deliberately absent: give_amount, get_amount, MAX_SUPPLY,
+        // MIN_AMOUNT, FEE and friends are VARCHAR(250) columns carrying fixed-decimal
+        // strings, and range-clamping them would destroy real balances.
+        //
+        // The bound is representability only. It does NOT narrow the accepted range to
+        // Number.MAX_SAFE_INTEGER: values between 2^53 and 2^64-1 are accepted and stored
+        // exactly today, and narrowing them is a consensus rule change that has to ride the
+        // per-network activation registry in src/protocol_changes.js.
+        const U64_MAX = '18446744073709551615';   // BIGINT UNSIGNED
+        const U32_MAX = '4294967295';             // INT UNSIGNED
+        config['INTEGER_FIELDS'] = {
+            'ALLOW_LIST':               U64_MAX,
+            'BLOCK_LIST':               U64_MAX,
+            'BROADCAST_ACTION_INDEX':   U64_MAX,
+            'CALLBACK_BLOCK':           U64_MAX,
+            'COIN1_ACTION_INDEX':       U64_MAX,
+            'COIN2_ACTION_INDEX':       U64_MAX,
+            'CONTRACT_ACTION_INDEX':    U64_MAX,
+            'CONTRACT_INDEX':           U64_MAX,
+            'COOLDOWN_BLOCKS':          U32_MAX,
+            'DEADLINE':                 U64_MAX,
+            'DISPENSER_ACTION_INDEX':   U64_MAX,
+            'EXPIRATION':               U64_MAX,
+            'FEED_ACTION_INDEX':        U64_MAX,
+            'LIST_ACTION_INDEX':        U64_MAX,
+            // MINT_START_BLOCK / MINT_STOP_BLOCK also reach a VARCHAR(15) mirror column on
+            // one table, which a 20-digit value still overflows; the u64 bound closes the
+            // integer-column exposure and that narrower one stays open.
+            'MINT_START_BLOCK':         U64_MAX,
+            'MINT_STOP_BLOCK':          U64_MAX,
+            'ORDER_ACTION_INDEX':       U64_MAX,
+            'OUTCOME':                  U32_MAX,
+            'REFUND_WINDOW':            U64_MAX,
+            'SWAP_ACTION_INDEX':        U64_MAX,
+            'TARGET_CONTRACT_INDEX':    U64_MAX
+        };
+
         // Define list of LOCK fields
         config['LOCK_FIELDS'] = [
             'LOCK_MAX_SUPPLY',

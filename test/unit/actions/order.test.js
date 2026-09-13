@@ -93,6 +93,31 @@ describe('Order action handler @regression @tier2', function () {
             sinon.assert.calledOnce(indexer.indexerDb.createOrderStatus);
         });
 
+        // An EXPIRATION the BIGINT UNSIGNED column cannot represent clears isNumeric and
+        // isInteger (+'18446744073709551616' is a whole float) and is not in the past, so
+        // without the range clause it would be a VALID order stored with a NULL expiration,
+        // i.e. an escrow that never expires.
+        it('rejects an EXPIRATION the expiration column cannot represent', async function () {
+            const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|10||${OWNER_ADDR}|18446744073709551616|||`);
+            const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await order.parse(params, data, false);
+
+            assert.strictEqual(data['STATUS'], 'invalid: EXPIRATION (format)');
+        });
+
+        // The boundary value itself still clears the format check. It fails later on the
+        // duration-priced fee, which is a separate rule; what matters here is that the range
+        // clause is a strict inequality and does not reject the largest storable value.
+        it('does not reject the largest EXPIRATION the column can hold on format', async function () {
+            const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|10||${OWNER_ADDR}|18446744073709551615|||`);
+            const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await order.parse(params, data, false);
+
+            assert.notStrictEqual(data['STATUS'], 'invalid: EXPIRATION (format)');
+        });
+
         it('valid order triggers processAction ORDER_MATCH', async function () {
             const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|10||${OWNER_ADDR}|${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });

@@ -124,7 +124,8 @@ describe('getCapabilitySnapshotValidators() NULL-amount guard @regression @tier1
 
     it("coerces a NULL snapshot amount to '0' (not the literal string 'null')", async function () {
         const db = makeDb();
-        sinon.stub(db, 'doQuery').resolves([
+        // Consensus input read on the hub mirror: routed through doQueryStrict.
+        sinon.stub(db, 'doQueryStrict').resolves([
             { pubkey: 'aa'.repeat(32), amount: null },
             { pubkey: 'bb'.repeat(32), amount: '500' }
         ]);
@@ -141,7 +142,7 @@ describe('getCapabilitySnapshotValidators() NULL-amount guard @regression @tier1
         // stake, shrinks the denominator S and lowers the very two-thirds bar it is
         // measured against - so it throws instead.
         const db = makeDb();
-        sinon.stub(db, 'doQuery').resolves([{ pubkey: 'cc'.repeat(32), weight: null, source: null, amount: null }]);
+        sinon.stub(db, 'doQueryStrict').resolves([{ pubkey: 'cc'.repeat(32), weight: null, source: null, amount: null }]);
         const vals = await db.getCapabilitySnapshotValidators('oracle_publish', 961000);
         assert.strictEqual(vals[0].amount, '0');
         await assert.rejects(() => db.getCapabilitySnapshotWeights('oracle_publish', 961000),
@@ -257,7 +258,12 @@ describe('capability_snapshots reads are deterministically ordered (#3085) @regr
     function capture(method, args) {
         const db = makeDb();
         const calls = [];
-        sinon.stub(db, 'doQuery').callsFake((query, a) => { calls.push({ query, args: a }); return Promise.resolve([]); });
+        const record = (query, a) => { calls.push({ query, args: a }); return Promise.resolve([]); };
+        // The capability-snapshot reads are consensus inputs on the hub mirror, so they run
+        // through doQueryStrict; doQuery is stubbed too so a sibling read on the same path
+        // cannot reach a real connection.
+        sinon.stub(db, 'doQuery').callsFake(record);
+        sinon.stub(db, 'doQueryStrict').callsFake(record);
         return db[method](...args).then(() => calls[0]);
     }
 

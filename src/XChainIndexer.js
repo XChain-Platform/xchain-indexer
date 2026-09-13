@@ -821,14 +821,18 @@ class XChainIndexer {
             // Coverage check: proceed the instant the local hub mirror covers block_time, i.e.
             // the highest finalized effective_time is at/after it, or there is nothing to wait on.
             // A query error means the table is not ready yet, which reads as NOT covered so the
-            // barrier waits (it never proceeds against an unread table).
+            // barrier waits (it never proceeds against an unread table). The probe uses
+            // doQueryStrict, which is what makes the catch below reachable: doQuery collapses a
+            // non-transactional query fault into [], and the hub connection never holds a
+            // transaction, so an empty result would fall straight into `covered = true` and a
+            // transient hub fault would CLEAR the barrier it exists to hold.
             let covered = false;
             try {
                 if(admission){
                     // THE HEIGHT FORM. Covered when the persisted floor for (cross_chain_calls,
                     // this chain) has reached B - margin. No clock, no escape: the only thing
                     // that holds this is a watermark that has not advanced, which is mirror lag.
-                    let rows = await this.hubDb.doQuery(
+                    let rows = await this.hubDb.doQueryStrict(
                         "SELECT param_value FROM configs " +
                         "WHERE coin = ? AND network = ? AND module = ? AND param_name = ?",
                         ['xchain', String(this.config['NETWORK'] || ''), 'admission_watermark',
@@ -844,7 +848,7 @@ class XChainIndexer {
                 // watermark, so the escape below compares two readings taken at one instant from
                 // one clock. Reading the hub's clock separately (or substituting this node's)
                 // would let skew between them decide a consensus barrier.
-                let rows = await this.hubDb.doQuery(coverageSql, coverageArgs);
+                let rows = await this.hubDb.doQueryStrict(coverageSql, coverageArgs);
                 if(rows.length === 0 || rows[0].ts === null){
                     covered = true;                         // no finalized rows: nothing to wait on
                 } else {
@@ -2407,15 +2411,19 @@ class XChainIndexer {
             console.error('XChainIndexer: DECODER REORG HALT detected - the decoder wrote a durable ' +
                 'REORG_HALT marker (a reorg it could not safely rewind) and will not advance. The ' +
                 'indexer is now blocked behind it and will present as idle/lagging until resolved. ' +
-                'REQUIRED OPERATOR ACTION: full decoder resync (clean reindex of decoder+indexer).' +
+                'OPERATOR ACTION: a full decoder resync (clean reindex of decoder+indexer) always ' +
+                'resolves it; where the halt has been reviewed and a resync is not required, ' +
+                '`xchain-node clear-reorg-halt` clears it in place.' +
                 (payload ? ' Marker detail: ' + payload : ''));
             this._reorgHaltLogTick = 0;
         } else if(halted){
             // Periodic reminder while it stays halted (every ~60 polls), not every tick.
             if((this._reorgHaltLogTick++ % 60) === 0)
-                console.error('XChainIndexer: decoder still REORG-HALTED; full decoder resync required.');
+                console.error('XChainIndexer: decoder still REORG-HALTED; resync the decoder or clear ' +
+                    'the reviewed halt with `xchain-node clear-reorg-halt`.');
         } else if(!halted && this.decoderReorgHalted){
-            console.warn('XChainIndexer: decoder REORG_HALT marker is gone; decoder halt cleared.');
+            console.warn('XChainIndexer: decoder halt is no longer live; a newer REORG_HALT_CLEARED ' +
+                'marker supersedes it, or the halt marker is absent.');
         }
         this.decoderReorgHalted = halted;
         return halted;

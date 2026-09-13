@@ -480,8 +480,14 @@ function stubDb(h, coin, opts) {
     const indexer = { config: { COIN: coin, NETWORK: NETWORK }, util: null };
     const db = new h.Database('127.0.0.1', 3306, 'xchain_test', 'u', 'p', indexer);
     const captured = [];
+    // The consensus readers go through doQueryStrict, which reaches the pool directly rather
+    // than through doQuery, so both entry points capture.
     db.doQuery = async (sql, args) => { captured.push({ sql, args }); return []; };
-    if (o.remoteMirror) indexer.hubDb = { doQuery: async (sql, args) => { captured.push({ sql, args, remote: true }); return []; } };
+    db.doQueryStrict = db.doQuery;
+    if (o.remoteMirror) {
+        const remoteQuery = async (sql, args) => { captured.push({ sql, args, remote: true }); return []; };
+        indexer.hubDb = { doQuery: remoteQuery, doQueryStrict: remoteQuery };
+    }
     return { db, captured };
 }
 
@@ -766,7 +772,7 @@ describe('admission binding: the direct-hub-DB call-presence member', function (
             return typeof o.rows === 'function' ? o.rows(sql, args) : (o.rows || []);
         });
         const self = {
-            hubDb: o.noHubDb ? null : { doQuery },
+            hubDb: o.noHubDb ? null : { doQuery, doQueryStrict: doQuery },
             config: o.noConfig ? undefined : { COIN: o.coin || 'BTC', NETWORK: NETWORK },
             callPresenceTimeoutMs: o.timeoutMs != null ? o.timeoutMs : 40,
             directCallGraceS: o.graceS,

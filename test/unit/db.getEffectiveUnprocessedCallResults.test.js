@@ -50,12 +50,14 @@ describe('getEffectiveUnprocessedCallResults', function () {
     it('same-DB deployment: one SQL statement pushes NOT EXISTS + ORDER BY + LIMIT', async function () {
         const db  = makeDb(null); // no hubDb -> _mirrorDb() === this
         const out = [{ call_id: 'a1', snapshot_block: 5 }];
-        const doQuery = sinon.stub(db, 'doQuery').resolves(out);
+        const doQueryStrict = sinon.stub(db, 'doQueryStrict').resolves(out);
+        const doQuery       = sinon.stub(db, 'doQuery').resolves([]);
 
         const res = await db.getEffectiveUnprocessedCallResults('BTC', 'regtest', 1700, 25);
 
-        assert.strictEqual(doQuery.callCount, 1, 'single query: no separate callback lookup');
-        const [sql, args] = doQuery.firstCall.args;
+        assert.strictEqual(doQueryStrict.callCount, 1, 'single strict query: no separate callback lookup');
+        assert.strictEqual(doQuery.callCount, 0, 'the consensus read never goes through the swallowing doQuery');
+        const [sql, args] = doQueryStrict.firstCall.args;
         assert.ok(/NOT EXISTS/i.test(sql), 'processed-row exclusion pushed into SQL');
         assert.ok(/cross_chain_call_callbacks/.test(sql), 'exclusion is against the callbacks table');
         assert.ok(/ORDER BY[\s\S]*snapshot_block ASC[\s\S]*call_id ASC/i.test(sql), 'deterministic ordering preserved');
@@ -66,9 +68,9 @@ describe('getEffectiveUnprocessedCallResults', function () {
 
     it('same-DB deployment: MAX_SAFE_INTEGER cap threads through unchanged (caller needs full set)', async function () {
         const db = makeDb(null);
-        const doQuery = sinon.stub(db, 'doQuery').resolves([]);
+        const doQueryStrict = sinon.stub(db, 'doQueryStrict').resolves([]);
         await db.getEffectiveUnprocessedCallResults('BTC', 'regtest', 1700, Number.MAX_SAFE_INTEGER);
-        assert.strictEqual(doQuery.firstCall.args[1][3], Number.MAX_SAFE_INTEGER);
+        assert.strictEqual(doQueryStrict.firstCall.args[1][3], Number.MAX_SAFE_INTEGER);
     });
 
     it('separate hub mirror: keeps the two-query JS filter, excluding processed then slicing', async function () {
@@ -77,21 +79,21 @@ describe('getEffectiveUnprocessedCallResults', function () {
             { call_id: 'a2', snapshot_block: 2 }, // already has a callback -> must be dropped
             { call_id: 'a3', snapshot_block: 3 },
         ];
-        const hubDoQuery = sinon.stub().resolves(mirrorRows);
-        const db = makeDb({ doQuery: hubDoQuery });
+        const hubDoQueryStrict = sinon.stub().resolves(mirrorRows);
+        const db = makeDb({ doQueryStrict: hubDoQueryStrict });
         // Local callbacks lookup: a2 already processed
         const localDoQuery = sinon.stub(db, 'doQuery').resolves([{ call_id: 'a2' }]);
 
         const res = await db.getEffectiveUnprocessedCallResults('BTC', 'regtest', 1700, 25);
 
-        assert.strictEqual(hubDoQuery.callCount, 1, 'mirror read on the hub connection');
+        assert.strictEqual(hubDoQueryStrict.callCount, 1, 'strict mirror read on the hub connection');
         assert.strictEqual(localDoQuery.callCount, 1, 'callbacks lookup on the local connection');
         assert.deepStrictEqual(res.map(r => r.call_id), ['a1', 'a3'], 'processed a2 dropped, order preserved');
     });
 
     it('separate hub mirror: empty mirror short-circuits with no callbacks lookup', async function () {
-        const hubDoQuery = sinon.stub().resolves([]);
-        const db = makeDb({ doQuery: hubDoQuery });
+        const hubDoQueryStrict = sinon.stub().resolves([]);
+        const db = makeDb({ doQueryStrict: hubDoQueryStrict });
         const localDoQuery = sinon.stub(db, 'doQuery').resolves([]);
         const res = await db.getEffectiveUnprocessedCallResults('BTC', 'regtest', 1700, 25);
         assert.deepStrictEqual(res, []);

@@ -73,9 +73,8 @@ describe('cross-chain settlement per-block cap', function(){
     it('getEffectiveUnsettledMatches returns at most the cap, as the ordered prefix', async function(){
         const db  = makeDb();
         const all = matches(60);
-        const doQuery = sinon.stub(db, 'doQuery');
-        doQuery.onCall(0).resolves(all);   // mirror rows (_mirrorDb() === this here)
-        doQuery.onCall(1).resolves([]);    // nothing settled locally yet
+        sinon.stub(db, 'doQueryStrict').resolves(all); // mirror rows (_mirrorDb() === this here)
+        sinon.stub(db, 'doQuery').resolves([]);        // nothing settled locally yet
 
         const res = await db.getEffectiveUnsettledMatches('BTC', 1700, 25);
         assert.strictEqual(res.length, 25, 'the uncapped pass returned all 60');
@@ -85,9 +84,8 @@ describe('cross-chain settlement per-block cap', function(){
 
     it('defaults to a cap when the caller passes none, so no path is uncapped', async function(){
         const db = makeDb();
-        const doQuery = sinon.stub(db, 'doQuery');
-        doQuery.onCall(0).resolves(matches(60));
-        doQuery.onCall(1).resolves([]);
+        sinon.stub(db, 'doQueryStrict').resolves(matches(60));
+        sinon.stub(db, 'doQuery').resolves([]);
 
         const res = await db.getEffectiveUnsettledMatches('BTC', 1700);
         assert.strictEqual(res.length, 25);
@@ -96,11 +94,10 @@ describe('cross-chain settlement per-block cap', function(){
     it('applies the cap AFTER the settled-set exclusion, so it counts real work', async function(){
         const db  = makeDb();
         const all = matches(40);
-        const doQuery = sinon.stub(db, 'doQuery');
-        doQuery.onCall(0).resolves(all);
+        sinon.stub(db, 'doQueryStrict').resolves(all);
         // The first 30 already settled: a cap applied in SQL before the exclusion would
         // return 10 fresh matches; applied after, it returns the full cap of fresh work.
-        doQuery.onCall(1).resolves(all.slice(0, 30).map(m => ({ match_id: m.match_id })));
+        sinon.stub(db, 'doQuery').resolves(all.slice(0, 30).map(m => ({ match_id: m.match_id })));
 
         const res = await db.getEffectiveUnsettledMatches('BTC', 1700, 25);
         assert.strictEqual(res.length, 10, 'only 10 unsettled matches exist');

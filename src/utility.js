@@ -306,6 +306,24 @@ class Utility {
         return Number.isInteger(+value);
     }
 
+    // Whether an integer wire value is PROVABLY outside the unsigned range [0, max] its
+    // storage column can hold. isInteger alone accepts '18446744073709551616' and '-1', both
+    // of which reach a BIGINT UNSIGNED bind and either wedge the block loop under a strict
+    // sql_mode or clamp under a permissive one. Answers false for anything it cannot prove,
+    // so a spelling the database accepts today keeps its current outcome. Plain integer
+    // literals compare as BigInt: Number() loses precision above 2^53 and would admit values
+    // the column cannot store. `max` is a decimal digit string (config['INTEGER_FIELDS']).
+    exceedsUnsignedColumn(value, max){
+        if(value === null || value === undefined) return false;
+        let raw = String(value).trim();
+        if(/^[+-]?[0-9]+$/.test(raw)){
+            let n = BigInt(raw);
+            return (n < 0n || n > BigInt(max));
+        }
+        let approx = Number(raw);
+        return (Number.isFinite(approx) && (approx < 0 || approx > Number(max)));
+    }
+
     // Determine if value is null or undefined or empty
     isNull(value){
         return (value === null || value === undefined || value==='');

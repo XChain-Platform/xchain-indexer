@@ -166,6 +166,13 @@ class Swap {
         if(!error && !this.util.isNull(data['EXPIRATION']) && (!this.util.isNumeric(data['EXPIRATION']) || !this.util.isInteger(data['EXPIRATION'])))
             error = "invalid: EXPIRATION (format)";
 
+        // Reject an EXPIRATION the expiration column cannot represent. Without this a
+        // payload that is otherwise VALID normalizes to expiration NULL for storage, i.e.
+        // an escrow that never expires, which is a worse outcome than rejecting it.
+        if(!error && !this.util.isNull(data['EXPIRATION']) &&
+           this.util.exceedsUnsignedColumn(data['EXPIRATION'], this.config['INTEGER_FIELDS']['EXPIRATION']))
+            error = "invalid: EXPIRATION (format)";
+
         // GIVE_OWNERSHIP / GET_OWNERSHIP must be 0 or 1
         if(!error && format==0 && ![0,1].includes(data['GIVE_OWNERSHIP']))
             error = "invalid: GIVE_OWNERSHIP (format)";

@@ -58,6 +58,32 @@ describe('db.isReorgHalted', function () {
         assert.deepStrictEqual(await db.isReorgHalted(), { halted: false, payload: null });
     });
 
+    it('selects both the halt and the cleared code, newest row first', async function () {
+        const db = makeDb();
+        const strict = sinon.stub(db, 'doQueryStrict').resolves([]);
+        await db.isReorgHalted();
+        assert.match(strict.firstCall.args[0], /REORG_HALT_CLEARED/);
+        assert.match(strict.firstCall.args[0], /ORDER BY id DESC LIMIT 1/);
+    });
+
+    it('reads halted:false when the newest row is REORG_HALT_CLEARED', async function () {
+        const db = makeDb();
+        sinon.stub(db, 'doQueryStrict').resolves([{ code: 'REORG_HALT_CLEARED', data: 'reviewed, depth was benign' }]);
+        assert.deepStrictEqual(await db.isReorgHalted(), { halted: false, payload: null });
+    });
+
+    it('reads halted:true again when a halt follows a clear (halt -> clear -> halt)', async function () {
+        const db = makeDb();
+        sinon.stub(db, 'doQueryStrict').resolves([{ code: 'REORG_HALT', data: 'second halt, depth 40' }]);
+        assert.deepStrictEqual(await db.isReorgHalted(), { halted: true, payload: 'second halt, depth 40' });
+    });
+
+    it('fails closed when the newest row carries no readable code', async function () {
+        const db = makeDb();
+        sinon.stub(db, 'doQueryStrict').resolves([{ code: null, data: 'unreadable marker' }]);
+        assert.deepStrictEqual(await db.isReorgHalted(), { halted: true, payload: 'unreadable marker' });
+    });
+
     it('propagates a read fault (throwing contract, no silent "not halted")', async function () {
         const db = makeDb();
         sinon.stub(db, 'doQueryStrict').rejects(new Error('decoder read fault'));

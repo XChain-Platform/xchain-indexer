@@ -50,10 +50,10 @@ describe('cross-chain call_id case-insensitive dedup', function () {
     it('getEffectiveUndispatchedCalls: uppercase mirror call_id filtered by lowercase executions row', async function () {
         const db = makeDb(null); // _mirrorDb() === this
         const UPPER = 'ABCDEF0123456789';
-        // First doQuery = mirror dispatch rows; second = local executions lookup (lowercase).
-        const doQuery = sinon.stub(db, 'doQuery');
-        doQuery.onCall(0).resolves([{ call_id: UPPER, snapshot_block: 1 }]);
-        doQuery.onCall(1).resolves([{ call_id: UPPER.toLowerCase() }]);
+        // Mirror dispatch rows come through doQueryStrict (a consensus read); the local
+        // executions lookup (lowercase) stays on doQuery.
+        sinon.stub(db, 'doQueryStrict').resolves([{ call_id: UPPER, snapshot_block: 1 }]);
+        sinon.stub(db, 'doQuery').resolves([{ call_id: UPPER.toLowerCase() }]);
 
         const res = await db.getEffectiveUndispatchedCalls('BTC', 'regtest', 1700, 25);
         assert.deepStrictEqual(res, [], 'uppercase mirror call already executed (lowercase row) must be filtered out');
@@ -61,8 +61,8 @@ describe('cross-chain call_id case-insensitive dedup', function () {
 
     it('getEffectiveUnprocessedCallResults: uppercase mirror call_id dropped by lowercase callback row', async function () {
         const UPPER = 'ABCDEF0123456789';
-        const hubDoQuery = sinon.stub().resolves([{ call_id: UPPER, snapshot_block: 1 }]);
-        const db = makeDb({ doQuery: hubDoQuery }); // separate hub mirror -> JS filter path
+        const hubDoQueryStrict = sinon.stub().resolves([{ call_id: UPPER, snapshot_block: 1 }]);
+        const db = makeDb({ doQueryStrict: hubDoQueryStrict }); // separate hub mirror -> JS filter path
         sinon.stub(db, 'doQuery').resolves([{ call_id: UPPER.toLowerCase() }]); // already processed
 
         const res = await db.getEffectiveUnprocessedCallResults('BTC', 'regtest', 1700, 25);
