@@ -159,10 +159,12 @@ class Slash {
 
     async parse(params, data, error){
 
+        // Validate format
         let format = data['FORMAT'];
         if(!error && (format === null || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
 
+        // Extract fields
         data['CAPABILITY']      = params[1];
         data['OFFENDER_PUBKEY'] = params[2];
         let msgAb64 = params[3], sigA = params[4], msgBb64 = params[5], sigB = params[6];
@@ -171,11 +173,13 @@ class Slash {
         if(!error && data['COIN'] !== 'BTC')
             error = 'invalid: ACTION (BTC only)';
 
+        // Field presence
         if(!error && (this.util.isNull(data['OFFENDER_PUBKEY']) ||
                       this.util.isNull(msgAb64) || this.util.isNull(sigA) ||
                       this.util.isNull(msgBb64) || this.util.isNull(sigB) || this.util.isNull(data['CAPABILITY'])))
             error = 'invalid: missing field';
 
+        // OFFENDER_PUBKEY format
         let offender = String(data['OFFENDER_PUBKEY'] || '').toLowerCase();
         if(!error && !/^[0-9a-fA-F]{64}$/.test(offender))
             error = 'invalid: OFFENDER_PUBKEY (format)';

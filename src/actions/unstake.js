@@ -33,6 +33,7 @@
 
 class Unstake {
 
+    // Handle constructing a class instance
     constructor(action){
         this.actions   = action;
         this.config    = action.config;
@@ -41,12 +42,15 @@ class Unstake {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
+        // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|SIGNING_PUBKEY|AMOUNT';                                   // capability unstake (AMOUNT optional)
         this.formats[1] = 'VERSION|SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK|AMOUNT';        // contract-targeted unstake (AMOUNT optional)
     }
 
+    // Handle parsing the UNSTAKE transaction
     async parse(params, data, error){
+        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
@@ -56,14 +60,26 @@ class Unstake {
             return await this._parseContractUnstake(params, data, error);
         }
 
+        // Extract params (v0 capability unstake)
         data['SIGNING_PUBKEY'] = params[1];
 
+        // Convert NUMBER fields from string value to number value
         if(!error)
             data = this.util.setNumberFormats(data);
 
+        /*****************************************************************
+         * Chain Restriction
+         ****************************************************************/
+
+        // UNSTAKE is BTC-only
         if(!error && data['COIN'] !== 'BTC')
             error = 'invalid: ACTION (BTC only)';
 
+        /*****************************************************************
+         * SIGNING_PUBKEY Validations
+         ****************************************************************/
+
+        // Verify SIGNING_PUBKEY is provided
         if(!error && this.util.isNull(data['SIGNING_PUBKEY']))
             error = 'invalid: SIGNING_PUBKEY (required)';
 
@@ -71,6 +87,11 @@ class Unstake {
         if(!error && !/^[0-9a-fA-F]{64}$/.test(String(data['SIGNING_PUBKEY'])))
             error = 'invalid: SIGNING_PUBKEY (format)';
 
+        /*****************************************************************
+         * Stake Existence Validations
+         ****************************************************************/
+
+        // Verify the pubkey has an active stake owned by SOURCE
         let totalAmount = '0';
         if(!error){
             // undeactivatedOnly: an UNSTAKE may only target stake that is not already
@@ -89,6 +110,7 @@ class Unstake {
             }
         }
 
+        // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
@@ -110,17 +132,23 @@ class Unstake {
                 requestedAmount = this.util.bcformat(amountStr, 8);
         }
 
+        /*****************************************************************
+         * Cooldown / Deactivation Calculation
+         ****************************************************************/
         let staking         = this.config['STAKING'];
         let cooldownBlocks  = (staking && staking['COOLDOWN_BLOCKS'])         ? staking['COOLDOWN_BLOCKS']         : 1000;
         let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
         data['COOLDOWN_END_BLOCK'] = parseInt(data['BLOCK_INDEX']) + cooldownBlocks;
         data['AMOUNT']             = (requestedAmount !== null) ? requestedAmount : totalAmount;
 
+        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
+        // Print status message
         console.log("\t UNSTAKE : pubkey=" + String(data['SIGNING_PUBKEY']).substring(0, 16) + '... : amount=' + this.util.logAmount(data['AMOUNT']) + ' : ' + data['STATUS']);
 
+        // Create record in unstakes table
         await this.indexerDb.createUnstake(data);
 
         // Mark all active stake rows for this pubkey with deactivation_block
@@ -155,20 +183,26 @@ class Unstake {
             });
         }
 
+        // Store the SOURCE and GAS tick in addresses list
         let gas = this.config['GAS'];
         this.util.addAddressTicker(data['SOURCE'], gas);
 
+        // Array of credits and debits
         let credits = [],
             debits  = [];
 
+        // Process any transaction ledger changes (credits / debits)
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
+        // Get a list of tickers & addresses
         let tickers   = this.util.getTickersList(),
             addresses = Object.keys(this.util.getAddressesList());
 
+        // Update address balances and token supply
         await this.indexerDb.updateBalances(addresses);
         await this.indexerDb.updateTokens(tickers);
 
+        // Create action mappings
         await this.mapper.createMappings(data);
     }
 
@@ -176,6 +210,7 @@ class Unstake {
     // sets deactivation_block on the matching contract_stakes rows, uses the contract's
     // own cooldown_blocks (vs. the global 1000 used for capability staking).
     async _parseContractUnstake(params, data, error){
+        // Extract params
         data['SIGNING_PUBKEY']        = params[1];
         data['TARGET_CONTRACT_INDEX'] = params[2];
         data['TICK']                  = params[3];
@@ -196,6 +231,7 @@ class Unstake {
         if(!error && this.util.isNull(data['TICK']))
             error = 'invalid: TICK (required)';
 
+        // Load the contract to fetch its cooldown_blocks
         let contractInfo = null;
         if(!error){
             contractInfo = await this.indexerDb.getContract(data['TARGET_CONTRACT_INDEX']);
@@ -206,6 +242,7 @@ class Unstake {
             }
         }
 
+        // Verify the (target, pubkey, tick) has an active contract-stake owned by SOURCE
         let totalAmount = '0';
         if(!error){
             let aggregate = await this.indexerDb.getActiveContractStakeByPubkey(
@@ -222,6 +259,7 @@ class Unstake {
             }
         }
 
+        // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
@@ -283,12 +321,14 @@ class Unstake {
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
+        // Print status message
         console.log("\t UNSTAKE v1 : pubkey=" + String(data['SIGNING_PUBKEY']).substring(0, 16) +
             '... : target=' + data['TARGET_CONTRACT_INDEX'] +
             ' : tick=' + data['TICK'] +
             ' : amount=' + data['AMOUNT'] +
             ' : ' + data['STATUS']);
 
+        // Write the contract_unstakes row
         await this.indexerDb.createContractUnstake(data);
 
         // Mark all active contract_stakes rows for (target, pubkey, tick) with deactivation_block
@@ -323,15 +363,20 @@ class Unstake {
 
         // Tickers/addresses tracking (no credits/debits at unstake time; funds are released by block-end sweep)
         this.util.addAddressTicker(data['SOURCE'], data['TICK']);
+        // Array of credits and debits
         let credits = [],
             debits  = [];
+        // Process any transaction ledger changes (credits / debits)
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
+        // Get a list of tickers & addresses
         let tickers   = this.util.getTickersList(),
             addresses = Object.keys(this.util.getAddressesList());
+        // Update address balances and token supply
         await this.indexerDb.updateBalances(addresses);
         await this.indexerDb.updateTokens(tickers);
 
+        // Create action mappings
         await this.mapper.createMappings(data);
     }
 }

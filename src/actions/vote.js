@@ -36,7 +36,9 @@ const { buildInjectedExecContext, SYNTH_EXEC_TX_HASH, SYNTH_TAGS } = require('./
 
 class Vote {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -53,14 +55,18 @@ class Vote {
         this.formats[3] = 'VERSION|TICK|DELEGATE_TO|MEMO';
     }
 
+    // Handle parsing the VOTE transaction
     async parse(params, data, error){
+        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
 
+        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
+        // Dispatch to the version-specific handler
         if(format===0)
             await this._parseCreate(data, error);
         else if(format===1)
@@ -286,6 +292,7 @@ class Vote {
         data['GAS_ESCROW']       = binding ? gasEscrow : '0';
         data['IS_BINDING']       = binding;
 
+        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
