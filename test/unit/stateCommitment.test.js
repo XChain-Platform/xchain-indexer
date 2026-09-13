@@ -293,6 +293,15 @@ function makeArmingMockDb({ priorRows, liveJournalRows }){
     const db = {
         config: { STAKING: {} },          // gatherStakeEntries reads it; BTC takes the stakes path
         getBlockLeafRows: async () => [],
+        // The escrow JOURNAL WRITER reaches the ledger through named db methods, so these
+        // two reads never pass through `route` and cannot be answered by SQL matching. An
+        // empty ledger whose count agrees is what the router's default answered: the writer's
+        // dropped-row guard is satisfied (0 rows === 0 expected) and it returns before
+        // writing any journal row. Faithful here, because this suite models root threading
+        // across the ARMING BOUNDARY and deliberately gives the block no escrow ledger rows;
+        // the live lock it must still commit arrives through liveEscrowLeaves above.
+        getEscrowLedgerRows:   async () => [],
+        countEscrowLedgerRows: async () => 0,
         doQuery: route,
         doQueryStrict: route
     };
