@@ -9,7 +9,7 @@
  * General Public License v3.0 or later; see LICENSE.md.
  *
  **********************************************************************
- * test/unit/db.tableParameterizedIdentifiers.test.js
+ * test/unit/db_table_parameterized_identifiers.test.js
  *
  * The misc mixin's table-parameterized reads and writes splice a caller-supplied
  * table or column name straight into the statement, because an identifier cannot
