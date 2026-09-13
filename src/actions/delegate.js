@@ -33,7 +33,9 @@
 
 class Delegate {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -41,6 +43,7 @@ class Delegate {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
+        // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|NEW_SIGNING_PUBKEY';                                       // capability rotate
         this.formats[1] = 'VERSION|NEW_SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK';            // contract-targeted rotate
@@ -48,8 +51,10 @@ class Delegate {
         this.formats[3] = 'VERSION|SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK';                // contract-targeted revoke
     }
 
+    // Handle parsing the DELEGATE transaction
     async parse(params, data, error){
 
+        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
@@ -62,6 +67,7 @@ class Delegate {
         // v0 capability delegation
         data['SIGNING_PUBKEY'] = params[1];
 
+        // Convert NUMBER fields from string value to number value
         if(!error)
             data = this.util.setNumberFormats(data);
 
@@ -77,6 +83,7 @@ class Delegate {
          * SIGNING_PUBKEY Validations
          ****************************************************************/
 
+        // Verify SIGNING_PUBKEY is provided
         if(!error && this.util.isNull(data['SIGNING_PUBKEY']))
             error = 'invalid: SIGNING_PUBKEY (required)';
 
@@ -95,6 +102,7 @@ class Delegate {
                 error = 'invalid: no active stake';
         }
 
+        // Check that the new signing pubkey is not already in use
         // Pubkey collision is checked across ALL stakes (including pending activation)
         if(!error){
             let existingStake = await this.indexerDb.getActiveStakeByPubkey(data['SIGNING_PUBKEY']);
@@ -112,6 +120,7 @@ class Delegate {
                 error = 'invalid: SIGNING_PUBKEY (already delegated)';
         }
 
+        // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
@@ -120,26 +129,35 @@ class Delegate {
         let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
         data['ACTIVATION_BLOCK'] = parseInt(data['BLOCK_INDEX']) + activationDelay;
 
+        // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
+        // Print status message
         console.log("\t DELEGATE : pubkey=" + data['SIGNING_PUBKEY'] + ' : ' + data['STATUS']);
 
+        // Create record in delegations table
         await this.indexerDb.createDelegation(data);
 
+        // Store the SOURCE in addresses list
         this.util.addAddressTicker(data['SOURCE'], this.config['GAS']);
 
+        // Array of credits and debits
         let credits = [],
             debits  = [];
 
+        // Process any transaction ledger changes (credits / debits)
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
+        // Get a list of tickers & addresses
         let tickers   = this.util.getTickersList(),
             addresses = Object.keys(this.util.getAddressesList());
 
+        // Update address balances and token supply
         await this.indexerDb.updateBalances(addresses);
         await this.indexerDb.updateTokens(tickers);
 
+        // Create action mappings
         await this.mapper.createMappings(data);
     }
 
@@ -149,13 +167,16 @@ class Delegate {
     // and a contract staker simultaneously (see plan §12.5).
     async _parseContractDelegate(params, data, error){
 
+        // Extract params
         data['SIGNING_PUBKEY']        = params[1];
         data['TARGET_CONTRACT_INDEX'] = params[2];
         data['TICK']                  = params[3];
 
+        // Convert NUMBER fields from string value to number value
         if(!error)
             data = this.util.setNumberFormats(data);
 
+        // Verify SIGNING_PUBKEY is provided + format
         if(!error && this.util.isNull(data['SIGNING_PUBKEY']))
             error = 'invalid: SIGNING_PUBKEY (required)';
         if(!error && !/^[0-9a-fA-F]{64}$/.test(String(data['SIGNING_PUBKEY'])))
@@ -206,6 +227,7 @@ class Delegate {
             }
         }
 
+        // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
@@ -242,14 +264,18 @@ class Delegate {
     // on the matching capability delegation row.
     async _parseCapabilityRevoke(params, data, error){
 
+        // Extract params
         data['SIGNING_PUBKEY'] = params[1];
 
+        // Convert NUMBER fields from string value to number value
         if(!error)
             data = this.util.setNumberFormats(data);
 
+        // Capability revoke (v2) is BTC-only
         if(!error && data['COIN'] !== 'BTC')
             error = 'invalid: ACTION (BTC only)';
 
+        // Verify SIGNING_PUBKEY is provided + format
         if(!error && this.util.isNull(data['SIGNING_PUBKEY']))
             error = 'invalid: SIGNING_PUBKEY (required)';
         if(!error && !/^[0-9a-fA-F]{64}$/.test(data['SIGNING_PUBKEY']))
@@ -279,6 +305,7 @@ class Delegate {
             }
         }
 
+        // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
@@ -316,6 +343,7 @@ class Delegate {
                 await this.indexerDb.setDelegationDeactivation(data['SOURCE'], data['SIGNING_PUBKEY'], parseInt(data['BLOCK_INDEX']) + activationDelay);
         }
 
+        // Store the SOURCE in addresses list
         this.util.addAddressTicker(data['SOURCE'], this.config['GAS']);
 
         let credits = [],
@@ -335,13 +363,16 @@ class Delegate {
     // Marks `deactivation_block` on the matching contract_delegations row.
     async _parseContractRevoke(params, data, error){
 
+        // Extract params
         data['SIGNING_PUBKEY']        = params[1];
         data['TARGET_CONTRACT_INDEX'] = params[2];
         data['TICK']                  = params[3];
 
+        // Convert NUMBER fields from string value to number value
         if(!error)
             data = this.util.setNumberFormats(data);
 
+        // Verify SIGNING_PUBKEY is provided + format
         if(!error && this.util.isNull(data['SIGNING_PUBKEY']))
             error = 'invalid: SIGNING_PUBKEY (required)';
         if(!error && !/^[0-9a-fA-F]{64}$/.test(String(data['SIGNING_PUBKEY'])))
@@ -372,6 +403,7 @@ class Delegate {
             }
         }
 
+        // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 

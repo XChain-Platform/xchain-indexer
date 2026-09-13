@@ -54,6 +54,10 @@ function row(ts, hubNow){
     return { ts: ts, hub_now: (hubNow !== undefined ? hubNow : NOW_S()) };
 }
 
+// Build a minimal `this` context for the prototype method: only the fields it reads
+// (hubDb, callPresenceTimeoutMs, directCallGraceS, util.sleep, util.throwError). doQuery is
+// a sinon stub so we can assert how many times the table was polled. `rowsSeq`, when
+// provided, lets successive polls return different rows (used to model a mirror catching up).
 function ctx(opts){
     opts = opts || {};
     let call = 0;
@@ -77,6 +81,7 @@ function ctx(opts){
         directCallGraceS: opts.graceS,
         util: {
             sleep: sleepSpy,
+            // Mirror utility.throwError: log + throw so the caller's catch defers the block.
             throwError: (msg) => { throw new Error(msg); }
         },
         _doQuery: doQuery,

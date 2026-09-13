@@ -187,6 +187,7 @@ class HubClient {
             if(chainId !== null && chainId !== undefined) params.chain_id = chainId;
             await this._call('pushchaintip', params);
         } catch (err) {
+            // Best-effort: log and continue
             console.warn('HubClient: pushChainTip failed:', err);
         }
     }
@@ -367,6 +368,7 @@ class HubClient {
         throw err;
     }
 
+    // Make a JSON-RPC 2.0 call to the hub
     _call(method, params, apiKeyOverride, urlOverride){
         return new Promise((settleResolve, settleReject) => {
             // Every exit runs through one latch, and the local `resolve`/`reject` below

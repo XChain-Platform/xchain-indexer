@@ -86,6 +86,7 @@ const GUARD_INERT_SENTINEL = 'FEE_QUOTE_CONTROLLER_UNSUPPORTED';
 
 class Utility {
 
+    // Handle constructing a class instance
     constructor(cfg){
         // Max market rows the throttled 24h rolling-stats ageing sweep refreshes per block
         // (processMarketUpdates step 2). Bounds per-block refresh cost independent of the total
@@ -3266,6 +3267,7 @@ class Utility {
         for(let pair of markets){
             let market_id = await db.createMarket(pair.tick1_id, pair.tick2_id, pair.coin1_id, pair.coin2_id);
             let data = await db.getMarketInfo(market_id, block_time);
+            // Set the last_updated time to the current block time
             data.last_updated = block_time;
             await db.updateMarketInfo(data);
         }

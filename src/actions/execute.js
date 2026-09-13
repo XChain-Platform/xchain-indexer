@@ -98,7 +98,9 @@ const EMISSION_AMOUNT_FIELDS = {
 
 class Execute {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -128,6 +130,7 @@ class Execute {
         this.formats[0] = 'VERSION|CONTRACT_ACTION_INDEX|METHOD|PARAMS...';
     }
 
+    // Handle parsing the EXECUTE transaction
     async parse(params, data, error){
 
         // Host-side assert: post-SYNTH_EXEC_TX_HASH every injected/emitted
@@ -161,6 +164,10 @@ class Execute {
         // Convert NUMBER fields from string value to number value
         if(!error)
             data = this.util.setNumberFormats(data);
+
+        /*****************************************************************
+         * Contract Validations
+         ****************************************************************/
 
         // Verify CONTRACT_ACTION_INDEX is provided
         if(!error && this.util.isNull(data['CONTRACT_ACTION_INDEX']))
@@ -204,6 +211,10 @@ class Execute {
             if(contractStatus !== 'valid')
                 error = 'invalid: contract (not active)';
         }
+
+        /*****************************************************************
+         * Gas Fee Calculation
+         ****************************************************************/
 
         let schedule = this.config['GAS_SCHEDULE'];
         // Base execution gas (actual VM gas will be metered during execution), priced through
@@ -251,6 +262,10 @@ class Execute {
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
+
+        /*****************************************************************
+         * VM Execution
+         ****************************************************************/
 
         let gasUsed = gasCost;
         let emittedCount = 0;

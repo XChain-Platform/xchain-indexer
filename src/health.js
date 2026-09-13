@@ -21,6 +21,11 @@
  *
  ********************************************************************/
 
+// Assemble the health() response from an indexer instance plus the few
+// values the API server owns (whether start() is still running, the last
+// fatal error, the freshly-read indexed-block height, and the current epoch
+// ms). Async only for the hub_push_queue stats fetch; all other fields are
+// derived synchronously from already-resolved values.
 const { computeArmedMapFingerprint } = require('./armedMapFingerprint');
 const { computeConsensusRulesDigest } = require('./consensus_rules_digest');
 const { hubConfigStaleness, stallWedged, waitingOnFutureBlock, stallClassOf, atProcessableTip,
