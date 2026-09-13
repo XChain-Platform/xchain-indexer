@@ -762,7 +762,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             let { v1, staked, capSets } = forgedBatch();
             let rec = new AnchorRecovery(memDb([v1], []),
                 Object.assign({ btcDb: btcDbStub(staked, { capSets }), verifyStakes: true }, quiet));
-            rec._verifyKeySourceBinding = async () => {};
+            rec.verifyKeySourceBinding = async () => {};
             let report = await rec.run();
             assert.strictEqual(report.verified, 1, JSON.stringify(report.failed));
         });
@@ -798,12 +798,12 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             let rec = new AnchorRecovery(memDb([], []),
                 Object.assign({ btcDb: poisoned, verifyStakes: true }, quiet));
             // mainnet arms stake-weighted quorum at 961000; 960999 is the last count block.
-            await rec._verifyKeySourceBinding(
+            await rec.verifyKeySourceBinding(
                 [{ snapshot_block: 960999, capability: 'cross_chain', signing_pubkey: 'ab'.repeat(32), source: '', amount: '5' }],
                 'mainnet');
             // ... and at the activation height it does run, against the same blank source.
             await assert.rejects(
-                rec._verifyKeySourceBinding(
+                rec.verifyKeySourceBinding(
                     [{ snapshot_block: 961000, capability: 'cross_chain', signing_pubkey: 'ab'.repeat(32), source: '', amount: '5' }],
                     'mainnet'),
                 /no staking source/);

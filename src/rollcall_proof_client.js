@@ -75,14 +75,14 @@ class RollcallProofClient {
         // re-asking is pure load. 'unknown' is NEVER memoized: it is precisely the
         // state that is expected to change.
         //
-        // Keyed on the COMPLETE request (_memoKey), never on the epoch alone. The answer is
+        // Keyed on the COMPLETE request (buildMemoKey), never on the epoch alone. The answer is
         // a function of every RPC param, and maxBlockTime comes from the window-end block's
         // block_time, which a BTC reorg rewrites while the epoch's ledger hash survives.
         // This client lives for the whole process (XChainIndexer builds one) and rollback
         // never clears it, so an epoch-only key let a replay after a reorg reuse the
         // pre-reorg DOGE cut and signer set while a fresh indexer re-queried and derived a
         // different quorum, gate set, rewards and absences - a consensus fork. Any field
-        // later added to the RPC params must be added to _memoKey too, or the stale answer
+        // later added to the RPC params must be added to buildMemoKey too, or the stale answer
         // silently returns. Same defect class the sibling anchor_proof_client keys around.
         this._memo = new Map();
     }
@@ -121,7 +121,7 @@ class RollcallProofClient {
      */
     async fetchSigners({epochHeight, maxBlockTime, pubkeys, publishers}){
         let network = String(this.config['NETWORK']);
-        let memoKey = this._memoKey({epochHeight, maxBlockTime, pubkeys, publishers, network});
+        let memoKey = this.buildMemoKey({epochHeight, maxBlockTime, pubkeys, publishers, network});
 
         if(this._memo.has(memoKey)) return this._memo.get(memoKey);
 
@@ -207,7 +207,7 @@ class RollcallProofClient {
     // or lowercased: over-keying costs one extra RPC, while under-keying lets one request's
     // answer speak for a different one, which is a consensus bug. JSON.stringify keeps the
     // array boundaries delimiter-safe, so ['a','b'] and ['a,b'] cannot collide.
-    _memoKey({epochHeight, maxBlockTime, pubkeys, publishers, network}){
+    buildMemoKey({epochHeight, maxBlockTime, pubkeys, publishers, network}){
         return JSON.stringify([String(network || ''),
                                Number(epochHeight),
                                Number(maxBlockTime),

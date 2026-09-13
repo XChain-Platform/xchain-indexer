@@ -277,7 +277,7 @@ class AnchorRecovery {
         // from the archive itself, so swapping an attacker key onto an honest source's row
         // (source and amount left byte-identical) is credited that source's full weight.
         // Needs no resolver, so it runs on a bare doQuery handle too.
-        if(this.verifyStakes && this.btcDb) await this._verifyKeySourceBinding(snaps, v1.network);
+        if(this.verifyStakes && this.btcDb) await this.verifyKeySourceBinding(snaps, v1.network);
 
         // Completeness (REC-SUBSET-1): existence alone (above) accepts a real-but-
         // PROPER-SUBSET snapshot - a single small-but-real staker could omit the honest
@@ -474,7 +474,7 @@ class AnchorRecovery {
     // _verifyCompleteness; applying them here would make this probe stricter than the set the
     // archive was built from. Known residual: a source's own revoked or slashed key still
     // binds to that source and passes. Same reasoning as the existence guard above.
-    async _verifyKeySourceBinding(snaps, network){
+    async verifyKeySourceBinding(snaps, network){
         for(let g of this._groupSnaps(snaps)){
             if(!QUORUM_CAPABILITIES.has(g.capability)) continue;
             if(!swq.isStakeWeightedQuorumActive(g.block, network)) continue;
@@ -488,7 +488,7 @@ class AnchorRecovery {
                     throw new Error('archived ' + g.capability + ' snapshot at block ' + g.block +
                                     ' carries key ' + pk.substring(0, 16) + '... with no staking source,' +
                                     ' which cannot be bound on the stake-weighted path');
-                if(!(await this._hasBoundStake(pk, src, atBlock)))
+                if(!(await this.hasBoundStake(pk, src, atBlock)))
                     throw new Error('archived ' + g.capability + ' snapshot at block ' + g.block +
                                     ': key ' + pk.substring(0, 16) + '... is not authorized by its claimed' +
                                     ' source ' + src.substring(0, 24) + '... at block ' + atBlock +
@@ -502,7 +502,7 @@ class AnchorRecovery {
     // `stakes` row of its own, so a stakes-only probe would reject every honest archive that
     // carries a delegated-only validator. Join-shaped like _hasDirectStake rather than
     // id-lookup-shaped like stake-source.js, so it answers on a bare doQuery handle.
-    async _hasBoundStake(pubkey, source, atBlock){
+    async hasBoundStake(pubkey, source, atBlock){
         let at   = Number(atBlock);
         let args = [pubkey, source, at, at];
         let rows = await this.btcDb.doQuery(
