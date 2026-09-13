@@ -23,8 +23,8 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const fc = require('fast-check');
 const { NUM_RUNS, createMockIndexer } = require('../setup/harness');
-const { validAmount, invalidAmount, anyAmount, decimalsValue } = require('../generators/amounts');
-const { anyAddress } = require('../generators/addresses');
+const { validAmount, invalidAmount, anyAmount, decimalsValue } = require('../generators/helpers/amounts');
+const { anyAddress } = require('../generators/helpers/addresses');
 
 describe('Tier 1 - Validation functions @tier1', function () {
     this.timeout(0);
@@ -173,7 +173,7 @@ describe('Tier 1 - Validation functions @tier1', function () {
         });
 
         it('accepts generated valid addresses and rejects invalid ones', function () {
-            const { cryptoAddress, invalidAddress } = require('../generators/addresses');
+            const { cryptoAddress, invalidAddress } = require('../generators/helpers/addresses');
             fc.assert(fc.property(
                 cryptoAddress(),
                 (address) => {

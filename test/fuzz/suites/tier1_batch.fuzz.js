@@ -24,7 +24,7 @@ const assert = require('assert');
 const fc = require('fast-check');
 const sinon = require('sinon');
 const { NUM_RUNS, createMockIndexer, createBaseData, makeFuzzActionsCtx } = require('../setup/harness');
-const { batchDataString, issueDataString, sendDataString } = require('../generators/actions');
+const { batchDataString, issueDataString, sendDataString } = require('../generators/helpers/actions');
 
 describe('Tier 1 - BATCH handler @tier1', function () {
     this.timeout(0);

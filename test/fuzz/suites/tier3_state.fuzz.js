@@ -24,9 +24,9 @@ const assert = require('assert');
 const fc = require('fast-check');
 const sinon = require('sinon');
 const { NUM_RUNS, createMockIndexer, createBaseData, createTokenInfo, makeFuzzActionsCtx } = require('../setup/harness');
-const { validAmount, anyAmount } = require('../generators/amounts');
-const { validTick, anyTick } = require('../generators/ticks');
-const { cryptoAddress } = require('../generators/addresses');
+const { validAmount, anyAmount } = require('../generators/helpers/amounts');
+const { validTick, anyTick } = require('../generators/helpers/ticks');
+const { cryptoAddress } = require('../generators/helpers/addresses');
 
 describe('Tier 3 - State transition edge cases @tier3', function () {
     this.timeout(0);

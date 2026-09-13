@@ -26,7 +26,7 @@ const fc = require('fast-check');
 const sinon = require('sinon');
 const { NUM_RUNS, createMockIndexer } = require('../setup/harness');
 const { fuzzedTx, issueDataString, sendDataString, mutatedDataString,
-        unknownActionString, KNOWN_ACTIONS, ACTION_ALIASES } = require('../generators/actions');
+        unknownActionString, KNOWN_ACTIONS, ACTION_ALIASES } = require('../generators/helpers/actions');
 
 // Minimal ProtocolChanges stub
 function makeProtocolChanges() {

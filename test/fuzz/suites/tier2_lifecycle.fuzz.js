@@ -24,9 +24,9 @@ const assert = require('assert');
 const fc = require('fast-check');
 const sinon = require('sinon');
 const { NUM_RUNS, createMockIndexer, createBaseData, createTokenInfo, makeFuzzActionsCtx } = require('../setup/harness');
-const { anyAmount, validAmount, decimalsValue } = require('../generators/amounts');
-const { anyTick, validTick } = require('../generators/ticks');
-const { cryptoAddress } = require('../generators/addresses');
+const { anyAmount, validAmount, decimalsValue } = require('../generators/helpers/amounts');
+const { anyTick, validTick } = require('../generators/helpers/ticks');
+const { cryptoAddress } = require('../generators/helpers/addresses');
 
 describe('Tier 2 - Token lifecycle (ISSUE + MINT) @tier2', function () {
     this.timeout(0);

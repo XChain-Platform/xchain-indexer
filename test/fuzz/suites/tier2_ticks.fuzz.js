@@ -24,7 +24,7 @@ const assert = require('assert');
 const fc = require('fast-check');
 const sinon = require('sinon');
 const { NUM_RUNS, createMockIndexer, createBaseData, createTokenInfo, makeFuzzActionsCtx } = require('../setup/harness');
-const { validTick, reservedTick, invalidTick, anyTick, TICK_CHARACTERS, RESERVED_TICKS } = require('../generators/ticks');
+const { validTick, reservedTick, invalidTick, anyTick, TICK_CHARACTERS, RESERVED_TICKS } = require('../generators/helpers/ticks');
 
 describe('Tier 2 - Tick name handling @tier2', function () {
     this.timeout(0);

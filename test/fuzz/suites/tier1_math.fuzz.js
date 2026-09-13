@@ -23,7 +23,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const fc = require('fast-check');
 const { NUM_RUNS, createMockIndexer } = require('../setup/harness');
-const { validAmount, anyAmount } = require('../generators/amounts');
+const { validAmount, anyAmount } = require('../generators/helpers/amounts');
 
 describe('Tier 1 - BigNumber math operations @tier1', function () {
     this.timeout(0);
