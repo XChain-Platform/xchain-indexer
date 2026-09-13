@@ -80,6 +80,7 @@ function bridgePolicyHash(allowList, blockList, sleeping){
     return crypto.createHash('sha256').update(canonical).digest('hex');
 }
 
+// Parse in .env config data
 dotenv.config();
 
 // Before anything else logs. The env-validation failures immediately below are
@@ -105,6 +106,7 @@ for(const key of REQUIRED_ENV){
     }
 }
 
+// Parse in the environmental variables
 const INDEXER_API_PORT = process.env.INDEXER_API_PORT;
 const INDEXER_NETWORK  = process.env.INDEXER_NETWORK;
 

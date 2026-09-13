@@ -101,10 +101,12 @@ class ProviderRegistry {
         this.providers = buildEffectiveProviders(config);
     }
 
+    // Whether a provider id is known and currently enabled
     isKnown(providerId) {
         return Object.prototype.hasOwnProperty.call(this.providers, providerId);
     }
 
+    // Get the full provider definition, or null
     getProvider(providerId) {
         return this.providers[providerId] || null;
     }
@@ -132,12 +134,14 @@ class ProviderRegistry {
         return pmsh.providerMinStakeAt(providerId, blockIndex, network, p.min_stake_xchain, override);
     }
 
+    // Check whether a redundancy value is allowed for this provider
     isRedundancyAllowed(providerId, redundancy) {
         let p = this.providers[providerId];
         if (!p) return false;
         return Array.isArray(p.allowed_redundancy) && p.allowed_redundancy.indexOf(Number(redundancy)) !== -1;
     }
 
+    // Validate a payload size against the provider's max_request_bytes
     isPayloadSizeAllowed(providerId, payloadByteLength) {
         let p = this.providers[providerId];
         if (!p) return false;
@@ -152,6 +156,7 @@ class ProviderRegistry {
         return delta > 0 && delta <= Number(p.deadline_window_blocks);
     }
 
+    // List all provider ids known to the registry
     listProviderIds() {
         return Object.keys(this.providers);
     }

@@ -920,6 +920,7 @@ class XChainIndexer {
     async start(){
         console.log('Starting up ' + this.name + ' v' + this.version + '...');
 
+        // Get indexer configuration
         this.config = config.getConfig();
 
         // Resolve the direct-hub-DB call barrier's grace now that NETWORK is known. Same
@@ -1061,8 +1062,10 @@ class XChainIndexer {
         // would have resolved here. See protocol_changes.assertConsensusVersionPin.
         changes.assertConsensusVersionPin();
 
+        // Create instance of the protocol changes class
         this.protocolChanges = new changes(this);
 
+        // Create instance of the mapper class
         this.mapper = new mapper(this);
 
         // Create xchain-utxo-tracker client (used by DISPENSER fresh-address check)
@@ -1070,12 +1073,14 @@ class XChainIndexer {
         if(!this.utxoTracker.enabled)
             console.log('WARNING: UTXO_TRACKER_URL / UTXO_TRACKER_API_PORT not set. DISPENSER fresh-address check will reject all non-owner dispensers');
 
+        // Create instance of the actions class and pass database connection instances to it
         this.actions = new actions(this);
 
         // Genesis ledger bootstrap (Counterparty/Dogeparty name-ownership injection at the
         // configured genesis block; no-op when GENESIS_BLOCK is unset). See genesis.js.
         this.genesis = new Genesis(this.actions, this.indexerDb, this.config, this.util);
 
+        // Create instance of the rollback class and pass database connection instances to it
         this.rollback = new rollback(this);
 
         // Verify the Decoder database exists
@@ -1235,6 +1240,7 @@ class XChainIndexer {
             // periodic). Advisory: it does not gate block processing, only makes the halt visible.
             await this._checkDecoderReorgHalt();
 
+            // Get last processed block from Indexer and Decoder databases
             lastDecoderBlock       = await this.decoderDb.getBlockIndex('decoder', 'last');
             this.lastDecoderBlock  = lastDecoderBlock;
             lastIndexerBlock       = await indexerReorgView.getBlockIndex('indexer', 'last');
@@ -1325,6 +1331,7 @@ class XChainIndexer {
                 // for exactly as long as it is doing the most work.
                 this.lastPollAt = Date.now();
 
+                // Set flag to indicate not fully synced
                 this.synced = false;
 
                 // Bounded reorg-detection latency during long catch-up (REORG-6). Reorg events are
@@ -1347,6 +1354,7 @@ class XChainIndexer {
                     }
                 }
 
+                // Start tracking time to parse block
                 var debugTimer = this.util.startTimer();
 
                 // Determine the next block to parse. Do NOT advance lastIndexerBlock yet:
@@ -1754,6 +1762,7 @@ class XChainIndexer {
                     // Process the block with a watchdog timeout to detect deadlocks or infinite loops
                     let blockProcessing = this.indexerDb.runInTxEpoch(txEpoch, async () => {
 
+                        // Initialize VM compilation cache for this block
                         if(this.actions.vm)
                             this.actions.vm.beginBlock();
 
@@ -1980,6 +1989,7 @@ class XChainIndexer {
                     if(this.priceBarrierForceBlock === blockToParse)
                         this.priceBarrierForceBlock = null;
 
+                    // Log the total parse time for this block
                     let parseTime = this.util.getTimer(debugTimer);
                     console.log('Block Parsed' + "\t: " + lastIndexerBlock + ' [ledger:' + ledger + ' actions:' + actions + ' contracts:' + contracts + '] (' + parseTime + ')');
 
@@ -2090,6 +2100,7 @@ class XChainIndexer {
                         this.stallReason = 'rollcall_proof_unavailable';
                         this.stallClearsAt = null;          // clears when DOGE visibility returns, not on a clock
                     } else {
+                        // Log the error
                         this.util.logError(`Error while parsing block data at block ${lastIndexerBlock}:`, error);
                     }
 
@@ -2109,6 +2120,7 @@ class XChainIndexer {
             // lines. A no-op when nothing is stalled; see _noteBarrierHold.
             this._noteBarrierHold(this.util.isNull(lastIndexerBlock) ? null : Number(lastIndexerBlock) + 1);
 
+            // Set flag to indicate fully synced and listening for block
             if(!this.synced && !this.util.bclt(lastIndexerBlock, lastDecoderBlock)){
                 this.synced = true;
                 console.log('Listening for blocks...');

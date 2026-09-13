@@ -20,6 +20,7 @@
  *
  ********************************************************************/
 
+// Load required libraries
 const fs   = require('fs');
 const path = require('path');
 
@@ -91,6 +92,7 @@ module.exports = {
 
     GAS_TICK,
 
+    // Handle returning the current indexer configuration
     getConfig: function(coinOverride, networkOverride){
 
         // coinOverride / networkOverride let a caller resolve a config for a coin OTHER
@@ -99,6 +101,8 @@ module.exports = {
         // getStakeWeightsByCapability resolves capability stakes from the BTC stakes
         // tables (not the mirrored capability_snapshots short-circuit). Default (no
         // args) reads the environment exactly as before.
+
+        // Set coin and network from environmental variables
         let gas     = GAS_TICK;                     // TICK to be used as gas token
         let coin    = coinOverride    || process.env.INDEXER_COIN;     // BTC / LTC / DOGE
         let network = networkOverride || process.env.INDEXER_NETWORK;  // mainnet / testnet / regtest

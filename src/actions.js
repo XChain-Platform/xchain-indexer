@@ -457,6 +457,7 @@ class Actions {
         this._preflightMemo = new PreflightMemo(
             parseInt(process.env.INDEXER_PREFLIGHT_MEMO_MAX, 10) || 256);
 
+        // Create action instances and pass database connections
         this.actionAddress         = new address(this);
         this.actionAirdrop         = new airdrop(this);
         this.actionBatch           = new batch(this);
