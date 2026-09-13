@@ -75,7 +75,7 @@ const FEE_QUOTE_STATIC = new Set(['DEPLOY', 'EXECUTE']);
 //   XCALL  - injects a callback EXECUTE (xcall.js). Already 'exempt', listed so the set is a
 //            complete statement of VM reach rather than a residue of another gate's choices.
 // Kept as an explicit literal, and bound to the dispatch table by
-// test/unit/ActionManifestConformance.test.js so a new action cannot default into 'allowed'.
+// test/unit/action_manifest_conformance.test.js so a new action cannot default into 'allowed'.
 const PROBE_VM_REACHING_ACTIONS = new Set(['ATTEST', 'VOTE', 'XCALL']);
 
 // Settlement and lifecycle legs that stage NO protocol fee: the fee was already charged when

@@ -19,7 +19,7 @@
  * WHY THIS FILE EXISTS. getRelayRequestByOrigin() is a NEW raw SQL predicate, and
  * it is the entire mechanism of #4141: its return value decides whether an ATTEST
  * v3 materializes an irreversible BTC request or stores an 'invalid' verdict. Its
- * unit sibling (test/unit/actions/attest-relay.test.js) reaches it only through
+ * unit sibling (test/unit/actions/attest_relay.test.js) reaches it only through
  * `sinon.stub()`, and .mocharc's spec globs are test/unit/**, so the whole default
  * suite can be green without one byte of this SQL ever having been parsed. A stub
  * proves the CALL happened; it cannot prove the predicate parses, that the novel

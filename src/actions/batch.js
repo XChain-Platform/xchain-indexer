@@ -812,7 +812,7 @@ class Batch {
         // BATCH_COST_WEIGHTING flag-day: the flat command cap becomes a budget over per-action
         // cost weights. Resolved once per BATCH like the two above, so every gated site sees ONE
         // verdict. Registered at or after BATCH_ISSUANCE_LIMITS (asserted in
-        // test/unit/batchCostWeightingGate.test.js), so wherever this is true the classification
+        // test/unit/batch_cost_weighting_gate.test.js), so wherever this is true the classification
         // and normalization the weight scan reads from are already in force.
         let weightsActive = await this.protocolChanges.isEnabled('BATCH_COST_WEIGHTING', data['BLOCK_INDEX']);
         // Clone before mutation: this raw copy is what gets stored in the batches table.

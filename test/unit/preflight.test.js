@@ -8,7 +8,7 @@
 //
 // Public validity-first pre-flight unit suite. Exercises the
 // REAL computePreflight prototype with the dry-run engine stubbed
-// (the engine itself is unit-tested in feeQuoteDryRun.test.js): the
+// (the engine itself is unit-tested in fee_quote_dry_run.test.js): the
 // classification (deny/exempt/quotable), FEE_DESTINATION decoupling,
 // guardInert surfacing, admission cap, and the height-keyed memo.
 
@@ -80,7 +80,7 @@ describe('public pre-flight (computePreflight) @regression @tier1', function () 
         // BATCH moved from a flat refusal to a sub-command-level one (spec row 46): a batch
         // that can reach the VM is still refused, a batch that cannot is pre-flighted. The full
         // policy, its spellings and the dispatch-loop guard behind it are in
-        // test/unit/batchProbePreflight.test.js; this pins the classification seam only.
+        // test/unit/batch_probe_preflight.test.js; this pins the classification seam only.
         it('BATCH is refused per sub-command, never as a lifted denylist entry', async function () {
             let { ctx, calls } = makeCtx(makeUtil('BTC', FEE_DEST));
             let denied = await ctx.computePreflight({ action: 'BATCH', params: '0|DEPLOY|0|code' });

@@ -505,7 +505,7 @@ class Genesis {
         // on two chains, which is a different ledger hash. The parameter set is the same
         // object the bridge passes, so "byte-identical" is a fact of the code, not a promise.
         // The synthesized transaction (data string, tx hash, source, vout) is byte-identical
-        // to the pre-refactor one; test/unit/genesis-bridge-replay-pin.test.js pins both
+        // to the pre-refactor one; test/unit/genesis_bridge_replay_pin.test.js pins both
         // literals, so genesis replays to the same hashes on every chain.
         // skipExistsProbe: the genesis pass runs once, at a block-keyed height, and this is the
         // FIRST action of that block, so the row provably cannot be there yet. The probe the

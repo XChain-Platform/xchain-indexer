@@ -230,7 +230,7 @@ class Utility {
     //
     // FROZEN VOCABULARY: the returned tokens are the closed set
     // xchain-vm/src/consensus-runtime.js CONSENSUS_STATUS_TOKENS. Adding/splitting a token is a
-    // consensus change (bump CONSENSUS_VERSION). Guarded by test/unit/consensus-params.test.js.
+    // consensus change (bump CONSENSUS_VERSION). Guarded by test/unit/consensus_params.test.js.
     vmFailureStatus(vmError){
         let msg = String(vmError || '');
         if(msg.startsWith('revert:')) return 'reverted';
@@ -3072,7 +3072,7 @@ class Utility {
     // findMatchingDispensers uses): a status this list has not heard of must still be REFUNDED,
     // because skipping a legitimate first refund strands a user's escrow and forks the chain,
     // while missing a novel terminal state only leaves today's latent hazard in place. Any new
-    // status a settlement handler writes belongs here; dispenser-settlement-idempotency.test.js
+    // status a settlement handler writes belongs here; dispenser_settlement_idempotency.test.js
     // pins the four that exist, and ONLY those four belong here. A status no handler writes
     // buys nothing and points the guard the wrong way: it can only ever suppress a legitimate
     // first refund. 'closed' was such an entry (never written to dispenser_statuses by any

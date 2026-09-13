@@ -36,13 +36,13 @@
 -- refuses BEFORE it recreates a container, rather than after (the 2026-08-09 fleet halt).
 -- mode=manual is what makes that meaningful: an auto migration applies itself at the first
 -- startup that sees it and can never be the missing precondition, and the unit suite
--- test/unit/migration-preconditions.test.js refuses the combination auto + tagged.
+-- test/unit/migration_preconditions.test.js refuses the combination auto + tagged.
 --
 -- IDEMPOTENT AND NON-DESTRUCTIVE. CREATE TABLE IF NOT EXISTS only; no DROP, so a database
 -- whose boot-time verifyTables() already created the tables from src/sql/ records this as
 -- applied without touching a row. Each block is copied VERBATIM from its fresh-build
 -- definition in src/sql/, which is what keeps SHOW CREATE TABLE identical between a
--- migrated database and a fresh install (test/unit/sql-schema-column-parity.test.js
+-- migrated database and a fresh install (test/unit/sql_schema_column_parity.test.js
 -- compares the two paths, columns, inline keys and the ENGINE tail alike).
 --
 -- HOW TO RUN

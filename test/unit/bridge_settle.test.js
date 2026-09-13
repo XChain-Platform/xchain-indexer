@@ -44,7 +44,7 @@ const CHK    = require('../../src/consensus/bridge_checkpoint_check.js');
 // correctly, and every quorum case here would fail for a reason that is not its subject.
 // The activation freezes at require time, so the module under test is required with the
 // env unset and the require cache is put back at once: this file drives the legacy arm,
-// admissionBinding.test.js drives the armed one. The purge/re-require idiom is the same
+// admission_binding.test.js drives the armed one. The purge/re-require idiom is the same
 // one the price and follower-bound suites carry by hand (frontier row 25).
 function requireDisarmed(mod){
     const twin  = require.resolve('../../src/mirror_admission_activation.js');

@@ -25,7 +25,7 @@
  * THIS FILE ADDED NO BEHAVIOUR WHEN IT WAS CREATED. It is the verify block lifted
  * verbatim out of actions/attest/index.js `_parseResponse`, with the heights it used to
  * read off the surrounding scope turned into parameters. Its byte-behaviour is
- * pinned by test/unit/actions/attest-response-verify-vectors.test.js, whose
+ * pinned by test/unit/actions/attest_response_verify_vectors.test.js, whose
  * expected canonicals and error strings were CAPTURED from the pre-extraction
  * handler.
  *

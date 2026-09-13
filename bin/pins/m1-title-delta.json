@@ -9,7 +9,7 @@
   "titleDeltas": [
     {
       "row": 3,
-      "file": "test/unit/protocol-address-roles.test.js",
+      "file": "test/unit/protocol_address_roles.test.js",
       "scripts": ["test", "test:integration"],
       "dropped": "protocolAddressRoles (consensus hash canonicalization) covers every hashed special address in src/configs/*.js",
       "added": "protocolAddressRoles (consensus hash canonicalization) covers every hashed special address in the coin bundles",

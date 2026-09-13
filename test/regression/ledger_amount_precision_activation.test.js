@@ -23,7 +23,7 @@
  * DEBITED as 1, and one parent plus 50 children spent 51 XCHAIN instead of the
  * 25.5 the fee schedule charges.
  *
- * `test/unit/db.ledger-amount-precision.test.js` guards the db.js call sites.
+ * `test/unit/db_ledger_amount_precision.test.js` guards the db.js call sites.
  * THIS file guards the flag module itself: the three values a silent edit
  * could move without any db test noticing, because db.js reads all three from
  * here rather than restating them.

@@ -148,12 +148,12 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         // These cases assert legacy COUNT quorum (the live mainnet path, whose
         // activation is a far-future placeholder). Regtest has WI-1 stake-weighted
         // quorum active at every block, so pin the legacy path: the oracle_publish
-        // mocks here carry no source/weight. Weighted coverage: StakeWeightedQuorum.test.js.
+        // mocks here carry no source/weight. Weighted coverage: stake_weighted_quorum.test.js.
         swqStub = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
         // these cases assert the LEGACY DOGE-side reward derivation (still the
         // behavior below the derive-relocation flag-day / on mainnet, where the gate is an
         // inert placeholder). Pin the derive gate OFF so anchor.js runs the DOGE-side write;
-        // the at/above-gate skip + BTC-side relocation are covered by anchorRewardDerive.test.js
+        // the at/above-gate skip + BTC-side relocation are covered by anchor_reward_derive.test.js
         // and the dedicated 'derive-relocation flag-day' describe below.
         deriveGateStub = sinon.stub(arMod, 'isAnchorRewardDeriveActive').returns(false);
     });

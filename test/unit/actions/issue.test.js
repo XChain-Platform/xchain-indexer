@@ -321,7 +321,7 @@ describe('Issue handler @regression @tier1', function () {
         // The below-the-flag twin proves the guard is gated, not baked in: it drives the
         // same params on mainnet, which parks at the 9999999999 sentinel, so the legacy
         // MIN_TICK_LENGTH=1 verdict still stands there. See
-        // xchain-indexer/test/unit/issue-bridge-namespace.test.js for the fuller AT6 suite.
+        // xchain-indexer/test/unit/issue_bridge_namespace.test.js for the fuller AT6 suite.
         it('1-char TICK at/above the namespace flag -> invalid: TICK (length)', async function () {
             const params = makeFormat0Params({ TICK: 'A' });
             const data   = makeData({ FORMAT: 0, BLOCK_INDEX: LOW_BLOCK });

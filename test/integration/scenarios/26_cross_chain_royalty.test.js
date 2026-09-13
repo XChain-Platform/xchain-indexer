@@ -222,7 +222,7 @@ describe('Cross-chain royalty: create-side gate + signed-legs settlement (real D
         // The counterparty (BTC side, leg a) sold a controlled token there; its legs are in
         // BTC regtest encoding and apply to the proceeds THIS chain releases (b's escrow →
         // a_payout_addr). BTC/LTC regtest share the p2pkh prefix, so the re-encode is the
-        // identity here; the mainnet byte-swap is pinned by address-reencode.test.js.
+        // identity here; the mainnet byte-swap is pinned by address_reencode.test.js.
         const A_LEGS = JSON.stringify([{ to: LEGADDR, bps: 2500 }]);
         const makeRow = (matchId, legs) => ({
             match_id: matchId, snapshot_block: SNAP, network: 'regtest',

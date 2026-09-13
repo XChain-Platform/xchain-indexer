@@ -104,7 +104,7 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         // stake-weighted quorum is active at every block, so pin the legacy path
         // explicitly : the validator mocks below carry no source/weight and the
         // weighted predicate diverges from the majority floor at N=3. Weighted
-        // coverage lives in StakeWeightedQuorum.test.js.
+        // coverage lives in stake_weighted_quorum.test.js.
         swqStub = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
 
         // Cross-chain DB methods not present in the shared mock : add neutral stubs.

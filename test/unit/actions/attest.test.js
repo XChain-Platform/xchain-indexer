@@ -1872,7 +1872,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             indexer.indexerDb.getStakeWeightsByCapability.resolves([{ pubkey: 'k1', source: 'S1', weight: '50000' }]);
             await handler._computeResponsibleSet('req-3', 1, 90, 'http_get');
             // the declared block 90 is resolved at its buried height; the
-            // stake-weighted flag-day still keys on the declared 90 (see snapshotReorgBuffer.test.js).
+            // stake-weighted flag-day still keys on the declared 90 (see snapshot_reorg_buffer.test.js).
             assert.ok(indexer.indexerDb.getStakeWeightsByCapability.calledWith(
                 'attestation', srb.buriedSnapshotBlock(90, 'regtest')));
             assert.ok(indexer.indexerDb.getValidatorsByCapability.notCalled);

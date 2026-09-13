@@ -1312,7 +1312,7 @@ class Database {
                 // for a surrogate key - only a dated migration is. A migration that adds
                 // one must never be squashed or baselined as "the reconciler already did
                 // it" (attest_validator_stats.id, 2026-08-19). Pinned by
-                // test/unit/schema-drift-column-order.test.js.
+                // test/unit/schema_drift_column_order.test.js.
                 if(exp.notNull && !exp.hasDefault){
                     console.log('Schema drift on ' + table + '.' + exp.name + ': column missing live, source is NOT NULL with no DEFAULT - cannot backfill existing rows safely. Skipping; add manually.');
                     continue;
@@ -3633,7 +3633,7 @@ Database.DEPLOY_PRECONDITION_TAG = 'deploy-precondition=required';
 // DEPLOY_PRECONDITION_TAG in each listed migration's own header, which the deploy
 // tool (xchain-node's MigrationPreconditionService) reads out of the source tree it
 // is about to deploy and checks against the target DB's schema_migrations BEFORE the
-// container is recreated. test/unit/migration-preconditions.test.js keeps the halves
+// container is recreated. test/unit/migration_preconditions.test.js keeps the halves
 // in step: every entry here must exist, be mode=manual, and carry the tag.
 //
 // ADDING A STARTUP ASSERTION: register it here and tag its migration file, or the

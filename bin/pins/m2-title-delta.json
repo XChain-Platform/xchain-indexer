@@ -48,7 +48,7 @@
     },
     {
       "row": 5,
-      "file": "test/unit/price-batch-query.test.js",
+      "file": "test/unit/price_batch_query.test.js",
       "added_by": "e56aa1c7",
       "scripts": [
         "test",
@@ -65,7 +65,7 @@
     },
     {
       "row": 5,
-      "file": "test/unit/reorg-history-query.test.js",
+      "file": "test/unit/reorg_history_query.test.js",
       "added_by": "4625b145",
       "scripts": [
         "test",

@@ -27,7 +27,7 @@
  * snapshot from the surviving mirrored row.
  *
  * The registry ships as two byte-identical twins (xchain-indexer/src/hub/tableLifecycle.js
- * and xchain-sync/src/tableLifecycle.js), and rollback-coverage.test.js already locks
+ * and xchain-sync/src/tableLifecycle.js), and rollback_coverage.test.js already locks
  * those two files byte-identical. This guard is deliberately NOT that check: it reads
  * each copy's OWN registry and pins the two fields, so a twin edit that moves both files
  * in lockstep (the shape byte-identity cannot see) still fails here. Source and replica

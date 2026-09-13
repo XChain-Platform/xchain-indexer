@@ -15,7 +15,7 @@
  *
  * Runs db.getArchiveReplayWatermarks() against a REAL MariaDB.
  *
- * Its unit sibling (test/unit/db.getArchiveReplayWatermarks.test.js) stubs
+ * Its unit sibling (test/unit/db_get_archive_replay_watermarks.test.js) stubs
  * doQuery and asserts the query's SHAPE: one statement, the shared version
  * constant, both statuses. That is the right guard for those properties and it
  * cannot catch the one thing that matters most here, because the SQL never

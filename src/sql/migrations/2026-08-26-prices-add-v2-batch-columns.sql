@@ -22,7 +22,7 @@
 -- POSITION matters here, not just presence: all four columns land AFTER sigs_json, in
 -- the same order src/sql/prices.sql declares them, so a fresh install (definition path)
 -- and a long-lived DB (this ledger path) converge on a byte-identical SHOW CREATE TABLE.
--- test/unit/sql-schema-column-parity.test.js fails CI on any divergence.
+-- test/unit/sql_schema_column_parity.test.js fails CI on any divergence.
 --
 -- The startup drift reconciler (alterTableForDrift) converges a fresh or aged install
 -- from src/sql/prices.sql independently, so a node that never replays this file still

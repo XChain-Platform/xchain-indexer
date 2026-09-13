@@ -28,7 +28,7 @@
  * Caught a real bug the mocked enforcement unit tests missed: normalizeDataValues
  * coerced the permissions ARRAY to a comma-joined string before JSON.stringify, so
  * the stored JSON silently disabled the allowlist on read-back (fixed in db.js;
- * pinned by test/unit/contract-permissions-persist.test.js).
+ * pinned by test/unit/contract_permissions_persist.test.js).
  *
  * Run (disposable MariaDB, e.g. a throwaway container):
  *   TEST_DB_HOST=127.0.0.1 TEST_DB_PORT=<port> TEST_DB_USER=root TEST_DB_PASS=<pw> \

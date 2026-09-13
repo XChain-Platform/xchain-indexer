@@ -38,7 +38,7 @@
 --
 -- Fresh installs get this table from the directory scan in db.verifyTables(); an aged
 -- database gets it from src/sql/migrations/2026-09-12-bridge-tables.sql, whose CREATE
--- TABLE block is byte-consistent with this one (sql-schema-column-parity.test.js
+-- TABLE block is byte-consistent with this one (sql_schema_column_parity.test.js
 -- compares the two paths).
 DROP TABLE IF EXISTS xbridges;
 CREATE TABLE xbridges (

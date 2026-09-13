@@ -1041,7 +1041,7 @@ class Rollback {
                 // status, written in the same action as the escrow clear. Alias `si` (not the
                 // SQL keyword `is`). The SQL between the ESCROW-REDERIVE-SQL markers is kept
                 // logically identical with xchain-sync/src/ClientRollback.js; a cross-repo drift
-                // guard (xchain-sync test/unit/rollback-coverage.test.js) asserts they match, so
+                // guard (xchain-sync test/unit/rollback_coverage.test.js) asserts they match, so
                 // source + replica derive byte-identical escrow_action_index values.
                 //<ESCROW-REDERIVE-SQL>
                 const escrowAffectedTickersSql =
@@ -1101,7 +1101,7 @@ class Rollback {
                 //
                 // The SQL between the COINPAY-MATCH-REDERIVE-SQL markers is kept logically
                 // identical with xchain-sync/src/ClientRollback.js; a cross-repo drift guard
-                // (xchain-sync test/unit/rollback-coverage.test.js) asserts they match, so
+                // (xchain-sync test/unit/rollback_coverage.test.js) asserts they match, so
                 // source and replica derive the same match statuses.
                 //<COINPAY-MATCH-REDERIVE-SQL>
                 const coinpayMatchDemoteSql =
