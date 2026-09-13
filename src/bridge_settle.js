@@ -86,6 +86,7 @@ const SETTLE_REASON = {
     NOT_FINALIZED:   'row is not finalized',
     NOT_DUE:         'effective_time is ahead of this block protocol time',
     ALREADY_APPLIED: 'already recorded in bridge_settlements',
+    SRC_LEG_APPLIED: 'this chain already applied a settlement for the source leg',
     QUORUM:          'insufficient cross_chain quorum over the signed canonical',
     SNAPSHOT_ABSENT: 'capability snapshot for snapshot_block is not mirrored yet',
     ESCROW_PROOF:    'escrow cross-check refused the row',
@@ -329,6 +330,44 @@ async function isSettled(indexerDb, id, kind){
 }
 
 /**
+ * Has this chain already applied a TRANSFER settlement for this SOURCE leg, under any
+ * transfer_id? The indexer is the ledger of record, so at most one settlement per source leg
+ * may ever apply here: one v0/v3 lock or v1/v4 burn funds exactly one mint or release, which is
+ * what the base spec's supply invariant counts when it says a transfer is in flight "from the
+ * block its source leg (lock or burn) applies until the block its destination leg (mint or
+ * release) applies". The hub guards the same rule at finalization, but a duplicate that escapes
+ * a future hub, a mesh running an older build or a later regression would otherwise mint or
+ * release a second time here, and a double mint is the one direction the invariant cannot
+ * recover from (there is no destination-side unwind, D16).
+ *
+ * KEYED ON THE SOURCE LEG ALONE, never on transfer_id. transfer_id carries snapshot_block by
+ * design (spec section 6), so two rows naming one leg differ in id, and an id-keyed test is
+ * exactly the hole the measured duplicates came through: eleven finalized rows for seven source
+ * legs, all eleven distinct ids.
+ *
+ * READ FROM THE LOCAL bridge_settlements TABLE and never from the mirror, for the reason
+ * isSettled gives, with a second consequence that matters here: a row retracted before it
+ * applied leaves no settlement behind, so a re-formed row for the same leg (a new id, a new
+ * snapshot_block) still applies, and applies exactly once.
+ *
+ * @param {Object} indexerDb
+ * @param {string} srcChain - the lock/burn chain, as signed
+ * @param {number|string} srcActionIndex - the lock/burn action_index, as signed
+ * @returns {Promise<boolean>} false when the row names no usable source leg; the caller's
+ *          ROW_FIELDS refusal owns that case, so this never answers a uniqueness question it
+ *          has no key for
+ */
+async function isSourceLegSettled(indexerDb, srcChain, srcActionIndex){
+    const idx = _int(srcActionIndex);
+    if(!srcChain || idx === null) return false;
+    const rows = await indexerDb.doQuery(
+        `SELECT transfer_id FROM bridge_settlements
+         WHERE kind = 'transfer' AND src_chain = ? AND src_action_index = ? LIMIT 1`,
+        [String(srcChain), idx]);
+    return rows.length > 0;
+}
+
+/**
  * Record the applied leg. INSERT IGNORE on (transfer_id, kind), the recordCrossChainSettlement
  * shape: the action_index is rollback-able, so a reorg below the applying block drops this row
  * and the transfer re-applies at a fresh index.
@@ -386,6 +425,10 @@ function _warn(kind, id, message){
  * is skipped. The record is local and reorg-rollback-able on purpose: the mirrored row can
  * be deleted later, so "did this chain already apply it?" can never be a read of the mirror.
  *
+ * ONE SETTLEMENT PER SOURCE LEG, beside that filter and keyed on (src_chain, src_action_index)
+ * rather than on the id: a second row naming a lock or burn this chain has already paid out is
+ * REFUSED, never deferred. See isSourceLegSettled.
+ *
  * NOT BUILT (lane L14).
  *
  * @param {Object} row - one finalized bridge_transfers row as mirrored: transfer_id,
@@ -416,8 +459,14 @@ async function applyBridgeTransfer(row, ctx){
     const tick      = String(row.tick || '');
     const decimals  = _int(row.decimals);
     const snapshot  = _int(row.snapshot_block);
+    // src_action_index is REQUIRED, not optional, because it is half of the source leg and the
+    // source leg is what the one-settlement-per-leg refusal below is keyed on. A row that names
+    // no source action cannot be tested for uniqueness at all, so admitting it would be a hole
+    // straight through that refusal; it is also a row no real lock or burn can produce, since
+    // the hub derives the field from the source action and signs it into the canonical.
+    const srcIndex  = _int(row.src_action_index);
     if(!id || !srcChain || !destChain || !tick || decimals === null || snapshot === null ||
-       _isNull(row.dest_address) || _isNull(row.amount))
+       srcIndex === null || _isNull(row.dest_address) || _isNull(row.amount))
         return out(false, SETTLE_REASON.ROW_FIELDS);
 
     // Network scope, the CROSS_SETTLE belt-and-suspenders guard: the network is inside the
@@ -452,6 +501,26 @@ async function applyBridgeTransfer(row, ctx){
 
     if(await isSettled(db, id, 'transfer'))
         return out(false, SETTLE_REASON.ALREADY_APPLIED);
+
+    // ONE SETTLEMENT PER SOURCE LEG. The id-keyed test above answers "have I applied THIS row?";
+    // this one answers "have I already paid out this lock or burn?", which is the question the
+    // ledger of record has to answer and the hub's own guard cannot answer for it.
+    //
+    // IT IS A REFUSAL AND NOT A DEFERRAL, and that is the whole point: the fact it turns on is
+    // a settlement this chain has already written, which no later block can unwrite short of a
+    // local reorg below the applying block, and a reorg drops the record with the action index
+    // so the leg re-applies on replay. Deferring instead would park the row on a barrier that
+    // waits forever for something that will never change.
+    //
+    // REPLAY-SAFE because every input is in the ledger: the already-settled set is this chain's
+    // own bridge_settlements table, and which of two duplicate rows applies first is fixed by
+    // the due set's (snapshot_block, transfer_id) order and by effective_time against protocol
+    // block_time, never by arrival order, a wall clock or the hub's AUTO_INCREMENT. Two nodes
+    // replaying the same chain and the same mirror therefore refuse the same row.
+    if(await isSourceLegSettled(db, srcChain, srcIndex)){
+        _warn('XBRIDGE', id, SETTLE_REASON.SRC_LEG_APPLIED + ' (' + srcChain + ':' + srcIndex + ') : skipping');
+        return out(false, SETTLE_REASON.SRC_LEG_APPLIED);
+    }
 
     // The amount moves as the SIGNED TEXT, not as a re-formatted number. `decimals` is a
     // signed field precisely so the string's precision is fixed by the record, and re-rendering
@@ -1027,8 +1096,38 @@ async function dueBridgeTransfers(ctx){
         `SELECT transfer_id FROM bridge_settlements
          WHERE kind = 'transfer' AND transfer_id IN (${ids.map(() => '?').join(',')})`, ids);
     const seen = new Set(settled.map(r => r.transfer_id));
-    return rows.filter(r => !seen.has(r.transfer_id))
-               .slice(0, XBRIDGE_MAX_PER_BLOCK || 25);
+    const unsettled = rows.filter(r => !seen.has(r.transfer_id));
+
+    // Drop a row whose SOURCE LEG this chain has already settled under a different transfer_id.
+    // applyBridgeTransfer refuses such a row anyway and that refusal is the authoritative guard;
+    // excluding it from the due set is what keeps a permanently refusable row from consuming one
+    // of the XBRIDGE_MAX_PER_BLOCK slots on every block forever and starving legitimate
+    // transfers behind it, the same reason the policy path records a snapshot that can no longer
+    // progress. Deterministic: the set is a function of this chain's own bridge_settlements, so
+    // every node replaying the same chain drops the same rows and applies the same slice.
+    const legChains = [...new Set(unsettled.filter(r => r.src_chain && _int(r.src_action_index) !== null)
+                                           .map(r => String(r.src_chain)))];
+    const legIndexes = [...new Set(unsettled.map(r => _int(r.src_action_index)).filter(v => v !== null))];
+    let settledLegs = new Set();
+    if(legChains.length && legIndexes.length){
+        const legRows = await db.doQuery(
+            `SELECT src_chain, src_action_index FROM bridge_settlements
+             WHERE kind = 'transfer' AND src_chain IN (${legChains.map(() => '?').join(',')})
+               AND src_action_index IN (${legIndexes.map(() => '?').join(',')})`,
+            legChains.concat(legIndexes));
+        // Two IN lists select the cross product of the candidates' chains and indexes, so the
+        // PAIR is matched here rather than trusted from the query: without this an applied leg
+        // on one chain would suppress the same action index on another.
+        settledLegs = new Set((legRows || []).map(r => String(r.src_chain) + ':' + String(_int(r.src_action_index))));
+    }
+    return unsettled.filter(r => {
+                       const idx = _int(r.src_action_index);
+                       // No usable source leg: left in the due set so the apply's ROW_FIELDS
+                       // refusal is the one place that judges it.
+                       if(!r.src_chain || idx === null) return true;
+                       return !settledLegs.has(String(r.src_chain) + ':' + idx);
+                   })
+                   .slice(0, XBRIDGE_MAX_PER_BLOCK || 25);
 }
 
 /**
@@ -1094,6 +1193,7 @@ module.exports = {
     parseMembership,
     verifyQuorum,
     isSettled,
+    isSourceLegSettled,
     recordSettlement,
     SETTLE_REASON,
     POLICY_LEG_ORDINAL,

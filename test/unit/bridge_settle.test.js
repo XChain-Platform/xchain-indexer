@@ -141,6 +141,10 @@ function makeCtx(opts){
         credits: [], debits: [], settlements: [], actions: [], mappings: [],
         balances: o.balances || {},          // tick_id -> amount, for the escrow address
         settled:  new Set(o.settled || []),
+        // The applied SOURCE LEGS, '<src_chain>:<src_action_index>', the second idempotency key
+        // the real table carries as idx_src_ref. Modelled separately from `settled` because the
+        // whole point of the refusal is that one leg can arrive under several transfer ids.
+        settledLegs: new Set(o.settledLegs || []),
         mirrorTransfers: o.mirrorTransfers || [],
         mirrorPolicies:  o.mirrorPolicies  || [],
         injected: []
@@ -168,6 +172,24 @@ function makeCtx(opts){
         config: config,
         _mirrorDb: () => mirror,
         doQuery: async (sql, args) => {
+            // The source-leg uniqueness read, keyed on (src_chain, src_action_index). Answered
+            // before the id-keyed branch below, which would otherwise swallow it on LIMIT 1 and
+            // report every leg unsettled.
+            if(/FROM bridge_settlements/.test(sql) && /src_action_index = \?/.test(sql))
+                return state.settledLegs.has(String(args[0]) + ':' + String(args[1]))
+                    ? [{ transfer_id: 'e'.repeat(64) }] : [];
+            // The due-set sweep: two IN lists, chains then indexes. Faithfully over-selects the
+            // CROSS PRODUCT the way a real database does, so the pair matching in the module is
+            // exercised instead of being handed pre-matched rows.
+            if(/FROM bridge_settlements/.test(sql) && /src_action_index IN/.test(sql)){
+                const nChains = ((sql.match(/src_chain IN \(([^)]*)\)/) || ['', ''])[1].match(/\?/g) || []).length;
+                const chains  = (args || []).slice(0, nChains).map(String);
+                const idxs    = (args || []).slice(nChains).map(Number);
+                return [...state.settledLegs]
+                    .map(k => ({ src_chain: k.slice(0, k.indexOf(':')),
+                                 src_action_index: Number(k.slice(k.indexOf(':') + 1)) }))
+                    .filter(r => chains.includes(r.src_chain) && idxs.includes(r.src_action_index));
+            }
             if(/FROM bridge_settlements/.test(sql) && /LIMIT 1/.test(sql))
                 return state.settled.has(String(args[0]) + '|' + String(args[1])) ? [{ transfer_id: args[0] }] : [];
             if(/FROM bridge_settlements/.test(sql)){
@@ -176,8 +198,14 @@ function makeCtx(opts){
                                    .map(id => ({ transfer_id: id }));
             }
             if(/INSERT IGNORE INTO bridge_settlements/.test(sql)){
-                state.settlements.push({ action_index: args[0], transfer_id: args[1], kind: args[2], block_index: args[3] });
+                state.settlements.push({ action_index: args[0], transfer_id: args[1], kind: args[2], block_index: args[3],
+                                         src_chain: args[4], src_action_index: args[5] });
                 state.settled.add(String(args[1]) + '|' + String(args[2]));
+                // The source leg the insert captured, which is what makes a SECOND row naming it
+                // visible to the next read in the same block, exactly as the real table does.
+                if(String(args[2]) === 'transfer' && args[4] !== null && args[5] !== null &&
+                   args[4] !== undefined && args[5] !== undefined)
+                    state.settledLegs.add(String(args[4]) + ':' + String(args[5]));
                 return [];
             }
             return [];
@@ -480,6 +508,160 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
             assert.strictEqual(res.reason, BS.SETTLE_REASON.QUORUM);
             assert.deepStrictEqual(state.credits, []);
             assert.deepStrictEqual(state.actions, []);
+        });
+    });
+
+    describe('one settlement per SOURCE LEG (the ledger of record refusal)', function(){
+
+        // Two finalized rows for ONE source leg: different transfer_id AND different
+        // snapshot_block, which is the shape measured on the rail (eleven finalized rows for
+        // seven source actions, 120 minted against 80 locked). The id-keyed idempotency filter
+        // cannot see it, because snapshot_block is inside transfer_id by design (spec section 6),
+        // so both rows are legitimately-signed, distinct, unapplied rows to every earlier guard.
+        function duplicatePair(keys, overrides){
+            const base = Object.assign({}, overrides || {});
+            return [makeTransfer(keys, Object.assign({}, base, { transfer_id: '1'.repeat(64), snapshot_block: SNAPSHOT })),
+                    makeTransfer(keys, Object.assign({}, base, { transfer_id: '2'.repeat(64), snapshot_block: SNAPSHOT + 1 }))];
+        }
+
+        it('refuses a second IN-leg row naming a lock this chain already minted for', async function(){
+            const keys = [makeKey(), makeKey(), makeKey()];
+            const pair = duplicatePair(keys);
+            assert.notStrictEqual(pair[0].transfer_id, pair[1].transfer_id,
+                'the two ids must differ, or the id-keyed filter would be what refuses the second');
+            const { ctx, state } = makeCtx({
+                coin: 'DOGE',
+                validators: snapshotSet(keys),
+                tokens: { XCHAIN: { TICK_ID: 7, DECIMALS: 8, SUPPLY: '0' } }
+            });
+            ctx.proof = buildProof('100.00000000');
+            assert.strictEqual((await BS.applyBridgeTransfer(pair[0], ctx)).applied, true);
+            const res = await BS.applyBridgeTransfer(pair[1], ctx);
+            assert.strictEqual(res.applied, false);
+            assert.strictEqual(res.reason, BS.SETTLE_REASON.SRC_LEG_APPLIED);
+            // The LEDGER is the assertion, not the verdict string: one mint of the amount, one
+            // settlement row, one minted action index. A leaked duplicate would double the supply.
+            assert.deepStrictEqual(state.credits, [['XCHAIN', '10.00000000', DEST_ADDR]]);
+            assert.strictEqual(state.settlements.length, 1);
+            assert.strictEqual(state.actions.length, 1);
+        });
+
+        it('refuses a second OUT-leg row naming a burn this chain already released for', async function(){
+            const keys = [makeKey(), makeKey(), makeKey()];
+            const pair = duplicatePair(keys, { src_chain: 'DOGE', dest_chain: 'BTC', src_action_index: 7731 });
+            const { ctx, state } = makeCtx({
+                coin: 'BTC',
+                validators: snapshotSet(keys),
+                tokens: { XCHAIN: { TICK_ID: 7, DECIMALS: 8, SUPPLY: '100' } },
+                // Deliberately enough escrow for BOTH releases, so the would-go-negative guard
+                // cannot be what stops the second one: this is the AT2 shape, a burn of 2
+                // releasing 4 out of an escrow that could afford it.
+                balances: { 7: '50.00000000' },
+                mirrorTransfers: pair
+            });
+            const applied = await BS.processBridgeSettlePass(ctx);
+            assert.deepStrictEqual(applied.transfers, [pair[0].transfer_id]);
+            assert.deepStrictEqual(state.debits,  [['XCHAIN', '10.00000000', ESCROW_DOGE_ON_BTC]]);
+            assert.deepStrictEqual(state.credits, [['XCHAIN', '10.00000000', DEST_ADDR]]);
+            assert.strictEqual(state.settlements.length, 1);
+        });
+
+        it('still applies a second row naming a DIFFERENT lock on the same chain', async function(){
+            const keys = [makeKey(), makeKey(), makeKey()];
+            const first  = makeTransfer(keys, { transfer_id: '3'.repeat(64), src_action_index: 4242 });
+            const second = makeTransfer(keys, { transfer_id: '4'.repeat(64), src_action_index: 4243 });
+            const { ctx, state } = makeCtx({
+                coin: 'DOGE',
+                validators: snapshotSet(keys),
+                tokens: { XCHAIN: { TICK_ID: 7, DECIMALS: 8, SUPPLY: '0' } }
+            });
+            ctx.proof = buildProof('100.00000000');
+            assert.strictEqual((await BS.applyBridgeTransfer(first, ctx)).applied, true);
+            const res = await BS.applyBridgeTransfer(second, ctx);
+            assert.strictEqual(res.applied, true, res.reason || '');
+            assert.strictEqual(state.credits.length, 2, 'the refusal must key on the leg, never on the chain');
+            assert.strictEqual(state.settlements.length, 2);
+        });
+
+        it('reaches the same decision on a replay from the same state, in either mirror order', async function(){
+            const keys = [makeKey(), makeKey(), makeKey()];
+            const pair = duplicatePair(keys, { src_chain: 'DOGE', dest_chain: 'BTC', src_action_index: 8800 });
+            const run = async (order) => {
+                const { ctx, state } = makeCtx({
+                    coin: 'BTC', validators: snapshotSet(keys),
+                    tokens: { XCHAIN: { TICK_ID: 7, DECIMALS: 8, SUPPLY: '100' } },
+                    balances: { 7: '50.00000000' }, mirrorTransfers: order
+                });
+                const applied = await BS.processBridgeSettlePass(ctx);
+                return { transfers: applied.transfers, debits: state.debits, legs: [...state.settledLegs] };
+            };
+            // The SECOND run is handed the mirror in the opposite physical order, which is what a
+            // node that received the rows in a different sequence sees. The decision may not turn
+            // on that: the winner is fixed by (snapshot_block, transfer_id).
+            const a = await run(pair.slice());
+            const b = await run(pair.slice().reverse());
+            assert.deepStrictEqual(a, b);
+            assert.deepStrictEqual(a.transfers, [pair[0].transfer_id]);
+            assert.deepStrictEqual(a.legs, ['DOGE:8800']);
+        });
+
+        it('applies nothing more when a later block re-evaluates a mirror it already settled', async function(){
+            const keys = [makeKey(), makeKey(), makeKey()];
+            const pair = duplicatePair(keys, { src_chain: 'DOGE', dest_chain: 'BTC', src_action_index: 8800 });
+            const { ctx, state } = makeCtx({
+                coin: 'BTC', validators: snapshotSet(keys),
+                tokens: { XCHAIN: { TICK_ID: 7, DECIMALS: 8, SUPPLY: '100' } },
+                balances: { 7: '50.00000000' }, mirrorTransfers: pair,
+                settled: [pair[0].transfer_id + '|transfer'],
+                settledLegs: ['DOGE:8800']
+            });
+            const applied = await BS.processBridgeSettlePass(ctx);
+            assert.deepStrictEqual(applied.transfers, []);
+            assert.deepStrictEqual(state.debits, []);
+            assert.deepStrictEqual(state.credits, []);
+            assert.deepStrictEqual(state.actions, [], 'a refused row must mint no action index');
+        });
+
+        it('drops a settled leg from the due set, so a duplicate cannot hold a cap slot forever', async function(){
+            const rows = [
+                { transfer_id: '1'.repeat(64), snapshot_block: 1, dest_chain: 'DOGE', network: NETWORK,
+                  effective_time: 1, status: 'finalized', src_chain: 'BTC', src_action_index: 11 },
+                { transfer_id: '2'.repeat(64), snapshot_block: 2, dest_chain: 'DOGE', network: NETWORK,
+                  effective_time: 1, status: 'finalized', src_chain: 'BTC', src_action_index: 12 }
+            ];
+            const { ctx } = makeCtx({ coin: 'DOGE', mirrorTransfers: rows, settledLegs: ['BTC:11'] });
+            const due = await BS.dueBridgeTransfers(ctx);
+            assert.deepStrictEqual(due.map(r => r.transfer_id), ['2'.repeat(64)]);
+        });
+
+        it('never lets an applied leg on one chain suppress the same action index on another', async function(){
+            const rows = [
+                { transfer_id: '1'.repeat(64), snapshot_block: 1, dest_chain: 'DOGE', network: NETWORK,
+                  effective_time: 1, status: 'finalized', src_chain: 'BTC', src_action_index: 11 },
+                { transfer_id: '2'.repeat(64), snapshot_block: 1, dest_chain: 'DOGE', network: NETWORK,
+                  effective_time: 1, status: 'finalized', src_chain: 'LTC', src_action_index: 11 }
+            ];
+            // LTC's leg 11 is settled; BTC's leg 11 is a different leg and must survive. The
+            // query selects the cross product of chains and indexes, so this is what proves the
+            // PAIR is matched rather than the two lists separately.
+            const { ctx } = makeCtx({ coin: 'DOGE', mirrorTransfers: rows, settledLegs: ['LTC:11'] });
+            const due = await BS.dueBridgeTransfers(ctx);
+            assert.deepStrictEqual(due.map(r => r.transfer_id), ['1'.repeat(64)]);
+        });
+
+        it('refuses a row that names no source action index, which has no leg to test', async function(){
+            const keys = [makeKey(), makeKey(), makeKey()];
+            const row  = makeTransfer(keys, { src_action_index: null });
+            const { ctx, state } = makeCtx({ coin: 'DOGE', validators: snapshotSet(keys),
+                                             tokens: { XCHAIN: { TICK_ID: 7, DECIMALS: 8, SUPPLY: '0' } } });
+            ctx.proof = buildProof('100.00000000');
+            const res = await BS.applyBridgeTransfer(row, ctx);
+            assert.strictEqual(res.applied, false);
+            assert.strictEqual(res.reason, BS.SETTLE_REASON.ROW_FIELDS);
+            assert.deepStrictEqual(state.credits, []);
+            assert.deepStrictEqual(state.actions, []);
+            // And the helper answers "no" rather than inventing a key for an absent leg.
+            assert.strictEqual(await BS.isSourceLegSettled(ctx.indexerDb, 'BTC', null), false);
         });
     });
 
