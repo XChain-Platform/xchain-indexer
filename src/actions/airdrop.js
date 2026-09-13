@@ -197,7 +197,7 @@ class Airdrop {
 
             // Fetch TICK's allow/block lists ONCE before the recipient loop, then check membership in
             // memory via Sets (matching isActionAllowed's no-block_index behavior) so each recipient
-            // costs an O(1) hash probe instead of an O(n) scan, previously O(recipients x list).
+            // costs an O(1) hash probe instead of an O(n) scan, not O(recipients x list).
             // Determinism rides on `recipients` iteration order, which Sets preserve; an empty list
             // stays truthy as a Set exactly as it was as an array, so an empty ALLOW_LIST still
             // approves nobody.

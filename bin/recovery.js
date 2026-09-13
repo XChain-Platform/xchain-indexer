@@ -531,8 +531,8 @@ class AnchorRecovery {
     // must appear in the archived snapshot for that (capability, block); a dropped
     // qualifying source under-counts S and lets an evicted minority clear quorum.
     //
-    // The threshold used to be derived FROM THE ARCHIVE (the smallest per-source weight the
-    // archive admitted), which let the archive choose its own bar: dropping every lower-weight
+    // Deriving the threshold FROM THE ARCHIVE (the smallest per-source weight the
+    // archive admits) would let the archive choose its own bar: dropping every lower-weight
     // qualifying source RAISES that minimum, the resolver then returns only the high-weight
     // sources the archive kept, and resolved ⊆ archived passes while the dropped sources are
     // missing from the stake denominator S. That vector stays closed: nothing archive-derived

@@ -21,6 +21,20 @@
 
 module.exports = {
 
+    // One grouped scan of the queue for the health endpoint: a row per status carrying the
+    // row count and, for the oldest row in that status, its age in seconds. Pooled rather
+    // than transactional so the health endpoint can read it while drain() is mid-flight.
+    // The age is computed server-side, which keeps host and DB clock skew out of the number;
+    // that field is the only signal of a stalled rail now that pushes retry without a cap,
+    // because a stall shows up as an AGEING pending backlog, not a climbing failed count.
+    async getHubPushQueueStats(){
+        return await this._poolQuery(
+            `SELECT status, COUNT(*) AS cnt,
+                    TIMESTAMPDIFF(SECOND, MIN(created_at), NOW()) AS oldest_age_sec
+               FROM pending_hub_pushes GROUP BY status`
+        );
+    },
+
     // Source-chain reorg fence (item 5308). The current monotonic push generation for `coin`,
     // 0 when no rollback has ever bumped it (matches the DEFAULT 0 hub rows stamp before the
     // first reorg, all of which are then always deletable). Read fresh on every push + rollback;

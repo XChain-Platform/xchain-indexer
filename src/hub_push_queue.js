@@ -210,11 +210,7 @@ class HubPushQueue {
     // into the age. Null when nothing is pending.
     async getStats(){
         if(!this.hubClient || !this.hubClient.enabled) return null;
-        let rows = await this.indexerDb._poolQuery(
-            `SELECT status, COUNT(*) AS cnt,
-                    TIMESTAMPDIFF(SECOND, MIN(created_at), NOW()) AS oldest_age_sec
-               FROM pending_hub_pushes GROUP BY status`
-        );
+        let rows = await this.indexerDb.getHubPushQueueStats();
         let pending = 0, failed = 0, pendingOldestAgeSec = null;
         for(let r of (rows || [])){
             if(r.status === 'pending'){
