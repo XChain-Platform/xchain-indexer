@@ -86,7 +86,11 @@ const SHARED_GATES = [
     ['attest_zero_conf_activation',             ['ATTEST_ZERO_CONF_ACTIVATION']],
     ['attest_responsible_widening_activation',  ['ATTEST_RESPONSIBLE_WIDENING_V2']],
     // Epoch-keyed: ROLLCALL v1 with the GATES field, and the rules-aware capability set.
-    ['rollcall_gates_activation',               ['ROLLCALL_GATES_ACTIVATION']]
+    ['rollcall_gates_activation',               ['ROLLCALL_GATES_ACTIVATION']],
+    // COIN-KEYED ('<COIN>:<network>' with the bare network key as fallback), the first
+    // shared gate of that shape: XBRIDGE arms one height per chain because TBTC, TLTC and
+    // TDOGE tips differ by orders of magnitude. activeGatesAt resolves both forms below.
+    ['xchain_bridge_activation',                ['XCHAIN_BRIDGE_ACTIVATION']]
 ];
 
 // A per-network height at or above this value is a far-future placeholder, not an
@@ -152,6 +156,41 @@ function knownGateKeys(){
     return Object.keys(loadGateValues()).sort();
 }
 
+// The activation height a gate MAP declares for `network`, or undefined when it declares
+// none. Two key forms are legal: the plain network key every gate but one uses, and the
+// coin-keyed '<COIN>:<network>' form XCHAIN_BRIDGE_ACTIVATION uses with the bare network
+// key as its fallback.
+//
+// With `coin` named the resolution matches the gate module's own resolver exactly: the
+// coin's key when the map declares one, otherwise the bare network key.
+//
+// With no coin named the EARLIEST armed key for the network decides. A GATES list states
+// what a BUILD applies and one build serves every chain on a network, so the first chain
+// to arm is the block from which a build lacking the gate is running different rules.
+// Reading the bare key alone would report such a gate inactive forever, because an arming
+// train sizes one height per chain and leaves the bare fallback on the far-future sentinel.
+function _networkActivationHeight(map, network, coin){
+    if (coin != null) {
+        const keyed = map[String(coin) + ':' + network];
+        if (keyed !== undefined) return keyed;
+        return Object.prototype.hasOwnProperty.call(map, network) ? map[network] : undefined;
+    }
+    const suffix = ':' + network;
+    let earliest = undefined;
+    let declared = false;
+    for (const k of Object.keys(map)) {
+        if (k !== network && !(k.length > suffix.length && k.endsWith(suffix))) continue;
+        declared = true;
+        const at = map[k];
+        if (!Number.isFinite(at) || at >= FAR_FUTURE_HEIGHT_SENTINEL) continue;
+        if (earliest === undefined || at < earliest) earliest = at;
+    }
+    if (earliest !== undefined) return earliest;
+    // Nothing armed for this network: hand back the bare value so the caller's own
+    // sentinel and null checks report it inactive for the reason it is inactive.
+    return declared ? map[network] : undefined;
+}
+
 // The shared gates ACTIVE at `height` on `network`, '<module>.<EXPORT>', sorted: every
 // per-network activation MAP whose entry for the network is a finite height, below the
 // far-future sentinel, and <= height. Non-map exports (frozen ladder constants such as
@@ -159,7 +198,12 @@ function knownGateKeys(){
 // null entry is the unratified sentinel and reads as inactive. This is the comparand the
 // rules-aware capability set filters on: a validator whose last rolled call did not name
 // every key returned here is dropped for a request at this height.
-function activeGatesAt(height, network){
+//
+// `coin` is optional and only changes the answer for a coin-keyed gate: pass the chain
+// being judged to get that chain's own activation, omit it to get the network-wide answer
+// (active from the first chain that arms), which is what a caller holding only a height
+// and a network needs.
+function activeGatesAt(height, network, coin){
     let h = Number(height);
     if (!Number.isFinite(h)) return [];
     const values = loadGateValues();
@@ -167,8 +211,8 @@ function activeGatesAt(height, network){
     for (const key of Object.keys(values)) {
         const v = values[key];
         if (v === ABSENT || v === null || typeof v !== 'object' || Array.isArray(v)) continue;
-        if (!Object.prototype.hasOwnProperty.call(v, network)) continue;
-        const at = v[network];
+        const at = _networkActivationHeight(v, network, coin);
+        if (at === undefined) continue;
         if (!Number.isFinite(at) || at >= FAR_FUTURE_HEIGHT_SENTINEL) continue;
         if (at <= h) out.push(key);
     }
