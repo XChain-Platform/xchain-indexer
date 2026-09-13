@@ -52,6 +52,17 @@ const sinon  = require('sinon');
 
 const eq = require('../../src/equivocation_header.js');
 const { sleep } = require('../helpers/wait.js');
+const bridgeSettlementsMixin = require('../../src/db/bridge_settlements.js');
+
+// The settle pass reaches the mirror through the db/bridge_settlements methods, so a
+// capturing stub has to carry the REAL ones bound over its own doQuery. That is what makes
+// the literal-string assertions below a check on the shipped statements rather than on
+// statements this file wrote.
+function bindSettlementReads(db){
+    for(const m of Reflect.ownKeys(bridgeSettlementsMixin))
+        db[m] = bridgeSettlementsMixin[m].bind(db);
+    return db;
+}
 
 const NETWORK   = 'regtest';
 const ADMIT_AT  = 799000;                       // the realistic arming height
@@ -531,7 +542,7 @@ describe('admission binding: the mirrored selects issue the C33 form above the a
 
                 it('below the activation at B=' + B + ' the bridge selects are byte-identical to the pre-train statements', async function () {
                     const captured = [];
-                    const ctx = { indexerDb: { _mirrorDb: () => ({ doQuery: async (sql, args) => { captured.push({ sql, args }); return []; } }),
+                    const ctx = { indexerDb: { _mirrorDb: () => bindSettlementReads({ doQuery: async (sql, args) => { captured.push({ sql, args }); return []; } }),
                                                doQuery: async () => [] },
                                   coin: 'DOGE', network: NETWORK, blockIndex: B, blockTime: T };
                     await h.BS.dueBridgeTransfers(ctx);
@@ -592,7 +603,7 @@ describe('admission binding: the mirrored selects issue the C33 form above the a
 
                 it('above the activation at B=' + B + ' the bridge selects take the C33 form, the policy select with no chain clause', async function () {
                     const captured = [];
-                    const ctx = { indexerDb: { _mirrorDb: () => ({ doQuery: async (sql, args) => { captured.push({ sql, args }); return []; } }),
+                    const ctx = { indexerDb: { _mirrorDb: () => bindSettlementReads({ doQuery: async (sql, args) => { captured.push({ sql, args }); return []; } }),
                                                doQuery: async () => [] },
                                   coin: 'DOGE', network: NETWORK, blockIndex: B, blockTime: T };
                     await h.BS.dueBridgeTransfers(ctx);

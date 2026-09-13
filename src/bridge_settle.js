@@ -366,10 +366,7 @@ async function verifyQuorum(canonical, signaturesJson, snapshotBlock, network, i
  * @returns {Promise<boolean>}
  */
 async function isSettled(indexerDb, id, kind){
-    const rows = await indexerDb.doQuery(
-        'SELECT transfer_id FROM bridge_settlements WHERE transfer_id = ? AND kind = ? LIMIT 1',
-        [String(id), String(kind)]);
-    return rows.length > 0;
+    return await indexerDb.isBridgeSettlementRecorded(id, kind);
 }
 
 /**
@@ -403,11 +400,7 @@ async function isSettled(indexerDb, id, kind){
 async function isSourceLegSettled(indexerDb, srcChain, srcActionIndex){
     const idx = _int(srcActionIndex);
     if(!srcChain || idx === null) return false;
-    const rows = await indexerDb.doQuery(
-        `SELECT transfer_id FROM bridge_settlements
-         WHERE kind = 'transfer' AND src_chain = ? AND src_action_index = ? LIMIT 1`,
-        [String(srcChain), idx]);
-    return rows.length > 0;
+    return await indexerDb.isBridgeSourceLegSettled(srcChain, idx);
 }
 
 /**
@@ -416,14 +409,11 @@ async function isSourceLegSettled(indexerDb, srcChain, srcActionIndex){
  * and the transfer re-applies at a fresh index.
  */
 async function recordSettlement(indexerDb, actionIndex, id, kind, blockIndex, row){
-    await indexerDb.doQuery(
-        `INSERT IGNORE INTO bridge_settlements
-         (action_index, transfer_id, kind, block_index, src_chain, src_action_index, dest_chain, dest_address, tick)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [actionIndex, String(id), String(kind), blockIndex,
-         row.src_chain || null,
-         (row.src_action_index === null || row.src_action_index === undefined) ? null : Number(row.src_action_index),
-         row.dest_chain || null, row.dest_address || null, row.tick || null]);
+    await indexerDb.recordBridgeSettlement(
+        actionIndex, id, kind, blockIndex,
+        row.src_chain || null,
+        (row.src_action_index === null || row.src_action_index === undefined) ? null : Number(row.src_action_index),
+        row.dest_chain || null, row.dest_address || null, row.tick || null);
 }
 
 // One log line per refusal or deferral, naming the id and the reason, which is the single line
@@ -846,11 +836,7 @@ async function applyPolicySnapshot(row, ctx){
     // materializes the STALE membership last and leaves the copy enforcing a policy the origin
     // has already replaced, permanently. So an earlier finalized seq that this chain has not
     // recorded carries this row forward (D19: a missing earlier seq is CARRIED, never terminal).
-    const earlier = await db._mirrorDb().doQuery(
-        `SELECT snapshot_id FROM policy_snapshots
-         WHERE status = 'finalized' AND network = ? AND origin_chain = ? AND tick = ? AND policy_seq < ?
-         ORDER BY policy_seq ASC`,
-        [String(row.network), origin, name, seq]);
+    const earlier = await db._mirrorDb().getEarlierFinalizedPolicySnapshots(row.network, origin, name, seq);
     for(const e of (earlier || [])){
         if(!await isSettled(db, e.snapshot_id, 'policy')){
             _log('XPOLICY', id, SETTLE_REASON.POLICY_SEQ_GAP + ' : carrying forward');
@@ -1186,16 +1172,10 @@ async function dueBridgeTransfers(ctx){
     const db   = ctx.indexerDb;
     // Bound by height in the admission era and by the clock below it (mirrorBindClause).
     const bind = mirrorBindClause(ctx);
-    const rows = await db._mirrorDb().doQuery(
-        `SELECT * FROM bridge_transfers
-         WHERE status = 'finalized' AND network = ? AND ${bind.sql} AND dest_chain = ?
-         ORDER BY snapshot_block ASC, transfer_id ASC`,
-        [String(ctx.network)].concat(bind.args, [String(ctx.coin)]));
+    const rows = await db._mirrorDb().getFinalizedBridgeTransfersForChain(ctx.network, ctx.coin, bind);
     if(rows.length === 0) return [];
     const ids = rows.map(r => r.transfer_id);
-    const settled = await db.doQuery(
-        `SELECT transfer_id FROM bridge_settlements
-         WHERE kind = 'transfer' AND transfer_id IN (${ids.map(() => '?').join(',')})`, ids);
+    const settled = await db.getRecordedTransferSettlementIds(ids);
     const seen = new Set(settled.map(r => r.transfer_id));
     const unsettled = rows.filter(r => !seen.has(r.transfer_id));
 
@@ -1211,11 +1191,7 @@ async function dueBridgeTransfers(ctx){
     const legIndexes = [...new Set(unsettled.map(r => _int(r.src_action_index)).filter(v => v !== null))];
     let settledLegs = new Set();
     if(legChains.length && legIndexes.length){
-        const legRows = await db.doQuery(
-            `SELECT src_chain, src_action_index FROM bridge_settlements
-             WHERE kind = 'transfer' AND src_chain IN (${legChains.map(() => '?').join(',')})
-               AND src_action_index IN (${legIndexes.map(() => '?').join(',')})`,
-            legChains.concat(legIndexes));
+        const legRows = await db.getSettledBridgeSourceLegs(legChains, legIndexes);
         // Two IN lists select the cross product of the candidates' chains and indexes, so the
         // PAIR is matched here rather than trusted from the query: without this an applied leg
         // on one chain would suppress the same action index on another.
@@ -1248,10 +1224,7 @@ async function duePolicySnapshots(ctx){
     // THIS chain's column decides, and a row whose map never named this chain has that column
     // NULL and binds by the clock, which is C38's fail-closed direction for a chain added later.
     const bind = mirrorBindClause(ctx);
-    const rows = await db._mirrorDb().doQuery(
-        `SELECT * FROM policy_snapshots
-         WHERE status = 'finalized' AND network = ? AND ${bind.sql}`,
-        [String(ctx.network)].concat(bind.args));
+    const rows = await db._mirrorDb().getFinalizedPolicySnapshots(ctx.network, bind);
     if(rows.length === 0) return [];
 
     const groupRank = new Map();
@@ -1275,9 +1248,7 @@ async function duePolicySnapshots(ctx){
     });
 
     const ids = rows.map(r => r.snapshot_id);
-    const settled = await db.doQuery(
-        `SELECT transfer_id FROM bridge_settlements
-         WHERE kind = 'policy' AND transfer_id IN (${ids.map(() => '?').join(',')})`, ids);
+    const settled = await db.getRecordedPolicySettlementIds(ids);
     const seen = new Set(settled.map(r => r.transfer_id));
     return rows.filter(r => !seen.has(r.snapshot_id))
                .slice(0, XPOLICY_MAX_PER_BLOCK || 5);

@@ -3723,6 +3723,7 @@ const MIXIN_FILES = [
     './batches.js',
     './bets.js',
     './blocks.js',
+    './bridge_settlements.js',
     './bridges.js',
     './broadcasts.js',
     './callbacks.js',

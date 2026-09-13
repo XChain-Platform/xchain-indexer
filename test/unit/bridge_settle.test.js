@@ -68,6 +68,17 @@ const M      = require('../../src/merkle.js');
 const SUB    = require('../../src/state_subtree_activation.js');
 const Utility = require('../../src/utility.js');
 const { XBRIDGE_MAX_PER_BLOCK } = require('../../src/protocol/constants.js');
+const bridgeSettlementsMixin = require('../../src/db/bridge_settlements.js');
+
+// Give a connection double the REAL db/bridge_settlements methods, bound over its own
+// doQuery. The settle pass reaches both the local ledger and the mirror through those
+// methods, so binding them here is what keeps every SQL matcher below reading the exact
+// statements that ship instead of statements the test invented.
+function bindSettlementReads(db){
+    for(const m of Reflect.ownKeys(bridgeSettlementsMixin))
+        db[m] = bridgeSettlementsMixin[m].bind(db);
+    return db;
+}
 
 // Ed25519 keypair whose raw 32-byte pubkey / 64-byte sig hex match src/ed25519.js verify().
 function makeKey(){
@@ -176,7 +187,7 @@ function makeCtx(opts){
     };
     let nextAction = 5000;
 
-    const mirror = {
+    const mirror = bindSettlementReads({
         doQuery: async (sql, args) => {
             if(/FROM bridge_transfers/.test(sql)){
                 const rows = state.mirrorTransfers.slice();
@@ -192,8 +203,8 @@ function makeCtx(opts){
             if(/FROM policy_snapshots/.test(sql)) return state.mirrorPolicies.slice();
             return [];
         }
-    };
-    const db = {
+    });
+    const db = bindSettlementReads({
         config: config,
         _mirrorDb: () => mirror,
         doQuery: async (sql, args) => {
@@ -248,7 +259,7 @@ function makeCtx(opts){
         updateTokens:   async () => {},
         getList:        async () => [],
         isTickSleeping: async () => false
-    };
+    });
     const util = new Utility(config);
     const ctx = {
         actions:   { processTransaction: async (tx) => { state.injected.push(tx); return { ACTION_INDEX: nextAction++, STATUS: 'valid' }; },
@@ -745,7 +756,7 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
             const { ctx } = makeCtx({ coin: 'DOGE' });
             // Both sources answer empty, which is exactly "this node holds none yet".
             ctx.indexerDb.doQuery = async () => [];
-            ctx.indexerDb._mirrorDb = () => ({ doQuery: async () => [] });
+            ctx.indexerDb._mirrorDb = () => bindSettlementReads({ doQuery: async () => [] });
             await assert.rejects(() => BS.fetchProofForTransfer(row, ctx), (err) => {
                 assert.strictEqual(err.name, 'BridgeProofUnavailableError');
                 assert.strictEqual(err.stallReason, PC.BRIDGE_PROOF_BARRIER);
@@ -782,7 +793,7 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
         function selectorCtx(anchorRows, mirrorRows){
             const { ctx } = makeCtx({ coin: 'DOGE' });
             ctx.indexerDb.doQuery = async (sql) => (/FROM anchor_actions/.test(sql) ? anchorRows : []);
-            ctx.indexerDb._mirrorDb = () => ({ doQuery: async () => mirrorRows });
+            ctx.indexerDb._mirrorDb = () => bindSettlementReads({ doQuery: async () => mirrorRows });
             // The two reads are the real db mixin methods over those stubs, not stubs of their
             // own, so the anchor leg still has to issue SQL naming anchor_actions to see a row
             // and the mirrored leg still has to route through _mirrorDb() to see one.
@@ -941,7 +952,7 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
         it('runs policy snapshots at the HEAD, before any transfer leg', async function(){
             const order = [];
             const { ctx } = makeCtx({ coin: 'DOGE' });
-            ctx.indexerDb._mirrorDb = () => ({ doQuery: async (sql) => {
+            ctx.indexerDb._mirrorDb = () => bindSettlementReads({ doQuery: async (sql) => {
                 order.push(/policy_snapshots/.test(sql) ? 'policy' : 'transfer');
                 return [];
             }});

@@ -40,6 +40,16 @@ const eq      = require('../../src/equivocation_header.js');
 const BS      = require('../../src/bridge_settle.js');
 const Utility = require('../../src/utility.js');
 const { XPOLICY_MAX_PER_BLOCK } = require('../../src/protocol/constants.js');
+const bridgeSettlementsMixin = require('../../src/db/bridge_settlements.js');
+
+// The pass reaches both the local settlements ledger and the mirror through the
+// db/bridge_settlements methods, so the doubles below carry the REAL ones bound over their
+// own doQuery: the SQL predicates this file matches on are the statements that ship.
+function bindSettlementReads(db){
+    for(const m of Reflect.ownKeys(bridgeSettlementsMixin))
+        db[m] = bridgeSettlementsMixin[m].bind(db);
+    return db;
+}
 
 function makeKey(){
     const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
@@ -107,9 +117,9 @@ function makeCtx(opts){
     let nextAction = 7000;
     const tokens = o.tokens || { [COPY]: { TICK_ID: 11, DECIMALS: 2, ALLOW_LIST: null, BLOCK_LIST: null } };
 
-    const db = {
+    const db = bindSettlementReads({
         config: config,
-        _mirrorDb: () => ({ doQuery: async (sql, args) => {
+        _mirrorDb: () => bindSettlementReads({ doQuery: async (sql, args) => {
             if(!/policy_snapshots/.test(sql)) return [];
             // The earlier-seq probe is a narrow query; the fake applies its predicate so the
             // gap case exercises the real filter rather than the whole mirror.
@@ -142,7 +152,7 @@ function makeCtx(opts){
         createActionIndex: async (d) => { state.actions.push(d); return nextAction++; },
         updateBalances: async () => {},
         updateTokens:   async () => {}
-    };
+    });
     const ctx = {
         actions: {
             processTransaction: async (tx) => {
