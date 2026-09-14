@@ -35,11 +35,14 @@
 const crypto   = require('crypto');
 const dotenv   = require('dotenv');
 const path     = require('path');
+
+// Before the local requires: src/config.js captures the environment once at
+// module load, so .env must already be in process.env when it is first required.
+dotenv.config();
+
 const config   = require('../src/config.js');
 const Database = require('../src/db');
 const Utility  = require('../src/utility.js');
-
-dotenv.config();
 
 // Deterministic responsible validator set (mirrors attest.js
 // _computeResponsibleSet: sort the capability validators by

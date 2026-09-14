@@ -59,6 +59,11 @@
  *
  ********************************************************************/
 
+// Run as a CLI, load .env before any local require: src/config.js captures the
+// environment once at module load, and a module required below may pull it in.
+// Required as a module (the tests), the caller's environment is left alone.
+if(require.main === module) require('dotenv').config();
+
 const zlib    = require('zlib');
 const crypto  = require('crypto');
 const ed25519 = require('../src/consensus/ed25519.js');
@@ -1207,8 +1212,6 @@ module.exports = AnchorRecovery;
 
 // ── CLI ─────────────────────────────────────────────────────────────────────
 if(require.main === module){
-    const dotenv = require('dotenv');
-    dotenv.config();
     const Database = require('../src/db');
     const config   = require('../src/config.js');
     const Utility  = require('../src/utility.js');

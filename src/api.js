@@ -27,6 +27,10 @@
 // costs pooled DB round-trips) without affecting the handful of legitimate
 // hub/explorer callers (see sibling services: decoder, encoder, explorer, hub).
 const dotenv        = require('dotenv');
+// Parse in .env config data BEFORE any local require. src/config.js captures the
+// environment once at module load, and XChainIndexer below loads it, so a later
+// dotenv.config() would leave every .env-supplied setting at its default.
+dotenv.config();
 const express       = require('express');
 const bodyParser    = require('body-parser');
 const helmet        = require('helmet');
@@ -79,9 +83,6 @@ function bridgePolicyHash(allowList, blockList, sleeping){
                     '|SLEEP|' + (sleeping ? '1' : '0');
     return crypto.createHash('sha256').update(canonical).digest('hex');
 }
-
-// Parse in .env config data
-dotenv.config();
 
 // Before anything else logs. The env-validation failures immediately below are
 // exactly the lines an operator needs levelled and timestamped, and
