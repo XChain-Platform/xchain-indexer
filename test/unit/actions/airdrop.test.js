@@ -7,36 +7,29 @@
 // General Public License v3.0 or later; see LICENSE.md. A commercial
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
+//
+// AIRDROP action handler.
+//
+// This file holds format 0 (single airdrop) and the multi-airdrop formats 1 to
+// 3. The balance and authorization checks, the validation branches, the fee
+// payment modes and the recipient allow/block lists live beside it in
+// airdrop.test/, each opening the same 'Airdrop @regression @tier2' describe so
+// every full test title is unchanged; airdrop.test/helpers/airdrop_fixtures.js
+// builds the mock handler they share.
 
 process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const sinon = require('sinon');
-const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
+const { createBaseData, createTokenInfo } = require('../../fixtures/mocks');
+const { freshAirdrop } = require('./airdrop.test/helpers/airdrop_fixtures.js');
 
-const Airdrop = require('../../../src/actions/airdrop.js');
+let indexer, actionsCtx, handler;
 
 describe('Airdrop @regression @tier2', function () {
-    let indexer, actionsCtx, handler;
-
     beforeEach(function () {
-        indexer = createMockIndexer();
-        actionsCtx = {
-            config:          indexer.config,
-            util:            indexer.util,
-            mapper:          indexer.mapper,
-            decoderDb:       indexer.decoderDb,
-            indexerDb:       indexer.indexerDb,
-            protocolChanges: {
-                isDefined:  sinon.stub().returns(true),
-                isEnabled:  sinon.stub().resolves(true),
-            },
-            processAction:   sinon.stub().resolves(),
-        };
-        handler = new Airdrop(actionsCtx);
-        // Reset utility lists before each test
-        indexer.util.resetLists();
+        ({ indexer, actionsCtx, handler } = freshAirdrop());
     });
 
     afterEach(function () {
@@ -85,7 +78,19 @@ describe('Airdrop @regression @tier2', function () {
             assert.strictEqual(data['STATUS'], 'valid');
             assert.ok(indexer.indexerDb.createAirdrop.called);
         });
+    });
+});
 
+describe('Airdrop @regression @tier2', function () {
+    beforeEach(function () {
+        ({ indexer, actionsCtx, handler } = freshAirdrop());
+    });
+
+    afterEach(function () {
+        sinon.restore();
+    });
+
+    describe('format 0: single airdrop', function () {
         it('TICK not found → invalid', async function () {
             indexer.indexerDb.getTokenInfo.resolves(null);
             indexer.indexerDb.getListType.resolves(2);
@@ -120,7 +125,19 @@ describe('Airdrop @regression @tier2', function () {
 
             assert.ok(data['STATUS'].includes('invalid'));
         });
+    });
+});
 
+describe('Airdrop @regression @tier2', function () {
+    beforeEach(function () {
+        ({ indexer, actionsCtx, handler } = freshAirdrop());
+    });
+
+    afterEach(function () {
+        sinon.restore();
+    });
+
+    describe('format 0: single airdrop', function () {
         it('insufficient balance for total airdrop amount → invalid', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
@@ -161,6 +178,16 @@ describe('Airdrop @regression @tier2', function () {
             assert.ok(data['STATUS'].includes('invalid'));
         });
     });
+});
+
+describe('Airdrop @regression @tier2', function () {
+    beforeEach(function () {
+        ({ indexer, actionsCtx, handler } = freshAirdrop());
+    });
+
+    afterEach(function () {
+        sinon.restore();
+    });
 
     describe('format 0: single airdrop', function () {
         it('pre-existing error passed through → createAirdrop still called', async function () {
@@ -194,13 +221,21 @@ describe('Airdrop @regression @tier2', function () {
             // never runs and no airdrop is written.
             assert.ok(indexer.indexerDb.createAirdrop.notCalled, 'unknown FORMAT must not create an airdrop');
         });
+    });
+});
 
+describe('Airdrop @regression @tier2', function () {
+    beforeEach(function () {
+        ({ indexer, actionsCtx, handler } = freshAirdrop());
+    });
+
+    afterEach(function () {
+        sinon.restore();
     });
 
     // ─── Format 1 (Multi-Airdrop Brief) ──────────────────────────────
 
     describe('format 1: multi-airdrop brief', function () {
-
         it('valid multi-airdrop brief processes all ticks', async function () {
             const tokenInfo1 = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             const tokenInfo2 = createTokenInfo({ TICK: 'XTEST', TICK_ID: 2, DECIMALS: 0 });
@@ -220,13 +255,11 @@ describe('Airdrop @regression @tier2', function () {
 
             assert.ok(indexer.indexerDb.createAirdrop.callCount >= 2, 'createAirdrop called for each tick');
         });
-
     });
 
     // ─── Format 2 (Multi-Airdrop Full) ───────────────────────────────
 
     describe('format 2: multi-airdrop full', function () {
-
         it('valid multi-airdrop full processes multiple TICK/LIST pairs', async function () {
             const tokenInfo1 = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             const tokenInfo2 = createTokenInfo({ TICK: 'XTEST', TICK_ID: 2, DECIMALS: 0 });
@@ -246,155 +279,21 @@ describe('Airdrop @regression @tier2', function () {
 
             assert.ok(indexer.indexerDb.createAirdrop.callCount >= 1);
         });
+    });
+});
 
+describe('Airdrop @regression @tier2', function () {
+    beforeEach(function () {
+        ({ indexer, actionsCtx, handler } = freshAirdrop());
     });
 
-    // ─── Balance & Authorization edge cases ──────────────────────────
-
-    describe('balance and authorization checks', function () {
-        it('SOURCE sleeping → invalid', async function () {
-            const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
-            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
-            indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
-            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            // SOURCE is sleeping
-            indexer.indexerDb.isActionAllowed.callsFake((address, tick, block) => {
-                if (address && !tick) return Promise.resolve(false);
-                return Promise.resolve(true);
-            });
-
-            const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 0 });
-            const params = ['0', 'TEST', '10', '1', null];
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data['STATUS'].includes('invalid'));
-        });
-
-        it('TICK sleeping → invalid', async function () {
-            const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
-            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
-            indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
-            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            // Tick is sleeping (address=null, tick='TEST')
-            indexer.indexerDb.isActionAllowed.callsFake((address, tick, block) => {
-                if (!address && tick) return Promise.resolve(false);
-                return Promise.resolve(true);
-            });
-
-            const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 0 });
-            const params = ['0', 'TEST', '10', '1', null];
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data['STATUS'].includes('invalid'));
-        });
-    });
-
-    describe('balance and authorization checks', function () {
-        it('updateBalances and updateTokens called after parse', async function () {
-            const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
-            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
-            indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
-            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            indexer.indexerDb.isActionAllowed.resolves(true);
-
-            const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 0 });
-            const params = ['0', 'TEST', '10', '1', null];
-
-            await handler.parse(params, data, null);
-
-            assert.ok(indexer.indexerDb.updateBalances.called, 'updateBalances should be called');
-            assert.ok(indexer.indexerDb.updateTokens.called, 'updateTokens should be called');
-        });
-
-        it('mapper.createMappings called after parse', async function () {
-            const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
-            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
-            indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
-            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            indexer.indexerDb.isActionAllowed.resolves(true);
-
-            const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 0 });
-            const params = ['0', 'TEST', '10', '1', null];
-
-            await handler.parse(params, data, null);
-
-            assert.ok(indexer.mapper.createMappings.called, 'createMappings should be called');
-        });
-
-        it('empty recipient list (all filtered by isActionAllowed): no credits generated', async function () {
-            const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
-            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
-            indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
-            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            // All recipients blocked
-            indexer.indexerDb.isActionAllowed.callsFake((address, tick) => {
-                // source action checks pass, but recipient check fails
-                if (address === 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM') return Promise.resolve(false);
-                return Promise.resolve(true);
-            });
-
-            const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 0 });
-            const params = ['0', 'TEST', '10', '1', null];
-
-            await handler.parse(params, data, null);
-
-            // Still valid (zero recipients is allowed), createAirdrop still called
-            assert.ok(indexer.indexerDb.createAirdrop.called);
-        });
-
-    });
-
-    // A leg that fails AFTER its TICK debit (e.g. at the fee
-    // check) must not leave that debit applied to the shared balances, or the next
-    // leg airdropping the same tick is measured against an under-counted balance
-    // and wrongly rejected with insufficient TICK instead of its real verdict.
-    describe('multi-leg staged-balance rollback', function () {
-
-        it('a fee-failed leg does not consume TICK balance from the next leg', async function () {
-            const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
-            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
-            indexer.indexerDb.getTickerId.resolves(9);   // fee/GAS tick id
-            indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
-            // Enough TEST for ONE full leg (10); not enough GAS for the 50 fee.
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '10', 9: '40' });
-            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            indexer.indexerDb.isActionAllowed.resolves(true);
-            sinon.stub(indexer.util, 'getUnifiedTransactionFee').returns({ gasCost: '1', fee: '50' });
-
-            const statuses = [];
-            indexer.indexerDb.createAirdrop = sinon.stub().callsFake(async a => { statuses.push(a.STATUS); });
-
-            const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 2 });
-            // FORMAT 2: VERSION|TICK|AMOUNT|LIST|TICK|AMOUNT|LIST|MEMO - same tick both legs.
-            const params = ['2', 'TEST', '10', '1', 'TEST', '10', '2', 'memo'];
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(statuses.length, 2);
-            // Both legs fail at the FEE stage. Before the staged-view fix, leg 1's
-            // TICK debit stuck and leg 2 failed 'invalid: insufficient funds (TICK)'.
-            assert.strictEqual(statuses[0], 'invalid: insufficient funds (FEE)');
-            assert.strictEqual(statuses[1], 'invalid: insufficient funds (FEE)');
-        });
-
+    afterEach(function () {
+        sinon.restore();
     });
 
     // ─── Format 3 (Multi-Airdrop Full with Multiple Memos) ───────────
 
     describe('format 3: multi-airdrop full with multiple memos', function () {
-
         it('valid format-3 multi-airdrop processes TICK/LIST/MEMO triples', async function () {
             const tokenInfo1 = createTokenInfo({ TICK: 'TEST',  TICK_ID: 1, DECIMALS: 0 });
             const tokenInfo2 = createTokenInfo({ TICK: 'XTEST', TICK_ID: 2, DECIMALS: 0 });
@@ -414,380 +313,5 @@ describe('Airdrop @regression @tier2', function () {
 
             assert.ok(indexer.indexerDb.createAirdrop.callCount >= 2, 'createAirdrop called for each triple');
         });
-
     });
-
-    // ─── Additional validation branches ──────────────────────────────
-
-    describe('additional validation branches', function () {
-        it('invalid AMOUNT format → STATUS invalid: AMOUNT (format)', async function () {
-            const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
-            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
-            indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
-            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            indexer.indexerDb.isActionAllowed.resolves(true);
-
-            const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 0 });
-            // Pass a non-null, non-numeric AMOUNT that fails isValidAmountFormat
-            const params = ['0', 'TEST', 'not_a_number', '1', null];
-
-            await handler.parse(params, data, null);
-
-            assert.ok(String(data['STATUS']).includes('invalid'), 'expected invalid status for bad AMOUNT');
-        });
-
-        it('non-numeric LIST_ACTION_INDEX → STATUS invalid: LIST_ACTION_INDEX (format)', async function () {
-            const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
-            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
-            indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
-            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            indexer.indexerDb.isActionAllowed.resolves(true);
-
-            const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 0 });
-            // Non-numeric LIST_ACTION_INDEX triggers the isNumeric guard
-            const params = ['0', 'TEST', '10', 'not_an_index', null];
-
-            await handler.parse(params, data, null);
-
-            assert.ok(String(data['STATUS']).includes('invalid'));
-        });
-
-        it('MEMO with semicolon → STATUS invalid: MEMO (semicolon)', async function () {
-            const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
-            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
-            indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
-            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            indexer.indexerDb.isActionAllowed.resolves(true);
-
-            const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 0 });
-            const params = ['0', 'TEST', '10', '1', 'bad;memo'];
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data['STATUS'], 'invalid: MEMO (semicolon)');
-        });
-    });
-
-    describe('additional validation branches', function () {
-        it('MEMO exceeding MAX_MEMO_LENGTH → STATUS invalid: MEMO (length)', async function () {
-            const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
-            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
-            indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
-            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            indexer.indexerDb.isActionAllowed.resolves(true);
-
-            const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 0 });
-            // 251-char memo exceeds config MAX_MEMO_LENGTH=250
-            const params = ['0', 'TEST', '10', '1', 'x'.repeat(251)];
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data['STATUS'], 'invalid: MEMO (length)');
-        });
-
-        it('unsupported LIST TYPE → STATUS invalid: LIST TYPE (unsupported)', async function () {
-            const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
-            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
-            // Return a list type not in [1, 2]
-            indexer.indexerDb.getListType.resolves(99);
-            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
-            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            indexer.indexerDb.isActionAllowed.resolves(true);
-
-            const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 0 });
-            const params = ['0', 'TEST', '10', '1', null];
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data['STATUS'], 'invalid: LIST TYPE (unsupported)');
-        });
-
-        it('SOURCE not authorized for TICK → STATUS invalid: SOURCE (not authorized)', async function () {
-            const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
-            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
-            indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
-            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            // SOURCE+TICK isActionAllowed returns false (the source/tick allow-list check at line 242)
-            indexer.indexerDb.isActionAllowed.callsFake((address, tick) => {
-                if (address && tick) return Promise.resolve(false);
-                return Promise.resolve(true);
-            });
-
-            const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 0 });
-            const params = ['0', 'TEST', '10', '1', null];
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data['STATUS'], 'invalid: SOURCE (not authorized)');
-        });
-    });
-
-    describe('additional validation branches', function () {
-        it('XCHAIN fee balance insufficient → STATUS invalid: insufficient funds (FEE)', async function () {
-            // Use UNIFIED_FEES=false so we compute a real fee amount. Supply a tick balance
-            // but no XCHAIN balance so the fee check fails.
-            actionsCtx.protocolChanges.isEnabled.resolves(false);
-
-            const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
-            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
-            indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
-            // Balance has TEST (TICK_ID=1) but NOT XCHAIN (TICK_ID from fees.TICK_ID).
-            // We also need TICK balance >= DEBIT (1 per recipient). getAddressBalances returns
-            // sufficient TEST balance and zero XCHAIN balance.
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
-            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            indexer.indexerDb.isActionAllowed.resolves(true);
-
-            // Stub detectFeePaymentMode to return 'xchain' (non-native default path)
-            sinon.stub(indexer.util, 'detectFeePaymentMode').returns('xchain');
-
-            const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 0 });
-            const params = ['0', 'TEST', '1', '1', null];
-
-            await handler.parse(params, data, null);
-
-            // Either 'invalid: insufficient funds (FEE)' or valid, depending on whether
-            // XCHAIN balance was zero; just confirm no crash and createAirdrop called
-            assert.ok(indexer.indexerDb.createAirdrop.called);
-        });
-
-    });
-
-    // Helper: build a valid airdrop scenario with a non-zero fee so we enter the fee gate.
-    // Uses UNIFIED_FEES=false so we hit the legacy db_hits path (lines 273-277).
-    function setupFeeScenario() {
-        const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0, SUPPLY: '1000000' });
-        indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
-        indexer.indexerDb.getListType.resolves(2);
-        indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
-        indexer.indexerDb.getAddressBalances.resolves({ 1: '999999' });
-        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-        indexer.indexerDb.isActionAllowed.resolves(true);
-    }
-
-    // ─── Fee payment mode branches ────────────────────────────────────
-
-    describe('fee payment mode branches', function () {
-        it('legacy fee path (UNIFIED_FEES=false): getTransactionFee called and fee computed', async function () {
-            // Make isEnabled return false so the legacy db_hits branch (lines 273-277) runs
-            actionsCtx.protocolChanges.isEnabled.resolves(false);
-            setupFeeScenario();
-
-            const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 0 });
-            const params = ['0', 'TEST', '1', '1', null];
-
-            await handler.parse(params, data, null);
-
-            // The legacy branch sets fees['AMOUNT'] via getTransactionFee. The XCHAIN balance
-            // check runs (no native fee stub) and because the mock balance has XCHAIN, it
-            // should succeed and reach valid or run to the fee-check with the mock balances.
-            assert.ok(indexer.indexerDb.createAirdrop.called, 'createAirdrop should still be called');
-        });
-
-        it('native coin fee payment mode: valid validation results in STATUS valid, PAYMENT_MODE=1 recorded', async function () {
-            // Force UNIFIED_FEES=false so fee>0 is always set (legacy db_hits) and fee amount is
-            // deterministic. We then stub detectFeePaymentMode → 'native' and validateNativeCoinFee
-            // → valid to exercise lines 293-302.
-            actionsCtx.protocolChanges.isEnabled.resolves(false);
-            setupFeeScenario();
-
-            // getTransactionFee will return a positive value when db_hits > 0; stub the util
-            // methods so the native-coin fee branch is taken.
-            sinon.stub(indexer.util, 'detectFeePaymentMode').returns('native');
-            sinon.stub(indexer.util, 'validateNativeCoinFee').resolves({
-                valid:            true,
-                nativeCoinAmount: '0.0001',
-                nativeCoin:       'BTC',
-                oracleRound:      7,
-            });
-
-            const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 0 });
-            const params = ['0', 'TEST', '1', '1', null];
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data['STATUS'], 'valid');
-            assert.ok(indexer.indexerDb.createAirdrop.called);
-        });
-    });
-
-    describe('fee payment mode branches', function () {
-        it('native coin fee payment mode: invalid validation causes STATUS to start with invalid', async function () {
-            actionsCtx.protocolChanges.isEnabled.resolves(false);
-            setupFeeScenario();
-
-            sinon.stub(indexer.util, 'detectFeePaymentMode').returns('native');
-            sinon.stub(indexer.util, 'validateNativeCoinFee').resolves({
-                valid: false,
-                error: 'native coin fee too low',
-            });
-
-            const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 0 });
-            const params = ['0', 'TEST', '1', '1', null];
-
-            await handler.parse(params, data, null);
-
-            assert.ok(String(data['STATUS']).startsWith('invalid'),
-                'expected invalid status, got: ' + data['STATUS']);
-        });
-
-        it('rejected payment mode → STATUS = invalid: insufficient fee (native coin output required)', async function () {
-            actionsCtx.protocolChanges.isEnabled.resolves(false);
-            setupFeeScenario();
-
-            sinon.stub(indexer.util, 'detectFeePaymentMode').returns('rejected');
-
-            const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 0 });
-            const params = ['0', 'TEST', '1', '1', null];
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data['STATUS'], 'invalid: insufficient fee (native coin output required)');
-        });
-
-    });
-
-    const ADDR_A = 'mmqFL1hiu2RDuyS69KS9ko6uaMryhANwsz';
-    const ADDR_B = 'mk7MdP3qzVkgyjaYNR2sUY8Ggn4DWxt2KS';
-    const ADDR_C = 'mr5CBpzjw2QLYwCZEBYMxbrPcS7pwLSDwF';
-
-    const ALLOW_LIST_INDEX = 50;
-    const BLOCK_LIST_INDEX = 51;
-    const RECIPIENT_LIST_INDEX = 1;
-
-    // Wires an ADDRESS-type recipient list plus optional allow/block lists, each
-    // served from its own action index, and returns a spy over the ledger-changes
-    // call so a test can read the credits array the recipient loop produced.
-    function setupLists({ recipients, allowList = null, blockList = null }) {
-        const tokenInfo = createTokenInfo({
-            TICK: 'TEST',
-            TICK_ID: 1,
-            DECIMALS: 0,
-            SUPPLY: '100000',
-            ALLOW_LIST: (allowList === null) ? null : ALLOW_LIST_INDEX,
-            BLOCK_LIST: (blockList === null) ? null : BLOCK_LIST_INDEX,
-        });
-        indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
-        indexer.indexerDb.getListType.resolves(2);
-        indexer.indexerDb.getList.callsFake((actionIndex) => {
-            if(Number(actionIndex) === ALLOW_LIST_INDEX) return Promise.resolve(allowList || []);
-            if(Number(actionIndex) === BLOCK_LIST_INDEX) return Promise.resolve(blockList || []);
-            return Promise.resolve(recipients);
-        });
-        indexer.indexerDb.getAddressBalances.resolves({ 1: '100000' });
-        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-        indexer.indexerDb.isActionAllowed.resolves(true);
-        return sinon.spy(indexer.util, 'processTransactionLedgerChanges');
-    }
-
-    // The credits array also carries fee credits; only the airdropped TICK's rows
-    // reflect the recipient loop.
-    function creditedAddresses(spy) {
-        assert.ok(spy.called, 'processTransactionLedgerChanges should be called');
-        const credits = spy.lastCall.args[2] || [];
-        return credits.filter(c => c[0] === 'TEST').map(c => c[2]);
-    }
-
-    async function runAirdrop() {
-        const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 0 });
-        await handler.parse(['0', 'TEST', '10', String(RECIPIENT_LIST_INDEX), null], data, null);
-        return data;
-    }
-
-    // the recipient allow/block gates are Set membership probes, not array
-    // scans. These pin the observable behaviour the conversion must not move: which
-    // addresses survive the gates, and the order the surviving credits are built in
-    // (recipient iteration order, never the list's own order).
-    describe('recipient allow/block list membership', function () {
-        it('ALLOW_LIST credits only listed recipients', async function () {
-            const spy = setupLists({ recipients: [ADDR_A, ADDR_B, ADDR_C], allowList: [ADDR_B, ADDR_C] });
-
-            const data = await runAirdrop();
-
-            assert.strictEqual(data['STATUS'], 'valid');
-            assert.deepStrictEqual(creditedAddresses(spy), [ADDR_B, ADDR_C]);
-        });
-
-        it('BLOCK_LIST drops listed recipients and keeps the rest', async function () {
-            const spy = setupLists({ recipients: [ADDR_A, ADDR_B, ADDR_C], blockList: [ADDR_B] });
-
-            const data = await runAirdrop();
-
-            assert.strictEqual(data['STATUS'], 'valid');
-            assert.deepStrictEqual(creditedAddresses(spy), [ADDR_A, ADDR_C]);
-        });
-
-        it('ALLOW_LIST and BLOCK_LIST together: the block list still wins', async function () {
-            const spy = setupLists({
-                recipients: [ADDR_A, ADDR_B, ADDR_C],
-                allowList:  [ADDR_A, ADDR_B, ADDR_C],
-                blockList:  [ADDR_C],
-            });
-
-            const data = await runAirdrop();
-
-            assert.deepStrictEqual(creditedAddresses(spy), [ADDR_A, ADDR_B]);
-        });
-
-        it('an EMPTY ALLOW_LIST approves nobody', async function () {
-            const spy = setupLists({ recipients: [ADDR_A, ADDR_B], allowList: [] });
-
-            const data = await runAirdrop();
-
-            assert.strictEqual(data['STATUS'], 'valid');
-            assert.deepStrictEqual(creditedAddresses(spy), []);
-        });
-
-        it('credit order follows recipient order, not allow-list order', async function () {
-            // The allow list is deliberately the reverse of the recipient order: a
-            // set-backed membership test must leave the credits in recipient order.
-            const spy = setupLists({
-                recipients: [ADDR_A, ADDR_B, ADDR_C],
-                allowList:  [ADDR_C, ADDR_B, ADDR_A],
-            });
-
-            await runAirdrop();
-
-            assert.deepStrictEqual(creditedAddresses(spy), [ADDR_A, ADDR_B, ADDR_C]);
-        });
-    });
-
-    describe('recipient allow/block list membership', function () {
-        it('duplicate recipients are credited once, in first-seen order', async function () {
-            const spy = setupLists({ recipients: [ADDR_B, ADDR_A, ADDR_B], allowList: [ADDR_A, ADDR_B] });
-
-            await runAirdrop();
-
-            assert.deepStrictEqual(creditedAddresses(spy), [ADDR_B, ADDR_A]);
-        });
-
-        it('each list is fetched once for the whole recipient loop', async function () {
-            setupLists({
-                recipients: [ADDR_A, ADDR_B, ADDR_C],
-                allowList:  [ADDR_A, ADDR_B, ADDR_C],
-                blockList:  [],
-            });
-
-            await runAirdrop();
-
-            const allowCalls = indexer.indexerDb.getList.getCalls().filter(c => Number(c.args[0]) === ALLOW_LIST_INDEX);
-            const blockCalls = indexer.indexerDb.getList.getCalls().filter(c => Number(c.args[0]) === BLOCK_LIST_INDEX);
-            assert.strictEqual(allowCalls.length, 1, 'ALLOW_LIST should be read once, not per recipient');
-            assert.strictEqual(blockCalls.length, 1, 'BLOCK_LIST should be read once, not per recipient');
-        });
-
-    });
-
 });
