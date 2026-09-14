@@ -37,38 +37,10 @@ const BASE_TIME = 1700000000;
 const FAR_FUTURE = BASE_TIME + 90 * 86400 + 1; // 90 days ahead (within 182-day free window)
 const COIN = 'RBTC';
 
-describe('E2E: Order Lifecycle @regression @tier2', function () {
-    this.timeout(60000);
+let server, port, explorer, client;
+let seeder, indexer;
 
-    let server, port, explorer, client;
-    let seeder, indexer;
-
-    before(async function () {
-        await createDatabases(__filename);
-        await createDecoderSchema();
-        ({ server, port, explorer } = await startExplorer());
-        client = createClient(port);
-    });
-
-    after(async function () {
-        // Sweep any indexer a failed test or partial init left live: each forks a VM worker subprocess that outlives the suite otherwise.
-        await destroyFileIndexers(__filename);
-        await stopExplorer(server, explorer);
-        await closeAll();
-    });
-
-    beforeEach(async function () {
-        await resetDecoderDb();
-        await resetIndexerDb();
-        await resetExplorerPools(explorer);
-        seeder = new DecoderSeeder(decoderQuery);
-        indexer = await initIndexer();
-    });
-
-    afterEach(async function () {
-        await destroyIndexer(indexer);
-    });
-
+function registerOrderCreationAndMatching() {
     // -------------------------------------------------------------------
     // Order creation and matching
     // -------------------------------------------------------------------
@@ -122,7 +94,9 @@ describe('E2E: Order Lifecycle @regression @tier2', function () {
             assertBalanceEntry(res.body, 'TOKENA', '100');
         });
     });
+}
 
+function registerOrderCancellation() {
     // -------------------------------------------------------------------
     // Order cancellation (two-phase: process, get action_index, cancel)
     // -------------------------------------------------------------------
@@ -170,7 +144,9 @@ describe('E2E: Order Lifecycle @regression @tier2', function () {
             assertBalanceEntry(res.body, 'CANCEL1', '500');
         });
     });
+}
 
+function registerOrderExpiration() {
     // -------------------------------------------------------------------
     // Order expiration
     // -------------------------------------------------------------------
@@ -208,4 +184,38 @@ describe('E2E: Order Lifecycle @regression @tier2', function () {
             assertBalanceEntry(bRes.body, 'EXPIRY1', '500');
         });
     });
+}
+
+describe('E2E: Order Lifecycle @regression @tier2', function () {
+    this.timeout(60000);
+
+    before(async function () {
+        await createDatabases(__filename);
+        await createDecoderSchema();
+        ({ server, port, explorer } = await startExplorer());
+        client = createClient(port);
+    });
+
+    after(async function () {
+        // Sweep any indexer a failed test or partial init left live: each forks a VM worker subprocess that outlives the suite otherwise.
+        await destroyFileIndexers(__filename);
+        await stopExplorer(server, explorer);
+        await closeAll();
+    });
+
+    beforeEach(async function () {
+        await resetDecoderDb();
+        await resetIndexerDb();
+        await resetExplorerPools(explorer);
+        seeder = new DecoderSeeder(decoderQuery);
+        indexer = await initIndexer();
+    });
+
+    afterEach(async function () {
+        await destroyIndexer(indexer);
+    });
+
+    registerOrderCreationAndMatching();
+    registerOrderCancellation();
+    registerOrderExpiration();
 });

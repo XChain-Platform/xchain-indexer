@@ -37,38 +37,10 @@ const BASE_TIME = 1700000000;
 const FAR_FUTURE = BASE_TIME + 90 * 86400 + 1; // 90 days ahead (within 182-day free window)
 const COIN = 'RBTC';
 
-describe('E2E: Dispenser Lifecycle @regression @tier2', function () {
-    this.timeout(60000);
+let server, port, explorer, client;
+let seeder, indexer;
 
-    let server, port, explorer, client;
-    let seeder, indexer;
-
-    before(async function () {
-        await createDatabases(__filename);
-        await createDecoderSchema();
-        ({ server, port, explorer } = await startExplorer());
-        client = createClient(port);
-    });
-
-    after(async function () {
-        // Sweep any indexer a failed test or partial init left live: each forks a VM worker subprocess that outlives the suite otherwise.
-        await destroyFileIndexers(__filename);
-        await stopExplorer(server, explorer);
-        await closeAll();
-    });
-
-    beforeEach(async function () {
-        await resetDecoderDb();
-        await resetIndexerDb();
-        await resetExplorerPools(explorer);
-        seeder = new DecoderSeeder(decoderQuery);
-        indexer = await initIndexer();
-    });
-
-    afterEach(async function () {
-        await destroyIndexer(indexer);
-    });
-
+function registerDispenserCreation() {
     // -------------------------------------------------------------------
     // Dispenser creation and dispensing
     // -------------------------------------------------------------------
@@ -109,7 +81,9 @@ describe('E2E: Dispenser Lifecycle @regression @tier2', function () {
             assertListResponse(res.body, 1, 'escrows');
         });
     });
+}
 
+function registerDispenserCancellation() {
     // -------------------------------------------------------------------
     // Dispenser cancellation
     // -------------------------------------------------------------------
@@ -158,4 +132,37 @@ describe('E2E: Dispenser Lifecycle @regression @tier2', function () {
             assertBalanceEntry(res.body, 'DCANCEL', '100');
         });
     });
+}
+
+describe('E2E: Dispenser Lifecycle @regression @tier2', function () {
+    this.timeout(60000);
+
+    before(async function () {
+        await createDatabases(__filename);
+        await createDecoderSchema();
+        ({ server, port, explorer } = await startExplorer());
+        client = createClient(port);
+    });
+
+    after(async function () {
+        // Sweep any indexer a failed test or partial init left live: each forks a VM worker subprocess that outlives the suite otherwise.
+        await destroyFileIndexers(__filename);
+        await stopExplorer(server, explorer);
+        await closeAll();
+    });
+
+    beforeEach(async function () {
+        await resetDecoderDb();
+        await resetIndexerDb();
+        await resetExplorerPools(explorer);
+        seeder = new DecoderSeeder(decoderQuery);
+        indexer = await initIndexer();
+    });
+
+    afterEach(async function () {
+        await destroyIndexer(indexer);
+    });
+
+    registerDispenserCreation();
+    registerDispenserCancellation();
 });

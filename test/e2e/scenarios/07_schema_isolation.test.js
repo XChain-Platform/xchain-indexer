@@ -59,16 +59,8 @@ async function launcherDbBlock() {
     return config.BTC.regtest.database;
 }
 
-describe('E2E: per-file schema isolation @regression @tier1', function () {
-    this.timeout(20000);
-
-    after(async function () {
-        // Leave the module pointed at a deterministic claim; the tier's root
-        // after hook drops whatever was handed out.
-        await dbConnection.useFileDatabases(__filename);
-    });
-
-    it('every e2e and perf scenario claims its own schema pair', function () {
+function registerSchemaIsolationCase1() {
+it('every e2e and perf scenario claims its own schema pair', function () {
         const files = scenarioFiles();
         assert.ok(files.length >= 15,
             `expected the e2e+perf scenario trees to be populated, found ${files.length}`);
@@ -91,8 +83,10 @@ describe('E2E: per-file schema isolation @regression @tier1', function () {
         assert.deepStrictEqual(offenders, [],
             'these scenarios do not pass __filename to createDatabases(): ' + offenders.join(', '));
     });
+}
 
-    it('gives the same-numbered e2e and perf scenarios different schemas', function () {
+function registerSchemaIsolationCase2() {
+it('gives the same-numbered e2e and perf scenarios different schemas', function () {
         const e2eKey  = dbConnection.fileKey(path.join(TEST_ROOT, 'e2e', 'scenarios', '01_token_lifecycle.test.js'));
         const perfKey = dbConnection.fileKey(path.join(TEST_ROOT, 'perf', 'scenarios', '01_baseline_throughput.test.js'));
         assert.notStrictEqual(e2eKey, perfKey);
@@ -103,8 +97,10 @@ describe('E2E: per-file schema isolation @regression @tier1', function () {
             dbConnection.scopedDbName('xchain_test_decoder', e2eKey),
             dbConnection.scopedDbName('xchain_test_decoder', perfKey));
     });
+}
 
-    it('builds the explorer config from the ACTIVE schema names, not the require-time ones', async function () {
+function registerSchemaIsolationCase3() {
+it('builds the explorer config from the ACTIVE schema names, not the require-time ones', async function () {
         const fileA = path.join(TEST_ROOT, 'e2e', 'scenarios', '__isolation_probe_a.test.js');
         const fileB = path.join(TEST_ROOT, 'e2e', 'scenarios', '__isolation_probe_b.test.js');
 
@@ -123,4 +119,20 @@ describe('E2E: per-file schema isolation @regression @tier1', function () {
         assert.notStrictEqual(dbA.indexer.name, dbB.indexer.name);
         assert.notStrictEqual(dbA.decoder.name, dbB.decoder.name);
     });
+}
+
+describe('E2E: per-file schema isolation @regression @tier1', function () {
+    this.timeout(20000);
+
+    after(async function () {
+        // Leave the module pointed at a deterministic claim; the tier's root
+        // after hook drops whatever was handed out.
+        await dbConnection.useFileDatabases(__filename);
+    });
+
+    registerSchemaIsolationCase1()
+
+    registerSchemaIsolationCase2()
+
+    registerSchemaIsolationCase3()
 });
