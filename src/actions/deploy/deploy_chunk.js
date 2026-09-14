@@ -38,11 +38,20 @@ const crypto = require('crypto');
 // (MAX_DEPLOY_CHUNKS / MAX_DEPLOYCHUNK_PART_BYTES); kept in lockstep with the SDK
 // validator + splitter by the cross-service regression suite.
 const PROTO = require('../../protocol/constants.js');
-const { getLogger } = require('../../observability/index.js');
 const MAX_DEPLOY_CHUNKS         = PROTO.MAX_DEPLOY_CHUNKS;
 const MAX_DEPLOYCHUNK_PART_BYTES = PROTO.MAX_DEPLOYCHUNK_PART_BYTES;
 
+// The carrier's parts (deploy_chunk/): the FORMAT validations, the per-byte gas fee, and
+// the carrier's own deploy_chunks row and ledger write.
+const { validateChunkFormat }               = require('./deploy_chunk/validate.js');
+const { priceCarrier }                      = require('./deploy_chunk/fees.js');
+const { recordCarrier, writeCarrierLedger } = require('./deploy_chunk/settle.js');
+
 class DeployChunk {
+
+    // Expose the canonical caps for the cross-service regression drift guard.
+    static MAX_DEPLOY_CHUNKS          = MAX_DEPLOY_CHUNKS;
+    static MAX_DEPLOYCHUNK_PART_BYTES = MAX_DEPLOYCHUNK_PART_BYTES;
 
     // `deploy` is the owning DEPLOY handler (deploy.js constructs this collaborator and hands
     // itself over). A carrier that completes a pending group runs THAT handler's deployment,
@@ -143,89 +152,11 @@ class DeployChunk {
         data['TOTAL_CHUNKS'] = params[3];
         data['CODE_PART']    = params[4];
 
-        /*****************************************************************
-         * FORMAT Validations
-         ****************************************************************/
-
-        // CODE_HASH must be a 64-char lowercase sha256 hex string (the group id)
-        if(!error && !/^[0-9a-f]{64}$/.test(String(data['CODE_HASH'])))
-            error = 'invalid: CODE_HASH (format)';
-
-        // CHUNK_INDEX / TOTAL_CHUNKS must be non-negative integers
-        if(!error && !/^\d+$/.test(String(data['CHUNK_INDEX'])))
-            error = 'invalid: CHUNK_INDEX (format)';
-        // Verify TOTAL_CHUNKS is a non-negative whole number
-        if(!error && !/^\d+$/.test(String(data['TOTAL_CHUNKS'])))
-            error = 'invalid: TOTAL_CHUNKS (format)';
-
-        let chunkIndex  = Number(data['CHUNK_INDEX']);
-        let totalChunks = Number(data['TOTAL_CHUNKS']);
-
-        // TOTAL_CHUNKS must be within [1, MAX_DEPLOY_CHUNKS]
-        if(!error && (totalChunks < 1 || totalChunks > this.MAX_DEPLOY_CHUNKS))
-            error = 'invalid: TOTAL_CHUNKS (out of range)';
-
-        // CHUNK_INDEX must address a position inside the group
-        if(!error && chunkIndex >= totalChunks)
-            error = 'invalid: CHUNK_INDEX (out of range)';
-
-        // CODE_PART must be present and a base64-alphabet string. It is a SLICE of
-        // base64(code), not necessarily independently decodable, so we validate the
-        // alphabet only; the assembling DEPLOY concatenates all parts then decodes +
-        // sha256-verifies the whole.
-        if(!error && this.util.isNull(data['CODE_PART']))
-            error = 'invalid: CODE_PART (required)';
-        // Verify CODE_PART only contains valid base64 characters
-        if(!error && !/^[A-Za-z0-9+/]*={0,2}$/.test(String(data['CODE_PART'])))
-            error = 'invalid: CODE_PART (base64)';
-
-        // CODE_PART must stay within the per-chunk byte budget (belt-and-suspenders:
-        // the decoder already drops any action whose compiled push exceeds the cap)
-        if(!error && Buffer.byteLength(String(data['CODE_PART']), 'utf8') > this.MAX_DEPLOYCHUNK_PART_BYTES)
-            error = 'invalid: CODE_PART (exceeds max size)';
-
-        /*****************************************************************
-         * Gas Fee Calculation
-         *
-         * A chunk pays the per-byte component for the bytes it puts on-chain
-         * (its CODE_PART). The assembling DEPLOY v2/v3 then charges base +
-         * constructor only, so net ≈ a single-shot deploy of the same source.
-         ****************************************************************/
-
-        let schedule  = this.config['GAS_SCHEDULE'];
-        let partBytes = error ? 0 : Buffer.byteLength(String(data['CODE_PART']), 'utf8');
-        // Priced through util.vmGasCost, the one arithmetic the static quote also uses.
-        let gasCost   = this.util.vmGasCost(schedule, 'DEPLOY_CARRIER', partBytes);
-        let fee       = this.util.bcmul(gasCost, this.config['GAS_PRICE'], 8);
-
-        // Get source address balances (gas tick)
-        let gas       = this.config['GAS'];
-        let tokenInfo = await this.indexerDb.getTokenInfo(gas, data['BLOCK_INDEX'], data['ACTION_INDEX']);
-        let balances  = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
-
-        // Validate gas fee payment (native coin or XCHAIN balance); mirrors deploy.js
-        let feePaymentMode = 2; // default: xchain balance
-        // Verify the gas fee is paid, either in native coin or the configured GAS token
-        if(!error && tokenInfo && this.util.bcgt(fee, 0)){
-            let pmMode = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']);
-            if(pmMode === 'native'){
-                let tempFees   = { AMOUNT: fee };
-                let validation = await this.util.validateNativeCoinFee(data, tempFees, this.indexerDb, data['TX_OUTPUTS']);
-                if(!validation.valid){
-                    error = 'invalid: ' + (validation.error || 'native coin fee validation failed');
-                } else {
-                    feePaymentMode = 1;
-                    data['NATIVE_COIN_AMOUNT'] = validation.nativeCoinAmount;
-                    data['NATIVE_COIN']        = validation.nativeCoin;
-                    data['ORACLE_ROUND']       = validation.oracleRound;
-                }
-            } else if(pmMode === 'rejected'){
-                error = 'invalid: insufficient fee (native coin output required)';
-            } else {
-                if(!this.util.hasBalance(balances, tokenInfo['TICK_ID'], fee))
-                    error = 'invalid: insufficient funds (GAS)';
-            }
-        }
+        // The FORMAT validations (deploy_chunk/validate.js), then the per-byte gas fee and its
+        // payment (deploy_chunk/fees.js), both first-failure-wins on the same `error`.
+        let chunkIndex, totalChunks, partBytes, fee, gas, tokenInfo, feePaymentMode;
+        ({ error, chunkIndex, totalChunks } = validateChunkFormat(this, data, error));
+        ({ error, partBytes, fee, gas, tokenInfo, feePaymentMode } = await priceCarrier(this, data, error));
 
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
@@ -235,22 +166,8 @@ class DeployChunk {
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
-        // Print status message
-        getLogger().info("\t DEPLOY v4 : hash=" + data['CODE_HASH'] + ' : ' + chunkIndex + '/' + totalChunks +
-            ' : bytes=' + partBytes + ' : ' + data['STATUS']);
-
-        // Persist the chunk (stored valid or invalid so the explorer can surface its status;
-        // the DEPLOY assembler reads only VALID rows).
-        await this.indexerDb.recordDeployChunk({
-            ACTION_INDEX : data['ACTION_INDEX'],
-            SOURCE       : data['SOURCE'],
-            CODE_HASH    : data['CODE_HASH'],
-            CHUNK_INDEX  : chunkIndex,
-            TOTAL_CHUNKS : totalChunks,
-            CODE_PART    : data['CODE_PART'],
-            STATUS       : status,
-            BLOCK_INDEX  : data['BLOCK_INDEX']
-        });
+        // Log the verdict and persist the slice (deploy_chunk/settle.js)
+        await recordCarrier(this, data, { chunkIndex, totalChunks, partBytes, status });
 
         // Store the SOURCE and GAS tick in addresses list
         this.util.addAddressTicker(data['SOURCE'], gas);
@@ -265,6 +182,26 @@ class DeployChunk {
         if(!error && tokenInfo && feePaymentMode === 2)
             debits.push([gas, fee, data['SOURCE']]);
 
+        // A carrier that completes a pending group has its ledger written by the deployment
+        // it runs (completePendingGroup below), so it must not write one of its own.
+        if(await this.completePendingGroup(data, status, debits))
+            return;
+
+        // The carrier's own ledger changes, balances, supply and mappings (deploy_chunk/settle.js)
+        await writeCarrierLedger(this, data, credits, debits);
+    }
+
+    /**
+     * Deploy the contract HERE when this carrier completes a group whose assembler already
+     * landed pending. Returns true when it did: runDeployment then wrote this action's ledger
+     * record, balances, tokens and mappings, so the caller writes none of its own.
+     *
+     * @param {object} data    the carrier's transaction context; STATUS is restored to `status`
+     * @param {string} status  the carrier's own verdict, already stored on its deploy_chunks row
+     * @param {Array}  debits  the carrier's own fee debit, handed to the deployment's ledger write
+     * @returns {Promise<boolean>}
+     */
+    async completePendingGroup(data, status, debits){
         // Deferred assembly (DEPLOY_DEFERRED_ASSEMBLY): this carrier may be the slice that completes a group
         // whose assembler already landed pending, in which case the contract deploys HERE, at
         // this action, and this action's rows are the contract's (the contract's index and
@@ -313,28 +250,12 @@ class DeployChunk {
                     // row; restore it so the fee-quote dry run and the action counters read the
                     // carrier's status rather than the contract's.
                     data['STATUS'] = status;
-                    return;
+                    return true;
                 }
             }
         }
-
-        // Process any transaction ledger changes (credits / debits)
-        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
-
-        // Get a list of tickers & addresses
-        let tickers   = this.util.getTickersList(),
-            addresses = Object.keys(this.util.getAddressesList());
-
-        // Update address balances and token supply
-        await this.indexerDb.updateBalances(addresses);
-        await this.indexerDb.updateTokens(tickers);
-
-        // Create action mappings
-        await this.mapper.createMappings(data);
+        return false;
     }
 }
 
 module.exports = DeployChunk;
-// Expose the canonical caps for the cross-service regression drift guard.
-module.exports.MAX_DEPLOY_CHUNKS = MAX_DEPLOY_CHUNKS;
-module.exports.MAX_DEPLOYCHUNK_PART_BYTES = MAX_DEPLOYCHUNK_PART_BYTES;
