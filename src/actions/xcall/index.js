@@ -48,15 +48,19 @@ const ed25519 = require('../../consensus/ed25519.js');
 const swq     = require('../../stake_weighted_quorum.js');
 const eq      = require('../../equivocation_header.js');
 const ah      = require('../../mirror_admission_activation.js');
-const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
-const { buildInjectedExecContext, SYNTH_TAGS } = require('../../consensus/exec_context.js');
 
 // Vendored from ../protocol/constants.js (byte-identical to xchain-documentation/
 // protocol/constants.js; same convention as the VM_MAX_CALL_DEPTH /
 // VM_MIN_CALL_GAS mirrors in execute.js). The VM enforces these at emit time;
 // this handler re-validates host-side (defense in depth).
 const PROTO = require('../../protocol/constants.js');
-const { getLogger } = require('../../observability/index.js');
+// Handler parts. Each is called with this handler as the receiver, so the rows
+// written and their order do not depend on which file the code sits in.
+const request  = require('./request.js');
+const expire   = require('./expire.js');
+const result   = require('./result.js');
+const callback = require('./callback_inject.js');
+const { CALL_ID_PREIMAGE_FIELDS, CALL_ID_MISMATCH_ERROR, STATUS_MAX_LENGTH, callIdMismatchStatus } = require('./call_id.js');
 const XCALL_MIN_GAS             = PROTO.XCALL_MIN_GAS;             // = VM_MIN_CALL_GAS
 const XCALL_MAX_GAS             = PROTO.XCALL_MAX_GAS;             // target-side ceiling cap (calls are fee-less on the target chain)
 const XCALL_MAX_HOPS            = PROTO.XCALL_MAX_HOPS;            // user→Y = 1, Y→back = 2; further hops need a fresh user tx
@@ -65,46 +69,10 @@ const XCALL_MAX_DEADLINE_BLOCKS = PROTO.XCALL_MAX_DEADLINE_BLOCKS; // generous: 
 const XCALL_MAX_CALLS_PER_BLOCK = PROTO.XCALL_MAX_CALLS_PER_BLOCK; // deterministic per-block injection cap (overflow carries forward; never dropped)
 const XCALL_RESULT_ORPHAN_GRACE_SECONDS = PROTO.XCALL_RESULT_ORPHAN_GRACE_SECONDS; // age-out clock for a result row with no local request
 
-const ALLOWED_CHAINS = ['BTC', 'LTC', 'DOGE'];
-
 // Flag-day gating the retirement of undeliverable result rows. See the
-// registration in src/protocol_changes.js and retireUndeliverableResult below.
+// registration in src/protocol_changes.js and retireUndeliverableResult
+// (result.js), which is handed this gate name by the delegate below.
 const ORPHAN_RETIREMENT_GATE = 'XCALL_RESULT_ORPHAN_RETIREMENT';
-
-// call_id preimage fields, in preimage order. This list is the single in-file
-// source of truth for the ORDER and the COUNT, so a skew against the VM's
-// derivation is one visible edit rather than a miscounted string concatenation.
-// Exported and pinned against the canonical
-// xchain-vm GOLDEN_VECTORS.callId tuple by bin/check-preimage-golden-parity.js.
-const CALL_ID_PREIMAGE_FIELDS = [
-    'NETWORK', 'COIN', 'TX_HASH', 'ROOT_ACTION_INDEX',
-    'CONTRACT_INDEX', 'EMITTER_PATH', 'EMITTER_POSITION', 'TARGET_CHAIN'
-];
-
-// Leading text of the call_id mismatch status. Kept as a stable prefix so the
-// diagnostic tail below can be extended without breaking status matching.
-const CALL_ID_MISMATCH_ERROR = 'invalid: CALL_ID (does not match deterministic derivation)';
-
-// index_statuses.status is VARCHAR(250); an over-long status is cut by MariaDB at
-// a length that varies with sql_mode, so the tail is budgeted here instead.
-const STATUS_MAX_LENGTH = 250;
-
-// Diagnostic tail for a call_id mismatch. The bare error cannot tell a forged
-// call_id from a VM/indexer preimage skew, which is the failure the operator
-// actually needs to distinguish, so the field count, both hash heads and the
-// preimage itself are recorded. Deterministic on every node (all inputs are
-// chain data or node-uniform config) and budget-capped, never DB-truncated.
-function callIdMismatchStatus(values, expected, supplied){
-    const head16 = (h) => String(h == null ? '' : h).toLowerCase().substring(0, 16);
-    const open   = ' [fields=' + values.length +
-                   ' expected=' + head16(expected) +
-                   ' got='      + head16(supplied) +
-                   ' preimage=';
-    const budget   = STATUS_MAX_LENGTH - CALL_ID_MISMATCH_ERROR.length - open.length - 1;
-    const preimage = values.join(':');
-    const shown    = preimage.length <= budget ? preimage : preimage.substring(0, budget - 1) + '~';
-    return CALL_ID_MISMATCH_ERROR + open + shown + ']';
-}
 
 class Xcall {
 
@@ -139,130 +107,32 @@ class Xcall {
         return CALL_ID_PREIMAGE_FIELDS.map((f) => String(src[f]));
     }
 
-    async parse(params, data, error){
-
-        let format = data['FORMAT'];
-        // Verify VERSION is one this handler knows (only the v0 request and the v2 expire exist)
-        if(!error && (format === null || this.formats[format] === undefined))
-            error = 'invalid: VERSION (unknown)';
-
-        if(format === 0) return await this.parseRequest(params, data, error);
-        if(format === 2) return await this.parseExpire(params, data, error);
-    }
-
-    // XCALL v0: Request (VM emission only)
-    async parseRequest(params, data, error){
-
-        // VM-emission-only: reject anything user-initiated.
-        if(!error && !data['IS_EMISSION'])
-            error = 'invalid: XCALL v0 must originate from VM emission';
-
-        // Extract positional params
-        data['CALL_ID']               = params[1];
-        data['TARGET_CHAIN']          = params[2];
-        data['TARGET_CONTRACT_INDEX'] = params[3];
-        data['METHOD']                = params[4];
-        data['PARAMS_JSON']           = params[5];
-        data['GAS_LIMIT']             = params[6];
-        data['CALLBACK_METHOD']       = params[7];
-        data['CALLBACK_PARAMS']       = params[8];
-        data['DEADLINE_BLOCKS']       = params[9];
-        data['CROSS_HOPS']            = params[10];
-        // EMITTER carries the contract's action_index (set by execute.processEmission)
-        data['CONTRACT_INDEX']        = data['EMITTER'];
-
-        // Put the numeric fields into their canonical number form before the checks below read them
-        if(!error)
-            data = this.util.setNumberFormats(data);
-
-        // Verify CALL_ID is present and is a 64-character hex hash
-        if(!error && (!data['CALL_ID'] || !/^[0-9a-fA-F]{64}$/.test(String(data['CALL_ID']))))
-            error = 'invalid: CALL_ID (format)';
-
-        // Verify TARGET_CHAIN is one of the chains this platform can call out to
-        if(!error && (ALLOWED_CHAINS.indexOf(String(data['TARGET_CHAIN'])) === -1))
-            error = 'invalid: TARGET_CHAIN (unknown)';
-
-        // Verify TARGET_CHAIN is not this chain (a same-chain call is a plain contract call, not XCALL)
-        if(!error && String(data['TARGET_CHAIN']) === String(this.config['COIN']))
-            error = 'invalid: TARGET_CHAIN (must differ from this chain)';
-
-        let targetContract = parseInt(data['TARGET_CONTRACT_INDEX']);
-        // Verify TARGET_CONTRACT_INDEX names a contract (contract indexes are positive whole numbers)
-        if(!error && (!Number.isInteger(targetContract) || targetContract <= 0))
-            error = 'invalid: TARGET_CONTRACT_INDEX (must be a positive integer)';
-
-        // Verify METHOD was supplied (the call needs a function name to run on the far side)
-        if(!error && this.util.isNull(data['METHOD']))
-            error = 'invalid: METHOD (required)';
-        // Verify METHOD fits the 64-byte name limit
-        if(!error && Buffer.byteLength(String(data['METHOD']), 'utf8') > 64)
-            error = 'invalid: METHOD (too long)';
-
-        // PARAMS_JSON must be a JSON array of strings (≤32 entries, each ≤1024 bytes);
-        // same caps as same-chain emit.execute params.
-        if(!error){
-            let parsed = null;
-            try { parsed = JSON.parse(String(data['PARAMS_JSON'] || '[]')); } catch(_){ parsed = null; }
-            if(!Array.isArray(parsed) || parsed.length > 32 ||
-               parsed.some(p => typeof p !== 'string' || Buffer.byteLength(p, 'utf8') > 1024))
-                error = 'invalid: PARAMS_JSON (must be array of <=32 strings, each <=1024 bytes)';
-        }
-
-        let gasLimit = parseInt(data['GAS_LIMIT']);
-        // Verify GAS_LIMIT sits in the allowed range (the target chain runs the call fee-less, so its ceiling is capped)
-        if(!error && (!Number.isInteger(gasLimit) || gasLimit < XCALL_MIN_GAS || gasLimit > XCALL_MAX_GAS))
-            error = 'invalid: GAS_LIMIT (out of range [' + XCALL_MIN_GAS + ', ' + XCALL_MAX_GAS + '])';
-
-        // Verify CALLBACK_METHOD was supplied (every outcome comes back to the caller as a callback)
-        if(!error && this.util.isNull(data['CALLBACK_METHOD']))
-            error = 'invalid: CALLBACK_METHOD (required)';
-        // Verify CALLBACK_METHOD fits the 64-byte name limit
-        if(!error && Buffer.byteLength(String(data['CALLBACK_METHOD']), 'utf8') > 64)
-            error = 'invalid: CALLBACK_METHOD (too long)';
-
-        let deadlineBlocks = parseInt(data['DEADLINE_BLOCKS']);
-        // Verify DEADLINE_BLOCKS sits in the allowed range (it has to cover both chains' confirmation depths plus relay rounds)
-        if(!error && (!Number.isInteger(deadlineBlocks) ||
-                      deadlineBlocks < XCALL_MIN_DEADLINE_BLOCKS || deadlineBlocks > XCALL_MAX_DEADLINE_BLOCKS))
-            error = 'invalid: DEADLINE_BLOCKS (out of range [' + XCALL_MIN_DEADLINE_BLOCKS + ', ' + XCALL_MAX_DEADLINE_BLOCKS + '])';
-        data['DEADLINE_BLOCK'] = parseInt(data['BLOCK_INDEX']) + (Number.isFinite(deadlineBlocks) ? deadlineBlocks : 0);
-
-        let crossHops = parseInt(data['CROSS_HOPS']);
-        // Verify CROSS_HOPS is inside the hop budget (out and back only; a further hop needs a fresh user transaction)
-        if(!error && (!Number.isInteger(crossHops) || crossHops < 1 || crossHops > XCALL_MAX_HOPS))
-            error = 'invalid: CROSS_HOPS (out of range [1, ' + XCALL_MAX_HOPS + '])';
-
-        // Validate contract_index references a real contract
-        if(!error && data['CONTRACT_INDEX'] != null){
-            let contract = await this.indexerDb.getContract(data['CONTRACT_INDEX']);
-            if(!contract)
-                error = 'invalid: CONTRACT_INDEX (unknown)';
-        } else if(!error){
-            error = 'invalid: CONTRACT_INDEX (missing emitter)';
-        }
-
-        // Re-derive call_id and compare. Defends against a compromised VM by anchoring
-        // the request to (network, source chain, tx_hash, contract_index, emitter_path,
-        // emitter_position, target_chain). Network + chain are bound in (unlike the
-        // ATTEST preimage) because BTC-family chains share tx-hash space; a call must
-        // never collide or replay across chains/networks.
-        //
-        // EMITTER_PATH (the emitting execution's deterministic call-path, the '>'-joined
-        // per-execution emission positions from the root on-chain action down to this
-        // execution, root = '') replaces the emitting EXECUTE's action_index. action_index
-        // was a function of injection *timing* (it advances with every synthetic action the
-        // indexer injects ahead of the EXECUTE); binding it forked call_id across nodes on
-        // any injection slip and never re-converged. But dropping it entirely (the prior
-        // fix) was unsafe: (tx_hash, contract_index, emitter_position) are NOT unique because
-        // emitter_position is per-execution, so two nested runs of the SAME contract each
-        // emitting their first call collide. The call-path is BOTH content-derived (stable
-        // across nodes/reorgs) AND unique per execution in the call tree; it fixes both.
-        //
-        // MUST byte-match the VM's derivation in xchain-vm/src/gateway_emit.js
-        // (crossExecute). All inputs are REQUIRED; their absence is a hard failure
-        // (no silent bypass). NOTE: EMITTER_PATH '' (root on-chain action) is VALID;
-        // check === undefined / null, never falsy.
+    // Kept on the handler, in this file, because bin/check-preimage-golden-parity.js
+    // pins the golden-vector assertion (the handler routing the preimage through its own
+    // callIdPreimageValues) to xcall/index.js: request.js calls this through the handler.
+    //
+    // Re-derive call_id and compare. Defends against a compromised VM by anchoring
+    // the request to (network, source chain, tx_hash, contract_index, emitter_path,
+    // emitter_position, target_chain). Network + chain are bound in (unlike the
+    // ATTEST preimage) because BTC-family chains share tx-hash space; a call must
+    // never collide or replay across chains/networks.
+    //
+    // EMITTER_PATH (the emitting execution's deterministic call-path, the '>'-joined
+    // per-execution emission positions from the root on-chain action down to this
+    // execution, root = '') replaces the emitting EXECUTE's action_index. action_index
+    // was a function of injection *timing* (it advances with every synthetic action the
+    // indexer injects ahead of the EXECUTE); binding it forked call_id across nodes on
+    // any injection slip and never re-converged. But dropping it entirely (the prior
+    // fix) was unsafe: (tx_hash, contract_index, emitter_position) are NOT unique because
+    // emitter_position is per-execution, so two nested runs of the SAME contract each
+    // emitting their first call collide. The call-path is BOTH content-derived (stable
+    // across nodes/reorgs) AND unique per execution in the call tree; it fixes both.
+    //
+    // MUST byte-match the VM's derivation in xchain-vm/src/gateway_emit.js
+    // (crossExecute). All inputs are REQUIRED; their absence is a hard failure
+    // (no silent bypass). NOTE: EMITTER_PATH '' (root on-chain action) is VALID;
+    // check === undefined / null, never falsy.
+    deriveCallId(data, error){
         if(!error){
             if(data['EMITTER_POSITION'] === undefined || data['EMITTER_POSITION'] === null){
                 error = 'invalid: EMITTER_POSITION (required for call_id derivation)';
@@ -288,73 +158,30 @@ class Xcall {
                     error = callIdMismatchStatus(values, expected, data['CALL_ID']);
             }
         }
-
-        data['REQUEST_STATUS'] = 'pending';
-        data['FEE_PAYER']      = data['FEE_PAYER'] || data['SOURCE'];
-
-        let status = (error) ? error : 'valid';
-        data['STATUS'] = status;
-
-        getLogger().info("\t XCALL v0 : id=" + (data['CALL_ID'] ? String(data['CALL_ID']).substring(0,16) + '...' : '?') +
-                    ' : ' + this.config['COIN'] + ':' + data['CONTRACT_INDEX'] +
-                    ' → ' + data['TARGET_CHAIN'] + ':' + data['TARGET_CONTRACT_INDEX'] +
-                    ' . ' + data['METHOD'] +
-                    ' : gas=' + data['GAS_LIMIT'] + ' hops=' + data['CROSS_HOPS'] +
-                    ' : ' + data['STATUS']);
-
-        await this.indexerDb.createCrossChainCallRequest(data);
-        await this.mapper.createMappings(data);
+        return error;
     }
 
-    // XCALL v2: Expire (system-synthesized)
+    async parse(params, data, error){
+
+        let format = data['FORMAT'];
+        // Verify VERSION is one this handler knows (only the v0 request and the v2 expire exist)
+        if(!error && (format === null || this.formats[format] === undefined))
+            error = 'invalid: VERSION (unknown)';
+
+        if(format === 0) return await this.parseRequest(params, data, error);
+        if(format === 2) return await this.parseExpire(params, data, error);
+    }
+
+    // XCALL v0: Request (VM emission only). The field checks and the emitter-contract
+    // lookup live in request.js; the call_id re-derivation is deriveCallId above. The
+    // phase stays a method here because the suites drive and stub it as one.
+    async parseRequest(params, data, error){
+        return request.parseRequest.call(this, params, data, error);
+    }
+
+    // XCALL v2: Expire (system-synthesized). Body in expire.js.
     async parseExpire(params, data, error){
-
-        // System-synthesized only; guard against accidental synthesis from a user tx.
-        if(!data['IS_SYNTHETIC']){
-            getLogger().warn('\t XCALL v2 : rejected (user-broadcast not allowed for synthetic expire)');
-            data['STATUS'] = 'invalid: XCALL v2 must be system-synthesized';
-            return;
-        }
-
-        // Look up the request to expire. data['CALL_ID'] is set by
-        // util.processCrossChainCalls from getExpiredCrossChainCallRequests.
-        let callId  = String(data['CALL_ID'] || '').toLowerCase();
-        let request = await this.indexerDb.getCrossChainCallRequestById(callId);
-
-        // Bail if the request no longer exists or has already been resolved. This is the
-        // exactly-once interlock shared with the result-callback pass: whichever path
-        // flips request_status to a terminal value first wins; the other becomes a no-op.
-        if(!request || request.request_status !== 'pending')
-            return;
-
-        // Synthesized actions arrive without an ACTION_INDEX; allocate one now.
-        data['ACTION_INDEX'] = await this.indexerDb.createActionIndex({
-            ACTION:      'XCALL',
-            BLOCK_INDEX: data['BLOCK_INDEX'],
-            FORMAT:      2
-        }, true);
-
-        data['STATUS'] = 'valid';
-
-        getLogger().info("\t XCALL v2 : id=" + callId.substring(0,16) + '...' +
-                    ' : deadline=' + request.deadline_block +
-                    ' : block=' + data['BLOCK_INDEX']);
-
-        // Flip request status to 'expired' BEFORE injecting (interlock order).
-        await this.indexerDb.updateCrossChainCallRequestStatus(callId, 'expired', 'expired', '', data['BLOCK_INDEX']);
-
-        // Synthesize the callback EXECUTE so the contract can clean up (status='expired').
-        try {
-            await this.injectCallback(request, data, 'expired', '');
-        } catch(e){
-            // An infra fault (VM host down, DB driver errno) is not a callback outcome:
-            // halt so the block retries, instead of committing a locally-dropped
-            // callback that forks contract_hash against healthy peers (consensus/fault_guard.js).
-            rethrowIfInfraFault(e);
-            getLogger().warn('XCALL expiry callback failed:', e);
-        }
-
-        await this.mapper.createMappings(data);
+        return expire.parseExpire.call(this, params, data, error);
     }
 
     // Canonical signing string for the result phase; MUST byte-match the hub's
@@ -452,288 +279,49 @@ class Xcall {
     }
 
     // Has an undeliverable result row aged out, i.e. can it no longer become
-    // deliverable on any branch this chain could still adopt?
-    //
-    // Two clocks, both node-invariant, both read only from consensus inputs (the
-    // block being processed and the quorum-signed mirror row), never wall-clock:
-    //
-    //   request present  the request's OWN deadline_block is exact. Past it the
-    //                    request is terminal (the expiry pass has flipped it, or a
-    //                    result already completed it), so no future block can turn
-    //                    this row into a delivered callback. Used for the routing
-    //                    mismatch and definitively-unquorate cases.
-    //
-    //   request absent   nothing local carries a deadline, and the mirrored row has
-    //                    no deadline field, so the clock is the row's quorum-signed
-    //                    effective_time plus XCALL_RESULT_ORPHAN_GRACE_SECONDS of
-    //                    block time. The federation only signs a result after the
-    //                    request is buried at its source chain's relay confirmation
-    //                    depth, and the grace covers the deepest of those windows, so
-    //                    a request still absent that far past effectiveness is absent
-    //                    because its branch is gone. Should a deeper-than-designed
-    //                    reorg restore it anyway, the retirement row is anchored to a
-    //                    rollback-able action_index and is erased with it.
-    //
-    // A row deferred because the capability snapshot is not mirrored yet never reaches
-    // here (processResult returns earlier): that row is still expected to deliver, and
-    // resultSuppressesExpiry keeps its request alive to receive it.
+    // deliverable on any branch this chain could still adopt? Both clocks live in
+    // result.js; it stays a method here because retirement and the suites read it
+    // through the handler.
     resultAgedOut(r, request, data){
-        if(request){
-            let deadline = parseInt(request.deadline_block);
-            let block    = parseInt(data['BLOCK_INDEX']);
-            if(!Number.isFinite(deadline) || !Number.isFinite(block)) return false;
-            return block > deadline;
-        }
-        // parseInt, not Number: Number(null) is 0, which would read a row with a missing
-        // effective_time as infinitely old and retire it on sight.
-        let effective = parseInt(r.effective_time);
-        let blockTime = parseInt(data['BLOCK_TIME']);
-        if(!Number.isFinite(effective) || !Number.isFinite(blockTime)) return false;
-        return (blockTime - effective) >= XCALL_RESULT_ORPHAN_GRACE_SECONDS;
+        return result.resultAgedOut.call(this, r, request, data);
     }
 
-    // Retire a result row this chain can never deliver, so it stops being re-selected
-    // by the capped delivery pass every block. Returns true when the row was
-    // retired (the caller must then stop processing it).
-    //
-    // Without this, an undeliverable row is rejected on every block and pruned by
-    // nothing, because pruning is keyed on a recorded callback and the reject paths
-    // record none. getEffectiveUnprocessedCallResults orders by (snapshot_block,
-    // call_id) and the pass takes only XCALL_MAX_CALLS_PER_BLOCK rows, so as few as 25
-    // such rows at a low snapshot_block hold the head of the queue forever and starve
-    // every legitimate result behind them (observed live: 229 undeliverable rows ahead
-    // of a real one starved it at the tail of a 25-row head slice).
-    //
-    // CONSENSUS-VISIBLE, deliberately. Retirement mints an actions row and frees a slot
-    // in a capped per-block pass, which decides which block a real callback EXECUTE
-    // lands in; a node-local retirement would fork the delivered set against a node that
-    // kept the row. So it is flag-day gated (ORPHAN_RETIREMENT_GATE), decided purely
-    // from consensus inputs (resultAgedOut), and written against a rollback-able
-    // action_index like every other cross-chain bookkeeping row, so a source-chain reorg
-    // that restores the missing request also erases the retirement and lets the result
-    // deliver normally on the branch that carries the request.
-    //
-    // It delivers NO callback: the requesting contract, if it exists at all, hears the
-    // 'expired' outcome from the deadline path, which is the only outcome a chain that
-    // never saw the request can agree on.
+    // Retire a result row this chain can never deliver (body in result.js). The
+    // flag-day gate name is passed in rather than re-declared there, so the gate
+    // this handler exports and the gate the retirement asks about are one string.
     async retireUndeliverableResult(r, data, callId, request, reason){
-        if(!(await this.actions.protocolChanges.isEnabled(ORPHAN_RETIREMENT_GATE, data['BLOCK_INDEX'])))
-            return false;
-        if(!this.resultAgedOut(r, request, data))
-            return false;
-
-        // Mint the retirement's own action_index (the rollback anchor). Minted only once
-        // the row is genuinely retired: an index minted on a row that stays in the queue
-        // would move every later action_index for nothing.
-        data['ACTION_INDEX'] = await this.indexerDb.createActionIndex({
-            ACTION:      'XCALL',
-            BLOCK_INDEX: data['BLOCK_INDEX']
-        }, true);
-
-        getLogger().info("\t XCALL result : id=" + callId.substring(0,16) + '...' +
-                    ' : undeliverable (' + reason + ') and aged out, retiring' +
-                    ' : block=' + data['BLOCK_INDEX']);
-
-        await this.indexerDb.recordCrossChainCallCallback(
-            data['ACTION_INDEX'], callId, 'retired:' + reason, data['BLOCK_INDEX']);
-        return true;
+        return result.retireUndeliverableResult.call(this, r, data, callId, request, reason, ORPHAN_RETIREMENT_GATE);
     }
 
-    // Process one mirrored, effective result row for a request THIS chain originated
-    // (driven by utility.processCrossChainCalls in (snapshot_block, call_id) order).
-    // Verifies the 2f+1 signatures, applies the exactly-once interlock against the
-    // deadline-expiry path, injects the requester's callback, and records the
-    // processing in cross_chain_call_callbacks (idempotency + rollback anchor).
-    // Every exit that is NOT a deferral records something in that table, so no row can
-    // sit in the capped queue forever: delivery and the interlock record their outcome,
-    // and the three undeliverable exits retire the row once it has aged out.
+    // Process one mirrored, effective result row for a request THIS chain
+    // originated (body in result.js).
     async processResult(r, data){
-        let callId = String(r.call_id || '').toLowerCase();
-
-        // Network guard (belt-and-suspenders; the query pre-filters).
-        if(String(r.network || '') !== String(this.config['NETWORK'] || '')) return;
-
-        // The result must correspond to a request THIS chain knows, with matching
-        // routing: a forged result for someone else's call_id can never deliver.
-        let request = await this.indexerDb.getCrossChainCallRequestById(callId);
-        if(!request){
-            if(await this.retireUndeliverableResult(r, data, callId, null, 'no_request')) return;
-            getLogger().warn("\t XCALL result : id=" + callId.substring(0,16) + '... : no matching local request, skipping');
-            return;
-        }
-        if(String(request.target_chain) !== String(r.target_chain)){
-            if(await this.retireUndeliverableResult(r, data, callId, request, 'routing')) return;
-            getLogger().warn("\t XCALL result : id=" + callId.substring(0,16) + '... : target_chain mismatch, skipping');
-            return;
-        }
-
-        // Verify the cross_chain quorum over the result canonical.
-        let q = await this.verifyResultQuorum(r);
-        if(!q.synced){
-            // Snapshot not mirrored yet; defer (the barriers front-stop this; see xexec.js).
-            getLogger().info("\t XCALL result : id=" + callId.substring(0,16) + '... : capability snapshot not synced, deferring');
-            return;
-        }
-        let N = q.N, validSigners = q.validSigners;
-        if(!q.quorumMet){
-            if(await this.retireUndeliverableResult(r, data, callId, request, 'no_quorum')) return;
-            getLogger().warn("\t XCALL result : id=" + callId.substring(0,16) + '... : insufficient ' + (q.weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + N + ')') + ', skipping');
-            return;
-        }
-
-        // Mint the internal processing action (rollback anchor for the callback record).
-        data['ACTION_INDEX'] = await this.indexerDb.createActionIndex({
-            ACTION:      'XCALL',
-            BLOCK_INDEX: data['BLOCK_INDEX']
-        }, true);
-
-        let resultStatus  = String(r.result_status || 'error');
-        let resultPayload = '';
-        try { resultPayload = Buffer.from(String(r.return_payload_b64 || ''), 'base64').toString('utf8'); }
-        catch(_){ resultPayload = ''; }
-
-        // Exactly-once interlock vs the deadline-expiry path.
-        // Both paths are block-height-driven and share request_status: whichever
-        // reaches terminal first wins; the loser records itself as skipped so the
-        // result row is never re-evaluated (idempotency row below) but the contract
-        // hears exactly one outcome.
-        if(request.request_status !== 'pending'){
-            getLogger().info("\t XCALL result : id=" + callId.substring(0,16) + '... : request already ' + request.request_status + ', recording skip');
-            await this.indexerDb.recordCrossChainCallCallback(
-                data['ACTION_INDEX'], callId, 'skipped:' + request.request_status, data['BLOCK_INDEX']);
-            return;
-        }
-
-        getLogger().info("\t XCALL result : id=" + callId.substring(0,16) + '...' +
-                    ' : from=' + r.target_chain + ' : status=' + resultStatus +
-                    ' : sigs=' + validSigners.length + '/' + N);
-
-        // Flip to terminal BEFORE injecting (interlock order; also feeds getCallResult).
-        await this.indexerDb.updateCrossChainCallRequestStatus(callId, 'completed', resultStatus, resultPayload, data['BLOCK_INDEX']);
-
-        // Inject the callback; a failing callback does NOT roll back the bookkeeping.
-        try {
-            let callbackActionIndex = await this.injectCallback(request, data, resultStatus, resultPayload);
-            if(callbackActionIndex)
-                await this.indexerDb.setCrossChainCallCallbackIndex(callId, callbackActionIndex);
-        } catch(e){
-            // Infra faults must halt the block, not record a callback-less result
-            // this validator alone commits (see consensus/fault_guard.js).
-            rethrowIfInfraFault(e);
-            getLogger().warn('XCALL result callback injection failed:', e);
-        }
-
-        await this.indexerDb.recordCrossChainCallCallback(
-            data['ACTION_INDEX'], callId, resultStatus, data['BLOCK_INDEX']);
-
-        await this.mapper.createMappings(data);
+        return result.processResult.call(this, r, data);
     }
 
     // Synthesize the callback EXECUTE delivering a cross-chain call outcome to the
-    // requesting contract. Shared by the result pass (utility.processCrossChainCalls)
-    // and the expiry path above. Runs under the fixed callback gas ceiling the caller
-    // pre-paid at emit time, inside its own savepoint; a failing callback never rolls
-    // back the result/expiry bookkeeping. Returns the callback EXECUTE's action_index.
-    //
-    // Callback signature: callbackMethod(call_id, target_chain, status, return_payload, ...callbackParams)
+    // requesting contract (body in callback_inject.js). Shared by the result pass
+    // and the expiry path; returns the callback EXECUTE's action_index.
     async injectCallback(request, contextData, resultStatus, resultPayload){
-        if(!this.actions.actionExecute) return null;
-
-        // Callback ceiling: read from the gas schedule so it stays in sync with
-        // the VM_XCALL_CALLBACK amount charged at emit time (gateway-emit.js crossExecute).
-        // Hard-fail on a missing or non-positive value: a silent default would allow the
-        // injected ceiling to diverge from the amount the VM charged at emit time if the
-        // schedule is misconfigured, producing an ok/out_of_gas split across validators.
-        let schedule = (this.config && this.config['GAS_SCHEDULE']) || {};
-        let xcallCallbackGasRaw = schedule['VM_XCALL_CALLBACK'];
-        let xcallCallbackGasVal = parseInt(xcallCallbackGasRaw, 10);
-        if(xcallCallbackGasRaw === undefined || xcallCallbackGasRaw === null || !Number.isInteger(xcallCallbackGasVal) || xcallCallbackGasVal <= 0 || String(xcallCallbackGasRaw).trim() !== String(xcallCallbackGasVal)){
-            throw new Error('GAS_SCHEDULE.VM_XCALL_CALLBACK missing or invalid (expected a positive integer, got ' + JSON.stringify(xcallCallbackGasRaw) + ')');
-        }
-        const XCALL_CALLBACK_GAS = xcallCallbackGasVal;
-
-        let callbackParams = [];
-        if(request.callback_params_json){
-            try {
-                let parsed = JSON.parse(request.callback_params_json);
-                if(Array.isArray(parsed)) callbackParams = parsed;
-            } catch(_){
-                callbackParams = [];
-            }
-        }
-
-        let callbackArgs = [
-            request.call_id,
-            String(request.target_chain || ''),
-            String(resultStatus),
-            String(resultPayload == null ? '' : resultPayload),
-            ...callbackParams.map(String)
-        ];
-
-        // Positional EXECUTE format: VERSION|CONTRACT_ACTION_INDEX|METHOD|PARAMS...
-        let actionParams = [
-            0,
-            request.contract_index,
-            request.callback_method,
-            ...callbackArgs
-        ];
-
-        let chain = this.config['CHAIN'];
-        let emissionActionIndex = await this.indexerDb.createActionIndex({
-            ACTION:      'EXECUTE',
-            BLOCK_INDEX: contextData['BLOCK_INDEX'],
-            FORMAT:      0,
-            SOURCE:      'C:' + chain + ':' + request.contract_index
-        }, true);
-
-        // SOURCE = contract address (ATTEST callback precedent). The synthetic TX_HASH
-        // ('XCALLCB' tag, live consensus, byte-identical to the legacy inline
-        // synthesis it replaced) is chain/network-namespaced so anything the callback itself emits
-        // (ATTEST, emit.execute, crossExecute) derives collision-free ids. CROSS_HOPS
-        // carries the call's hop count into the callback context so a contract reacting
-        // to a callback by calling out again stays inside the hop budget.
-        let emissionData = buildInjectedExecContext({
-            chain:         chain,
-            network:       this.config['NETWORK'],
-            contractIndex: request.contract_index,
-            actionIndex:   emissionActionIndex,
-            blockIndex:    contextData['BLOCK_INDEX'],
-            blockTime:     contextData['BLOCK_TIME'],
-            emitter:       contextData['ACTION_INDEX'],
-            synthTag:      SYNTH_TAGS.XCALL_CALLBACK,
-            synthId:       request.call_id,
-            extra: {
-                CALL_DEPTH:   0,
-                VM_GAS_LIMIT: XCALL_CALLBACK_GAS,
-                CROSS_HOPS:   Number(request.cross_hops) || 0
-            }
-        });
-
-        let savepoint = await this.indexerDb.createSavepoint('xcall_callback_' + emissionActionIndex);
-        try {
-            await this.actions.actionExecute.parse(actionParams, emissionData, null);
-            if(emissionData['STATUS'] && emissionData['STATUS'] !== 'valid'){
-                getLogger().warn('XCALL callback execute returned non-valid status: ' + emissionData['STATUS']);
-            }
-            await this.indexerDb.releaseSavepoint(savepoint);
-            return emissionActionIndex;
-        } catch(e){
-            await this.indexerDb.rollbackToSavepoint(savepoint);
-            throw e;
-        }
+        return callback.injectCallback.call(this, request, contextData, resultStatus, resultPayload);
     }
 }
 
+// The protocol limits and the call_id declarations, readable off the class
+// (Xcall.XCALL_MAX_CALLS_PER_BLOCK, Xcall.CALL_ID_PREIMAGE_FIELDS and the rest). They hang on
+// the handler rather than on a second export object, so the module's one export stays
+// the class and every consumer reads the same names it always did.
+Xcall.XCALL_MIN_GAS             = XCALL_MIN_GAS;
+Xcall.XCALL_MAX_GAS             = XCALL_MAX_GAS;
+Xcall.XCALL_MAX_HOPS            = XCALL_MAX_HOPS;
+Xcall.XCALL_MIN_DEADLINE_BLOCKS = XCALL_MIN_DEADLINE_BLOCKS;
+Xcall.XCALL_MAX_DEADLINE_BLOCKS = XCALL_MAX_DEADLINE_BLOCKS;
+Xcall.XCALL_MAX_CALLS_PER_BLOCK = XCALL_MAX_CALLS_PER_BLOCK;
+Xcall.XCALL_RESULT_ORPHAN_GRACE_SECONDS = XCALL_RESULT_ORPHAN_GRACE_SECONDS;
+Xcall.ORPHAN_RETIREMENT_GATE           = ORPHAN_RETIREMENT_GATE;
+Xcall.CALL_ID_PREIMAGE_FIELDS          = CALL_ID_PREIMAGE_FIELDS;
+Xcall.CALL_ID_MISMATCH_ERROR           = CALL_ID_MISMATCH_ERROR;
+Xcall.STATUS_MAX_LENGTH                = STATUS_MAX_LENGTH;
+Xcall.callIdMismatchStatus             = callIdMismatchStatus;
+
 module.exports = Xcall;
-module.exports.XCALL_MIN_GAS             = XCALL_MIN_GAS;
-module.exports.XCALL_MAX_GAS             = XCALL_MAX_GAS;
-module.exports.XCALL_MAX_HOPS            = XCALL_MAX_HOPS;
-module.exports.XCALL_MIN_DEADLINE_BLOCKS = XCALL_MIN_DEADLINE_BLOCKS;
-module.exports.XCALL_MAX_DEADLINE_BLOCKS = XCALL_MAX_DEADLINE_BLOCKS;
-module.exports.XCALL_MAX_CALLS_PER_BLOCK = XCALL_MAX_CALLS_PER_BLOCK;
-module.exports.XCALL_RESULT_ORPHAN_GRACE_SECONDS = XCALL_RESULT_ORPHAN_GRACE_SECONDS;
-module.exports.ORPHAN_RETIREMENT_GATE           = ORPHAN_RETIREMENT_GATE;
-module.exports.CALL_ID_PREIMAGE_FIELDS          = CALL_ID_PREIMAGE_FIELDS;
-module.exports.CALL_ID_MISMATCH_ERROR           = CALL_ID_MISMATCH_ERROR;
-module.exports.STATUS_MAX_LENGTH                = STATUS_MAX_LENGTH;
-module.exports.callIdMismatchStatus             = callIdMismatchStatus;
