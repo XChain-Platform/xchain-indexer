@@ -21,6 +21,14 @@
  * fuzz test (test/unit/stateCommitment.test.js) lock the equality; the xchain-sync
  * follower keeps its own byte-identical copy and HALTS on divergence.
  *
+ * The derivations the block commitment composes live beside this file as named
+ * parts: stateCommitment/ holds the leaf values, stakes_root, state_root and
+ * block_merkle_root, the full balances build and the two completeness guards;
+ * db/state_commitment/ holds the ledger reads. What stays here is the node-store
+ * and SMT engine, the orphan observability twin block, and the per-block
+ * orchestration whose source the frozen twin suites and the flag-day deploy
+ * check read by this path.
+ *
  * Node model (consensus-critical):
  *   - The store holds INTERNAL nodes only, keyed by node_hash, row {left_hash, right_hash}.
  *   - A value leaf (depth 256) is never its own row; it lives as a child hash of its
@@ -40,6 +48,13 @@ const SUB = require('./state_subtree_activation.js');
 const CST = require('./consensus/contract_state_subtree.js');
 const ESC = require('./consensus/escrow_leaf_subtree.js');
 const EJW = require('./consensus/escrowJournalWriter.js');   // SOURCE ONLY: the follower replicates these rows
+const { getLogger } = require('./observability/index.js');
+const { leafOrNull } = require('./stateCommitment/leaf_values.js');
+const { gatherStakeEntries, buildStakesRoot, resetStakesMemo } = require('./stateCommitment/stakes_root.js');
+const { assembleStateRoot, extraSubRootColumn, computeBlockMerkleRoot } = require('./stateCommitment/state_root.js');
+const FULL = require('./stateCommitment/full_balances_root.js');
+const { enforceTouchedSet, assertCommittedLeaves } = require('./stateCommitment/touch_guards.js');
+const { getNetBalance } = require('./db/state_commitment/ledger_reads.js');
 
 const EMPTY_ROOT_HEX = M.toHex(M.EMPTY_SMT_ROOT);   // root of an empty depth-256 SMT
 const EMPTY0_HEX     = M.toHex(M.EMPTY[0]);
@@ -377,34 +392,6 @@ async function reportOrphanStats(query, chain, network, opts){
     return stats;
 }
 
-// Assemble the top-level state_root from the two v1 sub-roots plus any RESERVED
-// slot that its flag-day has armed (SPV spec §4.1, state-subtree extension design).
-//
-// `extraSubRoots` is the forward-compatible carrier for ownership_root /
-// tokens_root / contract_state_root and MUST be the output of
-// state_subtree_activation.gateSubRoots(), never a caller's raw candidates: the
-// gate is what keeps an un-armed slot EMPTY. It is null today (every slot inert),
-// and merkle.stateRoot() maps a null/absent/empty-root slot to the identical
-// EMPTY_SMT_ROOT leaf, so this is byte-identical to the old two-argument
-// assembly on every chain. The equality is asserted, not assumed, in
-// test/unit/stateSubtreeActivation.test.js.
-function assembleStateRoot(balancesRootHex, stakesRootHex, extraSubRoots){
-    const subRoots = { balances_root: balancesRootHex, stakes_root: stakesRootHex };
-    if(extraSubRoots){
-        for(const name of SUB.RESERVED_SUBTREES)
-            if(extraSubRoots[name]) subRoots[name] = extraSubRoots[name];
-    }
-    return M.toHex(M.stateRoot(subRoots));
-}
-
-// Persisted column value for one reserved slot, taken from the GATED sub-root
-// object. Returns null (SQL NULL = EMPTY) when the slot is inert at this height
-// or the gate dropped it, so a row's extension column always describes the same
-// leaf set as the row's own state_root.
-function extraSubRootColumn(extraSubRoots, slotName){
-    return (extraSubRoots && extraSubRoots[slotName]) ? extraSubRoots[slotName] : null;
-}
-
 // Candidate reserved sub-roots for one block, before gating. Stage A's
 // contract_state_root is derived here (contractStateSubtree.js, byte-identical
 // across the twins); Stage B's escrow leaf is not a slot and does not appear.
@@ -441,400 +428,84 @@ async function shadowSubRoots(db, chain, network, blockIndex){
     return { contract_state_root: await CST.resolveContractStateRoot(db, smt, chain, network, blockIndex, true) };
 }
 
-// ---- Leaf value derivation (authoritative, never the balances cache) --------
-// Per SPV spec §4.2 the leaf is the authoritative SUM(credits)-SUM(debits) at 18 dp,
-// NOT the mutable balances cache (the per-block sanityCheck verifies aggregate
-// SUPPLIES, not per-address balances, so the cache is not guaranteed correct
-// per-key). Cost is O(history per touched key); flagged for Phase-1 throughput
-// measurement on the fast chains. Resolves through the index tables by canonical
-// string (never surrogate ids), matching BLOCK_HASH_VERSION's id-independence rule.
-const ZERO_CANON = M.canonicalAmount('0');
-
-function _nz(amountStr){ return M.canonicalAmount(String(amountStr)); }
-
-// Returns the value-leaf hex for an amount, or null when it is exactly zero
-// (delete-on-zero, normative §4.2).
-function _leafOrNull(amountStr){
-    const canon = _nz(amountStr);
-    return (canon === ZERO_CANON) ? null : M.toHex(M.leafHash(canon));
-}
-
-async function getNetBalance(db, address, tick){
-    const rows = await db.doQueryStrict(
-        `SELECT
-            (SELECT COALESCE(SUM(CAST(c.amount AS DECIMAL(60,18))),0) FROM credits c
-                INNER JOIN index_addresses a ON a.id=c.address_id
-                INNER JOIN index_tickers   t ON t.id=c.tick_id
-                WHERE a.address=? AND t.tick=?) AS cr,
-            (SELECT COALESCE(SUM(CAST(d.amount AS DECIMAL(60,18))),0) FROM debits d
-                INNER JOIN index_addresses a ON a.id=d.address_id
-                INNER JOIN index_tickers   t ON t.id=d.tick_id
-                WHERE a.address=? AND t.tick=?) AS dr`,
-        [address, tick, address, tick]);
-    const cr = rows.length ? String(rows[0].cr) : '0';
-    const dr = rows.length ? String(rows[0].dr) : '0';
-    // Render via bcstr: bcsub returns a decimal.js bignumber whose String() form
-    // goes exponential below 1e-7 ("1e-8"), which canonicalAmount rejects and
-    // wedges the block loop. bcstr is minimal fixed notation, byte-identical to
-    // the sync follower's SQL minimal-decimal rendering of the same net.
-    return db.util.bcstr(db.util.bcsub(cr, dr, 18));
-}
-
-// Locked-escrow leaf (XCHAIN_ESC): BUILT and gated, no longer deferred (SPV
-// sub-tree spec §3 Stage B). The finding that killed the naive derivation
-// still stands and is why the journal exists: the escrows
-// table keys a lock (+amount) to the order SOURCE but keys nine release sites
-// to the recipient, so SUM(escrows) per (address, tick) does NOT net per key
-// and only the per-tick GLOBAL sum nets to zero. The journal writer
-// (escrowJournalWriter.js) re-keys those rows to their locker at write time;
-// escrow_leaf_subtree.js derives the leaves from the journal, applied inside
-// balances_root when ESCROW_LOCKED_LEAF_ACTIVATION arms a height (and into
-// the shadow column while ESCROW_LOCKED_LEAF_SHADOW does). Until then
-// balances_root commits ONLY the net-spendable leaf, byte-identical to v1.
-
-// ---- Stakes sub-tree (BTC-only, §4.1) ---------------------------------------
-// Built fresh each BTC block from the authoritative capability stake-weight query
-// (the set is small, bounded by VALIDATOR_QUERY_LIMIT). One leaf per (pubkey,
-// capability) with the source-deduped weight; absent stakers are simply not in the
-// set (delete-on-zero falls out). Keyed by canonical pubkey+capability strings.
-async function gatherStakeEntries(db, blockIndex){
-    const caps = (db.config['STAKING'] && db.config['STAKING']['CAPABILITIES'])
-        ? Object.keys(db.config['STAKING']['CAPABILITIES']) : [];
-    const entries = [];
-    for(const capability of caps){
-        const rows = await db.getStakeWeightsByCapability(capability, blockIndex);
-        const seenSource = new Map();   // source -> weight (first wins; equal per source)
-        for(const r of (rows || [])){
-            if(!r || r.pubkey == null) continue;
-            if(_nz(String(r.weight == null ? '0' : r.weight)) === ZERO_CANON) continue;   // zero cannot qualify
-            const source = String(r.source);
-            // Member leaf commits SOURCE + weight so a light client can source-dedupe
-            // signer stake exactly as swq.meetsStakeThreshold does (validator-set proof).
-            entries.push([ M.toHex(M.stakeKey(String(r.pubkey), capability)),
-                           M.toHex(M.stakeMemberLeaf(source, String(r.weight))) ]);
-            if(!seenSource.has(source)) seenSource.set(source, String(r.weight));
-        }
-        // Total leaf: the source-deduped quorum denominator S, so a client can check
-        // 3·Σ(signer-source weight) > 2·S without enumerating the full set (spec §7).
-        const total = M.sumCanonicalAmounts(Array.from(seenSource.values()));
-        if(_nz(total) !== ZERO_CANON)
-            entries.push([ M.toHex(M.stakeKey(M.STAKE_TOTAL_PUBKEY, capability)),
-                           M.toHex(M.stakeTotalLeaf(total)) ]);
-    }
-    return entries;
-}
-
-// Rebuild the stakes tree only when the stake set actually changed.
-//
-// buildFull writes SMT_DEPTH nodes per key, so this tree costs keys x 256 node
-// writes on EVERY BTC block - 12,544 on the regtest venue's 49 keys - and the
-// stake set changes on almost none of them. Every one of those writes is an
-// INSERT IGNORE no-op, but each still probes a primary key far larger than the
-// buffer pool, which is what put BTC regtest block parse at 25-66s against LTC's
-// 3-5s for the same code (LTC commits the empty stakes root and never pays it).
-//
-// The memo is sound because buildFull is a PURE function of its entries: the node
-// store is content-addressed, so the same entry set always yields the same root.
-// stateCommitment.test.js pins both halves of that - equality with the merkle.js
-// reference, and insert-order independence.
-//
-// Every way this can be wrong is a way it rebuilds. It shortcuts ONLY when the
-// entries are identical to those of the block IMMEDIATELY BEFORE it, which this
-// same process built and committed, and whose nodes are therefore already durable
-// (state_tree_nodes is COW and rollback-exempt). Keyed on block CONTINUITY and not
-// on the digest alone, so a reorg, a rollback, or a cold start lands on a block
-// that is not the memo's successor and rebuilds. That direction matters: a cache
-// in a consensus path may only ever fail toward the slow correct answer, and an
-// earlier cache that failed the other way here did so because it was keyed on a
-// MUTABLE dense id rather than on its own inputs.
-let _stakesMemo = null;
-
-function _stakeEntriesDigest(entries){
-    // Sorted, because buildFull is order-independent: an entry set that merely
-    // reordered must still hit. Length-prefixed and separator-joined so no pair
-    // boundary can be forged by a value that happens to contain the separator.
-    const pairs = entries.map(e => String(e[0]) + ':' + String(e[1])).sort();
-    return M.toHex(M.sha256(Buffer.from(pairs.length + '|' + pairs.join('|'), 'utf8')));
-}
-
-// Exported for tests and for any caller that wipes the node store underneath a
-// live process; forgetting the memo only ever costs one rebuild.
-function resetStakesMemo(){ _stakesMemo = null; }
-
-async function buildStakesRoot(smt, chain, network, blockIndex, entries){
-    const digest = _stakeEntriesDigest(entries);
-    const memo   = _stakesMemo;
-    if(memo && memo.chain === chain && memo.network === network
-            && memo.blockIndex === blockIndex - 1 && memo.digest === digest){
-        // One indexed read weighed against 12,544 writes: proves the memoized tree
-        // is still IN the store before trusting it. It does not prove every interior
-        // node survived - only a prune could remove one, and reachability marking
-        // keeps whatever a retained root reaches - so this is a cheap floor, stated
-        // as such rather than sold as verification.
-        if(memo.root === EMPTY_ROOT_HEX || await smt.store.get(memo.root)){
-            _stakesMemo = { chain, network, blockIndex, digest, root: memo.root };
-            return memo.root;
-        }
-    }
-    const root = await smt.buildFull(entries);
-    _stakesMemo = { chain, network, blockIndex, digest, root };
-    return root;
-}
-
-// ---- Block-content Merkle root (§5) -----------------------------------------
-// Leaves over the EXACT canonical rows + order the flat hashes cover (db
-// getBlockLeafRows reuses the getBlockHashes stash), in the frozen cross-kind
-// total order. The ordering itself lives in merkle.blockMerkleLeaves (the
-// twin-guarded module) so the explorer proof server locates a row's leaf index
-// with byte-identical logic; this just hashes the assembled vector.
-async function computeBlockMerkleRoot(db, blockIndex){
-    const rows = await db.getBlockLeafRows(blockIndex);
-    return M.toHex(M.blockMerkleRoot(M.blockMerkleLeaves(rows)));
-}
-
-// ---- Full balances-tree initialization (flag-day cutover, §4.3) -------------
-// One-time at the activation boundary block: seed the balances SMT from ALL
-// pre-existing nonzero net balances (escrow leaf deferred from v1, see note
-// above). (At genesis activation this is just the boundary block's own
-// effects.) Persists nodes.
+// The full balances_root build (stateCommitment/full_balances_root.js) over a
+// fresh PersistentSMT on this db's node store. The engine lives in this file, so
+// the part takes it as an argument instead of requiring it back from here.
 async function buildFullBalancesRoot(db, chain, network, blockIndex, opts){
     const smt = new PersistentSMT(new DbNodeStore(db));
-    let root = EMPTY_ROOT_HEX;
-    const bals = await db.doQueryStrict(
-        `SELECT a.address AS address, t.tick AS tick, CAST(SUM(s.amt) AS CHAR) AS net FROM (
-            SELECT address_id, tick_id,  CAST(amount AS DECIMAL(60,18)) AS amt FROM credits
-            UNION ALL
-            SELECT address_id, tick_id, -CAST(amount AS DECIMAL(60,18)) AS amt FROM debits
-         ) s
-         INNER JOIN index_addresses a ON a.id=s.address_id
-         INNER JOIN index_tickers   t ON t.id=s.tick_id
-         GROUP BY s.address_id, s.tick_id
-         HAVING SUM(s.amt) <> 0`, []);
-    for(const r of bals){
-        if(r.address == null || r.tick == null) continue;
-        const leaf = _leafOrNull(r.net);
-        if(leaf == null) continue;
-        root = await smt.update(root, M.balanceKey(chain, network, r.address, r.tick), leaf);
-    }
-    // XCHAIN_ESC locked-balance leaves (Stage B), height-gated. Work item 2: this
-    // function had NO height and three callers (activation-boundary init, the
-    // indexer self-heal full recompute, seedSnapshotRoots), so after the escrow
-    // leaf arms it could not decide whether locked leaves belong in the tree, and
-    // the self-heal path would have silently rebuilt a locked-leaf-FREE
-    // balances_root on the SOURCE. That is a quiet fork, the worst kind, so the
-    // height is now a parameter and a caller that omits it gets the v1 leaf set.
-    // opts.forceEscrowLeaves is the §7 shadow window's build of the SAME set at
-    // heights where the leaf is not yet committed; only the shadow path passes it.
-    if(SUB.isEscrowLockedLeafActive(blockIndex, network, chain) || (opts && opts.forceEscrowLeaves)){
-        for(const e of await ESC.liveEscrowLeaves(db))
-            root = await smt.update(root, M.escrowKey(chain, network, e.address, e.tick), e.leaf);
-    }
-    return root;
-}
-
-// ---- Touched-set guard ------------------------------------------------------
-//
-// ON BY DEFAULT, and it refuses to commit the block rather than committing a
-// balances_root known to be incomplete.
-//
-// WHY THIS IS A GUARD AND NOT A DIAGNOSTIC. Balance leaves have gone missing on
-// every regtest venue (BTC 15 of 1531 ledger-changing blocks, LTC 8 of 880,
-// DOGE 2 of 648). Two real defects were found and fixed, and BOTH were mis-
-// diagnosed at least once first. Block 10296 then skipped under conditions that
-// exclude both of them, so at least one mechanism is still unknown. The
-// unifying property is not the cause, it is the SILENCE: a touched key recorded
-// under a key the ledger does not name makes getNetBalance return 0,
-// _leafOrNull maps 0 to null, and the commitment deletes a key that never
-// existed. The update is a no-op, the root does not move, nothing errors, and
-// every peer running the same code agrees. It only surfaces when some node
-// full-rebuilds (a follower's seedSnapshotRoots, a flag-day arming block) and
-// diverges from the chain it is following.
-//
-// So this stops trying to enumerate causes and closes the class: whatever the
-// mechanism, a block whose ledger moved keys that the touched set did not apply
-// is refused. That protects against the mechanisms not yet found, which is the
-// whole point of doing it this way.
-//
-// ---- Why the check is a SUBSET and not an equality -------------------------
-//
-// missing (expected minus applied) is the fault and is enforcing. extra (applied
-// minus expected) has legitimate causes and must NEVER halt a chain:
-//
-//   - escrows. createLedgerChangeRecord records a touch for credits, debits AND
-//     escrows, while the expected set below reads credits and debits only, so an
-//     escrow-only key is legitimately applied and not expected.
-//   - backdated cooldown-refund credits, which reuse an EARLIER block's
-//     action_index. The choke point captures them in the block that WRITES them
-//     while a block-range query attributes them to the block that OWNS the
-//     action. That asymmetry is deliberate and documented at the choke point.
-//
-// Both only ADD to applied, so expected is a subset of applied whenever the
-// commitment is healthy, and the subset direction stays exact. extra is
-// therefore reported only under INDEXER_SMT_TOUCH_AUDIT=1, where it is the
-// direction that would NAME an unknown mechanism.
-//
-// ---- Failure posture -------------------------------------------------------
-//
-// Fail closed, matching what this codebase does everywhere else: the follower
-// halts on divergence, doQueryStrict throws rather than returning [], the
-// arming block refuses rather than guessing. Throwing here rolls the block back
-// and it is retried, so a transient cause clears itself and a real one stops
-// the node instead of forking it.
-//
-// INDEXER_TOUCH_GUARD=warn downgrades to a log. That is an operational safety
-// valve, not a tuning knob: a node running with it committed a balances_root it
-// knows is incomplete, and will diverge from any node that full-rebuilds.
-async function _enforceTouchedSet(db, blockIndex, touched){
-    const expected = await _ledgerKeysForBlock(db, blockIndex);
-    if(!expected.size) return;
-
-    const applied = new Set(touched);
-    const missing = [...expected].filter(k => !applied.has(k));
-
-    if(process.env.INDEXER_SMT_TOUCH_AUDIT === '1'){
-        const extra = [...applied].filter(k => !expected.has(k));
-        if(extra.length)
-            console.log('SMT-TOUCH-AUDIT block=' + blockIndex +
-                ' extra=' + JSON.stringify(extra.map(k => k.split('\t'))));
-    }
-
-    if(!missing.length) return;
-
-    const detail = JSON.stringify(missing.map(k => k.split('\t')));
-    const msg = 'balances touched-set guard FAILED at block ' + blockIndex +
-        ': the ledger moved ' + missing.length + ' key(s) the commitment did not apply, so ' +
-        'balances_root would be committed incomplete. keys=' + detail +
-        ' (balances-root leaf-completeness guard)';
-    if(process.env.INDEXER_TOUCH_GUARD === 'warn'){
-        console.error(msg + ' [INDEXER_TOUCH_GUARD=warn: COMMITTING ANYWAY, this node will ' +
-            'diverge from any node that full-rebuilds]');
-        return;
-    }
-    throw new Error(msg);
-}
-
-// The (address, tick) keys THIS block's ledger moved, as canonical strings
-// resolved through the index tables, which is the same derivation the
-// commitment's own key uses. Shared by the touched-set guard above and the
-// leaf-presence assertion below so the two can never drift into disagreeing
-// about what the block moved.
-//
-// doQueryStrict, never doQuery: inside the block transaction a failed read
-// throws and the block retries. A guard that reads through the fail-soft path
-// would see [] as "the ledger moved nothing" and pass every block, which is
-// worse than not having a guard at all (M-17).
-async function _ledgerKeysForBlock(db, blockIndex){
-    const rows = await db.doQueryStrict(
-        `SELECT DISTINCT ia.address AS address, it.tick AS tick
-           FROM (
-                SELECT action_index, address_id, tick_id FROM credits
-                UNION ALL
-                SELECT action_index, address_id, tick_id FROM debits
-           ) s
-           INNER JOIN actions a          ON a.action_index = s.action_index
-           INNER JOIN index_addresses ia ON ia.id = s.address_id
-           INNER JOIN index_tickers   it ON it.id = s.tick_id
-          WHERE a.block_index = ?`, [blockIndex]);
-
-    const keys = new Set();
-    for(const r of (rows || []))
-        if(r.address != null && r.tick != null && r.tick !== '')
-            keys.add(r.address + '\t' + r.tick);
-    return keys;
-}
-
-// ---- Post-commit leaf-presence assertion -------------------------------------
-//
-// The touched-set guard above compares SET MEMBERSHIP in both directions, and
-// the missing-leaf fault class is not a membership failure. The key IS touched
-// and IS in `applied`; getNetBalance then answers 0 for it, _leafOrNull maps 0 to
-// null, and the commitment DELETES a key that never existed. `missing` is empty,
-// nothing throws, nothing logs, and the leaf never lands. That was PROVEN on a
-// replay venue: with the guard live and the audit armed, block 103
-// neither threw nor logged, while the per-key probe reported that same block's
-// key absent from the committed tree. The guard asks "was the key touched" and
-// the probe asks "did the leaf land"; only the second question is the one that
-// decides whether balances_root is complete, so this asks it too.
-//
-// It asks in vivo, at the one moment the answer is still recoverable: after the
-// block's balances_root is final and before it is written, prove every key the
-// block's ledger moved against that root.
-//
-// A key whose leaf is ABSENT is a fault only when its net is non-zero. A
-// net-zero key is applied as a DELETE and correctly leaves no leaf (§4.2
-// delete-on-zero), which is exactly why a healthy block can leave the root
-// untouched, so treating absence alone as a fault would halt healthy chains.
-// Judging by anything other than the net AS OF THIS HEIGHT invents faults too:
-// the after-the-fact per-key sweep produced four spurious hits from today's balance and
-// zero from the block's own. Inside the block transaction getNetBalance IS the
-// as-of-height net, which is what makes an in-block assertion both cheap and
-// exact where an after-the-fact one is neither.
-//
-// Cost: one descent per moved key, and the net re-read is deferred until a leaf
-// is actually found absent, so a healthy block pays no extra history scan. The
-// measured shape on BTC regtest is 1972 moved keys over 1516 healthy
-// ledger-changing blocks (~1.3 per block) with zero false positives.
-//
-// Value equality (leaf == leafHash(net)) is deliberately NOT asserted: it would
-// cost an O(history) net scan per moved key on every block to re-check a value
-// this same block wrote from that same query, while the fault class being closed
-// is absence.
-async function _assertCommittedLeaves(db, smt, chain, network, blockIndex, balancesRootHex){
-    const expected = await _ledgerKeysForBlock(db, blockIndex);
-    if(!expected.size) return;
-
-    const absent = [];
-    for(const entry of expected){
-        const [address, tick] = entry.split('\t');
-        const proof = await smt.prove(balancesRootHex, M.balanceKey(chain, network, address, tick));
-        if(proof.leaf_value != null) continue;               // the leaf landed
-        const net = await getNetBalance(db, address, tick);
-        if(_leafOrNull(net) == null) continue;               // net-zero: no leaf by design
-        absent.push([address, tick, _nz(net)]);
-    }
-    if(!absent.length) return;
-
-    const msg = 'balances leaf-presence assertion FAILED at block ' + blockIndex + ': ' +
-        absent.length + ' key(s) the ledger moved have NO leaf in the committed balances_root ' +
-        'while their net is non-zero, so balances_root would be committed incomplete. ' +
-        'keys=' + JSON.stringify(absent) + ' (leaf-presence guard)';
-    if(process.env.INDEXER_TOUCH_GUARD === 'warn'){
-        console.error(msg + ' [INDEXER_TOUCH_GUARD=warn: COMMITTING ANYWAY, this node will ' +
-            'diverge from any node that full-rebuilds]');
-        return;
-    }
-    throw new Error(msg);
+    return FULL.buildFullBalancesRootWith(smt, db, chain, network, blockIndex, opts);
 }
 
 // ---- Orchestrator -----------------------------------------------------------
 // Compute + persist the per-block roots, INSIDE the block transaction (the caller
 // runs this after sanityCheck, before commit). chain = COIN, network = NETWORK.
+// Each step below keeps the order the roots have always been derived and
+// written in: escrow journal, balances_root, stakes_root, then the assembled
+// state_root and the row.
 async function computeAndStoreRoots(db, chain, network, blockIndex, isActivationBlock){
     const smt = new PersistentSMT(new DbNodeStore(db));
 
-    // escrow_leaf_journal (Stage B), SOURCE ONLY. This runs BEFORE the roots are
-    // computed so the derivation below sees this block's rows, and it has no
-    // counterpart in computeFollowerRoots: the follower REPLICATES these rows
-    // rather than deriving them, which is what keeps the attribution rules (the
-    // nine recipient-keyed release sites re-keyed to their locker) from having
-    // to exist twice and agree byte-for-byte. The writer derives each key's
-    // total from the block's own escrows LEDGER rows, never from family
-    // aggregates or status predicates (see escrowJournalWriter.js for why).
+    const { escShadow, armingBlock } = await writeEscrowJournalForBlock(db, chain, network, blockIndex);
+    const { balancesRoot, shadowBalanceUpdates } = await balancesRootForBlock(
+        db, smt, chain, network, blockIndex, isActivationBlock, armingBlock, escShadow);
+
+    // stakes_root: BTC-only; LTC/DOGE commit the empty-SMT root.
+    let stakesRoot = EMPTY_ROOT_HEX;
+    if(chain === 'BTC'){
+        const stakeEntries = await gatherStakeEntries(db, blockIndex);
+        stakesRoot = await buildStakesRoot(smt, chain, network, blockIndex, stakeEntries);
+    }
+
+    const roots = await storeBlockRoots(db, smt, chain, network, blockIndex,
+        { balancesRoot, stakesRoot, escShadow, shadowBalanceUpdates });
+
+    // Bound the touched-key name memos to ONE block. db._smtAddressNameCache and
+    // db._smtTickNameCache are filled ONLY under the _smtTouched choke point
+    // (db.createLedgerChangeRecord), and XChainIndexer installs a fresh _smtTouched per
+    // block, but nothing dropped the memos on a SUCCESSFUL commit: only rollbackTransaction
+    // and the reorg path in rollback.js did. An uninterrupted indexer therefore retained one
+    // entry per distinct address and ticker it had ever touched, so resident size tracked the
+    // cumulative address/ticker population instead of per-block work.
     //
-    // The ARMING BLOCK gets a full-history replay of the escrows ledger instead
-    // of this block's rows. That is what lets the leaf arm with no operational
-    // backfill: the replay lands as ordinary journal rows, replicates, and both
-    // twins then full-build from the journal exactly as on any other block.
-    // Without it the arming block would commit a balances_root with no locked
-    // leaves at all on a chain that has open positions, which is a silent fork.
-    // The writer also runs through a §7 SHADOW window (consensus-free: the
-    // journal is not a commitment, and its rows replicate to the follower
-    // exactly as when armed, which is what lets the window exercise writer,
-    // replication and application end to end). Full-pass triggers, each a
-    // one-shot: the true ARMING block always replays the whole ledger, even
-    // when a shadow ran right up to it, because armed-wins correction of a
-    // drifted shadow journal is the arming block's job; a shadow WINDOW START
-    // replays too, so the dry run covers positions opened long before it.
+    // Clearing HERE, at the end of the per-block root computation, gives the memos exactly
+    // the lifetime of the touched set they serve: this runs after sanityCheck and after every
+    // ledger write of the block, and a block that never reaches this point is rolled back,
+    // which clears them on the existing path. Refill is lazy and STRICT (doQueryStrict), so
+    // the only cost is one indexed primary-key read per distinct touched id per block and no
+    // value can change. Guarded because computeAndStoreRoots is also driven by unit mocks
+    // that implement only the query surface.
+    if(typeof db.clearSmtNameCaches === 'function') db.clearSmtNameCaches();
+
+    return roots;
+}
+
+// escrow_leaf_journal (Stage B), SOURCE ONLY. This runs BEFORE the roots are
+// computed so the derivation below sees this block's rows, and it has no
+// counterpart in computeFollowerRoots: the follower REPLICATES these rows
+// rather than deriving them, which is what keeps the attribution rules (the
+// nine recipient-keyed release sites re-keyed to their locker) from having
+// to exist twice and agree byte-for-byte. The writer derives each key's
+// total from the block's own escrows LEDGER rows, never from family
+// aggregates or status predicates (see escrowJournalWriter.js for why).
+//
+// The ARMING BLOCK gets a full-history replay of the escrows ledger instead
+// of this block's rows. That is what lets the leaf arm with no operational
+// backfill: the replay lands as ordinary journal rows, replicates, and both
+// twins then full-build from the journal exactly as on any other block.
+// Without it the arming block would commit a balances_root with no locked
+// leaves at all on a chain that has open positions, which is a silent fork.
+// The writer also runs through a §7 SHADOW window (consensus-free: the
+// journal is not a commitment, and its rows replicate to the follower
+// exactly as when armed, which is what lets the window exercise writer,
+// replication and application end to end). Full-pass triggers, each a
+// one-shot: the true ARMING block always replays the whole ledger, even
+// when a shadow ran right up to it, because armed-wins correction of a
+// drifted shadow journal is the arming block's job; a shadow WINDOW START
+// replays too, so the dry run covers positions opened long before it.
+//
+// Returns the two escrow-leaf facts the later steps need: whether this height
+// shadows the leaf, and whether it is the arming block.
+async function writeEscrowJournalForBlock(db, chain, network, blockIndex){
     const escArmed  = SUB.isEscrowLockedLeafActive(blockIndex, network, chain);
     const escShadow = SUB.isEscrowLockedLeafShadowActive(blockIndex, network, chain);
     // Hoisted out of the journal-write block below: the balances gate needs it
@@ -844,15 +515,16 @@ async function computeAndStoreRoots(db, chain, network, blockIndex, isActivation
         const windowStart = escShadow && !SUB.isEscrowLockedLeafShadowActive(blockIndex - 1, network, chain);
         await EJW.writeEscrowJournal(db, blockIndex, { full: armingBlock || windowStart });
     }
+    return { escShadow, armingBlock };
+}
 
-    // balances_root: full init on the activation boundary, else incremental over
-    // the (address, tick) set the ledger touched this block. When the escrow
-    // leaf is SHADOWING, the incremental branch also collects this block's
-    // spendable-leaf updates so the shadow thread can replay the identical
-    // spendable set on its own root (null on the full-recompute branch, which
-    // makes the shadow full-build too).
-    let balancesRoot;
-    let shadowBalanceUpdates = null;
+// balances_root: full init on the activation boundary, else incremental over
+// the (address, tick) set the ledger touched this block. When the escrow
+// leaf is SHADOWING, the incremental branch also collects this block's
+// spendable-leaf updates so the shadow thread can replay the identical
+// spendable set on its own root (null on the full-recompute branch, which
+// makes the shadow full-build too).
+async function balancesRootForBlock(db, smt, chain, network, blockIndex, isActivationBlock, armingBlock, escShadow){
     const prior = isActivationBlock ? [] : await db.doQueryStrict(
         'SELECT balances_root FROM state_tree_roots WHERE chain=? AND network=? AND block_index=? LIMIT 1',
         [chain, network, blockIndex - 1]);
@@ -881,51 +553,60 @@ async function computeAndStoreRoots(db, chain, network, blockIndex, isActivation
         // self-healing rather than a fork or a halt.
         //
         // The arming block takes this branch with a prior root PRESENT, so it skips
-        // _enforceTouchedSet / _assertCommittedLeaves for that one block. Intended:
+        // enforceTouchedSet / assertCommittedLeaves for that one block. Intended:
         // both guards verify incremental threading, which this branch does not do,
         // and the follower path this now mirrors does not run them either.
         if(!isActivationBlock && !armingBlock)
-            console.warn('stateCommitment: no prior state_tree_roots row for ' + chain + '/' + network +
+            getLogger().warn('stateCommitment: no prior state_tree_roots row for ' + chain + '/' + network +
                 ' block ' + (blockIndex - 1) + '; full-recomputing balances_root for block ' + blockIndex +
                 ' instead of threading from the empty root (snapshot-bootstrap or activation rolled below this height)');
-        balancesRoot = await buildFullBalancesRoot(db, chain, network, blockIndex);
-    } else {
-        let root = prior[0].balances_root;
-        const touched = db._smtTouched ? Array.from(db._smtTouched) : [];
-        if(escShadow) shadowBalanceUpdates = [];
-        for(const entry of touched){
-            const [address, tick] = entry.split('\t');
-            const balLeaf = _leafOrNull(await getNetBalance(db, address, tick));
-            const balKey  = M.balanceKey(chain, network, address, tick);
-            root = await smt.update(root, balKey, balLeaf);
-            if(shadowBalanceUpdates) shadowBalanceUpdates.push({ key: balKey, leaf: balLeaf });
-        }
-        // XCHAIN_ESC locked-balance leaves for this block (Stage B), height-gated.
-        // Applied AFTER the spendable leaves and driven by its OWN touched set: an
-        // order match writes the escrows release row against the recipient
-        // GET_ADDRESS while the leaf that moves is the LOCKER's, so the balance
-        // touched set is the wrong input and reusing it would update the wrong key
-        // and miss the right one on every match. The journal answers per locker.
-        if(SUB.isEscrowLockedLeafActive(blockIndex, network, chain)){
-            root = await ESC.applyEscrowLeaves(db, smt, root, chain, network, blockIndex);
-        }
-        balancesRoot = root;
-        await _enforceTouchedSet(db, blockIndex, touched);
-        // Set membership cannot see a leaf that never landed, so the
-        // block's own ledger keys are proved against the root that is about to
-        // be committed. It runs AFTER the escrow leaves, on the exact value that
-        // goes into the row, because a root nobody proved against is the thing
-        // that made this fault class silent for three investigations.
-        await _assertCommittedLeaves(db, smt, chain, network, blockIndex, balancesRoot);
+        const balancesRoot = await buildFullBalancesRoot(db, chain, network, blockIndex);
+        return { balancesRoot, shadowBalanceUpdates: null };
     }
+    return threadBalancesRoot(db, smt, chain, network, blockIndex, prior[0].balances_root, escShadow);
+}
 
-    // stakes_root: BTC-only; LTC/DOGE commit the empty-SMT root.
-    let stakesRoot = EMPTY_ROOT_HEX;
-    if(chain === 'BTC'){
-        const stakeEntries = await gatherStakeEntries(db, blockIndex);
-        stakesRoot = await buildStakesRoot(smt, chain, network, blockIndex, stakeEntries);
+// The incremental branch of balances_root: thread this block's touched spendable
+// leaves and then its locked escrow leaves onto the prior block's root, and run
+// both completeness guards (stateCommitment/touch_guards.js) on the result.
+async function threadBalancesRoot(db, smt, chain, network, blockIndex, priorRoot, escShadow){
+    let root = priorRoot;
+    const touched = db._smtTouched ? Array.from(db._smtTouched) : [];
+    const shadowBalanceUpdates = escShadow ? [] : null;
+    for(const entry of touched){
+        const [address, tick] = entry.split('\t');
+        const balLeaf = leafOrNull(await getNetBalance(db, address, tick));
+        const balKey  = M.balanceKey(chain, network, address, tick);
+        root = await smt.update(root, balKey, balLeaf);
+        if(shadowBalanceUpdates) shadowBalanceUpdates.push({ key: balKey, leaf: balLeaf });
     }
+    // XCHAIN_ESC locked-balance leaves for this block (Stage B), height-gated.
+    // Applied AFTER the spendable leaves and driven by its OWN touched set: an
+    // order match writes the escrows release row against the recipient
+    // GET_ADDRESS while the leaf that moves is the LOCKER's, so the balance
+    // touched set is the wrong input and reusing it would update the wrong key
+    // and miss the right one on every match. The journal answers per locker.
+    if(SUB.isEscrowLockedLeafActive(blockIndex, network, chain)){
+        root = await ESC.applyEscrowLeaves(db, smt, root, chain, network, blockIndex);
+    }
+    const balancesRoot = root;
+    await enforceTouchedSet(db, blockIndex, touched);
+    // Set membership cannot see a leaf that never landed, so the
+    // block's own ledger keys are proved against the root that is about to
+    // be committed. It runs AFTER the escrow leaves, on the exact value that
+    // goes into the row, because a root nobody proved against is the thing
+    // that made this fault class silent for three investigations.
+    await assertCommittedLeaves(db, smt, chain, network, blockIndex, balancesRoot);
+    return { balancesRoot, shadowBalanceUpdates };
+}
 
+// Assemble state_root from the finished sub-roots, derive the block Merkle root
+// and the shadow columns, and write the block's state_tree_roots row. The
+// assembly, the shadow value and the INSERT stay together in this file: the
+// frozen twin suites read this path to prove every assembleStateRoot call takes
+// only gated sub-roots and that the shadow value never reaches a committed column.
+async function storeBlockRoots(db, smt, chain, network, blockIndex, subRootInputs){
+    const { balancesRoot, stakesRoot, escShadow, shadowBalanceUpdates } = subRootInputs;
     const extraSubRoots   = SUB.gateSubRoots(await reservedSubRootCandidates(db, chain, network, blockIndex), blockIndex, network, chain);
     const stateRoot       = assembleStateRoot(balancesRoot, stakesRoot, extraSubRoots);
     const blockMerkleRoot = await computeBlockMerkleRoot(db, blockIndex);
@@ -962,23 +643,6 @@ async function computeAndStoreRoots(db, chain, network, blockIndex, isActivation
             balances_root_escrow_shadow=VALUES(balances_root_escrow_shadow)`,
         [chain, network, blockIndex, balancesRoot, stakesRoot, stateRoot, blockMerkleRoot, contractStateRoot, contractStateShadow, balancesEscrowShadow]);
 
-    // Bound the touched-key name memos to ONE block. db._smtAddressNameCache and
-    // db._smtTickNameCache are filled ONLY under the _smtTouched choke point
-    // (db.createLedgerChangeRecord), and XChainIndexer installs a fresh _smtTouched per
-    // block, but nothing dropped the memos on a SUCCESSFUL commit: only rollbackTransaction
-    // and the reorg path in rollback.js did. An uninterrupted indexer therefore retained one
-    // entry per distinct address and ticker it had ever touched, so resident size tracked the
-    // cumulative address/ticker population instead of per-block work.
-    //
-    // Clearing HERE, at the end of the per-block root computation, gives the memos exactly
-    // the lifetime of the touched set they serve: this runs after sanityCheck and after every
-    // ledger write of the block, and a block that never reaches this point is rolled back,
-    // which clears them on the existing path. Refill is lazy and STRICT (doQueryStrict), so
-    // the only cost is one indexed primary-key read per distinct touched id per block and no
-    // value can change. Guarded because computeAndStoreRoots is also driven by unit mocks
-    // that implement only the query surface.
-    if(typeof db.clearSmtNameCaches === 'function') db.clearSmtNameCaches();
-
     return { balances_root: balancesRoot, stakes_root: stakesRoot, state_root: stateRoot,
              block_merkle_root: blockMerkleRoot, contract_state_root: contractStateRoot };
 }
@@ -1000,10 +664,10 @@ module.exports = {
     buildFullBalancesRoot,
     computeAndStoreRoots,
     reportOrphanStats,
-    // Exported for test/unit/stateCommitment.touch-guard.test.js. Both halves of
+    // Exported for test/unit/state_commitment_touch_guard.test.js. Both halves of
     // the guard are module-private on the block path, and this is the half whose
     // BEHAVIOUR (not source shape) has to be pinned by execution: the nine
     // touch-guard cases can only read the source, which is how a guard that
     // cannot detect its own fault class passed all nine.
-    _assertCommittedLeaves
+    assertCommittedLeaves
 };

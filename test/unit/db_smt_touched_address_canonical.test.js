@@ -22,7 +22,7 @@
  * WHY THAT IS WORSE THAN A WRONG LEAF, and why these vectors assert the exact
  * key string rather than just "something was recorded": downstream,
  * `getNetBalance('^123', tick)` joins index_addresses.address = '^123', matches
- * nothing, and returns 0; `_leafOrNull` maps 0 to null; and stateCommitment then
+ * nothing, and returns 0; `leafOrNull` maps 0 to null; and stateCommitment then
  * DELETES a key that never existed. The update is a silent no-op, the block's
  * balances_root is byte-identical to its predecessor's, and the real address's
  * leaf is never written. No error, no log, nothing to detect it until a node

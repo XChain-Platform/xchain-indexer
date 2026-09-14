@@ -45,6 +45,10 @@ const M       = require('../../src/consensus/merkle.js');
 const Utility = require('../../src/utility.js');
 
 const SRC = fs.readFileSync(path.resolve(__dirname, '../../src/stateCommitment.js'), 'utf8');
+// The call sites stay in stateCommitment.js (SRC); the guard bodies are a named part.
+const GUARDS = fs.readFileSync(path.resolve(__dirname, '../../src/stateCommitment/touch_guards.js'), 'utf8');
+const touchGuardBody = () => GUARDS.slice(GUARDS.indexOf('async function enforceTouchedSet'),
+    GUARDS.indexOf('// ---- Post-commit leaf-presence assertion'));
 
 // The guard is module-private and sits inside computeAndStoreRoots' incremental
 // branch, which needs a live schema to drive end to end. Behaviour is therefore
@@ -61,8 +65,7 @@ describe('touched-set guard @regression', function(){
     it('is ON by default: no env flag gates the check itself', function(){
         // The whole point is that it protects nodes nobody remembered to
         // configure. A gate here would put it back to opt-in.
-        const body = SRC.slice(SRC.indexOf('async function _enforceTouchedSet'),
-                               SRC.indexOf('// ---- Orchestrator ---'));
+        const body = touchGuardBody();
         assert.ok(!/INDEXER_SMT_TOUCH_AUDIT[^\n]*\)\s*return;/.test(body),
             'the guard must not return early on an audit flag');
         assert.ok(!/^\s*if\s*\(process\.env\.INDEXER_TOUCH_GUARD[^\n]*\)\s*return;/m.test(body),
@@ -70,8 +73,7 @@ describe('touched-set guard @regression', function(){
     });
 
     it('ENFORCES only the missing direction, never extra', function(){
-        const body = SRC.slice(SRC.indexOf('async function _enforceTouchedSet'),
-                               SRC.indexOf('// ---- Orchestrator ---'));
+        const body = touchGuardBody();
         // The throw must be reached from `missing`, and `extra` must not throw:
         // escrows and backdated cooldown credits legitimately land in extra, so
         // enforcing equality would halt healthy chains.
@@ -86,30 +88,30 @@ describe('touched-set guard @regression', function(){
     });
 
     it('reports extra only under the audit flag, because it is noisy by design', function(){
-        const body = SRC.slice(SRC.indexOf('async function _enforceTouchedSet'),
-                               SRC.indexOf('// ---- Orchestrator ---'));
+        const body = touchGuardBody();
         assert.ok(/INDEXER_SMT_TOUCH_AUDIT === '1'[\s\S]{0,400}extra/.test(body),
             'extra reporting is gated so healthy chains do not log escrow keys every block');
     });
 
     it('reads STRICTLY, so a failed check can never pass as clean', function(){
-        const body = SRC.slice(SRC.indexOf('async function _enforceTouchedSet'),
-                               SRC.indexOf('// ---- Orchestrator ---'));
-        assert.ok(/doQueryStrict\(/.test(body) && !/[^t]\bdb\.doQuery\(/.test(body),
+        const body = touchGuardBody();
+        // The guard's only read is ledgerKeysForBlock, so its body is graded with it.
+        const reads = fs.readFileSync(path.resolve(__dirname, '../../src/db/state_commitment/ledger_reads.js'), 'utf8')
+            .split('async function ledgerKeysForBlock')[1];
+        assert.ok(/ledgerKeysForBlock\(db, blockIndex\)/.test(body)
+            && /doQueryStrict\(/.test(reads) && !/[^t]\bdb\.doQuery\(/.test(body + reads),
             'through doQuery a failed read returns [], which the guard would read as ' +
             '"the ledger moved nothing" and pass every block: worse than no guard at all');
     });
 
     it('does NOT swallow its own errors (that was the diagnostic contract, not the guard one)', function(){
-        const body = SRC.slice(SRC.indexOf('async function _enforceTouchedSet'),
-                               SRC.indexOf('// ---- Orchestrator ---'));
+        const body = touchGuardBody();
         assert.ok(!/catch\s*\(/.test(body),
             'a swallowed failure is a silent pass, which is exactly the property being fixed');
     });
 
     it('has an operational downgrade that is documented as divergence, not a knob', function(){
-        const body = SRC.slice(SRC.indexOf('async function _enforceTouchedSet'),
-                               SRC.indexOf('// ---- Orchestrator ---'));
+        const body = touchGuardBody();
         assert.ok(/INDEXER_TOUCH_GUARD === 'warn'/.test(body), 'a safety valve must exist');
         assert.ok(/diverge/.test(body),
             'the warn path must say plainly that the node commits a root it knows is incomplete');
@@ -120,23 +122,21 @@ describe('touched-set guard @regression', function(){
     it('runs on the incremental branch only', function(){
         // The full-rebuild branch derives from the entire ledger and cannot skip
         // a key, so guarding it would cost a query for no possible finding.
-        assert.ok(/await _enforceTouchedSet\(db, blockIndex, touched\);/.test(SRC));
-        const guardCall = SRC.indexOf('await _enforceTouchedSet(db, blockIndex, touched)');
+        assert.ok(/await enforceTouchedSet\(db, blockIndex, touched\);/.test(SRC));
+        const guardCall = SRC.indexOf('await enforceTouchedSet(db, blockIndex, touched)');
         const fullBuild = SRC.indexOf('balancesRoot = await buildFullBalancesRoot(db, chain, network, blockIndex);');
         assert.ok(guardCall > fullBuild,
             'the guard belongs after the incremental branch, not on the full-rebuild path');
     });
 
     it('returns early when the block moved no ledger keys (the common case is free)', function(){
-        const body = SRC.slice(SRC.indexOf('async function _enforceTouchedSet'),
-                               SRC.indexOf('// ---- Orchestrator ---'));
+        const body = touchGuardBody();
         assert.ok(/if\(!expected\.size\) return;/.test(body),
             'a block with no ledger rows must cost nothing beyond the one query');
     });
 
     it('names the block and the exact keys in the failure', function(){
-        const body = SRC.slice(SRC.indexOf('async function _enforceTouchedSet'),
-                               SRC.indexOf('// ---- Orchestrator ---'));
+        const body = touchGuardBody();
         assert.ok(/block ' \+ blockIndex/.test(body), 'the operator needs the height');
         assert.ok(/keys=' \+ detail/.test(body),
             'and the keys, which are unrecoverable once the block is past');
@@ -317,7 +317,7 @@ describe('leaf-presence assertion @regression', function(){
             M.toHex(M.leafHash(M.canonicalAmount('7'))));
 
         await assert.rejects(
-            () => SC._assertCommittedLeaves(h.db, smt, CHAIN, NETWORK, 10818, applied),
+            () => SC.assertCommittedLeaves(h.db, smt, CHAIN, NETWORK, 10818, applied),
             /leaf-presence assertion FAILED at block 10818[\s\S]*PFX517776/);
     });
 });
@@ -355,7 +355,7 @@ describe('leaf-presence assertion @regression', function(){
         const h = makeBlockMockDb({ ledgerKeys: [], touched: [], nets: {}, seedLeaves: [] });
         await h.seed();
         const smt = new SC.PersistentSMT(new SC.DbNodeStore(h.db));
-        await SC._assertCommittedLeaves(h.db, smt, CHAIN, NETWORK, HEIGHT, SC.EMPTY_ROOT_HEX);
+        await SC.assertCommittedLeaves(h.db, smt, CHAIN, NETWORK, HEIGHT, SC.EMPTY_ROOT_HEX);
         assert.strictEqual(h.calls.descents, 0, 'no key to prove means no descent');
         assert.strictEqual(h.calls.netReads, 0);
     });
@@ -364,7 +364,7 @@ describe('leaf-presence assertion @regression', function(){
         // The full-rebuild branch derives from the whole ledger and cannot drop a
         // key, and the value proved has to be the value written, so the call site
         // matters as much as the check.
-        const assertCall = SRC.indexOf('await _assertCommittedLeaves(db, smt, chain, network, blockIndex, balancesRoot);');
+        const assertCall = SRC.indexOf('await assertCommittedLeaves(db, smt, chain, network, blockIndex, balancesRoot);');
         const finalRoot  = SRC.indexOf('balancesRoot = root;');
         const insertRow  = SRC.indexOf('INSERT INTO state_tree_roots');
         const fullBuild  = SRC.indexOf('balancesRoot = await buildFullBalancesRoot(db, chain, network, blockIndex);');
@@ -377,8 +377,8 @@ describe('leaf-presence assertion @regression', function(){
 
 describe('leaf-presence assertion @regression', function(){
     it('does not assert leaf VALUE equality, which would cost a history scan per key per block', function(){
-        const body = SRC.slice(SRC.indexOf('async function _assertCommittedLeaves'),
-                               SRC.indexOf('// ---- Orchestrator ---'));
+        const body = GUARDS.slice(GUARDS.indexOf('async function assertCommittedLeaves'),
+                                  GUARDS.indexOf('module.exports'));
         assert.ok(/proof\.leaf_value != null\) continue;/.test(body),
             'a landed leaf ends the check for that key');
         assert.ok(!/leafHash/.test(body),

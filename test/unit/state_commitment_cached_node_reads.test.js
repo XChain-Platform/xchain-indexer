@@ -22,7 +22,7 @@
  * _descend walks the key path with one dependent point SELECT per level, and a
  * present key's ancestors are never an empty subtree, so a descent never
  * short-circuits: SMT_DEPTH sequential reads, paid once in update() and again
- * in the prove() that _assertCommittedLeaves runs back over the same keys, plus
+ * in the prove() that assertCommittedLeaves runs back over the same keys, plus
  * SMT_DEPTH per key on every buildFull rebuild.
  *
  * Three properties:
@@ -91,7 +91,7 @@ describe('stateCommitment: cached SMT node reads @regression', function(){
     });
 
     it('proving a key this instance just wrote costs ZERO store reads', async function(){
-        // This is the _assertCommittedLeaves shape: every ledger-moved key is
+        // This is the assertCommittedLeaves shape: every ledger-moved key is
         // descended a second time via prove() against the root just committed,
         // over nodes _putBatch wrote moments earlier.
         const store = new ReadCountingStore();
@@ -113,7 +113,7 @@ describe('stateCommitment: cached SMT node reads @regression', function(){
         // key short-circuits at the first empty subtree, ~log2(keys) levels
         // down). It is computeAndStoreRoots on an ESTABLISHED tree: each touched
         // key is already PRESENT, so its 256 ancestors all have rows and the
-        // descent never short-circuits, and _assertCommittedLeaves then descends
+        // descent never short-circuits, and assertCommittedLeaves then descends
         // every one of them a SECOND time via prove() against the final root.
         const entries = [];
         for(let i = 0; i < 60; i++) entries.push([M.toHex(keyFor(i)), leafFor(i)]);
@@ -123,7 +123,7 @@ describe('stateCommitment: cached SMT node reads @regression', function(){
             const smt    = new SC.PersistentSMT(store, opts);
             let root = priorRoot;
             for(let i = 0; i < 6; i++) root = await smt.update(root, keyFor(i), leafFor(i + 500));
-            for(let i = 0; i < 6; i++){                      // the _assertCommittedLeaves descent
+            for(let i = 0; i < 6; i++){                      // the assertCommittedLeaves descent
                 const proof = await smt.prove(root, keyFor(i));
                 assert.strictEqual(proof.leaf_value, leafFor(i + 500), 'the moved leaf must prove under the new root');
             }

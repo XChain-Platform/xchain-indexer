@@ -19,7 +19,7 @@
  * then reassign those ids to whatever the new chain interns.
  *
  * A stale entry is silent and expensive. The touched key gets recorded under the
- * OLD name, getNetBalance matches nothing and returns 0, _leafOrNull maps 0 to
+ * OLD name, getNetBalance matches nothing and returns 0, leafOrNull maps 0 to
  * null, and the commitment DELETES a key that never existed. No error, no log,
  * and the block's balances_root comes out byte-identical to its predecessor's,
  * so the leaf for the real (address, tick) is simply never written.
