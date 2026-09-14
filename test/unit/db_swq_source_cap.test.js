@@ -100,6 +100,13 @@ describe('SWQ source-cap gate + truncation (SWQ-TRUNC-1 liveness) @regression @t
             assert.strictEqual(args[args.length - 1], MAX_KEYS, 'per-source key bound is the last arg');
         });
 
+    });
+});
+
+describe('SWQ source-cap gate + truncation (SWQ-TRUNC-1 liveness) @regression @tier1', function () {
+
+    describe('gate: which query is emitted', function () {
+
         // The control that keeps the helper above honest, built through the SAME helper:
         // an always-empty helper fails the mainnet cases, an always-suffix one fails here.
         // testnet caps from genesis but is not collation-pinned, so it is that venue.
@@ -132,6 +139,9 @@ describe('SWQ source-cap gate + truncation (SWQ-TRUNC-1 liveness) @regression @t
             assert.match(at._calls[0].query, /DENSE_RANK/, 'capped at/after the height');
         });
     });
+});
+
+describe('SWQ source-cap gate + truncation (SWQ-TRUNC-1 liveness) @regression @tier1', function () {
 
     describe('truncation semantics (capped path)', function () {
 
