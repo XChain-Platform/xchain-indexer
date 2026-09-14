@@ -91,7 +91,6 @@ describe('Dispenser action handler @regression @tier2', function () {
     // ─── Format 0: Create Dispenser ───────────────────────────────────────
 
     describe('Format 0 – Create Dispenser', function () {
-
         it('valid dispenser creation calls createDispenser and createDispenserStatus', async function () {
             // FORMAT: 0|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_OWNERSHIP|GIVE_ESCROW|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|FIAT_CODE|FIAT_AMOUNT|ORACLE_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO
             const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OWNER_ADDR}||||${EXPIRATION}|||Creating JDOG dispenser`);
@@ -148,7 +147,9 @@ describe('Dispenser action handler @regression @tier2', function () {
 
             assert.ok(data['STATUS'].includes('insufficient funds'));
         });
+    });
 
+    describe('Format 0 – Create Dispenser', function () {
         // Balance-dispenser GIVE_AMOUNT positivity gate. Empty or "0" GIVE_AMOUNT
         // used to open a dispenser that settled buyer payments as VALID fills
         // crediting nothing and never auto-closed. The gate is genesis-active on
@@ -203,7 +204,9 @@ describe('Dispenser action handler @regression @tier2', function () {
 
             assert.ok(data['STATUS'].includes('EXPIRATION'));
         });
+    });
 
+    describe('Format 0 – Create Dispenser', function () {
         it('GIVE_COIN not matching COIN config returns invalid', async function () {
             const params = makeParams(`0|LTC|JDOG|1||10|BTC||0.01|${OWNER_ADDR}||||${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
@@ -256,7 +259,9 @@ describe('Dispenser action handler @regression @tier2', function () {
 
             assert.ok(data['STATUS'].includes('FIAT_CODE'));
         });
+    });
 
+    describe('Format 0 – Create Dispenser', function () {
         it('pre-existing error short-circuits processing', async function () {
             const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OWNER_ADDR}||||${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
@@ -401,29 +406,28 @@ describe('Dispenser action handler @regression @tier2', function () {
         });
     });
 
+    function makeDispenserInfo(overrides = {}) {
+        return {
+            ACTION_INDEX:     50,
+            SOURCE:           OWNER_ADDR,
+            GET_ADDRESS:      OWNER_ADDR,
+            GIVE_COIN:        'BTC',
+            GIVE_TICK:        'JDOG',
+            GIVE_REMAINING:   '10',
+            GET_COIN:         'BTC',
+            GET_TICK:         null,
+            DISPENSER_STATUS: 'open',
+            EXPIRATION:       EXPIRATION,
+            BLOCK_TIME:       BLOCK_TIME,
+            ALLOW_LIST:       null,
+            BLOCK_LIST:       null,
+            ...overrides,
+        };
+    }
+
     // ─── Format 2: Edit Dispenser ─────────────────────────────────────────
 
     describe('Format 2 – Edit Dispenser', function () {
-
-        function makeDispenserInfo(overrides = {}) {
-            return {
-                ACTION_INDEX:     50,
-                SOURCE:           OWNER_ADDR,
-                GET_ADDRESS:      OWNER_ADDR,
-                GIVE_COIN:        'BTC',
-                GIVE_TICK:        'JDOG',
-                GIVE_REMAINING:   '10',
-                GET_COIN:         'BTC',
-                GET_TICK:         null,
-                DISPENSER_STATUS: 'open',
-                EXPIRATION:       EXPIRATION,
-                BLOCK_TIME:       BLOCK_TIME,
-                ALLOW_LIST:       null,
-                BLOCK_LIST:       null,
-                ...overrides,
-            };
-        }
-
         beforeEach(function () {
             indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo());
         });
@@ -474,6 +478,12 @@ describe('Dispenser action handler @regression @tier2', function () {
 
             assert.ok(data['STATUS'].includes('DISPENSER_ACTION_INDEX'));
         });
+    });
+
+    describe('Format 2 – Edit Dispenser', function () {
+        beforeEach(function () {
+            indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo());
+        });
 
         it('edit escrow deducted when GIVE_ESCROW provided', async function () {
             const params = makeParams(`2|50|20|${EXPIRATION + 86400}|||`);
@@ -491,6 +501,12 @@ describe('Dispenser action handler @regression @tier2', function () {
             await dispenser.parse(params, data, false);
 
             sinon.assert.calledWith(indexer.indexerDb.updateActionIndex, sinon.match.any, 'DISPENSER_EDIT');
+        });
+    });
+
+    describe('Format 2 – Edit Dispenser', function () {
+        beforeEach(function () {
+            indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo());
         });
 
         // ── MAX_REFILLS cap (dispenser_caps_activation.js). A refill is a
@@ -543,6 +559,12 @@ describe('Dispenser action handler @regression @tier2', function () {
 
                 assert.strictEqual(data['STATUS'], 'valid', 'below the flag-day the legacy uncapped behavior must run');
             });
+        });
+    });
+
+    describe('Format 2 – Edit Dispenser', function () {
+        beforeEach(function () {
+            indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo());
         });
 
         // Ownership dispensers hold no balance escrow, on edit as on create.
@@ -635,7 +657,6 @@ describe('Dispenser action handler @regression @tier2', function () {
         //    derives from indexer-local chain state (db.hasXChainActivityBefore); the
         //    external utxo-tracker is NEVER consulted. dispenser_freshness_activation.js.
         describe('local path (freshness flag-day active, regtest genesis)', function () {
-
             it('fresh GET_ADDRESS (no prior XChain activity) is allowed, and the tracker is NOT consulted', async function () {
                 indexer.indexerDb.getAddressPreferences
                     .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
@@ -689,7 +710,9 @@ describe('Dispenser action handler @regression @tier2', function () {
                 assert.strictEqual(data['STATUS'], 'valid');
                 assert.ok(indexer.indexerDb.hasDispenserOriginStanding.calledWith(OWNER_ADDR, OTHER_ADDR, sinon.match.any));
             });
+        });
 
+        describe('local path (freshness flag-day active, regtest genesis)', function () {
             it('non-fresh GET_ADDRESS where a DIFFERENT address holds standing stays invalid', async function () {
                 indexer.indexerDb.getAddressPreferences
                     .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
@@ -726,17 +749,39 @@ describe('Dispenser action handler @regression @tier2', function () {
             });
         });
 
+        function mainnetBelowGateCtx() {
+            actionsCtx.config = Object.assign({}, indexer.config, { NETWORK: 'mainnet', COIN: 'BTC' });
+        }
+
+        // get_first_seen answers the same null for "never appeared" and for "this
+        // tracker has not indexed that far yet / is halted", so a fresh-by-null
+        // verdict computed against a lagging tracker is a false positive with no
+        // trace. These pin the diagnostic that records it, and pin that it stays a
+        // diagnostic: the verdict is replay-frozen and must not move.
+        async function runBelowGateFresh(tracker) {
+            indexer.indexerDb.getAddressPreferences
+                .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
+                .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
+            mainnetBelowGateCtx();
+            actionsCtx.utxoTracker = tracker;
+            dispenser = new Dispenser(actionsCtx);
+
+            const logged = [];
+            sinon.stub(console, 'log').callsFake((...args) => { logged.push(args.join(' ')); });
+
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC', BLOCK_INDEX: 500 });
+            await dispenser.parse(params, data, false);
+
+            return { status: data['STATUS'], stale: logged.filter(l => l.includes('DISPENSER_FRESHNESS_STALE')) };
+        }
+
         // ── BELOW the freshness flag-day: byte-identical legacy behavior. The verdict
         //    comes from the external utxo-tracker getFirstSeen HTTP call and the local
         //    query is NEVER consulted. Modelled with a mainnet-BTC config below 961000
         //    (util keeps its own regtest config, so the regtest test addresses still
         //    validate; only the freshness gate sees mainnet).
         describe('legacy path (below the freshness flag-day: mainnet BTC < 961000)', function () {
-
-            function mainnetBelowGateCtx() {
-                actionsCtx.config = Object.assign({}, indexer.config, { NETWORK: 'mainnet', COIN: 'BTC' });
-            }
-
             it('tracker-fresh GET_ADDRESS is allowed, and the local query is NOT consulted', async function () {
                 indexer.indexerDb.getAddressPreferences
                     .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
@@ -793,30 +838,9 @@ describe('Dispenser action handler @regression @tier2', function () {
 
                 assert.ok(data['STATUS'].includes('GET_ADDRESS') && data['STATUS'].includes('not permitted'));
             });
+        });
 
-            // get_first_seen answers the same null for "never appeared" and for "this
-            // tracker has not indexed that far yet / is halted", so a fresh-by-null
-            // verdict computed against a lagging tracker is a false positive with no
-            // trace. These pin the diagnostic that records it, and pin that it stays a
-            // diagnostic: the verdict is replay-frozen and must not move.
-            async function runBelowGateFresh(tracker) {
-                indexer.indexerDb.getAddressPreferences
-                    .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
-                    .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
-                mainnetBelowGateCtx();
-                actionsCtx.utxoTracker = tracker;
-                dispenser = new Dispenser(actionsCtx);
-
-                const logged = [];
-                sinon.stub(console, 'log').callsFake((...args) => { logged.push(args.join(' ')); });
-
-                const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
-                const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC', BLOCK_INDEX: 500 });
-                await dispenser.parse(params, data, false);
-
-                return { status: data['STATUS'], stale: logged.filter(l => l.includes('DISPENSER_FRESHNESS_STALE')) };
-            }
-
+        describe('legacy path (below the freshness flag-day: mainnet BTC < 961000)', function () {
             const SYNCED   = { tracker_height: 500, node_height: 500, lag: 0, synced: true, mempool_ready: true };
             const LAGGING  = { tracker_height: 10, node_height: 500, lag: 490, synced: false, mempool_ready: false };
             const HALTED   = { tracker_height: 10, node_height: -1, lag: null, synced: false,
@@ -865,7 +889,9 @@ describe('Dispenser action handler @regression @tier2', function () {
                 assert.ok(getFirstSeenStatus.notCalled, 'a non-null answer needs no lag probe');
                 assert.strictEqual(r.stale.length, 0);
             });
+        });
 
+        describe('legacy path (below the freshness flag-day: mainnet BTC < 961000)', function () {
             it('leaves the verdict alone when the probe itself fails or is unsupported', async function () {
                 const thrown = await runBelowGateFresh({
                     enabled: true,
@@ -887,6 +913,37 @@ describe('Dispenser action handler @regression @tier2', function () {
             });
         });
 
+        const shapeGate  = require('../../../src/dispenser_freshness_shape_activation.js');
+        const RealTracker = require('../../../src/chain/utxo_tracker.js');
+        const SHAPE_KEY   = 'BTC:mainnet';
+        const ARMED_AT    = 400;   // below the 961000 freshness height, so the tracker path still runs
+
+        let origShape, origFetch;
+
+        // Drive the real client against a stubbed JSON-RPC reply, so the verdict
+        // travels the deployed path: dispenser -> gate -> UtxoTracker -> fetch.
+        async function runWithTrackerReply(result, blockIndex) {
+            indexer.indexerDb.getAddressPreferences
+                .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
+                .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
+            // If the local query were consulted it would say "has history", so a
+            // 'valid' here can only have come from the tracker answer.
+            indexer.indexerDb.hasXChainActivityBefore.resolves(true);
+
+            actionsCtx.config      = Object.assign({}, indexer.config, { NETWORK: 'mainnet', COIN: 'BTC' });
+            actionsCtx.utxoTracker = new RealTracker('localhost', 3005);
+            dispenser              = new Dispenser(actionsCtx);
+
+            global.fetch = sinon.stub().resolves({
+                ok: true, status: 200, json: async () => ({ jsonrpc: '2.0', id: 1, result }),
+            });
+
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC', BLOCK_INDEX: blockIndex });
+            await dispenser.parse(params, data, false);
+            return data['STATUS'];
+        }
+
         // ── The ORACLE-SHAPE flag-day, driven end to end through the real tracker
         //    client (src/dispenser_freshness_shape_activation.js). A non-null
         //    get_first_seen answer with no numeric height read as "never appeared on
@@ -898,14 +955,6 @@ describe('Dispenser action handler @regression @tier2', function () {
         //    modelled on mainnet BTC with the shape gate armed there for the duration
         //    of the case (mainnet ships UNARMED, which its own suite pins).
         describe('oracle-shape flag-day (malformed tracker reply must not grant freshness)', function () {
-
-            const shapeGate  = require('../../../src/dispenser_freshness_shape_activation.js');
-            const RealTracker = require('../../../src/chain/utxo_tracker.js');
-            const SHAPE_KEY   = 'BTC:mainnet';
-            const ARMED_AT    = 400;   // below the 961000 freshness height, so the tracker path still runs
-
-            let origShape, origFetch;
-
             beforeEach(function () {
                 origShape = Object.getOwnPropertyDescriptor(shapeGate.DISPENSER_FRESHNESS_SHAPE_ACTIVATION, SHAPE_KEY);
                 origFetch = global.fetch;
@@ -915,30 +964,6 @@ describe('Dispenser action handler @regression @tier2', function () {
                 Object.defineProperty(shapeGate.DISPENSER_FRESHNESS_SHAPE_ACTIVATION, SHAPE_KEY, origShape);
                 global.fetch = origFetch;
             });
-
-            // Drive the real client against a stubbed JSON-RPC reply, so the verdict
-            // travels the deployed path: dispenser -> gate -> UtxoTracker -> fetch.
-            async function runWithTrackerReply(result, blockIndex) {
-                indexer.indexerDb.getAddressPreferences
-                    .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
-                    .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
-                // If the local query were consulted it would say "has history", so a
-                // 'valid' here can only have come from the tracker answer.
-                indexer.indexerDb.hasXChainActivityBefore.resolves(true);
-
-                actionsCtx.config      = Object.assign({}, indexer.config, { NETWORK: 'mainnet', COIN: 'BTC' });
-                actionsCtx.utxoTracker = new RealTracker('localhost', 3005);
-                dispenser              = new Dispenser(actionsCtx);
-
-                global.fetch = sinon.stub().resolves({
-                    ok: true, status: 200, json: async () => ({ jsonrpc: '2.0', id: 1, result }),
-                });
-
-                const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
-                const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC', BLOCK_INDEX: blockIndex });
-                await dispenser.parse(params, data, false);
-                return data['STATUS'];
-            }
 
             const MALFORMED = [
                 ['a stringly-typed height',   { height: '100' }],
@@ -963,6 +988,18 @@ describe('Dispenser action handler @regression @tier2', function () {
                         'below the flag day the fail-open null is the replay-frozen verdict');
                 });
             }
+        });
+
+        describe('oracle-shape flag-day (malformed tracker reply must not grant freshness)', function () {
+            beforeEach(function () {
+                origShape = Object.getOwnPropertyDescriptor(shapeGate.DISPENSER_FRESHNESS_SHAPE_ACTIVATION, SHAPE_KEY);
+                origFetch = global.fetch;
+            });
+
+            afterEach(function () {
+                Object.defineProperty(shapeGate.DISPENSER_FRESHNESS_SHAPE_ACTIVATION, SHAPE_KEY, origShape);
+                global.fetch = origFetch;
+            });
 
             it('with mainnet UNARMED (as shipped) the malformed reply still grants freshness', async function () {
                 // The posture the fleet deploys with: registering the gate moves no
@@ -1100,7 +1137,6 @@ describe('Dispenser action handler @regression @tier2', function () {
     // ─── Native coin fee payment paths (lines 354-371) ───────────────────
 
     describe('Native coin fee payment path', function () {
-
         it('valid native coin fee sets PAYMENT_MODE=1', async function () {
             sinon.stub(indexer.util, 'detectFeePaymentMode').returns('native');
             sinon.stub(indexer.util, 'validateNativeCoinFee').resolves({
@@ -1146,7 +1182,9 @@ describe('Dispenser action handler @regression @tier2', function () {
 
             assert.ok(data['STATUS'].includes('insufficient fee'));
         });
+    });
 
+    describe('Native coin fee payment path', function () {
         it('insufficient xchain fee balance returns error', async function () {
             sinon.stub(indexer.util, 'detectFeePaymentMode').returns('xchain');
             sinon.stub(indexer.util, 'getUnifiedExpirationFee').returns({ gasCost: 100, fee: '9999999' });
@@ -1163,6 +1201,15 @@ describe('Dispenser action handler @regression @tier2', function () {
         });
     });
 
+    const ORACLE_ADDR = OTHER_ADDR;   // any valid address that is not the opener
+
+    function modeBParams(escrow = '1000') {
+        return makeParams(
+            `0|BTC|JDOG|1||${escrow}|BTC||0|${OWNER_ADDR}|USD||${ORACLE_ADDR}|${EXPIRATION}|||Mode B`);
+    }
+    const modeBData = () => createBaseData(
+        { ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
     // Counterparty parity. A Mode B dispenser (ORACLE_ADDRESS set) pays the
     // oracle operator UP FRONT as a real native-coin output, charged to the address
     // opening it. These pin the wiring: that the charge fires only for Mode B, only
@@ -1170,15 +1217,6 @@ describe('Dispenser action handler @regression @tier2', function () {
     // the output is missing. The fee arithmetic and every branch of the check itself
     // are covered in utility.computeOracleFee / utility.validateOracleFee tests.
     describe('Format 0 - oracle usage fee', function () {
-        const ORACLE_ADDR = OTHER_ADDR;   // any valid address that is not the opener
-
-        function modeBParams(escrow = '1000') {
-            return makeParams(
-                `0|BTC|JDOG|1||${escrow}|BTC||0|${OWNER_ADDR}|USD||${ORACLE_ADDR}|${EXPIRATION}|||Mode B`);
-        }
-        const modeBData = () => createBaseData(
-            { ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
-
         it('rejects the create when the oracle fee output is missing', async function () {
             indexer.indexerDb.getOraclePrice = sinon.stub().resolves({ value: '0.05', fee: '0.01' });
             indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000' }]);
@@ -1229,7 +1267,9 @@ describe('Dispenser action handler @regression @tier2', function () {
             assert.strictEqual(data['STATUS'], 'valid');
             sinon.assert.notCalled(getOraclePrice);
         });
+    });
 
+    describe('Format 0 - oracle usage fee', function () {
         it('does not charge below the activation gate', async function () {
             actionsCtx.protocolChanges.isEnabled
                 .withArgs('FIAT_DISPENSER_PRICING', sinon.match.any).resolves(false);

@@ -49,7 +49,6 @@ describe('Dividend @regression @tier2', function () {
     // ─── Valid dividend ───────────────────────────────────────────────
 
     describe('valid dividend', function () {
-
         it('valid dividend: createDividend called with valid status', async function () {
             const tokenInfo     = createTokenInfo({ TICK: 'TEST',   TICK_ID: 1, DECIMALS: 0 });
             const divTokenInfo  = createTokenInfo({ TICK: 'DIVTOK', TICK_ID: 2, DECIMALS: 0, ALLOW_LIST: null, BLOCK_LIST: null });
@@ -91,7 +90,9 @@ describe('Dividend @regression @tier2', function () {
 
             assert.strictEqual(data['STATUS'], 'valid');
         });
+    });
 
+    describe('valid dividend', function () {
         it('source address excluded from holder recipient list', async function () {
             const tokenInfo    = createTokenInfo({ TICK: 'TEST',   TICK_ID: 1, DECIMALS: 0 });
             const divTokenInfo = createTokenInfo({ TICK: 'DIVTOK', TICK_ID: 2, DECIMALS: 0, ALLOW_LIST: null, BLOCK_LIST: null });
@@ -203,10 +204,33 @@ describe('Dividend @regression @tier2', function () {
 
     });
 
+    // The three cases below pin the membership semantics against the Set-backed
+    // membership probe. A configured-but-empty ALLOW_LIST admitting everyone is the
+    // load-bearing one: AIRDROP gates on list existence and would admit nobody here.
+    async function runWithList(listIds, listMembers, holders) {
+        const tokenInfo    = createTokenInfo({ TICK: 'TEST',   TICK_ID: 1, DECIMALS: 0 });
+        const divTokenInfo = createTokenInfo({ TICK: 'DIVTOK', TICK_ID: 2, DECIMALS: 0, ...listIds });
+
+        indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(tokenInfo);
+        indexer.indexerDb.getTokenInfo.withArgs('DIVTOK').resolves(divTokenInfo);
+        indexer.indexerDb.getList.resolves(listMembers);
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1', 2: '1000' });
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.getHolders.resolves(holders);
+        indexer.indexerDb.isActionAllowed.resolves(true);
+
+        const data   = createBaseData({ ACTION: 'DIVIDEND', FORMAT: 0, SOURCE });
+        const params = ['0', 'TEST', 'DIVTOK', '1', null];
+
+        await handler.parse(params, data, null);
+
+        assert.ok(indexer.indexerDb.createDividend.called);
+        return String(indexer.indexerDb.createDividend.args[0][0]['DEBIT']);
+    }
+
     // ─── Allow/block list filtering ───────────────────────────────────
 
     describe('allow/block list filtering', function () {
-
         it('holders on block list are excluded from recipients', async function () {
             const tokenInfo    = createTokenInfo({ TICK: 'TEST',   TICK_ID: 1, DECIMALS: 0 });
             const divTokenInfo = createTokenInfo({ TICK: 'DIVTOK', TICK_ID: 2, DECIMALS: 0, ALLOW_LIST: null, BLOCK_LIST: 5 });
@@ -229,30 +253,6 @@ describe('Dividend @regression @tier2', function () {
             assert.strictEqual(data['STATUS'], 'valid');
         });
 
-        // The three cases below pin the membership semantics against the Set-backed
-        // membership probe. A configured-but-empty ALLOW_LIST admitting everyone is the
-        // load-bearing one: AIRDROP gates on list existence and would admit nobody here.
-        async function runWithList(listIds, listMembers, holders) {
-            const tokenInfo    = createTokenInfo({ TICK: 'TEST',   TICK_ID: 1, DECIMALS: 0 });
-            const divTokenInfo = createTokenInfo({ TICK: 'DIVTOK', TICK_ID: 2, DECIMALS: 0, ...listIds });
-
-            indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(tokenInfo);
-            indexer.indexerDb.getTokenInfo.withArgs('DIVTOK').resolves(divTokenInfo);
-            indexer.indexerDb.getList.resolves(listMembers);
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '1', 2: '1000' });
-            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            indexer.indexerDb.getHolders.resolves(holders);
-            indexer.indexerDb.isActionAllowed.resolves(true);
-
-            const data   = createBaseData({ ACTION: 'DIVIDEND', FORMAT: 0, SOURCE });
-            const params = ['0', 'TEST', 'DIVTOK', '1', null];
-
-            await handler.parse(params, data, null);
-
-            assert.ok(indexer.indexerDb.createDividend.called);
-            return String(indexer.indexerDb.createDividend.args[0][0]['DEBIT']);
-        }
-
         it('ALLOW_LIST set but resolving empty still admits every holder', async function () {
             const debit = await runWithList(
                 { ALLOW_LIST: 5, BLOCK_LIST: null },
@@ -270,7 +270,9 @@ describe('Dividend @regression @tier2', function () {
             );
             assert.strictEqual(debit, '10');
         });
+    });
 
+    describe('allow/block list filtering', function () {
         it('non-empty BLOCK_LIST excludes listed holders from the DEBIT', async function () {
             const debit = await runWithList(
                 { ALLOW_LIST: null, BLOCK_LIST: 5 },

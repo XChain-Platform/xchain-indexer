@@ -31,9 +31,9 @@ const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const DEST1  = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs';
 const DEST2  = 'n2j7X44Gm6P4E9cs2H13EkBAotYbjPZW17';
 
-describe('Send isActionAllowed memoization @regression', function () {
-    let indexer, actionsCtx, handler;
+let indexer, actionsCtx, handler;
 
+describe('Send isActionAllowed memoization @regression', function () {
     beforeEach(function () {
         indexer    = createMockIndexer();
         actionsCtx = {
@@ -79,6 +79,30 @@ describe('Send isActionAllowed memoization @regression', function () {
         const destAddrs  = new Set(destChecks.map(c => c.args[0]));
         assert.deepStrictEqual([...destAddrs].sort(), [DEST1, DEST2].sort(), 'per-recipient DESTINATION gate still runs for each leg');
     });
+});
+
+describe('Send isActionAllowed memoization @regression', function () {
+    beforeEach(function () {
+        indexer    = createMockIndexer();
+        actionsCtx = {
+            config:          indexer.config,
+            util:            indexer.util,
+            mapper:          indexer.mapper,
+            decoderDb:       indexer.decoderDb,
+            indexerDb:       indexer.indexerDb,
+            protocolChanges: { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) },
+            processAction:   sinon.stub().resolves(),
+        };
+        handler = new Send(actionsCtx);
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 }));
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.getAddressBalances.resolves({ 1: 100000 });
+        indexer.indexerDb.findMatchingDispensers.resolves([]);
+        indexer.indexerDb.findDispenserSends.resolves([]);
+    });
+
+    afterEach(() => sinon.restore());
 
     it('sleeping SOURCE still rejects every leg (hoist did not drop the gate)', async function () {
         indexer.indexerDb.isActionAllowed.callsFake(async (addr, tick /*, block*/) => {

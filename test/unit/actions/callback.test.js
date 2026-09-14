@@ -75,7 +75,6 @@ describe('Callback @regression @tier3', function () {
     // ─── Valid path ───────────────────────────────────────────────────
 
     describe('valid callback', function () {
-
         it('owner can callback: createCallback called with valid status', async function () {
             const tokenInfo   = makeTokenInfo();
             const cbTokenInfo = makeCallbackTokenInfo();
@@ -117,7 +116,9 @@ describe('Callback @regression @tier3', function () {
             assert.strictEqual(data['STATUS'], 'valid');
             assert.ok(indexer.indexerDb.updateBalances.called);
         });
+    });
 
+    describe('valid callback', function () {
         it('source not in holders: no debit for source', async function () {
             const tokenInfo   = makeTokenInfo();
             const cbTokenInfo = makeCallbackTokenInfo();
@@ -389,25 +390,24 @@ describe('Callback @regression @tier3', function () {
         });
     });
 
+    function setup(tokenOverrides = {}, cbOverrides = {}) {
+        indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(makeTokenInfo(tokenOverrides));
+        indexer.indexerDb.getTokenInfo.withArgs('CBTEST').resolves(makeCallbackTokenInfo(cbOverrides));
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1', 2: '100' });
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.getHolders.resolves({ [HOLDER1]: '10', [HOLDER2]: '20' });
+        indexer.indexerDb.getList.resolves([]);
+        indexer.indexerDb.isActionAllowed.resolves(true);
+    }
+
+    async function run(params, dataOverrides = {}) {
+        const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE: OWNER, BLOCK_INDEX: 100, ...dataOverrides });
+        await handler.parse(params, data, null);
+        return data;
+    }
+
     // ─── Validation guards (each rejects with its specific reason) ────────
     describe('validation guards', function () {
-
-        function setup(tokenOverrides = {}, cbOverrides = {}) {
-            indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(makeTokenInfo(tokenOverrides));
-            indexer.indexerDb.getTokenInfo.withArgs('CBTEST').resolves(makeCallbackTokenInfo(cbOverrides));
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '1', 2: '100' });
-            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            indexer.indexerDb.getHolders.resolves({ [HOLDER1]: '10', [HOLDER2]: '20' });
-            indexer.indexerDb.getList.resolves([]);
-            indexer.indexerDb.isActionAllowed.resolves(true);
-        }
-
-        async function run(params, dataOverrides = {}) {
-            const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE: OWNER, BLOCK_INDEX: 100, ...dataOverrides });
-            await handler.parse(params, data, null);
-            return data;
-        }
-
         it('rejects when LOCK_CALLBACK is set', async function () {
             setup({ LOCK_CALLBACK: 1 });
             const data = await run(['0', 'TEST', null]);
@@ -465,7 +465,9 @@ describe('Callback @regression @tier3', function () {
             const data = await run(['0', 'TEST', 'a|b']);
             assert.strictEqual(data['STATUS'], 'invalid: MEMO (pipe)');
         });
+    });
 
+    describe('validation guards', function () {
         it('rejects a MEMO containing a semicolon', async function () {
             setup();
             const data = await run(['0', 'TEST', 'a;b']);

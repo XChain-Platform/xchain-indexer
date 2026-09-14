@@ -98,7 +98,6 @@ function storedRows(encoded, author, firstActionIndex) {
 }
 
 describe('ATTEST batch chunk read: the publisher partition and its row limit (row 59) @regression', function () {
-
     afterEach(function () { sinon.restore(); });
 
     it('carries no author term and no limit when nothing is scoped, the legacy shape', async function () {
@@ -146,6 +145,10 @@ describe('ATTEST batch chunk read: the publisher partition and its row limit (ro
             'legal batch needs, so an honest publisher\'s own chunk set would be truncated ' +
             'and its window denied');
     });
+});
+
+describe('ATTEST batch chunk read: the publisher partition and its row limit (row 59) @regression', function () {
+    afterEach(function () { sinon.restore(); });
 
     it('is bounded at the PARSER ceiling, not at the encoder\'s habits @regression', function () {
         // The case above measures the bound against what the CODEC emits. That is the

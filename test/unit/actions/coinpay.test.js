@@ -182,7 +182,6 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
     // ─── Valid settlement ─────────────────────────────────────────────────
 
     describe('valid settlement', function () {
-
         it('valid coinpay → createCoinpay called with valid status', async function () {
             const data = createBaseData({
                 ACTION: 'COINPAY', FORMAT: 0,
@@ -239,7 +238,9 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
             assert.ok(indexer.indexerDb.updateBalances.calledOnce);
             assert.ok(indexer.indexerDb.updateTokens.calledOnce);
         });
+    });
 
+    describe('valid settlement', function () {
         it('valid coinpay → mapper.createMappings called', async function () {
             const data = createBaseData({
                 ACTION: 'COINPAY', FORMAT: 0,
@@ -286,7 +287,6 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
     // ─── Seller order finalisation ────────────────────────────────────────
 
     describe('seller order transition states', function () {
-
         it('finalises a cancelling seller order when no more obligations remain', async function () {
             // Seller order in 'cancelling' state with remaining balance
             const cancellingOrder = makeOrderInfo({ ORDER_STATUS: 'cancelling', GIVE_REMAINING: '10' });
@@ -340,7 +340,9 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
                 .find(c => c.args[2] === 'expired');
             assert.ok(expiredCall, 'expiring seller order should be marked expired when no obligations remain');
         });
+    });
 
+    describe('seller order transition states', function () {
         it('sweep destination used for refund when cancelling seller has one', async function () {
             const SWEEP_DEST = '1SweepDestXXXXXXXXXXXXXXXXXXXXabc123';
             const cancellingOrder = makeOrderInfo({ ORDER_STATUS: 'cancelling', GIVE_REMAINING: '20' });
@@ -424,7 +426,6 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
     // ─── Seller/coin order role determination ────────────────────────────────
 
     describe('seller vs coin order role determination', function () {
-
         it('giveOrderInfo GIVE_TICK is a real token (not null/COIN) → giveOrder is seller, getOrder is coin', async function () {
             // giveOrderInfo has GIVE_TICK='TEST' (a real token): falls through to the else branch
             // (lines 136-138): coinOrder=getOrderInfo, sellerOrder=giveOrderInfo
@@ -480,7 +481,9 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
             assert.ok(indexer.indexerDb.createCoinpayStatus.notCalled, 'ambiguous match must not be settled');
             assert.ok(indexer.indexerDb.createEscrow.notCalled, 'no escrow release on an ambiguous match');
         });
+    });
 
+    describe('seller vs coin order role determination', function () {
         it('LEGACY (flag OFF): both-token shape falls through to the pre-flag-day single-side split', async function () {
             actionsCtx.protocolChanges.isEnabled = sinon.stub().resolves(false);
 

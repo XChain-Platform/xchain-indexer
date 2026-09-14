@@ -46,7 +46,6 @@ describe('Airdrop @regression @tier2', function () {
     // ─── Format 0 (Single Airdrop) ───────────────────────────────────
 
     describe('format 0: single airdrop', function () {
-
         it('valid airdrop to address list creates airdrop record', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0, SUPPLY: '500' });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
@@ -102,7 +101,9 @@ describe('Airdrop @regression @tier2', function () {
 
             assert.ok(data['STATUS'].includes('invalid'));
         });
+    });
 
+    describe('format 0: single airdrop', function () {
         it('LIST_ACTION_INDEX invalid (type===false) → invalid', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
@@ -159,7 +160,9 @@ describe('Airdrop @regression @tier2', function () {
 
             assert.ok(data['STATUS'].includes('invalid'));
         });
+    });
 
+    describe('format 0: single airdrop', function () {
         it('pre-existing error passed through → createAirdrop still called', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
@@ -249,7 +252,6 @@ describe('Airdrop @regression @tier2', function () {
     // ─── Balance & Authorization edge cases ──────────────────────────
 
     describe('balance and authorization checks', function () {
-
         it('SOURCE sleeping → invalid', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
@@ -291,7 +293,9 @@ describe('Airdrop @regression @tier2', function () {
 
             assert.ok(data['STATUS'].includes('invalid'));
         });
+    });
 
+    describe('balance and authorization checks', function () {
         it('updateBalances and updateTokens called after parse', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
@@ -416,7 +420,6 @@ describe('Airdrop @regression @tier2', function () {
     // ─── Additional validation branches ──────────────────────────────
 
     describe('additional validation branches', function () {
-
         it('invalid AMOUNT format → STATUS invalid: AMOUNT (format)', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
@@ -469,7 +472,9 @@ describe('Airdrop @regression @tier2', function () {
 
             assert.strictEqual(data['STATUS'], 'invalid: MEMO (semicolon)');
         });
+    });
 
+    describe('additional validation branches', function () {
         it('MEMO exceeding MAX_MEMO_LENGTH → STATUS invalid: MEMO (length)', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
@@ -526,7 +531,9 @@ describe('Airdrop @regression @tier2', function () {
 
             assert.strictEqual(data['STATUS'], 'invalid: SOURCE (not authorized)');
         });
+    });
 
+    describe('additional validation branches', function () {
         it('XCHAIN fee balance insufficient → STATUS invalid: insufficient funds (FEE)', async function () {
             // Use UNIFIED_FEES=false so we compute a real fee amount. Supply a tick balance
             // but no XCHAIN balance so the fee check fails.
@@ -558,22 +565,21 @@ describe('Airdrop @regression @tier2', function () {
 
     });
 
+    // Helper: build a valid airdrop scenario with a non-zero fee so we enter the fee gate.
+    // Uses UNIFIED_FEES=false so we hit the legacy db_hits path (lines 273-277).
+    function setupFeeScenario() {
+        const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0, SUPPLY: '1000000' });
+        indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
+        indexer.indexerDb.getListType.resolves(2);
+        indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '999999' });
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.isActionAllowed.resolves(true);
+    }
+
     // ─── Fee payment mode branches ────────────────────────────────────
 
     describe('fee payment mode branches', function () {
-
-        // Helper: build a valid airdrop scenario with a non-zero fee so we enter the fee gate.
-        // Uses UNIFIED_FEES=false so we hit the legacy db_hits path (lines 273-277).
-        function setupFeeScenario() {
-            const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0, SUPPLY: '1000000' });
-            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
-            indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '999999' });
-            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            indexer.indexerDb.isActionAllowed.resolves(true);
-        }
-
         it('legacy fee path (UNIFIED_FEES=false): getTransactionFee called and fee computed', async function () {
             // Make isEnabled return false so the legacy db_hits branch (lines 273-277) runs
             actionsCtx.protocolChanges.isEnabled.resolves(false);
@@ -615,7 +621,9 @@ describe('Airdrop @regression @tier2', function () {
             assert.strictEqual(data['STATUS'], 'valid');
             assert.ok(indexer.indexerDb.createAirdrop.called);
         });
+    });
 
+    describe('fee payment mode branches', function () {
         it('native coin fee payment mode: invalid validation causes STATUS to start with invalid', async function () {
             actionsCtx.protocolChanges.isEnabled.resolves(false);
             setupFeeScenario();
@@ -651,59 +659,58 @@ describe('Airdrop @regression @tier2', function () {
 
     });
 
+    const ADDR_A = 'mmqFL1hiu2RDuyS69KS9ko6uaMryhANwsz';
+    const ADDR_B = 'mk7MdP3qzVkgyjaYNR2sUY8Ggn4DWxt2KS';
+    const ADDR_C = 'mr5CBpzjw2QLYwCZEBYMxbrPcS7pwLSDwF';
+
+    const ALLOW_LIST_INDEX = 50;
+    const BLOCK_LIST_INDEX = 51;
+    const RECIPIENT_LIST_INDEX = 1;
+
+    // Wires an ADDRESS-type recipient list plus optional allow/block lists, each
+    // served from its own action index, and returns a spy over the ledger-changes
+    // call so a test can read the credits array the recipient loop produced.
+    function setupLists({ recipients, allowList = null, blockList = null }) {
+        const tokenInfo = createTokenInfo({
+            TICK: 'TEST',
+            TICK_ID: 1,
+            DECIMALS: 0,
+            SUPPLY: '100000',
+            ALLOW_LIST: (allowList === null) ? null : ALLOW_LIST_INDEX,
+            BLOCK_LIST: (blockList === null) ? null : BLOCK_LIST_INDEX,
+        });
+        indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
+        indexer.indexerDb.getListType.resolves(2);
+        indexer.indexerDb.getList.callsFake((actionIndex) => {
+            if(Number(actionIndex) === ALLOW_LIST_INDEX) return Promise.resolve(allowList || []);
+            if(Number(actionIndex) === BLOCK_LIST_INDEX) return Promise.resolve(blockList || []);
+            return Promise.resolve(recipients);
+        });
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '100000' });
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        return sinon.spy(indexer.util, 'processTransactionLedgerChanges');
+    }
+
+    // The credits array also carries fee credits; only the airdropped TICK's rows
+    // reflect the recipient loop.
+    function creditedAddresses(spy) {
+        assert.ok(spy.called, 'processTransactionLedgerChanges should be called');
+        const credits = spy.lastCall.args[2] || [];
+        return credits.filter(c => c[0] === 'TEST').map(c => c[2]);
+    }
+
+    async function runAirdrop() {
+        const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 0 });
+        await handler.parse(['0', 'TEST', '10', String(RECIPIENT_LIST_INDEX), null], data, null);
+        return data;
+    }
+
     // the recipient allow/block gates are Set membership probes, not array
     // scans. These pin the observable behaviour the conversion must not move: which
     // addresses survive the gates, and the order the surviving credits are built in
     // (recipient iteration order, never the list's own order).
     describe('recipient allow/block list membership', function () {
-
-        const ADDR_A = 'mmqFL1hiu2RDuyS69KS9ko6uaMryhANwsz';
-        const ADDR_B = 'mk7MdP3qzVkgyjaYNR2sUY8Ggn4DWxt2KS';
-        const ADDR_C = 'mr5CBpzjw2QLYwCZEBYMxbrPcS7pwLSDwF';
-
-        const ALLOW_LIST_INDEX = 50;
-        const BLOCK_LIST_INDEX = 51;
-        const RECIPIENT_LIST_INDEX = 1;
-
-        // Wires an ADDRESS-type recipient list plus optional allow/block lists, each
-        // served from its own action index, and returns a spy over the ledger-changes
-        // call so a test can read the credits array the recipient loop produced.
-        function setupLists({ recipients, allowList = null, blockList = null }) {
-            const tokenInfo = createTokenInfo({
-                TICK: 'TEST',
-                TICK_ID: 1,
-                DECIMALS: 0,
-                SUPPLY: '100000',
-                ALLOW_LIST: (allowList === null) ? null : ALLOW_LIST_INDEX,
-                BLOCK_LIST: (blockList === null) ? null : BLOCK_LIST_INDEX,
-            });
-            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
-            indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.callsFake((actionIndex) => {
-                if(Number(actionIndex) === ALLOW_LIST_INDEX) return Promise.resolve(allowList || []);
-                if(Number(actionIndex) === BLOCK_LIST_INDEX) return Promise.resolve(blockList || []);
-                return Promise.resolve(recipients);
-            });
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '100000' });
-            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            indexer.indexerDb.isActionAllowed.resolves(true);
-            return sinon.spy(indexer.util, 'processTransactionLedgerChanges');
-        }
-
-        // The credits array also carries fee credits; only the airdropped TICK's rows
-        // reflect the recipient loop.
-        function creditedAddresses(spy) {
-            assert.ok(spy.called, 'processTransactionLedgerChanges should be called');
-            const credits = spy.lastCall.args[2] || [];
-            return credits.filter(c => c[0] === 'TEST').map(c => c[2]);
-        }
-
-        async function runAirdrop() {
-            const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 0 });
-            await handler.parse(['0', 'TEST', '10', String(RECIPIENT_LIST_INDEX), null], data, null);
-            return data;
-        }
-
         it('ALLOW_LIST credits only listed recipients', async function () {
             const spy = setupLists({ recipients: [ADDR_A, ADDR_B, ADDR_C], allowList: [ADDR_B, ADDR_C] });
 
@@ -755,7 +762,9 @@ describe('Airdrop @regression @tier2', function () {
 
             assert.deepStrictEqual(creditedAddresses(spy), [ADDR_A, ADDR_B, ADDR_C]);
         });
+    });
 
+    describe('recipient allow/block list membership', function () {
         it('duplicate recipients are credited once, in first-seen order', async function () {
             const spy = setupLists({ recipients: [ADDR_B, ADDR_A, ADDR_B], allowList: [ADDR_A, ADDR_B] });
 

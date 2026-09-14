@@ -42,50 +42,71 @@ const { getTestConfig } = require('../../fixtures/config');
 const Execute = require('../../../src/actions/execute/index.js');
 const gate    = require('../../../src/slash_ledger_consolidation_activation.js');
 
+const SOURCE   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+const CONTRACT = 5;
+const PUBKEY_A = 'a'.repeat(64);
+const PUBKEY_B = 'b'.repeat(64);
+const DEST     = '1SlashDestXXXXXXXXXXXXXXXXXXXXX';
+
+// `network` picks the gate state: regtest and mainnet are armed at genesis (mainnet by
+// the 2026-09-09 ruling), testnet is unpinned and therefore inert, which is what makes
+// the legacy cases below reachable at all.
+function makeHandler(network) {
+    const config = Object.assign({}, getTestConfig(), { NETWORK: network, COIN: 'BTC' });
+    config['GAS_PRICE'] = '0';
+    const indexer = createMockIndexer({ config });
+    const db = indexer.indexerDb;
+    db.getContract      = sinon.stub().resolves({ slash_destination_id: 42 });
+    db.getPubkeyId      = sinon.stub().callsFake(async (pk) => (pk === PUBKEY_A ? 7 : 8));
+    db.getTickerId      = sinon.stub().resolves(3);
+    db.doQuery          = sinon.stub().resolves([{ address: DEST }]);
+    // Real db method over the stubbed doQuery: the destination still resolves through
+    // index_addresses rather than being handed to the handler directly.
+    db.util             = db.util || indexer.util;
+    db.getAddressById   = require('../../../src/db/index_tables').getAddressById.bind(db);
+    db.createCredit     = sinon.stub().resolves();
+    db.createEscrow     = sinon.stub().resolves();
+    db.createSlashEvent = sinon.stub().resolves();
+    const handler = new Execute({
+        config, util: indexer.util, mapper: indexer.mapper,
+        decoderDb: indexer.decoderDb, indexerDb: db,
+        protocolChanges: indexer.protocolChanges
+    });
+    return { handler, db };
+}
+
+function slashEmission(pubkey) {
+    return { action: 'SLASH', params: { contractIndex: CONTRACT, pubkey, token: 'STK', amount: '0' } };
+}
+
+function slashData() {
+    return createBaseData({ ACTION: 'EXECUTE', FORMAT: 0, SOURCE,
+        CONTRACT_ACTION_INDEX: CONTRACT, ACTION_INDEX: 99, BLOCK_INDEX: 200 });
+}
+
+// Two spellings of ONE token in one EXECUTE. getTickerId resolves both to
+// the same tick_id, and createLedgerChangeRecord collides on tick_id, so
+// the running total must merge them. Keying the buckets on the raw wire
+// spelling gave each spelling its own bucket, each total came out short,
+// and the later write erased the earlier row exactly as in the legacy case.
+async function mixedCaseSlashes(network) {
+    const { handler, db } = makeHandler(network);
+    db.slashContractStake = sinon.stub()
+        .onFirstCall().resolves({ total: '10', releases: [{ address: 'ownerX', amount: '10' }] })
+        .onSecondCall().resolves({ total: '20', releases: [{ address: 'ownerX', amount: '20' }] });
+    const ledger = { credits: new Map(), escrows: new Map() };
+    const upper = slashEmission(PUBKEY_A);
+    const lower = slashEmission(PUBKEY_B);
+    lower.params.token = 'stk';
+    await handler.processSlashEmission(upper, slashData(), 0, ledger);
+    await handler.processSlashEmission(lower, slashData(), 1, ledger);
+    return {
+        credits: db.createCredit.getCalls().map(c => String(c.args[2])),
+        escrows: db.createEscrow.getCalls().map(c => String(c.args[2]))
+    };
+}
+
 describe('Execute._processSlashEmission multi-slash ledger conservation @regression @tier1', function () {
-
-    const SOURCE   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
-    const CONTRACT = 5;
-    const PUBKEY_A = 'a'.repeat(64);
-    const PUBKEY_B = 'b'.repeat(64);
-    const DEST     = '1SlashDestXXXXXXXXXXXXXXXXXXXXX';
-
-    // `network` picks the gate state: regtest and mainnet are armed at genesis (mainnet by
-    // the 2026-09-09 ruling), testnet is unpinned and therefore inert, which is what makes
-    // the legacy cases below reachable at all.
-    function makeHandler(network) {
-        const config = Object.assign({}, getTestConfig(), { NETWORK: network, COIN: 'BTC' });
-        config['GAS_PRICE'] = '0';
-        const indexer = createMockIndexer({ config });
-        const db = indexer.indexerDb;
-        db.getContract      = sinon.stub().resolves({ slash_destination_id: 42 });
-        db.getPubkeyId      = sinon.stub().callsFake(async (pk) => (pk === PUBKEY_A ? 7 : 8));
-        db.getTickerId      = sinon.stub().resolves(3);
-        db.doQuery          = sinon.stub().resolves([{ address: DEST }]);
-        // Real db method over the stubbed doQuery: the destination still resolves through
-        // index_addresses rather than being handed to the handler directly.
-        db.util             = db.util || indexer.util;
-        db.getAddressById   = require('../../../src/db/index_tables').getAddressById.bind(db);
-        db.createCredit     = sinon.stub().resolves();
-        db.createEscrow     = sinon.stub().resolves();
-        db.createSlashEvent = sinon.stub().resolves();
-        const handler = new Execute({
-            config, util: indexer.util, mapper: indexer.mapper,
-            decoderDb: indexer.decoderDb, indexerDb: db,
-            protocolChanges: indexer.protocolChanges
-        });
-        return { handler, db };
-    }
-
-    function slashEmission(pubkey) {
-        return { action: 'SLASH', params: { contractIndex: CONTRACT, pubkey, token: 'STK', amount: '0' } };
-    }
-
-    function slashData() {
-        return createBaseData({ ACTION: 'EXECUTE', FORMAT: 0, SOURCE,
-            CONTRACT_ACTION_INDEX: CONTRACT, ACTION_INDEX: 99, BLOCK_INDEX: 200 });
-    }
-
     afterEach(function () { sinon.restore(); });
 
     it('gate is armed on regtest and on mainnet at genesis by the 2026-09-09 ruling, inert on testnet', function () {
@@ -93,6 +114,10 @@ describe('Execute._processSlashEmission multi-slash ledger conservation @regress
         assert.strictEqual(gate.isSlashLedgerConsolidationActive(9e9, 'mainnet', 'BTC'), true);
         assert.strictEqual(gate.isSlashLedgerConsolidationActive(9e9, 'testnet', 'BTC'), false);
     });
+});
+
+describe('Execute._processSlashEmission multi-slash ledger conservation @regression @tier1', function () {
+    afterEach(function () { sinon.restore(); });
 
     // Two owners, one token, one EXECUTE. Both credits land on (99, DEST, STK).
     async function twoOwnerSlashes(network) {
@@ -126,6 +151,10 @@ describe('Execute._processSlashEmission multi-slash ledger conservation @regress
         // Per-slash granularity must stay in slash_events, untouched by the consolidation.
         assert.deepStrictEqual(out.events, ['10', '20']);
     });
+});
+
+describe('Execute._processSlashEmission multi-slash ledger conservation @regression @tier1', function () {
+    afterEach(function () { sinon.restore(); });
 
     // Two slashes against the SAME owner: the escrow releases collide as well as the credits.
     async function sameOwnerSlashes(network) {
@@ -154,28 +183,6 @@ describe('Execute._processSlashEmission multi-slash ledger conservation @regress
         assert.deepStrictEqual(out.escrows, ['-10', '-15']);
     });
 
-    // Two spellings of ONE token in one EXECUTE. getTickerId resolves both to
-    // the same tick_id, and createLedgerChangeRecord collides on tick_id, so
-    // the running total must merge them. Keying the buckets on the raw wire
-    // spelling gave each spelling its own bucket, each total came out short,
-    // and the later write erased the earlier row exactly as in the legacy case.
-    async function mixedCaseSlashes(network) {
-        const { handler, db } = makeHandler(network);
-        db.slashContractStake = sinon.stub()
-            .onFirstCall().resolves({ total: '10', releases: [{ address: 'ownerX', amount: '10' }] })
-            .onSecondCall().resolves({ total: '20', releases: [{ address: 'ownerX', amount: '20' }] });
-        const ledger = { credits: new Map(), escrows: new Map() };
-        const upper = slashEmission(PUBKEY_A);
-        const lower = slashEmission(PUBKEY_B);
-        lower.params.token = 'stk';
-        await handler.processSlashEmission(upper, slashData(), 0, ledger);
-        await handler.processSlashEmission(lower, slashData(), 1, ledger);
-        return {
-            credits: db.createCredit.getCalls().map(c => String(c.args[2])),
-            escrows: db.createEscrow.getCalls().map(c => String(c.args[2]))
-        };
-    }
-
     it('ACTIVE: two spellings of one token share a bucket, so the totals are 30 and -30', async function () {
         const out = await mixedCaseSlashes('regtest');
         assert.deepStrictEqual(out.credits, ['10', '30'],
@@ -183,6 +190,10 @@ describe('Execute._processSlashEmission multi-slash ledger conservation @regress
         assert.deepStrictEqual(out.escrows, ['-10', '-30'],
             'and the escrow releases for one owner merge across spellings too');
     });
+});
+
+describe('Execute._processSlashEmission multi-slash ledger conservation @regression @tier1', function () {
+    afterEach(function () { sinon.restore(); });
 
     it('LEGACY (inert gate): two spellings of one token still lose the first write', async function () {
         const out = await mixedCaseSlashes('testnet');

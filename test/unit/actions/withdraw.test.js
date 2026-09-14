@@ -205,7 +205,6 @@ describe('Withdraw handler @regression @tier2', function () {
     // -----------------------------------------------------------------------
 
     describe('CONTRACT_ACTION_INDEX validations', function () {
-
         it('missing CONTRACT_ACTION_INDEX → invalid', async function () {
             const params = ['0', '', TICK, '100'];
             const data   = makeData({ FORMAT: 0 });
@@ -260,7 +259,9 @@ describe('Withdraw handler @regression @tier2', function () {
 
             assert.ok(data.STATUS.includes('not contract owner'));
         });
+    });
 
+    describe('CONTRACT_ACTION_INDEX validations', function () {
         it('createWithdrawal always called even on invalid contract', async function () {
             indexer.indexerDb.getContract.resolves(null);
 

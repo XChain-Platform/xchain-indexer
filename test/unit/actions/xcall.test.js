@@ -123,34 +123,33 @@ describe('Xcall (XCALL) @regression @tier3', function () {
         sinon.restore();
     });
 
+    function v0Data(overrides = {}) {
+        return createBaseData({
+            ACTION: 'XCALL', FORMAT: 0, IS_EMISSION: true, EMITTER: 5,
+            EMITTER_POSITION: 0, EMITTER_PATH: '0', ROOT_ACTION_INDEX: 100,
+            BLOCK_INDEX: 100,
+            ...overrides,
+        });
+    }
+    // VERSION|CALL_ID|TARGET_CHAIN|TARGET_CONTRACT_INDEX|METHOD|PARAMS_JSON|GAS_LIMIT|CALLBACK_METHOD|CALLBACK_PARAMS_JSON|DEADLINE_BLOCKS|CROSS_HOPS
+    function v0Params(callId, overrides = {}) {
+        const p = {
+            targetChain: 'DOGE', targetIdx: '99', method: 'onArrival',
+            paramsJson: '["x"]', gasLimit: '50000', cb: 'onResult',
+            cbParams: '["ctx"]', deadline: '200', hops: '1',
+            ...overrides,
+        };
+        return ['0', callId, p.targetChain, p.targetIdx, p.method, p.paramsJson,
+                p.gasLimit, p.cb, p.cbParams, p.deadline, p.hops];
+    }
+    const goodCallId = (data) =>
+        deriveCallId('regtest', 'BTC', data['TX_HASH'], data['ROOT_ACTION_INDEX'],
+                     data['EMITTER'], data['EMITTER_PATH'], data['EMITTER_POSITION'], 'DOGE');
+
     // ───────────────────────────────────────────────────────────────────────
     // v0: Request (VM emission only)
     // ───────────────────────────────────────────────────────────────────────
     describe('v0: request', function () {
-
-        function v0Data(overrides = {}) {
-            return createBaseData({
-                ACTION: 'XCALL', FORMAT: 0, IS_EMISSION: true, EMITTER: 5,
-                EMITTER_POSITION: 0, EMITTER_PATH: '0', ROOT_ACTION_INDEX: 100,
-                BLOCK_INDEX: 100,
-                ...overrides,
-            });
-        }
-        // VERSION|CALL_ID|TARGET_CHAIN|TARGET_CONTRACT_INDEX|METHOD|PARAMS_JSON|GAS_LIMIT|CALLBACK_METHOD|CALLBACK_PARAMS_JSON|DEADLINE_BLOCKS|CROSS_HOPS
-        function v0Params(callId, overrides = {}) {
-            const p = {
-                targetChain: 'DOGE', targetIdx: '99', method: 'onArrival',
-                paramsJson: '["x"]', gasLimit: '50000', cb: 'onResult',
-                cbParams: '["ctx"]', deadline: '200', hops: '1',
-                ...overrides,
-            };
-            return ['0', callId, p.targetChain, p.targetIdx, p.method, p.paramsJson,
-                    p.gasLimit, p.cb, p.cbParams, p.deadline, p.hops];
-        }
-        const goodCallId = (data) =>
-            deriveCallId('regtest', 'BTC', data['TX_HASH'], data['ROOT_ACTION_INDEX'],
-                         data['EMITTER'], data['EMITTER_PATH'], data['EMITTER_POSITION'], 'DOGE');
-
         it('valid request → STATUS valid, createCrossChainCallRequest called with the derived deadline', async function () {
             const data = v0Data();
             await handler.parse(v0Params(goodCallId(data)), data, null);
@@ -205,7 +204,9 @@ describe('Xcall (XCALL) @regression @tier3', function () {
             assert.strictEqual(status.length, Xcall.STATUS_MAX_LENGTH);
             assert.ok(status.endsWith('~]'), 'a budgeted cut must be marked: ' + status.slice(-24));
         });
+    });
 
+    describe('v0: request', function () {
         // The preimage field ORDER and COUNT are the consensus contract with
         // xchain-vm/src/gateway_emit.js (crossExecute). Pinned literally here, and by
         // bin/check-preimage-golden-parity.js against the same canonical order, so a
@@ -260,7 +261,9 @@ describe('Xcall (XCALL) @regression @tier3', function () {
             await handler.parse(v0Params('e'.repeat(64)), data, null);
             assert.match(data['STATUS'], /EMITTER_POSITION/);
         });
+    });
 
+    describe('v0: request', function () {
         it('call_id is independent of ACTION_INDEX (reorg / injection-order stability)', async function () {
             // Mirror of the ATTEST guard: the call_id preimage uses EMITTER_PATH, not the
             // injection-timing-dependent action_index, so a node that reorged (different
@@ -307,7 +310,9 @@ describe('Xcall (XCALL) @regression @tier3', function () {
             await handler.parse(v0Params(id, { targetChain: 'BTC' }), data, null);
             assert.match(data['STATUS'], /TARGET_CHAIN \(must differ/);
         });
+    });
 
+    describe('v0: request', function () {
         it('re-validates gasLimit, hops, deadline and params host-side', async function () {
             for (const [overrides, re] of [
                 [{ gasLimit: '4999' },   /GAS_LIMIT/],
@@ -361,7 +366,9 @@ describe('Xcall (XCALL) @regression @tier3', function () {
             await handler.parse(v0Params(goodCallId(data), { method: null }), data, null);
             assert.match(data['STATUS'], /METHOD \(required\)/);
         });
+    });
 
+    describe('v0: request', function () {
         it('rejects a METHOD longer than 64 bytes', async function () {
             const data = v0Data();
             await handler.parse(v0Params(goodCallId(data), { method: 'm'.repeat(65) }), data, null);
@@ -458,28 +465,27 @@ describe('Xcall (XCALL) @regression @tier3', function () {
         });
     });
 
+    function makeResultRow(overrides = {}) {
+        return {
+            call_id:              'c'.repeat(64),
+            phase:                'result',
+            snapshot_block:       150,
+            network:              'regtest',
+            source_chain:         'BTC',
+            target_chain:         'DOGE',
+            result_status:        'ok',
+            return_payload_b64:   Buffer.from('"42"', 'utf8').toString('base64'),
+            effective_time:       1700000000,
+            validator_signatures: JSON.stringify([{ pubkey: PUBKEY_A, sig: SIG_A }]),
+            ...overrides,
+        };
+    }
+    const ctx = () => ({ BLOCK_INDEX: 200, BLOCK_TIME: 1700000100 });
+
     // ───────────────────────────────────────────────────────────────────────
     // processResult: mirror-driven result delivery
     // ───────────────────────────────────────────────────────────────────────
     describe('processResult', function () {
-
-        function makeResultRow(overrides = {}) {
-            return {
-                call_id:              'c'.repeat(64),
-                phase:                'result',
-                snapshot_block:       150,
-                network:              'regtest',
-                source_chain:         'BTC',
-                target_chain:         'DOGE',
-                result_status:        'ok',
-                return_payload_b64:   Buffer.from('"42"', 'utf8').toString('base64'),
-                effective_time:       1700000000,
-                validator_signatures: JSON.stringify([{ pubkey: PUBKEY_A, sig: SIG_A }]),
-                ...overrides,
-            };
-        }
-        const ctx = () => ({ BLOCK_INDEX: 200, BLOCK_TIME: 1700000100 });
-
         it('verifies sigs, flips to completed, injects the callback with the decoded payload', async function () {
             sinon.stub(ed25519, 'verify').returns(true);
             indexer.indexerDb.getCrossChainCallRequestById.resolves(makeRequestRow());
@@ -533,7 +539,9 @@ describe('Xcall (XCALL) @regression @tier3', function () {
             assert.ok(indexer.indexerDb.updateCrossChainCallRequestStatus.calledOnceWith(
                 'c'.repeat(64), 'completed', 'ok', '"42"', 200));
         });
+    });
 
+    describe('processResult', function () {
         it('refuses insufficient signatures (nothing flips, nothing injects, NO idempotency row)', async function () {
             sinon.stub(ed25519, 'verify').returns(false);
             indexer.indexerDb.getCrossChainCallRequestById.resolves(makeRequestRow());
@@ -584,7 +592,9 @@ describe('Xcall (XCALL) @regression @tier3', function () {
             await handler.processResult(makeResultRow({ network: 'mainnet' }), ctx());
             assert.ok(executeStub.parse.notCalled);
         });
+    });
 
+    describe('processResult', function () {
         it('a failing callback does not undo the flip or the idempotency row', async function () {
             sinon.stub(ed25519, 'verify').returns(true);
             indexer.indexerDb.getCrossChainCallRequestById.resolves(makeRequestRow());

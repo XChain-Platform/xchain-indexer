@@ -60,14 +60,13 @@ function v0Params(overrides = {}) {
     return p;
 }
 
+let indexer, handler, verifyStub, swqStub, sink;
+
+function failures() {
+    return sink.lines.filter(l => l.includes('ANCHOR_FAILED'));
+}
+
 describe('ANCHOR_FAILED: a refused anchor is separable from an accepted one @regression', function () {
-
-    let indexer, handler, verifyStub, swqStub, sink;
-
-    function failures() {
-        return sink.lines.filter(l => l.includes('ANCHOR_FAILED'));
-    }
-
     beforeEach(function () {
         observability._resetObservability();
         diag.resetDiagnostics();
@@ -118,6 +117,45 @@ describe('ANCHOR_FAILED: a refused anchor is separable from an accepted one @reg
         assert.ok(failures()[0].includes('SECTION 1 STATE_ROOT'), failures()[0]);
         assert.ok(failures()[0].includes('network=regtest'), failures()[0]);
     });
+});
+
+describe('ANCHOR_FAILED: a refused anchor is separable from an accepted one @regression', function () {
+    beforeEach(function () {
+        observability._resetObservability();
+        diag.resetDiagnostics();
+        sink = { lines: [] };
+        const push = (m) => sink.lines.push(m);
+        observability.installObservability(null, {
+            service: 'xchain-indexer', env: {}, console: { log: push, warn: push, error: push }
+        });
+
+        indexer = createMockIndexer();
+        indexer.config = Object.assign({}, indexer.config, { COIN: 'DOGE', NETWORK: 'regtest' });
+        const db = indexer.indexerDb;
+        db.getValidatorsByCapability  = sinon.stub().resolves([{ pubkey: PUBKEY_A, amount: '1' }]);
+        db.hasCapability              = sinon.stub().resolves(true);
+        db.getMaxAnchorCheckpointSeq  = sinon.stub().resolves(null);
+        db.getArchiveReplayWatermarks = sinon.stub().resolves({ batchSeq: null, checkpointSeq: null });
+        db.createAnchorAction         = sinon.stub().resolves();
+        db.getAnchorV1ByBatchSeq      = sinon.stub().resolves(null);
+        db.getAnchorChunks            = sinon.stub().resolves([]);
+        db.setAnchorArchiveStatus     = sinon.stub().resolves();
+        db.createValidatorReward      = sinon.stub().resolves(true);
+        db.reconcileAnchorRewardWinner = sinon.stub().resolves(0);
+
+        handler    = new Anchor(indexer);
+        verifyStub = sinon.stub(ed25519, 'verify').returns(true);
+        // These cases assert the legacy COUNT quorum path; the mocked
+        // oracle_publish set carries no source or weight.
+        swqStub    = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+    });
+
+    afterEach(function () {
+        verifyStub.restore(); swqStub.restore();
+        sinon.restore();
+        observability._resetObservability();
+        diag.resetDiagnostics();
+    });
 
     it('an accepted v0 bundle emits nothing: the happy path is not an event', async function () {
         const data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
@@ -137,6 +175,45 @@ describe('ANCHOR_FAILED: a refused anchor is separable from an accepted one @reg
         // No section survived, so there is no chain to name and the record says so
         // rather than inventing one.
         assert.ok(failures()[0].includes('chain=unknown'), failures()[0]);
+    });
+});
+
+describe('ANCHOR_FAILED: a refused anchor is separable from an accepted one @regression', function () {
+    beforeEach(function () {
+        observability._resetObservability();
+        diag.resetDiagnostics();
+        sink = { lines: [] };
+        const push = (m) => sink.lines.push(m);
+        observability.installObservability(null, {
+            service: 'xchain-indexer', env: {}, console: { log: push, warn: push, error: push }
+        });
+
+        indexer = createMockIndexer();
+        indexer.config = Object.assign({}, indexer.config, { COIN: 'DOGE', NETWORK: 'regtest' });
+        const db = indexer.indexerDb;
+        db.getValidatorsByCapability  = sinon.stub().resolves([{ pubkey: PUBKEY_A, amount: '1' }]);
+        db.hasCapability              = sinon.stub().resolves(true);
+        db.getMaxAnchorCheckpointSeq  = sinon.stub().resolves(null);
+        db.getArchiveReplayWatermarks = sinon.stub().resolves({ batchSeq: null, checkpointSeq: null });
+        db.createAnchorAction         = sinon.stub().resolves();
+        db.getAnchorV1ByBatchSeq      = sinon.stub().resolves(null);
+        db.getAnchorChunks            = sinon.stub().resolves([]);
+        db.setAnchorArchiveStatus     = sinon.stub().resolves();
+        db.createValidatorReward      = sinon.stub().resolves(true);
+        db.reconcileAnchorRewardWinner = sinon.stub().resolves(0);
+
+        handler    = new Anchor(indexer);
+        verifyStub = sinon.stub(ed25519, 'verify').returns(true);
+        // These cases assert the legacy COUNT quorum path; the mocked
+        // oracle_publish set carries no source or weight.
+        swqStub    = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+    });
+
+    afterEach(function () {
+        verifyStub.restore(); swqStub.restore();
+        sinon.restore();
+        observability._resetObservability();
+        diag.resetDiagnostics();
     });
 
     it('an anchor refused for want of quorum is a record, not just a stored verdict', async function () {

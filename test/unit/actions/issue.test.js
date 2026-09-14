@@ -138,7 +138,6 @@ describe('Issue handler @regression @tier1', function () {
     // -----------------------------------------------------------------------
 
     describe('format 0: new token creation', function () {
-
         it('valid new token → status valid, createIssue called, createToken called', async function () {
             const params = makeFormat0Params({ TICK: 'MYTOKEN', MAX_SUPPLY: '1000', MAX_MINT: '100', DECIMALS: '0' });
             const data   = makeData({ FORMAT: 0, BLOCK_INDEX: LOW_BLOCK });
@@ -194,7 +193,9 @@ describe('Issue handler @regression @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid');
             assert.strictEqual(data.OWNER, newOwner);
         });
+    });
 
+    describe('format 0: new token creation', function () {
         it('updateBalances and updateTokens called on valid issuance', async function () {
             const params = makeFormat0Params({ TICK: 'MYTOKEN' });
             const data   = makeData({ FORMAT: 0, BLOCK_INDEX: LOW_BLOCK });
@@ -245,7 +246,6 @@ describe('Issue handler @regression @tier1', function () {
     // -----------------------------------------------------------------------
 
     describe('TICK validations', function () {
-
         it('null/empty TICK → invalid', async function () {
             const params = makeFormat0Params({ TICK: '' });
             const data   = makeData({ FORMAT: 0, BLOCK_INDEX: LOW_BLOCK });
@@ -302,7 +302,9 @@ describe('Issue handler @regression @tier1', function () {
 
             assert.ok(data.STATUS.startsWith('invalid'));
         });
+    });
 
+    describe('TICK validations', function () {
         it('reserved TICK name (XCHAIN) → invalid', async function () {
             // RESERVED_TICKS rejection is a mainnet rule : issue.js deliberately
             // exempts regtest (any address may mint reserved ticks there).
@@ -360,7 +362,9 @@ describe('Issue handler @regression @tier1', function () {
 
             assert.ok(data.STATUS.startsWith('invalid'));
         });
+    });
 
+    describe('TICK validations', function () {
         it('child TICK where parent does not exist → invalid', async function () {
             // getTokenInfo returns null for parent
             indexer.indexerDb.getTokenInfo.resolves(null);
@@ -541,7 +545,6 @@ describe('Issue handler @regression @tier1', function () {
     // -----------------------------------------------------------------------
 
     describe('lock immutability', function () {
-
         it('attempting to unlock LOCK_MINT (set from 1 to 0) → invalid', async function () {
             const source    = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
             const tokenInfo = createTokenInfo({ TICK: 'MYTOKEN', OWNER: source, LOCK_MINT: 1 });
@@ -591,7 +594,9 @@ describe('Issue handler @regression @tier1', function () {
 
             assert.strictEqual(data.STATUS, 'valid');
         });
+    });
 
+    describe('lock immutability', function () {
         it('LOCK_DESCRIPTION prevents description changes', async function () {
             const source    = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
             const tokenInfo = createTokenInfo({ TICK: 'MYTOKEN', OWNER: source, LOCK_DESCRIPTION: 1, DESCRIPTION: 'original' });
@@ -1073,6 +1078,31 @@ describe('Issue handler @regression @tier1', function () {
         });
     });
 
+    const source = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+
+    /** Every protocol change on EXCEPT the cumulative cap: a pre-flag-day mainnet. */
+    function disableCumulativeCap() {
+        actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(async (name, block) =>
+            name === 'ISSUANCE_FEE' ? Number(block) >= 862633 :
+            name === 'ISSUE_MINT_SUPPLY_CUMULATIVE_CAP' ? false : true);
+    }
+
+    /**
+     * A token record as `getTokenInfo` really returns one.
+     *
+     * The MINT_SUPPLY delete is not cosmetic. issue.js backfills every empty param from
+     * tokenInfo (~line 241), and the real getTokenInfo selects no mint_supply column at
+     * all, so on a live chain an edit that leaves MINT_SUPPLY blank stays blank. The
+     * shared fixture carries a MINT_SUPPLY key it does not have; left in place it would
+     * backfill '0' into every edit and make this lock look like it freezes the whole
+     * token, which is the opposite of what the DESCRIPTION control below proves.
+     */
+    function lockedTokenInfo(overrides) {
+        const info = createTokenInfo(overrides);
+        delete info.MINT_SUPPLY;
+        return info;
+    }
+
     // the wallet's COLLECTIBLE and MEME wizard templates promise a supply that can
     // never grow. The cumulative MINT_SUPPLY cap keeps that promise, but it is GATED - at genesis on
     // testnet/regtest, on a flag day on mainnet - so a token that leans on it is only fixed
@@ -1082,32 +1112,6 @@ describe('Issue handler @regression @tier1', function () {
     // the protocol change has not activated, because that is the whole reason the templates
     // write the flag.
     describe('LOCK_MINT_SUPPLY refuses re-ISSUE inflation without the flag day @regression @security', function () {
-
-        const source = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
-
-        /** Every protocol change on EXCEPT the cumulative cap: a pre-flag-day mainnet. */
-        function disableCumulativeCap() {
-            actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(async (name, block) =>
-                name === 'ISSUANCE_FEE' ? Number(block) >= 862633 :
-                name === 'ISSUE_MINT_SUPPLY_CUMULATIVE_CAP' ? false : true);
-        }
-
-        /**
-         * A token record as `getTokenInfo` really returns one.
-         *
-         * The MINT_SUPPLY delete is not cosmetic. issue.js backfills every empty param from
-         * tokenInfo (~line 241), and the real getTokenInfo selects no mint_supply column at
-         * all, so on a live chain an edit that leaves MINT_SUPPLY blank stays blank. The
-         * shared fixture carries a MINT_SUPPLY key it does not have; left in place it would
-         * backfill '0' into every edit and make this lock look like it freezes the whole
-         * token, which is the opposite of what the DESCRIPTION control below proves.
-         */
-        function lockedTokenInfo(overrides) {
-            const info = createTokenInfo(overrides);
-            delete info.MINT_SUPPLY;
-            return info;
-        }
-
         it('a collectible that set LOCK_MINT_SUPPLY refuses the re-ISSUE by the LOCK, not the gate', async function () {
             // The token the wizard's collectible template now creates: 1 of 1, cap frozen,
             // MINT closed, and MINT_SUPPLY locked.
@@ -1150,7 +1154,9 @@ describe('Issue handler @regression @tier1', function () {
 
             assert.strictEqual(data.STATUS, 'valid');
         });
+    });
 
+    describe('LOCK_MINT_SUPPLY refuses re-ISSUE inflation without the flag day @regression @security', function () {
         it('a meme token that set LOCK_MINT_SUPPLY keeps its fixed supply pre-flag-day', async function () {
             const tokenInfo = lockedTokenInfo({
                 TICK: 'DANKCOIN', OWNER: source, MAX_SUPPLY: '21000000', SUPPLY: '21000000', DECIMALS: 0,

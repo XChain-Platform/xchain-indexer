@@ -148,7 +148,6 @@ describe('Unstake handler @regression @tier2', function () {
     // -----------------------------------------------------------------------
 
     describe('v0 : capability unstake', function () {
-
         it('valid v0 unstake → STATUS valid, createUnstake called', async function () {
             indexer.indexerDb.getActiveStakeByPubkey.resolves({ source_id: 42, amount: '500.00000000' });
 
@@ -205,7 +204,9 @@ describe('Unstake handler @regression @tier2', function () {
             // COOLDOWN_BLOCKS = 1000 in regtest config
             assert.strictEqual(data.COOLDOWN_END_BLOCK, BLOCK + 1000);
         });
+    });
 
+    describe('v0 : capability unstake', function () {
         it('no active stake → invalid', async function () {
             indexer.indexerDb.getActiveStakeByPubkey.resolves(null);
 
@@ -263,7 +264,9 @@ describe('Unstake handler @regression @tier2', function () {
 
             assert.ok(!indexer.indexerDb.setStakeDeactivationByPubkey.called);
         });
+    });
 
+    describe('v0 : capability unstake', function () {
         it('SOURCE sleeping → invalid', async function () {
             indexer.indexerDb.getActiveStakeByPubkey.resolves({ source_id: 42, amount: '500' });
             indexer.indexerDb.isActionAllowed.resolves(false);
@@ -520,16 +523,10 @@ describe('Unstake handler @regression @tier2', function () {
     // -----------------------------------------------------------------------
 
     describe('v0: partial unstake', function () {
-
         function activationDelay() {
             const staking = indexer.config['STAKING'];
             return (staking && staking['ACTIVATION_DELAY_BLOCKS'])
                 ? staking['ACTIVATION_DELAY_BLOCKS'] : indexer.config['ACTIVATION_DELAY_BLOCKS'];
-        }
-
-        function gateOff() {
-            actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(async (name) =>
-                name === 'PARTIAL_UNSTAKE_COLLECT' ? false : true);
         }
 
         beforeEach(function () {
@@ -583,6 +580,17 @@ describe('Unstake handler @regression @tier2', function () {
             await handler.parse(['0', PUBKEY, '0'], data, null);
             assert.ok(data.STATUS.includes('greater than 0'));
         });
+    });
+
+    describe('v0: partial unstake', function () {
+        function gateOff() {
+            actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(async (name) =>
+                name === 'PARTIAL_UNSTAKE_COLLECT' ? false : true);
+        }
+
+        beforeEach(function () {
+            indexer.indexerDb.getActiveStakeByPubkey.resolves({ source_id: 42, amount: '500.00000000' });
+        });
 
         it('malformed amounts → invalid (explicit-but-empty, non-numeric, >8dp)', async function () {
             for (const bad of ['', 'abc', '1.123456789', '-5', '1e3']) {
@@ -613,11 +621,10 @@ describe('Unstake handler @regression @tier2', function () {
         });
     });
 
+    const CONTRACT_INDEX = '5';
+    const TICK           = 'TEST';
+
     describe('v1: partial contract unstake', function () {
-
-        const CONTRACT_INDEX = '5';
-        const TICK           = 'TEST';
-
         function activationDelay() {
             const staking = indexer.config['STAKING'];
             return (staking && staking['ACTIVATION_DELAY_BLOCKS'])
@@ -667,6 +674,13 @@ describe('Unstake handler @regression @tier2', function () {
             assert.strictEqual(data.STATUS, 'valid');
             assert.strictEqual(data.AMOUNT, '100.00000000');
             assert.ok(!indexer.indexerDb.createContractStake.called);
+        });
+    });
+
+    describe('v1: partial contract unstake', function () {
+        beforeEach(function () {
+            indexer.indexerDb.getContract.resolves({ source_id: 42, cooldown_blocks: 200 });
+            indexer.indexerDb.getActiveContractStakeByPubkey.resolves({ source_id: 42, amount: '100.00000000' });
         });
 
         it('below the flag-day a present AMOUNT is IGNORED (legacy full sweep)', async function () {

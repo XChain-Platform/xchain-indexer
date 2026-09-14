@@ -17,20 +17,20 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Dispenser_Expire = require('../../../src/actions/dispenser_expire.js');
 
+let indexer, actionsCtx, handler;
+
+function makeDispenser(overrides) {
+    return {
+        ACTION_INDEX: 50,
+        SOURCE: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
+        GIVE_TICK: 'TEST',
+        GIVE_REMAINING: '200',
+        GET_ADDRESS: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
+        ...overrides,
+    };
+}
+
 describe('Dispenser_Expire action handler @regression @tier2', function () {
-    let indexer, actionsCtx, handler;
-
-    function makeDispenser(overrides) {
-        return {
-            ACTION_INDEX: 50,
-            SOURCE: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
-            GIVE_TICK: 'TEST',
-            GIVE_REMAINING: '200',
-            GET_ADDRESS: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
-            ...overrides,
-        };
-    }
-
     beforeEach(function () {
         indexer = createMockIndexer();
         actionsCtx = {
@@ -84,6 +84,26 @@ describe('Dispenser_Expire action handler @regression @tier2', function () {
         const addresses = indexer.util.getAddressesList();
         assert.ok(Object.keys(addresses).includes(dispenser['SOURCE']), 'SOURCE should be tracked for balance update');
     });
+});
+
+describe('Dispenser_Expire action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().resolves(true),
+            },
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Dispenser_Expire(actionsCtx);
+        indexer.util.resetLists();
+    });
 
     it('calls updateBalances after processing', async function () {
         const dispenser = makeDispenser();
@@ -116,6 +136,26 @@ describe('Dispenser_Expire action handler @regression @tier2', function () {
         assert.strictEqual(escrows.length, 1, 'one escrow debit is pushed');
         assert.strictEqual(String(escrows[0][1]), '-' + REMAINING, 'escrow debit keeps all 18 decimals');
         assert.notStrictEqual(String(escrows[0][1]), String(-Number(REMAINING)), 'not the truncated JS-float negation');
+    });
+});
+
+describe('Dispenser_Expire action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().resolves(true),
+            },
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Dispenser_Expire(actionsCtx);
+        indexer.util.resetLists();
     });
 
     // Regression: dispenser_expire.js must mirror dispenser_close.js's escrow-gate
@@ -156,6 +196,26 @@ describe('Dispenser_Expire action handler @regression @tier2', function () {
         await handler.parse(null, data, null);
 
         sinon.assert.notCalled(indexer.indexerDb.clearTokenEscrow);
+    });
+});
+
+describe('Dispenser_Expire action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().resolves(true),
+            },
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Dispenser_Expire(actionsCtx);
+        indexer.util.resetLists();
     });
 
     // Regression: mirrors dispenser_close.js's bcgt(GIVE_REMAINING, 0) guard so an

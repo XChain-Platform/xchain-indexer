@@ -31,32 +31,69 @@ const CAROL  = 'mqPXTX9BpNzHmB3rd94xhk3SLZBjWK5B7c';
 
 const T0 = 1700000000; // base BLOCK_TIME
 
+let indexer, actionsCtx, handler, ledgerSpy;
+
+// A live feed dict as getBetFeedInfo returns it
+function feedInfo(overrides = {}) {
+    return {
+        ACTION_INDEX: 5,
+        SOURCE: ORACLE,
+        LABEL: 'Test market',
+        OUTCOMES: 'yes,no',
+        TICK: 'TEST',
+        FEE: '1.00',
+        DEADLINE: T0 + 86400,
+        REFUND_WINDOW: 1209600,
+        EXPIRE_AT: T0 + 86400 + 1209600,
+        MIN_AMOUNT: null,
+        ALLOW_LIST: null,
+        BLOCK_LIST: null,
+        FEED_STATUS: 'open',
+        CLOSED_BLOCK: null,
+        TERMINAL_BLOCK: null,
+        ...overrides,
+    };
+}
+
+function makeCreateParams(over = {}) {
+    const p = {
+        LABEL: 'Test market', OUTCOMES: 'yes,no', TICK: 'TEST', FEE: '1.00',
+        DEADLINE: String(T0 + 86400), REFUND_WINDOW: '', MIN_AMOUNT: '',
+        ALLOW_LIST: '', BLOCK_LIST: '', DETAILS: '', MEMO: '',
+        ...over,
+    };
+    return ['0', p.LABEL, p.OUTCOMES, p.TICK, p.FEE, p.DEADLINE, p.REFUND_WINDOW,
+            p.MIN_AMOUNT, p.ALLOW_LIST, p.BLOCK_LIST, p.DETAILS, p.MEMO];
+}
+
+/*****************************************************************
+ * DETAILS validation
+ ****************************************************************/
+
+function b64(obj){ return Buffer.from(JSON.stringify(obj)).toString('base64'); }
+
+/*****************************************************************
+ * Format 2 - Place Bet
+ ****************************************************************/
+
+function placeData(over = {}) {
+    return createBaseData({ ACTION: 'BET', FORMAT: 2, SOURCE: ALICE, ...over });
+}
+
+/*****************************************************************
+ * Format 3 - Resolve Feed: the section-7 worked example
+ ****************************************************************/
+
+function armWorkedExample() {
+    indexer.indexerDb.getBetFeedInfo.resolves(feedInfo({ FEED_STATUS: 'closed' }));
+    indexer.indexerDb.getOpenBetsByFeed.resolves([
+        { ACTION_INDEX: 10, OUTCOME: 0, AMOUNT: '10.00000000', SOURCE: ALICE },
+        { ACTION_INDEX: 11, OUTCOME: 1, AMOUNT: '5.00000000',  SOURCE: BOB },
+        { ACTION_INDEX: 12, OUTCOME: 0, AMOUNT: '2.50000000',  SOURCE: CAROL },
+    ]);
+}
+
 describe('BET action handler @regression @tier2', function () {
-
-    let indexer, actionsCtx, handler, ledgerSpy;
-
-    // A live feed dict as getBetFeedInfo returns it
-    function feedInfo(overrides = {}) {
-        return {
-            ACTION_INDEX: 5,
-            SOURCE: ORACLE,
-            LABEL: 'Test market',
-            OUTCOMES: 'yes,no',
-            TICK: 'TEST',
-            FEE: '1.00',
-            DEADLINE: T0 + 86400,
-            REFUND_WINDOW: 1209600,
-            EXPIRE_AT: T0 + 86400 + 1209600,
-            MIN_AMOUNT: null,
-            ALLOW_LIST: null,
-            BLOCK_LIST: null,
-            FEED_STATUS: 'open',
-            CLOSED_BLOCK: null,
-            TERMINAL_BLOCK: null,
-            ...overrides,
-        };
-    }
-
     beforeEach(function () {
         indexer = createMockIndexer();
         actionsCtx = {
@@ -79,17 +116,6 @@ describe('BET action handler @regression @tier2', function () {
         ledgerSpy = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
     });
 
-    function makeCreateParams(over = {}) {
-        const p = {
-            LABEL: 'Test market', OUTCOMES: 'yes,no', TICK: 'TEST', FEE: '1.00',
-            DEADLINE: String(T0 + 86400), REFUND_WINDOW: '', MIN_AMOUNT: '',
-            ALLOW_LIST: '', BLOCK_LIST: '', DETAILS: '', MEMO: '',
-            ...over,
-        };
-        return ['0', p.LABEL, p.OUTCOMES, p.TICK, p.FEE, p.DEADLINE, p.REFUND_WINDOW,
-                p.MIN_AMOUNT, p.ALLOW_LIST, p.BLOCK_LIST, p.DETAILS, p.MEMO];
-    }
-
     /*****************************************************************
      * Format 0 - Create Feed
      ****************************************************************/
@@ -106,12 +132,60 @@ describe('BET action handler @regression @tier2', function () {
         // open history row caused by the create itself
         assert.ok(indexer.indexerDb.createBetFeedStatus.calledOnceWith(data['ACTION_INDEX'], data['ACTION_INDEX'], 'open'));
     });
+});
+
+describe('BET action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: indexer.protocolChanges,
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Bet(actionsCtx);
+        indexer.util.resetLists();
+
+        // Wager token: 8 decimals, distinct TICK_ID (2) from the GAS token (1)
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', TICK_ID: 2, DECIMALS: 8 }));
+        // Generous balances: {tick_id: amount}; 1 = GAS/XCHAIN, 2 = TEST
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000' });
+        // Capture ledger changes instead of writing them
+        ledgerSpy = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
+    });
 
     it('canonicalizes OUTCOMES (trims labels, joins with single commas)', async function () {
         const data = createBaseData({ ACTION: 'BET', FORMAT: 0, SOURCE: ORACLE });
         await handler.parse(makeCreateParams({ OUTCOMES: ' yes , no ' }), data, null);
         assert.strictEqual(data['STATUS'], 'valid');
         assert.strictEqual(indexer.indexerDb.createBetFeed.firstCall.args[0]['OUTCOMES'], 'yes,no');
+    });
+});
+
+describe('BET action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: indexer.protocolChanges,
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Bet(actionsCtx);
+        indexer.util.resetLists();
+
+        // Wager token: 8 decimals, distinct TICK_ID (2) from the GAS token (1)
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', TICK_ID: 2, DECIMALS: 8 }));
+        // Generous balances: {tick_id: amount}; 1 = GAS/XCHAIN, 2 = TEST
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000' });
+        // Capture ledger changes instead of writing them
+        ledgerSpy = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
     });
 
     const createRejects = [
@@ -144,6 +218,30 @@ describe('BET action handler @regression @tier2', function () {
             assert.strictEqual(data['STATUS'], expected === null ? 'valid' : expected);
         });
     }
+});
+
+describe('BET action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: indexer.protocolChanges,
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Bet(actionsCtx);
+        indexer.util.resetLists();
+
+        // Wager token: 8 decimals, distinct TICK_ID (2) from the GAS token (1)
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', TICK_ID: 2, DECIMALS: 8 }));
+        // Generous balances: {tick_id: amount}; 1 = GAS/XCHAIN, 2 = TEST
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000' });
+        // Capture ledger changes instead of writing them
+        ledgerSpy = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
+    });
 
     it('create: unknown TICK rejects', async function () {
         indexer.indexerDb.getTokenInfo.resolves(null);
@@ -175,12 +273,30 @@ describe('BET action handler @regression @tier2', function () {
         await handler.parse(makeCreateParams({ ALLOW_LIST: '77', BLOCK_LIST: '77' }), data3, null);
         assert.strictEqual(data3['STATUS'], 'invalid: BLOCK_LIST (same as ALLOW_LIST)');
     });
+});
 
-    /*****************************************************************
-     * DETAILS validation
-     ****************************************************************/
+describe('BET action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: indexer.protocolChanges,
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Bet(actionsCtx);
+        indexer.util.resetLists();
 
-    function b64(obj){ return Buffer.from(JSON.stringify(obj)).toString('base64'); }
+        // Wager token: 8 decimals, distinct TICK_ID (2) from the GAS token (1)
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', TICK_ID: 2, DECIMALS: 8 }));
+        // Generous balances: {tick_id: amount}; 1 = GAS/XCHAIN, 2 = TEST
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000' });
+        // Capture ledger changes instead of writing them
+        ledgerSpy = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
+    });
 
     it('create: valid DETAILS with matching outcomes accepted', async function () {
         const data = createBaseData({ ACTION: 'BET', FORMAT: 0, SOURCE: ORACLE });
@@ -212,6 +328,30 @@ describe('BET action handler @regression @tier2', function () {
         await handler.parse(makeCreateParams({ DETAILS: b64(root) }), data, null);
         assert.strictEqual(data['STATUS'], 'invalid: DETAILS (json shape)');
     });
+});
+
+describe('BET action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: indexer.protocolChanges,
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Bet(actionsCtx);
+        indexer.util.resetLists();
+
+        // Wager token: 8 decimals, distinct TICK_ID (2) from the GAS token (1)
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', TICK_ID: 2, DECIMALS: 8 }));
+        // Generous balances: {tick_id: amount}; 1 = GAS/XCHAIN, 2 = TEST
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000' });
+        // Capture ledger changes instead of writing them
+        ledgerSpy = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
+    });
 
     it('create DETAILS: outcomes mismatch (order, count, non-array) rejects', async function () {
         for (const bad of [ { outcomes: ['no', 'yes'] }, { outcomes: ['yes'] }, { outcomes: 'yes,no' } ]) {
@@ -226,6 +366,30 @@ describe('BET action handler @regression @tier2', function () {
         const data = createBaseData({ ACTION: 'BET', FORMAT: 0, SOURCE: ORACLE });
         await handler.parse(makeCreateParams({ DETAILS: b64(big) }), data, null);
         assert.strictEqual(data['STATUS'], 'invalid: DETAILS (length)');
+    });
+});
+
+describe('BET action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: indexer.protocolChanges,
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Bet(actionsCtx);
+        indexer.util.resetLists();
+
+        // Wager token: 8 decimals, distinct TICK_ID (2) from the GAS token (1)
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', TICK_ID: 2, DECIMALS: 8 }));
+        // Generous balances: {tick_id: amount}; 1 = GAS/XCHAIN, 2 = TEST
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000' });
+        // Capture ledger changes instead of writing them
+        ledgerSpy = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
     });
 
     /*****************************************************************
@@ -249,6 +413,30 @@ describe('BET action handler @regression @tier2', function () {
         await handler.parse(makeCreateParams({ DEADLINE: String(T0 + 351 * 86400) }), data3, null);
         assert.strictEqual(data3['STATUS'], 'valid');
     });
+});
+
+describe('BET action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: indexer.protocolChanges,
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Bet(actionsCtx);
+        indexer.util.resetLists();
+
+        // Wager token: 8 decimals, distinct TICK_ID (2) from the GAS token (1)
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', TICK_ID: 2, DECIMALS: 8 }));
+        // Generous balances: {tick_id: amount}; 1 = GAS/XCHAIN, 2 = TEST
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000' });
+        // Capture ledger changes instead of writing them
+        ledgerSpy = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
+    });
 
     it('place charges BET_PER_CREDIT; resolve and cancel are free', async function () {
         indexer.indexerDb.getBetFeedInfo.resolves(feedInfo());
@@ -271,14 +459,6 @@ describe('BET action handler @regression @tier2', function () {
         assert.strictEqual(c['STATUS'], 'valid');
     });
 
-    /*****************************************************************
-     * Format 2 - Place Bet
-     ****************************************************************/
-
-    function placeData(over = {}) {
-        return createBaseData({ ACTION: 'BET', FORMAT: 2, SOURCE: ALICE, ...over });
-    }
-
     it('accepts a valid place, escrows the stake, writes the open bet', async function () {
         indexer.indexerDb.getBetFeedInfo.resolves(feedInfo());
         const data = placeData();
@@ -292,6 +472,30 @@ describe('BET action handler @regression @tier2', function () {
         assert.deepStrictEqual(debits.filter(d => d[2] === ALICE && d[0] === 'TEST').map(d => d[1]), ['2.50000000']);
         assert.deepStrictEqual(escrows, [['TEST', '2.50000000', ALICE]]);
         assert.strictEqual(credits.filter(c => c[2] === ALICE).length, 0);
+    });
+});
+
+describe('BET action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: indexer.protocolChanges,
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Bet(actionsCtx);
+        indexer.util.resetLists();
+
+        // Wager token: 8 decimals, distinct TICK_ID (2) from the GAS token (1)
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', TICK_ID: 2, DECIMALS: 8 }));
+        // Generous balances: {tick_id: amount}; 1 = GAS/XCHAIN, 2 = TEST
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000' });
+        // Capture ledger changes instead of writing them
+        ledgerSpy = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
     });
 
     const placeRejects = [
@@ -329,6 +533,30 @@ describe('BET action handler @regression @tier2', function () {
         await handler.parse(['2', '5', '0', '2.0', ''], data, null);
         assert.strictEqual(data['STATUS'], 'invalid: insufficient funds (AMOUNT)');
     });
+});
+
+describe('BET action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: indexer.protocolChanges,
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Bet(actionsCtx);
+        indexer.util.resetLists();
+
+        // Wager token: 8 decimals, distinct TICK_ID (2) from the GAS token (1)
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', TICK_ID: 2, DECIMALS: 8 }));
+        // Generous balances: {tick_id: amount}; 1 = GAS/XCHAIN, 2 = TEST
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000' });
+        // Capture ledger changes instead of writing them
+        ledgerSpy = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
+    });
 
     it('place gating: allow-then-block, BLOCK_LIST wins on both, evaluated at place time', async function () {
         // ALLOW only, member: valid
@@ -355,6 +583,30 @@ describe('BET action handler @regression @tier2', function () {
         data = placeData();
         await handler.parse(['2', '5', '0', '1.0', ''], data, null);
         assert.strictEqual(data['STATUS'], 'invalid: SOURCE (not authorized)');
+    });
+});
+
+describe('BET action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: indexer.protocolChanges,
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Bet(actionsCtx);
+        indexer.util.resetLists();
+
+        // Wager token: 8 decimals, distinct TICK_ID (2) from the GAS token (1)
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', TICK_ID: 2, DECIMALS: 8 }));
+        // Generous balances: {tick_id: amount}; 1 = GAS/XCHAIN, 2 = TEST
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000' });
+        // Capture ledger changes instead of writing them
+        ledgerSpy = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
     });
 
     /*****************************************************************
@@ -390,19 +642,30 @@ describe('BET action handler @regression @tier2', function () {
         await handler.parse(['1', '5', ''], d2, null);
         assert.strictEqual(d2['STATUS'], 'invalid: FEED_ACTION_INDEX (feed not open)');
     });
+});
 
-    /*****************************************************************
-     * Format 3 - Resolve Feed: the section-7 worked example
-     ****************************************************************/
+describe('BET action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: indexer.protocolChanges,
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Bet(actionsCtx);
+        indexer.util.resetLists();
 
-    function armWorkedExample() {
-        indexer.indexerDb.getBetFeedInfo.resolves(feedInfo({ FEED_STATUS: 'closed' }));
-        indexer.indexerDb.getOpenBetsByFeed.resolves([
-            { ACTION_INDEX: 10, OUTCOME: 0, AMOUNT: '10.00000000', SOURCE: ALICE },
-            { ACTION_INDEX: 11, OUTCOME: 1, AMOUNT: '5.00000000',  SOURCE: BOB },
-            { ACTION_INDEX: 12, OUTCOME: 0, AMOUNT: '2.50000000',  SOURCE: CAROL },
-        ]);
-    }
+        // Wager token: 8 decimals, distinct TICK_ID (2) from the GAS token (1)
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', TICK_ID: 2, DECIMALS: 8 }));
+        // Generous balances: {tick_id: amount}; 1 = GAS/XCHAIN, 2 = TEST
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000' });
+        // Capture ledger changes instead of writing them
+        ledgerSpy = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
+    });
 
     it('settles the worked example exactly: payouts, fee, dust, conservation', async function () {
         armWorkedExample();
@@ -436,6 +699,30 @@ describe('BET action handler @regression @tier2', function () {
         const bySource = {};
         for (const c of credits) bySource[c[2]] = (bySource[c[2]] || 0) + 1;
         for (const src of [ALICE, BOB, CAROL]) assert.ok((bySource[src] || 0) <= 1, src);
+    });
+});
+
+describe('BET action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: indexer.protocolChanges,
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Bet(actionsCtx);
+        indexer.util.resetLists();
+
+        // Wager token: 8 decimals, distinct TICK_ID (2) from the GAS token (1)
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', TICK_ID: 2, DECIMALS: 8 }));
+        // Generous balances: {tick_id: amount}; 1 = GAS/XCHAIN, 2 = TEST
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000' });
+        // Capture ledger changes instead of writing them
+        ledgerSpy = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
     });
 
     it('W=0 resolves void: full refunds, no oracle fee', async function () {
@@ -472,6 +759,30 @@ describe('BET action handler @regression @tier2', function () {
         const out = credits.reduce((s, c) => indexer.util.bcadd(s, c[1], 8), 0);
         assert.strictEqual(String(out), String(indexer.util.bcnum('10.00000001')));
     });
+});
+
+describe('BET action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: indexer.protocolChanges,
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Bet(actionsCtx);
+        indexer.util.resetLists();
+
+        // Wager token: 8 decimals, distinct TICK_ID (2) from the GAS token (1)
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', TICK_ID: 2, DECIMALS: 8 }));
+        // Generous balances: {tick_id: amount}; 1 = GAS/XCHAIN, 2 = TEST
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000' });
+        // Capture ledger changes instead of writing them
+        ledgerSpy = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
+    });
 
     it('resolve rejects: early, post-window, non-owner, out-of-range outcome', async function () {
         indexer.indexerDb.getBetFeedInfo.resolves(feedInfo());
@@ -499,6 +810,30 @@ describe('BET action handler @regression @tier2', function () {
         await handler.parse(['3', '5', '0', ''], data, null);
         assert.strictEqual(data['STATUS'], 'valid');
     });
+});
+
+describe('BET action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: indexer.protocolChanges,
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Bet(actionsCtx);
+        indexer.util.resetLists();
+
+        // Wager token: 8 decimals, distinct TICK_ID (2) from the GAS token (1)
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', TICK_ID: 2, DECIMALS: 8 }));
+        // Generous balances: {tick_id: amount}; 1 = GAS/XCHAIN, 2 = TEST
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000' });
+        // Capture ledger changes instead of writing them
+        ledgerSpy = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
+    });
 
     it('outcome-range assertion: a stored bet outside the outcome range HALTS settlement', async function () {
         indexer.indexerDb.getBetFeedInfo.resolves(feedInfo({ FEED_STATUS: 'closed' }));
@@ -513,6 +848,30 @@ describe('BET action handler @regression @tier2', function () {
         // Nothing was credited or flipped before the halt
         assert.ok(ledgerSpy.notCalled);
         assert.ok(indexer.indexerDb.setBetFeedTerminal.notCalled);
+    });
+});
+
+describe('BET action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: indexer.protocolChanges,
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Bet(actionsCtx);
+        indexer.util.resetLists();
+
+        // Wager token: 8 decimals, distinct TICK_ID (2) from the GAS token (1)
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', TICK_ID: 2, DECIMALS: 8 }));
+        // Generous balances: {tick_id: amount}; 1 = GAS/XCHAIN, 2 = TEST
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000' });
+        // Capture ledger changes instead of writing them
+        ledgerSpy = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
     });
 
     /*****************************************************************
@@ -542,6 +901,30 @@ describe('BET action handler @regression @tier2', function () {
         // The resolve leg's table is untouched by a cancel
         assert.ok(indexer.indexerDb.createBetResolve.notCalled);
     });
+});
+
+describe('BET action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: indexer.protocolChanges,
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Bet(actionsCtx);
+        indexer.util.resetLists();
+
+        // Wager token: 8 decimals, distinct TICK_ID (2) from the GAS token (1)
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', TICK_ID: 2, DECIMALS: 8 }));
+        // Generous balances: {tick_id: amount}; 1 = GAS/XCHAIN, 2 = TEST
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000' });
+        // Capture ledger changes instead of writing them
+        ledgerSpy = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
+    });
 
     it('a REJECTED cancel still stores its row, carrying the rejection reason', async function () {
         indexer.indexerDb.getBetFeedInfo.resolves(feedInfo());
@@ -566,6 +949,30 @@ describe('BET action handler @regression @tier2', function () {
         const row = indexer.indexerDb.createBetCancel.firstCall.args[0];
         assert.strictEqual(Number(row['FEED_ACTION_INDEX']), 4242);
         assert.strictEqual(row['STATUS'], 'invalid: FEED_ACTION_INDEX (unknown)');
+    });
+});
+
+describe('BET action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: indexer.protocolChanges,
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Bet(actionsCtx);
+        indexer.util.resetLists();
+
+        // Wager token: 8 decimals, distinct TICK_ID (2) from the GAS token (1)
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', TICK_ID: 2, DECIMALS: 8 }));
+        // Generous balances: {tick_id: amount}; 1 = GAS/XCHAIN, 2 = TEST
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000' });
+        // Capture ledger changes instead of writing them
+        ledgerSpy = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
     });
 
     it('resolve stores a bet_resolves row with the claimed outcome and the valid status', async function () {
@@ -599,6 +1006,30 @@ describe('BET action handler @regression @tier2', function () {
         assert.ok(ledgerSpy.notCalled);
         assert.ok(indexer.indexerDb.setBetFeedTerminal.notCalled);
         assert.ok(indexer.indexerDb.setBetSettled.notCalled);
+    });
+});
+
+describe('BET action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: indexer.protocolChanges,
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Bet(actionsCtx);
+        indexer.util.resetLists();
+
+        // Wager token: 8 decimals, distinct TICK_ID (2) from the GAS token (1)
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', TICK_ID: 2, DECIMALS: 8 }));
+        // Generous balances: {tick_id: amount}; 1 = GAS/XCHAIN, 2 = TEST
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000' });
+        // Capture ledger changes instead of writing them
+        ledgerSpy = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
     });
 
     it('the leg tables are not cross-wired: create and place write neither', async function () {

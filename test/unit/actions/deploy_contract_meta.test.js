@@ -133,7 +133,6 @@ describe('DEPLOY meta verdicts (CONTRACT_META_REQUIRED) @regression @tier1', fun
     afterEach(function () { sinon.restore(); });
 
     describe('the seven verdict rows, at/after the flag day', function () {
-
         it('row 1: a module-level throw (success:false) is (manifest read failed), NOT a nameless valid', async function () {
             // The bypass this rule exists to close: below the flag day a throwing contract
             // deploys 'valid' because the whole verdict block sits inside success && manifest.
@@ -190,7 +189,9 @@ describe('DEPLOY meta verdicts (CONTRACT_META_REQUIRED) @regression @tier1', fun
             const { status } = await deployWith(readOf({ name: 'Esc\u202Erow', description: 'Bidi' }));
             assert.strictEqual(status, V.NAME);
         });
+    });
 
+    describe('the seven verdict rows, at/after the flag day', function () {
         it('row 5: a name carrying a lone surrogate is the name string', async function () {
             const json = JSON.stringify({ name: 'Escrow\uD800', description: 'Lone surrogate' });
             assert.strictEqual(JSON.parse(json).name.isWellFormed(), false);

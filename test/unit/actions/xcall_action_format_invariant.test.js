@@ -37,51 +37,63 @@ const ed25519 = require('../../../src/consensus/ed25519.js');
 const PUBKEY_A = 'a'.repeat(64);
 const SIG_A    = '1'.repeat(128);
 
+let indexer, actionsCtx, handler, executeStub, recordedCalls;
+
+function addXcallDbStubs(db) {
+    db.getContract                        = sinon.stub().resolves({ contract_index: 5 });
+    db.createCrossChainCallRequest        = sinon.stub().resolves();
+    db.getCrossChainCallRequestById       = sinon.stub().resolves(null);
+    db.updateCrossChainCallRequestStatus  = sinon.stub().resolves();
+    db.setCrossChainCallCallbackIndex     = sinon.stub().resolves();
+    db.recordCrossChainCallCallback       = sinon.stub().resolves();
+    db.hasCapability                      = sinon.stub().resolves(true);
+    db.getValidatorsByCapability          = sinon.stub().resolves([{ pubkey: PUBKEY_A }]);
+    db.getStakeWeightsByCapability        = sinon.stub().resolves([{ pubkey: PUBKEY_A, source: 'S1', weight: '100' }]);
+    db.createSavepoint                    = sinon.stub().resolves('sp1');
+    db.releaseSavepoint                   = sinon.stub().resolves();
+    db.rollbackToSavepoint                = sinon.stub().resolves();
+
+    // Wrap createActionIndex so every mint call's FORMAT argument is captured,
+    // independent of which code path (result-delivery vs expiry) triggers it.
+    recordedCalls = [];
+    db.createActionIndex = sinon.stub().callsFake(async (action) => {
+        recordedCalls.push(action);
+        return recordedCalls.length;
+    });
+}
+
+function makeRequestRow(overrides = {}) {
+    return {
+        call_id:               'c'.repeat(64),
+        contract_index:        5,
+        target_chain:          'DOGE',
+        target_contract_index: 99,
+        method:                'onArrival',
+        params_json:           '["x"]',
+        gas_limit:             50000,
+        cross_hops:            1,
+        callback_method:       'onResult',
+        callback_params_json:  '["ctx"]',
+        deadline_block:        300,
+        request_status:        'pending',
+        block_index:           100,
+        ...overrides,
+    };
+}
+
+    // The class-level invariant asserted below, applied to every recorded call.
+    function assertFormatInvariant(action, label) {
+        const declared = handler.formats || {};
+        const hasFormat = Object.prototype.hasOwnProperty.call(action, 'FORMAT') && action['FORMAT'] !== null;
+        if (!hasFormat) return; // absent/null FORMAT always satisfies the invariant
+        assert.ok(
+            Object.prototype.hasOwnProperty.call(declared, action['FORMAT']),
+            `${label}: createActionIndex was called with FORMAT ${action['FORMAT']}, ` +
+            `but XCALL only declares formats [${Object.keys(declared).join(', ')}]`
+        );
+    }
+
 describe('XCALL action_format invariant (review item 2748)', function () {
-    let indexer, actionsCtx, handler, executeStub, recordedCalls;
-
-    function addXcallDbStubs(db) {
-        db.getContract                        = sinon.stub().resolves({ contract_index: 5 });
-        db.createCrossChainCallRequest        = sinon.stub().resolves();
-        db.getCrossChainCallRequestById       = sinon.stub().resolves(null);
-        db.updateCrossChainCallRequestStatus  = sinon.stub().resolves();
-        db.setCrossChainCallCallbackIndex     = sinon.stub().resolves();
-        db.recordCrossChainCallCallback       = sinon.stub().resolves();
-        db.hasCapability                      = sinon.stub().resolves(true);
-        db.getValidatorsByCapability          = sinon.stub().resolves([{ pubkey: PUBKEY_A }]);
-        db.getStakeWeightsByCapability        = sinon.stub().resolves([{ pubkey: PUBKEY_A, source: 'S1', weight: '100' }]);
-        db.createSavepoint                    = sinon.stub().resolves('sp1');
-        db.releaseSavepoint                   = sinon.stub().resolves();
-        db.rollbackToSavepoint                = sinon.stub().resolves();
-
-        // Wrap createActionIndex so every mint call's FORMAT argument is captured,
-        // independent of which code path (result-delivery vs expiry) triggers it.
-        recordedCalls = [];
-        db.createActionIndex = sinon.stub().callsFake(async (action) => {
-            recordedCalls.push(action);
-            return recordedCalls.length;
-        });
-    }
-
-    function makeRequestRow(overrides = {}) {
-        return {
-            call_id:               'c'.repeat(64),
-            contract_index:        5,
-            target_chain:          'DOGE',
-            target_contract_index: 99,
-            method:                'onArrival',
-            params_json:           '["x"]',
-            gas_limit:             50000,
-            cross_hops:            1,
-            callback_method:       'onResult',
-            callback_params_json:  '["ctx"]',
-            deadline_block:        300,
-            request_status:        'pending',
-            block_index:           100,
-            ...overrides,
-        };
-    }
-
     function makeResultRow(overrides = {}) {
         return {
             call_id:              'c'.repeat(64),
@@ -119,18 +131,6 @@ describe('XCALL action_format invariant (review item 2748)', function () {
         sinon.restore();
     });
 
-    // The class-level invariant asserted below, applied to every recorded call.
-    function assertFormatInvariant(action, label) {
-        const declared = handler.formats || {};
-        const hasFormat = Object.prototype.hasOwnProperty.call(action, 'FORMAT') && action['FORMAT'] !== null;
-        if (!hasFormat) return; // absent/null FORMAT always satisfies the invariant
-        assert.ok(
-            Object.prototype.hasOwnProperty.call(declared, action['FORMAT']),
-            `${label}: createActionIndex was called with FORMAT ${action['FORMAT']}, ` +
-            `but XCALL only declares formats [${Object.keys(declared).join(', ')}]`
-        );
-    }
-
     it('mirror result-delivery mint carries no FORMAT (or one XCALL declares)', async function () {
         indexer.indexerDb.getCrossChainCallRequestById.resolves(makeRequestRow());
         await handler.processResult(makeResultRow(), { BLOCK_INDEX: 200, BLOCK_TIME: 1700000100 });
@@ -146,6 +146,29 @@ describe('XCALL action_format invariant (review item 2748)', function () {
             !Object.prototype.hasOwnProperty.call(anchorCall, 'FORMAT') || anchorCall['FORMAT'] === null,
             'XCALL result-delivery rollback anchor must not mint with an explicit FORMAT (got FORMAT: ' + anchorCall['FORMAT'] + ')'
         );
+    });
+});
+
+describe('XCALL action_format invariant (review item 2748)', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        addXcallDbStubs(indexer.indexerDb);
+        executeStub = { parse: sinon.stub().resolves() };
+        actionsCtx = {
+            config:        indexer.config,
+            util:          indexer.util,
+            mapper:        indexer.mapper,
+            decoderDb:     indexer.decoderDb,
+            indexerDb:     indexer.indexerDb,
+            actionExecute: executeStub,
+        };
+        handler = new Xcall(actionsCtx);
+        indexer.util.resetLists();
+        sinon.stub(ed25519, 'verify').returns(true);
+    });
+
+    afterEach(function () {
+        sinon.restore();
     });
 
     it('deadline-expiry mint (v2) carries the declared FORMAT 2, satisfying the invariant', async function () {

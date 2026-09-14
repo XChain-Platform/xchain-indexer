@@ -297,7 +297,6 @@ describe('PRICE price-range flag day @regression @tier3', function () {
     // Both sides of the flag day, through the real parser.
     // -----------------------------------------------------------------------
     describe('the real gate, through the v0 batch parser', function () {
-
         it('AT the gate invalidates the WHOLE batch for a zero price', async function () {
             // regtest is genesis-armed, so this is the shipped rule refusing the shipped
             // defect with no stub involved.
@@ -350,7 +349,9 @@ describe('PRICE price-range flag day @regression @tier3', function () {
                 assert.ok(String(data['STATUS']).includes('invalid price range'), data['STATUS']);
             }
         });
+    });
 
+    describe('the real gate, through the v0 batch parser', function () {
         it('leaves an inert network and an unreadable block time on the legacy path', async function () {
             for(const [network, blockTime] of [['mainnet', 1700000000], ['mainnet', TESTNET_GATE], ['regtest', null]]){
                 const data = v0Data({ BLOCK_TIME: blockTime });

@@ -20,6 +20,42 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 const Order_Expire = require('../../../src/actions/order_expire.js');
 const Swap_Expire  = require('../../../src/actions/swap_expire.js');
 
+// 18-decimal remaining whose tail an IEEE-754 round-trip provably drops.
+const HI = '1000000.123456789012345678';
+
+function makeCtx(indexer) {
+    return {
+        config:    indexer.config,
+        util:      indexer.util,
+        mapper:    indexer.mapper,
+        decoderDb: indexer.decoderDb,
+        indexerDb: indexer.indexerDb,
+        protocolChanges: {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        },
+        processAction: sinon.stub().resolves(),
+    };
+}
+
+let indexer, ledgerSpy;
+
+function assertParity(tick) {
+    sinon.assert.calledOnce(ledgerSpy);
+    const credits = ledgerSpy.firstCall.args[2];
+    const escrows = ledgerSpy.firstCall.args[4];
+    const esc     = escrows.find(e => e[0] === tick);
+    const credit  = credits.find(c => c[0] === tick);
+    assert.ok(esc,    tick + ' must have an escrow release row');
+    assert.ok(credit, tick + ' must have a paired credit row');
+    // Full 18-dp magnitude on both rows, no float truncation.
+    assert.strictEqual(String(esc[1]),    '-' + HI, tick + ' escrow release lost precision');
+    assert.strictEqual(String(credit[1]), HI,       tick + ' credit drifted');
+    // The pair nets to exactly zero in BigNumber space.
+    assert.strictEqual(String(indexer.util.bcadd(esc[1], credit[1], 64)), '0',
+        tick + ' escrow release does not cancel the paired credit');
+}
+
 // Escrow-release negation parity
 //
 // Every release handler pushes an escrow row for the same tick/address it
@@ -29,48 +65,12 @@ const Swap_Expire  = require('../../../src/actions/swap_expire.js');
 // longer nets to zero and the per-block supply sanity check trips. The fix
 // negates in BigNumber space (bcsub(0, amount, 64)) at every release site.
 describe('Escrow release negation parity @regression @tier1', function () {
-    // 18-decimal remaining whose tail an IEEE-754 round-trip provably drops.
-    const HI = '1000000.123456789012345678';
-
-    function makeCtx(indexer) {
-        return {
-            config:    indexer.config,
-            util:      indexer.util,
-            mapper:    indexer.mapper,
-            decoderDb: indexer.decoderDb,
-            indexerDb: indexer.indexerDb,
-            protocolChanges: {
-                isDefined: sinon.stub().returns(true),
-                isEnabled: sinon.stub().resolves(true),
-            },
-            processAction: sinon.stub().resolves(),
-        };
-    }
-
-    let indexer, ledgerSpy;
-
     beforeEach(function () {
         indexer   = createMockIndexer();
         ledgerSpy = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
         indexer.util.resetLists();
     });
     afterEach(function () { sinon.restore(); });
-
-    function assertParity(tick) {
-        sinon.assert.calledOnce(ledgerSpy);
-        const credits = ledgerSpy.firstCall.args[2];
-        const escrows = ledgerSpy.firstCall.args[4];
-        const esc     = escrows.find(e => e[0] === tick);
-        const credit  = credits.find(c => c[0] === tick);
-        assert.ok(esc,    tick + ' must have an escrow release row');
-        assert.ok(credit, tick + ' must have a paired credit row');
-        // Full 18-dp magnitude on both rows, no float truncation.
-        assert.strictEqual(String(esc[1]),    '-' + HI, tick + ' escrow release lost precision');
-        assert.strictEqual(String(credit[1]), HI,       tick + ' credit drifted');
-        // The pair nets to exactly zero in BigNumber space.
-        assert.strictEqual(String(indexer.util.bcadd(esc[1], credit[1], 64)), '0',
-            tick + ' escrow release does not cancel the paired credit');
-    }
 
     it('ORDER_EXPIRE releases an 18-dp remaining bit-exactly', async function () {
         indexer.indexerDb.getOrderInfo.resolves({
@@ -85,6 +85,15 @@ describe('Escrow release negation parity @regression @tier1', function () {
         await handler.parse(null, createBaseData({ ACTION: 'ORDER_EXPIRE', ACTION_INDEX: 50, BLOCK_INDEX: 200 }), null);
         assertParity('HIDEC');
     });
+});
+
+describe('Escrow release negation parity @regression @tier1', function () {
+    beforeEach(function () {
+        indexer   = createMockIndexer();
+        ledgerSpy = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
+        indexer.util.resetLists();
+    });
+    afterEach(function () { sinon.restore(); });
 
     it('SWAP_EXPIRE releases an 18-dp amount bit-exactly', async function () {
         indexer.indexerDb.getSwapInfo.resolves({

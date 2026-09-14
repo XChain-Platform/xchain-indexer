@@ -135,7 +135,6 @@ describe('SWEEP / CALLBACK unified gas-schedule fee @regression @tier3', functio
     }
 
     describe('at or above the flag day', function () {
-
         it('SWEEP prices SWEEP_BASE + items * SWEEP_PER_ITEM and never touches the legacy model', async function () {
             const data = await runSweep(['0', DESTINATION], { balances: { 1: '1000' } });
             assert.strictEqual(data['STATUS'], 'valid');
@@ -188,7 +187,9 @@ describe('SWEEP / CALLBACK unified gas-schedule fee @regression @tier3', functio
             const { fee } = expectedFee('CALLBACK_BASE', 'CALLBACK_PER_RECIPIENT', 0);
             assert.strictEqual(pricedFee(), String(fee));
         });
+    });
 
+    describe('at or above the flag day', function () {
         it('an emitted (VM-synthesized) SWEEP still pays no per-tx fee', async function () {
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
             const handler = new Sweep(actionsCtx);

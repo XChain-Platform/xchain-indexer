@@ -101,38 +101,37 @@ describe('MAX_SUPPLY=0 is the uncapped sentinel @regression @tier1', function ()
         sinon.restore();
     });
 
+    // @param maxSupply  the token's stored MAX_SUPPLY ('0' = uncapped)
+    // @param supply     supply already minted
+    // @param amount     the AMOUNT this MINT asks for
+    // @param gateOn     UNCAPPED_MAX_SUPPLY_ZERO activation state
+    async function runMint({ maxSupply, supply, amount, gateOn }) {
+        const indexer = createMockIndexer();
+        const ctx     = makeActionsCtx(indexer, { UNCAPPED_MAX_SUPPLY_ZERO: gateOn });
+        const handler = new Mint(ctx);
+
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({
+            TICK:        'UNCAPPED',
+            TICK_ID:     1,
+            DECIMALS:    0,
+            MAX_SUPPLY:  maxSupply,
+            MAX_MINT:    '0',    // no per-tx cap: the MAX_SUPPLY ceiling is what decides
+            SUPPLY:      supply,
+            BLOCK_INDEX: 50,
+        }));
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.getActionCreditDebitAmount.resolves('0');
+        indexer.indexerDb.validTickerBeforeTxIndex.resolves(true);
+
+        const data = createBaseData({ ACTION: 'MINT', FORMAT: 0, BLOCK_INDEX: LOW_BLOCK, SOURCE });
+        await handler.parse(['0', 'UNCAPPED', amount, '', ''], data, null);
+        return data.STATUS;
+    }
+
     // ---------------------------------------------------------------------
     // MINT: the bricked-token defect itself
     // ---------------------------------------------------------------------
     describe('MINT supply ceiling', function () {
-
-        // @param maxSupply  the token's stored MAX_SUPPLY ('0' = uncapped)
-        // @param supply     supply already minted
-        // @param amount     the AMOUNT this MINT asks for
-        // @param gateOn     UNCAPPED_MAX_SUPPLY_ZERO activation state
-        async function runMint({ maxSupply, supply, amount, gateOn }) {
-            const indexer = createMockIndexer();
-            const ctx     = makeActionsCtx(indexer, { UNCAPPED_MAX_SUPPLY_ZERO: gateOn });
-            const handler = new Mint(ctx);
-
-            indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({
-                TICK:        'UNCAPPED',
-                TICK_ID:     1,
-                DECIMALS:    0,
-                MAX_SUPPLY:  maxSupply,
-                MAX_MINT:    '0',    // no per-tx cap: the MAX_SUPPLY ceiling is what decides
-                SUPPLY:      supply,
-                BLOCK_INDEX: 50,
-            }));
-            indexer.indexerDb.isActionAllowed.resolves(true);
-            indexer.indexerDb.getActionCreditDebitAmount.resolves('0');
-            indexer.indexerDb.validTickerBeforeTxIndex.resolves(true);
-
-            const data = createBaseData({ ACTION: 'MINT', FORMAT: 0, BLOCK_INDEX: LOW_BLOCK, SOURCE });
-            await handler.parse(['0', 'UNCAPPED', amount, '', ''], data, null);
-            return data.STATUS;
-        }
-
         it('gate ON: a positive mint on an uncapped (MAX_SUPPLY=0) token is VALID', async function () {
             assert.strictEqual(
                 await runMint({ maxSupply: '0', supply: '0', amount: '1000', gateOn: true }),
@@ -163,7 +162,9 @@ describe('MAX_SUPPLY=0 is the uncapped sentinel @regression @tier1', function ()
                 await runMint({ maxSupply: '1000', supply: '901', amount: '100', gateOn: true }),
                 'invalid: mint exceeds MAX_SUPPLY');
         });
+    });
 
+    describe('MINT supply ceiling', function () {
         it('gate ON: a mint that exactly fills a declared cap stays valid', async function () {
             assert.strictEqual(
                 await runMint({ maxSupply: '1000', supply: '900', amount: '100', gateOn: true }),
@@ -171,31 +172,30 @@ describe('MAX_SUPPLY=0 is the uncapped sentinel @regression @tier1', function ()
         });
     });
 
+    function makeIssue({ gateOn, tokenInfo = null, tokenSupply = '0' }) {
+        const indexer = createMockIndexer();
+        const ctx     = makeActionsCtx(indexer, { UNCAPPED_MAX_SUPPLY_ZERO: gateOn });
+        const handler = new Issue(ctx);
+
+        indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
+        indexer.indexerDb.getTokenSupply.resolves(tokenSupply);
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.isOwnershipEscrowed.resolves(false);
+        indexer.indexerDb.isDistributed.resolves(false);
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        return { indexer, handler };
+    }
+
+    async function runIssue(handler, params) {
+        const data = createBaseData({ ACTION: 'ISSUE', FORMAT: 0, BLOCK_INDEX: LOW_BLOCK, SOURCE });
+        await handler.parse(params, data, null);
+        return data.STATUS;
+    }
+
     // ---------------------------------------------------------------------
     // ISSUE: the three cross-checks that compare a field against MAX_SUPPLY
     // ---------------------------------------------------------------------
     describe('ISSUE cross-checks against MAX_SUPPLY', function () {
-
-        function makeIssue({ gateOn, tokenInfo = null, tokenSupply = '0' }) {
-            const indexer = createMockIndexer();
-            const ctx     = makeActionsCtx(indexer, { UNCAPPED_MAX_SUPPLY_ZERO: gateOn });
-            const handler = new Issue(ctx);
-
-            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
-            indexer.indexerDb.getTokenSupply.resolves(tokenSupply);
-            indexer.indexerDb.isActionAllowed.resolves(true);
-            indexer.indexerDb.isOwnershipEscrowed.resolves(false);
-            indexer.indexerDb.isDistributed.resolves(false);
-            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            return { indexer, handler };
-        }
-
-        async function runIssue(handler, params) {
-            const data = createBaseData({ ACTION: 'ISSUE', FORMAT: 0, BLOCK_INDEX: LOW_BLOCK, SOURCE });
-            await handler.parse(params, data, null);
-            return data.STATUS;
-        }
-
         it('gate ON: MINT_SUPPLY on an uncapped token is VALID (single-shot check exempt)', async function () {
             const { handler } = makeIssue({ gateOn: true });
             assert.strictEqual(
@@ -247,7 +247,9 @@ describe('MAX_SUPPLY=0 is the uncapped sentinel @regression @tier1', function ()
                 await runIssue(handler, makeIssueParams({ MAX_SUPPLY: '', MINT_SUPPLY: '1000' })),
                 'invalid: MINT_SUPPLY > MAX_SUPPLY');
         });
+    });
 
+    describe('ISSUE cross-checks against MAX_SUPPLY', function () {
         it('gate ON: a DECLARED cap still rejects an over-cap MINT_SUPPLY', async function () {
             const { handler } = makeIssue({ gateOn: true });
             assert.strictEqual(

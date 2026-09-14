@@ -626,7 +626,6 @@ describe('Dispense action handler @regression @tier2', function () {
     // future matching correction has a height to hang off. These pin both states,
     // because an "off" branch nothing ever exercises is an unverified branch.
     describe('FIAT_DISPENSER_PRICING gate', function () {
-
         it('is genesis-active, so a FIAT dispenser settles normally', async function () {
             indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
                 FIAT: 'USD', FIAT_AMOUNT: '100', ORACLE_ADDRESS: null, GET_AMOUNT: null,
@@ -674,7 +673,9 @@ describe('Dispense action handler @regression @tier2', function () {
             assert.strictEqual(rec['STATUS'], 'invalid: FIAT dispenser pricing not active');
             sinon.assert.notCalled(match);
         });
+    });
 
+    describe('FIAT_DISPENSER_PRICING gate', function () {
         it('the gate never touches a non-FIAT dispenser', async function () {
             // A non-FIAT dispense must not consult FIAT_DISPENSER_PRICING at all, so
             // turning the gate off can never disturb the ordinary GET_AMOUNT path.
@@ -691,6 +692,21 @@ describe('Dispense action handler @regression @tier2', function () {
         });
     });
 
+    // The measured case, LTC regtest 2026-07-31, DISPENSE 1956: oracle at
+    // 1.5 USD per XCHAIN, GIVE_AMOUNT 5, a 0.37 LTC payment worth $11.10.
+    // That is 7.4 tokens of affordability => 1 whole fill of 5 tokens ($7.50),
+    // where the chain credited 7 fills / 35 tokens ($0.317 a token).
+    const MEASURED = { units: 7, rawUnits: '7.4' };
+
+    function modeBDispenser(overrides = {}) {
+        return makeDispenserInfo({
+            FIAT: 'USD', FIAT_AMOUNT: null, GET_AMOUNT: null,
+            ORACLE_ADDRESS: '1OracleAddrXXXXXXXXXXXXXXXXXXXX',
+            GIVE_AMOUNT: '5', GIVE_REMAINING: '100',
+            ...overrides,
+        });
+    }
+
     // DISPENSER_ORACLE_PER_TOKEN_PRICE.
     //
     // A PRICE v1 oracle publishes the price of one TOKEN. Below the activation
@@ -704,22 +720,6 @@ describe('Dispense action handler @regression @tier2', function () {
     // readings coincide exactly, which is the whole reason this survived every
     // documented example and every test written before 2026-07-31.
     describe('DISPENSER_ORACLE_PER_TOKEN_PRICE gate (Mode B)', function () {
-
-        // The measured case, LTC regtest 2026-07-31, DISPENSE 1956: oracle at
-        // 1.5 USD per XCHAIN, GIVE_AMOUNT 5, a 0.37 LTC payment worth $11.10.
-        // That is 7.4 tokens of affordability => 1 whole fill of 5 tokens ($7.50),
-        // where the chain credited 7 fills / 35 tokens ($0.317 a token).
-        const MEASURED = { units: 7, rawUnits: '7.4' };
-
-        function modeBDispenser(overrides = {}) {
-            return makeDispenserInfo({
-                FIAT: 'USD', FIAT_AMOUNT: null, GET_AMOUNT: null,
-                ORACLE_ADDRESS: '1OracleAddrXXXXXXXXXXXXXXXXXXXX',
-                GIVE_AMOUNT: '5', GIVE_REMAINING: '100',
-                ...overrides,
-            });
-        }
-
         it('at activation the published price buys one TOKEN, not one fill', async function () {
             indexer.indexerDb.getDispenserInfo.resolves(modeBDispenser());
             sinon.stub(indexer.util, 'reverseOraclePriceMatch').resolves(MEASURED);
@@ -769,7 +769,9 @@ describe('Dispense action handler @regression @tier2', function () {
                     `GIVE_AMOUNT 1 must settle identically with the gate ${enabled ? 'on' : 'off'}`);
             }
         });
+    });
 
+    describe('DISPENSER_ORACLE_PER_TOKEN_PRICE gate (Mode B)', function () {
         it('floors the fill count ONCE, so a sub-1 GIVE_AMOUNT is not under-credited', async function () {
             // 1.75 affordable tokens at half a token per fill is 3 fills = 1.5
             // tokens. Flooring to whole tokens first (floor(floor(1.75)/0.5)) gives
@@ -813,7 +815,9 @@ describe('Dispense action handler @regression @tier2', function () {
             assert.ok(String(rec['STATUS']).startsWith('invalid: insufficient funds'),
                 `expected an insufficient-funds refusal, got ${rec['STATUS']}`);
         });
+    });
 
+    describe('DISPENSER_ORACLE_PER_TOKEN_PRICE gate (Mode B)', function () {
         it('does not divide by a balance dispenser empty GIVE_AMOUNT', async function () {
             // The case the giveAmountPositive guard covers: a BALANCE dispenser opened
             // with an empty GIVE_AMOUNT, still legal below
@@ -870,7 +874,9 @@ describe('Dispense action handler @regression @tier2', function () {
             assert.ok(!isEnabled.getCalls().some(c => c.args[0] === 'DISPENSER_ORACLE_PER_TOKEN_PRICE'),
                 'a Mode A dispense must not query the Mode B gate');
         });
+    });
 
+    describe('DISPENSER_ORACLE_PER_TOKEN_PRICE gate (Mode B)', function () {
         it('never touches a non-FIAT dispenser', async function () {
             const isEnabled = actionsCtx.protocolChanges.isEnabled;
             indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo());

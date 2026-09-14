@@ -151,7 +151,6 @@ describe('Stake handler @regression @tier2', function () {
     // -----------------------------------------------------------------------
 
     describe('v1: create new capability stake', function () {
-
         it('valid v1 stake → STATUS valid, createStake called', async function () {
             indexer.indexerDb.getActiveStakeByPubkey.resolves(null); // no existing stake
             const params = ['1', '500.00000000', PUBKEY];
@@ -204,7 +203,9 @@ describe('Stake handler @regression @tier2', function () {
 
             assert.ok(data.STATUS.includes('already in use'));
         });
+    });
 
+    describe('v1: create new capability stake', function () {
         it('pubkey held by an active delegation → invalid for v1 (mirrors the DELEGATE collision rule)', async function () {
             indexer.indexerDb.getDelegationByPubkey.resolves({ action_index: 7 });
 
@@ -406,23 +407,22 @@ describe('Stake handler @regression @tier2', function () {
         });
     });
 
+    const CONTRACT_INDEX = '5';
+    const CONTRACT_TICK  = 'TEST';
+
+    function makeContractToken() {
+        return createTokenInfo({ TICK: CONTRACT_TICK, TICK_ID: 2, DECIMALS: 0 });
+    }
+
+    function makeContractInfo(overrides = {}) {
+        return Object.assign({ source_id: 42, cooldown_blocks: 100 }, overrides);
+    }
+
     // -----------------------------------------------------------------------
     // v3 : Contract-targeted stake
     // -----------------------------------------------------------------------
 
     describe('v3 : contract-targeted stake', function () {
-
-        const CONTRACT_INDEX = '5';
-        const CONTRACT_TICK  = 'TEST';
-
-        function makeContractToken() {
-            return createTokenInfo({ TICK: CONTRACT_TICK, TICK_ID: 2, DECIMALS: 0 });
-        }
-
-        function makeContractInfo(overrides = {}) {
-            return Object.assign({ source_id: 42, cooldown_blocks: 100 }, overrides);
-        }
-
         beforeEach(function () {
             // Contract exists, is valid, and has cooldown_blocks set
             indexer.indexerDb.getContract.resolves(makeContractInfo());
@@ -470,6 +470,20 @@ describe('Stake handler @regression @tier2', function () {
             await handler.parse(params, data, null);
             assert.ok(String(data.STATUS).includes('STAKE + guard fee'));
         });
+    });
+
+    describe('v3 : contract-targeted stake', function () {
+        beforeEach(function () {
+            // Contract exists, is valid, and has cooldown_blocks set
+            indexer.indexerDb.getContract.resolves(makeContractInfo());
+            indexer.indexerDb.getStatusString.resolves('valid');
+            // Token for the stake
+            indexer.indexerDb.getTokenInfo.resolves(makeContractToken());
+            // Sufficient balance
+            indexer.indexerDb.getAddressBalances.resolves({ 2: '1000' });
+            // No existing stake for this (target, pubkey, tick)
+            indexer.indexerDb.getContractStakeOwner.resolves(null);
+        });
 
         it('STAKE-2: allows the combined debit when the GAS balance covers AMOUNT+guardFee', async function () {
             const GAS = actionsCtx.config['GAS'];
@@ -509,6 +523,20 @@ describe('Stake handler @regression @tier2', function () {
             await handler.parse(params, data, null);
 
             assert.ok(data.STATUS.includes('unknown'));
+        });
+    });
+
+    describe('v3 : contract-targeted stake', function () {
+        beforeEach(function () {
+            // Contract exists, is valid, and has cooldown_blocks set
+            indexer.indexerDb.getContract.resolves(makeContractInfo());
+            indexer.indexerDb.getStatusString.resolves('valid');
+            // Token for the stake
+            indexer.indexerDb.getTokenInfo.resolves(makeContractToken());
+            // Sufficient balance
+            indexer.indexerDb.getAddressBalances.resolves({ 2: '1000' });
+            // No existing stake for this (target, pubkey, tick)
+            indexer.indexerDb.getContractStakeOwner.resolves(null);
         });
 
         it('v3 contract status not valid → invalid', async function () {
@@ -552,6 +580,20 @@ describe('Stake handler @regression @tier2', function () {
 
             assert.ok(data.STATUS.includes('AMOUNT'));
         });
+    });
+
+    describe('v3 : contract-targeted stake', function () {
+        beforeEach(function () {
+            // Contract exists, is valid, and has cooldown_blocks set
+            indexer.indexerDb.getContract.resolves(makeContractInfo());
+            indexer.indexerDb.getStatusString.resolves('valid');
+            // Token for the stake
+            indexer.indexerDb.getTokenInfo.resolves(makeContractToken());
+            // Sufficient balance
+            indexer.indexerDb.getAddressBalances.resolves({ 2: '1000' });
+            // No existing stake for this (target, pubkey, tick)
+            indexer.indexerDb.getContractStakeOwner.resolves(null);
+        });
 
         it('v3 TARGET_CONTRACT_INDEX missing → invalid', async function () {
             const params = ['3', '100', PUBKEY, '', CONTRACT_TICK];
@@ -591,6 +633,20 @@ describe('Stake handler @regression @tier2', function () {
 
             assert.ok(data.STATUS.includes('already staked'));
         });
+    });
+
+    describe('v3 : contract-targeted stake', function () {
+        beforeEach(function () {
+            // Contract exists, is valid, and has cooldown_blocks set
+            indexer.indexerDb.getContract.resolves(makeContractInfo());
+            indexer.indexerDb.getStatusString.resolves('valid');
+            // Token for the stake
+            indexer.indexerDb.getTokenInfo.resolves(makeContractToken());
+            // Sufficient balance
+            indexer.indexerDb.getAddressBalances.resolves({ 2: '1000' });
+            // No existing stake for this (target, pubkey, tick)
+            indexer.indexerDb.getContractStakeOwner.resolves(null);
+        });
 
         it('v3 same source top-up → valid (owner matches)', async function () {
             indexer.indexerDb.getContractStakeOwner.resolves(42); // already staked by same source
@@ -626,6 +682,20 @@ describe('Stake handler @regression @tier2', function () {
             await handler.parse(params, data, null);
 
             assert.ok(data.STATUS.includes('exceeds token decimals'));
+        });
+    });
+
+    describe('v3 : contract-targeted stake', function () {
+        beforeEach(function () {
+            // Contract exists, is valid, and has cooldown_blocks set
+            indexer.indexerDb.getContract.resolves(makeContractInfo());
+            indexer.indexerDb.getStatusString.resolves('valid');
+            // Token for the stake
+            indexer.indexerDb.getTokenInfo.resolves(makeContractToken());
+            // Sufficient balance
+            indexer.indexerDb.getAddressBalances.resolves({ 2: '1000' });
+            // No existing stake for this (target, pubkey, tick)
+            indexer.indexerDb.getContractStakeOwner.resolves(null);
         });
 
         it('v3 source sleeping → invalid', async function () {

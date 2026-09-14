@@ -17,20 +17,20 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Order_Expire = require('../../../src/actions/order_expire.js');
 
+let indexer, actionsCtx, handler;
+
+function makeOrderInfo(overrides) {
+    return {
+        ACTION_INDEX: 50,
+        SOURCE: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
+        GIVE_TICK: 'TEST',
+        GIVE_REMAINING: '100',
+        GET_TICK: 'OTHER',
+        ...overrides,
+    };
+}
+
 describe('Order_Expire action handler @regression @tier2', function () {
-    let indexer, actionsCtx, handler;
-
-    function makeOrderInfo(overrides) {
-        return {
-            ACTION_INDEX: 50,
-            SOURCE: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
-            GIVE_TICK: 'TEST',
-            GIVE_REMAINING: '100',
-            GET_TICK: 'OTHER',
-            ...overrides,
-        };
-    }
-
     beforeEach(function () {
         indexer = createMockIndexer();
         actionsCtx = {
@@ -83,6 +83,26 @@ describe('Order_Expire action handler @regression @tier2', function () {
         await handler.parse(null, data, null);
         assert.ok(indexer.indexerDb.updateBalances.calledOnce);
     });
+});
+
+describe('Order_Expire action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().resolves(true),
+            },
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Order_Expire(actionsCtx);
+        indexer.util.resetLists();
+    });
 
     it('calls mapper.createMappings after processing', async function () {
         const orderInfo = makeOrderInfo();
@@ -116,6 +136,26 @@ describe('Order_Expire action handler @regression @tier2', function () {
 
         assert.ok(indexer.indexerDb.createOrderExpire.calledOnce);
     });
+});
+
+describe('Order_Expire action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().resolves(true),
+            },
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Order_Expire(actionsCtx);
+        indexer.util.resetLists();
+    });
 
     // ─── GIVE_OWNERSHIP=1: release ownership escrow ─────────────────
 
@@ -141,6 +181,26 @@ describe('Order_Expire action handler @regression @tier2', function () {
         const statusCall = indexer.indexerDb.createOrderStatus.getCall(0);
         assert.ok(statusCall);
         assert.strictEqual(statusCall.args[2], 'expired');
+    });
+});
+
+describe('Order_Expire action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().resolves(true),
+            },
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Order_Expire(actionsCtx);
+        indexer.util.resetLists();
     });
 
     // ─── Native coin GIVE (null GIVE_TICK) ───────────────────────────

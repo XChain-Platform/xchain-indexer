@@ -27,7 +27,6 @@ async function captureLog(fn) {
 }
 
 describe('Dispenser divergence metrics (observability) @regression @tier2', function () {
-
     afterEach(function () { sinon.restore(); });
 
     describe('metrics module', function () {
@@ -86,6 +85,10 @@ describe('Dispenser divergence metrics (observability) @regression @tier2', func
             assert.ok(summary.includes('| totals'), 'summary carries running totals for multi-day tally');
         });
     });
+});
+
+describe('Dispenser divergence metrics (observability) @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     describe('dispenser_close call site', function () {
         let indexer, ctx, handler;
@@ -124,6 +127,10 @@ describe('Dispenser divergence metrics (observability) @regression @tier2', func
             sinon.assert.notCalled(spy);
         });
     });
+});
+
+describe('Dispenser divergence metrics (observability) @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     describe('dispense zero-match call site', function () {
         let indexer, ctx, dispense;

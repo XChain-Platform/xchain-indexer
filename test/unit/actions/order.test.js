@@ -87,7 +87,6 @@ describe('Order action handler @regression @tier2', function () {
     // ─── Format 0: Create Order ───────────────────────────────────────────
 
     describe('Format 0 – Create Order', function () {
-
         it('valid order creation calls createOrder and createOrderStatus', async function () {
             const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|10||${OWNER_ADDR}|${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
@@ -144,7 +143,9 @@ describe('Order action handler @regression @tier2', function () {
             sinon.assert.calledOnce(indexer.indexerDb.updateBalances);
             sinon.assert.calledOnce(indexer.indexerDb.updateTokens);
         });
+    });
 
+    describe('Format 0 – Create Order', function () {
         it('GIVE_COIN not matching COIN config returns invalid', async function () {
             const params = makeParams(`0|LTC|RAREPEPE|1||BTC|PEPECASH|10||${OWNER_ADDR}|${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
@@ -191,7 +192,9 @@ describe('Order action handler @regression @tier2', function () {
 
             assert.ok(data['STATUS'].includes('GIVE_TICK'));
         });
+    });
 
+    describe('Format 0 – Create Order', function () {
         it('GET_TICK not found returns invalid', async function () {
             indexer.indexerDb.getTokenInfo
                 .withArgs('NOTOKEN', sinon.match.any, sinon.match.any)
@@ -244,7 +247,9 @@ describe('Order action handler @regression @tier2', function () {
 
             assert.ok(data['STATUS'].includes('GIVE_COIN'));
         });
+    });
 
+    describe('Format 0 – Create Order', function () {
         it('SOURCE sleeping returns invalid', async function () {
             indexer.indexerDb.isActionAllowed
                 .withArgs(OWNER_ADDR, null, sinon.match.any)
@@ -302,7 +307,9 @@ describe('Order action handler @regression @tier2', function () {
 
             assert.ok(data['STATUS'].startsWith('invalid'));
         });
+    });
 
+    describe('Format 0 – Create Order', function () {
         it('defaults GET_ADDRESS to SOURCE when COIN networks match and GET_ADDRESS not provided', async function () {
             // Empty GET_ADDRESS in param string
             const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|10|||${EXPIRATION}|||`);
@@ -351,7 +358,9 @@ describe('Order action handler @regression @tier2', function () {
                 `Expected GET_AMOUNT positive error, got "${data['STATUS']}"`);
             sinon.assert.notCalled(indexer.indexerDb.updateBalances);
         });
+    });
 
+    describe('Format 0 – Create Order', function () {
         it('native-coin GET side still requires a positive GET_AMOUNT', async function () {
             // GET_TICK empty (native BTC), GET_AMOUNT empty → invalid
             const params = makeParams(`0|BTC|RAREPEPE|1||BTC|||0|${OWNER_ADDR}|${EXPIRATION}|||`);
@@ -773,22 +782,21 @@ describe('Order action handler @regression @tier2', function () {
         });
     });
 
+    function makeOrderInfo(overrides = {}) {
+        return {
+            ACTION_INDEX:   42,
+            SOURCE:         OWNER_ADDR,
+            GIVE_TICK:      'RAREPEPE',
+            GIVE_REMAINING: '1',
+            GET_TICK:       'PEPECASH',
+            ORDER_STATUS:   'open',
+            ...overrides,
+        };
+    }
+
     // ─── Format 1 Cancel: two-phase and ownership-cancel paths ──────────
 
     describe('Format 1 – two-phase cancel and ownership-cancel paths', function () {
-
-        function makeOrderInfo(overrides = {}) {
-            return {
-                ACTION_INDEX:   42,
-                SOURCE:         OWNER_ADDR,
-                GIVE_TICK:      'RAREPEPE',
-                GIVE_REMAINING: '1',
-                GET_TICK:       'PEPECASH',
-                ORDER_STATUS:   'open',
-                ...overrides,
-            };
-        }
-
         beforeEach(function () {
             indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo());
             indexer.indexerDb.clearTokenEscrow = sinon.stub().resolves();
@@ -819,6 +827,13 @@ describe('Order action handler @regression @tier2', function () {
 
             assert.strictEqual(data['STATUS'], 'valid');
             sinon.assert.calledOnce(indexer.indexerDb.clearTokenEscrow);
+        });
+    });
+
+    describe('Format 1 – two-phase cancel and ownership-cancel paths', function () {
+        beforeEach(function () {
+            indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo());
+            indexer.indexerDb.clearTokenEscrow = sinon.stub().resolves();
         });
 
         it('standard cancel with null GIVE_TICK: no debit/escrow (defensive branch)', async function () {

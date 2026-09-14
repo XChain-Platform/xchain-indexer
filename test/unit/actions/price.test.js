@@ -162,16 +162,16 @@ describe('Price (PRICE) @regression @tier3', function () {
         assert.ok(indexer.indexerDb.createPrice.calledOnce);
     });
 
+    function v1Params(overrides = {}) {
+        const p = { coin: 'BTC', tick: 'TEST', fiat: 'USD', value: '1.50', fee: '0', memo: 'm', ...overrides };
+        return ['1', p.coin, p.tick, p.fiat, p.value, p.fee, p.memo];
+    }
+
     // ───────────────────────────────────────────────────────────────────────
     // Hub push paths (hubClient present)
     // ───────────────────────────────────────────────────────────────────────
 
     describe('hub push - v1', function () {
-        function v1Params(overrides = {}) {
-            const p = { coin: 'BTC', tick: 'TEST', fiat: 'USD', value: '1.50', fee: '0', memo: 'm', ...overrides };
-            return ['1', p.coin, p.tick, p.fiat, p.value, p.fee, p.memo];
-        }
-
         // A v1 oracle_price is user-submitted and never re-emitted by a later block, so its lost-push
         // window was permanent. It now uses the same durable transactional outbox as v0: enqueueHubPushTx
         // inside the block transaction plus a staged post-commit delivery; parse never pushes directly.
@@ -202,7 +202,9 @@ describe('Price (PRICE) @regression @tier3', function () {
             assert.strictEqual(staged.id, 7);
             assert.strictEqual(staged.pushType, 'oracle_price');
         });
+    });
 
+    describe('hub push - v1', function () {
         it('invalid v1 with hubClient → nothing enqueued or staged', async function () {
             const mockHubClient = { enabled: true, pushOraclePrice: sinon.stub().resolves() };
             indexer.indexerDb.enqueueHubPushTx = sinon.stub().resolves(1);

@@ -46,20 +46,34 @@ const LIVE_STATUSES = ['open', 'cancelling'];
 // dispenser_expire writes 'expired'.
 const SETTLED_STATUSES = ['cancelled', 'empty', 'max_dispenses_reached', 'expired'];
 
+let indexer, actionsCtx;
+
+function makeDispenser(overrides) {
+    return {
+        ACTION_INDEX: 50,
+        SOURCE: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
+        GIVE_TICK: 'TEST',
+        GIVE_REMAINING: '200',
+        GET_ADDRESS: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
+        ...overrides,
+    };
+}
+
+// Returns the [credits, debits, escrows] the handler handed to the ledger writer.
+async function runSettlement(Handler, dispenser, data) {
+    indexer.indexerDb.getDispenserInfo.resolves(dispenser);
+    const capture = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
+    await new Handler(actionsCtx).parse(null, data, null);
+    assert.ok(capture.calledOnce, 'the ledger writer must still run on every settlement');
+    return { credits: capture.getCall(0).args[2], escrows: capture.getCall(0).args[4] };
+}
+
+const closeData = () => createBaseData({
+    ACTION: 'DISPENSER_CLOSE', DISPENSER_ACTION_INDEX: 50, BLOCK_INDEX: 200, DISPENSER_STATUS: 'cancelled' });
+const expireData = () => createBaseData({
+    ACTION: 'DISPENSER_EXPIRE', ACTION_INDEX: 50, BLOCK_INDEX: 200 });
+
 describe('Dispenser settlement idempotency (double-refund guard) @regression @tier1', function () {
-    let indexer, actionsCtx;
-
-    function makeDispenser(overrides) {
-        return {
-            ACTION_INDEX: 50,
-            SOURCE: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
-            GIVE_TICK: 'TEST',
-            GIVE_REMAINING: '200',
-            GET_ADDRESS: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
-            ...overrides,
-        };
-    }
-
     beforeEach(function () {
         indexer = createMockIndexer();
         actionsCtx = {
@@ -79,20 +93,6 @@ describe('Dispenser settlement idempotency (double-refund guard) @regression @ti
         indexer.indexerDb.getDispenserCanceller.resolves(null);
     });
 
-    // Returns the [credits, debits, escrows] the handler handed to the ledger writer.
-    async function runSettlement(Handler, dispenser, data) {
-        indexer.indexerDb.getDispenserInfo.resolves(dispenser);
-        const capture = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
-        await new Handler(actionsCtx).parse(null, data, null);
-        assert.ok(capture.calledOnce, 'the ledger writer must still run on every settlement');
-        return { credits: capture.getCall(0).args[2], escrows: capture.getCall(0).args[4] };
-    }
-
-    const closeData = () => createBaseData({
-        ACTION: 'DISPENSER_CLOSE', DISPENSER_ACTION_INDEX: 50, BLOCK_INDEX: 200, DISPENSER_STATUS: 'cancelled' });
-    const expireData = () => createBaseData({
-        ACTION: 'DISPENSER_EXPIRE', ACTION_INDEX: 50, BLOCK_INDEX: 200 });
-
     describe('a settled dispenser is never refunded twice', function () {
 
         SETTLED_STATUSES.forEach(function (status) {
@@ -108,6 +108,27 @@ describe('Dispenser settlement idempotency (double-refund guard) @regression @ti
                 assert.deepStrictEqual(r.credits, [], 'a re-settlement must credit nobody');
             });
         });
+    });
+});
+
+describe('Dispenser settlement idempotency (double-refund guard) @regression @tier1', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().resolves(true),
+            },
+            processAction: sinon.stub().resolves(),
+        };
+        indexer.util.resetLists();
+        indexer.indexerDb.getSweepDestination.resolves(null);
+        indexer.indexerDb.getDispenserCanceller.resolves(null);
     });
 
     describe('every live first settlement still refunds in full', function () {
@@ -136,6 +157,27 @@ describe('Dispenser settlement idempotency (double-refund guard) @regression @ti
             const r = await runSettlement(Dispenser_Close, makeDispenser({ DISPENSER_STATUS: 'some_future_state' }), closeData());
             assert.strictEqual(r.escrows.length, 1, 'an unknown status must not suppress the refund');
         });
+    });
+});
+
+describe('Dispenser settlement idempotency (double-refund guard) @regression @tier1', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().resolves(true),
+            },
+            processAction: sinon.stub().resolves(),
+        };
+        indexer.util.resetLists();
+        indexer.indexerDb.getSweepDestination.resolves(null);
+        indexer.indexerDb.getDispenserCanceller.resolves(null);
     });
 
     describe('util.isDispenserSettled', function () {

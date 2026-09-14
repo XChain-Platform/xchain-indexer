@@ -176,30 +176,45 @@ describe('Dispenser amount positivity @regression @tier2', function () {
         });
     });
 
+    let indexer;
+    let dispense;
+
+    function makeDispenserInfo(overrides = {}) {
+        return {
+            ACTION_INDEX:   10,
+            SOURCE:         OWNER_ADDR,
+            GET_ADDRESS:    OWNER_ADDR,
+            GIVE_COIN:      'BTC',
+            GIVE_TICK:      'JDOG',
+            GIVE_AMOUNT:    '1',
+            GIVE_REMAINING: '10',
+            GET_COIN:       'BTC',
+            GET_TICK:       null,
+            GET_AMOUNT:     '0.01',
+            ALLOW_LIST:     null,
+            BLOCK_LIST:     null,
+            DISPENSER_STATUS: 'open',
+            ...overrides,
+        };
+    }
+
+    async function settle(dispenserOverrides, opts = {}) {
+        if (opts.network)
+            indexer.config['NETWORK'] = opts.network;
+        indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo(dispenserOverrides));
+        const data = createBaseData({
+            ACTION:      'DISPENSE',
+            SOURCE:      BUYER_ADDR,
+            COIN_AMOUNT: opts.coinAmount || '0.001',
+            BLOCK_TIME,
+        });
+        await dispense.parse([], data, false);
+        return indexer.indexerDb.createDispense.firstCall
+            ? indexer.indexerDb.createDispense.firstCall.args[0]
+            : null;
+    }
+
     describe('DISPENSE settlement: fill count', function () {
-
-        let indexer;
-        let dispense;
-
-        function makeDispenserInfo(overrides = {}) {
-            return {
-                ACTION_INDEX:   10,
-                SOURCE:         OWNER_ADDR,
-                GET_ADDRESS:    OWNER_ADDR,
-                GIVE_COIN:      'BTC',
-                GIVE_TICK:      'JDOG',
-                GIVE_AMOUNT:    '1',
-                GIVE_REMAINING: '10',
-                GET_COIN:       'BTC',
-                GET_TICK:       null,
-                GET_AMOUNT:     '0.01',
-                ALLOW_LIST:     null,
-                BLOCK_LIST:     null,
-                DISPENSER_STATUS: 'open',
-                ...overrides,
-            };
-        }
-
         beforeEach(function () {
             indexer  = createMockIndexer();
             dispense = new Dispense(makeActionsCtx(indexer));
@@ -217,22 +232,6 @@ describe('Dispenser amount positivity @regression @tier2', function () {
         afterEach(function () {
             sinon.restore();
         });
-
-        async function settle(dispenserOverrides, opts = {}) {
-            if (opts.network)
-                indexer.config['NETWORK'] = opts.network;
-            indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo(dispenserOverrides));
-            const data = createBaseData({
-                ACTION:      'DISPENSE',
-                SOURCE:      BUYER_ADDR,
-                COIN_AMOUNT: opts.coinAmount || '0.001',
-                BLOCK_TIME,
-            });
-            await dispense.parse([], data, false);
-            return indexer.indexerDb.createDispense.firstCall
-                ? indexer.indexerDb.createDispense.firstCall.args[0]
-                : null;
-        }
 
         it('control: the arithmetic behind a negative fill count is real', function () {
             // Not a behavioral test: it pins that this fixture DOES drive the multiplier
@@ -263,6 +262,26 @@ describe('Dispenser amount positivity @regression @tier2', function () {
             const rec = await settle({}, { coinAmount: '0.02' });
             assert.strictEqual(rec['STATUS'], 'valid');
             assert.strictEqual(String(rec['GIVE_AMOUNT']), '2');
+        });
+    });
+
+    describe('DISPENSE settlement: fill count', function () {
+        beforeEach(function () {
+            indexer  = createMockIndexer();
+            dispense = new Dispense(makeActionsCtx(indexer));
+
+            indexer.indexerDb.findMatchingDispensers.resolves([10]);
+            indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo());
+            indexer.indexerDb.getTokenInfo
+                .withArgs('JDOG', sinon.match.any, sinon.match.any)
+                .resolves(createTokenInfo({ TICK: 'JDOG', TICK_ID: 10, ALLOW_LIST: null, BLOCK_LIST: null }));
+            for (const empty of [null, undefined])
+                indexer.indexerDb.getTokenInfo.withArgs(empty, sinon.match.any, sinon.match.any).resolves(null);
+            indexer.indexerDb.createActionIndex.resolves(200);
+        });
+
+        afterEach(function () {
+            sinon.restore();
         });
 
         it('a zero fill count keeps its legacy status text on both sides of the gate', async function () {

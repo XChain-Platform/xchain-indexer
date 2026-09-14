@@ -194,7 +194,6 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
     // 1. Decompression
     // -----------------------------------------------------------------------
     describe('decompression (step 1)', function () {
-
         it('accepts a real six-round batch in the COMPRESSED form', async function () {
             const data = v2Data();
             await handler.parse(compressedParams(batchBody(validBatch())), data, null);
@@ -245,7 +244,9 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
             assert.strictEqual(plain['VALIDATION_STATUS'], 'invalid');
             assert.strictEqual(plain['STATUS'], squeezed['STATUS']);
         });
+    });
 
+    describe('decompression (step 1)', function () {
         it('records the compression module reason verbatim for non-canonical base64', async function () {
             const field = comp.compressPriceBatchBody(batchBody(validBatch()).join('|'));
             // URL-safe alphabet is a DIFFERENT encoding of the same bytes: one wire, one meaning.
@@ -307,7 +308,6 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
     // 2. Structural checks
     // -----------------------------------------------------------------------
     describe('structural checks (step 2)', function () {
-
         it('rejects FIRST_ROUND > LAST_ROUND', async function () {
             const body = batchBody(validBatch());
             body[0] = '106'; body[1] = '105';
@@ -359,7 +359,9 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
             assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
             assert.ok(data['STATUS'].includes(String(comp.PRICE_BATCH_MAX_ROUND_COUNT)), data['STATUS']);
         });
+    });
 
+    describe('structural checks (step 2)', function () {
         it('accepts exactly PRICE_BATCH_MAX_ROUND_COUNT and refuses one more', async function () {
             const make = n => {
                 const rounds = [];
@@ -406,7 +408,9 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
                 assert.ok(data['STATUS'].includes('ascending'), data['STATUS']);
             }
         });
+    });
 
+    describe('structural checks (step 2)', function () {
         it('rejects a round outside the declared window', async function () {
             for(const [idx, value] of [[0, 99], [5, 106]]){
                 const rounds = sixRounds();
@@ -517,6 +521,14 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
         });
     });
 
+    const GATE          = 961000;      // stands in for mainnet's stake-weighted height
+    const ROUND_ANCHOR  = GATE - 10;   // rounds 960990..960995, all below the gate
+    const ATTACK_HEADER = GATE + 500;  // the header alone claims the far side
+
+    let gate, signers, whole;
+
+    const attackRounds = () => sixRounds({ anchorBase: ROUND_ANCHOR });
+
     // -----------------------------------------------------------------------
     // The batch anchor rule (part of step 3): BTC_BLOCK_HEIGHT must equal the LAST
     // included round's anchor.
@@ -531,12 +543,6 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
     // per-round anchor sits honestly below the gate; only the HEADER claims otherwise.
     // -----------------------------------------------------------------------
     describe('batch anchor rule (step 3)', function () {
-        const GATE          = 961000;      // stands in for mainnet's stake-weighted height
-        const ROUND_ANCHOR  = GATE - 10;   // rounds 960990..960995, all below the gate
-        const ATTACK_HEADER = GATE + 500;  // the header alone claims the far side
-
-        let gate, signers, whole;
-
         beforeEach(function () {
             // A height-keyed gate, exactly as an armed activation height behaves. The
             // parser resolves it through the same predicate the quorum uses, so this
@@ -556,8 +562,6 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
                 pubkey: id.pubkey, source: 's' + i, weight: i < 2 ? '100000' : '1'
             })));
         });
-
-        const attackRounds = () => sixRounds({ anchorBase: ROUND_ANCHOR });
 
         it('refuses a header anchor that is not the last round anchor, before either quorum gate resolves', async function () {
             // Otherwise perfect: the quorum really signed this header, so nothing but the
@@ -592,6 +596,28 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
             assert.strictEqual(data['STATUS'], 'invalid: insufficient PBFT quorum (2/3)');
             assert.ok(!indexer.indexerDb.getStakeWeightsByCapability.called,
                 'the honest anchor is below the gate, so the stake rule must not apply');
+        });
+    });
+
+    describe('batch anchor rule (step 3)', function () {
+        beforeEach(function () {
+            // A height-keyed gate, exactly as an armed activation height behaves. The
+            // parser resolves it through the same predicate the quorum uses, so this
+            // moves the real rule rather than a copy of it.
+            swq.isStakeWeightedQuorumActive.restore();
+            gate = sinon.stub(swq, 'isStakeWeightedQuorumActive').callsFake(h => parseInt(h) >= GATE);
+
+            signers = [newIdentity(), newIdentity()];
+            const dust = [newIdentity(), newIdentity()];
+            whole = signers.concat(dust);
+            for(const id of whole) capable.add(id.pubkey);
+
+            // Count rule: 4 price-capable validators, so quorum is 3 and two signers fail.
+            indexer.indexerDb.getActiveCapabilityCount.resolves(4);
+            // Stake rule: the same two signers hold 3*200000 > 2*200002, so they pass.
+            indexer.indexerDb.getStakeWeightsByCapability.resolves(whole.map((id, i) => ({
+                pubkey: id.pubkey, source: 's' + i, weight: i < 2 ? '100000' : '1'
+            })));
         });
 
         it('accepts an honest batch whose header anchor equals the last round anchor', async function () {
@@ -628,7 +654,6 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
     // 4. Signature verification
     // -----------------------------------------------------------------------
     describe('signature verification (step 4)', function () {
-
         it('verifies real signatures over the canonical from buildPriceBatchPayload', async function () {
             const data = v2Data();
             await handler.parse(uncompressedParams(batchBody(validBatch())), data, null);
@@ -682,7 +707,9 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
             assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
             assert.ok(data['STATUS'].includes('1/3'), data['STATUS']);
         });
+    });
 
+    describe('signature verification (step 4)', function () {
         it('meets PBFT quorum at exactly 2f+1', async function () {
             const ids = [newIdentity(), newIdentity(), newIdentity()];
             for(const id of ids) capable.add(id.pubkey);
@@ -729,7 +756,9 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
             assert.strictEqual(indexer.indexerDb.getValidatorsByCapability.firstCall.args[1], batch.btcBlockHeight);
             assert.strictEqual(indexer.indexerDb.getActiveCapabilityCount.firstCall.args[1], batch.btcBlockHeight);
         });
+    });
 
+    describe('signature verification (step 4)', function () {
         it('uses stake-weighted quorum when the batch anchor is at or above its gate', async function () {
             swq.isStakeWeightedQuorumActive.restore();
             sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(true);
@@ -862,7 +891,6 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
     // 6. Hub push
     // -----------------------------------------------------------------------
     describe('hub push (step 6)', function () {
-
         // THE KEY SET. The hub's pushpricebatch handler destructures exactly these names
         // and nothing in the transport validates them, so a typo fails silently at runtime
         // and no other test in either repo would catch it.
@@ -919,7 +947,9 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
             assert.strictEqual(staged.pushType, 'price_batch');
             assert.deepStrictEqual(staged.payload, indexer.indexerDb.enqueueHubPushTx.firstCall.args[1]);
         });
+    });
 
+    describe('hub push (step 6)', function () {
         it('pushes nothing for an invalid batch', async function () {
             const body = batchBody(validBatch());
             body[body.length - 1] = 'f'.repeat(128);   // a signature that cannot verify

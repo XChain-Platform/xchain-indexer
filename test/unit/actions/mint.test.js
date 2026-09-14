@@ -512,7 +512,6 @@ describe('Mint handler @regression @tier1', function () {
     // -----------------------------------------------------------------------
 
     describe('DESTINATION', function () {
-
         it('valid DESTINATION → credit goes to DESTINATION, debit from SOURCE', async function () {
             const ledgerSpy = sinon.spy(indexer.util, 'processTransactionLedgerChanges');
 
@@ -561,7 +560,9 @@ describe('Mint handler @regression @tier1', function () {
 
             assert.ok(data.STATUS.startsWith('invalid'));
         });
+    });
 
+    describe('DESTINATION', function () {
         it('DESTINATION not authorized by token list → invalid', async function () {
             indexer.indexerDb.isActionAllowed
                 .onFirstCall().resolves(true)   // SOURCE sleeping check

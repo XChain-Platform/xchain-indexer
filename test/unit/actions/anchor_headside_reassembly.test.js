@@ -195,6 +195,40 @@ describe('Anchor head-side reassembly gate @regression', function () {
     });
 });
 
+let indexer, handler, verifyStub, swqStub;
+let headSlice, chunk1, chunk2;
+
+function addAnchorDbStubs(db) {
+    db.getValidatorsByCapability  = sinon.stub().resolves([{ pubkey: PUBKEY_A, amount: '1' }]);
+    db.getMaxAnchorCheckpointSeq  = sinon.stub().resolves(null);
+    db.getArchiveReplayWatermarks = sinon.stub().resolves({ batchSeq: null, checkpointSeq: null });
+    db.createAnchorAction         = sinon.stub().resolves();
+    db.getAnchorV1ByBatchSeq      = sinon.stub().resolves(null);
+    db.getAnchorChunks            = sinon.stub().resolves([]);
+    db.setAnchorArchiveStatus     = sinon.stub().resolves();
+    db.createValidatorReward      = sinon.stub().resolves(true);
+    db.reconcileAnchorRewardWinner= sinon.stub().resolves(0);
+}
+
+// Build a handler bound to `network`, with the archive chunks already stored.
+function handlerFor(network) {
+    indexer = createMockIndexer();
+    indexer.config = Object.assign({}, indexer.config, { COIN: 'DOGE', NETWORK: network });
+    addAnchorDbStubs(indexer.indexerDb);
+    indexer.indexerDb.getAnchorChunks.resolves([chunk1, chunk2]);
+    return new Anchor(indexer);
+}
+
+// Run a corrupt-CRC head-last arrival on `network` at DOGE height `blockIndex`,
+// returning whether the head-side gate stamped invalid_archive.
+async function stampedAt(network, blockIndex, snapshotless) {
+    handler = handlerFor(network);
+    if (snapshotless) indexer.indexerDb.getValidatorsByCapability.resolves([]);
+    let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE', ACTION_INDEX: 21, BLOCK_INDEX: blockIndex });
+    await handler.parse(v1HeadParams({ network, batch_seq: '9', crc: '00000000', total_chunks: '3', head_b64: headSlice }), data, null);
+    return { stamped: indexer.indexerDb.setAnchorArchiveStatus.calledWith(21, 'invalid_archive'), status: data['STATUS'] };
+}
+
 // The 'unverified' admission is preimage-moving (invalid_archive is projected by
 // stateHash.js class 6) and it does NOT move the two node classes together: a mirrored
 // node whose quorum FAILS gets error set, so the gate never runs and no stamp lands,
@@ -205,30 +239,6 @@ describe('Anchor head-side reassembly gate @regression', function () {
 // (measured 2026-09-09), so the two node classes have no stamp to disagree about
 // and the widening is identity over it.
 describe('Anchor head-side reassembly gate: unverified flag-day @regression', function () {
-    let indexer, handler, verifyStub, swqStub;
-    let headSlice, chunk1, chunk2;
-
-    function addAnchorDbStubs(db) {
-        db.getValidatorsByCapability  = sinon.stub().resolves([{ pubkey: PUBKEY_A, amount: '1' }]);
-        db.getMaxAnchorCheckpointSeq  = sinon.stub().resolves(null);
-        db.getArchiveReplayWatermarks = sinon.stub().resolves({ batchSeq: null, checkpointSeq: null });
-        db.createAnchorAction         = sinon.stub().resolves();
-        db.getAnchorV1ByBatchSeq      = sinon.stub().resolves(null);
-        db.getAnchorChunks            = sinon.stub().resolves([]);
-        db.setAnchorArchiveStatus     = sinon.stub().resolves();
-        db.createValidatorReward      = sinon.stub().resolves(true);
-        db.reconcileAnchorRewardWinner= sinon.stub().resolves(0);
-    }
-
-    // Build a handler bound to `network`, with the archive chunks already stored.
-    function handlerFor(network) {
-        indexer = createMockIndexer();
-        indexer.config = Object.assign({}, indexer.config, { COIN: 'DOGE', NETWORK: network });
-        addAnchorDbStubs(indexer.indexerDb);
-        indexer.indexerDb.getAnchorChunks.resolves([chunk1, chunk2]);
-        return new Anchor(indexer);
-    }
-
     beforeEach(function () {
         verifyStub = sinon.stub(ed25519, 'verify').returns(true);
         swqStub    = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
@@ -239,16 +249,6 @@ describe('Anchor head-side reassembly gate: unverified flag-day @regression', fu
         chunk2     = { chunk_index: 2, archive_b64: b64.slice(cut2) };
     });
     afterEach(function () { verifyStub.restore(); swqStub.restore(); });
-
-    // Run a corrupt-CRC head-last arrival on `network` at DOGE height `blockIndex`,
-    // returning whether the head-side gate stamped invalid_archive.
-    async function stampedAt(network, blockIndex, snapshotless) {
-        handler = handlerFor(network);
-        if (snapshotless) indexer.indexerDb.getValidatorsByCapability.resolves([]);
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE', ACTION_INDEX: 21, BLOCK_INDEX: blockIndex });
-        await handler.parse(v1HeadParams({ network, batch_seq: '9', crc: '00000000', total_chunks: '3', head_b64: headSlice }), data, null);
-        return { stamped: indexer.indexerDb.setAnchorArchiveStatus.calledWith(21, 'invalid_archive'), status: data['STATUS'] };
-    }
 
     it('every network is armed at 0, mainnet included since the 2026-09-09 ruling', function () {
         assert.strictEqual(ahug.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION.mainnet, 0,
@@ -296,6 +296,19 @@ describe('Anchor head-side reassembly gate: unverified flag-day @regression', fu
         assert.strictEqual(r.stamped, true,
             'mainnet is armed at 0, so an unverified head runs the same CRC check as a valid one');
     });
+});
+
+describe('Anchor head-side reassembly gate: unverified flag-day @regression', function () {
+    beforeEach(function () {
+        verifyStub = sinon.stub(ed25519, 'verify').returns(true);
+        swqStub    = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+        let b64    = gz64(ARCHIVE_JSON);
+        let cut1   = Math.ceil(b64.length / 3), cut2 = 2 * cut1;
+        headSlice  = b64.slice(0, cut1);
+        chunk1     = { chunk_index: 1, archive_b64: b64.slice(cut1, cut2) };
+        chunk2     = { chunk_index: 2, archive_b64: b64.slice(cut2) };
+    });
+    afterEach(function () { verifyStub.restore(); swqStub.restore(); });
 
     it('gate ARMED (testnet), unverified head, corrupt blob: stamps from genesis', async function () {
         let r = await stampedAt('testnet', TESTNET_ACTIVE, true);

@@ -56,7 +56,6 @@ describe('Batch @regression @tier3', function () {
     // ─── Valid batch ──────────────────────────────────────────────────
 
     describe('valid batch', function () {
-
         it('commands split by semicolon, processAction called for each', async function () {
             const data = createBaseData({
                 ACTION:    'BATCH',
@@ -107,7 +106,9 @@ describe('Batch @regression @tier3', function () {
             assert.strictEqual(data['STATUS'], 'valid');
             assert.strictEqual(actionsCtx.processAction.callCount, 1);
         });
+    });
 
+    describe('valid batch', function () {
         it('createActionIndex called for each command', async function () {
             const data = createBaseData({
                 ACTION:  'BATCH',
@@ -152,7 +153,6 @@ describe('Batch @regression @tier3', function () {
     // ─── Action limits ────────────────────────────────────────────────
 
     describe('action limits', function () {
-
         it('more than 1 MINT in batch → invalid', async function () {
             const data = createBaseData({
                 ACTION:  'BATCH',
@@ -200,7 +200,9 @@ describe('Batch @regression @tier3', function () {
 
             assert.ok(data['STATUS'].includes('invalid'));
         });
+    });
 
+    describe('action limits', function () {
         it('exactly 1 ISSUE in batch → valid', async function () {
             const data = createBaseData({
                 ACTION:  'BATCH',
@@ -533,15 +535,14 @@ describe('Batch @regression @tier3', function () {
 
         });
 
+        // One parent plus n children, the headline shape: ISSUE JDOG; ISSUE JDOG.<n>.
+        function parentPlusChildren(n) {
+            const out = ['ISSUE|0|JDOG'];
+            for (let i = 1; i <= n; i++) out.push('ISSUE|0|JDOG.' + i);
+            return out;
+        }
+
         describe('R1 dotted-TICK exemption', function () {
-
-            // One parent plus n children, the headline shape: ISSUE JDOG; ISSUE JDOG.<n>.
-            function parentPlusChildren(n) {
-                const out = ['ISSUE|0|JDOG'];
-                for (let i = 1; i <= n; i++) out.push('ISSUE|0|JDOG.' + i);
-                return out;
-            }
-
             it('gate ON: one undotted ISSUE plus 50 dotted children → valid, all 51 dispatched', async function () {
                 const data = await run(true, parentPlusChildren(50));
 
@@ -597,7 +598,9 @@ describe('Batch @regression @tier3', function () {
                 assert.deepStrictEqual(seen[1].params, [0, 'JDOG.1']);
                 assert.deepStrictEqual(seen[2].params, [0, 'JDOG.2']);
             });
+        });
 
+        describe('R1 dotted-TICK exemption', function () {
             it('gate ON: MINT is never child-exempt; a dotted TICK counts like any other', async function () {
                 // The dotted-TICK exemption is an ISSUE rule (one parent plus its children),
                 // never a MINT rule. Two MINTs of ONE dotted tick are still two MINTs of one
@@ -1266,6 +1269,11 @@ describe('Batch @regression @tier3', function () {
 
         });
 
+        const TABLE = { JDOG: 614, PEPE: 700 };
+
+        const issues = ['ISSUE|0|AAA', 'ISSUE|0|BBB'];
+        const repeatMints = mints(['JDOG', 'JDOG']);
+
         /*
          * Among per-ACTION caps, the error names the action whose FIRST sub-command appears
          * EARLIEST in the command list.
@@ -1280,16 +1288,10 @@ describe('Batch @regression @tier3', function () {
          * one-sided test would go on passing under any of the wrong rules.
          */
         describe('R2b: per-ACTION error precedence is FIRST APPEARANCE', function () {
-
-            const TABLE = { JDOG: 614, PEPE: 700 };
-
             beforeEach(function () {
                 stubTickerTable(TABLE);
                 indexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
             });
-
-            const issues = ['ISSUE|0|AAA', 'ISSUE|0|BBB'];
-            const repeatMints = mints(['JDOG', 'JDOG']);
 
             it('DEPLOY first, ISSUE second → the DEPLOY limit', async function () {
                 const data = await run(true, deploys(2).concat(issues));
@@ -1337,6 +1339,13 @@ describe('Batch @regression @tier3', function () {
 
                 const onDeploy = await run(true, deploys(2).concat(repeatMints));
                 assert.strictEqual(onDeploy['STATUS'], 'invalid: DEPLOY (limit)');
+            });
+        });
+
+        describe('R2b: per-ACTION error precedence is FIRST APPEARANCE', function () {
+            beforeEach(function () {
+                stubTickerTable(TABLE);
+                indexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
             });
 
             it('uncapped and child-exempt commands take no turn in the queue', async function () {
@@ -1513,20 +1522,19 @@ describe('Batch @regression @tier3', function () {
             });
         });
 
+        // AIRDROP and DIVIDEND write a row PER RECIPIENT. They are weighed FLAT rather than
+        // per-recipient because the filtered recipient count cannot be obtained here without
+        // re-running each handler's own resolution, which would both duplicate consensus
+        // logic and perform the very work the budget exists to bound. See the table's own
+        // comment in batch.js for the full reasoning.
+
+        function airdrops(n, name) {
+            const out = [];
+            for (let i = 0; i < n; i++) out.push((name || 'AIRDROP') + '|0|TEST|10|' + (i + 1) + '|memo');
+            return out;
+        }
+
         describe('fan-out actions carry a flat weight (operator decision 2026-08-14)', function () {
-
-            // AIRDROP and DIVIDEND write a row PER RECIPIENT. They are weighed FLAT rather than
-            // per-recipient because the filtered recipient count cannot be obtained here without
-            // re-running each handler's own resolution, which would both duplicate consensus
-            // logic and perform the very work the budget exists to bound. See the table's own
-            // comment in batch.js for the full reasoning.
-
-            function airdrops(n, name) {
-                const out = [];
-                for (let i = 0; i < n; i++) out.push((name || 'AIRDROP') + '|0|TEST|10|' + (i + 1) + '|memo');
-                return out;
-            }
-
             it('10 AIRDROPs exactly fill the budget at weight 25', async function () {
                 const data = await run(true, true, airdrops(10));
 
@@ -1572,7 +1580,9 @@ describe('Batch @regression @tier3', function () {
 
                 assert.strictEqual(data['STATUS'], 'invalid: COMMAND (limit)');
             });
+        });
 
+        describe('fan-out actions carry a flat weight (operator decision 2026-08-14)', function () {
             it('below the weighting flag the same fan-out batch is unaffected', async function () {
                 // The pre-flag verdict has to be reproducible byte for byte by a replay, and 11
                 // AIRDROPs were never anywhere near the flat 250-command cap.
@@ -1583,8 +1593,49 @@ describe('Batch @regression @tier3', function () {
             });
         });
 
-        describe('VM actions carry the ratified weight of 30 (D8, operator 2026-08-15)', function () {
+        // A funded source with the GAS token seeded. At/after this same flag the widened spam
+        // collapse prices EXECUTE at its acceptance floor, so an unfunded all-EXECUTE batch
+        // would collapse to one invalid record for a reason that has nothing to do with the
+        // budget. Paying its way is what makes "valid" here mean "the WEIGHT admitted it".
+        function fundedForVm() {
+            indexer.indexerDb.getTokenInfo
+                .withArgs('XCHAIN', sinon.match.any, sinon.match.any)
+                .resolves(createTokenInfo({ TICK: 'XCHAIN', TICK_ID: 1, DECIMALS: 8 }));
+            indexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
+        }
 
+        // The weighted-budget helper's gate stub does not know the VM actions, and an unknown ACTION
+        // reports 'invalid: ACTION (unknown)' instead of the budget string. This block needs
+        // them known, so a VALID verdict is a real verdict rather than an activation artefact.
+        function stubVmGates(weightsOn) {
+            const known = ['BATCH', 'SEND', 'DEPLOY', 'EXECUTE', 'XEXEC', 'ISSUANCE_FEE', 'UNIFIED_FEES'];
+            actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(async (name) => {
+                if (name === 'BATCH_SUBACTION_NORMALIZATION') return true;
+                if (name === 'BATCH_ISSUANCE_LIMITS') return true;
+                if (name === 'BATCH_COST_WEIGHTING') return weightsOn;
+                return known.includes(name);
+            });
+            handler = new Batch(actionsCtx);
+        }
+
+        async function runVm(weightsOn, commands) {
+            stubVmGates(weightsOn);
+            fundedForVm();
+            const data = createBaseData({
+                ACTION:  'BATCH',
+                FORMAT:  0,
+                SOURCE,
+                TX_DATA: 'BATCH|0|' + commands.join(';'),
+            });
+            indexer.indexerDb.isActionAllowed.resolves(true);
+            await handler.parse(['0'], data, null);
+            return data;
+        }
+
+        const execs   = (n) => Array.from({ length: n }, (_, i) => 'EXECUTE|0|7|m' + i + '|');
+        const deploys = (n) => Array.from({ length: n }, (_, i) => 'DEPLOY|0|base64|100000|' + i);
+
+        describe('VM actions carry the ratified weight of 30 (D8, operator 2026-08-15)', function () {
             // DEPLOY, EXECUTE and XEXEC run contract code, which is the one class whose
             // per-sub-command cost is not bounded by a row count. 30 is the operator-ratified
             // consensus constant, derived in bin/measure-batch-execute-cost.js: it is the
@@ -1597,49 +1648,6 @@ describe('Batch @regression @tier3', function () {
             // these tests instead of silently re-deriving whatever the code now believes.
 
             const VM_WEIGHT = 30;
-
-            // A funded source with the GAS token seeded. At/after this same flag the widened spam
-            // collapse prices EXECUTE at its acceptance floor, so an unfunded all-EXECUTE batch
-            // would collapse to one invalid record for a reason that has nothing to do with the
-            // budget. Paying its way is what makes "valid" here mean "the WEIGHT admitted it".
-            function fundedForVm() {
-                indexer.indexerDb.getTokenInfo
-                    .withArgs('XCHAIN', sinon.match.any, sinon.match.any)
-                    .resolves(createTokenInfo({ TICK: 'XCHAIN', TICK_ID: 1, DECIMALS: 8 }));
-                indexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
-            }
-
-            // The weighted-budget helper's gate stub does not know the VM actions, and an unknown ACTION
-            // reports 'invalid: ACTION (unknown)' instead of the budget string. This block needs
-            // them known, so a VALID verdict is a real verdict rather than an activation artefact.
-            function stubVmGates(weightsOn) {
-                const known = ['BATCH', 'SEND', 'DEPLOY', 'EXECUTE', 'XEXEC', 'ISSUANCE_FEE', 'UNIFIED_FEES'];
-                actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(async (name) => {
-                    if (name === 'BATCH_SUBACTION_NORMALIZATION') return true;
-                    if (name === 'BATCH_ISSUANCE_LIMITS') return true;
-                    if (name === 'BATCH_COST_WEIGHTING') return weightsOn;
-                    return known.includes(name);
-                });
-                handler = new Batch(actionsCtx);
-            }
-
-            async function runVm(weightsOn, commands) {
-                stubVmGates(weightsOn);
-                fundedForVm();
-                const data = createBaseData({
-                    ACTION:  'BATCH',
-                    FORMAT:  0,
-                    SOURCE,
-                    TX_DATA: 'BATCH|0|' + commands.join(';'),
-                });
-                indexer.indexerDb.isActionAllowed.resolves(true);
-                await handler.parse(['0'], data, null);
-                return data;
-            }
-
-            const execs   = (n) => Array.from({ length: n }, (_, i) => 'EXECUTE|0|7|m' + i + '|');
-            const xexecs  = (n) => Array.from({ length: n }, (_, i) => 'XEXEC|0|7|m' + i + '|');
-            const deploys = (n) => Array.from({ length: n }, (_, i) => 'DEPLOY|0|base64|100000|' + i);
 
             it('the table pins 30 for DEPLOY, EXECUTE and XEXEC', async function () {
                 // The constant itself, asserted once. It decides verdicts, so moving it is a
@@ -1684,6 +1692,10 @@ describe('Batch @regression @tier3', function () {
                 assert.strictEqual(data['STATUS'], 'invalid: COMMAND (limit)');
                 assert.strictEqual(actionsCtx.processAction.callCount, 0);
             });
+        });
+
+        describe('VM actions carry the ratified weight of 30 (D8, operator 2026-08-15)', function () {
+            const xexecs  = (n) => Array.from({ length: n }, (_, i) => 'XEXEC|0|7|m' + i + '|');
 
             it('8 EXECUTEs fit the budget exactly and all of them dispatch', async function () {
                 const data = await runVm(true, execs(8));
@@ -1740,7 +1752,9 @@ describe('Batch @regression @tier3', function () {
                 assert.strictEqual(data['STATUS'], 'valid');
                 assert.strictEqual(actionsCtx.processAction.callCount, 221);
             });
+        });
 
+        describe('VM actions carry the ratified weight of 30 (D8, operator 2026-08-15)', function () {
             it('one DEPLOY plus 221 companions is one over', async function () {
                 const data = await runVm(true, deploys(1).concat(sends(221)));
 
@@ -1842,78 +1856,74 @@ describe('Batch @regression @tier3', function () {
         });
     });
 
+    const ADDR = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
+
+    // createBaseData's BLOCK_TIME. The fee is a pure function of (EXPIRATION - BLOCK_TIME),
+    // so the two are written together here and nowhere else in this block.
+    const BLOCK_TIME = 1700000000;
+    const day        = (n) => String(BLOCK_TIME + (n * 86400));
+
+    // BTC regtest, unified lane: UNIFIED_EXPIRATION_FEE_FREE_DAYS 90, EXPIRATION_PER_DAY 550
+    // gas, GAS_PRICE 0.00001 XCHAIN. A 100-day create is 10 chargeable days = 5500 gas =
+    // 0.055 XCHAIN, and a 90-day create is inside the free window and costs nothing.
+    // Written out rather than recomputed, so a schedule change reddens these tests instead
+    // of silently re-deriving whatever the code now believes.
+    const CREATE_FEE = '0.05500000';
+    const EXP_PAID   = day(100);
+
+    // Real ORDER / SWAP / DISPENSER handlers, so the EXPIRATION position under test is the
+    // one their OWN format strings declare (index 10, 10 and 13 today). A hand-written
+    // format string here would let the pre-check and the handlers drift apart in exactly
+    // the way reading the format string exists to prevent.
+    const Order     = require('../../../src/actions/order.js');
+    const Swap      = require('../../../src/actions/swap.js');
+    const Dispenser = require('../../../src/actions/dispenser.js');
+
+    function stubGates(weightsOn) {
+        const known = ['BATCH', 'SEND', 'ISSUE', 'MINT', 'ORDER', 'SWAP', 'DISPENSER',
+                       'EXECUTE', 'ISSUANCE_FEE', 'UNIFIED_FEES'];
+        actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(async (name) => {
+            if (name === 'BATCH_SUBACTION_NORMALIZATION') return true;
+            if (name === 'BATCH_ISSUANCE_LIMITS') return true;
+            if (name === 'BATCH_COST_WEIGHTING') return weightsOn;
+            return known.includes(name);
+        });
+        // The seam batch.js reads positions through. Mirrors actions/index.js's own map.
+        const paramHandlers = {
+            ORDER:     new Order(actionsCtx),
+            SWAP:      new Swap(actionsCtx),
+            DISPENSER: new Dispenser(actionsCtx),
+        };
+        actionsCtx.setActionParamHandler = (action) => paramHandlers[action] || null;
+        handler = new Batch(actionsCtx);
+    }
+
+    // Wire shapes. Positions are NOT restated here beyond what a real encoder would emit;
+    // the trailing field is EXPIRATION in each create format.
+    const orderCreate     = (exp) => 'ORDER|0|BTC|TEST|10|0|BTC|OTHER|20|0|' + ADDR + '|' + exp;
+
+    function repeat(fn, n, exp) {
+        const out = [];
+        for (let i = 0; i < n; i++) out.push(fn(exp));
+        return out;
+    }
+
+    async function run(weightsOn, commands, balance) {
+        stubGates(weightsOn);
+        const data = createBaseData({
+            ACTION:  'BATCH',
+            FORMAT:  0,
+            SOURCE,
+            TX_DATA: 'BATCH|0|' + commands.join(';'),
+        });
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.getAddressBalances.resolves(balance === null ? {} : { 1: balance });
+        await handler.parse(['0'], data, null);
+        return data;
+    }
+
     describe('D10 spam collapse widened to duration-metered creates (BATCH_COST_WEIGHTING)', function () {
-
-        const ADDR = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
-
-        // createBaseData's BLOCK_TIME. The fee is a pure function of (EXPIRATION - BLOCK_TIME),
-        // so the two are written together here and nowhere else in this block.
-        const BLOCK_TIME = 1700000000;
-        const day        = (n) => String(BLOCK_TIME + (n * 86400));
-
-        // BTC regtest, unified lane: UNIFIED_EXPIRATION_FEE_FREE_DAYS 90, EXPIRATION_PER_DAY 550
-        // gas, GAS_PRICE 0.00001 XCHAIN. A 100-day create is 10 chargeable days = 5500 gas =
-        // 0.055 XCHAIN, and a 90-day create is inside the free window and costs nothing.
-        // Written out rather than recomputed, so a schedule change reddens these tests instead
-        // of silently re-deriving whatever the code now believes.
-        const CREATE_FEE = '0.05500000';
-        const EXP_PAID   = day(100);
         const EXP_FREE   = day(90);
-
-        // Real ORDER / SWAP / DISPENSER handlers, so the EXPIRATION position under test is the
-        // one their OWN format strings declare (index 10, 10 and 13 today). A hand-written
-        // format string here would let the pre-check and the handlers drift apart in exactly
-        // the way reading the format string exists to prevent.
-        const Order     = require('../../../src/actions/order.js');
-        const Swap      = require('../../../src/actions/swap.js');
-        const Dispenser = require('../../../src/actions/dispenser.js');
-
-        function stubGates(weightsOn) {
-            const known = ['BATCH', 'SEND', 'ISSUE', 'MINT', 'ORDER', 'SWAP', 'DISPENSER',
-                           'EXECUTE', 'ISSUANCE_FEE', 'UNIFIED_FEES'];
-            actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(async (name) => {
-                if (name === 'BATCH_SUBACTION_NORMALIZATION') return true;
-                if (name === 'BATCH_ISSUANCE_LIMITS') return true;
-                if (name === 'BATCH_COST_WEIGHTING') return weightsOn;
-                return known.includes(name);
-            });
-            // The seam batch.js reads positions through. Mirrors actions/index.js's own map.
-            const paramHandlers = {
-                ORDER:     new Order(actionsCtx),
-                SWAP:      new Swap(actionsCtx),
-                DISPENSER: new Dispenser(actionsCtx),
-            };
-            actionsCtx.setActionParamHandler = (action) => paramHandlers[action] || null;
-            handler = new Batch(actionsCtx);
-        }
-
-        // Wire shapes. Positions are NOT restated here beyond what a real encoder would emit;
-        // the trailing field is EXPIRATION in each create format.
-        const orderCreate     = (exp) => 'ORDER|0|BTC|TEST|10|0|BTC|OTHER|20|0|' + ADDR + '|' + exp;
-        const swapCreate      = (exp) => 'SWAP|0|BTC|TEST|10|0|BTC|OTHER|20|0|' + ADDR + '|' + exp;
-        // Three empty fields between GET_ADDRESS and EXPIRATION: FIAT_CODE, FIAT_AMOUNT,
-        // ORACLE_ADDRESS. That gap is the point of the DISPENSER case below.
-        const dispenserCreate = (exp) => 'DISPENSER|0|BTC|TEST|10|0|0|BTC|OTHER|1|' + ADDR + '||||' + exp;
-
-        function repeat(fn, n, exp) {
-            const out = [];
-            for (let i = 0; i < n; i++) out.push(fn(exp));
-            return out;
-        }
-
-        async function run(weightsOn, commands, balance) {
-            stubGates(weightsOn);
-            const data = createBaseData({
-                ACTION:  'BATCH',
-                FORMAT:  0,
-                SOURCE,
-                TX_DATA: 'BATCH|0|' + commands.join(';'),
-            });
-            indexer.indexerDb.isActionAllowed.resolves(true);
-            indexer.indexerDb.getAddressBalances.resolves(balance === null ? {} : { 1: balance });
-            await handler.parse(['0'], data, null);
-            return data;
-        }
 
         it('gate OFF: an all-ORDER no-gas batch keeps the pre-flag verdict, N records and all', async function () {
             // The unwidened predicate bails on the first non-ISSUE sub-command, so this batch is
@@ -1964,6 +1974,13 @@ describe('Batch @regression @tier3', function () {
             assert.strictEqual(data['STATUS'], 'valid');
             assert.strictEqual(actionsCtx.processAction.callCount, 3);
         });
+    });
+
+    describe('D10 spam collapse widened to duration-metered creates (BATCH_COST_WEIGHTING)', function () {
+        const swapCreate      = (exp) => 'SWAP|0|BTC|TEST|10|0|BTC|OTHER|20|0|' + ADDR + '|' + exp;
+        // Three empty fields between GET_ADDRESS and EXPIRATION: FIAT_CODE, FIAT_AMOUNT,
+        // ORACLE_ADDRESS. That gap is the point of the DISPENSER case below.
+        const dispenserCreate = (exp) => 'DISPENSER|0|BTC|TEST|10|0|0|BTC|OTHER|1|' + ADDR + '||||' + exp;
 
         it('gate ON: an EDIT is not priceable here, so the batch proceeds', async function () {
             // Format 2 prices the DIFFERENCE against the stored record's EXPIRATION, which
@@ -2014,7 +2031,9 @@ describe('Batch @regression @tier3', function () {
 
             assert.strictEqual(data['STATUS'], 'valid');
         });
+    });
 
+    describe('D10 spam collapse widened to duration-metered creates (BATCH_COST_WEIGHTING)', function () {
         it('gate ON: the cheapest sub-command still sets the bar across mixed classes', async function () {
             // A child ISSUE costs 0.5 and a 100-day create costs 0.055. A source holding the
             // create's price can land the create, so rejecting the batch would destroy work
@@ -2062,7 +2081,9 @@ describe('Batch @regression @tier3', function () {
             assert.strictEqual(data['STATUS'], 'invalid: COMMAND (limit)');
             assert.strictEqual(indexer.indexerDb.getAddressBalances.callCount, 0);
         });
+    });
 
+    describe('D10 spam collapse widened to duration-metered creates (BATCH_COST_WEIGHTING)', function () {
         it('gate ON: a missing positional-layout seam is UNKNOWN cost, never a collapse', async function () {
             // An Actions without setActionParamHandler (an older build, a partial double) must
             // degrade to the unwidened verdict rather than to a hardcoded position.

@@ -341,7 +341,6 @@ describe('Send handler @regression @tier1', function () {
     // -----------------------------------------------------------------------
 
     describe('address and tick sleeping', function () {
-
         it('SOURCE sleeping → invalid', async function () {
             // First isActionAllowed call is SOURCE check
             indexer.indexerDb.isActionAllowed
@@ -384,7 +383,9 @@ describe('Send handler @regression @tier1', function () {
 
             assert.ok(data.STATUS.startsWith('invalid'));
         });
+    });
 
+    describe('address and tick sleeping', function () {
         it('DESTINATION not authorized → invalid', async function () {
             indexer.indexerDb.isActionAllowed
                 .onFirstCall().resolves(true)   // SOURCE sleeping
@@ -686,6 +687,53 @@ describe('Send handler: conditional gated handoff (PC-29) @regression @tier1', f
     });
 });
 
+let indexer, actionsCtx;
+
+const PUB   = 'mpub1111111111111111111111111111111';
+const HASH  = 'a'.repeat(64);
+const REF   = '^57';
+const PACKS = [{ publisher: PUB, keyHash: HASH, threshold: null }];
+
+const NEEDS_HANDOFF = 'invalid: gated token transfer requires key handoff message';
+const messageTo = (dest) => ({ action: 'MESSAGE', params: ['2', 'BTC', dest, 'ciphertext'] });
+
+// Every network is genesis-active for this gate now: regtest and testnet since it
+// landed, mainnet since the 2026-09-09 ruling (mainnet history is ISSUE and ANCHOR
+// only, so 0 SEND, measured 2026-09-09, leaves the resolved compare identity over
+// it). The network therefore no longer selects the era on its own.
+function handlerOn(network) {
+    return new Send(Object.assign({}, actionsCtx, {
+        config: Object.assign({}, indexer.config, { NETWORK: network })
+    }));
+}
+
+// The pre-flag-day era is reached by pinning THIS key inert on a mainnet venue for
+// the duration of the call. Pinning only this key is deliberate: the venue keeps
+// every other mainnet gate send.js reads (consolidation_leg_amount) at the value the
+// fleet runs, so the legacy arm being compared against is the real one.
+const HOUSE_SENTINEL = 9999999999;
+async function belowFlag(fn) {
+    const map   = gatedHandoffRef.GATED_HANDOFF_REF_ACTIVATION;
+    const saved = map.mainnet;
+    map.mainnet = HOUSE_SENTINEL;
+    try { return await fn(); }
+    finally { map.mainnet = saved; }
+}
+
+// How the indexer's resolver answers a `^<id>`: to `addr`, or refused.
+function refResolves(addr, rejected) {
+    indexer.indexerDb.resolveAddressRefChecked.callsFake(async (v) => (
+        String(v).substring(0, 1) === '^'
+            ? { value: (rejected ? v : addr), rejected: !!rejected }
+            : { value: v, rejected: false }));
+}
+
+async function statusFor(handler, siblings) {
+    const data = makeData({ SOURCE, SIBLING_ACTIONS: siblings });
+    await handler.parse(['0', 'TEST', '10', DESTINATION, ''], data, null);
+    return data['STATUS'];
+}
+
 /*********************************************************************
  * The gated handoff is matched by ADDRESS, not by wire spelling.
  *
@@ -699,17 +747,6 @@ describe('Send handler: conditional gated handoff (PC-29) @regression @tier1', f
  * era by pinning the gate's own key inert rather than by naming a network.
  ********************************************************************/
 describe('Send handler: caret-compacted handoff destination @regression @tier1', function () {
-
-    let indexer, actionsCtx;
-
-    const PUB   = 'mpub1111111111111111111111111111111';
-    const HASH  = 'a'.repeat(64);
-    const REF   = '^57';
-    const PACKS = [{ publisher: PUB, keyHash: HASH, threshold: null }];
-
-    const NEEDS_HANDOFF = 'invalid: gated token transfer requires key handoff message';
-    const messageTo = (dest) => ({ action: 'MESSAGE', params: ['2', 'BTC', dest, 'ciphertext'] });
-
     beforeEach(function () {
         indexer    = createMockIndexer();
         actionsCtx = makeActionsCtx(indexer);
@@ -726,43 +763,6 @@ describe('Send handler: caret-compacted handoff destination @regression @tier1',
     });
 
     afterEach(function () { sinon.restore(); });
-
-    // Every network is genesis-active for this gate now: regtest and testnet since it
-    // landed, mainnet since the 2026-09-09 ruling (mainnet history is ISSUE and ANCHOR
-    // only, so 0 SEND, measured 2026-09-09, leaves the resolved compare identity over
-    // it). The network therefore no longer selects the era on its own.
-    function handlerOn(network) {
-        return new Send(Object.assign({}, actionsCtx, {
-            config: Object.assign({}, indexer.config, { NETWORK: network })
-        }));
-    }
-
-    // The pre-flag-day era is reached by pinning THIS key inert on a mainnet venue for
-    // the duration of the call. Pinning only this key is deliberate: the venue keeps
-    // every other mainnet gate send.js reads (consolidation_leg_amount) at the value the
-    // fleet runs, so the legacy arm being compared against is the real one.
-    const HOUSE_SENTINEL = 9999999999;
-    async function belowFlag(fn) {
-        const map   = gatedHandoffRef.GATED_HANDOFF_REF_ACTIVATION;
-        const saved = map.mainnet;
-        map.mainnet = HOUSE_SENTINEL;
-        try { return await fn(); }
-        finally { map.mainnet = saved; }
-    }
-
-    // How the indexer's resolver answers a `^<id>`: to `addr`, or refused.
-    function refResolves(addr, rejected) {
-        indexer.indexerDb.resolveAddressRefChecked.callsFake(async (v) => (
-            String(v).substring(0, 1) === '^'
-                ? { value: (rejected ? v : addr), rejected: !!rejected }
-                : { value: v, rejected: false }));
-    }
-
-    async function statusFor(handler, siblings) {
-        const data = makeData({ SOURCE, SIBLING_ACTIONS: siblings });
-        await handler.parse(['0', 'TEST', '10', DESTINATION, ''], data, null);
-        return data['STATUS'];
-    }
 
     it('ARMED: a `^<id>` handoff resolving to the destination is accepted', async function () {
         refResolves(DESTINATION);
@@ -800,6 +800,25 @@ describe('Send handler: caret-compacted handoff destination @regression @tier1',
         refResolves(DESTINATION, true);
         assert.strictEqual(await statusFor(handlerOn('regtest'), [messageTo(REF)]), NEEDS_HANDOFF);
     });
+});
+
+describe('Send handler: caret-compacted handoff destination @regression @tier1', function () {
+    beforeEach(function () {
+        indexer    = createMockIndexer();
+        actionsCtx = makeActionsCtx(indexer);
+        indexer.indexerDb.getTokenInfo.resolves(makeToken());
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.findMatchingDispensers.resolves([]);
+        indexer.indexerDb.findDispenserSends.resolves([]);
+        indexer.indexerDb.getGatedPackThresholds.resolves(PACKS);
+        // SOURCE funded, destination empty (the pack is unconditional, so the
+        // handoff is required either way).
+        indexer.indexerDb.getAddressBalances.callsFake(async (addr) =>
+            (addr === DESTINATION ? makeBalances(1, 0) : makeBalances(1, 1000)));
+    });
+
+    afterEach(function () { sinon.restore(); });
 
     it('ARMED: a dangling reference the resolver returns unchanged fails closed', async function () {
         // Below the caret-ref-strict flag day the resolver reports a malformed or

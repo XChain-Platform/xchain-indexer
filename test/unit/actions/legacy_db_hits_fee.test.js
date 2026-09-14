@@ -32,14 +32,22 @@ const Dividend = require('../../../src/actions/dividend.js');
 const Callback = require('../../../src/actions/callback.js');
 const Sweep    = require('../../../src/actions/sweep.js');
 
+let indexer, actionsCtx, feeStub;
+
+const SOURCE      = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+const DESTINATION = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
+const HOLDER1     = 'mmqFL1hiu2RDuyS69KS9ko6uaMryhANwsz';
+const HOLDER2     = 'mk7MdP3qzVkgyjaYNR2sUY8Ggn4DWxt2KS';
+
+    function assertIntegerDbHits(expected) {
+        assert.ok(feeStub.called, 'getTransactionFee was not called');
+        const dbHits = feeStub.firstCall.args[0];
+        assert.strictEqual(typeof dbHits, 'number', `db_hits is ${typeof dbHits} (${dbHits}), expected number`);
+        assert.ok(Number.isInteger(dbHits), `db_hits ${dbHits} is not an integer`);
+        assert.strictEqual(dbHits, expected);
+    }
+
 describe('Legacy db-hits fee accumulation @regression @tier3', function () {
-    let indexer, actionsCtx, feeStub;
-
-    const SOURCE      = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
-    const DESTINATION = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
-    const HOLDER1     = 'mmqFL1hiu2RDuyS69KS9ko6uaMryhANwsz';
-    const HOLDER2     = 'mk7MdP3qzVkgyjaYNR2sUY8Ggn4DWxt2KS';
-
     beforeEach(function () {
         indexer = createMockIndexer();
         indexer.indexerDb.getAddressEscrows = sinon.stub().resolves([]);
@@ -69,14 +77,6 @@ describe('Legacy db-hits fee accumulation @regression @tier3', function () {
         sinon.restore();
     });
 
-    function assertIntegerDbHits(expected) {
-        assert.ok(feeStub.called, 'getTransactionFee was not called');
-        const dbHits = feeStub.firstCall.args[0];
-        assert.strictEqual(typeof dbHits, 'number', `db_hits is ${typeof dbHits} (${dbHits}), expected number`);
-        assert.ok(Number.isInteger(dbHits), `db_hits ${dbHits} is not an integer`);
-        assert.strictEqual(dbHits, expected);
-    }
-
     it('DIVIDEND legacy path: db_hits = 3 + recipients*2 as a Number (not "3" concat)', async function () {
         actionsCtx.protocolChanges.isEnabled.withArgs('UNIFIED_FEES').resolves(false);
         const handler = new Dividend(actionsCtx);
@@ -95,6 +95,37 @@ describe('Legacy db-hits fee accumulation @regression @tier3', function () {
 
         assert.strictEqual(data['STATUS'], 'valid');
         assertIntegerDbHits(3 + 2 * 2); // 2 recipients
+    });
+});
+
+describe('Legacy db-hits fee accumulation @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        indexer.indexerDb.getAddressEscrows = sinon.stub().resolves([]);
+        actionsCtx = {
+            config:          indexer.config,
+            util:            indexer.util,
+            mapper:          indexer.mapper,
+            decoderDb:       indexer.decoderDb,
+            indexerDb:       indexer.indexerDb,
+            protocolChanges: {
+                isDefined:  sinon.stub().returns(true),
+                isEnabled:  sinon.stub().resolves(true),
+            },
+            processAction:   sinon.stub().resolves(),
+        };
+        // This whole suite is about the LEGACY db-hits accumulator, so hold SWEEP and
+        // CALLBACK on their legacy branch: UNIFIED_FEES_SWEEP_CALLBACK moves both onto the
+        // unified gas schedule, which never calls getTransactionFee at all. DIVIDEND's
+        // equivalent (UNIFIED_FEES) is switched off per-case below, where it always was.
+        actionsCtx.protocolChanges.isEnabled.withArgs('UNIFIED_FEES_SWEEP_CALLBACK').resolves(false);
+        // Capture db_hits; return a zero fee so fee-payment validation is skipped
+        feeStub = sinon.stub(indexer.util, 'getTransactionFee').returns('0.00000000');
+        indexer.util.resetLists();
+    });
+
+    afterEach(function () {
+        sinon.restore();
     });
 
     it('CALLBACK: db_hits = 4 + recipients*3 as a Number (not "4" concat)', async function () {
@@ -118,6 +149,37 @@ describe('Legacy db-hits fee accumulation @regression @tier3', function () {
         assert.strictEqual(data['STATUS'], 'valid');
         assertIntegerDbHits(4 + 2 * 3); // 2 recipients
     });
+});
+
+describe('Legacy db-hits fee accumulation @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        indexer.indexerDb.getAddressEscrows = sinon.stub().resolves([]);
+        actionsCtx = {
+            config:          indexer.config,
+            util:            indexer.util,
+            mapper:          indexer.mapper,
+            decoderDb:       indexer.decoderDb,
+            indexerDb:       indexer.indexerDb,
+            protocolChanges: {
+                isDefined:  sinon.stub().returns(true),
+                isEnabled:  sinon.stub().resolves(true),
+            },
+            processAction:   sinon.stub().resolves(),
+        };
+        // This whole suite is about the LEGACY db-hits accumulator, so hold SWEEP and
+        // CALLBACK on their legacy branch: UNIFIED_FEES_SWEEP_CALLBACK moves both onto the
+        // unified gas schedule, which never calls getTransactionFee at all. DIVIDEND's
+        // equivalent (UNIFIED_FEES) is switched off per-case below, where it always was.
+        actionsCtx.protocolChanges.isEnabled.withArgs('UNIFIED_FEES_SWEEP_CALLBACK').resolves(false);
+        // Capture db_hits; return a zero fee so fee-payment validation is skipped
+        feeStub = sinon.stub(indexer.util, 'getTransactionFee').returns('0.00000000');
+        indexer.util.resetLists();
+    });
+
+    afterEach(function () {
+        sinon.restore();
+    });
 
     it('SWEEP: db_hits stays an integer Number across all three += terms', async function () {
         const handler = new Sweep(actionsCtx);
@@ -136,6 +198,37 @@ describe('Legacy db-hits fee accumulation @regression @tier3', function () {
         const dbHits = feeStub.firstCall.args[0];
         assert.strictEqual(typeof dbHits, 'number');
         assert.ok(Number.isInteger(dbHits) && dbHits >= 1);
+    });
+});
+
+describe('Legacy db-hits fee accumulation @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        indexer.indexerDb.getAddressEscrows = sinon.stub().resolves([]);
+        actionsCtx = {
+            config:          indexer.config,
+            util:            indexer.util,
+            mapper:          indexer.mapper,
+            decoderDb:       indexer.decoderDb,
+            indexerDb:       indexer.indexerDb,
+            protocolChanges: {
+                isDefined:  sinon.stub().returns(true),
+                isEnabled:  sinon.stub().resolves(true),
+            },
+            processAction:   sinon.stub().resolves(),
+        };
+        // This whole suite is about the LEGACY db-hits accumulator, so hold SWEEP and
+        // CALLBACK on their legacy branch: UNIFIED_FEES_SWEEP_CALLBACK moves both onto the
+        // unified gas schedule, which never calls getTransactionFee at all. DIVIDEND's
+        // equivalent (UNIFIED_FEES) is switched off per-case below, where it always was.
+        actionsCtx.protocolChanges.isEnabled.withArgs('UNIFIED_FEES_SWEEP_CALLBACK').resolves(false);
+        // Capture db_hits; return a zero fee so fee-payment validation is skipped
+        feeStub = sinon.stub(indexer.util, 'getTransactionFee').returns('0.00000000');
+        indexer.util.resetLists();
+    });
+
+    afterEach(function () {
+        sinon.restore();
     });
 
     // BELOW the LEGACY_FEE_NUMERIC_DBHITS flag-day the pre-activation
@@ -164,6 +257,37 @@ describe('Legacy db-hits fee accumulation @regression @tier3', function () {
         assert.strictEqual(typeof dbHits, 'string', 'below flag-day db_hits must be a concatenated string');
         assert.strictEqual(dbHits, '34'); // 3 concat bcmul(2,2,0)="4" -> "34"
     });
+});
+
+describe('Legacy db-hits fee accumulation @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        indexer.indexerDb.getAddressEscrows = sinon.stub().resolves([]);
+        actionsCtx = {
+            config:          indexer.config,
+            util:            indexer.util,
+            mapper:          indexer.mapper,
+            decoderDb:       indexer.decoderDb,
+            indexerDb:       indexer.indexerDb,
+            protocolChanges: {
+                isDefined:  sinon.stub().returns(true),
+                isEnabled:  sinon.stub().resolves(true),
+            },
+            processAction:   sinon.stub().resolves(),
+        };
+        // This whole suite is about the LEGACY db-hits accumulator, so hold SWEEP and
+        // CALLBACK on their legacy branch: UNIFIED_FEES_SWEEP_CALLBACK moves both onto the
+        // unified gas schedule, which never calls getTransactionFee at all. DIVIDEND's
+        // equivalent (UNIFIED_FEES) is switched off per-case below, where it always was.
+        actionsCtx.protocolChanges.isEnabled.withArgs('UNIFIED_FEES_SWEEP_CALLBACK').resolves(false);
+        // Capture db_hits; return a zero fee so fee-payment validation is skipped
+        feeStub = sinon.stub(indexer.util, 'getTransactionFee').returns('0.00000000');
+        indexer.util.resetLists();
+    });
+
+    afterEach(function () {
+        sinon.restore();
+    });
 
     it('CALLBACK below flag-day: db_hits reproduces "46" string-concat', async function () {
         actionsCtx.protocolChanges.isEnabled.withArgs('LEGACY_FEE_NUMERIC_DBHITS').resolves(false);
@@ -188,6 +312,37 @@ describe('Legacy db-hits fee accumulation @regression @tier3', function () {
         const dbHits = feeStub.firstCall.args[0];
         assert.strictEqual(typeof dbHits, 'string', 'below flag-day db_hits must be a concatenated string');
         assert.strictEqual(dbHits, '46'); // 4 concat bcmul(2,3,0)="6" -> "46"
+    });
+});
+
+describe('Legacy db-hits fee accumulation @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        indexer.indexerDb.getAddressEscrows = sinon.stub().resolves([]);
+        actionsCtx = {
+            config:          indexer.config,
+            util:            indexer.util,
+            mapper:          indexer.mapper,
+            decoderDb:       indexer.decoderDb,
+            indexerDb:       indexer.indexerDb,
+            protocolChanges: {
+                isDefined:  sinon.stub().returns(true),
+                isEnabled:  sinon.stub().resolves(true),
+            },
+            processAction:   sinon.stub().resolves(),
+        };
+        // This whole suite is about the LEGACY db-hits accumulator, so hold SWEEP and
+        // CALLBACK on their legacy branch: UNIFIED_FEES_SWEEP_CALLBACK moves both onto the
+        // unified gas schedule, which never calls getTransactionFee at all. DIVIDEND's
+        // equivalent (UNIFIED_FEES) is switched off per-case below, where it always was.
+        actionsCtx.protocolChanges.isEnabled.withArgs('UNIFIED_FEES_SWEEP_CALLBACK').resolves(false);
+        // Capture db_hits; return a zero fee so fee-payment validation is skipped
+        feeStub = sinon.stub(indexer.util, 'getTransactionFee').returns('0.00000000');
+        indexer.util.resetLists();
+    });
+
+    afterEach(function () {
+        sinon.restore();
     });
 
     it('SWEEP below flag-day: db_hits reproduces the "1400" string-concat', async function () {

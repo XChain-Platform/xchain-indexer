@@ -96,10 +96,16 @@ describe('Multi-leg consolidation: per-leg amount format @regression @tier1', fu
         });
     });
 
+    let indexer, handler, rows;
+
+    async function parse(params, opts = {}) {
+        if (opts.network) indexer.config['NETWORK'] = opts.network;
+        const data = createBaseData({ ACTION: 'SEND', FORMAT: params[0] | 0, SOURCE });
+        await handler.parse(params, data, null);
+        return data['STATUS'];
+    }
+
     describe('SEND', function () {
-
-        let indexer, handler, rows;
-
         beforeEach(function () {
             indexer = createMockIndexer();
             handler = new Send(makeActionsCtx(indexer));
@@ -119,13 +125,6 @@ describe('Multi-leg consolidation: per-leg amount format @regression @tier1', fu
         });
 
         afterEach(function () { sinon.restore(); });
-
-        async function parse(params, opts = {}) {
-            if (opts.network) indexer.config['NETWORK'] = opts.network;
-            const data = createBaseData({ ACTION: 'SEND', FORMAT: params[0] | 0, SOURCE });
-            await handler.parse(params, data, null);
-            return data['STATUS'];
-        }
 
         it('a single 0.5 leg of a 0-decimals token is rejected (the rule that was being laundered)', async function () {
             assert.strictEqual(await parse(['0', 'TEST', '0.5', DEST, '']), 'invalid: AMOUNT (format)');
@@ -164,6 +163,28 @@ describe('Multi-leg consolidation: per-leg amount format @regression @tier1', fu
             assert.strictEqual(rows.length, 1);
             assert.strictEqual(indexer.util.bcformat(rows[0].AMOUNT, 0), '11');
         });
+    });
+
+    describe('SEND', function () {
+        beforeEach(function () {
+            indexer = createMockIndexer();
+            handler = new Send(makeActionsCtx(indexer));
+            rows    = [];
+
+            indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 }));
+            indexer.indexerDb.isActionAllowed.resolves(true);
+            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+            indexer.indexerDb.getAddressBalances.resolves({ 1: 1000 });
+            indexer.indexerDb.findMatchingDispensers.resolves([]);
+            indexer.indexerDb.findDispenserSends.resolves([]);
+            // `send` aliases `data`, so every call records the SAME object: snapshot each row at
+            // call time or the assertions below would only ever see the last leg's state.
+            indexer.indexerDb.createSend.callsFake(async (s) => {
+                rows.push({ AMOUNT: String(s['AMOUNT']), STATUS: s['STATUS'], DESTINATION: s['DESTINATION'] });
+            });
+        });
+
+        afterEach(function () { sinon.restore(); });
 
         it('two well-formed legs to one destination still consolidate, gate on', async function () {
             const status = await parse(['1', 'TEST', '50', DEST, '30', DEST, '']);

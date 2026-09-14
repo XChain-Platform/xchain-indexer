@@ -146,18 +146,23 @@ describe('Callback injection infra-fault propagation @regression @tier2', functi
         });
     });
 
+    let indexer, handler, executeStub;
+
+    function makeRequestRow(overrides = {}) {
+        return {
+            request_id: REQ_ID, provider_id: 'http_get', request_status: 'pending',
+            deadline_block: 200, block_index: 90, redundancy: 1, contract_index: 5,
+            callback_method: 'onResult', callback_params_json: '[]', ...overrides,
+        };
+    }
+
+    const b64 = (s) => Buffer.from(s, 'utf8').toString('base64');
+    const v1Data   = () => createBaseData({ ACTION: 'ATTEST', FORMAT: 1, BLOCK_INDEX: 100, ACTION_INDEX: 7 });
+    const v1Params = () => ['1', REQ_ID, 'http_get', b64('hello'), 'ok', 'm', '1', PUBKEY_A, SIG_A];
+    const v2Data   = () => createBaseData({ ACTION: 'ATTEST', FORMAT: 2, BLOCK_INDEX: 250, REQUEST_ID: REQ_ID, IS_SYNTHETIC: true });
+
     // ---------------- ATTEST ----------------
     describe('ATTEST (attest.js)', function () {
-        let indexer, handler, executeStub;
-
-        function makeRequestRow(overrides = {}) {
-            return {
-                request_id: REQ_ID, provider_id: 'http_get', request_status: 'pending',
-                deadline_block: 200, block_index: 90, redundancy: 1, contract_index: 5,
-                callback_method: 'onResult', callback_params_json: '[]', ...overrides,
-            };
-        }
-
         beforeEach(function () {
             indexer = createMockIndexer();
             const db = indexer.indexerDb;
@@ -193,11 +198,6 @@ describe('Callback injection infra-fault propagation @regression @tier2', functi
                        'isResponseMirrorActive').returns(false);
         });
 
-        const b64 = (s) => Buffer.from(s, 'utf8').toString('base64');
-        const v1Data   = () => createBaseData({ ACTION: 'ATTEST', FORMAT: 1, BLOCK_INDEX: 100, ACTION_INDEX: 7 });
-        const v1Params = () => ['1', REQ_ID, 'http_get', b64('hello'), 'ok', 'm', '1', PUBKEY_A, SIG_A];
-        const v2Data   = () => createBaseData({ ACTION: 'ATTEST', FORMAT: 2, BLOCK_INDEX: 250, REQUEST_ID: REQ_ID, IS_SYNTHETIC: true });
-
         it('v1 response: a VM host fault in the callback PROPAGATES (block halts)', async function () {
             sinon.stub(ed25519, 'verify').returns(true);
             executeStub.parse.rejects(new HostFaultError());
@@ -208,6 +208,43 @@ describe('Callback injection infra-fault propagation @regression @tier2', functi
             sinon.stub(ed25519, 'verify').returns(true);
             executeStub.parse.rejects(dbFault(1213));
             await assert.rejects(handler.parse(v1Params(), v1Data(), null), isErrno(1213));
+        });
+    });
+
+    describe('ATTEST (attest.js)', function () {
+        beforeEach(function () {
+            indexer = createMockIndexer();
+            const db = indexer.indexerDb;
+            db.getContract                         = sinon.stub().resolves({ contract_index: 5 });
+            db.getAttestationAdmissionCounts = sinon.stub().resolves({ total: 0, byContract: 0 });
+            db.getAttestationRequestById           = sinon.stub().resolves(makeRequestRow());
+            db.hasCapability                       = sinon.stub().resolves(true);
+            db.createAttestationResponse           = sinon.stub().resolves();
+            db.incrementAttestationValidatorStat   = sinon.stub().resolves();
+            db.updateAttestationRequestStatus      = sinon.stub().resolves();
+            db.setAttestationResponseCallbackIndex = sinon.stub().resolves();
+            db.getValidatorsByCapability           = sinon.stub().resolves([{ pubkey: PUBKEY_A }]);
+            db.getStakeWeightsByCapability         = sinon.stub().resolves([{ pubkey: PUBKEY_A, source: 'SA', weight: '100' }]);
+            db.createValidatorReward               = sinon.stub().resolves(true);
+            db.createSavepoint                     = sinon.stub().resolves('sp1');
+            db.releaseSavepoint                    = sinon.stub().resolves();
+            db.rollbackToSavepoint                 = sinon.stub().resolves();
+            executeStub = { parse: sinon.stub().resolves() };
+            handler = new Attest({
+                config: indexer.config, util: indexer.util, mapper: indexer.mapper,
+                decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb,
+                actionExecute: executeStub,
+                protocolChanges: { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) },
+            });
+            indexer.util.resetLists();
+            // Legacy COUNT path for the responsible set (matches attest.test.js default).
+            sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+            // And the response-mirror flag day, armed on regtest at genesis: above it the
+            // chain handler refuses an on-chain v1 outright, so a callback is never
+            // injected and there is no fault to propagate. These cases are the legacy
+            // era's (matches attest.test.js default).
+            sinon.stub(require('../../../src/attest_response_mirror_activation.js'),
+                       'isResponseMirrorActive').returns(false);
         });
 
         it('v1 response: a deterministic callback failure is still swallowed (response stands)', async function () {
@@ -227,6 +264,43 @@ describe('Callback injection infra-fault propagation @regression @tier2', functi
         it('v2 expiry: a DB driver fault in the expiry callback PROPAGATES', async function () {
             executeStub.parse.rejects(dbFault(1205));
             await assert.rejects(handler.parse(['2', REQ_ID], v2Data(), null), isErrno(1205));
+        });
+    });
+
+    describe('ATTEST (attest.js)', function () {
+        beforeEach(function () {
+            indexer = createMockIndexer();
+            const db = indexer.indexerDb;
+            db.getContract                         = sinon.stub().resolves({ contract_index: 5 });
+            db.getAttestationAdmissionCounts = sinon.stub().resolves({ total: 0, byContract: 0 });
+            db.getAttestationRequestById           = sinon.stub().resolves(makeRequestRow());
+            db.hasCapability                       = sinon.stub().resolves(true);
+            db.createAttestationResponse           = sinon.stub().resolves();
+            db.incrementAttestationValidatorStat   = sinon.stub().resolves();
+            db.updateAttestationRequestStatus      = sinon.stub().resolves();
+            db.setAttestationResponseCallbackIndex = sinon.stub().resolves();
+            db.getValidatorsByCapability           = sinon.stub().resolves([{ pubkey: PUBKEY_A }]);
+            db.getStakeWeightsByCapability         = sinon.stub().resolves([{ pubkey: PUBKEY_A, source: 'SA', weight: '100' }]);
+            db.createValidatorReward               = sinon.stub().resolves(true);
+            db.createSavepoint                     = sinon.stub().resolves('sp1');
+            db.releaseSavepoint                    = sinon.stub().resolves();
+            db.rollbackToSavepoint                 = sinon.stub().resolves();
+            executeStub = { parse: sinon.stub().resolves() };
+            handler = new Attest({
+                config: indexer.config, util: indexer.util, mapper: indexer.mapper,
+                decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb,
+                actionExecute: executeStub,
+                protocolChanges: { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) },
+            });
+            indexer.util.resetLists();
+            // Legacy COUNT path for the responsible set (matches attest.test.js default).
+            sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+            // And the response-mirror flag day, armed on regtest at genesis: above it the
+            // chain handler refuses an on-chain v1 outright, so a callback is never
+            // injected and there is no fault to propagate. These cases are the legacy
+            // era's (matches attest.test.js default).
+            sinon.stub(require('../../../src/attest_response_mirror_activation.js'),
+                       'isResponseMirrorActive').returns(false);
         });
 
         it('v2 expiry: a deterministic expiry-callback failure is still swallowed (expiry stands)', async function () {

@@ -196,6 +196,9 @@ describe('Dispenser_Close action handler @regression @tier2', function () {
         assert.notStrictEqual(String(escrows[0][1]), String(-Number(REMAINING)), 'not the truncated JS-float negation');
     });
 
+    const ocg      = require('../../../src/dispenser_ownership_cancel_activation.js');
+    const FLAG_DAY = ocg.DISPENSER_OWNERSHIP_CANCEL_ACTIVATION.mainnet; // 1786060800
+
     // ── 1678: ownership cancel/expire routing flag-day ────────────────────────
     // Cancelling an OWNERSHIP dispenser must NOT hand the canceller (which may be
     // GET_ADDRESS) the token's issuer rights. Per DISPENSER.md:122 only a SWEEP
@@ -203,8 +206,6 @@ describe('Dispenser_Close action handler @regression @tier2', function () {
     // SOURCE. Gated (dispenser_ownership_cancel_activation.js) so historical replay
     // stays byte-identical below the flag-day.
     describe('1678 ownership cancel/expire routing gate @regression @tier1', function () {
-        const ocg      = require('../../../src/dispenser_ownership_cancel_activation.js');
-        const FLAG_DAY = ocg.DISPENSER_OWNERSHIP_CANCEL_ACTIVATION.mainnet; // 1786060800
         const SOURCE   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
         const GET_ADDR = 'mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp'; // != SOURCE, and the canceller
         const SWEEP    = 'mzMsvKm5N4vmAWKFDbwjc7hqCkGwANhCwn';
@@ -262,7 +263,9 @@ describe('Dispenser_Close action handler @regression @tier2', function () {
             sinon.assert.notCalled(indexer.util.transferTokenOwnership);
             sinon.assert.calledOnce(indexer.indexerDb.clearTokenEscrow);
         });
+    });
 
+    describe('1678 ownership cancel/expire routing gate @regression @tier1', function () {
         it('activation predicate: flips at the mainnet flag-day, genesis on testnet/regtest, off for unknown/bad input', function () {
             assert.strictEqual(ocg.isDispenserOwnershipCancelActive(FLAG_DAY - 1, 'mainnet'), false);
             assert.strictEqual(ocg.isDispenserOwnershipCancelActive(FLAG_DAY, 'mainnet'), true);

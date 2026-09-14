@@ -168,20 +168,19 @@ describe('Collect (COLLECT) @regression @tier3', function () {
         assert.strictEqual(second['AMOUNT'], '100');
     });
 
+    function setGate(enabled) {
+        actionsCtx.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().callsFake(async (name) =>
+                name === 'PARTIAL_UNSTAKE_COLLECT' ? enabled : true),
+        };
+    }
+
     // -----------------------------------------------------------------------
     // partial claim (trailing optional AMOUNT, PARTIAL_UNSTAKE_COLLECT)
     // -----------------------------------------------------------------------
 
     describe('partial claim', function () {
-
-        function setGate(enabled) {
-            actionsCtx.protocolChanges = {
-                isDefined: sinon.stub().returns(true),
-                isEnabled: sinon.stub().callsFake(async (name) =>
-                    name === 'PARTIAL_UNSTAKE_COLLECT' ? enabled : true),
-            };
-        }
-
         beforeEach(function () {
             setGate(true);
         });
@@ -234,6 +233,12 @@ describe('Collect (COLLECT) @regression @tier3', function () {
                 assert.ok(String(data['STATUS']).includes('AMOUNT') || String(data['STATUS']).includes('greater than 0'),
                     `expected reject for "${bad}", got ${data['STATUS']}`);
             }
+        });
+    });
+
+    describe('partial claim', function () {
+        beforeEach(function () {
+            setGate(true);
         });
 
         it('partial claim still respects the reward-pool coverage check', async function () {

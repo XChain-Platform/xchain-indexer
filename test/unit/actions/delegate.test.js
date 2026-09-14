@@ -81,7 +81,6 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
     // ─── v0: Capability rotate ───────────────────────────────────────────
 
     describe('v0: capability rotate', function () {
-
         it('valid delegation → STATUS valid and createDelegation called', async function () {
             const data = delegateData({ FORMAT: 0 });
             await handler.parse(['0', VALID_PUBKEY], data, null);
@@ -132,7 +131,9 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
             await handler.parse(['0', VALID_PUBKEY], data, null);
             assert.ok(String(data['STATUS']).includes('already in use'));
         });
+    });
 
+    describe('v0: capability rotate', function () {
         it('rejects when SIGNING_PUBKEY is held by an active delegation (F9)', async function () {
             indexer.indexerDb.getDelegationByPubkey.resolves({ delegation_index: 7 });
             const data = delegateData({ FORMAT: 0 });
@@ -186,7 +187,6 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
     // ─── v2: Capability revoke ────────────────────────────────────────
 
     describe('v2: capability revoke', function () {
-
         it('valid revoke → STATUS valid, deactivates the parent with no spurious insert (DEL-1, flag on)', async function () {
             const data = delegateData({ FORMAT: 2 });
             await handler.parse(['2', VALID_PUBKEY], data, null);
@@ -241,7 +241,9 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
                 : indexer.config['ACTIVATION_DELAY_BLOCKS'];
             assert.strictEqual(data['DEACTIVATION_BLOCK'], 1000 + delay);
         });
+    });
 
+    describe('v2: capability revoke', function () {
         it('stake-key mode: prior revocation check is scoped to the stake row\'s action_index (re-stake clears it)', async function () {
             indexer.indexerDb.getActiveDelegation.resolves(null);
             indexer.indexerDb.getActiveStakeBySourceAndPubkey.resolves({ action_index: 50 });
@@ -289,12 +291,11 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
 
     });
 
+    function v1Data() { return delegateData({ FORMAT: 1 }); }
+
     // ─── v1: Contract-targeted rotate ───────────────────────────────────
 
     describe('v1: contract-targeted rotate', function () {
-
-        function v1Data() { return delegateData({ FORMAT: 1 }); }
-
         beforeEach(function () {
             // doQuery for getAddressId-based contract_stake lookup returns one row (active stake)
             indexer.indexerDb.doQuery.resolves([{ 1: 1 }]);
@@ -343,6 +344,13 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
             const data = v1Data();
             await handler.parse(['1', VALID_PUBKEY, '5', 'TEST'], data, null);
             assert.ok(String(data['STATUS']).includes('no active contract stake'));
+        });
+    });
+
+    describe('v1: contract-targeted rotate', function () {
+        beforeEach(function () {
+            // doQuery for getAddressId-based contract_stake lookup returns one row (active stake)
+            indexer.indexerDb.doQuery.resolves([{ 1: 1 }]);
         });
 
         it('valid contract rotate → createContractDelegation called', async function () {

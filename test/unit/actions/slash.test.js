@@ -979,12 +979,12 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         assert.deepStrictEqual(indexer.indexerDb.getValidatorsByCapability.firstCall.args, ['attestation', buried(90)]);
     });
 
+    function withSlashConfig(cfg) {
+        indexer.config.STAKING = { CAPABILITIES: { cross_chain: { MIN_STAKE: '5000', SLASH: cfg } } };
+    }
+
     // ── Bounty / treasury split (governance config + BURN default) ──
     describe('bountyTreasurySplit', function () {
-        function withSlashConfig(cfg) {
-            indexer.config.STAKING = { CAPABILITIES: { cross_chain: { MIN_STAKE: '5000', SLASH: cfg } } };
-        }
-
         it('pure burn when no SLASH config (bounty 0, no treasury credit)', function () {
             // Explicit no-SLASH config: the real BTC.js now ships SLASH defaults, so assert
             // the absent-config path against a config that deliberately omits the SLASH block.
@@ -1035,7 +1035,9 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
             assert.strictEqual(Number(s.treasury), 450); // remainder burned (no TREASURY_ADDRESS)
             assert.strictEqual(s.treasuryAddr, null);
         });
+    });
 
+    describe('bountyTreasurySplit', function () {
         it('clamps the floor to the bond: a sub-floor bond never mints', function () {
             withSlashConfig({ BOUNTY_BPS: 500, BOUNTY_FLOOR: '50.00000000' });
             const s = handler.bountyTreasurySplit('cross_chain', '30');   // bond < floor

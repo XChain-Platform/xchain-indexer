@@ -19,6 +19,38 @@ const { getTestConfig } = require('../../fixtures/config');
 const Execute = require('../../../src/actions/execute/index.js');
 const Deploy  = require('../../../src/actions/deploy/index.js');
 
+const SOURCE   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+
+// A full, self-describing provider definition: the registry REPLACES a default
+// entry wholesale rather than field-merging, so a partial override is not valid.
+const OVERLAY = {
+    http_get: {
+        provider_id:            'http_get',
+        version:                1,
+        consensus_strategy:     'byte_equality',
+        max_request_bytes:      2048,
+        max_response_bytes:     32768,
+        allowed_redundancy:     [1, 3, 5],
+        deadline_window_blocks: 7
+    },
+    weather: {
+        provider_id:            'weather',
+        version:                1,
+        consensus_strategy:     'byte_equality',
+        max_request_bytes:      1024,
+        max_response_bytes:     4096,
+        allowed_redundancy:     [1],
+        deadline_window_blocks: 13
+    }
+};
+
+function overlayConfig() {
+    const config = getTestConfig();
+    config['GAS_PRICE'] = '0';   // fee = 0 → skip the gas-balance validation
+    config['ATTESTATION'] = { PROVIDERS: OVERLAY };
+    return config;
+}
+
 // the deadline-window map injected into the VM gateway was built from an
 // UNCONFIGURED ProviderRegistry, so it only ever carried the built-in DEFAULTS while
 // attest.js validated the same deadlines against the CONFIGURED registry. Under an
@@ -26,39 +58,7 @@ const Deploy  = require('../../../src/actions/deploy/index.js');
 // indexer then rejects, which is a validator-level accept/reject split. These tests
 // pin the injected map to the overlay so the two sides cannot drift again.
 describe('Provider deadline-window overlay parity (VM injection) @regression @tier2', function () {
-
-    const SOURCE   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
     const CONTRACT = 5;
-
-    // A full, self-describing provider definition: the registry REPLACES a default
-    // entry wholesale rather than field-merging, so a partial override is not valid.
-    const OVERLAY = {
-        http_get: {
-            provider_id:            'http_get',
-            version:                1,
-            consensus_strategy:     'byte_equality',
-            max_request_bytes:      2048,
-            max_response_bytes:     32768,
-            allowed_redundancy:     [1, 3, 5],
-            deadline_window_blocks: 7
-        },
-        weather: {
-            provider_id:            'weather',
-            version:                1,
-            consensus_strategy:     'byte_equality',
-            max_request_bytes:      1024,
-            max_response_bytes:     4096,
-            allowed_redundancy:     [1],
-            deadline_window_blocks: 13
-        }
-    };
-
-    function overlayConfig() {
-        const config = getTestConfig();
-        config['GAS_PRICE'] = '0';   // fee = 0 → skip the gas-balance validation
-        config['ATTESTATION'] = { PROVIDERS: OVERLAY };
-        return config;
-    }
 
     afterEach(function () {
         sinon.restore();
@@ -109,6 +109,12 @@ describe('Provider deadline-window overlay parity (VM injection) @regression @ti
         assert.strictEqual(injected.http_get, 7,  'overridden provider window must reach the VM');
         assert.strictEqual(injected.weather,  13, 'config-registered provider must reach the VM');
         assert.strictEqual(injected.llm,      20, 'un-overridden default must survive the overlay');
+    });
+});
+
+describe('Provider deadline-window overlay parity (VM injection) @regression @tier2', function () {
+    afterEach(function () {
+        sinon.restore();
     });
 
     it('DEPLOY injects the CONFIGURED deadline windows into the VM', async function () {

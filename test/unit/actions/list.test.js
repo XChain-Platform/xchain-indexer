@@ -108,7 +108,6 @@ describe('List @regression @tier3', function () {
     // ─── Format 1: Edit LIST ──────────────────────────────────────────
 
     describe('format 1: edit LIST', function () {
-
         it('add address to existing list: createListEdit called', async function () {
             indexer.indexerDb.getListType.resolves(2);
             indexer.indexerDb.getList.resolves([ADDR1]);
@@ -152,7 +151,9 @@ describe('List @regression @tier3', function () {
 
             assert.ok(data['STATUS'].includes('invalid'));
         });
+    });
 
+    describe('format 1: edit LIST', function () {
         // the edit must be built on the list's CURRENT membership (the head
         // of its edit chain), not on the create-time item set, and the parent it
         // stores must be the CREATE that roots the chain so the next edit finds it.
@@ -191,7 +192,9 @@ describe('List @regression @tier3', function () {
             assert.strictEqual(Number(indexer.indexerDb.getList.getCall(0).args[0]), 5,
                 'the membership read must use the normalized root');
         });
+    });
 
+    describe('format 1: edit LIST', function () {
         it('leaves LIST_ACTION_INDEX untouched while the flag day is inert', async function () {
             indexer.indexerDb.getListType.resolves(2);
             indexer.indexerDb.getList.resolves([ADDR1]);
@@ -242,7 +245,9 @@ describe('List @regression @tier3', function () {
             assert.strictEqual(indexer.indexerDb.createListItem.callCount, 0,
                 'an emptied list writes no item rows, which getList reads back as []');
         });
+    });
 
+    describe('format 1: edit LIST', function () {
         it('invalid EDIT value → invalid', async function () {
             indexer.indexerDb.getListType.resolves(2);
             indexer.indexerDb.getList.resolves([]);
@@ -397,7 +402,6 @@ describe('List @regression @tier3', function () {
     // more item. That position is the whole risk in the change: get it wrong and
     // the first item is eaten as the memo, or the memo is stored as a list member.
     describe('MEMO', function () {
-
         it('stores the MEMO and does NOT treat it as a list item (format 0)', async function () {
             indexer.indexerDb.isActionAllowed.resolves(true);
 
@@ -453,7 +457,9 @@ describe('List @regression @tier3', function () {
 
             assert.strictEqual(data['STATUS'], 'invalid: MEMO (semicolon)');
         });
+    });
 
+    describe('MEMO', function () {
         it('rejects a MEMO longer than MAX_MEMO_LENGTH', async function () {
             indexer.indexerDb.isActionAllowed.resolves(true);
 

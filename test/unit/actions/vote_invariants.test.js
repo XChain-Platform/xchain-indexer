@@ -74,7 +74,6 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
     }
 
     describe('_settleDeposit escrow conservation', function () {
-
         it('finalized win: refunds the whole hold (deposit + gas_escrow) to the creator, net zero', async function () {
             const p    = poll();
             const data = createBaseData({ ACTION: 'VOTE', FORMAT: 2, ACTION_INDEX: 100 });
@@ -131,7 +130,9 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
             assert.ok(indexer.indexerDb.createCredit.notCalled);
             assert.ok(indexer.indexerDb.setPollDepositResolved.notCalled);
         });
+    });
 
+    describe('_settleDeposit escrow conservation', function () {
         it('no-op when the poll carried zero deposit and zero gas_escrow', async function () {
             const p    = poll({ deposit_amount: '0', gas_escrow: '0' });
             const data = createBaseData({ ACTION: 'VOTE', FORMAT: 2, ACTION_INDEX: 100 });
@@ -143,22 +144,21 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
         });
     });
 
+    function bindingPoll(overrides = {}) {
+        return poll({
+            callback_contract_index: 5, callback_method: 'onResult',
+            callback_params: '[]', callback_on: 'pass',
+            ...overrides,
+        });
+    }
+
+    function stubFinalize(pollRow, result) {
+        indexer.indexerDb.getPoll = sinon.stub().resolves(pollRow);
+        indexer.indexerDb.finalizePoll = sinon.stub().resolves(result);
+        indexer.indexerDb.createActionIndex = sinon.stub().resolves(200);
+    }
+
     describe('binding-callback firing / metering (VOTE v2 finalize)', function () {
-
-        function bindingPoll(overrides = {}) {
-            return poll({
-                callback_contract_index: 5, callback_method: 'onResult',
-                callback_params: '[]', callback_on: 'pass',
-                ...overrides,
-            });
-        }
-
-        function stubFinalize(pollRow, result) {
-            indexer.indexerDb.getPoll = sinon.stub().resolves(pollRow);
-            indexer.indexerDb.finalizePoll = sinon.stub().resolves(result);
-            indexer.indexerDb.createActionIndex = sinon.stub().resolves(200);
-        }
-
         it("CALLBACK_ON='pass': fires exactly once on a finalized win, calling the target contract method via EXECUTE", async function () {
             const p = bindingPoll({ poll_status: 'open' });
             stubFinalize(p, { poll_status: 'finalized', winning_option: 1, total_counted_weight: '15', total_voters: 2, quorum_met: true, min_voters_met: true });
@@ -198,7 +198,9 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
             const [actionParams] = executeStub.parse.firstCall.args;
             assert.strictEqual(actionParams[4], 'failed_quorum');
         });
+    });
 
+    describe('binding-callback firing / metering (VOTE v2 finalize)', function () {
         // footgun pin: the binding-poll callback EXECUTE is emitted as a
         // fee-skipped, protocol-ceiling run whose gas is NOT drawn from or bounded
         // by the poll's GAS_ESCROW. The emission carries IS_EMISSION (execute.js
@@ -324,36 +326,35 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
         });
     });
 
+    // Drives the real v0 create path (parse FORMAT 0). Format:
+    // VERSION|TICK|END_BLOCK|OPTIONS|MAX_SELECTIONS|TALLY_MODE|WEIGHT_MODE|QUORUM|
+    // MIN_VOTERS|MIN_VOTE_BALANCE|DECIDE_THRESHOLD|QUESTION|DEPOSIT|CALLBACK_CONTRACT|
+    // CALLBACK_METHOD|CALLBACK_PARAMS|CALLBACK_ON|GAS_ESCROW
+    function createParams({ quorum = '', minVoters = '', callbackContract = '5' } = {}) {
+        return ['0', 'TEST', '200', 'yes,no', '', '', '', quorum, minVoters, '', '', '', '',
+                callbackContract, 'onResult', '', '', ''];
+    }
+
+    function stubCreate() {
+        indexer.indexerDb.getTokenInfo.resolves({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0, SUPPLY: '1000' });
+        indexer.indexerDb.createTicker.resolves(1);
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '100' });
+        indexer.indexerDb.getContract = sinon.stub().resolves({ contract_index: 5 });
+        indexer.indexerDb.createPoll  = sinon.stub().resolves();
+    }
+
+    function gateStub(active) {
+        return sinon.stub().callsFake(async (name) =>
+            name === 'VOTE_BINDING_MINIMUMS' ? active : true);
+    }
+
+    async function runCreate(params) {
+        const data = createBaseData({ ACTION: 'VOTE', FORMAT: 0, BLOCK_INDEX: 100, ACTION_INDEX: 50, SOURCE: 'creatorAddr' });
+        await handler.parse(params, data, null);
+        return data;
+    }
+
     describe('VOTE_BINDING_MINIMUMS flag-day (/ BonkDAO-class guard)', function () {
-
-        // Drives the real v0 create path (parse FORMAT 0). Format:
-        // VERSION|TICK|END_BLOCK|OPTIONS|MAX_SELECTIONS|TALLY_MODE|WEIGHT_MODE|QUORUM|
-        // MIN_VOTERS|MIN_VOTE_BALANCE|DECIDE_THRESHOLD|QUESTION|DEPOSIT|CALLBACK_CONTRACT|
-        // CALLBACK_METHOD|CALLBACK_PARAMS|CALLBACK_ON|GAS_ESCROW
-        function createParams({ quorum = '', minVoters = '', callbackContract = '5' } = {}) {
-            return ['0', 'TEST', '200', 'yes,no', '', '', '', quorum, minVoters, '', '', '', '',
-                    callbackContract, 'onResult', '', '', ''];
-        }
-
-        function stubCreate() {
-            indexer.indexerDb.getTokenInfo.resolves({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0, SUPPLY: '1000' });
-            indexer.indexerDb.createTicker.resolves(1);
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '100' });
-            indexer.indexerDb.getContract = sinon.stub().resolves({ contract_index: 5 });
-            indexer.indexerDb.createPoll  = sinon.stub().resolves();
-        }
-
-        function gateStub(active) {
-            return sinon.stub().callsFake(async (name) =>
-                name === 'VOTE_BINDING_MINIMUMS' ? active : true);
-        }
-
-        async function runCreate(params) {
-            const data = createBaseData({ ACTION: 'VOTE', FORMAT: 0, BLOCK_INDEX: 100, ACTION_INDEX: 50, SOURCE: 'creatorAddr' });
-            await handler.parse(params, data, null);
-            return data;
-        }
-
         beforeEach(stubCreate);
 
         it('gate ACTIVE: binding poll without QUORUM → invalid', async function () {
@@ -386,6 +387,10 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
             const data = await runCreate(['0', 'TEST', '200', 'yes,no', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
             assert.strictEqual(data.STATUS, 'valid');
         });
+    });
+
+    describe('VOTE_BINDING_MINIMUMS flag-day (/ BonkDAO-class guard)', function () {
+        beforeEach(stubCreate);
 
         it('gate INACTIVE: binding poll without QUORUM/MIN_VOTERS stays valid (byte-identical replay)', async function () {
             actionsCtx.protocolChanges.isEnabled = gateStub(false);
@@ -394,8 +399,18 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
         });
     });
 
-    describe('VOTE_CALLBACK_TIMELOCK flag-day (/ finalize→callback timelock)', function () {
+    function terminalPoll(overrides = {}) {
+        return {
+            action_index: 100, poll_status: 'open', end_block: 150,
+            deposit_amount: '0', gas_escrow: '0', deposit_resolved: null, deposit_address_id: null,
+            callback_contract_index: 5, callback_method: 'onResult', callback_params: '[]',
+            callback_on: 'pass', callback_delay_blocks: null, callback_due_block: null,
+            callback_execute_action_index: null, finalized_action_index: null,
+            ...overrides,
+        };
+    }
 
+    describe('VOTE_CALLBACK_TIMELOCK flag-day (/ finalize→callback timelock)', function () {
         function createParams({ delay = '' } = {}) {
             // VERSION|TICK|END_BLOCK|OPTIONS|MAX_SELECTIONS|TALLY_MODE|WEIGHT_MODE|QUORUM|
             // MIN_VOTERS|MIN_VOTE_BALANCE|DECIDE_THRESHOLD|QUESTION|DEPOSIT|CALLBACK_CONTRACT|
@@ -423,17 +438,6 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
             return data;
         }
 
-        function terminalPoll(overrides = {}) {
-            return {
-                action_index: 100, poll_status: 'open', end_block: 150,
-                deposit_amount: '0', gas_escrow: '0', deposit_resolved: null, deposit_address_id: null,
-                callback_contract_index: 5, callback_method: 'onResult', callback_params: '[]',
-                callback_on: 'pass', callback_delay_blocks: null, callback_due_block: null,
-                callback_execute_action_index: null, finalized_action_index: null,
-                ...overrides,
-            };
-        }
-
         describe('v0 create', function () {
 
             beforeEach(stubCreate);
@@ -459,7 +463,9 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
                 assert.strictEqual(data.CALLBACK_DELAY_BLOCKS, null, 'below the flag-day the field must be dropped, not honored');
             });
         });
+    });
 
+    describe('VOTE_CALLBACK_TIMELOCK flag-day (/ finalize→callback timelock)', function () {
         describe('v2 finalize deferral', function () {
 
             function stubFinalize(pollRow, result) {
@@ -498,7 +504,9 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
                 assert.ok(indexer.indexerDb.setPollCallbackDue.notCalled);
             });
         });
+    });
 
+    describe('VOTE_CALLBACK_TIMELOCK flag-day (/ finalize→callback timelock)', function () {
         describe('due-callback sweep (processDueCallbacks)', function () {
 
             it('fires the deferred callback at its due block with the frozen result, and marks it fired', async function () {

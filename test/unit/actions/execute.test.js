@@ -114,7 +114,6 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
     // ─── Contract validations ─────────────────────────────────────────────
 
     describe('contract validations', function () {
-
         it('rejects missing CONTRACT_ACTION_INDEX', async function () {
             const data = executeData({ FORMAT: 0 });
             await handler.parse(['0', '', 'run', ''], data, null);
@@ -169,7 +168,9 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             await handler.parse(['0', String(CONTRACT), 'run', ''], data, null);
             assert.ok(String(data['STATUS']).includes('CONTRACT_ACTION_INDEX'));
         });
+    });
 
+    describe('contract validations', function () {
         it('rejects when contract is not active', async function () {
             indexer.indexerDb.getStatusString.resolves('invalid');
             const data = executeData({ FORMAT: 0 });
@@ -257,7 +258,6 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
     // ─── Valid execution (with VM) ────────────────────────────────────────
 
     describe('valid execution with VM', function () {
-
         it('vm.execute called with correct method and params', async function () {
             const vm = makeVm();
             actionsCtx.vm = vm;
@@ -297,7 +297,9 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             await handler.parse(['0', String(CONTRACT), 'run', ''], data, null);
             assert.ok(indexer.indexerDb.createContractState.calledOnce);
         });
+    });
 
+    describe('valid execution with VM', function () {
         it('applies state deletes via createContractState with null value', async function () {
             actionsCtx.vm = makeVm({
                 execute: sinon.stub().resolves({
@@ -337,7 +339,9 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             assert.strictEqual(data['STATUS'], 'valid');
             assert.strictEqual(data['VM_GAS_BILLED'], 1000000);
         });
+    });
 
+    describe('valid execution with VM', function () {
         // A cross-contract callee settles against its CALLER-FUNDED reservation, not the
         // protocol ceiling, and the parent's refund reads execCeiling - gasBilled: an
         // unclamped callee both overbills and zeroes out the parent's refund.
@@ -362,7 +366,6 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
     // ─── VM failure paths ─────────────────────────────────────────────────
 
     describe('VM failure paths', function () {
-
         it('normalises a revert to a stable status token (not raw error string)', async function () {
             actionsCtx.vm = makeVm({
                 execute: sinon.stub().resolves({
@@ -410,7 +413,9 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             await handler.parse(['0', String(CONTRACT), 'run', ''], data, null);
             assert.ok(indexer.indexerDb.createContractExecution.calledOnce);
         });
+    });
 
+    describe('VM failure paths', function () {
         it('rolls back state changes on emission failure', async function () {
             // VM succeeds but the emission handler throws
             actionsCtx.vm = makeVm({
@@ -498,7 +503,6 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
     // ─── processEmission: emission routing ───────────────────────────────
 
     describe('processEmission', function () {
-
         it('throws when action handler is unknown or unsupported', async function () {
             // buildActionParams throws 'unsupported emission action' before getActionHandler fires
             const emission = { action: 'UNKNOWNACTION', params: {} };
@@ -550,7 +554,9 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
                 /XCALL emission missing EMITTER_POSITION/
             );
         });
+    });
 
+    describe('processEmission', function () {
         it('throws when XCALL is emitted from a constructor', async function () {
             const emission = { action: 'XCALL', params: { gasLimit: 50000 } };
             const execData = executeData({ FORMAT: 0, IS_CONSTRUCTOR: true });
@@ -605,7 +611,9 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             await handler.processEmission(emission, execData, 0);
             assert.ok(sendHandler.parse.calledOnce);
         });
+    });
 
+    describe('processEmission', function () {
         it('throws when emission handler sets STATUS to invalid', async function () {
             const sendHandler = { parse: sinon.stub().callsFake(async (params, data) => { data['STATUS'] = 'invalid: bad tick'; }) };
             actionsCtx.actionSend = sendHandler;
@@ -699,42 +707,41 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
 
     });
 
+    const PUBKEY = 'a'.repeat(64);
+
+    function slashEmission(overrides = {}) {
+        return { action: 'SLASH', params: { contractIndex: CONTRACT, pubkey: PUBKEY, token: 'STK', amount: '100', ...overrides } };
+    }
+
+    function slashData(overrides = {}) {
+        return executeData({ CONTRACT_ACTION_INDEX: CONTRACT, ACTION_INDEX: 99, BLOCK_INDEX: 200, ...overrides });
+    }
+
+    // Wire the DB methods processSlashEmission needs (absent from the default mock).
+    function wireSlashDb(over = {}) {
+        indexer.indexerDb.getContract        = sinon.stub().resolves({ slash_destination_id: 42 });
+        indexer.indexerDb.getPubkeyId        = sinon.stub().resolves(7);
+        indexer.indexerDb.getTickerId        = sinon.stub().resolves(3);
+        // { total, releases }: the deduction reports WHOSE escrow it reduced, because a
+        // contract stake is LOCKED there and the handler has to release it before it
+        // credits the slash destination.
+        indexer.indexerDb.slashContractStake = sinon.stub().resolves({ total: '100', releases: [{ address: '1StakerXXXXXXXXXXXXXXXXXXXXXXXX', amount: '100' }] });
+        indexer.indexerDb.doQuery            = sinon.stub().resolves([{ address: '1SlashDestXXXXXXXXXXXXXXXXXXXXX' }]);
+        // The destination resolve is the real db method over that stubbed doQuery, so the
+        // handler still has to go through index_addresses to find where a slash credits.
+        indexer.indexerDb.util = indexer.indexerDb.util || indexer.util;
+        indexer.indexerDb.getAddressById =
+            require('../../../src/db/index_tables').getAddressById.bind(indexer.indexerDb);
+        indexer.indexerDb.createCredit       = sinon.stub().resolves();
+        indexer.indexerDb.createEscrow       = sinon.stub().resolves();
+        indexer.indexerDb.createSlashEvent   = sinon.stub().resolves();
+        for(const [k, v] of Object.entries(over)) indexer.indexerDb[k] = v;
+    }
+
     // ─── processSlashEmission (internal SLASH handler) ───────────────────
     // Driven directly: SLASH emissions never reach the wire/decoder, so they are
     // handled inline by this method rather than the generic emission router.
     describe('processSlashEmission', function () {
-
-        const PUBKEY = 'a'.repeat(64);
-
-        function slashEmission(overrides = {}) {
-            return { action: 'SLASH', params: { contractIndex: CONTRACT, pubkey: PUBKEY, token: 'STK', amount: '100', ...overrides } };
-        }
-
-        function slashData(overrides = {}) {
-            return executeData({ CONTRACT_ACTION_INDEX: CONTRACT, ACTION_INDEX: 99, BLOCK_INDEX: 200, ...overrides });
-        }
-
-        // Wire the DB methods processSlashEmission needs (absent from the default mock).
-        function wireSlashDb(over = {}) {
-            indexer.indexerDb.getContract        = sinon.stub().resolves({ slash_destination_id: 42 });
-            indexer.indexerDb.getPubkeyId        = sinon.stub().resolves(7);
-            indexer.indexerDb.getTickerId        = sinon.stub().resolves(3);
-            // { total, releases }: the deduction reports WHOSE escrow it reduced, because a
-            // contract stake is LOCKED there and the handler has to release it before it
-            // credits the slash destination.
-            indexer.indexerDb.slashContractStake = sinon.stub().resolves({ total: '100', releases: [{ address: '1StakerXXXXXXXXXXXXXXXXXXXXXXXX', amount: '100' }] });
-            indexer.indexerDb.doQuery            = sinon.stub().resolves([{ address: '1SlashDestXXXXXXXXXXXXXXXXXXXXX' }]);
-            // The destination resolve is the real db method over that stubbed doQuery, so the
-            // handler still has to go through index_addresses to find where a slash credits.
-            indexer.indexerDb.util = indexer.indexerDb.util || indexer.util;
-            indexer.indexerDb.getAddressById =
-                require('../../../src/db/index_tables').getAddressById.bind(indexer.indexerDb);
-            indexer.indexerDb.createCredit       = sinon.stub().resolves();
-            indexer.indexerDb.createEscrow       = sinon.stub().resolves();
-            indexer.indexerDb.createSlashEvent   = sinon.stub().resolves();
-            for(const [k, v] of Object.entries(over)) indexer.indexerDb[k] = v;
-        }
-
         it('slashes stake, credits the destination, and writes a slash event (happy path)', async function () {
             wireSlashDb();
             await handler.processSlashEmission(slashEmission(), slashData());
@@ -786,7 +793,9 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             assert.ok(indexer.indexerDb.slashContractStake.notCalled);
             assert.ok(indexer.indexerDb.createCredit.notCalled);
         });
+    });
 
+    describe('processSlashEmission', function () {
         // seam pin. The VM's new '|' guard on contract.slash's token is
         // defense-in-depth precisely because this handler reads the emission by
         // NAMED field; if it ever pipe-splits instead, a '|'-bearing token would
@@ -812,15 +821,14 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
         });
     });
 
+    const CALLEE = 7;
+
+    function emitExecute(overrides = {}) {
+        return { action: 'EXECUTE', params: { contractIndex: CALLEE, method: 'onPing', params: ['x'], gasLimit: 50000, ...overrides } };
+    }
+
     // ─── Cross-contract calls (emit.execute) ──────────────────────────────
     describe('cross-contract calls', function () {
-
-        const CALLEE = 7;
-
-        function emitExecute(overrides = {}) {
-            return { action: 'EXECUTE', params: { contractIndex: CALLEE, method: 'onPing', params: ['x'], gasLimit: 50000, ...overrides } };
-        }
-
         it('getActionHandler routes EXECUTE to the wired actionExecute', function () {
             actionsCtx.actionExecute = { parse: sinon.stub() };
             handler = new Execute(actionsCtx);
@@ -873,7 +881,9 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             assert.strictEqual(row['GAS_USED'], 20000);
             assert.strictEqual(row['GAS_LIMIT'], 50000);
         });
+    });
 
+    describe('cross-contract calls', function () {
         it('a top-level run nets callee refunds out of its billed gas', async function () {
             // Caller metered 60000 (incl. the 500+50000 reservation); the callee
             // hands back 30000 unused -> billed 30000.
@@ -931,7 +941,9 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             const row = indexer.indexerDb.createContractExecution.firstCall.args[0];
             assert.strictEqual(row['GAS_USED'], 60000, 'no refunds on a failed tree');
         });
+    });
 
+    describe('cross-contract calls', function () {
         it('clamps a resource-terminated callee to ITS reservation, not the protocol ceiling', async function () {
             actionsCtx.vm = makeVm({
                 execute: sinon.stub().resolves({

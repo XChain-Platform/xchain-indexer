@@ -49,10 +49,40 @@ describe('Sweep @regression @tier3', function () {
         sinon.restore();
     });
 
+    const { SWEEP_ZERO_LEG_ACTIVATION } = require('../../../src/sweep_zero_leg_activation.js');
+
+    // GAS (tick_id=1) pays the fee; tick_id=2 is held at exactly 0, nothing to move.
+    function zeroTickStubs() {
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1', 2: '0' });
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.getAddressOwnerships.resolves([]);
+        indexer.indexerDb.getAddressEscrows.resolves([]);
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        const tickById = { 1: 'GAS', 2: 'ZEROTICK' };
+        indexer.indexerDb.getTicker.callsFake(async (id) => tickById[Number(id)] || null);
+    }
+
+    async function sweepAt(network, blockIndex) {
+        handler.config = Object.assign({}, indexer.config, { NETWORK: network });
+        const data = createBaseData({ ACTION: 'SWEEP', FORMAT: 0, SOURCE, COIN: 'BTC', BLOCK_INDEX: blockIndex });
+        await handler.parse(['0', DESTINATION], data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+        // Teeth: the non-zero GAS leg settles on both sides of the height.
+        assert.ok(indexer.indexerDb.createCredit.calledWith(sinon.match.any, 'GAS', sinon.match.any, DESTINATION),
+            'the non-zero GAS balance must still be credited');
+        return data;
+    }
+
+    function assertZeroLegsWritten() {
+        assert.ok(indexer.indexerDb.createDebit.calledWith(sinon.match.any, 'ZEROTICK', '0', SOURCE),
+            'below the height the zero-amount debit leg is written as the deployed fleet writes it');
+        assert.ok(indexer.indexerDb.createCredit.calledWith(sinon.match.any, 'ZEROTICK', '0', DESTINATION),
+            'below the height the zero-amount credit leg is written as the deployed fleet writes it');
+    }
+
     // ─── BALANCES=1 ──────────────────────────────────────────────────
 
     describe('BALANCES=1', function () {
-
         it('all balances transferred to destination', async function () {
             // Balance includes GAS (tick_id=1) for fees; no extra ticks so no balance sweeping needed
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1' }); // 1 GAS for fee
@@ -110,7 +140,9 @@ describe('Sweep @regression @tier3', function () {
             assert.ok(!indexer.indexerDb.createCredit.called, 'must not write any credit for a null-destination sweep');
             assert.ok(!indexer.indexerDb.createIssue.called, 'must not transfer ownership to a null owner');
         });
+    });
 
+    describe('BALANCES=1', function () {
         it('empty-string DESTINATION → invalid (same guard)', async function () {
             indexer.indexerDb.getAddressBalances.resolves({ 1: '5' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
@@ -162,44 +194,16 @@ describe('Sweep @regression @tier3', function () {
             assert.notDeepStrictEqual(calledTicks, idOrder,
                 'byte order must differ from the old tick_id order for this fixture (test has teeth)');
         });
+    });
 
+    describe('BALANCES=1', function () {
         // A SWEEP with nothing to move for a held tick wrote a zero-amount credit/debit
         // leg for it (seen on SWEEP 1237, amount "0"), a fake row on the action page and
         // the address Credits tab. Those rows are in the hashed ledger, so the skip is
         // gated on the SWEEP's own chain height (sweep_zero_leg_activation.js): the legs
         // are written below the height and skipped at/above it.
         describe('zero-amount leg flag day', function () {
-            const { SWEEP_ZERO_LEG_ACTIVATION } = require('../../../src/sweep_zero_leg_activation.js');
             const BTC_TESTNET_HEIGHT = SWEEP_ZERO_LEG_ACTIVATION['BTC:testnet'];
-
-            // GAS (tick_id=1) pays the fee; tick_id=2 is held at exactly 0, nothing to move.
-            function zeroTickStubs() {
-                indexer.indexerDb.getAddressBalances.resolves({ 1: '1', 2: '0' });
-                indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-                indexer.indexerDb.getAddressOwnerships.resolves([]);
-                indexer.indexerDb.getAddressEscrows.resolves([]);
-                indexer.indexerDb.isActionAllowed.resolves(true);
-                const tickById = { 1: 'GAS', 2: 'ZEROTICK' };
-                indexer.indexerDb.getTicker.callsFake(async (id) => tickById[Number(id)] || null);
-            }
-
-            async function sweepAt(network, blockIndex) {
-                handler.config = Object.assign({}, indexer.config, { NETWORK: network });
-                const data = createBaseData({ ACTION: 'SWEEP', FORMAT: 0, SOURCE, COIN: 'BTC', BLOCK_INDEX: blockIndex });
-                await handler.parse(['0', DESTINATION], data, null);
-                assert.strictEqual(data['STATUS'], 'valid');
-                // Teeth: the non-zero GAS leg settles on both sides of the height.
-                assert.ok(indexer.indexerDb.createCredit.calledWith(sinon.match.any, 'GAS', sinon.match.any, DESTINATION),
-                    'the non-zero GAS balance must still be credited');
-                return data;
-            }
-
-            function assertZeroLegsWritten() {
-                assert.ok(indexer.indexerDb.createDebit.calledWith(sinon.match.any, 'ZEROTICK', '0', SOURCE),
-                    'below the height the zero-amount debit leg is written as the deployed fleet writes it');
-                assert.ok(indexer.indexerDb.createCredit.calledWith(sinon.match.any, 'ZEROTICK', '0', DESTINATION),
-                    'below the height the zero-amount credit leg is written as the deployed fleet writes it');
-            }
 
             function assertZeroLegsSkipped() {
                 assert.ok(!indexer.indexerDb.createCredit.calledWith(sinon.match.any, 'ZEROTICK', sinon.match.any, sinon.match.any),
@@ -233,7 +237,11 @@ describe('Sweep @regression @tier3', function () {
                 await sweepAt('regtest', 100);
                 assertZeroLegsSkipped();
             });
+        });
+    });
 
+    describe('BALANCES=1', function () {
+        describe('zero-amount leg flag day', function () {
             it('mainnet is inert (null): the zero-amount legs are written at any height', async function () {
                 assert.strictEqual(SWEEP_ZERO_LEG_ACTIVATION['BTC:mainnet'], null);
                 zeroTickStubs();
@@ -288,7 +296,6 @@ describe('Sweep @regression @tier3', function () {
     // ─── OWNERSHIPS controller guard (`ownership` class) ─────────────
 
     describe('OWNERSHIPS controller guard', function () {
-
         // Deed-over of a controlled token's ownership routes to the `ownership` class via the
         // synthetic SWEEP_OWNERSHIP action, run once per swept ownership at from=SOURCE, to=DESTINATION.
         it('runs the ownership guard once per swept ownership (actionType SWEEP_OWNERSHIP)', async function () {
@@ -343,7 +350,9 @@ describe('Sweep @regression @tier3', function () {
             assert.ok(String(data['STATUS']).startsWith('invalid'), 'a denied ownership deed invalidates the sweep');
             assert.ok(!indexer.indexerDb.createIssue.called, 'no ownership transfer ISSUE on a denied sweep');
         });
+    });
 
+    describe('OWNERSHIPS controller guard', function () {
         // CONSENSUS-DETERMINISM: ownership guards must run in byte order of the tick STRING, like the
         // BALANCES guards, so a post-reorg tick_id divergence can't reorder the guard executions.
         it('runs ownership guards in byte order of the tick string', async function () {
@@ -399,10 +408,16 @@ describe('Sweep @regression @tier3', function () {
 
     });
 
+    function baseSweepStubs() {
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1' });
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.getAddressOwnerships.resolves([]);
+        indexer.indexerDb.isActionAllowed.resolves(true);
+    }
+
     // ─── ESCROWS=1 ───────────────────────────────────────────────────
 
     describe('ESCROWS=1', function () {
-
         it('open orders cancelled when ESCROWS=1', async function () {
             const orderInfo = {
                 ACTION_INDEX: 10, SOURCE, GIVE_TICK: 'TEST', GIVE_REMAINING: '50',
@@ -456,18 +471,13 @@ describe('Sweep @regression @tier3', function () {
 
             assert.ok(indexer.indexerDb.createSwapStatus.called, 'createSwapStatus should be called');
         });
+    });
 
+    describe('ESCROWS=1', function () {
         // Helper: force one or more sweep flags on after param parsing.
         function forceFlags(flags) {
             const orig = indexer.util.setActionParams.bind(indexer.util);
             indexer.util.setActionParams = (d, p, f, v) => Object.assign(orig(d, p, f, v), flags);
-        }
-
-        function baseSweepStubs() {
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '1' });
-            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            indexer.indexerDb.getAddressOwnerships.resolves([]);
-            indexer.indexerDb.isActionAllowed.resolves(true);
         }
 
         it('order cancellation transfers ownership when GIVE_OWNERSHIP=1', async function () {
@@ -517,7 +527,9 @@ describe('Sweep @regression @tier3', function () {
             assert.ok(indexer.indexerDb.clearTokenEscrow.called);
             assert.ok(indexer.indexerDb.createSwapStatus.calledWith(sinon.match.any, 20, 'cancelled'));
         });
+    });
 
+    describe('ESCROWS=1', function () {
         it('accepts a native-coin fee payment (PAYMENT_MODE native)', async function () {
             baseSweepStubs();
             indexer.indexerDb.getAddressEscrows.resolves([]);
@@ -555,7 +567,9 @@ describe('Sweep @regression @tier3', function () {
             await handler.parse(['0', DESTINATION], data, null);
             assert.ok(String(data['STATUS']).startsWith('invalid'));
         });
+    });
 
+    describe('ESCROWS=1', function () {
         it('dispensers set to cancelling when DISPENSERS=1 (via data override)', async function () {
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
@@ -604,7 +618,6 @@ describe('Sweep @regression @tier3', function () {
     // ─── All three flags combined ─────────────────────────────────────
 
     describe('all flags combined', function () {
-
         it('BALANCES=1, OWNERSHIPS=1, ORDERS/SWAPS/DISPENSERS=1 all processed (via data override)', async function () {
             const orderInfo = {
                 ACTION_INDEX: 10, SOURCE, GIVE_TICK: 'TEST', GIVE_REMAINING: '10',
@@ -638,7 +651,9 @@ describe('Sweep @regression @tier3', function () {
             assert.ok(indexer.indexerDb.createIssue.called);
             assert.ok(indexer.indexerDb.createOrderStatus.called);
         });
+    });
 
+    describe('all flags combined', function () {
         it('escrowed-ownership tick produces exactly ONE ISSUE when OWNERSHIPS=1 and ORDERS=1', async function () {
             // SOURCE has an open GIVE_OWNERSHIP=1 order escrowing TEST's ownership.
             // The real getAddressOwnerships query excludes escrowed ticks, but even
@@ -674,7 +689,9 @@ describe('Sweep @regression @tier3', function () {
             assert.strictEqual(indexer.indexerDb.createIssue.callCount, 1,
                 'escrowed-ownership tick must be transferred exactly once (offer-close path only)');
         });
+    });
 
+    describe('all flags combined', function () {
         it('escrowed-ownership tick via SWAP produces exactly ONE ISSUE when OWNERSHIPS=1 and SWAPS=1', async function () {
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
@@ -703,7 +720,9 @@ describe('Sweep @regression @tier3', function () {
             assert.strictEqual(indexer.indexerDb.createIssue.callCount, 1,
                 'escrowed-ownership tick must be transferred exactly once (offer-close path only)');
         });
+    });
 
+    describe('all flags combined', function () {
         it('non-escrowed ownership still transferred alongside an escrowed-order tick', async function () {
             // TEST is escrowed by the order; XTEST is a plain ownership. The sweep
             // must deliver both to DESTINATION with exactly one ISSUE each.

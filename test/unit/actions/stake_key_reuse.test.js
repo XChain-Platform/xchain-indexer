@@ -139,7 +139,6 @@ async function stakeVerdict(rows, blockIndex, config) {
 }
 
 describe('STAKE v1 signing-key reuse flag day @regression @tier2', function () {
-
     afterEach(function () { sinon.restore(); });
 
     it('is not vacuous: BTC:testnet is armed at a height above genesis', function () {
@@ -186,6 +185,10 @@ describe('STAKE v1 signing-key reuse flag day @regression @tier2', function () {
             assert.strictEqual(status, 'invalid: SIGNING_PUBKEY (already in use)');
         });
     });
+});
+
+describe('STAKE v1 signing-key reuse flag day @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     describe('the states that still hold a key, at and above the gate', function () {
 
@@ -236,6 +239,10 @@ describe('STAKE v1 signing-key reuse flag day @regression @tier2', function () {
             assert.strictEqual(status, 'invalid: SIGNING_PUBKEY (already in use)');
         });
     });
+});
+
+describe('STAKE v1 signing-key reuse flag day @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     describe('the unchanged cases', function () {
         it('a key with no stake rows is admitted below the gate', async function () {

@@ -49,7 +49,6 @@ describe('Sleep @regression @tier3', function () {
     // ─── Format 0: Sleep ADDRESS ──────────────────────────────────────
 
     describe('format 0: sleep ADDRESS', function () {
-
         it('valid address sleep: createSleep called with valid status', async function () {
             indexer.indexerDb.getTokenInfo.resolves(null);
             indexer.indexerDb.isActionAllowed.resolves(true);
@@ -98,7 +97,9 @@ describe('Sleep @regression @tier3', function () {
 
             assert.strictEqual(data['STATUS'], 'valid');
         });
+    });
 
+    describe('format 0: sleep ADDRESS', function () {
         it('RESUME_BLOCK < BLOCK_INDEX and not in immediate methods → invalid', async function () {
             indexer.indexerDb.getTokenInfo.resolves(null);
             indexer.indexerDb.isActionAllowed.resolves(true);
@@ -141,7 +142,6 @@ describe('Sleep @regression @tier3', function () {
     // ─── Format 1: Sleep TICK ─────────────────────────────────────────
 
     describe('format 1: sleep TICK', function () {
-
         it('valid tick sleep by owner: createSleep called with valid status', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, OWNER });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
@@ -196,7 +196,9 @@ describe('Sleep @regression @tier3', function () {
 
             assert.strictEqual(data['STATUS'], 'valid');
         });
+    });
 
+    describe('format 1: sleep TICK', function () {
         it('pre-flag-day (flag off) LOCK_SLEEP is not yet enforced → valid', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, OWNER, LOCK_SLEEP: 1 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);

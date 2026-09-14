@@ -273,11 +273,11 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
         });
     });
 
+    let util, db, actionsSpy;
+
     // -------------------------------------------------------------- the pass wiring
 
     describe('§4.1 applier pass (utility.processAttestationResponses)', function () {
-        let util, db, actionsSpy;
-
         beforeEach(function () {
             util = new Utility();
             db = {
@@ -327,6 +327,20 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
             await util.processAttestationResponses(actionsSpy, db, 100, EFFECTIVE_T - 1);
             assert.strictEqual(actionsSpy.processAction.called, false);
         });
+    });
+
+    describe('§4.1 applier pass (utility.processAttestationResponses)', function () {
+        beforeEach(function () {
+            util = new Utility();
+            db = {
+                config: { NETWORK: 'regtest' },
+                getAttestationRequestsAwaitingMirrorResponse: sinon.stub().resolves([requestRow()]),
+                getMirroredAttestationResponses: sinon.stub().resolves([mirrorRow()]),
+            };
+            actionsSpy = { processAction: sinon.stub().resolves() };
+        });
+
+        afterEach(function () { sinon.restore(); });
 
         it('drives two same-block rows through processAction in the deterministic order', async function () {
             const earlyId = 'f'.repeat(64);
@@ -346,15 +360,11 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
         });
     });
 
-    // ------------------------------------------------------- the BOUNDED read (row 58)
-
-    describe('bounded applicability read (utility.processAttestationResponses paging)', function () {
-        // The page size is spelled as a literal for the reason the cap is: a fixture
-        // derived from the value under test would follow it anywhere and prove nothing.
-        // It is not exported, so nothing but this comment ties the two together, and the
-        // point of every case here is that the answer does not depend on it.
-        const PAGE = 500;
-        const CAP  = 10;
+    // The page size is spelled as a literal for the reason the cap is: a fixture
+    // derived from the value under test would follow it anywhere and prove nothing.
+    // It is not exported, so nothing but this comment ties the two together, and the
+    // point of every case here is that the answer does not depend on it.
+    const PAGE = 500;
 
         // `n` pending requests in local request-row order, with a mirror row only for the indexes
         // in `withResponse`, so the applicable rows sit at chosen distances into the read.
@@ -372,24 +382,36 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
             return { requests, rows, applicableIds };
         }
 
-        function mirrorStub(rows) {
-            const byId = new Map(rows.map(r => [String(r.request_id), r]));
-            return sinon.stub().callsFake(async (network, ids) =>
-                ids.map(id => byId.get(String(id))).filter(Boolean));
-        }
+    function mirrorStub(rows) {
+        const byId = new Map(rows.map(r => [String(r.request_id), r]));
+        return sinon.stub().callsFake(async (network, ids) =>
+            ids.map(id => byId.get(String(id))).filter(Boolean));
+    }
 
-        // The read as it is now: a keyset walk the caller drives.
-        function pagedDb(fx) {
-            return {
-                config: { NETWORK: 'regtest' },
-                getAttestationRequestsAwaitingMirrorResponse: sinon.stub().callsFake(async (b, limit, after) => {
-                    let rows = fx.requests;
-                    if (after) rows = rows.filter(r => Number(r.action_index) > Number(after.action_index));
-                    return (limit === undefined || limit === null) ? rows.slice() : rows.slice(0, Number(limit));
-                }),
-                getMirroredAttestationResponses: mirrorStub(fx.rows),
-            };
-        }
+    // The read as it is now: a keyset walk the caller drives.
+    function pagedDb(fx) {
+        return {
+            config: { NETWORK: 'regtest' },
+            getAttestationRequestsAwaitingMirrorResponse: sinon.stub().callsFake(async (b, limit, after) => {
+                let rows = fx.requests;
+                if (after) rows = rows.filter(r => Number(r.action_index) > Number(after.action_index));
+                return (limit === undefined || limit === null) ? rows.slice() : rows.slice(0, Number(limit));
+            }),
+            getMirroredAttestationResponses: mirrorStub(fx.rows),
+        };
+    }
+
+    async function applied(db) {
+        const util   = new Utility();
+        const spy    = { processAction: sinon.stub().resolves() };
+        await util.processAttestationResponses(spy, db, 100, BLOCK_TIME);
+        return spy.processAction.getCalls().map(c => c.args[2]['REQUEST_ID']);
+    }
+
+    // ------------------------------------------------------- the BOUNDED read (row 58)
+
+    describe('bounded applicability read (utility.processAttestationResponses paging)', function () {
+        const CAP  = 10;
 
         // The read as it WAS: one call hands back every pending request and the selector's
         // own slice does the capping. This is the reference the bound must not move.
@@ -404,13 +426,6 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
                 }),
                 getMirroredAttestationResponses: mirrorStub(fx.rows),
             };
-        }
-
-        async function applied(db) {
-            const util   = new Utility();
-            const spy    = { processAction: sinon.stub().resolves() };
-            await util.processAttestationResponses(spy, db, 100, BLOCK_TIME);
-            return spy.processAction.getCalls().map(c => c.args[2]['REQUEST_ID']);
         }
 
         afterEach(function () { sinon.restore(); });
@@ -448,6 +463,10 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
             assert.strictEqual(db.getMirroredAttestationResponses.firstCall.args[1].length, PAGE,
                 'and the mirror read is bounded to one page of ids, not to every pending request');
         });
+    });
+
+    describe('bounded applicability read (utility.processAttestationResponses paging)', function () {
+        afterEach(function () { sinon.restore(); });
 
         it('walks past pages that yield nothing, and carries the keyset rather than an offset', async function () {
             // One applicable row, in the LAST page. The read has to reach it, so the walk
@@ -501,40 +520,40 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
         });
     });
 
+    let indexer, actionsCtx, handler, executeStub;
+
+    function addAttestationDbStubs(db) {
+        db.getAttestationRequestById         = sinon.stub().resolves(null);
+        db.hasCapability                     = sinon.stub().resolves(true);
+        db.createAttestationResponse         = sinon.stub().resolves();
+        db.incrementAttestationValidatorStat = sinon.stub().resolves();
+        db.updateAttestationRequestStatus    = sinon.stub().resolves();
+        db.setAttestationResponseCallbackIndex = sinon.stub().resolves();
+        db.getValidatorsByCapability         = sinon.stub().resolves([{ pubkey: PUBKEY_A }]);
+        db.getStakeWeightsByCapability       = sinon.stub().resolves([{ pubkey: PUBKEY_A, source: 'SA', weight: '100' }]);
+        db.createValidatorReward             = sinon.stub().resolves(true);
+        db.createSavepoint                   = sinon.stub().resolves('sp1');
+        db.releaseSavepoint                  = sinon.stub().resolves();
+        db.rollbackToSavepoint               = sinon.stub().resolves();
+        db.createActionIndex                 = sinon.stub().resolves(4242);
+    }
+
+    // The data object utility.processAttestationResponses hands the handler.
+    function applyData(overrides = {}, rowOverrides = {}, requestOverrides = {}) {
+        return createBaseData({
+            ACTION: 'ATTEST', FORMAT: 1, BLOCK_INDEX: 100, BLOCK_TIME: BLOCK_TIME,
+            TX_INDEX: null, TX_VOUT: null, TX_HASH: undefined, ACTION_INDEX: undefined,
+            IS_SYNTHETIC: true,
+            MIRROR_RESPONSE: mirrorRow(rowOverrides),
+            MIRROR_REQUEST:  requestRow(requestOverrides),
+            REQUEST_ID: REQ_ID,
+            ...overrides,
+        });
+    }
+
     // ------------------------------------------------------------------- the effects
 
     describe('§4.4 effects (attest.js _applyMirroredResponse)', function () {
-        let indexer, actionsCtx, handler, executeStub;
-
-        function addAttestationDbStubs(db) {
-            db.getAttestationRequestById         = sinon.stub().resolves(null);
-            db.hasCapability                     = sinon.stub().resolves(true);
-            db.createAttestationResponse         = sinon.stub().resolves();
-            db.incrementAttestationValidatorStat = sinon.stub().resolves();
-            db.updateAttestationRequestStatus    = sinon.stub().resolves();
-            db.setAttestationResponseCallbackIndex = sinon.stub().resolves();
-            db.getValidatorsByCapability         = sinon.stub().resolves([{ pubkey: PUBKEY_A }]);
-            db.getStakeWeightsByCapability       = sinon.stub().resolves([{ pubkey: PUBKEY_A, source: 'SA', weight: '100' }]);
-            db.createValidatorReward             = sinon.stub().resolves(true);
-            db.createSavepoint                   = sinon.stub().resolves('sp1');
-            db.releaseSavepoint                  = sinon.stub().resolves();
-            db.rollbackToSavepoint               = sinon.stub().resolves();
-            db.createActionIndex                 = sinon.stub().resolves(4242);
-        }
-
-        // The data object utility.processAttestationResponses hands the handler.
-        function applyData(overrides = {}, rowOverrides = {}, requestOverrides = {}) {
-            return createBaseData({
-                ACTION: 'ATTEST', FORMAT: 1, BLOCK_INDEX: 100, BLOCK_TIME: BLOCK_TIME,
-                TX_INDEX: null, TX_VOUT: null, TX_HASH: undefined, ACTION_INDEX: undefined,
-                IS_SYNTHETIC: true,
-                MIRROR_RESPONSE: mirrorRow(rowOverrides),
-                MIRROR_REQUEST:  requestRow(requestOverrides),
-                REQUEST_ID: REQ_ID,
-                ...overrides,
-            });
-        }
-
         beforeEach(function () {
             indexer = createMockIndexer();
             addAttestationDbStubs(indexer.indexerDb);
@@ -585,6 +604,34 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
             assert.strictEqual(emissionData['BLOCK_TIME'], BLOCK_TIME);
             assert.ok(indexer.indexerDb.setAttestationResponseCallbackIndex.calledOnce);
         });
+    });
+
+    describe('§4.4 effects (attest.js _applyMirroredResponse)', function () {
+        beforeEach(function () {
+            indexer = createMockIndexer();
+            addAttestationDbStubs(indexer.indexerDb);
+            executeStub = { parse: sinon.stub().resolves() };
+            actionsCtx = {
+                config:        indexer.config,
+                util:          indexer.util,
+                mapper:        indexer.mapper,
+                decoderDb:     indexer.decoderDb,
+                indexerDb:     indexer.indexerDb,
+                actionExecute: executeStub,
+                protocolChanges: {
+                    isDefined: sinon.stub().returns(true),
+                    isEnabled: sinon.stub().resolves(true),
+                },
+            };
+            handler = new Attest(actionsCtx);
+            indexer.util.resetLists();
+            sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+            sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(false);
+            sinon.stub(attestBcastFee, 'isAttestBroadcastFeeActive').returns(false);
+            sinon.stub(ed25519, 'verify').returns(true);
+        });
+
+        afterEach(function () { sinon.restore(); });
 
         it('the synthetic action has NULL tx coordinates and the deterministic hash', async function () {
             const data = applyData();
@@ -612,6 +659,34 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
             assert.strictEqual(executeStub.parse.firstCall.args[1]['TX_HASH'], expected,
                 'the injected callback context inherits it, so ids emitted inside the callback resolve');
         });
+    });
+
+    describe('§4.4 effects (attest.js _applyMirroredResponse)', function () {
+        beforeEach(function () {
+            indexer = createMockIndexer();
+            addAttestationDbStubs(indexer.indexerDb);
+            executeStub = { parse: sinon.stub().resolves() };
+            actionsCtx = {
+                config:        indexer.config,
+                util:          indexer.util,
+                mapper:        indexer.mapper,
+                decoderDb:     indexer.decoderDb,
+                indexerDb:     indexer.indexerDb,
+                actionExecute: executeStub,
+                protocolChanges: {
+                    isDefined: sinon.stub().returns(true),
+                    isEnabled: sinon.stub().resolves(true),
+                },
+            };
+            handler = new Attest(actionsCtx);
+            indexer.util.resetLists();
+            sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+            sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(false);
+            sinon.stub(attestBcastFee, 'isAttestBroadcastFeeActive').returns(false);
+            sinon.stub(ed25519, 'verify').returns(true);
+        });
+
+        afterEach(function () { sinon.restore(); });
 
         it('an invalid signature leaves the request pending and writes NOTHING', async function () {
             ed25519.verify.returns(false);
@@ -634,6 +709,34 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
             assert.strictEqual(indexer.indexerDb.createAttestationResponse.called, false);
             assert.strictEqual(indexer.indexerDb.updateAttestationRequestStatus.called, false);
         });
+    });
+
+    describe('§4.4 effects (attest.js _applyMirroredResponse)', function () {
+        beforeEach(function () {
+            indexer = createMockIndexer();
+            addAttestationDbStubs(indexer.indexerDb);
+            executeStub = { parse: sinon.stub().resolves() };
+            actionsCtx = {
+                config:        indexer.config,
+                util:          indexer.util,
+                mapper:        indexer.mapper,
+                decoderDb:     indexer.decoderDb,
+                indexerDb:     indexer.indexerDb,
+                actionExecute: executeStub,
+                protocolChanges: {
+                    isDefined: sinon.stub().returns(true),
+                    isEnabled: sinon.stub().resolves(true),
+                },
+            };
+            handler = new Attest(actionsCtx);
+            indexer.util.resetLists();
+            sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+            sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(false);
+            sinon.stub(attestBcastFee, 'isAttestBroadcastFeeActive').returns(false);
+            sinon.stub(ed25519, 'verify').returns(true);
+        });
+
+        afterEach(function () { sinon.restore(); });
 
         it('skips a body over the 8189-byte cap the batch could never carry', async function () {
             const big  = 'x'.repeat(8190);
@@ -656,6 +759,34 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
             assert.strictEqual(indexer.indexerDb.updateAttestationRequestStatus.called, false,
                 'a retryable round is never mirrored, and one that appears must leave the request pending');
         });
+    });
+
+    describe('§4.4 effects (attest.js _applyMirroredResponse)', function () {
+        beforeEach(function () {
+            indexer = createMockIndexer();
+            addAttestationDbStubs(indexer.indexerDb);
+            executeStub = { parse: sinon.stub().resolves() };
+            actionsCtx = {
+                config:        indexer.config,
+                util:          indexer.util,
+                mapper:        indexer.mapper,
+                decoderDb:     indexer.decoderDb,
+                indexerDb:     indexer.indexerDb,
+                actionExecute: executeStub,
+                protocolChanges: {
+                    isDefined: sinon.stub().returns(true),
+                    isEnabled: sinon.stub().resolves(true),
+                },
+            };
+            handler = new Attest(actionsCtx);
+            indexer.util.resetLists();
+            sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+            sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(false);
+            sinon.stub(attestBcastFee, 'isAttestBroadcastFeeActive').returns(false);
+            sinon.stub(ed25519, 'verify').returns(true);
+        });
+
+        afterEach(function () { sinon.restore(); });
 
         it('re-gates the mirror era and the pending state at apply time', async function () {
             // The handler is reached through a synthesized action, so it re-checks what
@@ -678,6 +809,34 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
             assert.strictEqual(indexer.indexerDb.incrementAttestationValidatorStat.called, false,
                 'fulfilled_count is credited only for status ok');
         });
+    });
+
+    describe('§4.4 effects (attest.js _applyMirroredResponse)', function () {
+        beforeEach(function () {
+            indexer = createMockIndexer();
+            addAttestationDbStubs(indexer.indexerDb);
+            executeStub = { parse: sinon.stub().resolves() };
+            actionsCtx = {
+                config:        indexer.config,
+                util:          indexer.util,
+                mapper:        indexer.mapper,
+                decoderDb:     indexer.decoderDb,
+                indexerDb:     indexer.indexerDb,
+                actionExecute: executeStub,
+                protocolChanges: {
+                    isDefined: sinon.stub().returns(true),
+                    isEnabled: sinon.stub().resolves(true),
+                },
+            };
+            handler = new Attest(actionsCtx);
+            indexer.util.resetLists();
+            sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+            sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(false);
+            sinon.stub(attestBcastFee, 'isAttestBroadcastFeeActive').returns(false);
+            sinon.stub(ed25519, 'verify').returns(true);
+        });
+
+        afterEach(function () { sinon.restore(); });
 
         it('settles the request fee at the synthesized action, which carries BLOCK_TIME (D60)', async function () {
             // The fee-ORACLE read is the first reason the synthesized action must
@@ -700,6 +859,34 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
             assert.strictEqual(executeStub.parse.firstCall.args[1]['BLOCK_TIME'], BLOCK_TIME,
                 'the synthesized action carries BLOCK_TIME through to the callback context');
         });
+    });
+
+    describe('§4.4 effects (attest.js _applyMirroredResponse)', function () {
+        beforeEach(function () {
+            indexer = createMockIndexer();
+            addAttestationDbStubs(indexer.indexerDb);
+            executeStub = { parse: sinon.stub().resolves() };
+            actionsCtx = {
+                config:        indexer.config,
+                util:          indexer.util,
+                mapper:        indexer.mapper,
+                decoderDb:     indexer.decoderDb,
+                indexerDb:     indexer.indexerDb,
+                actionExecute: executeStub,
+                protocolChanges: {
+                    isDefined: sinon.stub().returns(true),
+                    isEnabled: sinon.stub().resolves(true),
+                },
+            };
+            handler = new Attest(actionsCtx);
+            indexer.util.resetLists();
+            sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+            sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(false);
+            sinon.stub(attestBcastFee, 'isAttestBroadcastFeeActive').returns(false);
+            sinon.stub(ed25519, 'verify').returns(true);
+        });
+
+        afterEach(function () { sinon.restore(); });
 
         it('retires the broadcast-fee carve-out: no attest_bcast, whole escrow to the signers', async function () {
             // A mirror-applied response was never broadcast by anyone, so there is no
@@ -732,6 +919,34 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
             assert.strictEqual(executeStub.parse.called, false,
                 'the contract lives on the origin chain; the v4 relay leg fires the callback there');
         });
+    });
+
+    describe('§4.4 effects (attest.js _applyMirroredResponse)', function () {
+        beforeEach(function () {
+            indexer = createMockIndexer();
+            addAttestationDbStubs(indexer.indexerDb);
+            executeStub = { parse: sinon.stub().resolves() };
+            actionsCtx = {
+                config:        indexer.config,
+                util:          indexer.util,
+                mapper:        indexer.mapper,
+                decoderDb:     indexer.decoderDb,
+                indexerDb:     indexer.indexerDb,
+                actionExecute: executeStub,
+                protocolChanges: {
+                    isDefined: sinon.stub().returns(true),
+                    isEnabled: sinon.stub().resolves(true),
+                },
+            };
+            handler = new Attest(actionsCtx);
+            indexer.util.resetLists();
+            sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+            sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(false);
+            sinon.stub(attestBcastFee, 'isAttestBroadcastFeeActive').returns(false);
+            sinon.stub(ed25519, 'verify').returns(true);
+        });
+
+        afterEach(function () { sinon.restore(); });
 
         it('the chain-path v1 dispatch is untouched by the mirror marker', async function () {
             // Row 18 will gate the chain path on isMirrorEraRequest; the seam it calls is

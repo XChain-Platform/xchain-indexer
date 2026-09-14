@@ -17,9 +17,9 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Broadcast = require('../../../src/actions/broadcast.js');
 
-describe('Broadcast action handler @regression @tier3', function () {
-    let indexer, actionsCtx, handler;
+let indexer, actionsCtx, handler;
 
+describe('Broadcast action handler @regression @tier3', function () {
     beforeEach(function () {
         indexer = createMockIndexer();
         actionsCtx = {
@@ -74,6 +74,26 @@ describe('Broadcast action handler @regression @tier3', function () {
         await handler.parse(params, data, null);
         assert.ok(data['STATUS'].includes('VERSION'), `Expected VERSION error, got: ${data['STATUS']}`);
     });
+});
+
+describe('Broadcast action handler @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().resolves(true),
+            },
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Broadcast(actionsCtx);
+        indexer.util.resetLists();
+    });
 
     // ─── MESSAGE length limit ─────────────────────────────────────────
 
@@ -109,6 +129,26 @@ describe('Broadcast action handler @regression @tier3', function () {
         const params = ['1', 'BTC-USD', '50000', '1', 'bad;memo'];
         await handler.parse(params, data, null);
         assert.ok(data['STATUS'].includes('MEMO'), `Expected MEMO error, got: ${data['STATUS']}`);
+    });
+});
+
+describe('Broadcast action handler @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().resolves(true),
+            },
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Broadcast(actionsCtx);
+        indexer.util.resetLists();
     });
 
     it('rejects MEMO exceeding MAX_MEMO_LENGTH', async function () {

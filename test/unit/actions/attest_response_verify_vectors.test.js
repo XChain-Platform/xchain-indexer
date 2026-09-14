@@ -326,7 +326,6 @@ describe('ATTEST v1 response verification: captured byte vectors @regression @ti
     });
 
     describe('signature counting and the exact error strings', function () {
-
         it('valid quorum: sigs inlined, error string absent', async function () {
             seatUnweighted([K1.pubkey]);
             const r = await driveSigned([K1.pubkey]);
@@ -384,7 +383,9 @@ describe('ATTEST v1 response verification: captured byte vectors @regression @ti
             assert.strictEqual(r.status, 'invalid: insufficient valid signatures (1/2)');
             assert.strictEqual(r.validSigs, 1);
         });
+    });
 
+    describe('signature counting and the exact error strings', function () {
         it('insufficient signatures against redundancy 3: 1/3', async function () {
             indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 3 }));
             seatUnweighted([RANK3[0], RANK3[1], RANK3[2]]);
@@ -395,7 +396,6 @@ describe('ATTEST v1 response verification: captured byte vectors @regression @ti
     });
 
     describe('the capability read: which query, at which height', function () {
-
         it('unweighted branch resolves at the ONCE-buried height', async function () {
             seatUnweighted([K1.pubkey]);
             const r = await driveSigned([K1.pubkey]);
@@ -441,7 +441,9 @@ describe('ATTEST v1 response verification: captured byte vectors @regression @ti
             const blocks = indexer.indexerDb.getStakeWeightsByCapability.getCalls().map(c => c.args[1]);
             assert.ok(blocks.every(b => b === BURIED_BLOCK), JSON.stringify(blocks));
         });
+    });
 
+    describe('the capability read: which query, at which height', function () {
         it('a TRUNCATED weighted read is taken as it stands, never re-probed per signer', async function () {
             // The fixed bug: hasCapability is the pubkey aggregate, so a per-signer
             // fallback here drops the very source-split signers the weighted query
@@ -541,6 +543,33 @@ describe('ATTEST v1 response verification: captured byte vectors @regression @ti
         });
     });
 
+    // Same shape as v1Data/v1Params above, but calling the module directly:
+    // atBlock === declaredBlock (90) keeps the widening ladder at its unwidened
+    // floor, where RANK3[0] is the sole responsible signer, matching the
+    // "unwidened" vector in the widening-step block above.
+    function mirrorInput(effectiveTime, sigs, overrides = {}) {
+        return {
+            request:           makeRequestRow(),
+            sigs,
+            requestId:         REQ_ID_LOWER,
+            requestIdRaw:      REQ_ID_LOWER,
+            providerId:        'http_get',
+            responseStatus:    'ok',
+            meta:              'm',
+            responseBodyBytes: Buffer.from('hello', 'utf8'),
+            effectiveTime,
+            atBlock:           DECLARED_BLOCK,
+            gateBlock:         DECLARED_BLOCK,
+            error:             null,
+            coin:              'BTC',
+            network:           'regtest',
+            indexerDb:         indexer.indexerDb,
+            protocolChanges:   handler.actions.protocolChanges,
+            computeResponsibleSet: handler.computeResponsibleSet.bind(handler),
+            ...overrides,
+        };
+    }
+
     // -----------------------------------------------------------------------
     // MIRROR-ERA CANONICAL. The chain path above never
     // sets `effectiveTime` at all, so it stays on the legacy canonical (proved by
@@ -552,34 +581,6 @@ describe('ATTEST v1 response verification: captured byte vectors @regression @ti
     // -----------------------------------------------------------------------
 
     describe('mirror-era canonical: the caller-selected effectiveTime', function () {
-
-        // Same shape as v1Data/v1Params above, but calling the module directly:
-        // atBlock === declaredBlock (90) keeps the widening ladder at its unwidened
-        // floor, where RANK3[0] is the sole responsible signer, matching the
-        // "unwidened" vector in the widening-step block above.
-        function mirrorInput(effectiveTime, sigs, overrides = {}) {
-            return {
-                request:           makeRequestRow(),
-                sigs,
-                requestId:         REQ_ID_LOWER,
-                requestIdRaw:      REQ_ID_LOWER,
-                providerId:        'http_get',
-                responseStatus:    'ok',
-                meta:              'm',
-                responseBodyBytes: Buffer.from('hello', 'utf8'),
-                effectiveTime,
-                atBlock:           DECLARED_BLOCK,
-                gateBlock:         DECLARED_BLOCK,
-                error:             null,
-                coin:              'BTC',
-                network:           'regtest',
-                indexerDb:         indexer.indexerDb,
-                protocolChanges:   handler.actions.protocolChanges,
-                computeResponsibleSet: handler.computeResponsibleSet.bind(handler),
-                ...overrides,
-            };
-        }
-
         // Capture the canonical the module actually builds for a given effectiveTime
         // (via a throwaway signature; the canonical does not depend on the sigs
         // list), then sign THAT string with the real key. Same two-pass technique
@@ -636,7 +637,9 @@ describe('ATTEST v1 response verification: captured byte vectors @regression @ti
             assert.strictEqual(r.canonical, null);
             assert.strictEqual(r.validSigs, 0);
         });
+    });
 
+    describe('mirror-era canonical: the caller-selected effectiveTime', function () {
         it('an unspellable effectiveTime never throws out of the module (a bad row is skipped, not a crash)', async function () {
             seatUnweighted([RANK3[0]]);
             await assert.doesNotReject(avr.verifyAttestationResponse(

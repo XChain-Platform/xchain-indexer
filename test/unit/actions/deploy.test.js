@@ -218,26 +218,26 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
 
     });
 
+    // deploy.js resolves the per-coin Pkg 3 height gate (vm_deploy_lint_pkg3_activation)
+    // and threads two flags into validateSyntax (enforceBannedGenerator /
+    // enforceBannedWasm). Below each coin's height both are false so the historical
+    // accepted verdict replays byte-identically; at/after it both are true so the deploy
+    // validator blocks. The vm is stubbed here, so this pins the WIRING (which flags,
+    // resolved from which height), not the rule logic (proven in
+    // xchain-vm/test/unit/lint_generator_wasm.test.js).
+
+    async function optsFor(network, coin, blockIndex) {
+        actionsCtx.config['NETWORK'] = network;
+        actionsCtx.config['COIN']    = coin;
+        const vm = makeVm();
+        actionsCtx.vm = vm;
+        handler = new Deploy(actionsCtx);
+        const data = deployData({ FORMAT: 0, BLOCK_INDEX: blockIndex });
+        await handler.parse(['0', VALID_CODE_B64, String(blockIndex || 100), ''], data, null);
+        return { data, opts: vm.validateSyntax.firstCall.args[1] };
+    }
+
     describe('Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm)', function () {
-        // deploy.js resolves the per-coin Pkg 3 height gate (vm_deploy_lint_pkg3_activation)
-        // and threads two flags into validateSyntax (enforceBannedGenerator /
-        // enforceBannedWasm). Below each coin's height both are false so the historical
-        // accepted verdict replays byte-identically; at/after it both are true so the deploy
-        // validator blocks. The vm is stubbed here, so this pins the WIRING (which flags,
-        // resolved from which height), not the rule logic (proven in
-        // xchain-vm/test/unit/lint_generator_wasm.test.js).
-
-        async function optsFor(network, coin, blockIndex) {
-            actionsCtx.config['NETWORK'] = network;
-            actionsCtx.config['COIN']    = coin;
-            const vm = makeVm();
-            actionsCtx.vm = vm;
-            handler = new Deploy(actionsCtx);
-            const data = deployData({ FORMAT: 0, BLOCK_INDEX: blockIndex });
-            await handler.parse(['0', VALID_CODE_B64, String(blockIndex || 100), ''], data, null);
-            return { data, opts: vm.validateSyntax.firstCall.args[1] };
-        }
-
         it('below the BTC mainnet height (960999): both flags OFF, contract still accepted', async function () {
             const { data, opts } = await optsFor('mainnet', 'BTC', 960999);
             assert.strictEqual(opts.enforceBannedGenerator, false);
@@ -290,7 +290,9 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             assert.ok('enforceLintGlobalAlias' in opts, 'enforceLintGlobalAlias must be threaded');
             assert.strictEqual(opts.enforceLintGlobalAlias, true, 'regtest is genesis-armed');
         });
+    });
 
+    describe('Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm)', function () {
         it('is ON on mainnet at every height, genesis included (armed by the 2026-09-09 ruling)', async function () {
             for (const [coin, height] of [['BTC', 0], ['BTC', 961000], ['LTC', 3154250], ['DOGE', 6319000]]) {
                 const { data, opts } = await optsFor('mainnet', coin, height);
@@ -426,21 +428,20 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
 
     });
 
+    // Real readManifest always reports permissions/maxTakeBps types and, from the
+    // CONTRACT_META_REQUIRED flag day, the meta fields; mirror that full shape so
+    // neither the permissions check nor the meta verdict misfires.
+    function manifest(hasInitialize) {
+        return baseManifest(hasInitialize);
+    }
+    function vmWithManifest(hasInitialize, executeResult) {
+        return makeVm(Object.assign(
+            { readManifest: sinon.stub().resolves({ success: true, manifest: manifest(hasInitialize), error: null }) },
+            executeResult ? { execute: sinon.stub().resolves(executeResult) } : {}
+        ));
+    }
+
     describe('constructor execution under DEPLOY_INIT_STRICT (Option C)', function () {
-
-        // Real readManifest always reports permissions/maxTakeBps types and, from the
-        // CONTRACT_META_REQUIRED flag day, the meta fields; mirror that full shape so
-        // neither the permissions check nor the meta verdict misfires.
-        function manifest(hasInitialize) {
-            return baseManifest(hasInitialize);
-        }
-        function vmWithManifest(hasInitialize, executeResult) {
-            return makeVm(Object.assign(
-                { readManifest: sinon.stub().resolves({ success: true, manifest: manifest(hasInitialize), error: null }) },
-                executeResult ? { execute: sinon.stub().resolves(executeResult) } : {}
-            ));
-        }
-
         it('at/after the flag-day, runs the constructor even with NO CONSTRUCTOR_PARAMS (zero args)', async function () {
             const vm = vmWithManifest(true);
             actionsCtx.vm = vm;
@@ -493,7 +494,9 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             assert.ok(vm.execute.notCalled, 'no constructor to run');
             assert.strictEqual(data['STATUS'], 'valid');
         });
+    });
 
+    describe('constructor execution under DEPLOY_INIT_STRICT (Option C)', function () {
         it('with CONSTRUCTOR_PARAMS present, still runs the constructor with those args (unchanged path)', async function () {
             const vm = vmWithManifest(true);
             actionsCtx.vm = vm;
@@ -510,7 +513,6 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
     // ─── FORMAT 1: staking config (COOLDOWN_BLOCKS + SLASH_DESTINATION) ──
 
     describe('FORMAT 1: staking config', function () {
-
         it('valid v1 with COOLDOWN_BLOCKS sets STATUS valid', async function () {
             const data = deployData({ FORMAT: 1 });
             await handler.parse(['1', VALID_CODE_B64, '100000', '', '100', 'BURN'], data, null);
@@ -568,7 +570,9 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             // createContract should have been called (deploy succeeded)
             sinon.assert.calledOnce(indexer.indexerDb.createContract);
         });
+    });
 
+    describe('FORMAT 1: staking config', function () {
         // Pkg6 / dede7788 (gated DEPLOY_SLASH_DEST_ADDRESS_VALID): an explicit SLASH_DESTINATION
         // must resolve to a well-formed chain address, else it is interned into the immutable
         // contracts.slash_destination and every later slash routes stake to an unspendable address.
@@ -625,6 +629,24 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
 
     });
 
+    const crypto = require('crypto');
+    const SOURCE_HASH = crypto.createHash('sha256').update(VALID_CODE).digest('hex');
+
+    // Run one inline DEPLOY with the gate forced on/off and return what was
+    // recorded: the final STATUS and the code_hash written to `contracts`.
+    async function runDeploy({ enabled, codeEncoding }) {
+        actionsCtx.protocolChanges.isEnabled = sinon.stub().resolves(enabled);
+        // Reset so this run's createContract is always firstCall, even when the
+        // helper is invoked twice in one test (both-sides-of-the-gate cases).
+        indexer.indexerDb.createContract.resetHistory();
+        const data = deployData({ FORMAT: 0 });
+        await handler.parse(['0', codeEncoding, '100000', ''], data, null);
+        const codeHash = indexer.indexerDb.createContract.calledOnce
+            ? indexer.indexerDb.createContract.firstCall.args[0].CODE_HASH
+            : null;
+        return { status: data['STATUS'], codeHash };
+    }
+
     // ─── CODE_ENCODING activation gate (hex below, base64 at/above) ──────
     //
     // Inline DEPLOY decodes CODE_ENCODING as base64 at/after the
@@ -635,25 +657,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
     // drive both sides of the gate by flipping the protocolChanges stub.
 
     describe('CODE_ENCODING activation gate', function () {
-
-        const crypto = require('crypto');
-        const SOURCE_HASH = crypto.createHash('sha256').update(VALID_CODE).digest('hex');
         const VALID_CODE_HEX = Buffer.from(VALID_CODE, 'utf8').toString('hex');
-
-        // Run one inline DEPLOY with the gate forced on/off and return what was
-        // recorded: the final STATUS and the code_hash written to `contracts`.
-        async function runDeploy({ enabled, codeEncoding }) {
-            actionsCtx.protocolChanges.isEnabled = sinon.stub().resolves(enabled);
-            // Reset so this run's createContract is always firstCall, even when the
-            // helper is invoked twice in one test (both-sides-of-the-gate cases).
-            indexer.indexerDb.createContract.resetHistory();
-            const data = deployData({ FORMAT: 0 });
-            await handler.parse(['0', codeEncoding, '100000', ''], data, null);
-            const codeHash = indexer.indexerDb.createContract.calledOnce
-                ? indexer.indexerDb.createContract.firstCall.args[0].CODE_HASH
-                : null;
-            return { status: data['STATUS'], codeHash };
-        }
 
         it('at/above the gate decodes base64 → valid, code_hash = sha256(source)', async function () {
             const { status, codeHash } = await runDeploy({ enabled: true, codeEncoding: VALID_CODE_B64 });
@@ -688,7 +692,9 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             const forked = (above.status !== 'valid') || (above.codeHash !== SOURCE_HASH);
             assert.ok(forked, 'reading the hex field as base64 must not reproduce the hex-era contract');
         });
+    });
 
+    describe('CODE_ENCODING activation gate', function () {
         it('a base64 field below the gate (read as hex) does not yield the base64-era contract', async function () {
             // Symmetric guard: the base64 string read as hex below the gate must not
             // silently reproduce the base64-era contract.
@@ -702,7 +708,6 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
     // ─── Native coin fee payment paths (lines 185-203) ───────────────────
 
     describe('native coin fee payment', function () {
-
         it('valid native coin fee sets feePaymentMode=1 and STATUS valid', async function () {
             const config = getTestConfig();
             config['GAS_PRICE'] = '0.00000001'; // non-zero fee to trigger payment mode check
@@ -742,7 +747,9 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             await h.parse(['0', VALID_CODE_B64, '100000', ''], data, null);
             assert.ok(String(data['STATUS']).includes('fee too small') || String(data['STATUS']).startsWith('invalid'));
         });
+    });
 
+    describe('native coin fee payment', function () {
         it('rejected native coin fee returns insufficient fee error', async function () {
             const config = getTestConfig();
             config['GAS_PRICE'] = '0.00000001';
@@ -788,7 +795,6 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
     // ─── Constructor state changes + rollback (lines 323-348) ────────────
 
     describe('constructor state changes and rollback', function () {
-
         it('constructor with stateChanges calls createContractState for each change (lines 322-330)', async function () {
             const vm = makeVm({
                 execute: sinon.stub().resolves({
@@ -831,7 +837,9 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             assert.ok(nullCalls.length >= 2, 'should have called createContractState with null for each delete');
             assert.strictEqual(data['STATUS'], 'valid');
         });
+    });
 
+    describe('constructor state changes and rollback', function () {
         it('constructor state write failure rolls back savepoint and marks deploy failed (lines 341-348)', async function () {
             const vm = makeVm({
                 execute: sinon.stub().resolves({
@@ -858,27 +866,26 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
 
     });
 
+    function wireEmissionDeps(emittedActions, vmGas = 1000) {
+        indexer.indexerDb.createContractEmission = sinon.stub().resolves();
+        actionsCtx.vm = makeVm({
+            execute: sinon.stub().resolves({
+                success: true, gasUsed: vmGas,
+                stateChanges: [], stateDeletes: [],
+                emittedActions,
+            }),
+        });
+        actionsCtx.actionExecute = {
+            processEmission: sinon.stub().callsFake(async (emission) => { emission.resultActionIndex = 999; }),
+        };
+        sinon.stub(slashEmission, 'processSlashEmission').resolves();
+        handler = new Deploy(actionsCtx);
+        return actionsCtx;
+    }
+
     // ─── Constructor emissions (processed through the EXECUTE pipeline) ────
 
     describe('constructor emissions', function () {
-
-        function wireEmissionDeps(emittedActions, vmGas = 1000) {
-            indexer.indexerDb.createContractEmission = sinon.stub().resolves();
-            actionsCtx.vm = makeVm({
-                execute: sinon.stub().resolves({
-                    success: true, gasUsed: vmGas,
-                    stateChanges: [], stateDeletes: [],
-                    emittedActions,
-                }),
-            });
-            actionsCtx.actionExecute = {
-                processEmission: sinon.stub().callsFake(async (emission) => { emission.resultActionIndex = 999; }),
-            };
-            sinon.stub(slashEmission, 'processSlashEmission').resolves();
-            handler = new Deploy(actionsCtx);
-            return actionsCtx;
-        }
-
         it('routes constructor emissions through Execute.processEmission with a root context', async function () {
             const ctx = wireEmissionDeps([{ action: 'SEND', params: { tick: 'T', quantity: '1', destination: SOURCE } }]);
 
@@ -932,7 +939,9 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             assert.strictEqual(row['GAS_USED'], deployGas + 60000 - 30000,
                 'deployment gas must net the callee refund');
         });
+    });
 
+    describe('constructor emissions', function () {
         it('a failed constructor emission rolls back and fails the deployment', async function () {
             const ctx = wireEmissionDeps([{ action: 'SEND', params: {} }]);
             ctx.actionExecute.processEmission = sinon.stub().rejects(new Error('SEND: invalid: insufficient funds'));

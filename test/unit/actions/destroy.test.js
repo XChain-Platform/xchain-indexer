@@ -47,7 +47,6 @@ describe('Destroy @regression @tier1', function () {
     // ─── Format 0 (Single Destroy) ────────────────────────────────────
 
     describe('format 0: single destroy', function () {
-
         it('valid destroy: createDestroy called with valid status', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
@@ -91,7 +90,9 @@ describe('Destroy @regression @tier1', function () {
 
             assert.ok(data['STATUS'].includes('invalid'));
         });
+    });
 
+    describe('format 0: single destroy', function () {
         it('insufficient balance → invalid', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
@@ -137,7 +138,9 @@ describe('Destroy @regression @tier1', function () {
 
             assert.ok(data['STATUS'].includes('invalid'));
         });
+    });
 
+    describe('format 0: single destroy', function () {
         it('unknown format version → createDestroy still called', async function () {
             indexer.indexerDb.getTokenInfo.resolves(null);
             indexer.indexerDb.getAddressBalances.resolves({});

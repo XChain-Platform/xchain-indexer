@@ -103,9 +103,9 @@ function assertSqlSafe(args) {
     });
 }
 
-describe('ANCHOR retired wires on a from-genesis replay @regression', function () {
-    let indexer, handler;
+let indexer, handler;
 
+describe('ANCHOR retired wires on a from-genesis replay @regression', function () {
     beforeEach(function () {
         indexer = createMockIndexer();
         indexer.config = Object.assign({}, indexer.config, { COIN: 'DOGE', NETWORK: 'testnet' });
@@ -153,6 +153,25 @@ describe('ANCHOR retired wires on a from-genesis replay @regression', function (
         const written = indexer.indexerDb.createAnchorAction.lastCall.args[0];
         assertSqlSafe(await runCreate(makeDb(), written));
     });
+});
+
+describe('ANCHOR retired wires on a from-genesis replay @regression', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        indexer.config = Object.assign({}, indexer.config, { COIN: 'DOGE', NETWORK: 'testnet' });
+        const db = indexer.indexerDb;
+        db.getValidatorsByCapability  = sinon.stub().resolves([{ pubkey: PUBKEY, amount: '1' }]);
+        db.hasCapability              = sinon.stub().resolves(true);
+        db.getMaxAnchorCheckpointSeq  = sinon.stub().resolves(null);
+        db.getArchiveReplayWatermarks = sinon.stub().resolves({ batchSeq: null, checkpointSeq: null });
+        db.createAnchorAction         = sinon.stub().resolves();
+        db.getAnchorV1ByBatchSeq      = sinon.stub().resolves(null);
+        db.getAnchorChunks            = sinon.stub().resolves([]);
+        db.setAnchorArchiveStatus     = sinon.stub().resolves();
+        db.createValidatorReward      = sinon.stub().resolves();
+        handler = new Anchor(indexer);
+    });
+    afterEach(() => sinon.restore());
 
     it('a hostile v1 at/above activation with junk in bounded fields is recorded SQL-safe, so one bad ANCHOR cannot park the indexer', async function () {
         const at = aact.ANCHOR_ACTIVATION.testnet;

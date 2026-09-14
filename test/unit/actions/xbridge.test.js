@@ -147,7 +147,6 @@ describe('XBRIDGE action handler @regression @tier3', function(){
     });
 
     describe('shared gates', function(){
-
         it('refuses a version byte outside 0-5 before reading anything', async function(){
             let { handler, indexerDb } = makeHandler();
             let data = makeData(9, 'BTC');
@@ -205,7 +204,9 @@ describe('XBRIDGE action handler @regression @tier3', function(){
             assert.strictEqual(XCHAIN_BRIDGE_ACTIVATION['DOGE:regtest'], undefined,
                 'the shipped map must be left exactly as it ships');
         });
+    });
 
+    describe('shared gates', function(){
         it('refuses a v0 lock off BTC', async function(){
             let { handler } = makeHandler({ coin: 'DOGE' });
             let data = makeData(0, 'DOGE');
@@ -545,23 +546,22 @@ describe('XBRIDGE action handler @regression @tier3', function(){
         });
     });
 
+    function setup(opts){
+        opts = opts || {};
+        let h = makeHandler({ coin: 'DOGE', noFeeDestination: true });
+        h.indexerDb.getTokenInfo.resolves(opts.tokenInfo === undefined
+            ? createTokenInfo({
+                TICK: 'BTC.FUFU', TICK_ID: TOKEN_TICK_ID, DECIMALS: 2,
+                OWNER: (opts.owner === undefined) ? BRIDGE_BTC : opts.owner
+            })
+            : opts.tokenInfo);
+        h.indexerDb.getAddressBalances.resolves(opts.balances || {
+            [TOKEN_TICK_ID]: '100', [XCHAIN_TICK_ID]: '10'
+        });
+        return h;
+    }
+
     describe('v4 burn (a bridged copy on the chain holding it)', function(){
-
-        function setup(opts){
-            opts = opts || {};
-            let h = makeHandler({ coin: 'DOGE', noFeeDestination: true });
-            h.indexerDb.getTokenInfo.resolves(opts.tokenInfo === undefined
-                ? createTokenInfo({
-                    TICK: 'BTC.FUFU', TICK_ID: TOKEN_TICK_ID, DECIMALS: 2,
-                    OWNER: (opts.owner === undefined) ? BRIDGE_BTC : opts.owner
-                })
-                : opts.tokenInfo);
-            h.indexerDb.getAddressBalances.resolves(opts.balances || {
-                [TOKEN_TICK_ID]: '100', [XCHAIN_TICK_ID]: '10'
-            });
-            return h;
-        }
-
         it('debits the copy and names the origin chain, with no bridged bit to set', async function(){
             let { handler, indexerDb } = setup();
             let data = makeData(4, 'DOGE');
@@ -603,7 +603,9 @@ describe('XBRIDGE action handler @regression @tier3', function(){
             await handler.parse(['4', 'BTC.FUFU', 'not-an-address', '2', ''], data, null);
             assert.strictEqual(data['STATUS'], 'invalid: ORIGIN_ADDRESS');
         });
+    });
 
+    describe('v4 burn (a bridged copy on the chain holding it)', function(){
         it('reaches the same row and the same verdict for a lower-case root', async function(){
             let { handler } = setup();
             let data = makeData(4, 'DOGE');

@@ -38,7 +38,6 @@ const Xcall  = require('../../../src/actions/xcall/index.js');
 const sha256hex = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
 describe('execContext (injected-execution TX_HASH seam) @regression @tier2', function () {
-
     afterEach(function () { sinon.restore(); });
 
     describe('buildInjectedExecContext', function () {
@@ -90,6 +89,10 @@ describe('execContext (injected-execution TX_HASH seam) @regression @tier2', fun
             assert.strictEqual(ctx.CROSS_HOPS, 1);
         });
     });
+});
+
+describe('execContext (injected-execution TX_HASH seam) @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     describe('attest expiry callback (previously-broken site 1)', function () {
         let indexer, handler, executeStub;
@@ -133,6 +136,10 @@ describe('execContext (injected-execution TX_HASH seam) @regression @tier2', fun
             assert.ok(!('TX_HASH' in ctx), 'pre-activation context must stay hashless (replay safety)');
         });
     });
+});
+
+describe('execContext (injected-execution TX_HASH seam) @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     describe('vote finalize callback (previously-broken site 2)', function () {
         let indexer, handler, executeStub;
@@ -181,6 +188,10 @@ describe('execContext (injected-execution TX_HASH seam) @regression @tier2', fun
             assert.ok(!('TX_HASH' in ctx), 'pre-activation context must stay hashless (replay safety)');
         });
     });
+});
+
+describe('execContext (injected-execution TX_HASH seam) @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     describe('xcall result callback (live-consensus byte parity)', function () {
         it('the builder-produced TX_HASH is byte-identical to the pre- inline XCALLCB synthesis', async function () {
@@ -212,6 +223,10 @@ describe('execContext (injected-execution TX_HASH seam) @regression @tier2', fun
             assert.strictEqual(ctx.CALL_DEPTH, 0);
         });
     });
+});
+
+describe('execContext (injected-execution TX_HASH seam) @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     describe('execute.js host-side assert', function () {
         const Execute = require('../../../src/actions/execute/index.js');
@@ -258,6 +273,10 @@ describe('execContext (injected-execution TX_HASH seam) @regression @tier2', fun
             rethrowIfInfraFault(new Error('contract reverted'));
         });
     });
+});
+
+describe('execContext (injected-execution TX_HASH seam) @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     describe('protocol_changes registration', function () {
         it('SYNTH_EXEC_TX_HASH is registered on the ratified 2026-08-07 anchor, regtest/testnet genesis', function () {

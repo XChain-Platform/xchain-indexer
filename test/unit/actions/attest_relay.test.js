@@ -205,7 +205,6 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
     // ── 2. The activation plane ──────────────────────────────────────────────
 
     describe('activation plane', function () {
-
         it('v4 resolves the gate on the carried SNAPSHOT_BLOCK, not on the local height', async function () {
             gateStub.restore();
             indexer.config['COIN']    = 'LTC';
@@ -262,7 +261,9 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
             assert.strictEqual(data2['STATUS'], 'valid');
             assert.strictEqual(indexer.indexerDb.createAttestationRequest.calledOnce, true);
         });
+    });
 
+    describe('activation plane', function () {
         // The other half of the same gate, and the reason the landing-height check
         // survives rather than being replaced: SNAPSHOT_BLOCK is broadcaster-supplied,
         // so gating on it ALONE would let an invented future snapshot pull the leg
@@ -285,7 +286,6 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
     // ── 3. v3 materialization on the home chain ──────────────────────────────
 
     describe('ATTEST v3 (relay request)', function () {
-
         it('materializes an origin request with the origin stamped on the row', async function () {
             indexer.config['COIN'] = 'BTC';
             const data = createBaseData({ ACTION: 'ATTEST', FORMAT: 3, BLOCK_INDEX: 900000 });
@@ -333,7 +333,9 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
             assert.strictEqual(indexer.indexerDb.createAttestationRequest.called, false);
             assert.strictEqual(data['STATUS'], undefined);
         });
+    });
 
+    describe('ATTEST v3 (relay request)', function () {
         it('rejects an unknown ORIGIN_CHAIN, including the home chain itself', async function () {
             indexer.config['COIN'] = 'BTC';
             for (const chain of ['BTC', 'XMR', '']) {
@@ -384,7 +386,9 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
             assert.strictEqual(indexer.indexerDb.getRelayRequestById.calledWith(REQ_ID), true,
                 'the guard asks the admitted-only lookup, not the shared row lookup');
         });
+    });
 
+    describe('ATTEST v3 (relay request)', function () {
         it('leaves the shared request lookup out of the v3 admission path entirely', async function () {
             // The other half of the ruling: getAttestationRequestById keeps its current
             // behaviour for the four consensus callers that need to see rejected rows
@@ -432,7 +436,9 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
             assert.strictEqual(data['STATUS'], 'valid');
             assert.strictEqual(data['REQUEST_STATUS'], 'pending');
         });
+    });
 
+    describe('ATTEST v3 (relay request)', function () {
         it('rejects when the cross_chain snapshot is empty (fails closed)', async function () {
             indexer.config['COIN'] = 'BTC';
             indexer.indexerDb.getValidatorsByCapability.resolves([]);
@@ -517,7 +523,6 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
     // ── 5. v4 response relay + callback injection on the origin chain ────────
 
     describe('ATTEST v4 (relay response)', function () {
-
         beforeEach(function () {
             indexer.config['COIN'] = 'LTC';
             indexer.indexerDb.getAttestationRequestById.resolves(originRequestRow());
@@ -566,6 +571,13 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
                 assert.match(data['STATUS'], /STATUS/, status);
                 assert.strictEqual(indexer.indexerDb.updateAttestationRequestStatus.called, false, status);
             }
+        });
+    });
+
+    describe('ATTEST v4 (relay response)', function () {
+        beforeEach(function () {
+            indexer.config['COIN'] = 'LTC';
+            indexer.indexerDb.getAttestationRequestById.resolves(originRequestRow());
         });
 
         it('refuses to close a request this chain never admitted for relay', async function () {

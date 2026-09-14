@@ -368,6 +368,8 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         assert.ok(indexer.indexerDb.recordCrossChainSettlement.calledOnce);
     });
 
+    const orderMatch = (o) => makeMatch({ a_kind: 'order', b_kind: 'order', ...o });
+
     // ─── ORDER leg: partial-fill settlement ─────────────────────
     describe('ORDER leg (partial fills)', function () {
         beforeEach(function () {
@@ -377,8 +379,6 @@ describe('Cross_Settle action handler @regression @tier1', function () {
             // The cross_chain snapshot is wired per-test (snapFor) once the match
             // is signed, so it includes the order's signer (snapshot membership).
         });
-
-        const orderMatch = (o) => makeMatch({ a_kind: 'order', b_kind: 'order', ...o });
 
         it('partial fill: releases the fill, records it, and leaves the order OPEN', async function () {
             const { match } = signMatch(orderMatch(), 1);
@@ -421,6 +421,16 @@ describe('Cross_Settle action handler @regression @tier1', function () {
             assert.strictEqual(f[1], 88);    // local order = b leg
             assert.strictEqual(f[2], '7');   // give fill = b_amount
             assert.strictEqual(f[3], '5');   // get fill = a_amount
+        });
+    });
+
+    describe('ORDER leg (partial fills)', function () {
+        beforeEach(function () {
+            indexer.indexerDb.recordCrossChainOrderFill = sinon.stub().resolves();
+            indexer.indexerDb.getOrderInfo.resolves({ SOURCE: '1SrcOrderXXXXXXXXXXXXXXXXXXXXYs6gYt', ORDER_STATUS: 'open' });
+            indexer.indexerDb.getOrderAmountsRemaining.resolves(['90', '45']);  // still remaining by default
+            // The cross_chain snapshot is wired per-test (snapFor) once the match
+            // is signed, so it includes the order's signer (snapshot membership).
         });
 
         it('ownership order: transfers ownership and completes (single fill)', async function () {
@@ -475,16 +485,17 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         });
     });
 
+    // Regtest p2pkh: LTC→BTC regtest re-encode is the identity (shared 0x6f prefix),
+    // so the leg credit lands on this exact address.
+    const LEG_TO = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
+    const LEGS   = JSON.stringify([{ to: LEG_TO, bps: 2500 }]);
+
+    function creditsSeen() {
+        return indexer.indexerDb.createCredit.getCalls().map(c => c.args); // [action_index, tick, amount, address]
+    }
+
     describe('cross-chain royalty at settlement (CROSS_CHAIN_ROYALTY)', function () {
         const ccr = require('../../../src/cross_chain_royalty_activation.js');
-        // Regtest p2pkh: LTC→BTC regtest re-encode is the identity (shared 0x6f prefix),
-        // so the leg credit lands on this exact address.
-        const LEG_TO = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
-        const LEGS   = JSON.stringify([{ to: LEG_TO, bps: 2500 }]);
-
-        function creditsSeen() {
-            return indexer.indexerDb.createCredit.getCalls().map(c => c.args); // [action_index, tick, amount, address]
-        }
 
         it('applies the counterparty legs to the released proceeds (seller remainder + leg credit)', async function () {
             // BTC is leg a; its escrow releases to b's payout, so b's legs (b_payout_legs,
@@ -541,7 +552,9 @@ describe('Cross_Settle action handler @regression @tier1', function () {
             assert.strictEqual(credits.length, 1);
             assert.strictEqual(Number(credits[0][2]), 10);
         });
+    });
 
+    describe('cross-chain royalty at settlement (CROSS_CHAIN_ROYALTY)', function () {
         it('applies the legs on an ORDER-leg partial fill too', async function () {
             indexer.indexerDb.recordCrossChainOrderFill = sinon.stub().resolves();
             indexer.indexerDb.getOrderInfo.resolves({ SOURCE: '1SrcOrderXXXXXXXXXXXXXXXXXXXXYs6gYt', ORDER_STATUS: 'open' });
@@ -558,11 +571,12 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         });
     });
 
+    let warn;
+
     // A match the mirror keeps serving whose local leg is an indexed action that is not an
     // offer (a hub database that outlived a regtest re-genesis) can never settle here; it
     // is judged once, before any signature work, and skipped silently on later blocks.
     describe('dismissal of a provably absent local leg', function () {
-        let warn;
         beforeEach(function () { warn = sinon.stub(console, 'warn'); });
 
         it('dismisses a swap leg whose action index is parsed but is not an offer, before any signature work, and writes nothing', async function () {
@@ -619,6 +633,10 @@ describe('Cross_Settle action handler @regression @tier1', function () {
             assert.ok(indexer.indexerDb.getSwapInfo.notCalled);
             assert.ok(indexer.indexerDb.createActionIndex.notCalled);
         });
+    });
+
+    describe('dismissal of a provably absent local leg', function () {
+        beforeEach(function () { warn = sinon.stub(console, 'warn'); });
 
         it('leaves a match that is not this chain\'s untouched and undismissed', async function () {
             indexer.indexerDb.isActionIndexParsed.resolves(true);

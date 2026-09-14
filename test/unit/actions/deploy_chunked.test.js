@@ -164,29 +164,31 @@ describe('DeployChunk.assembleCode: the incomplete flag and the assembly bound @
     });
 });
 
+let indexer, ctx, handler;
+
+function addDeployStubs(db) {
+    db.createContract           = sinon.stub().resolves();
+    db.createContractPermission = sinon.stub().resolves();
+    db.deleteContract           = sinon.stub().resolves();
+    db.createContractExecution  = sinon.stub().resolves();
+    db.createContractState      = sinon.stub().resolves();
+    db.createSavepoint          = sinon.stub().resolves('sp1');
+    db.releaseSavepoint         = sinon.stub().resolves();
+    db.rollbackToSavepoint      = sinon.stub().resolves();
+    db.getOracleDataForVM       = sinon.stub().resolves({});
+    db.getCrossChainDataForVM   = sinon.stub().resolves({});
+    db.getStatusString          = sinon.stub().resolves('valid');
+    db.getDeployChunksForAssembly = sinon.stub().resolves([]);
+    db.recordDeployChunk        = sinon.stub().resolves();
+}
+
+function deployData(overrides = {}) {
+    return createBaseData({ ACTION: 'DEPLOY', SOURCE, BLOCK_INDEX: 100, ACTION_INDEX: 50, ...overrides });
+}
+
+const HASH = sha256Hex(CODE);
+
 describe('Chunked DEPLOY : DEPLOY v2/v3 assembly @regression @tier2', function () {
-    let indexer, ctx, handler;
-
-    function addDeployStubs(db) {
-        db.createContract           = sinon.stub().resolves();
-        db.createContractPermission = sinon.stub().resolves();
-        db.deleteContract           = sinon.stub().resolves();
-        db.createContractExecution  = sinon.stub().resolves();
-        db.createContractState      = sinon.stub().resolves();
-        db.createSavepoint          = sinon.stub().resolves('sp1');
-        db.releaseSavepoint         = sinon.stub().resolves();
-        db.rollbackToSavepoint      = sinon.stub().resolves();
-        db.getOracleDataForVM       = sinon.stub().resolves({});
-        db.getCrossChainDataForVM   = sinon.stub().resolves({});
-        db.getStatusString          = sinon.stub().resolves('valid');
-        db.getDeployChunksForAssembly = sinon.stub().resolves([]);
-        db.recordDeployChunk        = sinon.stub().resolves();
-    }
-
-    function deployData(overrides = {}) {
-        return createBaseData({ ACTION: 'DEPLOY', SOURCE, BLOCK_INDEX: 100, ACTION_INDEX: 50, ...overrides });
-    }
-
     beforeEach(function () {
         const config = getTestConfig();
         config['GAS_PRICE'] = '0';
@@ -207,8 +209,6 @@ describe('Chunked DEPLOY : DEPLOY v2/v3 assembly @regression @tier2', function (
         indexer.util.resetLists();
     });
     afterEach(function () { sinon.restore(); });
-
-    const HASH = sha256Hex(CODE);
 
     it('assembles a contract from contiguous chunks (v2)', async function () {
         indexer.indexerDb.getDeployChunksForAssembly.resolves(chunkRows(CODE, 3));
@@ -244,6 +244,29 @@ describe('Chunked DEPLOY : DEPLOY v2/v3 assembly @regression @tier2', function (
         await handler.parse(['2', HASH, '100000', ''], data, null);
         assert.ok(String(data['STATUS']).includes('CODE_HASH'));
     });
+});
+
+describe('Chunked DEPLOY : DEPLOY v2/v3 assembly @regression @tier2', function () {
+    beforeEach(function () {
+        const config = getTestConfig();
+        config['GAS_PRICE'] = '0';
+        indexer = createMockIndexer({ config });
+        addDeployStubs(indexer.indexerDb);
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.getTokenInfo.resolves({ TICK_ID: 1 });
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
+        // Inline (v0/v1) decode is gated on DEPLOY_BASE64_CODE; default the stub to
+        // enabled (base64) so these v0/v1 fixtures behave as on a post-activation node.
+        // Every gate on EXCEPT DEPLOY_DEFERRED_ASSEMBLY: these cases pin the PRE-activation
+        // chunk verdicts (an incomplete group is invalid at the assembler, byte-for-byte as it
+        // has always been). The post-activation verdicts live in deploy_deferred.test.js.
+        const isEnabled = sinon.stub().resolves(true);
+        isEnabled.withArgs('DEPLOY_DEFERRED_ASSEMBLY', sinon.match.any).resolves(false);
+        ctx = { config: indexer.config, util: indexer.util, mapper: indexer.mapper, decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb, vm: { validateSyntax: () => ({ valid: true, errors: [] }), checkFloatWarnings: () => [], readManifest: async () => ({ success: true, manifest: { hasInitialize: false, permissionsType: 'undefined', maxTakeBpsType: 'undefined', metaType: 'object', metaJson: JSON.stringify({ name: 'Unit Fixture', description: 'A unit-test contract fixture.', version: '1.0.0' }), metaError: false, metaOversize: false } }), execute: async () => ({ success: true, gasUsed: 0 }) }, protocolChanges: { isEnabled } };
+        handler = new Deploy(ctx);
+        indexer.util.resetLists();
+    });
+    afterEach(function () { sinon.restore(); });
 
     it('rejects when the declared CODE_HASH does not match the assembled bytes', async function () {
         // Chunks assemble to CODE, but the DEPLOY declares a different hash.
@@ -270,6 +293,29 @@ describe('Chunked DEPLOY : DEPLOY v2/v3 assembly @regression @tier2', function (
         await handler.parse(['2', HASH, '100000', ''], data, null);
         assert.strictEqual(data['STATUS'], 'valid');
     });
+});
+
+describe('Chunked DEPLOY : DEPLOY v2/v3 assembly @regression @tier2', function () {
+    beforeEach(function () {
+        const config = getTestConfig();
+        config['GAS_PRICE'] = '0';
+        indexer = createMockIndexer({ config });
+        addDeployStubs(indexer.indexerDb);
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.getTokenInfo.resolves({ TICK_ID: 1 });
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
+        // Inline (v0/v1) decode is gated on DEPLOY_BASE64_CODE; default the stub to
+        // enabled (base64) so these v0/v1 fixtures behave as on a post-activation node.
+        // Every gate on EXCEPT DEPLOY_DEFERRED_ASSEMBLY: these cases pin the PRE-activation
+        // chunk verdicts (an incomplete group is invalid at the assembler, byte-for-byte as it
+        // has always been). The post-activation verdicts live in deploy_deferred.test.js.
+        const isEnabled = sinon.stub().resolves(true);
+        isEnabled.withArgs('DEPLOY_DEFERRED_ASSEMBLY', sinon.match.any).resolves(false);
+        ctx = { config: indexer.config, util: indexer.util, mapper: indexer.mapper, decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb, vm: { validateSyntax: () => ({ valid: true, errors: [] }), checkFloatWarnings: () => [], readManifest: async () => ({ success: true, manifest: { hasInitialize: false, permissionsType: 'undefined', maxTakeBpsType: 'undefined', metaType: 'object', metaJson: JSON.stringify({ name: 'Unit Fixture', description: 'A unit-test contract fixture.', version: '1.0.0' }), metaError: false, metaOversize: false } }), execute: async () => ({ success: true, gasUsed: 0 }) }, protocolChanges: { isEnabled } };
+        handler = new Deploy(ctx);
+        indexer.util.resetLists();
+    });
+    afterEach(function () { sinon.restore(); });
 
     it('assembles deterministically when chunk rows arrive out of position order', async function () {
         // Determinism pin: the same chunks returned in a shuffled order, with action_index
@@ -305,6 +351,29 @@ describe('Chunked DEPLOY : DEPLOY v2/v3 assembly @regression @tier2', function (
         assert.strictEqual(data['STATUS'], 'valid');
         assert.ok(indexer.indexerDb.getDeployChunksForAssembly.notCalled);
     });
+});
+
+describe('Chunked DEPLOY : DEPLOY v2/v3 assembly @regression @tier2', function () {
+    beforeEach(function () {
+        const config = getTestConfig();
+        config['GAS_PRICE'] = '0';
+        indexer = createMockIndexer({ config });
+        addDeployStubs(indexer.indexerDb);
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.getTokenInfo.resolves({ TICK_ID: 1 });
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
+        // Inline (v0/v1) decode is gated on DEPLOY_BASE64_CODE; default the stub to
+        // enabled (base64) so these v0/v1 fixtures behave as on a post-activation node.
+        // Every gate on EXCEPT DEPLOY_DEFERRED_ASSEMBLY: these cases pin the PRE-activation
+        // chunk verdicts (an incomplete group is invalid at the assembler, byte-for-byte as it
+        // has always been). The post-activation verdicts live in deploy_deferred.test.js.
+        const isEnabled = sinon.stub().resolves(true);
+        isEnabled.withArgs('DEPLOY_DEFERRED_ASSEMBLY', sinon.match.any).resolves(false);
+        ctx = { config: indexer.config, util: indexer.util, mapper: indexer.mapper, decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb, vm: { validateSyntax: () => ({ valid: true, errors: [] }), checkFloatWarnings: () => [], readManifest: async () => ({ success: true, manifest: { hasInitialize: false, permissionsType: 'undefined', maxTakeBpsType: 'undefined', metaType: 'object', metaJson: JSON.stringify({ name: 'Unit Fixture', description: 'A unit-test contract fixture.', version: '1.0.0' }), metaError: false, metaOversize: false } }), execute: async () => ({ success: true, gasUsed: 0 }) }, protocolChanges: { isEnabled } };
+        handler = new Deploy(ctx);
+        indexer.util.resetLists();
+    });
+    afterEach(function () { sinon.restore(); });
 
     it('routes a v4 carrier to chunk storage (no contract created)', async function () {
         const data = deployData({ FORMAT: 4, ACTION_INDEX: 5 });

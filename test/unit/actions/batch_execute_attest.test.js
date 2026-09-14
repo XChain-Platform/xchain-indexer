@@ -182,10 +182,20 @@ describe('two-EXECUTE BATCH ATTEST request_id collision @regression @tier1', fun
                 'composite request_id preimage drifted; xchain-vm/src/gateway.js must move in lockstep');
     });
 
+    let attest, attestCtx;
+
+    // ATTEST v0 as execute.processEmission stamps it for a subcommand's first emission.
+    function v0(root, requestId){
+        const data = createBaseData({
+            ACTION: 'ATTEST', FORMAT: 0, IS_EMISSION: true, TX_HASH, TX_VOUT,
+            EMITTER: CONTRACT, EMITTER_POSITION: 0, EMITTER_PATH: '',
+            ROOT_ACTION_INDEX: root, BLOCK_INDEX: 100,
+        });
+        const params = ['0', requestId, 'http_get', 'q', 'onResult', '[]', '3', '50'];
+        return { data, params };
+    }
+
     describe('the REAL ATTEST v0 handler accepts each subcommand request', function(){
-
-        let attest, attestCtx;
-
         beforeEach(function(){
             const db = indexer.indexerDb;
             db.getContract                       = sinon.stub().resolves({ contract_index: CONTRACT });
@@ -214,17 +224,6 @@ describe('two-EXECUTE BATCH ATTEST request_id collision @regression @tier1', fun
             sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(false);
         });
 
-        // ATTEST v0 as execute.processEmission stamps it for a subcommand's first emission.
-        function v0(root, requestId){
-            const data = createBaseData({
-                ACTION: 'ATTEST', FORMAT: 0, IS_EMISSION: true, TX_HASH, TX_VOUT,
-                EMITTER: CONTRACT, EMITTER_POSITION: 0, EMITTER_PATH: '',
-                ROOT_ACTION_INDEX: root, BLOCK_INDEX: 100,
-            });
-            const params = ['0', requestId, 'http_get', 'q', 'onResult', '[]', '3', '50'];
-            return { data, params };
-        }
-
         it('accepts a composite-root request, so the host re-derivation matches the VM', async function(){
             const root  = rootDiscriminator(TX_VOUT, 1, true);
             const reqId = deriveReqId(TX_HASH, root, '', CONTRACT, 0);
@@ -245,6 +244,36 @@ describe('two-EXECUTE BATCH ATTEST request_id collision @regression @tier1', fun
             await attest.parse(params, data, null);
             assert.ok(String(data['STATUS']).includes('REQUEST_ID'),
                 'expected a REQUEST_ID derivation rejection, got: ' + data['STATUS']);
+        });
+    });
+
+    describe('the REAL ATTEST v0 handler accepts each subcommand request', function(){
+        beforeEach(function(){
+            const db = indexer.indexerDb;
+            db.getContract                       = sinon.stub().resolves({ contract_index: CONTRACT });
+            db.createAttestationRequest          = sinon.stub().resolves();
+            db.getAttestationAdmissionCounts = sinon.stub().resolves({ total: 0, byContract: 0 });
+            db.getAttestationRequestById         = sinon.stub().resolves(null);
+            db.hasCapability                     = sinon.stub().resolves(true);
+            db.getValidatorsByCapability         = sinon.stub().resolves([{ pubkey: 'a'.repeat(64) }]);
+            db.getStakeWeightsByCapability       = sinon.stub().resolves([{ pubkey: 'a'.repeat(64), source: 'SA', weight: '100' }]);
+            attestCtx = {
+                config:        indexer.config,
+                util:          indexer.util,
+                mapper:        indexer.mapper,
+                decoderDb:     indexer.decoderDb,
+                indexerDb:     db,
+                actionExecute: { parse: sinon.stub().resolves() },
+                protocolChanges: {
+                    isDefined: sinon.stub().returns(true),
+                    isEnabled: sinon.stub().resolves(true),
+                },
+            };
+            attest = new Attest(attestCtx);
+            // Same defaults the ATTEST suite uses: legacy count path, admission gate off,
+            // so a redundancy-3 request against a one-validator snapshot stays 'valid'.
+            sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+            sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(false);
         });
 
         it('both subcommands are inserted as SEPARATE requests', async function(){

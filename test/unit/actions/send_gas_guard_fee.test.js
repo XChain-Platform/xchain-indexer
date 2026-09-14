@@ -57,9 +57,9 @@ function makeData(overrides = {}) {
 const SOURCE      = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const DESTINATION = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs';
 
-describe('Send handler - GAS guard-fee double-count regression @regression @tier1', function () {
-    let indexer, actionsCtx, handler;
+let indexer, actionsCtx, handler;
 
+describe('Send handler - GAS guard-fee double-count regression @regression @tier1', function () {
     beforeEach(function () {
         indexer    = createMockIndexer();
         actionsCtx = makeActionsCtx(indexer);
@@ -107,6 +107,31 @@ describe('Send handler - GAS guard-fee double-count regression @regression @tier
         // guardFee should have been queued into the ledger.
         assert.ok(indexer.indexerDb.createSend.calledOnce);
     });
+});
+
+describe('Send handler - GAS guard-fee double-count regression @regression @tier1', function () {
+    beforeEach(function () {
+        indexer    = createMockIndexer();
+        actionsCtx = makeActionsCtx(indexer);
+        handler    = new Send(actionsCtx);
+
+        // The guard-fee reservation reads the gas schedule off the DB handle
+        // (resolveGuardGasCeiling(db.config)); the mock DB carries no config,
+        // so wire the real test config onto it.
+        indexer.indexerDb.config = indexer.config;
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.findMatchingDispensers.resolves([]);
+        indexer.indexerDb.findDispenserSends.resolves([]);
+        // Bind a `transfer`-class controller to the token so maybeRunControllerGuard runs
+        // (rather than bailing out early as a no-op).
+        indexer.indexerDb.getEffectiveTokenControllerForGuard.resolves({ contract_index: 7 });
+        indexer.indexerDb.getTickerId.resolves(1);
+    });
+
+    afterEach(function () {
+        sinon.restore();
+    });
 
     it('GAS bound to a transfer controller: balance covering AMOUNT + guardFee together is accepted', async function () {
         const GAS = actionsCtx.config['GAS'];
@@ -123,6 +148,31 @@ describe('Send handler - GAS guard-fee double-count regression @regression @tier
         await handler.parse(params, data, null);
 
         assert.strictEqual(data.STATUS, 'valid');
+    });
+});
+
+describe('Send handler - GAS guard-fee double-count regression @regression @tier1', function () {
+    beforeEach(function () {
+        indexer    = createMockIndexer();
+        actionsCtx = makeActionsCtx(indexer);
+        handler    = new Send(actionsCtx);
+
+        // The guard-fee reservation reads the gas schedule off the DB handle
+        // (resolveGuardGasCeiling(db.config)); the mock DB carries no config,
+        // so wire the real test config onto it.
+        indexer.indexerDb.config = indexer.config;
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.findMatchingDispensers.resolves([]);
+        indexer.indexerDb.findDispenserSends.resolves([]);
+        // Bind a `transfer`-class controller to the token so maybeRunControllerGuard runs
+        // (rather than bailing out early as a no-op).
+        indexer.indexerDb.getEffectiveTokenControllerForGuard.resolves({ contract_index: 7 });
+        indexer.indexerDb.getTickerId.resolves(1);
+    });
+
+    afterEach(function () {
+        sinon.restore();
     });
 
     it('send tick different from gas tick: independent balances/guard-fee snapshots are unaffected', async function () {

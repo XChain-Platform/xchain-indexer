@@ -159,6 +159,18 @@ describe('File action handler @regression @tier3', function () {
             assert.ok(indexer.indexerDb.createGatedFile.calledOnce);
         });
 
+        async function statusFor(minAmount, tokenOverrides) {
+            if (tokenOverrides) {
+                const { createTokenInfo } = require('../../fixtures/mocks');
+                indexer.indexerDb.getTokenInfo.resolves(
+                    createTokenInfo(Object.assign({ TICK: 'TEST', TICK_ID: 1, OWNER: SOURCE }, tokenOverrides))
+                );
+            }
+            const data = createBaseData({ ACTION: 'FILE', FORMAT: 0, SOURCE });
+            await handler.parse(makeGatedParams({ minAmount }), data, null);
+            return data['STATUS'];
+        }
+
         /*************************************************************
          * GATE_MIN_AMOUNT is validated STRICT.
          *
@@ -170,19 +182,6 @@ describe('File action handler @regression @tier3', function () {
          * unknown positional fields).
          *************************************************************/
         describe('GATE_MIN_AMOUNT (PC-29, STRICT)', function () {
-
-            async function statusFor(minAmount, tokenOverrides) {
-                if (tokenOverrides) {
-                    const { createTokenInfo } = require('../../fixtures/mocks');
-                    indexer.indexerDb.getTokenInfo.resolves(
-                        createTokenInfo(Object.assign({ TICK: 'TEST', TICK_ID: 1, OWNER: SOURCE }, tokenOverrides))
-                    );
-                }
-                const data = createBaseData({ ACTION: 'FILE', FORMAT: 0, SOURCE });
-                await handler.parse(makeGatedParams({ minAmount }), data, null);
-                return data['STATUS'];
-            }
-
             it('a valid threshold is accepted and stored', async function () {
                 assert.strictEqual(await statusFor('100'), 'valid');
                 assert.ok(indexer.indexerDb.createGatedFile.calledOnce);
@@ -233,7 +232,9 @@ describe('File action handler @regression @tier3', function () {
                 assert.strictEqual(data['STATUS'], 'invalid: GATE_MIN_AMOUNT',
                     'nothing would weigh a balance against, so it must not be storable');
             });
+        });
 
+        describe('GATE_MIN_AMOUNT (PC-29, STRICT)', function () {
             // ── Shared vector fixture ──────────────────────
             // The tests above are this repo's own reading of the rules. These run the
             // SAME vectors the SDK and the wallet run, from a byte-identical file, so
@@ -352,6 +353,11 @@ describe('File action handler @regression @tier3', function () {
         });
     });
 
+    const BASE = ['0', 'doc.txt', 'text/plain', 'Doc', 'memo'];
+    // Local copies: the gated-content block's fixtures are scoped to it, and
+    // these assertions must stand on their own.
+    const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+
     // ------------------------------------------------------------------
     // COMPRESSION, the tenth optional field.
     //
@@ -362,13 +368,6 @@ describe('File action handler @regression @tier3', function () {
     // across the fleet.
     // ------------------------------------------------------------------
     describe('COMPRESSION field (Part B)', function () {
-        const BASE = ['0', 'doc.txt', 'text/plain', 'Doc', 'memo'];
-        // Local copies: the gated-content block's fixtures are scoped to it, and
-        // these assertions must stand on their own.
-        const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
-        const gatedParams = () => ['0', 'secret.enc', 'application/octet-stream',
-            'Gated File', '', 'TEST', '1', 'a'.repeat(64)];
-
         beforeEach(function () {
             // Mirror the gated-content block's stubs so a gated FILE can reach
             // 'valid': the gate ticker must resolve to a token owned by SOURCE
@@ -409,6 +408,23 @@ describe('File action handler @regression @tier3', function () {
                 assert.strictEqual(data['STATUS'], 'valid',
                     `COMPRESSION=${JSON.stringify(value)} must never affect validity`);
             }
+        });
+    });
+
+    describe('COMPRESSION field (Part B)', function () {
+        const gatedParams = () => ['0', 'secret.enc', 'application/octet-stream',
+            'Gated File', '', 'TEST', '1', 'a'.repeat(64)];
+
+        beforeEach(function () {
+            // Mirror the gated-content block's stubs so a gated FILE can reach
+            // 'valid': the gate ticker must resolve to a token owned by SOURCE
+            // and not escrowed.
+            const { createTokenInfo } = require('../../fixtures/mocks');
+            indexer.indexerDb.createGatedFile = sinon.stub().resolves();
+            indexer.indexerDb.getTokenInfo.resolves(
+                createTokenInfo({ TICK: 'TEST', TICK_ID: 1, OWNER: SOURCE })
+            );
+            indexer.indexerDb.isOwnershipEscrowed.resolves(false);
         });
 
         it('the verdict is IDENTICAL with and without the field, valid or invalid', async function () {

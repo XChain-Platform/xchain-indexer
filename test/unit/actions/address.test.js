@@ -185,6 +185,11 @@ describe('Address action handler @regression @tier3', function () {
         assert.ok(indexer.mapper.createMappings.calledOnce);
     });
 
+    // VERSION|CONTROLLER|ACTION_CLASS|COOLDOWN_BLOCKS|UNBIND|MEMO
+    function bindParams({ controller = '1500', actionClass = 'transfer', cooldown = '144', unbind = '', memo = '' } = {}) {
+        return ['1', String(controller), String(actionClass), String(cooldown), String(unbind), memo];
+    }
+
     /*****************************************************************
      * A REFUSED format 1 (controller bind) was silent.
      *
@@ -197,11 +202,6 @@ describe('Address action handler @regression @tier3', function () {
      * valid events only.
      ****************************************************************/
     describe('format 1 : controller bind persistence', function () {
-        // VERSION|CONTROLLER|ACTION_CLASS|COOLDOWN_BLOCKS|UNBIND|MEMO
-        function bindParams({ controller = '1500', actionClass = 'transfer', cooldown = '144', unbind = '', memo = '' } = {}) {
-            return ['1', String(controller), String(actionClass), String(cooldown), String(unbind), memo];
-        }
-
         beforeEach(function () {
             // A bind validates its CONTROLLER against an existing, active contract.
             indexer.indexerDb.getContract      = sinon.stub().resolves({ action_index: 1500, status_id: 1 });
@@ -252,6 +252,16 @@ describe('Address action handler @regression @tier3', function () {
             assert.strictEqual(written['STATUS'], 'invalid: ACTION_CLASS (already bound)');
             assert.ok(indexer.indexerDb.recordAddressControllerEvent.notCalled,
                 'the enforcement log must never carry a refused bind');
+        });
+    });
+
+    describe('format 1 : controller bind persistence', function () {
+        beforeEach(function () {
+            // A bind validates its CONTROLLER against an existing, active contract.
+            indexer.indexerDb.getContract      = sinon.stub().resolves({ action_index: 1500, status_id: 1 });
+            indexer.indexerDb.getStatusString  = sinon.stub().resolves('valid');
+            indexer.indexerDb.getAddressId     = sinon.stub().resolves(7);
+            indexer.indexerDb.createAddress    = sinon.stub().resolves(7);
         });
 
         it('a REFUSED unbind is readable too', async function () {

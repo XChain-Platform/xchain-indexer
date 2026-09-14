@@ -768,7 +768,6 @@ describe('Order_Match action handler @regression @tier2', function () {
     // ─── Debug mode console-log paths ─────────────────────────────────────
 
     describe('debug mode (handler.debug = true)', function () {
-
         it('logs remaining amounts when debug=true and a match proceeds (lines 99-101)', async function () {
             orderMatch.debug = true;
             indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo());
@@ -814,7 +813,9 @@ describe('Order_Match action handler @regression @tier2', function () {
 
             sinon.assert.notCalled(indexer.indexerDb.createOrderMatch);
         });
+    });
 
+    describe('debug mode (handler.debug = true)', function () {
         it('logs zero GIVE amount skip in debug mode (lines 154-157)', async function () {
             orderMatch.debug = true;
             // Construct: orderInfo.GET_PRICE=0, matchInfo.GET_PRICE=1=orderInfo.GIVE_PRICE
@@ -869,7 +870,9 @@ describe('Order_Match action handler @regression @tier2', function () {
             // regression that wrongly creates a match on this path fails.
             sinon.assert.notCalled(indexer.indexerDb.createOrderMatch);
         });
+    });
 
+    describe('debug mode (handler.debug = true)', function () {
         it('logs allow/block list skip in debug mode (lines 195-197)', async function () {
             orderMatch.debug = true;
             const matchAddr = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
@@ -1086,7 +1089,6 @@ describe('Order_Match action handler @regression @tier2', function () {
     // COINPAY_NATIVE_RECIPROCITY active the reciprocity gate rejects both, so no bogus COINPay
     // obligation is minted and the coin/seller roles are never mis-assigned downstream.
     describe('native coin routing via GET_TICK null is rejected as mis-paired', function () {
-
         it('orderInfo GET_TICK null but matchInfo GIVES a real token (not coin) → skipped, no obligation', async function () {
             const orderWantsNative = makeOrderInfo({
                 GIVE_TICK:      'RAREPEPE',
@@ -1121,7 +1123,9 @@ describe('Order_Match action handler @regression @tier2', function () {
             sinon.assert.notCalled(indexer.indexerDb.createCoinpayObligation);
             sinon.assert.notCalled(indexer.indexerDb.createOrderMatch);
         });
+    });
 
+    describe('native coin routing via GET_TICK null is rejected as mis-paired', function () {
         it('matchInfo GET_TICK null against a token-for-token order (unreachable forward leg) → skipped', async function () {
             const orderPaysCoin = makeOrderInfo({
                 GIVE_TICK:      'PEPECASH',
@@ -1189,6 +1193,10 @@ describe('Order_Match action handler @regression @tier2', function () {
     });
 });
 
+let indexer, actionsCtx, orderMatch, ledgerSpy;
+// 18-decimal value whose 18th digit is lost by an IEEE-754 round-trip.
+const HI = '10.123456789012345678';
+
 // Escrow/credit precision parity
 //
 // Instant settlement pushes an escrow RELEASE for the same tick/address it
@@ -1199,10 +1207,7 @@ describe('Order_Match action handler @regression @tier2', function () {
 // the credit : per-row drift that trips the supply SanityError. The fix negates
 // in BigNumber space (bcsub), so the magnitudes are bit-identical.
 describe('Order_Match escrow/credit precision parity @regression @tier1', function () {
-    let indexer, actionsCtx, orderMatch, ledgerSpy;
     const BLOCK_TIME = 1700000000;
-    // 18-decimal value whose 18th digit is lost by an IEEE-754 round-trip.
-    const HI = '10.123456789012345678';
 
     beforeEach(function () {
         indexer    = createMockIndexer();
@@ -1253,6 +1258,25 @@ describe('Order_Match escrow/credit precision parity @regression @tier1', functi
                 tick + ' escrow release != paired credit');
         }
     });
+});
+
+describe('Order_Match escrow/credit precision parity @regression @tier1', function () {
+    beforeEach(function () {
+        indexer    = createMockIndexer();
+        actionsCtx = makeActionsCtx(indexer);
+        orderMatch = new Order_Match(actionsCtx);
+        // Both ticks are divisible to 18 dp so give/get_amount carry the full value.
+        indexer.indexerDb.getTokenInfo
+            .withArgs('RAREPEPE', sinon.match.any, sinon.match.any)
+            .resolves(createTokenInfo({ TICK: 'RAREPEPE', TICK_ID: 10, DECIMALS: 18, ALLOW_LIST: null, BLOCK_LIST: null }));
+        indexer.indexerDb.getTokenInfo
+            .withArgs('PEPECASH', sinon.match.any, sinon.match.any)
+            .resolves(createTokenInfo({ TICK: 'PEPECASH', TICK_ID: 20, DECIMALS: 18, ALLOW_LIST: null, BLOCK_LIST: null }));
+        indexer.indexerDb.createActionIndex.resolves(999);
+        // Capture the credits/debits/escrows handed to the ledger writer.
+        ledgerSpy = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
+    });
+    afterEach(function () { sinon.restore(); });
 
     it('negative control: JS unary minus on the same value DOES lose precision', function () {
         // Proves the assertion above has teeth: the pre-fix `-give_amount` path.

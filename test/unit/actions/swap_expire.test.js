@@ -17,22 +17,22 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Swap_Expire = require('../../../src/actions/swap_expire.js');
 
+let indexer, actionsCtx, handler;
+
+function makeSwapInfo(overrides) {
+    return {
+        ACTION_INDEX: 10,
+        SOURCE: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
+        GIVE_TICK: 'TEST',
+        GIVE_AMOUNT: '100',
+        GIVE_REMAINING: '80',
+        GET_TICK: 'OTHER',
+        GET_ADDRESS: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
+        ...overrides,
+    };
+}
+
 describe('Swap_Expire action handler @regression @tier2', function () {
-    let indexer, actionsCtx, handler;
-
-    function makeSwapInfo(overrides) {
-        return {
-            ACTION_INDEX: 10,
-            SOURCE: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
-            GIVE_TICK: 'TEST',
-            GIVE_AMOUNT: '100',
-            GIVE_REMAINING: '80',
-            GET_TICK: 'OTHER',
-            GET_ADDRESS: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
-            ...overrides,
-        };
-    }
-
     beforeEach(function () {
         indexer = createMockIndexer();
         actionsCtx = {
@@ -83,6 +83,26 @@ describe('Swap_Expire action handler @regression @tier2', function () {
         const data = createBaseData({ ACTION: 'SWAP_EXPIRE', ACTION_INDEX: 10, BLOCK_INDEX: 200 });
         await handler.parse(null, data, null);
         assert.ok(indexer.indexerDb.updateBalances.calledOnce);
+    });
+});
+
+describe('Swap_Expire action handler @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().resolves(true),
+            },
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Swap_Expire(actionsCtx);
+        indexer.util.resetLists();
     });
 
     it('calls mapper.createMappings after processing', async function () {

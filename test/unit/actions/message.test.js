@@ -20,9 +20,9 @@ const Message = require('../../../src/actions/message.js');
 // A valid BTC-format destination address (P2PKH on mainnet; util.isCryptoAddress accepts it)
 const VALID_DEST = 'mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp';
 
-describe('Message action handler @regression @tier3', function () {
-    let indexer, actionsCtx, handler;
+let indexer, actionsCtx, handler;
 
+describe('Message action handler @regression @tier3', function () {
     beforeEach(function () {
         indexer = createMockIndexer();
         actionsCtx = {
@@ -80,6 +80,26 @@ describe('Message action handler @regression @tier3', function () {
         await handler.parse(params, data, null);
         assert.ok(data['STATUS'].includes('VERSION'), `Expected VERSION error, got: ${data['STATUS']}`);
     });
+});
+
+describe('Message action handler @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().resolves(true),
+            },
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Message(actionsCtx);
+        indexer.util.resetLists();
+    });
 
     // ─── ENCRYPTION_METHOD validation ────────────────────────────────
 
@@ -119,6 +139,26 @@ describe('Message action handler @regression @tier3', function () {
         const params = ['0', 'BTC', VALID_DEST, '1', longKey];
         await handler.parse(params, data, null);
         assert.ok(data['STATUS'].includes('ENCRYPTION_KEY'), `Expected ENCRYPTION_KEY error, got: ${data['STATUS']}`);
+    });
+});
+
+describe('Message action handler @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().resolves(true),
+            },
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Message(actionsCtx);
+        indexer.util.resetLists();
     });
 
     // ─── DESTINATION validation ───────────────────────────────────────

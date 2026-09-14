@@ -771,6 +771,16 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.ok(String(data['STATUS']).includes('insufficient'));
         });
 
+        // The stake-split source: in the weighted (source-aggregate) set, absent
+        // from the pubkey-aggregate set, and holding no delegation row.
+        function stakeSplitSource() {
+            indexer.indexerDb.getValidatorsByCapability.resolves([]);
+            indexer.indexerDb.hasCapability.resolves(false);
+            indexer.indexerDb.getStakeWeightsByCapability.resolves([
+                { pubkey: PUBKEY_A, source: 'S1', weight: '50000' },
+            ]);
+        }
+
         // STAKE_WEIGHTED_QUORUM: the v1 eligibility pre-filter must be derived from
         // the SAME query the responsible set is, or a responsible signer is dropped
         // before it is counted. getValidatorsByCapability / hasCapability qualify a
@@ -780,17 +790,6 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         // The responsible set is exactly REDUNDANCY keys, so one dropped member made
         // the request permanently unfulfillable, burning a fee on every retry.
         describe('STAKE_WEIGHTED_QUORUM: v1 signer eligibility follows the responsible-set derivation', function () {
-
-            // The stake-split source: in the weighted (source-aggregate) set, absent
-            // from the pubkey-aggregate set, and holding no delegation row.
-            function stakeSplitSource() {
-                indexer.indexerDb.getValidatorsByCapability.resolves([]);
-                indexer.indexerDb.hasCapability.resolves(false);
-                indexer.indexerDb.getStakeWeightsByCapability.resolves([
-                    { pubkey: PUBKEY_A, source: 'S1', weight: '50000' },
-                ]);
-            }
-
             it('counts a responsible signer the pubkey-aggregate set excludes', async function () {
                 swq.isStakeWeightedQuorumActive.returns(true);
                 stakeSplitSource();
@@ -846,7 +845,9 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                     'no pubkey-aggregate probe may run on the weighted branch');
                 assert.strictEqual(data['STATUS'], 'valid');
             });
+        });
 
+        describe('STAKE_WEIGHTED_QUORUM: v1 signer eligibility follows the responsible-set derivation', function () {
             it('below the flag-day the pubkey-aggregate gate is byte-preserved', async function () {
                 swq.isStakeWeightedQuorumActive.returns(false);
                 stakeSplitSource();
@@ -1202,7 +1203,6 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         }
 
         describe('v0: fee validation + escrow', function () {
-
             it('valid fee → escrows + debits FEE_AMOUNT from FEE_PAYER, STATUS valid', async function () {
                 fundFeePayer();
                 const data = v0FeeData();
@@ -1253,7 +1253,9 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 assert.strictEqual(data['STATUS'], 'valid');
                 assert.ok(indexer.indexerDb.createEscrow.calledOnce);
             });
+        });
 
+        describe('v0: fee validation + escrow', function () {
             it('rejects a fractional FEE_AMOUNT against the decimals-0 regtest GAS tick', async function () {
                 fundFeePayer(); // mock getTokenDecimalPrecision defaults to 0 (regtest GAS)
                 const data = v0FeeData();
@@ -1296,7 +1298,6 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
 
         describe('v1: fee settlement on the terminal flip', function () {
-
             beforeEach(function () {
                 sinon.stub(ed25519, 'verify').returns(true);
             });
@@ -1351,6 +1352,12 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                     assert.strictEqual(String(call.args[3]), '0.33333333', 'floor to GAS decimals');
                 // pool was credited the FULL fee; rewards reference 0.99999999 (dust stays)
                 assert.strictEqual(String(indexer.indexerDb.createCredit.firstCall.args[2]), '1.00000001');
+            });
+        });
+
+        describe('v1: fee settlement on the terminal flip', function () {
+            beforeEach(function () {
+                sinon.stub(ed25519, 'verify').returns(true);
             });
 
             it("terminal non-ok ('errored') → fee refunds to FEE_PAYER, no rewards", async function () {
@@ -1418,31 +1425,21 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             });
         });
 
+        // cap 0.0001 BTC × (50000 USD/BTC) ÷ (2.5 USD/XCHAIN) = 2 XCHAIN
+        const COIN_USD   = '50000';
+        const XCHAIN_USD = '2.5';
+
+        function rewardsByType(type) {
+            return indexer.indexerDb.createValidatorReward.getCalls()
+                .filter(c => c.args[2] === type)
+                .map(c => ({ pubkey: c.args[0], roundRef: c.args[1], amount: String(c.args[3]), block: c.args[4] }));
+        }
+
         // Leader broadcast-fee reimbursement. The escrow pays the
         // broadcaster its native-coin cost back BEFORE the equal split, converted to XCHAIN
         // at the settle block's oracle price, bounded by a per-provider cap, and gated on a
         // flag-day so replay below the height is byte-identical to the pre-flag ledger.
         describe('§11: leader broadcast-fee reimbursement', function () {
-
-            // cap 0.0001 BTC × (50000 USD/BTC) ÷ (2.5 USD/XCHAIN) = 2 XCHAIN
-            const COIN_USD   = '50000';
-            const XCHAIN_USD = '2.5';
-
-            // The hash-sorted responsible set the handler derives for REQ_ID over
-            // {A,B,C}: element 0 is the broadcaster the carve-out must pay.
-            function hashOrder(pubkeys) {
-                return pubkeys
-                    .map(pk => ({ pk, h: crypto.createHash('sha256').update(REQ_ID, 'utf8').update(pk, 'utf8').digest('hex') }))
-                    .sort((a, b) => (a.h < b.h ? -1 : a.h > b.h ? 1 : 0))
-                    .map(v => v.pk);
-            }
-
-            function rewardsByType(type) {
-                return indexer.indexerDb.createValidatorReward.getCalls()
-                    .filter(c => c.args[2] === type)
-                    .map(c => ({ pubkey: c.args[0], roundRef: c.args[1], amount: String(c.args[3]), block: c.args[4] }));
-            }
-
             beforeEach(function () {
                 sinon.stub(ed25519, 'verify').returns(true);
                 attestBcastFee.isAttestBroadcastFeeActive.returns(true);
@@ -1474,6 +1471,28 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 // The pool credit is still the FULL escrow; the rows only reference it.
                 assert.strictEqual(String(indexer.indexerDb.createCredit.firstCall.args[2]), '6.00000000');
             });
+        });
+
+        describe('§11: leader broadcast-fee reimbursement', function () {
+            // The hash-sorted responsible set the handler derives for REQ_ID over
+            // {A,B,C}: element 0 is the broadcaster the carve-out must pay.
+            function hashOrder(pubkeys) {
+                return pubkeys
+                    .map(pk => ({ pk, h: crypto.createHash('sha256').update(REQ_ID, 'utf8').update(pk, 'utf8').digest('hex') }))
+                    .sort((a, b) => (a.h < b.h ? -1 : a.h > b.h ? 1 : 0))
+                    .map(v => v.pk);
+            }
+
+            beforeEach(function () {
+                sinon.stub(ed25519, 'verify').returns(true);
+                attestBcastFee.isAttestBroadcastFeeActive.returns(true);
+                // Production XCHAIN genesis is 8dp; the carve-out and the split floor to the
+                // same grid, so assert on that grid rather than the 0dp regtest default.
+                indexer.indexerDb.getTokenDecimalPrecision.resolves(8);
+                sinon.stub(indexer.util, 'getFeeOraclePrices').resolves({
+                    coinUsdPrice: COIN_USD, xchainUsdPrice: XCHAIN_USD, oracleRound: 7,
+                });
+            });
 
             it('the reimbursement is ON TOP of the broadcaster share (REDUNDANCY 3)', async function () {
                 indexer.indexerDb.getValidatorsByCapability.resolves([
@@ -1500,6 +1519,19 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 for (const row of split) assert.strictEqual(row.amount, '1.33333333');
                 // The leader holds both rows, which is exactly "additionally receives".
                 assert.ok(split.some(r => r.pubkey === leader));
+            });
+        });
+
+        describe('§11: leader broadcast-fee reimbursement', function () {
+            beforeEach(function () {
+                sinon.stub(ed25519, 'verify').returns(true);
+                attestBcastFee.isAttestBroadcastFeeActive.returns(true);
+                // Production XCHAIN genesis is 8dp; the carve-out and the split floor to the
+                // same grid, so assert on that grid rather than the 0dp regtest default.
+                indexer.indexerDb.getTokenDecimalPrecision.resolves(8);
+                sinon.stub(indexer.util, 'getFeeOraclePrices').resolves({
+                    coinUsdPrice: COIN_USD, xchainUsdPrice: XCHAIN_USD, oracleRound: 7,
+                });
             });
 
             it('a missing/stale oracle price reimburses 0 and never wedges the settle', async function () {
@@ -1547,6 +1579,19 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 assert.strictEqual(rewardsByType('attest_bcast').length, 0);
                 assert.strictEqual(rewardsByType('attest_fee')[0].amount, '6');
                 assert.ok(indexer.util.getFeeOraclePrices.notCalled, 'no oracle read below the gate');
+            });
+        });
+
+        describe('§11: leader broadcast-fee reimbursement', function () {
+            beforeEach(function () {
+                sinon.stub(ed25519, 'verify').returns(true);
+                attestBcastFee.isAttestBroadcastFeeActive.returns(true);
+                // Production XCHAIN genesis is 8dp; the carve-out and the split floor to the
+                // same grid, so assert on that grid rather than the 0dp regtest default.
+                indexer.indexerDb.getTokenDecimalPrecision.resolves(8);
+                sinon.stub(indexer.util, 'getFeeOraclePrices').resolves({
+                    coinUsdPrice: COIN_USD, xchainUsdPrice: XCHAIN_USD, oracleRound: 7,
+                });
             });
 
             it('a feeless request pays no reimbursement (nothing is escrowed to carve from)', async function () {
@@ -1704,18 +1749,17 @@ describe('Attest (ATTEST) @regression @tier3', function () {
 
     });
 
+    function v2Data(overrides = {}) {
+        return createBaseData({
+            ACTION: 'ATTEST', FORMAT: 2, BLOCK_INDEX: 250, REQUEST_ID: REQ_ID, IS_SYNTHETIC: true,
+            ...overrides,
+        });
+    }
+
     // ───────────────────────────────────────────────────────────────────────
     // injectExpiredCallback internal branches (v2 expire path)
     // ───────────────────────────────────────────────────────────────────────
     describe('_injectExpiredCallback internal branches', function () {
-
-        function v2Data(overrides = {}) {
-            return createBaseData({
-                ACTION: 'ATTEST', FORMAT: 2, BLOCK_INDEX: 250, REQUEST_ID: REQ_ID, IS_SYNTHETIC: true,
-                ...overrides,
-            });
-        }
-
         it('null actionExecute on v2 expire → expire still valid, no callback (line 467)', async function () {
             actionsCtx.actionExecute = null;
             handler = new Attest(actionsCtx);
@@ -1773,7 +1817,9 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.strictEqual(indexer.indexerDb.createSavepoint.firstCall.args[0], 'attestation_expire_callback_77',
                 'expire savepoint name must embed the emission action_index');
         });
+    });
 
+    describe('_injectExpiredCallback internal branches', function () {
         it('getValidatorsByCapability throws → missed_count catch block fires, expire still succeeds (lines 367-368)', async function () {
             // Make getValidatorsByCapability throw so computeResponsibleSet propagates and
             // the outer try/catch in parseExpire (lines 357-368) fires the warning path.
@@ -1879,26 +1925,25 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
     });
 
+    function v0Data(overrides = {}) {
+        return createBaseData({
+            ACTION: 'ATTEST', FORMAT: 0, IS_EMISSION: true, EMITTER: 5, EMITTER_POSITION: 0,
+            EMITTER_PATH: '0', ROOT_ACTION_INDEX: 100, BLOCK_INDEX: 100,
+            ...overrides,
+        });
+    }
+    function v0Params(reqId, redundancy) {
+        return ['0', reqId, 'http_get', 'q', 'onResult', '[]', String(redundancy), '50'];
+    }
+    function validReqId(data) {
+        return deriveReqId(data['TX_HASH'], data['ROOT_ACTION_INDEX'], data['EMITTER_PATH'], data['EMITTER'], data['EMITTER_POSITION']);
+    }
+
     // Pkg 7 / 87441a53 admission rejection: at/above ATTEST_ADMISSION_ACTIVATION
     // an ATTEST v0 whose responsible set at the request block is smaller than
     // REDUNDANCY is rejected at admission (immediate, never enters 'pending');
     // below the gate the legacy accept-then-expire behavior is bit-identical.
     describe('ATTEST_ADMISSION flag-day: unservable-redundancy rejection', function () {
-
-        function v0Data(overrides = {}) {
-            return createBaseData({
-                ACTION: 'ATTEST', FORMAT: 0, IS_EMISSION: true, EMITTER: 5, EMITTER_POSITION: 0,
-                EMITTER_PATH: '0', ROOT_ACTION_INDEX: 100, BLOCK_INDEX: 100,
-                ...overrides,
-            });
-        }
-        function v0Params(reqId, redundancy) {
-            return ['0', reqId, 'http_get', 'q', 'onResult', '[]', String(redundancy), '50'];
-        }
-        function validReqId(data) {
-            return deriveReqId(data['TX_HASH'], data['ROOT_ACTION_INDEX'], data['EMITTER_PATH'], data['EMITTER'], data['EMITTER_POSITION']);
-        }
-
         beforeEach(function () {
             attestAdmission.isAttestAdmissionActive.returns(true);   // stubbed off in outer beforeEach
         });
@@ -1940,6 +1985,12 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 'expected deduped-set rejection, got: ' + data['STATUS']);
             assert.strictEqual(data['REQUEST_STATUS'], 'rejected');
         });
+    });
+
+    describe('ATTEST_ADMISSION flag-day: unservable-redundancy rejection', function () {
+        beforeEach(function () {
+            attestAdmission.isAttestAdmissionActive.returns(true);   // stubbed off in outer beforeEach
+        });
 
         it('below the gate the legacy accept-then-expire path is preserved (replay bit-identical)', async function () {
             attestAdmission.isAttestAdmissionActive.returns(false);
@@ -1963,6 +2014,32 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
     });
 
+    function v1Data(overrides = {}) {
+        return createBaseData({ ACTION: 'ATTEST', FORMAT: 1, BLOCK_INDEX: 100, ACTION_INDEX: 60, ...overrides });
+    }
+    function v1Params(sigs, status = 'ok') {
+        const head = ['1', REQ_ID, 'http_get', b64('hello'), status, 'm', String(sigs.length)];
+        const tail = [];
+        for (const s of sigs) { tail.push(s.pubkey, s.sig); }
+        return head.concat(tail);
+    }
+
+    const FEE_PAYER = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+    const COIN_USD   = '50000';
+    const XCHAIN_USD = '2.5';
+
+    function rewardsByType(type) {
+        return indexer.indexerDb.createValidatorReward.getCalls()
+            .filter(c => c.args[2] === type)
+            .map(c => ({ pubkey: c.args[0], amount: String(c.args[3]) }));
+    }
+    function feeRequestRow(overrides = {}) {
+        return makeRequestRow({
+            action_index: 42, fee_amount: '6.00000000', fee_payer: FEE_PAYER,
+            redundancy: 1, ...overrides,
+        });
+    }
+
     // ------------------------------------------------------- the response-mirror flag day
 
     // Above the height a response reaches every indexer through the hub mirror, so the
@@ -1970,17 +2047,6 @@ describe('Attest (ATTEST) @regression @tier3', function () {
     // broadcast-fee carve-out that reimbursed the leader's miner fee goes with it because
     // nobody broadcasts anything to be reimbursed for.
     describe('ATTEST_RESPONSE_MIRROR flag day: the chain handler and the fee', function () {
-
-        function v1Data(overrides = {}) {
-            return createBaseData({ ACTION: 'ATTEST', FORMAT: 1, BLOCK_INDEX: 100, ACTION_INDEX: 60, ...overrides });
-        }
-        function v1Params(sigs, status = 'ok') {
-            const head = ['1', REQ_ID, 'http_get', b64('hello'), status, 'm', String(sigs.length)];
-            const tail = [];
-            for (const s of sigs) { tail.push(s.pubkey, s.sig); }
-            return head.concat(tail);
-        }
-
         beforeEach(function () {
             sinon.stub(ed25519, 'verify').returns(true);
         });
@@ -2018,6 +2084,12 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 'the request row block, never the response action block and never a hub-stated one');
             assert.strictEqual(handler.isMirrorEraRequest(null), false);
         });
+    });
+
+    describe('ATTEST_RESPONSE_MIRROR flag day: the chain handler and the fee', function () {
+        beforeEach(function () {
+            sinon.stub(ed25519, 'verify').returns(true);
+        });
 
         it('the gate outranks every other request-derived verdict on the same wire', async function () {
             // Each of these rejects on its own below the height. Above it the era answers
@@ -2039,25 +2111,14 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }]), orphan, null);
             assert.strictEqual(orphan['STATUS'], 'invalid: REQUEST_ID (no matching request)');
         });
+    });
+
+    describe('ATTEST_RESPONSE_MIRROR flag day: the chain handler and the fee', function () {
+        beforeEach(function () {
+            sinon.stub(ed25519, 'verify').returns(true);
+        });
 
         describe('broadcast-fee retirement', function () {
-
-            const FEE_PAYER = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
-            const COIN_USD   = '50000';
-            const XCHAIN_USD = '2.5';
-
-            function rewardsByType(type) {
-                return indexer.indexerDb.createValidatorReward.getCalls()
-                    .filter(c => c.args[2] === type)
-                    .map(c => ({ pubkey: c.args[0], amount: String(c.args[3]) }));
-            }
-            function feeRequestRow(overrides = {}) {
-                return makeRequestRow({
-                    action_index: 42, fee_amount: '6.00000000', fee_payer: FEE_PAYER,
-                    redundancy: 1, ...overrides,
-                });
-            }
-
             beforeEach(function () {
                 // The carve-out flag day is ARMED throughout this describe: what is under
                 // test is that the mirror era retires it anyway, not that an unarmed gate
@@ -2101,6 +2162,25 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 assert.strictEqual(String(indexer.indexerDb.createCredit.firstCall.args[2]), '6.00000000',
                     'the pool credit is the full escrow either way');
             });
+        });
+    });
+
+    describe('ATTEST_RESPONSE_MIRROR flag day: the chain handler and the fee', function () {
+        beforeEach(function () {
+            sinon.stub(ed25519, 'verify').returns(true);
+        });
+
+        describe('broadcast-fee retirement', function () {
+            beforeEach(function () {
+                // The carve-out flag day is ARMED throughout this describe: what is under
+                // test is that the mirror era retires it anyway, not that an unarmed gate
+                // pays nothing.
+                attestBcastFee.isAttestBroadcastFeeActive.returns(true);
+                indexer.indexerDb.getTokenDecimalPrecision.resolves(8);
+                sinon.stub(indexer.util, 'getFeeOraclePrices').resolves({
+                    coinUsdPrice: COIN_USD, xchainUsdPrice: XCHAIN_USD, oracleRound: 7,
+                });
+            });
 
             it('MIRROR era at REDUNDANCY 3: every signer gets an equal share of the whole escrow', async function () {
                 arm.isResponseMirrorActive.returns(true);
@@ -2132,70 +2212,141 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
     });
 
+    const ANCHOR = 900000;
+
+    function batchRow(i) {
+        return {
+            network: 'regtest',
+            request_id: crypto.createHash('sha256').update('breq' + i).digest('hex'),
+            request_action_index: 100 + i, request_block_index: 90 + i,
+            provider_id: 'http_get', status: 'ok',
+            response_payload: 'body-' + i,
+            response_hash: crypto.createHash('sha256').update('body-' + i).digest('hex'),
+            meta: 'm', effective_time: 1700000000 + i,
+            signer_pubkeys: JSON.stringify([PUBKEY_A]),
+            signatures: JSON.stringify([{ pubkey: PUBKEY_A, sig: SIG_A }]),
+            widen: 0,
+        };
+    }
+    function batchWindow(rowCount = 2, overrides = {}) {
+        const rows = [];
+        for (let i = 0; i < rowCount; i++) rows.push(batchRow(i));
+        return {
+            network: 'regtest', window_start: 1700000000, window_end: 1700003600,
+            row_count: rows.length, btc_block_height: ANCHOR, rows,
+            sigs: [{ pubkey: PUBKEY_A, sig: SIG_A }],
+            ...overrides,
+        };
+    }
+    // Positional params as the decoder hands them over: params[0] is VERSION.
+    function wireParams(wire) { return wire.split('|').slice(1); }
+
+    // A handler on the batch rail. COIN comes from a fresh mock config, so the
+    // outer BTC fixtures are untouched.
+    function batchHandler(coin = 'DOGE') {
+        const ix = createMockIndexer();
+        ix.config.COIN    = coin;
+        ix.config.NETWORK = 'regtest';
+        const db = ix.indexerDb;
+        db.createAttestationBatchAction = sinon.stub().resolves();
+        db.getAttestBatchChunks         = sinon.stub().resolves([]);
+        db.setAttestBatchStatus         = sinon.stub().resolves();
+        db.getValidatorsByCapability    = sinon.stub().resolves([{ pubkey: PUBKEY_A }]);
+        db.getStakeWeightsByCapability  = sinon.stub().resolves([{ pubkey: PUBKEY_A, source: 'SA', weight: '100' }]);
+        db.getActiveCapabilityCount     = sinon.stub().resolves(1);
+        db.hasCapability                = sinon.stub().resolves(true);
+        const h = new Attest({
+            config: ix.config, util: ix.util, mapper: ix.mapper,
+            decoderDb: ix.decoderDb, indexerDb: db,
+            hubClient: { enabled: true },
+            protocolChanges: { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) },
+        });
+        return { handler: h, db, ix };
+    }
+    // SOURCE is the broadcaster address, and a batch's slots are bound to it, so every
+    // fixture wire is one publisher's unless a case deliberately names another.
+    function batchData(overrides = {}) {
+        return createBaseData({
+            ACTION: 'ATTEST', FORMAT: 5, BLOCK_INDEX: 6300000, ACTION_INDEX: 71,
+            BLOCK_TIME: 1700004000, COIN: 'DOGE', SOURCE: PUB_A, ...overrides,
+        });
+    }
+
+    // --------------------------------------------- multi-chunk: the stored chunk table
+
+    // A window whose encoding lands on exactly `want` wires. The row bodies are
+    // deterministic hash noise, which barely deflates, so each added row grows the
+    // compressed body by far less than one wire and the search below cannot step over
+    // the size it is looking for.
+    function chunkedBatch(want) {
+        for (let n = 1; n <= 200; n++) {
+            const rows = [];
+            for (let i = 0; i < n; i++) {
+                const r = batchRow(i);
+                let noise = '';
+                for (let k = 0; k < 8; k++)
+                    noise += crypto.createHash('sha512').update('n:' + i + ':' + k).digest('base64');
+                r.response_payload = noise;
+                r.response_hash = crypto.createHash('sha256').update(noise).digest('hex');
+                rows.push(r);
+            }
+            const win = {
+                network: 'regtest', window_start: 1700000000, window_end: 1700003600,
+                row_count: n, btc_block_height: ANCHOR, rows,
+                sigs: [{ pubkey: PUBKEY_A, sig: SIG_A }],
+            };
+            const enc = abw.encodeAttestBatch(win);
+            if (enc.totalChunks === want) return { win, enc };
+        }
+        throw new Error('no window of this fixture shape encodes to ' + want + ' chunks');
+    }
+
+    // A stand-in for the attests chunk table: the handler's own stamped columns go in,
+    // and the read serves back exactly what the real query does (valid rows carrying a
+    // slot, EVERY publisher's, ordered by slot then action index, each carrying the
+    // broadcaster address). The read is deliberately not author-scoped, because the
+    // author partition is the handler's rule and a store that pre-filtered would pass
+    // whether the handler applied it or not.
+    function chunkStore(db) {
+        const rows = [];
+        db.createAttestationBatchAction = sinon.stub().callsFake(async (d) => {
+            rows.push({
+                action_index: Number(d['ACTION_INDEX']), version: Number(d['VERSION']),
+                request_id: d['REQUEST_ID'], status: d['STATUS'], source: d['SOURCE'],
+                window_start: d['WINDOW_START'], window_end: d['WINDOW_END'],
+                row_count: d['ROW_COUNT'], btc_block_height: d['BTC_BLOCK_HEIGHT'],
+                batch_crc32: d['BATCH_CRC32'], total_chunks: d['TOTAL_CHUNKS'],
+                chunk_index: d['CHUNK_INDEX'], chunk_b64: d['CHUNK_B64'],
+            });
+        });
+        db.getAttestBatchChunks = sinon.stub().callsFake(async (key) => rows
+            .filter(r => r.request_id === key && r.status === 'valid' && r.chunk_index != null)
+            .sort((a, b) => (a.chunk_index - b.chunk_index) || (a.action_index - b.action_index)));
+        db.setAttestBatchStatus = sinon.stub().callsFake(async (actionIndex, status) => {
+            for (const r of rows) if (r.action_index === Number(actionIndex)) r.status = status;
+        });
+        return rows;
+    }
+
+    // The publisher every batch fixture broadcasts from unless a case names another.
+    const PUB_A = 'DPubAxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+    const PUB_B = 'DPubBxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+
+    // Land one wire of `enc` as its own action. Wire 0 is the v5 head, the rest v6.
+    async function land(h, enc, wireIndex, actionIndex, source = PUB_A) {
+        const data = batchData({
+            FORMAT: wireIndex === 0 ? 5 : 6,
+            ACTION_INDEX: actionIndex,
+            BLOCK_INDEX: 6300000 + wireIndex,
+            SOURCE: source,
+        });
+        await h.parse(wireParams(enc.wires[wireIndex]), data, null);
+        return data;
+    }
+
     // ------------------------------------------------- ATTEST v5/v6: the response batch
 
     describe('ATTEST v5/v6 response batch', function () {
-
-        const ANCHOR = 900000;
-
-        function batchRow(i) {
-            return {
-                network: 'regtest',
-                request_id: crypto.createHash('sha256').update('breq' + i).digest('hex'),
-                request_action_index: 100 + i, request_block_index: 90 + i,
-                provider_id: 'http_get', status: 'ok',
-                response_payload: 'body-' + i,
-                response_hash: crypto.createHash('sha256').update('body-' + i).digest('hex'),
-                meta: 'm', effective_time: 1700000000 + i,
-                signer_pubkeys: JSON.stringify([PUBKEY_A]),
-                signatures: JSON.stringify([{ pubkey: PUBKEY_A, sig: SIG_A }]),
-                widen: 0,
-            };
-        }
-        function batchWindow(rowCount = 2, overrides = {}) {
-            const rows = [];
-            for (let i = 0; i < rowCount; i++) rows.push(batchRow(i));
-            return {
-                network: 'regtest', window_start: 1700000000, window_end: 1700003600,
-                row_count: rows.length, btc_block_height: ANCHOR, rows,
-                sigs: [{ pubkey: PUBKEY_A, sig: SIG_A }],
-                ...overrides,
-            };
-        }
-        // Positional params as the decoder hands them over: params[0] is VERSION.
-        function wireParams(wire) { return wire.split('|').slice(1); }
-
-        // A handler on the batch rail. COIN comes from a fresh mock config, so the
-        // outer BTC fixtures are untouched.
-        function batchHandler(coin = 'DOGE') {
-            const ix = createMockIndexer();
-            ix.config.COIN    = coin;
-            ix.config.NETWORK = 'regtest';
-            const db = ix.indexerDb;
-            db.createAttestationBatchAction = sinon.stub().resolves();
-            db.getAttestBatchChunks         = sinon.stub().resolves([]);
-            db.setAttestBatchStatus         = sinon.stub().resolves();
-            db.getValidatorsByCapability    = sinon.stub().resolves([{ pubkey: PUBKEY_A }]);
-            db.getStakeWeightsByCapability  = sinon.stub().resolves([{ pubkey: PUBKEY_A, source: 'SA', weight: '100' }]);
-            db.getActiveCapabilityCount     = sinon.stub().resolves(1);
-            db.hasCapability                = sinon.stub().resolves(true);
-            const h = new Attest({
-                config: ix.config, util: ix.util, mapper: ix.mapper,
-                decoderDb: ix.decoderDb, indexerDb: db,
-                hubClient: { enabled: true },
-                protocolChanges: { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) },
-            });
-            return { handler: h, db, ix };
-        }
-        // SOURCE is the broadcaster address, and a batch's slots are bound to it, so every
-        // fixture wire is one publisher's unless a case deliberately names another.
-        function batchData(overrides = {}) {
-            return createBaseData({
-                ACTION: 'ATTEST', FORMAT: 5, BLOCK_INDEX: 6300000, ACTION_INDEX: 71,
-                BLOCK_TIME: 1700004000, COIN: 'DOGE', SOURCE: PUB_A, ...overrides,
-            });
-        }
-
         beforeEach(function () {
             sinon.stub(ed25519, 'verify').returns(true);
         });
@@ -2245,6 +2396,12 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.ok(db.stageHubPush.calledOnce);
             assert.strictEqual(db.stageHubPush.firstCall.args[0].pushType, 'attest_batch');
         });
+    });
+
+    describe('ATTEST v5/v6 response batch', function () {
+        beforeEach(function () {
+            sinon.stub(ed25519, 'verify').returns(true);
+        });
 
         it('an empty window (row_count 0) is a valid batch and still pushes', async function () {
             const { handler: h, db } = batchHandler('DOGE');
@@ -2290,6 +2447,12 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.ok(db.getStakeWeightsByCapability.calledWith('attestation', ANCHOR));
             assert.strictEqual(db.getActiveCapabilityCount.called, false,
                 'the count denominator belongs to the unweighted branch only');
+        });
+    });
+
+    describe('ATTEST v5/v6 response batch', function () {
+        beforeEach(function () {
+            sinon.stub(ed25519, 'verify').returns(true);
         });
 
         it('NEVER resolves a per-row responsible set on the batch rail', async function () {
@@ -2338,6 +2501,12 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 'no key could be derived, so none is filed');
             assert.strictEqual(db.enqueueHubPushTx.called, false);
         });
+    });
+
+    describe('ATTEST v5/v6 response batch', function () {
+        beforeEach(function () {
+            sinon.stub(ed25519, 'verify').returns(true);
+        });
 
         it('a v6 continuation records itself and absorbs nothing', async function () {
             const { handler: h, db } = batchHandler('DOGE');
@@ -2375,78 +2544,12 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.strictEqual(data['STATUS'], 'valid', 'a hub-less node judges the batch identically');
             assert.strictEqual(db.enqueueHubPushTx.called, false);
         });
+    });
 
-        // --------------------------------------------- multi-chunk: the stored chunk table
-
-        // A window whose encoding lands on exactly `want` wires. The row bodies are
-        // deterministic hash noise, which barely deflates, so each added row grows the
-        // compressed body by far less than one wire and the search below cannot step over
-        // the size it is looking for.
-        function chunkedBatch(want) {
-            for (let n = 1; n <= 200; n++) {
-                const rows = [];
-                for (let i = 0; i < n; i++) {
-                    const r = batchRow(i);
-                    let noise = '';
-                    for (let k = 0; k < 8; k++)
-                        noise += crypto.createHash('sha512').update('n:' + i + ':' + k).digest('base64');
-                    r.response_payload = noise;
-                    r.response_hash = crypto.createHash('sha256').update(noise).digest('hex');
-                    rows.push(r);
-                }
-                const win = {
-                    network: 'regtest', window_start: 1700000000, window_end: 1700003600,
-                    row_count: n, btc_block_height: ANCHOR, rows,
-                    sigs: [{ pubkey: PUBKEY_A, sig: SIG_A }],
-                };
-                const enc = abw.encodeAttestBatch(win);
-                if (enc.totalChunks === want) return { win, enc };
-            }
-            throw new Error('no window of this fixture shape encodes to ' + want + ' chunks');
-        }
-
-        // A stand-in for the attests chunk table: the handler's own stamped columns go in,
-        // and the read serves back exactly what the real query does (valid rows carrying a
-        // slot, EVERY publisher's, ordered by slot then action index, each carrying the
-        // broadcaster address). The read is deliberately not author-scoped, because the
-        // author partition is the handler's rule and a store that pre-filtered would pass
-        // whether the handler applied it or not.
-        function chunkStore(db) {
-            const rows = [];
-            db.createAttestationBatchAction = sinon.stub().callsFake(async (d) => {
-                rows.push({
-                    action_index: Number(d['ACTION_INDEX']), version: Number(d['VERSION']),
-                    request_id: d['REQUEST_ID'], status: d['STATUS'], source: d['SOURCE'],
-                    window_start: d['WINDOW_START'], window_end: d['WINDOW_END'],
-                    row_count: d['ROW_COUNT'], btc_block_height: d['BTC_BLOCK_HEIGHT'],
-                    batch_crc32: d['BATCH_CRC32'], total_chunks: d['TOTAL_CHUNKS'],
-                    chunk_index: d['CHUNK_INDEX'], chunk_b64: d['CHUNK_B64'],
-                });
-            });
-            db.getAttestBatchChunks = sinon.stub().callsFake(async (key) => rows
-                .filter(r => r.request_id === key && r.status === 'valid' && r.chunk_index != null)
-                .sort((a, b) => (a.chunk_index - b.chunk_index) || (a.action_index - b.action_index)));
-            db.setAttestBatchStatus = sinon.stub().callsFake(async (actionIndex, status) => {
-                for (const r of rows) if (r.action_index === Number(actionIndex)) r.status = status;
-            });
-            return rows;
-        }
-
-        // The publisher every batch fixture broadcasts from unless a case names another.
-        const PUB_A = 'DPubAxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
-        const PUB_B = 'DPubBxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
-
-        // Land one wire of `enc` as its own action. Wire 0 is the v5 head, the rest v6.
-        async function land(h, enc, wireIndex, actionIndex, source = PUB_A) {
-            const data = batchData({
-                FORMAT: wireIndex === 0 ? 5 : 6,
-                ACTION_INDEX: actionIndex,
-                BLOCK_INDEX: 6300000 + wireIndex,
-                SOURCE: source,
-            });
-            await h.parse(wireParams(enc.wires[wireIndex]), data, null);
-            return data;
-        }
+    describe('ATTEST v5/v6 response batch', function () {
+        beforeEach(function () {
+            sinon.stub(ed25519, 'verify').returns(true);
+        });
 
         it('a two-chunk batch absorbs exactly once, on the continuation that completes it', async function () {
             const { handler: h, db } = batchHandler('DOGE');
@@ -2478,6 +2581,12 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 'the head (71) this delivery survives a rollback that removed the chunk that ' +
                 'completed the batch and publishes a completion for chunks off chain');
             assert.strictEqual(db.stageHubPush.callCount, 1);
+        });
+    });
+
+    describe('ATTEST v5/v6 response batch', function () {
+        beforeEach(function () {
+            sinon.stub(ed25519, 'verify').returns(true);
         });
 
         it('a three-chunk batch absorbs once when the head lands LAST, out of order', async function () {
@@ -2520,6 +2629,12 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.strictEqual(db.setAttestBatchStatus.called, false,
                 'and an incomplete batch is not a failed one, so the head keeps its verdict');
         });
+    });
+
+    describe('ATTEST v5/v6 response batch', function () {
+        beforeEach(function () {
+            sinon.stub(ed25519, 'verify').returns(true);
+        });
 
         it('a duplicate continuation is inert: refused, and absorbing nothing a second time', async function () {
             const { handler: h, db } = batchHandler('DOGE');
@@ -2558,6 +2673,12 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.strictEqual(db.setAttestBatchStatus.firstCall.args[0], 71);
             assert.match(db.setAttestBatchStatus.firstCall.args[1], /^invalid: ATTEST_BATCH \(/);
             assert.strictEqual(stored.find(r => r.action_index === 72).status, 'valid');
+        });
+    });
+
+    describe('ATTEST v5/v6 response batch', function () {
+        beforeEach(function () {
+            sinon.stub(ed25519, 'verify').returns(true);
         });
 
         it('refuses a continuation whose geometry disagrees with its head', async function () {
@@ -2611,6 +2732,12 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.match(db.setAttestBatchStatus.firstCall.args[1], /^invalid: insufficient PBFT quorum/,
                 'the completing chunk is judged on the same quorum a single-wire head is');
         });
+    });
+
+    describe('ATTEST v5/v6 response batch', function () {
+        beforeEach(function () {
+            sinon.stub(ed25519, 'verify').returns(true);
+        });
 
         // ------------------------------------------- a batch belongs to ONE publisher
 
@@ -2651,6 +2778,12 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.strictEqual(db.enqueueHubPushTx.called, false,
                 'a chunk completes only its OWN publisher\'s coverage; anyone could otherwise ' +
                 'close a window at a moment of their choosing');
+        });
+    });
+
+    describe('ATTEST v5/v6 response batch', function () {
+        beforeEach(function () {
+            sinon.stub(ed25519, 'verify').returns(true);
         });
 
         // -------------------------------------------------- ONE canonical head per window
@@ -2701,6 +2834,12 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.strictEqual(honest['STATUS'], 'valid',
                 'a squatted window must not be deniable by landing a head under its key');
             assert.strictEqual(db.enqueueHubPushTx.callCount, 2);
+        });
+    });
+
+    describe('ATTEST v5/v6 response batch', function () {
+        beforeEach(function () {
+            sinon.stub(ed25519, 'verify').returns(true);
         });
 
         // ------------------------------------------------------ the batch link names the head
@@ -2758,7 +2897,6 @@ describe('Attest (ATTEST) @regression @tier3', function () {
  * moment it would otherwise become a live fork.
  ********************************************************************/
 describe('ATTEST responsible-set is BTC-anchored (#3233) @regression @tier1', function () {
-
     // A local height comfortably past the 961000 BTC anchor, which is where every
     // LTC/DOGE indexer already sits.
     const PAST_ANCHOR = 3160000;
@@ -2815,6 +2953,10 @@ describe('ATTEST responsible-set is BTC-anchored (#3233) @regression @tier1', fu
         assert.strictEqual(db.getStakeWeightsByCapability.called, false,
             'below 961000 the gate is off, so replay of pre-anchor history is unchanged');
     });
+});
+
+describe('ATTEST responsible-set is BTC-anchored (#3233) @regression @tier1', function () {
+    afterEach(() => sinon.restore());
 
     // The two implementations are required to agree byte-for-byte; agreeing only by
     // both reaching [] via different routes is how they drift apart later.

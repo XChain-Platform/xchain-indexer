@@ -177,9 +177,9 @@ describe('Amount representability @regression @tier1', function () {
         });
     });
 
-    describe('isValidAmountFormat(): the credited number vs the validated text', function () {
+    let util;
 
-        let util;
+    describe('isValidAmountFormat(): the credited number vs the validated text', function () {
         beforeEach(function () { util = new Utility(); });
 
         it('the defect: 5e-19 validates but bcadd credits a DIFFERENT number', function () {
@@ -233,6 +233,10 @@ describe('Amount representability @regression @tier1', function () {
             assert.strictEqual(util.isValidAmountFormat(8, '0x10'), true);
             assert.strictEqual(util.isValidAmountFormat(18, '5e-19'), true);
         });
+    });
+
+    describe('isValidAmountFormat(): the credited number vs the validated text', function () {
+        beforeEach(function () { util = new Utility(); });
 
         it('the gate only ever REJECTS more: every legacy-valid case stays valid armed', function () {
             const stillValid = [

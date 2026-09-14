@@ -17,9 +17,13 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Link = require('../../../src/actions/link.js');
 
-describe('Link action handler @regression @tier3', function () {
-    let indexer, actionsCtx, handler;
+let indexer, actionsCtx, handler;
 
+function makeParams(coin1, index1, coin2, index2, memo) {
+    return ['0', coin1, String(index1), coin2, String(index2), memo || ''];
+}
+
+describe('Link action handler @regression @tier3', function () {
     beforeEach(function () {
         indexer = createMockIndexer();
         actionsCtx = {
@@ -37,10 +41,6 @@ describe('Link action handler @regression @tier3', function () {
         handler = new Link(actionsCtx);
         indexer.util.resetLists();
     });
-
-    function makeParams(coin1, index1, coin2, index2, memo) {
-        return ['0', coin1, String(index1), coin2, String(index2), memo || ''];
-    }
 
     // ─── Valid link creation ──────────────────────────────────────────
 
@@ -75,6 +75,26 @@ describe('Link action handler @regression @tier3', function () {
         const data = createBaseData({ ACTION: 'LINK', FORMAT: 0 });
         await handler.parse(makeParams('BTC', 100, 'ETH', 200, ''), data, null);
         assert.ok(data['STATUS'].includes('COIN2'), `Expected COIN2 error, got: ${data['STATUS']}`);
+    });
+});
+
+describe('Link action handler @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().resolves(true),
+            },
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Link(actionsCtx);
+        indexer.util.resetLists();
     });
 
     // ─── ACTION_INDEX validations ─────────────────────────────────────
@@ -115,6 +135,26 @@ describe('Link action handler @regression @tier3', function () {
         const data = createBaseData({ ACTION: 'LINK', FORMAT: 0 });
         await handler.parse(makeParams('BTC', 100, 'LTC', 200, 'bad|memo'), data, null);
         assert.ok(data['STATUS'].includes('MEMO'), `Expected MEMO error, got: ${data['STATUS']}`);
+    });
+});
+
+describe('Link action handler @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().resolves(true),
+            },
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Link(actionsCtx);
+        indexer.util.resetLists();
     });
 
     // ─── Side-effect checks ───────────────────────────────────────────
