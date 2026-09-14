@@ -44,78 +44,77 @@ const sinon  = require('sinon');
 const { createMockIndexer } = require('../fixtures/mocks');
 const Rollback              = require('../../src/rollback.js');
 
-describe('Rollback attest_validator_stats recompute @regression @tier3', function () {
-    this.timeout(0);
+const N        = 100;          // rollback target: orphan everything at/after this block
+const VALID_ID = 7;            // arbitrary status id returned for 'valid'
+// A REAL provider id: the recompute resolves that provider's block-anchored
+// min_stake_xchain floor and, on the weighted path, drops sources below
+// it. An invented id resolves no floor and correctly fails the recompute closed,
+// which would make this suite assert on an empty set rather than on the rule.
+const PROV     = 'http_get';
 
-    const N        = 100;          // rollback target: orphan everything at/after this block
-    const VALID_ID = 7;            // arbitrary status id returned for 'valid'
-    // A REAL provider id: the recompute resolves that provider's block-anchored
-    // min_stake_xchain floor and, on the weighted path, drops sources below
-    // it. An invented id resolves no floor and correctly fails the recompute closed,
-    // which would make this suite assert on an empty set rather than on the rule.
-    const PROV     = 'http_get';
+const pkA = 'aa'.repeat(33);   // affected: touched in orphaned range, survives partially
+const pkB = 'bb'.repeat(33);   // untouched: last touch pre-N, must be left exactly as-is
+const pkC = 'cc'.repeat(33);   // affected but fully orphaned: must disappear entirely
 
-    const pkA = 'aa'.repeat(33);   // affected: touched in orphaned range, survives partially
-    const pkB = 'bb'.repeat(33);   // untouched: last touch pre-N, must be left exactly as-is
-    const pkC = 'cc'.repeat(33);   // affected but fully orphaned: must disappear entirely
+let indexer, rollback, statsStore, expiredReqs, okResponses;
 
-    let indexer, rollback, statsStore, expiredReqs;
+// Helper: serialise the fake stats table into a comparable plain object.
+const dump = () => {
+    const out = {};
+    for (const [k, r] of statsStore) out[k] = r;
+    return out;
+};
 
-    // Helper: serialise the fake stats table into a comparable plain object.
-    const dump = () => {
-        const out = {};
-        for (const [k, r] of statsStore) out[k] = r;
-        return out;
+function initializeFixture() {
+    indexer = createMockIndexer();
+    indexer.protocolChanges = {
+        isDefined: sinon.stub().returns(true),
+        isEnabled: sinon.stub().resolves(true),
     };
+    rollback = new Rollback(indexer);
 
-    beforeEach(function () {
-        indexer = createMockIndexer();
-        indexer.protocolChanges = {
-            isDefined: sinon.stub().returns(true),
-            isEnabled: sinon.stub().resolves(true),
-        };
-        rollback = new Rollback(indexer);
+    // ── In-memory attest_validator_stats (post block-delete state) ──
+    // Each value mirrors a real row. last_updated_block decides "affected".
+    statsStore = new Map([
+        [`${pkA}|${PROV}`, { validator_pubkey: pkA, provider_id: PROV, fulfilled_count: 5, missed_count: 2, slashed_count: 0, quality_score: 0, last_updated_block: 105 }],
+        [`${pkB}|${PROV}`, { validator_pubkey: pkB, provider_id: PROV, fulfilled_count: 3, missed_count: 0, slashed_count: 0, quality_score: 0, last_updated_block: 98 }],
+        [`${pkC}|${PROV}`, { validator_pubkey: pkC, provider_id: PROV, fulfilled_count: 1, missed_count: 0, slashed_count: 0, quality_score: 0, last_updated_block: 110 }],
+    ]);
 
-        // ── In-memory attest_validator_stats (post block-delete state) ──
-        // Each value mirrors a real row. last_updated_block decides "affected".
-        statsStore = new Map([
-            [`${pkA}|${PROV}`, { validator_pubkey: pkA, provider_id: PROV, fulfilled_count: 5, missed_count: 2, slashed_count: 0, quality_score: 0, last_updated_block: 105 }],
-            [`${pkB}|${PROV}`, { validator_pubkey: pkB, provider_id: PROV, fulfilled_count: 3, missed_count: 0, slashed_count: 0, quality_score: 0, last_updated_block: 98 }],
-            [`${pkC}|${PROV}`, { validator_pubkey: pkC, provider_id: PROV, fulfilled_count: 1, missed_count: 0, slashed_count: 0, quality_score: 0, last_updated_block: 110 }],
-        ]);
+    // Surviving STATUS='ok' response rows whose validator_signatures JSON column
+    // holds the verified sigs (block_index < N : the block deletes already pruned
+    // the rest). pkA appears on two ok responses (earns 2, last block 90); pkC
+    // earned none post-rollback (its only signatures were orphaned).
+    okResponses = [
+        { provider_id: PROV, validator_signatures: JSON.stringify([{ pubkey: pkA, sig: 'ab'.repeat(64) }]), block_index: 90 },
+        { provider_id: PROV, validator_signatures: JSON.stringify([{ pubkey: pkA, sig: 'cd'.repeat(64) }]), block_index: 88 },
+    ];
 
-        // Surviving STATUS='ok' response rows whose validator_signatures JSON column
-        // holds the verified sigs (block_index < N : the block deletes already pruned
-        // the rest). pkA appears on two ok responses (earns 2, last block 90); pkC
-        // earned none post-rollback (its only signatures were orphaned).
-        const okResponses = [
-            { provider_id: PROV, validator_signatures: JSON.stringify([{ pubkey: pkA, sig: 'ab'.repeat(64) }]), block_index: 90 },
-            { provider_id: PROV, validator_signatures: JSON.stringify([{ pubkey: pkA, sig: 'cd'.repeat(64) }]), block_index: 88 },
-        ];
+    // Surviving requests that WOULD have expired in a replay to N-1: deadline
+    // before N-1 and no valid response. R1's responsible set (redundancy 1
+    // over a single-validator capability set = [pkA]) earns pkA one miss.
+    // No responsible_set_json here: these rows exercise the LEGACY fallback (the
+    // recompute re-derives via the stubbed capability lookups). The recompute-bypass
+    // test below adds the persisted set to prove the re-derive is bypassed.
+    expiredReqs = [
+        { request_id: 'r1'.repeat(32), provider_id: PROV, redundancy: 1, block_index: 20, deadline_block: 50 },
+    ];
 
-        // Surviving requests that WOULD have expired in a replay to N-1: deadline
-        // before N-1 and no valid response. R1's responsible set (redundancy 1
-        // over a single-validator capability set = [pkA]) earns pkA one miss.
-        // No responsible_set_json here: these rows exercise the LEGACY fallback (the
-        // recompute re-derives via the stubbed capability lookups). The recompute-bypass
-        // test below adds the persisted set to prove the re-derive is bypassed.
-        expiredReqs = [
-            { request_id: 'r1'.repeat(32), provider_id: PROV, redundancy: 1, block_index: 20, deadline_block: 50 },
-        ];
+    // The deterministic snapshot the live expiry path consulted; for block 20 the
+    // attestation set is just [pkA]. Stub BOTH the unweighted and stake-weighted
+    // capability lookups (the recompute picks one per request block via
+    // isStakeWeightedQuorumActive, mirroring attest.js) so the responsible set is
+    // [pkA] regardless of which branch the activation height selects.
+    indexer.indexerDb.getValidatorsByCapability = sinon.stub().resolves([{ pubkey: pkA }]);
+    // Weight clears the http_get floor of 10000, so the weighted branch exercises
+    // the dedupe + ranking rather than the floor's fail-closed path.
+    indexer.indexerDb.getStakeWeightsByCapability = sinon.stub().resolves([{ pubkey: pkA, source: 'srcA', weight: '50000' }]);
+    indexer.indexerDb.getStatusId = sinon.stub().resolves(VALID_ID);
+}
 
-        // The deterministic snapshot the live expiry path consulted; for block 20 the
-        // attestation set is just [pkA]. Stub BOTH the unweighted and stake-weighted
-        // capability lookups (the recompute picks one per request block via
-        // isStakeWeightedQuorumActive, mirroring attest.js) so the responsible set is
-        // [pkA] regardless of which branch the activation height selects.
-        indexer.indexerDb.getValidatorsByCapability = sinon.stub().resolves([{ pubkey: pkA }]);
-        // Weight clears the http_get floor of 10000, so the weighted branch exercises
-        // the dedupe + ranking rather than the floor's fail-closed path.
-        indexer.indexerDb.getStakeWeightsByCapability = sinon.stub().resolves([{ pubkey: pkA, source: 'srcA', weight: '50000' }]);
-        indexer.indexerDb.getStatusId = sinon.stub().resolves(VALID_ID);
-
-        // Route the recompute's raw SQL at the in-memory model.
-        indexer.indexerDb.doQuery = sinon.stub().callsFake(async (query, args) => {
+function installQueryStub() {
+    // Route the recompute's raw SQL at the in-memory model.
+    indexer.indexerDb.doQuery = sinon.stub().callsFake(async (query, args) => {
             // 1. pairs whose counters may include orphaned increments
             if (/SELECT\s+validator_pubkey,\s*provider_id/i.test(query)) {
                 const cutoff = args[0];
@@ -153,9 +152,20 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
                 });
                 return [];
             }
-            return [];
-        });
+        return [];
     });
+}
+
+function useFixture() {
+    beforeEach(function () {
+        initializeFixture();
+        installQueryStub();
+    });
+}
+
+describe('Rollback attest_validator_stats recompute @regression @tier3', function () {
+    this.timeout(0);
+    useFixture();
 
     it('rebuilds affected rows to match a fresh aggregation from the source tables', async function () {
         await rollback.recomputeAttestationValidatorStats(N);
@@ -205,7 +215,11 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
         assert.deepStrictEqual(Object.keys(result).sort(), Object.keys(expected).sort(),
             'recomputed table must contain exactly the rows a fresh aggregation yields');
     });
+});
 
+describe('Rollback attest_validator_stats recompute @regression @tier3', function () {
+    this.timeout(0);
+    useFixture();
     it('ATT-RECOMP-1: uses the persisted responsible_set_json and does NOT re-derive against current stakes', async function () {
         // A surviving slash has (in the wild) already reduced stakes.amount, so re-deriving the
         // responsible set here would charge missed_count to the wrong set. With the set pinned
@@ -236,7 +250,11 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
             'a malformed persisted set must fall back to the live capability re-derive');
         assert.strictEqual(result[`${pkA}|${PROV}`].missed_count, 1, 'miss still attributed via the fallback');
     });
+});
 
+describe('Rollback attest_validator_stats recompute @regression @tier3', function () {
+    this.timeout(0);
+    useFixture();
     // The fallback re-derive must resolve the capability set at the DECLARED height
     // BURIED by CANONICAL_REORG_BUFFER, exactly as actions/attest.js
     // computeResponsibleSet does, while the STAKE_WEIGHTED_QUORUM flag-day stays on
