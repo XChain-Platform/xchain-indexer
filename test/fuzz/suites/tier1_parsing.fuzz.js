@@ -43,42 +43,60 @@ function makeProtocolChanges() {
 
 // Track unhandled crashes for reporting
 let crashLog = [];
+let Actions, indexer, actions;
+
+function loadActions() {
+    if (!Actions) Actions = require('../../../src/actions/index.js');
+}
+
+function setupActions() {
+    indexer = createMockIndexer();
+    indexer.protocolChanges = makeProtocolChanges();
+    actions = new Actions(indexer);
+}
+
+async function cleanupActions() {
+    sinon.restore();
+    // beforeEach's `new Actions(indexer)` forks a persistent VM subprocess
+    // (execution: 'subprocess'); nothing else in this suite ever called
+    // vm.shutdown(), so each test's fork outlived the process.
+    await actions.vm.shutdown();
+}
+
+function useActionsFixture() {
+    before(loadActions);
+    beforeEach(setupActions);
+    afterEach(cleanupActions);
+}
+
+// Helper: process tx and log crashes (does not assert; crash logging only)
+async function processAndLog(tx) {
+    try {
+        await actions.processTransaction(tx);
+    } catch (err) {
+        crashLog.push({ data: tx.data, error: err.message });
+        // Re-throw only for truly unexpected errors
+        if (!err.message.includes('Cannot read properties') &&
+            !err.message.includes('split')) {
+            throw err;
+        }
+    }
+}
+
+function reportCrashes() {
+    if (crashLog.length > 0) {
+        const unique = [...new Set(crashLog.map(c => c.error))];
+        console.log(`\n    [FUZZ CRASH REPORT] ${crashLog.length} handled crashes across ${unique.length} unique error types:`);
+        for (const err of unique) {
+            const count = crashLog.filter(c => c.error === err).length;
+            console.log(`      - (${count}x) ${err.substring(0, 100)}`);
+        }
+    }
+}
 
 describe('Tier 1 - processTransaction crash safety @tier1', function () {
     this.timeout(0);
-    let Actions, indexer, actions;
-
-    before(function () {
-        Actions = require('../../../src/actions/index.js');
-    });
-
-    beforeEach(function () {
-        indexer = createMockIndexer();
-        indexer.protocolChanges = makeProtocolChanges();
-        actions = new Actions(indexer);
-    });
-
-    afterEach(async function () {
-        sinon.restore();
-        // beforeEach's `new Actions(indexer)` forks a persistent VM subprocess
-        // (execution: 'subprocess'); nothing else in this suite ever called
-        // vm.shutdown(), so each test's fork outlived the process.
-        await actions.vm.shutdown();
-    });
-
-    // Helper: process tx and log crashes (does not assert; crash logging only)
-    async function processAndLog(tx) {
-        try {
-            await actions.processTransaction(tx);
-        } catch (err) {
-            crashLog.push({ data: tx.data, error: err.message });
-            // Re-throw only for truly unexpected errors
-            if (!err.message.includes('Cannot read properties') &&
-                !err.message.includes('split')) {
-                throw err;
-            }
-        }
-    }
+    useActionsFixture();
 
     describe('with fuzzed tx data strings', function () {
         it('survives well-formed tx with random data field', function () {
@@ -116,6 +134,11 @@ describe('Tier 1 - processTransaction crash safety @tier1', function () {
             ), { numRuns: NUM_RUNS });
         });
     });
+});
+
+describe('Tier 1 - processTransaction crash safety @tier1', function () {
+    this.timeout(0);
+    useActionsFixture();
 
     describe('with fully random tx fields', function () {
         it('survives when all fields are random strings', function () {
@@ -134,6 +157,11 @@ describe('Tier 1 - processTransaction crash safety @tier1', function () {
             ), { numRuns: NUM_RUNS });
         });
     });
+});
+
+describe('Tier 1 - processTransaction crash safety @tier1', function () {
+    this.timeout(0);
+    useActionsFixture();
 
     describe('action alias handling', function () {
         it('resolves all known aliases without unexpected crash', function () {
@@ -152,6 +180,11 @@ describe('Tier 1 - processTransaction crash safety @tier1', function () {
             ), { numRuns: Math.min(NUM_RUNS, 100) });
         });
     });
+});
+
+describe('Tier 1 - processTransaction crash safety @tier1', function () {
+    this.timeout(0);
+    useActionsFixture();
 
     describe('edge case data values', function () {
         it('handles empty data string', async function () {
@@ -181,6 +214,14 @@ describe('Tier 1 - processTransaction crash safety @tier1', function () {
             };
             await actions.processTransaction(tx);
         });
+    });
+});
+
+describe('Tier 1 - processTransaction crash safety @tier1', function () {
+    this.timeout(0);
+    useActionsFixture();
+
+    describe('edge case data values', function () {
 
         it('handles very long data string', async function () {
             const tx = {
@@ -211,14 +252,5 @@ describe('Tier 1 - processTransaction crash safety @tier1', function () {
         });
     });
 
-    after(function () {
-        if (crashLog.length > 0) {
-            const unique = [...new Set(crashLog.map(c => c.error))];
-            console.log(`\n    [FUZZ CRASH REPORT] ${crashLog.length} handled crashes across ${unique.length} unique error types:`);
-            for (const err of unique) {
-                const count = crashLog.filter(c => c.error === err).length;
-                console.log(`      - (${count}x) ${err.substring(0, 100)}`);
-            }
-        }
-    });
+    after(reportCrashes);
 });

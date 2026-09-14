@@ -26,37 +26,46 @@ const sinon = require('sinon');
 const { NUM_RUNS, createMockIndexer, createBaseData, createTokenInfo, makeFuzzActionsCtx } = require('../setup/harness');
 const { validTick, reservedTick, invalidTick, anyTick, TICK_CHARACTERS, RESERVED_TICKS } = require('../generators/helpers/ticks');
 
+let Issue, indexer, actionsCtx, handler, config;
+
+function loadIssue() {
+    if (Issue) return;
+    Issue = require('../../../src/actions/issue.js');
+    config = createMockIndexer().config;
+}
+
+function setupIssue() {
+    indexer = createMockIndexer();
+    actionsCtx = makeFuzzActionsCtx(indexer);
+    handler = new Issue(actionsCtx);
+
+    // Default stubs for Issue handler
+    indexer.indexerDb.getAddressBalances.resolves({ 1: '999999' });
+    indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+    indexer.indexerDb.getTickerId.resolves(1);
+}
+
+function cleanupIssue() {
+    sinon.restore();
+}
+
+function useIssueFixture() {
+    before(loadIssue);
+    beforeEach(setupIssue);
+    afterEach(cleanupIssue);
+}
+
+function makeIssueData(tick) {
+    return createBaseData({
+        ACTION: 'ISSUE',
+        FORMAT: 0,
+        TX_DATA: `ISSUE|0|${tick}|1000|100|0|Test token`,
+    });
+}
+
 describe('Tier 2 - Tick name handling @tier2', function () {
     this.timeout(0);
-    let Issue, indexer, actionsCtx, handler, config;
-
-    before(function () {
-        Issue = require('../../../src/actions/issue.js');
-        config = createMockIndexer().config;
-    });
-
-    beforeEach(function () {
-        indexer = createMockIndexer();
-        actionsCtx = makeFuzzActionsCtx(indexer);
-        handler = new Issue(actionsCtx);
-
-        // Default stubs for Issue handler
-        indexer.indexerDb.getAddressBalances.resolves({ 1: '999999' });
-        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-        indexer.indexerDb.getTickerId.resolves(1);
-    });
-
-    afterEach(function () {
-        sinon.restore();
-    });
-
-    function makeIssueData(tick) {
-        return createBaseData({
-            ACTION: 'ISSUE',
-            FORMAT: 0,
-            TX_DATA: `ISSUE|0|${tick}|1000|100|0|Test token`,
-        });
-    }
+    useIssueFixture();
 
     describe('validTick() generator self-tests', function () {
         it('all generated valid ticks contain only TICK_CHARACTERS', function () {
@@ -91,6 +100,11 @@ describe('Tier 2 - Tick name handling @tier2', function () {
             ), { numRuns: NUM_RUNS });
         });
     });
+});
+
+describe('Tier 2 - Tick name handling @tier2', function () {
+    this.timeout(0);
+    useIssueFixture();
 
     describe('Issue handler with fuzzed TICK field', function () {
         it('never throws for any tick value', function () {
@@ -140,6 +154,11 @@ describe('Tier 2 - Tick name handling @tier2', function () {
             assert.ok(data.STATUS.startsWith('invalid'), `Trailing period tick should be invalid, got: ${data.STATUS}`);
         });
     });
+});
+
+describe('Tier 2 - Tick name handling @tier2', function () {
+    this.timeout(0);
+    useIssueFixture();
 
     describe('setActionParams with fuzzed fieldFormats', function () {
         it('never throws for any formats object', function () {

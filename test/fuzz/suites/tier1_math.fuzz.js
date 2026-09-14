@@ -25,22 +25,24 @@ const fc = require('fast-check');
 const { NUM_RUNS, createMockIndexer } = require('../setup/harness');
 const { validAmount, anyAmount } = require('../generators/helpers/amounts');
 
+let util;
+
+function setupUtil() {
+    if (!util) util = createMockIndexer().util;
+}
+
+// Arbitrary for numeric strings that mathjs can parse
+const numericStr = () => fc.oneof(
+    validAmount(0),
+    validAmount(8),
+    validAmount(18),
+    fc.integer({ min: -999999, max: 999999 }).map(String),
+    fc.constantFrom('0', '1', '-1', '0.5', '100.12345678'),
+);
+
 describe('Tier 1 - BigNumber math operations @tier1', function () {
     this.timeout(0);
-    let util;
-
-    before(function () {
-        util = createMockIndexer().util;
-    });
-
-    // Arbitrary for numeric strings that mathjs can parse
-    const numericStr = () => fc.oneof(
-        validAmount(0),
-        validAmount(8),
-        validAmount(18),
-        fc.integer({ min: -999999, max: 999999 }).map(String),
-        fc.constantFrom('0', '1', '-1', '0.5', '100.12345678'),
-    );
+    before(setupUtil);
 
     describe('bcnum(num)', function () {
         it('never throws for valid numeric strings', function () {
@@ -62,6 +64,11 @@ describe('Tier 1 - BigNumber math operations @tier1', function () {
             }
         });
     });
+});
+
+describe('Tier 1 - BigNumber math operations @tier1', function () {
+    this.timeout(0);
+    before(setupUtil);
 
     describe('bcformat(num, decimals)', function () {
         it('never throws for valid (num, decimals) pairs', function () {
@@ -100,6 +107,11 @@ describe('Tier 1 - BigNumber math operations @tier1', function () {
             assert.strictEqual(typeof result2, 'string');
         });
     });
+});
+
+describe('Tier 1 - BigNumber math operations @tier1', function () {
+    this.timeout(0);
+    before(setupUtil);
 
     describe('bcadd(numA, numB, decimals)', function () {
         it('never throws for valid numeric inputs', function () {
@@ -127,6 +139,11 @@ describe('Tier 1 - BigNumber math operations @tier1', function () {
             assert.strictEqual(result, '0');
         });
     });
+});
+
+describe('Tier 1 - BigNumber math operations @tier1', function () {
+    this.timeout(0);
+    before(setupUtil);
 
     describe('bcsub(numA, numB, decimals)', function () {
         it('never throws for valid numeric inputs', function () {
@@ -149,6 +166,11 @@ describe('Tier 1 - BigNumber math operations @tier1', function () {
             ), { numRuns: NUM_RUNS });
         });
     });
+});
+
+describe('Tier 1 - BigNumber math operations @tier1', function () {
+    this.timeout(0);
+    before(setupUtil);
 
     describe('bcmul(numA, numB, decimals)', function () {
         it('never throws for valid numeric inputs', function () {
@@ -182,6 +204,11 @@ describe('Tier 1 - BigNumber math operations @tier1', function () {
             ), { numRuns: NUM_RUNS });
         });
     });
+});
+
+describe('Tier 1 - BigNumber math operations @tier1', function () {
+    this.timeout(0);
+    before(setupUtil);
 
     describe('bcdiv(numA, numB, decimals)', function () {
         it('never throws for valid nonzero denominator', function () {
@@ -214,6 +241,11 @@ describe('Tier 1 - BigNumber math operations @tier1', function () {
             ), { numRuns: NUM_RUNS });
         });
     });
+});
+
+describe('Tier 1 - BigNumber math operations @tier1', function () {
+    this.timeout(0);
+    before(setupUtil);
 
     describe('comparison functions: bcgt, bclt, bcgte, bclte', function () {
         it('never throw for valid numeric inputs', function () {
@@ -238,6 +270,14 @@ describe('Tier 1 - BigNumber math operations @tier1', function () {
                 }
             ), { numRuns: NUM_RUNS });
         });
+    });
+});
+
+describe('Tier 1 - BigNumber math operations @tier1', function () {
+    this.timeout(0);
+    before(setupUtil);
+
+    describe('comparison functions: bcgt, bclt, bcgte, bclte', function () {
 
         it('bcgte(a, a) is always true (reflexive)', function () {
             fc.assert(fc.property(
@@ -275,6 +315,11 @@ describe('Tier 1 - BigNumber math operations @tier1', function () {
             ), { numRuns: NUM_RUNS });
         });
     });
+});
+
+describe('Tier 1 - BigNumber math operations @tier1', function () {
+    this.timeout(0);
+    before(setupUtil);
 
     describe('setNumberFormats(data)', function () {
         it('never throws for any data object with string values', function () {
