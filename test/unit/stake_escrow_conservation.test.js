@@ -60,10 +60,10 @@ const stakeSrc   = [path.join(SRC, 'actions/stake.js')]
         .map(f => path.join(STAKE_PARTS, f)))
     .map(f => fs.readFileSync(f, 'utf8')).join('\n');
 const utilSrc    = fs.readFileSync(path.join(SRC, 'utility.js'), 'utf8');
-// The journal writer is an entry plus parts too: escrowJournalWriter.js keeps the pass
-// and escrowJournalWriter/attribution.js holds SELF_ATTRIBUTING and the RESOLVERS this
-// file slices. Same entry-plus-parts read as the STAKE handler above, so a rule that
-// moves between the entry and a part stays visible here instead of reading as absent.
+// The journal writer is an entry plus parts too: escrowJournalWriter.js sequences the pass,
+// escrowJournalWriter/journal_pass.js holds its steps, escrowJournalWriter/attribution.js
+// holds SELF_ATTRIBUTING and the RESOLVERS this file slices. Same entry-plus-parts read as
+// STAKE above, so a rule moving between the entry and a part stays visible, never absent.
 const JOURNAL_PARTS = path.join(SRC, 'consensus', 'escrowJournalWriter');
 const journalSrc = [path.join(SRC, 'consensus', 'escrowJournalWriter.js')]
     .concat(fs.readdirSync(JOURNAL_PARTS).filter(f => f.endsWith('.js')).sort()
