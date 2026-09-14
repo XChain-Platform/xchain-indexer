@@ -30,10 +30,11 @@
  *
  ********************************************************************/
 
-const crypto  = require('crypto');
-const ed25519 = require('../consensus/ed25519.js');
-const eq      = require('../equivocation_header.js');
-const srb     = require('../snapshot_reorg_buffer.js');
+const ed25519  = require('../consensus/ed25519.js');
+const eq       = require('../equivocation_header.js');
+const srb      = require('../snapshot_reorg_buffer.js');
+const validate = require('./nodeproof/validate.js');
+const settle   = require('./nodeproof/settle.js');
 
 const { getLogger } = require('../observability/index.js');
 class NodeProof {
@@ -65,98 +66,52 @@ class NodeProof {
     // NODEPROOF v0: quorum-signed verdict over who answered the epoch's challenge.
     async parseVerdict(params, data, error){
 
-        // BTC-only: capability staking + oracle-round rewards are BTC-only, so the
-        // proof and its verified set live on BTC. Other chains receive the rows via
-        // xchain-sync replication, never by processing a NODEPROOF tx.
-        if(!error && this.config['COIN'] !== 'BTC')
-            error = 'invalid: NODEPROOF is BTC-only';
+        // Header, accept window and the re-derived challenge id (validate.js).
+        let head = await validate.validateVerdictHeader(this, params, data, error);
+        let { challengeId, epochHeight, blockIndex, targetHeight } = head;
+        error = head.error;
 
-        let fn        = this.fnConfig();
-        let interval  = parseInt(fn['CHALLENGE_INTERVAL_BLOCKS'])     || 0;
-        let depth     = parseInt(fn['CONFIRM_DEPTH'])                 || 0;
-        let acceptWin = parseInt(fn['VERDICT_ACCEPT_WINDOW_BLOCKS'])  || 0;
+        let pass = validate.parsePassList(params, data, error);
+        let passList = pass.passList;
+        error = pass.error;
 
-        let challengeId = String(params[1] || '').toLowerCase();
-        let epochHeight = parseInt(params[2]);
-        let blockIndex  = parseInt(data['BLOCK_INDEX']);
-
-        if(!error && !/^[0-9a-f]{64}$/.test(challengeId))
-            error = 'invalid: CHALLENGE_ID (format)';
-        if(!error && interval <= 0)
-            error = 'invalid: full-node challenges not configured';
-        if(!error && (!Number.isFinite(epochHeight) || epochHeight % interval !== 0))
-            error = 'invalid: EPOCH_HEIGHT (not a challenge epoch)';
-        if(!error && epochHeight > blockIndex)
-            error = 'invalid: EPOCH_HEIGHT (in the future)';
-        if(!error && (blockIndex - epochHeight) > acceptWin)
-            error = 'invalid: verdict too late (epoch=' + epochHeight + ', block=' + blockIndex + ')';
-
-        let targetHeight = epochHeight - depth;
-        if(!error && targetHeight < 0)
-            error = 'invalid: target height below genesis';
-
-        // Recompute the derived challenge id from real chain history. Binds the
-        // verdict to the epoch's ledger hash, so a verdict can't claim an epoch
-        // that never happened (or fabricate a different target).
-        if(!error){
-            let row = await this.indexerDb.getStoredBlockHashes(epochHeight);
-            if(!row || !row.ledger_hash){
-                error = 'invalid: EPOCH_HEIGHT (no block / ledger hash)';
-            } else {
-                let preimage = String(this.config['NETWORK']) + ':' + epochHeight + ':' + String(row.ledger_hash) + ':' + targetHeight;
-                let expected = crypto.createHash('sha256').update(preimage).digest('hex');
-                if(expected !== challengeId)
-                    error = 'invalid: CHALLENGE_ID (does not match derivation)';
-            }
-        }
-
-        // Parse the PASS list (validators being attested as having answered).
-        let passList = [];
-        if(!error){
-            try {
-                let passCount = parseInt(params[3]);
-                if(!Number.isFinite(passCount) || passCount < 0)
-                    throw new Error('invalid PASS_COUNT');
-                let seen = new Set();
-                for(let i = 0; i < passCount; i++){
-                    let pk = String(params[4 + i] || '').toLowerCase();
-                    if(!/^[0-9a-f]{64}$/.test(pk)) throw new Error('invalid PASS_PK at index ' + i);
-                    if(seen.has(pk)) continue;
-                    seen.add(pk);
-                    passList.push(pk);
-                }
-                // Offset where the signature block begins (after PASS_COUNT + n pubkeys)
-                data['_SIG_OFFSET'] = 4 + passCount;
-            } catch(e){
-                error = 'invalid: ' + e.message;
-            }
-        }
-
-        // Parse the verifier signature list.
-        let sigs = [];
-        if(!error){
-            try {
-                let off      = data['_SIG_OFFSET'];
-                let sigCount = parseInt(params[off]);
-                if(!Number.isFinite(sigCount) || sigCount < 1)
-                    throw new Error('invalid SIG_COUNT');
-                for(let i = 0; i < sigCount; i++){
-                    let pubkey = params[off + 1 + 2 * i];
-                    let sig    = params[off + 1 + 2 * i + 1];
-                    if(!pubkey || !sig) throw new Error('missing sig data at index ' + i);
-                    if(!/^[0-9a-fA-F]{64}$/.test(pubkey))  throw new Error('invalid pubkey format at index ' + i);
-                    if(!/^[0-9a-fA-F]{128}$/.test(sig))    throw new Error('invalid sig format at index ' + i);
-                    sigs.push({ pubkey: pubkey.toLowerCase(), sig: sig.toLowerCase() });
-                }
-            } catch(e){
-                error = 'invalid: ' + e.message;
-            }
-        }
+        let verifiers = validate.parseVerifierSigs(params, data, error);
+        let sigs = verifiers.sigs;
+        error = verifiers.error;
 
         // Determine the eligible verifier universe at the epoch block: already-
         // verified full nodes plus the configured genesis verifiers (the bootstrap
         // trust anchor). Quorum = floor(2V/3)+1. V==0 → nobody can vouch yet.
-        //
+        // The two heights that universe and the attribution resolve at: verdictPlanes.
+        let { snapshotBlock, setBlock } = this.verdictPlanes(epochHeight);
+        let validSigners  = 0;
+        if(!error){
+            let verdict = await this.verifyVerdictQuorum(challengeId, epochHeight, passList, sigs, snapshotBlock);
+            validSigners = verdict.validSigners;
+            error = verdict.error;
+        }
+
+        data['STATUS'] = (error) ? error : 'valid';
+
+        getLogger().info("\t NODEPROOF v0 : challenge=" + challengeId.substring(0, 16) + '...' +
+                    ' : epoch=' + epochHeight +
+                    ' : pass=' + passList.length +
+                    ' : sigs=' + validSigners +
+                    ' : ' + data['STATUS']);
+
+        // A valid verdict writes its verification rows (settle.js).
+        if(!error)
+            await settle.recordVerifications(this, {
+                passList, challengeId, epochHeight, targetHeight,
+                actionIndex: data['ACTION_INDEX'], blockIndex, setBlock
+            });
+
+        await this.mapper.createMappings(data);
+    }
+
+    // The declared height a verdict is judged at and the buried height its
+    // participation is credited at, both from the carried epoch.
+    verdictPlanes(epochHeight){
         // TWO PLANES, and only the attribution plane buries. `snapshotBlock` is the
         // DECLARED height: it sizes the quorum divisor and drives the EQUIV flag-day
         // gate below, and it stays RAW because the producing hub also resolves its
@@ -174,85 +129,58 @@ class NodeProof {
         // (epochHeight - buffer, epochHeight]: the hub challenged it, it answered, a
         // quorum attested it, and the staking source silently lost the epoch anyway.
         // Row existence feeds getVerifiedFullNodeSet, which the eligible-verifier set
-        // above and the hub's getfullnodeverifiers RPC both read at RAW heights a proof
+        // (eligibleVerifierSet) and the hub's getfullnodeverifiers RPC both read at RAW heights a proof
         // window later, so a burial-only credit becomes an eligible verifier and moves
         // the quorum divisor: upgraded and un-upgraded indexers diverge on acceptance
         // there, not just on attribution. Safe only because the flag day arms at genesis
         // on every network with no quorum-signed history to reinterpret, which is what
         // makes this gate load-bearing rather than decorative.
         let setBlock      = srb.buriedSnapshotBlock(epochHeight, this.config['NETWORK']);
-        let validSigners  = 0;
-        if(!error){
-            let eligible = await this.eligibleVerifierSet(snapshotBlock);
-            if(eligible.size === 0){
-                error = 'invalid: no eligible verifiers at epoch (feature dormant)';
-            } else {
-                // Byte comparator, not a bare .sort(): this order is joined into the
-                // ed25519 preimage, so it is consensus, and the default sort is a total
-                // order here only because every element happens to be lowercase 64-hex.
-                // Pinned in lockstep with the hub PRODUCER's four PASS sorts
-                // (xchain-hub consensus/full_node_challenge_round.js PASS_CMP); pinning one side alone
-                // would diverge the verifier from the producer on any non-uniform input.
-                let sortedPass = passList.slice().sort(
-                    (a, b) => Buffer.compare(Buffer.from(String(a), 'utf8'),
-                                             Buffer.from(String(b), 'utf8')));
-                let canonRaw  = challengeId + '|' + epochHeight + '|' + sortedPass.join(',');
-                if(eq.isEquivHeaderActive(snapshotBlock, this.config['NETWORK']))
-                    canonRaw = eq.buildEquivCanonical(eq.ENGINE_TAGS.NODEPROOF, challengeId, 0, canonRaw);
-                let canonical = Buffer.from(canonRaw, 'utf8');
+        return { snapshotBlock, setBlock };
+    }
 
-                let seen = new Set();
-                for(let s of sigs){
-                    if(seen.has(s.pubkey)) continue;
-                    if(!eligible.has(s.pubkey)) continue;
-                    if(!ed25519.verify(canonical, s.sig, s.pubkey)) continue;
-                    // Mark seen only AFTER the signature verifies, matching the hub
-                    // finalizer and the SDK/explorer/sync verifiers (and anchor.js):
-                    // marking on first encounter lets a garbage-then-valid pair for
-                    // one eligible verifier suppress the real signature
-                    // (order-dependent quorum under-count, fails quorate proofs closed).
-                    seen.add(s.pubkey);
-                    validSigners++;
-                }
+    // Verify the verifier signatures over the verdict canonical against the eligible
+    // set at the declared snapshotBlock. Returns the error (null once quorum is met)
+    // and the count of distinct eligible verifiers whose signature verified.
+    async verifyVerdictQuorum(challengeId, epochHeight, passList, sigs, snapshotBlock){
+        let error = null, validSigners = 0;
+        let eligible = await this.eligibleVerifierSet(snapshotBlock);
+        if(eligible.size === 0){
+            error = 'invalid: no eligible verifiers at epoch (feature dormant)';
+        } else {
+            // Byte comparator, not a bare .sort(): this order is joined into the
+            // ed25519 preimage, so it is consensus, and the default sort is a total
+            // order here only because every element happens to be lowercase 64-hex.
+            // Pinned in lockstep with the hub PRODUCER's four PASS sorts
+            // (xchain-hub consensus/full_node_challenge_round.js PASS_CMP); pinning one side alone
+            // would diverge the verifier from the producer on any non-uniform input.
+            let sortedPass = passList.slice().sort(
+                (a, b) => Buffer.compare(Buffer.from(String(a), 'utf8'),
+                                         Buffer.from(String(b), 'utf8')));
+            let canonRaw  = challengeId + '|' + epochHeight + '|' + sortedPass.join(',');
+            if(eq.isEquivHeaderActive(snapshotBlock, this.config['NETWORK']))
+                canonRaw = eq.buildEquivCanonical(eq.ENGINE_TAGS.NODEPROOF, challengeId, 0, canonRaw);
+            let canonical = Buffer.from(canonRaw, 'utf8');
 
-                let quorum = Math.floor((2 * eligible.size) / 3) + 1;
-                if(validSigners < quorum)
-                    error = 'invalid: insufficient verifier signatures (' + validSigners + '/' + quorum + ' of ' + eligible.size + ')';
+            let seen = new Set();
+            for(let s of sigs){
+                if(seen.has(s.pubkey)) continue;
+                if(!eligible.has(s.pubkey)) continue;
+                if(!ed25519.verify(canonical, s.sig, s.pubkey)) continue;
+                // Mark seen only AFTER the signature verifies, matching the hub
+                // finalizer and the SDK/explorer/sync verifiers (and anchor.js):
+                // marking on first encounter lets a garbage-then-valid pair for
+                // one eligible verifier suppress the real signature
+                // (order-dependent quorum under-count, fails quorate proofs closed).
+                seen.add(s.pubkey);
+                validSigners++;
             }
+
+            let quorum = Math.floor((2 * eligible.size) / 3) + 1;
+            if(validSigners < quorum)
+                error = 'invalid: insufficient verifier signatures (' + validSigners + '/' + quorum + ' of ' + eligible.size + ')';
         }
-
-        data['STATUS'] = (error) ? error : 'valid';
-
-        getLogger().info("\t NODEPROOF v0 : challenge=" + challengeId.substring(0, 16) + '...' +
-                    ' : epoch=' + epochHeight +
-                    ' : pass=' + passList.length +
-                    ' : sigs=' + validSigners +
-                    ' : ' + data['STATUS']);
-
-        // Record one verification row per PASS pubkey that actually holds the
-        // full_node capability at the set-resolution block (a verdict can't verify a
-        // non-staker). Idempotent on (epoch_height, signing_pubkey).
-        if(!error){
-            // One batched capability read for the whole PASS list, same fallback rule
-            // as eligibleVerifierSet: a truncated read re-probes per pubkey. Resolves
-            // at the buried setBlock, the height the hub locked its claimant universe
-            // at, and the row's source is resolved at that same height (the two must
-            // agree: a gate that admits a node whose source resolution then finds no
-            // active stake drops the row just as silently as a raw-epoch gate does).
-            let capRows = await this.indexerDb.getValidatorsByCapability('full_node', setBlock);
-            let capSet  = (capRows && capRows.truncated === true)
-                        ? null
-                        : new Set((capRows || []).map(v => String(v.pubkey).toLowerCase()));
-            for(let pk of passList){
-                if(capSet ? !capSet.has(pk) : !await this.indexerDb.hasCapability(pk, 'full_node', setBlock))
-                    continue;
-                await this.indexerDb.createNodeProofVerification(
-                    pk, challengeId, epochHeight, targetHeight, data['ACTION_INDEX'], blockIndex, setBlock
-                );
-            }
-        }
-
-        await this.mapper.createMappings(data);
+        return { error, validSigners };
     }
 
     // Eligible verifier universe at `blockIndex`: previously-verified full nodes
