@@ -29,12 +29,24 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 
-const REPO_ROOT = path.join(__dirname, '../../..');
+// Where the SIBLING checkouts live. This repo's own copy is deliberately not
+// resolved through here: <root>/xchain-indexer/... only resolves when the checkout
+// directory happens to be named xchain-indexer, so in a worktree or a renamed clone
+// the mirror this suite exists to check skipped ITSELF while the suite printed green.
+const SIBLING_ROOT = path.join(__dirname, '../../..');
+const OWN_COPY     = path.join(__dirname, '../../src/sql/state_checkpoints.sql');
 
-// Every file that declares the state_checkpoints table, and what it is.
+// A bare clone may legitimately lack the siblings; a run that declared them supplied
+// (XCHAIN_REQUIRE_SIBLINGS=1, which bin/ci-all.sh and the CI sibling jobs set) must
+// fail instead, because there a missing holder means a broken checkout, not a skip.
+const REQUIRE_SIBLINGS = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
+
+// Every file that declares the state_checkpoints table, and what it is. `own` is this
+// repo's copy, never optional. `authority` is the hub's, the copy the other two mirror:
+// a comparison the authority dropped out of only proves two mirrors drifted together.
 const HOLDERS = [
-    { label: 'hub (authority)',      file: 'xchain-hub/src/sql/state_checkpoints.sql' },
-    { label: 'indexer mirror',       file: 'xchain-indexer/src/sql/state_checkpoints.sql' },
+    { label: 'hub (authority)',      file: 'xchain-hub/src/sql/state_checkpoints.sql', authority: true },
+    { label: 'indexer mirror',       file: 'xchain-indexer/src/sql/state_checkpoints.sql', own: true },
     { label: 'explorer hub-mirror',  file: 'xchain-explorer/src/sql/hub-mirror/state_checkpoints.sql' },
 ];
 
@@ -43,9 +55,22 @@ const HOLDERS = [
 // must NOT be part of the key or two divergent payloads both get admitted.
 const FENCE_COLUMNS = ['chain', 'network', 'checkpoint_seq'];
 
-function readHolder(rel) {
-    const p = path.join(REPO_ROOT, rel);
-    return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null;
+function holderPath(holder) {
+    return holder.own ? OWN_COPY : path.join(SIBLING_ROOT, holder.file);
+}
+
+// The DDL, or null for a sibling that is legitimately not checked out. Never null for
+// this repo's own copy, and never null under XCHAIN_REQUIRE_SIBLINGS=1.
+function readHolder(holder) {
+    const p = holderPath(holder);
+    if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8');
+    if (holder.own)
+        throw new Error('this repo\'s own state_checkpoints.sql did not resolve at ' + p
+            + '; repoint OWN_COPY rather than letting the mirror drop out of its own parity check');
+    if (REQUIRE_SIBLINGS)
+        throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but the ' + holder.label + ' copy is absent at ' + p
+            + '. Check the sibling out, or unset the variable to accept the gap.');
+    return null;
 }
 
 // Pull the unique-key column list out of either spelling the schemas use:
@@ -70,7 +95,7 @@ describe('state_checkpoints split-brain fence parity (#3096) @regression @tier1'
 
     for (const holder of HOLDERS) {
         it(`${holder.label}: unique key is exactly (${FENCE_COLUMNS.join(', ')})`, function () {
-            const sql = readHolder(holder.file);
+            const sql = readHolder(holder);
             if (sql === null) return this.skip();   // sibling repo absent
             const key = uniqueKeyColumns(sql);
             assert.ok(key, holder.file + ' declares no unique key at all');
@@ -81,7 +106,7 @@ describe('state_checkpoints split-brain fence parity (#3096) @regression @tier1'
         });
 
         it(`${holder.label}: block_index is NOT part of the fence`, function () {
-            const sql = readHolder(holder.file);
+            const sql = readHolder(holder);
             if (sql === null) return this.skip();
             const key = uniqueKeyColumns(sql);
             assert.ok(key);
@@ -94,13 +119,25 @@ describe('state_checkpoints split-brain fence parity (#3096) @regression @tier1'
     it('all present holders agree with one another, not merely with the constant', function () {
         // The per-holder assertions above could all be updated in lockstep to a new
         // wrong value; this one states the actual invariant, which is agreement.
+        //
+        // The list must keep naming both roles. Dropping the authority row turns this into
+        // two mirrors agreeing with each other, and dropping the own row leaves the copy
+        // this repo actually ships out of its own parity check: both read green.
+        assert.strictEqual(HOLDERS.filter(h => h.authority).length, 1,
+            'exactly one holder is the authority the others mirror; the list lost it');
+        assert.strictEqual(HOLDERS.filter(h => h.own).length, 1,
+            'exactly one holder is this repo\'s own copy; the list lost it');
         const seen = HOLDERS
-            .map(h => ({ h, sql: readHolder(h.file) }))
+            .map(h => ({ h, sql: readHolder(h) }))
             .filter(x => x.sql !== null)
-            .map(x => ({ label: x.h.label, key: uniqueKeyColumns(x.sql) }));
-        assert.ok(seen.length >= 1, 'expected at least this repo\'s own copy');
-        const first = seen[0];
-        for (const s of seen.slice(1)) {
+            .map(x => ({ label: x.h.label, own: !!x.h.own, authority: !!x.h.authority,
+                key: uniqueKeyColumns(x.sql) }));
+        assert.ok(seen.some(s => s.own), 'this repo\'s own copy is never optional here');
+        // Compare everything TO the authority. Without it there is nothing to be in parity
+        // with, so this states the gap instead of passing on two mirrors that agree.
+        const first = seen.find(s => s.authority);
+        if (!first) return this.skip();
+        for (const s of seen.filter(s => s !== first)) {
             assert.deepStrictEqual(s.key.cols, first.key.cols,
                 s.label + ' disagrees with ' + first.label + ': a fence applied to one holder ' +
                 'and not another only moves where the fork becomes visible');

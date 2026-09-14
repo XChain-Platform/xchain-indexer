@@ -103,7 +103,15 @@ describe('DEX fill quantization parity, indexer half (#3145/#3146) @regression @
         it('matches the canonical xchain-hub copy when the sibling is present', function () {
             const sibling = path.join(__dirname,
                 '../../../xchain-hub/test/fixtures/dex-fill-quantization-vectors.json');
-            if (!fs.existsSync(sibling)) return this.skip();
+            // Absent sibling skips a bare clone, but FAILS a run that declared the sibling
+            // supplied (XCHAIN_REQUIRE_SIBLINGS=1): there an absent hub is a broken checkout,
+            // and skipping would let the two vendored copies drift apart green.
+            if (!fs.existsSync(sibling)) {
+                if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                    throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but the xchain-hub vector copy is '
+                        + 'absent at ' + sibling);
+                return this.skip();
+            }
             assert.strictEqual(fs.readFileSync(FIXTURE, 'utf8'), fs.readFileSync(sibling, 'utf8'),
                 'the two vendored copies drifted; a fill-quantization vector must never ' +
                 'differ between the two repos that implement it');

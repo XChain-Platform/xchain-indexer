@@ -36,6 +36,17 @@ const indexer = require('../../src/attest_relay_activation.js');
 const INDEXER_SRC = path.resolve(__dirname, '..', '..', 'src', 'attest_relay_activation.js');
 const HUB_SRC     = path.resolve(__dirname, '..', '..', '..', 'xchain-hub', 'src', 'attest_relay_activation.js');
 
+// A bare clone skips the twin half; a run that declared the sibling supplied
+// (XCHAIN_REQUIRE_SIBLINGS=1, set by bin/ci-all.sh and the CI sibling jobs) fails it,
+// since there an absent hub means a broken checkout and a skip would ship a drift green.
+function hubOrSkip(ctx) {
+    if (fs.existsSync(HUB_SRC)) return true;
+    if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+        throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but the xchain-hub twin is absent at ' + HUB_SRC);
+    ctx.skip();
+    return false;
+}
+
 describe('attest_relay_activation twin parity @regression @tier1', function () {
 
     it('is armed on the ratified BTC anchor, genesis-on off mainnet', function () {
@@ -63,14 +74,14 @@ describe('attest_relay_activation twin parity @regression @tier1', function () {
     });
 
     it('the hub copy is byte-identical to the indexer copy', function () {
-        if (!fs.existsSync(HUB_SRC)) this.skip();   // sibling checkout absent
+        hubOrSkip(this);
         assert.strictEqual(fs.readFileSync(HUB_SRC, 'utf8'), fs.readFileSync(INDEXER_SRC, 'utf8'),
             'attest_relay_activation.js drifted between xchain-indexer and xchain-hub; ' +
             'a one-sided edit forks relay acceptance at the flag-day');
     });
 
     it('the hub copy exports the same map and predicate', function () {
-        if (!fs.existsSync(HUB_SRC)) this.skip();
+        hubOrSkip(this);
         const hub = require(HUB_SRC);
         assert.deepStrictEqual(hub.ATTEST_RELAY_ACTIVATION, indexer.ATTEST_RELAY_ACTIVATION);
         for (const [block, network] of [[962999, 'mainnet'], [963000, 'mainnet'], [0, 'regtest'], [7, 'bogusnet']]) {
