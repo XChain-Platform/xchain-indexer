@@ -103,7 +103,9 @@ describe('Tier 2 - Token lifecycle (ISSUE + MINT) @tier2', function () {
                 }
             ), { numRuns: NUM_RUNS });
         });
+    });
 
+    describe('Issue.parse() crash safety', function () {
         it('handles all 6 format versions without crash', async function () {
             const handler = new Issue(actionsCtx);
             const formats = [
@@ -177,7 +179,9 @@ describe('Tier 2 - Token lifecycle (ISSUE + MINT) @tier2', function () {
                 }
             ), { numRuns: NUM_RUNS });
         });
+    });
 
+    describe('Mint.parse() crash safety', function () {
         it('handles unknown format version', async function () {
             const handler = new Mint(actionsCtx);
             indexer.indexerDb.getTokenInfo.resolves(createTokenInfo());

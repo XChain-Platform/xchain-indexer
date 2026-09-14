@@ -102,7 +102,9 @@ describe('Tier 3 - State transition edge cases @tier3', function () {
                 }
             ), { numRuns: NUM_RUNS });
         });
+    });
 
+    describe('Send handler crash safety', function () {
         it('handles all 4 send format versions', async function () {
             const handler = new Send(actionsCtx);
             const formats = [

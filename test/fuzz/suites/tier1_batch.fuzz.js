@@ -149,7 +149,9 @@ describe('Tier 1 - BATCH handler @tier1', function () {
                 `Multiple ISSUE should be rejected, got: ${data.STATUS}`
             );
         });
+    });
 
+    describe('structural invariants', function () {
         it('multiple MINT actions are rejected (limit=1)', async function () {
             const txData = 'BATCH|0|MINT|0|TOK1|50;MINT|0|TOK1|50';
             const data = makeData(txData);

@@ -218,7 +218,9 @@ describe('Tier 1 - normalizeDataValues @tier1', function () {
                 }
             ), { numRuns: Math.floor(NUM_RUNS / 2) });
         });
+    });
 
+    describe('string truncation post-conditions', function () {
         it('FILE NAME is truncated to at most 250 chars', function () {
             fc.assert(fc.property(
                 fuzzedData().filter(d => d.ACTION === 'FILE'),
