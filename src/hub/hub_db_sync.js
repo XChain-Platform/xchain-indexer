@@ -100,7 +100,7 @@ const RETRACTION_CHAIN_COLUMNS = {
     bridge_transfers: 'src_chain'
 };
 
-// ── Watermark grace margins: frozen protocol constants (/ Package 12) ──
+// ── Watermark grace margins: frozen protocol constants every node must share ──
 // The four barrier grace margins (seconds) are NOT operational timeouts: they
 // decide WHEN the block-loop consensus barriers open via the stream-watermark
 // escape (_priceSyncSatisfied / _oracleSyncSatisfied / _matchSyncSatisfied /
@@ -3853,7 +3853,7 @@ class HubDbSync {
         let gen = (event.retraction_generation !== undefined && event.retraction_generation !== null)
                   ? Number(event.retraction_generation) : null;
         let fenced = (gen !== null && Number.isFinite(gen) && gen >= 0);
-        // Receive-side guards (XCALL-RETRACT-1,; see the constructor note).
+        // Receive-side guards (see the constructor note for why they exist).
         // 1. Quorum-class tables (their insertions carry 2f+1 proof) never accept an
         //    unfenced open delete: every current source stamps the item-5308 fence, so
         //    an unfenced event is either a pre-5308 relic or a fabricated wipe. The
@@ -4017,7 +4017,7 @@ class HubDbSync {
             if (!pk || seen.has(pk)) continue;
             if (!snapPubkeys.has(pk)) continue;
             if (!verifyEd25519(canonical, sig, pk)) continue;
-            // Mark seen only AFTER the signature verifies (Pkg 13 /), matching
+            // Mark seen only AFTER the signature verifies, matching
             // the hub producer twin (RetractionConsensus.handleFinalized) and the
             // sibling tallies in anchor.js / recovery.js / StateAnchorPublisher. Marking
             // on first encounter lets a garbage-then-valid pair for one snapshot member
