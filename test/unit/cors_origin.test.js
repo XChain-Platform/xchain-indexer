@@ -165,11 +165,17 @@ describe('CORS_ORIGIN allowlist parsing', function () {
     describe('src/api.js wiring', function () {
 
         it('mounts cors through parseCorsOrigin, never the raw env var', function () {
-            const src = require('fs').readFileSync(require('path').join(__dirname, '../../src/api.js'), 'utf8')
-            assert.ok(/origin:\s*parseCorsOrigin\(process\.env\.CORS_ORIGIN \|\| 'http:\/\/localhost'\)/.test(src),
-                "api.js must mount cors with parseCorsOrigin(process.env.CORS_ORIGIN || 'http://localhost')")
-            assert.ok(!/origin:\s*process\.env\.CORS_ORIGIN/.test(src),
+            const read = (p) => require('fs').readFileSync(require('path').join(__dirname, p), 'utf8')
+            const src = read('../../src/api.js')
+            // api.js reads the environment through config.js's env view, so the value the
+            // parser must wrap is CONFIG_ENV.CORS_ORIGIN; the last assertion follows it back
+            // to the env read, so the wiring cannot be satisfied by an unrelated CONFIG_ENV key.
+            assert.ok(/origin:\s*parseCorsOrigin\(CONFIG_ENV\.CORS_ORIGIN \|\| 'http:\/\/localhost'\)/.test(src),
+                "api.js must mount cors with parseCorsOrigin(CONFIG_ENV.CORS_ORIGIN || 'http://localhost')")
+            assert.ok(!/origin:\s*(process\.env|CONFIG_ENV)\.CORS_ORIGIN/.test(src),
                 'api.js must not hand the raw CORS_ORIGIN string to cors')
+            assert.ok(/CORS_ORIGIN:\s*process\.env\.CORS_ORIGIN(?![A-Za-z0-9_])/.test(read('../../src/config.js')),
+                'config.js must carry CORS_ORIGIN into the env view api.js reads')
         })
     })
 })
