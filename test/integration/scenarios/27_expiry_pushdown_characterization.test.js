@@ -36,6 +36,9 @@
  * null edit layered on top of a non-null one.
  *
  * Venue: real MariaDB, indexer schema built by verifyTables(). No chain access.
+ *
+ * The verbatim legacy implementation is in
+ * 27_expiry_pushdown_characterization.test/helpers/legacy_expired_items.js.
  */
 
 const assert = require('assert');
@@ -43,6 +46,7 @@ const {
     createDatabases, closeAll,
 } = require('../setup/db-connection');
 const { initIndexer, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
+const { legacyGetExpiredItems } = require('./27_expiry_pushdown_characterization.test/helpers/legacy_expired_items');
 
 let indexer;
 let db;
@@ -57,89 +61,6 @@ const TYPES = ['order', 'swap', 'dispenser'];
 const ITEM_BASE   = { order: 1000, swap: 1100, dispenser: 1200 };
 const STATUS_BASE = { order: 2000, swap: 2100, dispenser: 2200 };
 const EDIT_BASE   = { order: 3000, swap: 3100, dispenser: 3200 };
-
-/**
- * The pre- implementation, copied verbatim from src/db.js so the
- * characterization compares against the real prior behaviour rather than a
- * paraphrase of it. Only `this` was rebound to an explicit db argument.
- */
-async function legacyGetExpiredItems(db, block_time) {
-    let expired = [];
-    let types   = ['order','swap','dispenser'];
-    let query   = '';
-    let args    = [];
-    // Build out the query for each of the table types to get 'open' items
-    for(let type of types){
-        if(query!='')
-            query += 'UNION ';
-        query += `SELECT
-                    m.action_index,
-                    m.expiration,
-                    '` + type + `' as type
-                FROM
-                    ` + type + `s m
-                    INNER JOIN ` + type + `_statuses s1 ON (s1.` + type + `_action_index=m.action_index)
-                    INNER JOIN index_statuses        s2 ON (s2.id=s1.status_id)
-                WHERE
-                    s1.action_index = (
-                        SELECT
-                            MAX(s3.action_index)
-                        FROM
-                            ` + type + `_statuses s3
-                        WHERE
-                            s3.` + type + `_action_index=m.action_index
-                    ) AND
-                    s2.status='open'`;
-    }
-    query += ' ORDER BY action_index ASC';
-    let results = await db.doQuery(query, args);
-    if(results.length > 0){
-        let byType = {};
-        for(let info of results){
-            if(!byType[info.type])
-                byType[info.type] = [];
-            byType[info.type].push(info);
-        }
-        for(let type of Object.keys(byType)){
-            let items        = byType[type];
-            let placeholders = items.map(() => '?').join(',');
-            query  = `SELECT
-                        s1.` + type + `_action_index as item_action_index,
-                        s1.expiration
-                    FROM
-                        ` + type + `_edits s1
-                        INNER JOIN index_statuses s2 ON (s2.id=s1.status_id)
-                    WHERE
-                        s1.` + type + `_action_index IN (` + placeholders + `) AND
-                        s2.status=?
-                    ORDER BY
-                        s1.action_index ASC`;
-            args         = items.map(i => i.action_index).concat(['valid']);
-            let results2 = await db.doQuery(query, args);
-            if(results2.length > 0){
-                let latest = {};
-                for(let row of results2){
-                    if(!db.util.isNull(row.expiration))
-                        latest[row.item_action_index] = row.expiration;
-                }
-                for(let info of items){
-                    if(latest[info.action_index] !== undefined)
-                        info.expiration = latest[info.action_index];
-                }
-            }
-        }
-        for(let info of results){
-            if(info.expiration < block_time){
-                expired.push({
-                    type:         info.type,
-                    action_index: Number(info.action_index),
-                    expiration:   Number(info.expiration)
-                });
-            }
-        }
-    }
-    return expired;
-}
 
 /** Insert one base item row (only the columns the sweep reads). */
 async function seedItem(type, offset, expiration) {
@@ -280,36 +201,37 @@ after(async function () {
     await closeAll();
 });
 
+// Seed at suite level, not in a root hook: every scenario file's root hooks
+// run before ANY test, and several of them reset the indexer database, so a
+// root-level seed would be wiped in a whole-directory run. Only this suite's
+// action_index ranges are touched, so residue from other scenarios is left
+// alone (the legacy/current comparison spans the whole book either way).
+async function seedCharacterizationBook() {
+    this.timeout(60000);
+    OPEN_ID      = await db.createStatus('open');
+    EXPIRED_ID   = await db.createStatus('expired');
+    CANCELLED_ID = await db.createStatus('cancelled');
+    VALID_ID     = await db.createStatus('valid');
+    INVALID_ID   = await db.createStatus('invalid');
+    statusSeq = {};
+    editSeq   = {};
+    for (const type of TYPES) {
+        await clearBook(type);
+        await seedBook(type);
+    }
+}
+
+// Straddles every expiration in the seed book, both sides of each boundary,
+// plus the degenerate 0 case (where a null expiration must NOT expire,
+// because the legacy predicate compared the coerced 0 against 0).
+const BLOCK_TIMES = [
+    0, 1, 999, 1000, 1001, 1499, 1500, 1501,
+    1999, 2000, 2001, 2999, 3000, 3001, 4000, 5000, 9999999,
+];
+
 describe('27 Expiry-sweep push-down characterization @regression @tier2', function () {
     this.timeout(60000);
-
-    // Seed at suite level, not in a root hook: every scenario file's root hooks
-    // run before ANY test, and several of them reset the indexer database, so a
-    // root-level seed would be wiped in a whole-directory run. Only this suite's
-    // action_index ranges are touched, so residue from other scenarios is left
-    // alone (the legacy/current comparison spans the whole book either way).
-    before(async function () {
-        this.timeout(60000);
-        OPEN_ID      = await db.createStatus('open');
-        EXPIRED_ID   = await db.createStatus('expired');
-        CANCELLED_ID = await db.createStatus('cancelled');
-        VALID_ID     = await db.createStatus('valid');
-        INVALID_ID   = await db.createStatus('invalid');
-        statusSeq = {};
-        editSeq   = {};
-        for (const type of TYPES) {
-            await clearBook(type);
-            await seedBook(type);
-        }
-    });
-
-    // Straddles every expiration in the seed book, both sides of each boundary,
-    // plus the degenerate 0 case (where a null expiration must NOT expire,
-    // because the legacy predicate compared the coerced 0 against 0).
-    const BLOCK_TIMES = [
-        0, 1, 999, 1000, 1001, 1499, 1500, 1501,
-        1999, 2000, 2001, 2999, 3000, 3001, 4000, 5000, 9999999,
-    ];
+    before(seedCharacterizationBook);
 
     it('matches the pre-push-down implementation at every block time', async function () {
         for (const block_time of BLOCK_TIMES) {
@@ -351,6 +273,12 @@ describe('27 Expiry-sweep push-down characterization @regression @tier2', functi
             assert.strictEqual(row.expiration, 0, 'a NULL expiration is reported as 0');
         }
     });
+
+});
+
+describe('27 Expiry-sweep push-down characterization @regression @tier2', function () {
+    this.timeout(60000);
+    before(seedCharacterizationBook);
 
     // A null edit means "leave the expiration unchanged", so it must not blank
     // out an expiration set by an earlier edit or by the base row.
