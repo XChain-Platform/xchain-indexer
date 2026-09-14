@@ -172,7 +172,7 @@ const WEIGHTING_COMMITS = ['013c206', 'd627a4b', '2d70b903'];
 // member names must be identical either side of each. Short SHAs, resolved through git;
 // a rebase of this history renames them, and the tool then reports them as unaccounted
 // rather than passing them silently, which is the safe direction.
-const RELOCATION_COMMITS = ['63625429', '2a497268'];
+const RELOCATION_COMMITS = ['62300808', 'f179d499'];
 
 // The BATCH handler has two spellings across the trees this tool reads: the flat
 // src/actions/batch.js, and the directory src/actions/batch/ (entry index.js, one part per
