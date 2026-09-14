@@ -27,8 +27,9 @@
  *
  * src/api.js self-starts (it calls startApi() at load, exits on missing env,
  * and never exports the app), which is why every earlier attempt mirrored it.
- * The boot harness below defeats that without touching production code: a
- * Module._load hook swaps THREE modules and nothing else -
+ * The boot harness in auth_gate.test/helpers/api_boot.js defeats that without
+ * touching production code: a Module._load hook swaps THREE modules and
+ * nothing else -
  *   - `dotenv`          -> a no-op, so the suite never reads the operator's
  *                          real .env and can assert the unset-key case
  *   - `./XChainIndexer` -> a stub, so no database connection is opened
@@ -41,163 +42,23 @@
  * Layer coverage: auth-gate fail-closed, batch smuggling, rate-limit 429 and
  * helmet headers. The cors layer is covered by test/unit/cors_origin.test.js,
  * which drives the real middleware the same way, and is not duplicated here.
+ * The rate-limit and helmet cases run from auth_gate.test/rate_limit_headers.test.js
+ * through the same harness.
  *
  *********************************************************************/
 
 'use strict'
 
 const assert = require('assert')
-const path   = require('path')
-const Module = require('module')
-const { requireWithFreshConfig } = require('../../helpers/fresh_config.js')
+const {
+    installHook, teardownHarness, bootApi, assertUnauthorized, assertPassedGate,
+    GATED_FEDERATION, GATED_EXEC, PUBLIC_METHOD, RETIRED_WRITE, KEY
+} = require('./auth_gate.test/helpers/api_boot.js')
 
-const REPO_ROOT = path.resolve(__dirname, '..', '..', '..')
-const API_PATH  = path.join(REPO_ROOT, 'src', 'api.js')
-
-// api.js exits at load unless every database variable is present. They are
-// placeholders: XChainIndexer is stubbed, so nothing ever dials them.
-const DB_ENV = [
-    'DECODER_DB_HOST', 'DECODER_DB_PORT', 'DECODER_DB_NAME', 'DECODER_DB_USER', 'DECODER_DB_PASS',
-    'INDEXER_DB_HOST', 'INDEXER_DB_PORT', 'INDEXER_DB_NAME', 'INDEXER_DB_USER', 'INDEXER_DB_PASS'
-]
-
-// Every env var a boot may set, so each boot starts from a known state rather
-// than inheriting the previous scenario's key.
-const OWNED_ENV = DB_ENV.concat([
-    'INDEXER_API_PORT', 'INDEXER_API_KEY', 'INDEXER_ALLOW_UNAUTHENTICATED',
-    'INDEXER_RATE_LIMIT_RPM', 'CORS_ORIGIN', 'INDEXER_NETWORK', 'METRICS_ENABLED'
-])
-
-// This file runs inside the same mocha process as the rest of the unit tier, so
-// a boot's env writes would otherwise outlive it and reach whatever runs next.
-const ENV_BEFORE = OWNED_ENV.map(key => [key, process.env[key]])
-function restoreEnv () {
-    for (const [key, value] of ENV_BEFORE) {
-        if (value === undefined) delete process.env[key]
-        else process.env[key] = value
-    }
-}
-
-// Stands in for the live indexer. startApi() constructs one and calls start();
-// the security layers all sit in front of the router, so the pending promise
-// keeps the fake "running" for the life of the boot without any I/O.
-class StubIndexer {
-    constructor () { this.indexerDb = null; this.lastBlockCommittedAt = null }
-    async start () { return new Promise(() => {}) }
-}
-
-const realExpress = require('express')
-const originalLoad = Module._load
-let captured = null
-
-// Installed once for the whole file and removed in the root after(); scoping it
-// per boot would leave the hook live across the awaited listen callback.
-function installHook () {
-    Module._load = function (request, parent, isMain) {
-        if (request === 'dotenv') return { config () { return { parsed: {} } } }
-        if (request === './XChainIndexer') return StubIndexer
-        if (request === 'express') {
-            const wrapped = function (...args) {
-                const app = realExpress(...args)
-                const listen = app.listen.bind(app)
-                app.listen = (...listenArgs) => {
-                    const server = listen(...listenArgs)
-                    if (captured) captured.server = server
-                    return server
-                }
-                return app
-            }
-            // express carries statics (Router, json, static, ...) that api.js and
-            // its middleware reach for; the wrapper must keep them.
-            Object.assign(wrapped, realExpress)
-            return wrapped
-        }
-        return originalLoad.apply(this, arguments)
-    }
-}
-
-/**
- * Boot the real API on an ephemeral port under the given environment.
- *
- * The gate's key and escape hatch are module-level consts in api.js, read once
- * at evaluation from src/config.js's load-time CONFIG_ENV snapshot, so a scenario
- * that changes them must re-evaluate both: every boot loads api.js together with
- * a fresh config.js.
- */
-async function bootApi (env = {}) {
-    for (const key of OWNED_ENV) delete process.env[key]
-    for (const key of DB_ENV) process.env[key] = 'unused-by-this-suite'
-    process.env.INDEXER_API_PORT = '0'
-    for (const [key, value] of Object.entries(env)) process.env[key] = value
-
-    captured = {}
-    requireWithFreshConfig(API_PATH)
-
-    const deadline = Date.now() + 4000
-    while (!captured.server) {
-        if (Date.now() > deadline) throw new Error('api.js did not listen within 4s')
-        await new Promise(resolve => setTimeout(resolve, 5))
-    }
-
-    const server = captured.server
-    const port = server.address().port
-    return {
-        port,
-        async post (body, headers = {}) {
-            const res = await fetch(`http://127.0.0.1:${port}/`, {
-                method: 'POST',
-                headers: Object.assign({ 'content-type': 'application/json' }, headers),
-                body: JSON.stringify(body)
-            })
-            const text = await res.text()
-            let json = null
-            try { json = JSON.parse(text) } catch { /* non-JSON body is itself the assertion subject */ }
-            return { status: res.status, headers: res.headers, body: json, text }
-        },
-        close () { return new Promise(resolve => server.close(resolve)) }
-    }
-}
-
-// Undo everything a boot changed outside this file: the module hook, the env,
-// and the cached api.js evaluation (which holds the stubbed indexer).
-function teardownHarness () {
-    Module._load = originalLoad
-    restoreEnv()
-    captured = null
-    delete require.cache[require.resolve(API_PATH)]
-}
-
-// A representative from each NON-EMPTY gated set, so a set that loses its gating
-// is caught. WRITE_METHODS has no member to represent: `pushvalidatorrewards`
-// was its only one and the PUSH-ANCHOR endgame retired the method outright, so
-// every case that would drive a write method drives the federation-read
-// representative instead, and the retired name is asserted separately below as
-// ungated + method-not-found.
-const GATED_FEDERATION = 'getactivevalidators'
-const GATED_EXEC       = 'feequotedryrun'
-const PUBLIC_METHOD    = 'ping'
-const RETIRED_WRITE    = 'pushvalidatorrewards'
-
-const KEY = 'harness-api-key'
-
-// Unauthorized is the JSON-RPC -32001 error AND no dispatch: the gate returns
-// before next(), so a rejected call must carry no `result` at all.
-function assertUnauthorized (res) {
-    assert.strictEqual(res.status, 401, `expected 401, got ${res.status}: ${res.text}`)
-    assert.ok(res.body && res.body.error, `expected a JSON-RPC error body, got ${res.text}`)
-    assert.strictEqual(res.body.error.code, -32001)
-    assert.strictEqual(res.body.result, undefined, 'a rejected call must never reach the handler')
-}
-
-// Passing the gate is asserted as "not the gate's rejection", never as a
-// specific payload: past the gate the call reaches the real handler, whose
-// answer depends on parameters and DB state this suite deliberately has none of.
-function assertPassedGate (res) {
-    assert.strictEqual(res.status, 200, `expected the gate to pass the call, got ${res.status}: ${res.text}`)
-    const code = res.body && res.body.error && res.body.error.code
-    assert.notStrictEqual(code, -32001, `call was rejected by the auth gate: ${res.text}`)
-}
-
+// The gate scenarios are consecutive sibling blocks under one suite title, each
+// installing and removing the harness itself, so every full test title is the
+// same one the suite has always reported while no describe callback outgrows
+// the structure limit.
 describe('indexer http-surface security: API-key gate on the real app', function () {
 
     before(installHook)
@@ -237,6 +98,19 @@ describe('indexer http-surface security: API-key gate on the real app', function
         it('matches the gated method name case-insensitively', async function () {
             assertUnauthorized(await api.post({ jsonrpc: '2.0', method: GATED_FEDERATION.toUpperCase(), id: 9 }))
         })
+    })
+})
+
+describe('indexer http-surface security: API-key gate on the real app', function () {
+
+    before(installHook)
+    after(teardownHarness)
+
+    // The batch cases of the keyed scenario, on a keyed app of their own.
+    describe('with INDEXER_API_KEY configured', function () {
+        let api
+        before(async function () { api = await bootApi({ INDEXER_API_KEY: KEY }) })
+        after(async function () { if (api) await api.close() })
 
         // The regression this whole gate was rewritten for: express-json-rpc-router
         // dispatches every element of an array body, so reading req.body.method
@@ -265,6 +139,12 @@ describe('indexer http-surface security: API-key gate on the real app', function
             assert.ok(!res.text.includes('-32001'), res.text)
         })
     })
+})
+
+describe('indexer http-surface security: API-key gate on the real app', function () {
+
+    before(installHook)
+    after(teardownHarness)
 
     // PUSH-ANCHOR endgame: the last write method is gone from the surface, not
     // merely gated or stubbed. Asserted over the real app so a re-registration
@@ -317,6 +197,12 @@ describe('indexer http-surface security: API-key gate on the real app', function
             assert.strictEqual(res.body && res.body.error && res.body.error.code, -32601, res.text)
         })
     })
+})
+
+describe('indexer http-surface security: API-key gate on the real app', function () {
+
+    before(installHook)
+    after(teardownHarness)
 
     // The property that keeps a keyless deployment from being an open reward
     // mint: absence of configuration denies, it does not allow.
@@ -347,6 +233,12 @@ describe('indexer http-surface security: API-key gate on the real app', function
             assert.deepStrictEqual(res.body.result, { status: 'success' })
         })
     })
+})
+
+describe('indexer http-surface security: API-key gate on the real app', function () {
+
+    before(installHook)
+    after(teardownHarness)
 
     describe('with INDEXER_ALLOW_UNAUTHENTICATED=true (keyless regtest)', function () {
         let api
@@ -373,62 +265,6 @@ describe('indexer http-surface security: API-key gate on the real app', function
 
         it('still fails closed', async function () {
             assertUnauthorized(await api.post({ jsonrpc: '2.0', method: GATED_FEDERATION, id: 1 }))
-        })
-    })
-})
-
-describe('indexer http-surface security: rate limit and response headers', function () {
-
-    before(installHook)
-    after(teardownHarness)
-
-    // A tiny window budget so the 429 is reached in four requests rather than
-    // the 600-per-minute default.
-    describe('per-IP rate limit', function () {
-        let api
-        before(async function () { api = await bootApi({ INDEXER_RATE_LIMIT_RPM: '3' }) })
-        after(async function () { if (api) await api.close() })
-
-        it('429s once the per-window budget is spent', async function () {
-            const statuses = []
-            for (let i = 0; i < 4; i++) {
-                const res = await api.post({ jsonrpc: '2.0', method: PUBLIC_METHOD, id: i })
-                statuses.push(res.status)
-            }
-            assert.deepStrictEqual(statuses, [200, 200, 200, 429], `unexpected status sequence ${statuses}`)
-        })
-
-        it('advertises the budget with standard headers and not legacy ones', async function () {
-            const res = await api.post({ jsonrpc: '2.0', method: PUBLIC_METHOD, id: 99 })
-            assert.strictEqual(res.headers.get('ratelimit-limit'), '3')
-            assert.strictEqual(res.headers.get('x-ratelimit-limit'), null, 'legacyHeaders is false')
-        })
-    })
-
-    describe('helmet', function () {
-        let api
-        before(async function () { api = await bootApi({ INDEXER_API_KEY: KEY }) })
-        after(async function () { if (api) await api.close() })
-
-        it('sets nosniff on a normal response', async function () {
-            const res = await api.post({ jsonrpc: '2.0', method: PUBLIC_METHOD, id: 1 })
-            assert.strictEqual(res.headers.get('x-content-type-options'), 'nosniff')
-        })
-
-        it('denies framing', async function () {
-            const res = await api.post({ jsonrpc: '2.0', method: PUBLIC_METHOD, id: 2 })
-            assert.strictEqual(String(res.headers.get('x-frame-options')).toUpperCase(), 'SAMEORIGIN')
-        })
-
-        it('does not advertise the server framework', async function () {
-            const res = await api.post({ jsonrpc: '2.0', method: PUBLIC_METHOD, id: 3 })
-            assert.strictEqual(res.headers.get('x-powered-by'), null)
-        })
-
-        it('sets the headers on a rejected call too', async function () {
-            const res = await api.post({ jsonrpc: '2.0', method: GATED_FEDERATION, id: 4 })
-            assert.strictEqual(res.status, 401)
-            assert.strictEqual(res.headers.get('x-content-type-options'), 'nosniff')
         })
     })
 })
