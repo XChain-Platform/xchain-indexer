@@ -194,9 +194,9 @@ const transactionMethods = require('./actions_class/transaction.js');
 const addressPrePass     = require('./actions_class/address_pre_pass.js');
 const feePricingMethods  = require('./actions_class/fee_pricing.js');
 const feeViewMethods     = require('./actions_class/fee_views.js');
+const installMethods     = require('./actions_class/install_methods.js');
 
-// Pure parts of the dry-run engine and of the two public read-only surfaces, taking the
-// instance explicitly so a context that borrows one prototype method still works.
+// Pure parts of the dry-run engine and both public read-only surfaces, given the instance explicitly.
 const dryRunSupport = require('./actions_class/dry_run_support.js');
 const quoteAnswers  = require('./actions_class/quote_answers.js');
 const { syntheticDryRunTx, sourceFeeBalanceOrNull, quietAbandonedRun, readDryRunVerdict, dryRunOutcome } = dryRunSupport;
@@ -758,9 +758,9 @@ class Actions {
 
 }
 
-// Mix the split-out method families into the prototype, the way db/index.js assembles
-// Database: each is a plain object of methods written against `this`.
-Object.assign(Actions.prototype, transactionMethods, addressPrePass, feePricingMethods, feeViewMethods);
+// Install the split-out method families on the prototype NON-ENUMERABLE, the shape the class
+// body they came from produced (see actions_class/install_methods.js).
+installMethods(Actions.prototype, [transactionMethods, addressPrePass, feePricingMethods, feeViewMethods]);
 
 // Static members ride on the class, so module.exports keeps one shape: the class itself.
 Object.assign(Actions, {
