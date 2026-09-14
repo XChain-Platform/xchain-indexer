@@ -240,7 +240,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
 
         it('request_id is independent of ACTION_INDEX (reorg / injection-order stability)', async function () {
-            // The defect this guards (#4213): emitted-action action_index is assigned by a
+            // The defect this guards: emitted-action action_index is assigned by a
             // global max+1 counter and gets NEW values on reorg replay, so binding it forked
             // the PBFT. The preimage now uses EMITTER_PATH (content-derived) and NO action_index
             // A node that reorged (different ACTION_INDEX) must derive the SAME request_id.
@@ -730,7 +730,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
 
         it('resolves the capable set ONCE, never once per signer', async function () {
             // Pre-fix this ran hasCapability (~5 sequential queries) per signer inside the
-            // per-tx consensus path; the batched read now answers every signer (#3872).
+            // per-tx consensus path; the batched read now answers every signer.
             indexer.indexerDb.getValidatorsByCapability.resolves([{ pubkey: PUBKEY_A }, { pubkey: PUBKEY_B }]);
             indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
             const data = v1Data();
@@ -991,7 +991,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
 
         it('records both rounds and fulfills on the ok after an earlier retryable left it pending', async function () {
-            // #4373: a retryable no_quorum round leaves the request pending; a later ok round
+            // A retryable no_quorum round leaves the request pending; a later ok round
             // must also persist and fulfill it. This drives the REAL persistence path against a
             // fake `attests` store that models the post-fix schema (UNIQUE(action_index) only,
             // request_id+version NON-unique). The old UNIQUE(request_id, version) would have

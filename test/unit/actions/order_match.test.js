@@ -866,7 +866,7 @@ describe('Order_Match action handler @regression @tier2', function () {
             // This fixture reaches a debug skip (zero-get and/or price-mismatch), and
             // BOTH skip reasons must leave the order unmatched. Assert the consensus-
             // relevant outcome (no ORDER_MATCH created) rather than mere no-crash, so a
-            // regression that wrongly creates a match on this path fails (#1860).
+            // regression that wrongly creates a match on this path fails.
             sinon.assert.notCalled(indexer.indexerDb.createOrderMatch);
         });
 
@@ -1189,10 +1189,10 @@ describe('Order_Match action handler @regression @tier2', function () {
     });
 });
 
-// Escrow/credit precision parity (#3736)
+// Escrow/credit precision parity
 //
 // Instant settlement pushes an escrow RELEASE for the same tick/address it
-// CREDITS. The release amount used to be negated with JS unary minus
+// CREDITS. The release amount must not be negated with JS unary minus
 // (`-give_amount`), which coerces the mathjs BigNumber to an IEEE-754 double and
 // truncates digits past ~15 sig-figs, while the paired credit kept the intact
 // BigNumber. On a high-decimal tick the escrow magnitude then no longer equalled

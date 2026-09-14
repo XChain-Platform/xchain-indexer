@@ -120,7 +120,7 @@ describe('Dispenser_Expire action handler @regression @tier2', function () {
 
     // Regression: dispenser_expire.js must mirror dispenser_close.js's escrow-gate
     // ownership check, only releasing the gate when it belongs to this dispenser's
-    // ACTION_INDEX. See AML finding uuid:0149a13e.
+    // ACTION_INDEX.
     it('ownership dispenser: clears the escrow gate when it matches this ACTION_INDEX', async function () {
         const dispenser = makeDispenser({ GIVE_OWNERSHIP: 1, ACTION_INDEX: 50 });
         indexer.indexerDb.getDispenserInfo.resolves(dispenser);

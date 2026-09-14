@@ -69,7 +69,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         // { total, releases }: the burn reports WHOSE escrow it reduced, because the handler
         // has to release the bond out of the staker's escrow before redirecting any of it.
         db.slashCapabilityStake      = sinon.stub().resolves({ total: '1000', releases: [{ address: 'staker1', amount: '1000' }] });
-        // #3163: the handler resolves a delegated offender to its owning stake source at
+        // The handler resolves a delegated offender to its owning stake source at
         // the equivocation height before burning. Default to null (offender stakes in its
         // own name); the delegated-offender case overrides this per-test.
         db.getStakeSourceForDelegatedPubkey = sinon.stub().resolves(null);
@@ -119,7 +119,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         assert.strictEqual(d['STATUS'], 'valid');
         assert.ok(indexer.indexerDb.slashCapabilityStake.calledOnce, 'slashCapabilityStake must be called once');
         // 4th arg is burnPending (SLASH-1): true here since the mock flag defaults on.
-        // 5th is ownerSourceId (#3163): null because this offender stakes in its own name.
+        // 5th is ownerSourceId: null because this offender stakes in its own name.
         assert.deepStrictEqual(indexer.indexerDb.slashCapabilityStake.firstCall.args, [7, 200, 999, true, null]);
         assert.ok(indexer.indexerDb.createCapabilitySlashEvent.calledOnce, 'an audit event must be written');
     });
@@ -886,8 +886,8 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
     // delimiter-less and carries no block, so the slot resolver reads it from the mirrored
     // request row; the relay legs are XCALL-shaped (snapshot_block at index 3) under a
     // HASHED round id, and are quorum-verified against `cross_chain`, not `attestation`.
-    // Before #3882 the resolver knew only the base family, so every relay double-sign was
-    // unslashable: the hashed round id could never match a request_id.
+    // A resolver that knows only the base family leaves every relay double-sign
+    // unslashable: the hashed round id can never match a request_id.
     const RELAY_ROUND = 'f1'.repeat(32);   // sha256('ATTESTRELAY|request|req_1') shape
     function relayRequestContent(snap, providerId) {
         return ['ATTEST', 'RELAY_REQUEST', 'req_1', String(snap), 'regtest', 'LTC', '5',

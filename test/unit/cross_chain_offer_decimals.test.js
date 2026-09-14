@@ -9,7 +9,7 @@
  * General Public License v3.0 or later; see LICENSE.md.
  *
  **********************************************************************
- * Give-side decimal grid on the cross-chain book (/#3146).
+ * Give-side decimal grid on the cross-chain book.
  *
  * The hub quantizes every cross-chain fill on the grid reported here and DECLINES a
  * match when it is absent, so what this stamping gets wrong the hub either settles
@@ -23,7 +23,7 @@
  *   3. getTokenInfo is never called for a tick with no id, because it would INTERN
  *      one (createTicker inserts), and an out-of-band index-id assignment on a read
  *      path offsets the deterministic counter behind wire ^<id> references and the
- *      index-map state-hash class (#5052);
+ *      index-map state-hash class;
  *   4. 0 decimals survives as 0. It is a real grid (indivisible/NFT ticks), and any
  *      falsy-coercing shortcut turns it into the COIN_DECIMALS fallback, which is
  *      exactly the mis-quantization the hub refuses to guess at.
@@ -98,7 +98,7 @@ describe('cross-chain book give_decimals stamping (#3145/#3146) @regression @tie
     });
 
     it('never calls getTokenInfo for an unknown tick, because that would intern an id', async function () {
-        // #5052: getTokenInfo -> createTicker INSERTS index_tickers for an unknown tick.
+        // getTokenInfo -> createTicker INSERTS index_tickers for an unknown tick.
         // On this federation read path that offsets the deterministic dense id counter.
         const db = makeDb({ LTCT: 8 });
         const offers = [offer('NEVER_ISSUED')];

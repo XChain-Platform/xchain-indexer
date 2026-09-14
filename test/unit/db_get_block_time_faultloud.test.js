@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/db_get_block_time_faultloud.test.js
  *
- * CONSENSUS REGRESSION GUARD for getBlockTime() fault handling (finding #898).
+ * CONSENSUS REGRESSION GUARD for getBlockTime() fault handling.
  *
  * getBlockTime() feeds ProtocolChanges.isEnabled() on the consensus path. It used to run
  * through doQuery, which collapses ANY decoder-DB fault to [] - indistinguishable from

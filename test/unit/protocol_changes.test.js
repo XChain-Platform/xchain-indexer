@@ -20,7 +20,7 @@ describe('ProtocolChanges @regression @tier3', function () {
         // Set version for the indexer package
         process.env.INDEXER_NETWORK = 'regtest';
         ProtocolChanges = require('../../src/protocol_changes.js');
-        // Consensus version is passed explicitly now that it is a compiled pin (#3087).
+        // Consensus version is passed explicitly now that it is a compiled pin.
         pc = new ProtocolChanges(indexer, '0.1.0');
     });
 
@@ -171,7 +171,7 @@ describe('ProtocolChanges @regression @tier3', function () {
         });
 
         it('should enable when current version exceeds required', async function () {
-            // Recreate with an explicit consensus version (#3087: the pin means the
+            // Recreate with an explicit consensus version (the pin means the
             // environment no longer supplies one).
             pc = new ProtocolChanges(indexer, '0.2.0');
             indexer.decoderDb.getBlockTime.resolves(1700000000);
@@ -238,10 +238,10 @@ describe('ProtocolChanges @regression @tier3', function () {
         const MAINNET_FLAG_DAY = 1786060800; // 2026-08-07 00:00:00 UTC, CONFIRMED 2026-07-07 (see protocol_changes.js)
 
         // The constructor reads config.NETWORK fresh and takes the consensus version as an
-        // explicit argument (#3087), so a new instance per network/version is all that is
+        // explicit argument, so a new instance per network/version is all that is
         // needed (no module-cache reset, and no environment mutation).
         function pcFor(network, version = '2.0.0') {
-            // Shipping consensus version passed explicitly (#3087 pin).
+            // Shipping consensus version passed explicitly (compiled pin).
             indexer.config.NETWORK = network; // constructor reads network from the validated config
             return new ProtocolChanges(indexer, version);
         }
@@ -318,7 +318,7 @@ describe('ProtocolChanges @regression @tier3', function () {
         const MAINNET_FLAG_DAY = 1786060800; // 2026-08-07 00:00:00 UTC, CONFIRMED 2026-07-07 (see protocol_changes.js)
 
         function pcFor(network, version = '2.0.0') {
-            // Shipping consensus version passed explicitly (#3087 pin).
+            // Shipping consensus version passed explicitly (compiled pin).
             indexer.config.NETWORK = network; // constructor reads network from the validated config
             return new ProtocolChanges(indexer, version);
         }
@@ -394,7 +394,7 @@ describe('ProtocolChanges @regression @tier3', function () {
         const MAINNET_FLAG_DAY = 1786060800; // 2026-08-07 00:00:00 UTC, CONFIRMED 2026-07-07 (see protocol_changes.js)
 
         function pcFor(network, version = '2.0.0') {
-            // Shipping consensus version passed explicitly (#3087 pin).
+            // Shipping consensus version passed explicitly (compiled pin).
             indexer.config.NETWORK = network; // constructor reads network from the validated config
             return new ProtocolChanges(indexer, version);
         }
@@ -458,7 +458,7 @@ describe('ProtocolChanges @regression @tier3', function () {
         const MAINNET_FLAG_DAY = 1786060800; // 2026-08-07 00:00:00 UTC, CONFIRMED 2026-07-07 (see protocol_changes.js)
 
         function pcFor(network, version = '2.0.0') {
-            // Shipping consensus version passed explicitly (#3087 pin).
+            // Shipping consensus version passed explicitly (compiled pin).
             indexer.config.NETWORK = network; // constructor reads network from the validated config
             return new ProtocolChanges(indexer, version);
         }
@@ -525,7 +525,7 @@ describe('ProtocolChanges @regression @tier3', function () {
         // exported constant, so a future edit that updates the constant (or a subset
         // of the literals) but misses the rest would pass CI and activate coupled
         // contract-deploy consensus rules at different boundaries. This pins them
-        // equal so any such partial edit fails CI. See AML finding uuid:e6069c27.
+        // equal so any such partial edit fails CI.
         const COHORT = [
             'DEPLOY_BASE64_CODE',
             'ISSUANCE_FEE_EMISSION_EXEMPT',
@@ -547,7 +547,7 @@ describe('ProtocolChanges @regression @tier3', function () {
         });
     });
 
-    // ─── #3087: the consensus version is a compiled pin, not npm metadata ───
+    // ─── The consensus version is a compiled pin, not npm metadata ───
     // isEnabled() compares the resolved version against every registered change, so
     // whatever supplies it decides which consensus rules this node applies. Sourcing
     // it from npm_package_version (with a package.json fallback) meant a version bump,

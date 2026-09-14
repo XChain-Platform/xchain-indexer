@@ -15,7 +15,7 @@
 /*********************************************************************
  * test/unit/merkle_stakes_golden.test.js
  *
- * #4751: the stakes-root value leaves (stakeMemberLeaf / stakeTotalLeaf /
+ * The stakes-root value leaves (stakeMemberLeaf / stakeTotalLeaf /
  * sumCanonicalAmounts, 94818db) and the lifted blockMerkleLeaves cross-kind
  * ordering are consensus-root inputs but shipped without a golden vector. A
  * future refactor of the BigInt scaling, leaf framing, or leaf ordering could

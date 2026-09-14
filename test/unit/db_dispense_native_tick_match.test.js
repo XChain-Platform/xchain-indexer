@@ -15,7 +15,7 @@
  * (get_tick_id IS NULL). A bare native payment carries no COIN_TICK, so the
  * legacy native branch of findMatchingDispensers left its WHERE unbounded and
  * matched token-priced dispensers too, letting a native payment settle a
- * token-denominated dispenser's escrow against the wrong asset (review #2683).
+ * token-denominated dispenser's escrow against the wrong asset.
  *
  * The corrected native predicate (`AND d1.get_tick_id IS NULL`) changes how
  * already-valid blocks evaluate, so it is time-gated on the coordinated 2.0.0

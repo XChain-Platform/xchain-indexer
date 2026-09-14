@@ -17,7 +17,7 @@
  * and applies its migration to a real schema.
  *
  * WHY THIS FILE EXISTS. getRelayRequestByOrigin() is a NEW raw SQL predicate, and
- * it is the entire mechanism of #4141: its return value decides whether an ATTEST
+ * it is the whole mechanism here: its return value decides whether an ATTEST
  * v3 materializes an irreversible BTC request or stores an 'invalid' verdict. Its
  * unit sibling (test/unit/actions/attest_relay.test.js) reaches it only through
  * `sinon.stub()`, and .mocharc's spec globs are test/unit/**, so the whole default
@@ -213,7 +213,7 @@ describe('relay-identity lookup against a real MariaDB @tier3', function () {
         // The other half of the same clause, and the more dangerous half: a fulfilled or
         // expired request DID spend the fee, so it must keep consuming the slot. Written
         // as `<> 'rejected'` rather than `= 'pending'` for exactly this reason, and this
-        // case is what stops a later "tighten it to pending" edit from re-opening #4141.
+        // case is what stops a later "tighten it to pending" edit from re-opening that hole.
         for (const status of ['fulfilled', 'expired', 'errored']) {
             await conn(c => c.query('DELETE FROM attests'));
             await row({ actionIndex: 13, status });

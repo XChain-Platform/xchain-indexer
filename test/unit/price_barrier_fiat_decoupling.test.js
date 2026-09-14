@@ -17,7 +17,7 @@
  * non-BTC chain whenever hub-db sync is enabled, NOT only at/after the
  * NATIVE_FEE_PRICE_TIME_GATE flag-day.
  *
- * The barrier arrived as the twin of that gate's fee-validation change (H-3),
+ * The barrier arrived as the twin of that gate's fee-validation change,
  * so it was wired behind the same predicate. But native fees are not the only
  * time-keyed reader of price_snapshots: FIAT dispenser settlement bounds its
  * read on `block_timestamp <= this block's time` on every chain from day one,

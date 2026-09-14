@@ -61,7 +61,7 @@ describe('migrate CLI safety guard', function () {
     });
 });
 
-// Per-file targeting (#3874). migrate.js runs main() at require time, so each case
+// Per-file targeting. migrate.js runs main() at require time, so each case
 // injects a fake Database into the require cache, fresh-requires the CLI, and awaits
 // a deferred that the fake's pool.end() resolves. Mirrors the decoder's CLI suite,
 // which is where this flag shipped first.

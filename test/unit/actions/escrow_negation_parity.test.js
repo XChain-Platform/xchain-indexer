@@ -20,7 +20,7 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 const Order_Expire = require('../../../src/actions/order_expire.js');
 const Swap_Expire  = require('../../../src/actions/swap_expire.js');
 
-// Escrow-release negation parity (#3736, stability-deepdive H-1)
+// Escrow-release negation parity
 //
 // Every release handler pushes an escrow row for the same tick/address it
 // credits. Negating the release with JS unary minus (`-amount`) coerces the

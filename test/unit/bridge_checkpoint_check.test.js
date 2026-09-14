@@ -165,7 +165,7 @@ describe('bridge_checkpoint_check: D2 escrow cross-check', function(){
 
     // The escrow address is resolved from the ORIGIN chain's own coin config, never from the
     // envelope. These tests stub that one door so they exercise the check itself rather than
-    // the arrival of lane L2's BRIDGE_<COIN> role; the door itself is asserted separately at
+    // the arrival of the BRIDGE_<COIN> role; the door itself is asserted separately at
     // the bottom of this file.
     let cfgStub;
     beforeEach(function(){
@@ -654,7 +654,7 @@ describe('bridge_checkpoint_check: D2 escrow cross-check', function(){
 describe('bridge_checkpoint_check: the escrow address door', function(){
 
     // NOT stubbed. This asserts the resolver reads the same place the lock handler credits,
-    // so the two can never prove and fund different addresses. Lane L2 adds BRIDGE_<COIN> to
+    // so the two can never prove and fund different addresses. The BRIDGE_<COIN> role goes into
     // the BTC coin bundle and the config adapter's ADDRESS allowlist; until BOTH land the
     // role is absent and the resolver must say so rather than guess.
     it('resolves BRIDGE_<DEST> from the origin chain config, or nothing at all', function(){

@@ -403,7 +403,7 @@ describe('XChainIndexer hub config overlay', function () {
         }
     });
 
-    // #2247: a getallconfigs call outrunning the interval must not stack
+    // A getallconfigs call outrunning the interval must not stack
     // overlapping in-flight polls (mirrors _startStateTreeMetric's guard),
     // and the guard must release in finally so one slow poll never wedges
     // all future polls.
@@ -485,7 +485,7 @@ describe('XChainIndexer hub config overlay', function () {
         }
     });
 
-    // #3884: a hub restarted from an OLDER snapshot serves a lower seq AND a lower
+    // A hub restarted from an OLDER snapshot serves a lower seq AND a lower
     // watermark, which hits none of the three advance gates - and the Math.max clamp
     // keeps the stale high-water mark forever, so config re-apply stops until the hub
     // climbs back past it. The startup overlay already adopts the served values

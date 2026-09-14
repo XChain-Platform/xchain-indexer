@@ -10,7 +10,7 @@
  *
  **********************************************************************
  *
- * Lane L15, token-bridge-policy spec row 3 (the token bridge policy spec,
+ * Token bridge policy reads (the token bridge policy spec,
  * section 3, D3, D5, D7, D15): the "as of a block" read-path resolvers
  * (getListAtBlock, isTickSleepingAtBlock), gettokenpolicy / getappliedpolicy, and
  * the XPOLICY canonical membership hash.

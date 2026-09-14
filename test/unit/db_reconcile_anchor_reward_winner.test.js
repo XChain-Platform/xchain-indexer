@@ -15,7 +15,7 @@
  *
  * CONSENSUS REGRESSION GUARD for reconcileAnchorRewardWinner(): the
  * replace-on-push collapse that keeps exactly ONE validator_rewards row per
- * (reward_type, round_reference) for anchor rewards (#3963).
+ * (reward_type, round_reference) for anchor rewards.
  *
  * The hub's RewardTracker dedups failover-race anchor rewards to the
  * lexicographically-smallest signing pubkey in its OWN DB, but its BTC-indexer

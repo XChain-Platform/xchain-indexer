@@ -17,7 +17,7 @@
  * getConnection() returns the block loop's open transactionConnection while a
  * block is processing, so that read landed INSIDE the uncommitted block. Every
  * federation query guard instead reads through apiView() (the committed-only
- * independent pooled connection, / H2) and answers `block_index N not
+ * independent pooled connection) and answers `block_index N not
  * yet indexed (latest: N-1)`. The two endpoints therefore disagreed by exactly
  * one block, and any client that polls health and then queries AT the height
  * health just reported failed deterministically whenever the poll landed

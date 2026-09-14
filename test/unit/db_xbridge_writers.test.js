@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/db_xbridge_writers.test.js
  *
- * The two database writers the XBRIDGE handler calls (lane L3b):
+ * The two database writers the XBRIDGE handler calls:
  *   createXbridge(data)            - the `xbridges` action row, one per XBRIDGE action
  *   setTokenBridged(tick, block)   - the origin row's sticky `tokens.bridged` bit
  *

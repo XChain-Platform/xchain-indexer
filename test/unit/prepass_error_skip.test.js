@@ -15,7 +15,7 @@
 /*********************************************************************
  * test/unit/prepass_error_skip.test.js
  *
- * #4888: the deterministic index-id pre-pass (assignActionAddressIds)
+ * The deterministic index-id pre-pass (assignActionAddressIds)
  * must NOT intern index_addresses ids for an action that was already
  * rejected before its handler (unknown / not-yet-activated ACTION). Such
  * an action does nothing, so minting ids for its wire-field addresses is

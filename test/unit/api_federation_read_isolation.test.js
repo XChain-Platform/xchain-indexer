@@ -11,7 +11,7 @@
  **********************************************************************
  * Federation READ isolation.
  *
- * H2 moved the pushvalidatorrewards WRITE off the block's ACID transaction by
+ * The pushvalidatorrewards WRITE runs off the block's ACID transaction by
  * routing it through indexerDb.apiView() (an independent pooled connection). The
  * residual: every federation READ handler still resolved through doQuery ->
  * getConnection(), which returns the block's open transactionConnection while a
@@ -107,7 +107,7 @@ describe('federation READ connection isolation @regression @tier1', function () 
         });
     }
 
-    // #3873: the handler's own comment claims its eligibility rule is byte-identical to
+    // The handler's own comment claims its eligibility rule is byte-identical to
     // actions/nodeproof.js `_eligibleVerifierSet`, and the hub sizes quorum off this RPC.
     // Both now resolve the capability side through ONE getValidatorsByCapability read,
     // re-probing per pubkey only on a truncated result. Guarded as a pair so the api

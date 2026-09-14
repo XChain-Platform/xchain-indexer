@@ -39,7 +39,7 @@ const assert   = require('assert');
 const crypto   = require('crypto');
 const Database = require('../../src/db');
 
-// sha256 of a data payload, matching db._hashReorgData (the #2735 witness hash).
+// sha256 of a data payload, matching db._hashReorgData (the reorg witness hash).
 function reorgHash(data) {
     return crypto.createHash('sha256').update(String(data == null ? '' : data), 'utf8').digest('hex');
 }
@@ -76,11 +76,11 @@ function makeDb(seedRows) {
         if (/WHERE code='REORG' ORDER BY id ASC/.test(query)) {
             return rows.slice().sort((a, b) => a.id - b.id).map((r) => ({ id: r.id, data: r.data }));
         }
-        // #2735 witness the cursor row / getReorgEventWitness -> the single REORG row at this id
+        // witness the cursor row / getReorgEventWitness -> the single REORG row at this id
         if (/SELECT time, data FROM events WHERE id = \? AND code='REORG'/.test(query)) {
             return rows.filter((r) => r.id === Number(args[0])).map((r) => ({ time: r.time, data: r.data }));
         }
-        // #2735 getLastProcessedReorgWitness -> newest-first data + witness columns
+        // getLastProcessedReorgWitness -> newest-first data + witness columns
         if (/SELECT data, witness_time, witness_hash FROM events WHERE code='REORG' ORDER BY id DESC/.test(query)) {
             return rows.slice().sort((a, b) => b.id - a.id)
                        .map((r) => ({ data: r.data, witness_time: r.witness_time == null ? null : r.witness_time, witness_hash: r.witness_hash == null ? null : r.witness_hash }));
@@ -93,7 +93,7 @@ function makeDb(seedRows) {
         if (/SELECT MAX\(id\) AS max_id FROM events WHERE code='REORG'/.test(query)) {
             return [{ max_id: rows.length ? rows.reduce((m, r) => Math.max(m, r.id), 0) : null }];
         }
-        // createReorg -> INSERT a marker row (carrying the #2735 witness columns when supplied)
+        // createReorg -> INSERT a marker row (carrying the witness columns when supplied)
         if (/INSERT INTO events/.test(query)) {
             rows.push({ id: nextId++, data: args[0], witness_time: args[1] != null ? args[1] : null, witness_hash: args[2] != null ? args[2] : null });
             return { affectedRows: 1 };
@@ -202,7 +202,7 @@ describe('reorg cursor incarnation guard (/ RE-1)', function () {
     });
 });
 
-// #2735: witness the cursor row to close the UNDER-cursor silent skip. A rebuilt decoder whose
+// Witness the cursor row to close the UNDER-cursor silent skip. A rebuilt decoder whose
 // fresh AUTO_INCREMENT id space overtook a stranded cursor returns non-empty id>afterId results,
 // so the over-cursor guard (RE-1 above) never sees it. The additive witness check catches it.
 describe('reorg cursor under-cursor witness guard (#2735)', function () {

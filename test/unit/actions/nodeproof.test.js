@@ -53,7 +53,7 @@ describe('NodeProof (NODEPROOF) @regression @tier3', function () {
 
     // Every pubkey this suite uses. The mock resolves the BATCHED capability set over
     // it, mirroring db.js where getValidatorsByCapability and hasCapability answer from
-    // the same _effectiveCapabilitySetSql (#3873).
+    // the same _effectiveCapabilitySetSql.
     const ALL_PUBKEYS = [PUBKEY_V, PUBKEY_V2, PUBKEY_P, PUBKEY_P2, PUBKEY_X];
 
     function addNodeProofDbStubs(db) {
@@ -320,9 +320,9 @@ describe('NodeProof (NODEPROOF) @regression @tier3', function () {
     });
 
     it('resolves the full_node capability set in batch, never once per pubkey', async function () {
-        // Both loops used to run hasCapability (~5 sequential queries) per element: the
+        // Both loops must not run hasCapability (~5 sequential queries) per element: the
         // verifier intersect that sizes the quorum divisor, and the PASS recording pass
-        // (#3873). Two batched reads now answer both, whatever the list length.
+        // Two batched reads answer both, whatever the list length.
         // V is already a genesis verifier, so echoing it back leaves the divisor at 1
         // while still driving the intersect loop.
         indexer.indexerDb.getVerifiedFullNodeSet.resolves([{ pubkey: PUBKEY_V }]);
@@ -365,7 +365,7 @@ describe('NodeProof (NODEPROOF) @regression @tier3', function () {
             'the truncated read must not shrink the divisor, got: ' + data['STATUS']);
     });
 
-    // #3859: the PASS list is joined into the ed25519 preimage, so its order is
+    // The PASS list is joined into the ed25519 preimage, so its order is
     // consensus. Both sides of the seam are pinned to a Buffer byte comparator; the
     // input regex keeps every element lowercase 64-hex today, which is the ONLY reason
     // a bare .sort() was a total order here, and it is not a property the code states.

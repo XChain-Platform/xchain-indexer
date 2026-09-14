@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// XBRIDGE handler (lane L3): v0/v3 lock, v1/v4 burn, the shared activation and chain
+// XBRIDGE handler: v0/v3 lock, v1/v4 burn, the shared activation and chain
 // gates, and the refusal of a broadcast v2/v5.
 //
 // Every expected verdict below is written as a LITERAL, never as XBridge.VERDICTS.X. A
@@ -34,7 +34,7 @@ const { XCHAIN_BRIDGE_ACTIVATION } = require('../../../src/xchain_bridge_activat
 const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const DEST   = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
 
-// Placeholder keyless escrow / bridged-row-owner addresses. Lane L2 mints the real ones
+// Placeholder keyless escrow / bridged-row-owner addresses. The real ones live
 // in the coin bundles; the handler only ever reads them out of config, so the literal
 // value is irrelevant to what is under test here.
 const BRIDGE_DOGE = 'mxchainbridgedogeXXXXXXXXXXXXXXXXX';
@@ -54,7 +54,7 @@ function makeHandler(opts){
 
     let config = configjs.getConfig(coin, network);
 
-    // Lane L2's coin-bundle entries, supplied here so this suite does not wait on it.
+    // The coin-bundle entries, supplied here so this suite does not depend on them.
     config['ADDRESS']['BRIDGE_DOGE'] = BRIDGE_DOGE;
     config['ADDRESS']['BRIDGE_LTC']  = BRIDGE_LTC;
     config['ADDRESS']['BRIDGE_BTC']  = BRIDGE_BTC;
@@ -66,7 +66,7 @@ function makeHandler(opts){
     let indexerDb = createMockDb();
     let mapper    = { createMappings: sinon.stub().resolves() };
 
-    // The two writers lane L3 raised as seam gaps (see the handler's file header): the
+    // The two writers raised as seam gaps (see the handler's file header): the
     // xbridges action row and the tokens.bridged setter. Stubbed here so the payload
     // each one must receive is pinned by test before either is built.
     indexerDb.createXbridge    = sinon.stub().resolves();

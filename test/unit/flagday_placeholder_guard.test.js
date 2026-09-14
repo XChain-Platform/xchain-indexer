@@ -216,7 +216,7 @@ describe('flag-day placeholder guard @regression @tier1', function () {
     // monorepo/aggregator checkout; standalone single-repo CI skips (unless a required-
     // sibling job sets XCHAIN_REQUIRE_SIBLINGS=1, where a missing sibling hard-fails).
     describe('sibling copies carry no placeholder regression', function () {
-        // NOTE (#2759): xchain-documentation/protocol/constants.js is deliberately NOT in
+        // NOTE: xchain-documentation/protocol/constants.js is deliberately NOT in
         // this substring loop. Its `mainnet: 963000` substring is vacuously satisfied by
         // ARCHIVE_REWARD_ACTIVATION, so a substring check on the docs file could never fail
         // for the retraction gate. The docs arm is asserted by named export below instead.
@@ -248,7 +248,7 @@ describe('flag-day placeholder guard @regression @tier1', function () {
             });
         }
 
-        // #2759: assert the retraction gate against the canonical inventory by NAMED
+        // Assert the retraction gate against the canonical inventory by NAMED
         // EXPORT, not by substring. The vendored copies claim to be byte-equal to the
         // RETRACTION_SIGNING_ACTIVATION map in xchain-documentation/protocol/constants.js;
         // this makes that claim capable of failing (a re-anchor that moves the copies while
@@ -337,7 +337,7 @@ describe('flag-day placeholder guard @regression @tier1', function () {
         });
     });
 
-    // #2734: retraction_signing_activation.js is a fork-relevant flag-day twin that
+    // retraction_signing_activation.js is a fork-relevant flag-day twin that
     // exists in three byte-identical copies (hub, indexer, explorer). It decides
     // whether a mirror REFUSES an unsigned quorum-class retraction, so a one-sided edit
     // (a comparator flip >= -> >, a testnet/regtest value change, an added second map,

@@ -104,7 +104,7 @@ const REWARD_DERIVE_BLOCK = ar.anchorRewardDeriveHeight(EARN_BLOCK);
 const VALIDATOR = makeKeypair();   // the reward's signing validator (independent of federation signers)
 
 // The DOGE address that publishes the seeded archive anchor: head and every continuation
-// chunk are authored by it, which is what binds the chunks to the head since #3075.
+// chunk are authored by it, which is what binds the chunks to the head.
 const ARCHIVE_PUBLISHER = 'DArchivePublisher0000000000000000';
 
 // ── Contract-heavy recovery leg ────────────────────────────────────
@@ -298,7 +298,7 @@ async function seedArchive(dogeDb) {
     // seeded v1 MUST carry a real status_id (a NULL status_id is dropped by the INNER JOIN, which is
     // a fixture defect, not a reason to loosen the query). anchor.js defaults a clean parse to 'valid'.
     const validStatusId = await dogeDb.createStatus('valid');
-    // Every anchor row also needs its `actions` row (#3075): a v2 continuation chunk is
+    // Every anchor row also needs its `actions` row: a v2 continuation chunk is
     // now authenticated by matching the archive head's AUTHOR, resolved through
     // actions.source_id -> index_addresses, so a seeded anchor with no action linkage
     // resolves to a NULL author, matches nothing, and the batch reports 'incomplete

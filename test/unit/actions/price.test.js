@@ -32,7 +32,7 @@ const SIG_C    = '3'.repeat(128);
 // Every pubkey this suite signs with (the byte-repeat forms cover the Sybil
 // fixtures below). The mock DB resolves the BATCHED capability set over this
 // universe, mirroring db.js where getValidatorsByCapability and hasCapability
-// answer from the same _effectiveCapabilitySetSql (#3871).
+// answer from the same _effectiveCapabilitySetSql.
 const ALL_PUBKEYS = Array.from(new Set(
     [PUBKEY_A, PUBKEY_B, PUBKEY_C].concat(
         Array.from({ length: 16 }, (_, i) => i.toString(16).padStart(2, '0').repeat(32)))));
@@ -50,7 +50,7 @@ describe('Price (PRICE) @regression @tier3', function () {
         setCapable(db, () => true);
     }
 
-    // Drive BOTH capability APIs from one predicate, the way db.js does (#3871):
+    // Drive BOTH capability APIs from one predicate, the way db.js does:
     // a case that says who qualifies stays honest whichever path the handler takes.
     function setCapable(db, predicate) {
         db.hasCapability.callsFake(async (pubkey, cap, blk) => !!(await predicate(pubkey, cap, blk)));

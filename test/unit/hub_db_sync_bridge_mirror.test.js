@@ -153,7 +153,7 @@ describe('bridge sync barrier @regression @tier1', function () {
     });
 
     it('an empty mirror satisfies the barrier ONLY after a full bootstrap drain', async function () {
-        // The #1788 rule: the NULL fast path may never be armed from a holed mirror, or a
+        // The holed-mirror rule: the NULL fast path may never be armed from a holed mirror, or a
         // node that drained nothing would mint at the wrong block and fork.
         const { sync } = makeSync({ coin: 'DOGE' });
         sync.bridgeSyncTimestamp = null;
@@ -274,7 +274,7 @@ describe('policy sync barrier @regression @tier1', function () {
     });
 
     it('a watermark advance releases an in-flight waiter without a new row', async function () {
-        // The #1984 deadlock class: a quiet table must never freeze the tip. A heartbeat is
+        // The quiet-table deadlock class: a quiet table must never freeze the tip. A heartbeat is
         // the only evidence that arrives when no row does, so _advanceWatermark has to reach
         // this waiter list as well as the older ones.
         const { sync } = makeSync({ coin: 'DOGE' });

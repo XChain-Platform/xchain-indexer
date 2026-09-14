@@ -151,7 +151,7 @@ describe('stateCommitment: cached SMT node reads @regression', function(){
 
     it('an ABSENT node is never cached, so the strict-read miss keeps reaching the store', async function(){
         // A cached miss would turn "this subtree is empty" into a decision made
-        // once and reused, which is the one thing the M-17 strict-read note in
+        // once and reused, which is the one thing the strict-read note in
         // stateCommitment.js says must stay loud.
         const store = new ReadCountingStore();
         const smt   = new SC.PersistentSMT(store);

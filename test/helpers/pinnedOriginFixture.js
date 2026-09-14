@@ -14,7 +14,7 @@
  *
  **********************************************************************
  * Load a fixture that is meant to be an IMMUTABLE ANCHOR, refusing it if the
- * bytes moved (#5404).
+ * bytes moved.
  *
  * Used by the two schema-parity suites for the origin copies of the pre-ledger
  * baselines. Those guards work by comparing today's baseline against a record of

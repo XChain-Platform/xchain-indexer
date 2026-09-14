@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/db_find_swap_matches_ownership_null.test.js
  *
- * REGRESSION GUARD for findSwapMatches() ownership-swap pairing (#3749).
+ * REGRESSION GUARD for findSwapMatches() ownership-swap pairing.
  *
  * Ownership swaps store NULL give_amount/get_amount. The match query paired
  * swaps with bare amount equality (s1.give_amount=s2.get_amount), but SQL

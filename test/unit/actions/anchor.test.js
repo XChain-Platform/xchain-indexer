@@ -116,7 +116,7 @@ function v1Params(archiveJson, overrides = {}) {
 
 const ARCHIVE_JSON = JSON.stringify({ v: 1, network: 'regtest', batch_seq: 0, matches: [{ match_id: 'm1' }], capability_snapshots: [] });
 
-// The archive head's AUTHOR address (#3075), i.e. what db.getAnchorV1ByBatchSeq now
+// The archive head's AUTHOR address, i.e. what db.getAnchorV1ByBatchSeq now
 // returns as `source`. Deliberately createBaseData's SOURCE: a v2 continuation chunk is
 // authenticated by matching it, so every legitimate-chunk fixture below publishes as this
 // address and the hostile ones publish as OUTSIDER.
@@ -697,7 +697,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         assert.strictEqual(data['STATUS'], 'orphan');
 
         // Parent present, fresh chunk from the head's OWN publisher → valid. `source` is
-        // the head author the chunk is bound to (#3075); createBaseData's SOURCE is the
+        // the head author the chunk is bound to; createBaseData's SOURCE is the
         // chunk author, so the two must match for the chunk to be authenticated at all.
         indexer.indexerDb.getAnchorV1ByBatchSeq.resolves({ action_index: 1, total_chunks: 3, archive_b64: 'AAA', batch_crc32: 'deadbeef', source: PUBLISHER });
         let data2 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 3 });
@@ -711,10 +711,10 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         assert.ok(String(data3['STATUS']).startsWith('invalid: CHUNK_INDEX (duplicate)'));
     });
 
-    // ── #3075: chunk-slot poisoning. "Authenticated by its parent v1" used to mean only
-    //    that a parent existed with matching geometry, so the FIRST broadcast into a slot
-    //    won permanently: a junk chunk took the slot, the real publisher's chunk was
-    //    rejected as a duplicate, and the batch could never reassemble. ─────────────────
+    // ── Chunk-slot poisoning. "Authenticated by its parent v1" must mean more than
+    //    that a parent exists with matching geometry, or the FIRST broadcast into a slot
+    //    wins permanently: a junk chunk takes the slot, the real publisher's chunk is
+    //    rejected as a duplicate, and the batch can never reassemble. ─────────────────
     describe('v2 chunk authorship (#3075)', function () {
 
         const headOf = (source) => ({ action_index: 1, total_chunks: 3, archive_b64: 'AAA', batch_crc32: 'deadbeef', source });

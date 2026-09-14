@@ -1006,8 +1006,8 @@ describe('Dispense action handler @regression @tier2', function () {
 
     // Regression for the dead 'invalid: Dispenser unknown' branch: getDispenserInfo
     // returning falsy for a matched action_index must not throw a TypeError out of
-    // the settlement loop (dispenserInfo[...] is never populated for it). See
-    // AML finding uuid:78e3de16.
+    // the settlement loop (dispenserInfo[...] is never populated for it).
+    // It is skipped with no dispense recorded.
     it('unknown dispenser (getDispenserInfo returns false): does not throw, no dispense recorded for it', async function () {
         indexer.indexerDb.findMatchingDispensers.resolves([10]);
         indexer.indexerDb.getDispenserInfo.resolves(false);

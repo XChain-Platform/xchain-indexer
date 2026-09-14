@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Integration: cross-chain DEX royalty enforcement (finding B), real MariaDB + real
+ * Integration: cross-chain DEX royalty enforcement, real MariaDB + real
  * isolated-vm guard.
  *
  * Proves, over real DB rows + a real guard VM + a real Ed25519-signed match:

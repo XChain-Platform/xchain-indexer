@@ -59,7 +59,7 @@ function dbWithDoQuery(rows) {
     const db = makeDb();
     sinon.stub(db, 'doQuery').resolves(rows);
     // Consensus-input reads (e.g. getLatestPrice) route through doQueryStrict,
-    // which throws instead of swallowing errors (M-17). Stub it identically so
+    // which throws instead of swallowing errors. Stub it identically so
     // helpers that assert on returned rows exercise either path.
     sinon.stub(db, 'doQueryStrict').resolves(rows);
     return db;
@@ -274,7 +274,7 @@ describe('Database.doQuery() @regression @tier1', function () {
 });
 
 // doQueryStrict: the consensus-input variant that ALWAYS throws on query error
-// (M-17). doQuery collapses a non-transactional error into [] - indistinguishable
+// and never swallows it. doQuery collapses a non-transactional error into [] - indistinguishable
 // from an empty result - which can fork the ledger on a transient DB fault; a
 // strict read lets block processing roll back and retry.
 describe('Database.doQueryStrict() @regression @tier1', function () {
@@ -1744,9 +1744,9 @@ describe('Database.parseExpectedIndexes() @regression @tier1', function () {
         assert.strictEqual(idxs.length, 0);
     });
 
-    // #2261: the (len) prefix used to be stripped and discarded, so a live
-    // aged address(62) UNIQUE index and the declared full-column one read as
-    // identical and prefix drift was invisible to the reconciler.
+    // The (len) prefix must not be stripped and discarded, or a live
+    // aged address(62) UNIQUE index and the declared full-column one would read as
+    // identical and prefix drift would be invisible to the reconciler.
     it('captures per-column prefix widths separately from the column names', function () {
         const sql = 'CREATE UNIQUE INDEX address ON index_addresses (address(62));\n' +
                     'CREATE INDEX combo ON index_addresses (a(10), b);';
@@ -1758,7 +1758,7 @@ describe('Database.parseExpectedIndexes() @regression @tier1', function () {
         assert.deepStrictEqual(idxs[1].prefixes, [10, null]);
     });
 
-    // #2261: an aged prefixed UNIQUE index matching the declared full-column
+    // An aged prefixed UNIQUE index matching the declared full-column
     // one by column set must be WARNED about (auditable drift), never DDL'd
     // (the UNIQUE rebuild is deliberately gated manual).
     it('reconcileTableIndexes warns on prefix-width drift without issuing DDL', async function () {
@@ -1797,7 +1797,7 @@ describe('Database.parseExpectedIndexes() @regression @tier1', function () {
         }
     });
 
-    // #2702: a declared UNIQUE index whose name is already held by a live NON-unique
+    // A declared UNIQUE index whose name is already held by a live NON-unique
     // index of the same column set must be WARNED about (uniqueness drift is otherwise
     // invisible and silently degrades ON DUPLICATE KEY UPDATE writers), never DDL'd
     // (we must never DROP an index we did not create).
@@ -1823,8 +1823,8 @@ describe('Database.parseExpectedIndexes() @regression @tier1', function () {
     });
 });
 
-// #4357: the ADD path built its column list from bare column names, so an index the
-// source declares with a (len) prefix or a DESC column was rebuilt as a different index.
+// The ADD path must not build its column list from bare column names, or an index the
+// source declares with a (len) prefix or a DESC column is rebuilt as a different index.
 // index_tickers.tick is TEXT, so the full-column rebuild fails with errno 1170 and the
 // non-fatal catch swallows it, leaving the table without its declared UNIQUE.
 describe('Database.reconcileTableIndexes() prefix/direction-preserving DDL @regression @tier1', function () {
@@ -1885,7 +1885,7 @@ describe('Database.reconcileTableIndexes() prefix/direction-preserving DDL @regr
     });
 });
 
-// #4359: relaxing NOT NULL -> NULL with a bare MODIFY restates the whole column, so every
+// Relaxing NOT NULL -> NULL with a bare MODIFY restates the whole column, so every
 // attribute the statement omits (DEFAULT, COMMENT, ON UPDATE, generation expression) is
 // dropped and an aged DB silently stops matching a fresh install of the same source.
 describe('Database.alterTableForDrift() lossless nullability relax @regression @tier1', function () {
@@ -2053,7 +2053,7 @@ describe('Database.apiView() @regression @tier1', function () {
         assert.ok(txConn.query.calledOnce, 'block-loop queries must keep joining the transaction');
     });
 
-    // H2 residual: federation READ methods (not just the pushvalidatorrewards
+    // Federation read isolation: READ methods (not just the pushvalidatorrewards
     // write) must resolve on a pooled connection. A read accessor invoked through the
     // view routes its internal doQuery calls off the open block transaction, so a hub
     // never reads validator-set rows the block may still roll back.
@@ -2166,7 +2166,7 @@ describe('Database.getPendingHubPushes() @regression @tier1', function () {
         assert.match(sql, /LIMIT \?/);
     });
 
-    // Head-of-line blocking fix (review finding 01178748): the due-time predicate
+    // Head-of-line blocking fix: the due-time predicate
     // must be pushed into SQL, mirroring HubPushQueue._isDue's backoff formula
     // (delay = LEAST(base * 2^(attempts-1), max)), so pending-but-not-due rows no
     // longer occupy the LIMIT batch slots.
@@ -4539,9 +4539,9 @@ describe('Database.getExpiredItems() @regression @tier1', function () {
     });
 
     // the expiration cut is applied in SQL, so exactly ONE query runs and
-    // only the rows actually expiring this block come back. Previously the whole
-    // open book was fetched, overlaid by a second batched edits query per type,
-    // and filtered in JS. (Supersedes the uuid:4fe690ab N+1 regression, whose
+    // only the rows actually expiring this block come back, rather than the whole
+    // open book fetched, overlaid by a second batched edits query per type,
+    // and filtered in JS. (That shape also carried an N+1 regression, and its
     // batched edits query no longer exists.)
     it('runs one query with the expiration cut and the edits overlay pushed into SQL', async function () {
         const db = makeDb();

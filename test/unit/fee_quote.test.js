@@ -111,7 +111,7 @@ describe('native coin fee quote @regression @tier1', function () {
         });
     });
 
-    // #2693 / every time-sensitive decision in getFeeOraclePrices (flag-day gate, non-BTC
+    // Every time-sensitive decision in getFeeOraclePrices (flag-day gate, non-BTC
     // round selection, staleness) anchors on the SINGLE chain-derived refTime the caller passes.
     // There is no separate wall-clock anchor to disagree with it.
     describe('getFeeOraclePrices() single chain-time anchor', function () {

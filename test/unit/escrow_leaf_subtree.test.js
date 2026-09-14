@@ -49,7 +49,7 @@ const TICK  = 'XCHAIN';
 class FakeDb {
     constructor(){
         this.rows = []; this.nodes = new Map(); this.nextId = 1; this.journalQueries = 0;
-        // M-17: which reader each SQL string arrived through, plus fault injection.
+        // Which reader each SQL string arrived through, plus fault injection.
         // Every journal read must be strict, because doQuery turns a
         // non-transactional fault into [], and [] is delete-on-zero here.
         this.softSql   = [];
@@ -158,7 +158,7 @@ describe('XCHAIN_ESC locked leaf: inertness @regression', function(){
         // the cheapest proof of that is that the journal is never even read.
         const db = new FakeDb();
         db.write(100, ADDR, TICK, '5');
-        // BOTH readers are counted. The journal read is strict (M-17) while the
+        // BOTH readers are counted. The journal read is strict while the
         // credits/debits reads around it are not, so stubbing only doQuery would
         // make this pass by missing the very query it is counting.
         const count = async (sql) => {
@@ -340,7 +340,7 @@ describe('XCHAIN_ESC locked leaf: the §7 shadow thread @regression', function()
     // read on top.
     function shadowDb(priors){
         const db = new FakeDb();
-        // Patch run, not doQuery: the module reads strictly now (M-17), and
+        // Patch run, not doQuery: the module reads strictly now, and
         // overriding the soft reader would leave the shadow prior-row read
         // unstubbed while quietly passing.
         const orig = db.run.bind(db);
@@ -385,7 +385,7 @@ describe('XCHAIN_ESC locked leaf: the §7 shadow thread @regression', function()
         prior = await ESC.applyEscrowLeaves(db, smt, prior, CHAIN, NETWORK, 499);
 
         const priors = {}; priors[499] = prior;
-        // Patch run, not doQuery: the module reads strictly now (M-17), and
+        // Patch run, not doQuery: the module reads strictly now, and
         // overriding the soft reader would leave the shadow prior-row read
         // unstubbed while quietly passing.
         const orig = db.run.bind(db);
@@ -433,7 +433,7 @@ describe('XCHAIN_ESC locked leaf: the §7 shadow thread @regression', function()
 });
 
 // ---------------------------------------------------------------------------
-// M-17: the journal reads STRICTLY, so a DB fault halts instead of forking.
+// The journal reads STRICTLY, so a DB fault halts instead of forking.
 //
 // Delete-on-zero makes this stage's exposure worse than Stage A's: doQuery's
 // fail-soft [] is not merely "no data", it is the exact encoding of "nothing is

@@ -17,7 +17,7 @@ const sinon = require('sinon');
 const HubDbSync = require('../../src/hub/hub_db_sync.js');
 
 // A bootstrap never dropped capability_snapshots rows the current hub does not carry
-// (#1837). The table has no `network` column, so _mirrorNetworkScope returns null and
+// on its own. The table has no `network` column, so _mirrorNetworkScope returns null and
 // both purge paths are unreachable, and being a FULL_REPAGE table its cursor is forced
 // to 0 so the id-ceiling fence never runs either. The re-page then converges only the
 // uq_cap_snap keys the two hubs SHARE; a row from a retired hub at a block boundary the

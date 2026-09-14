@@ -427,7 +427,7 @@ describe('HubDbSync bootstrap pagination + retry @regression @tier2', function (
         assert.strictEqual(await sync._bootstrapTable('oracle_prices'), 99);
     });
 
-    // #2270: capability_snapshots is a natural-key mirror. Local ids are locally
+    // capability_snapshots is a natural-key mirror. Local ids are locally
     // assigned (recovery rebuilds id-less; hub ids are hub-local), so seeding the
     // cursor from local MAX(id) silently skips hub rows, and applying a wire id
     // collides with a local PK where INSERT IGNORE drops the row.
@@ -441,7 +441,7 @@ describe('HubDbSync bootstrap pagination + retry @regression @tier2', function (
             'must page from 0, not local MAX(id): ' + httpGet.firstCall.args[0]);
     });
 
-    // #2491: the three in-place-UPGRADED tables must ALSO bootstrap from since_id=0, so a row
+    // The three in-place-UPGRADED tables must ALSO bootstrap from since_id=0, so a row
     // upgraded on the hub under its unchanged id (price_snapshots skipped->finalized,
     // cross_chain_calls re-finalized, cross_chain_matches anchor_txid) while this mirror was
     // disconnected is re-delivered and converged by its idempotent _applyRow ODKU. A
@@ -458,7 +458,7 @@ describe('HubDbSync bootstrap pagination + retry @regression @tier2', function (
         });
     });
 
-    // #3211, the half no ODKU can reach: the hub's snapshot endpoint filters
+    // The missed-retraction half no ODKU can reach: the hub's snapshot endpoint filters
     // `status <> 'retracted'`, so a match retracted while this mirror was disconnected is
     // ABSENT from every bootstrap page. There is no row to converge against, and the stale
     // local copy keeps settling a match the hub retracted. After a COMPLETE re-page, a local
@@ -769,8 +769,8 @@ describe('HubDbSync _applyRow cross_chain_calls generation fence @regression @ti
     // push_generation is the item-5308 reorg FENCE, not content. Assigned inside the
     // status gate it followed the incoming finalized row in EITHER direction, so a
     // bootstrap page fetched before a re-publish and landing AFTER the live re-published
-    // row (cross_chain_calls does not buffer during the drain; only price_snapshots does,
-    // #2422) lowered it. The fenced retraction (DELETE ... WHERE push_generation <= gen)
+    // row (cross_chain_calls does not buffer during the drain; only price_snapshots does)
+    // lowered it. The fenced retraction (DELETE ... WHERE push_generation <= gen)
     // then matched a row published ABOVE the fence and deleted it for good. The fence must
     // only ever move up, the rule cross_chain_matches applies to a_/b_push_generation.
 
@@ -847,7 +847,7 @@ describe('HubDbSync _applyRow cross_chain_calls generation fence @regression @ti
 
     it('assigns the fence LAST, so every gated column is judged against the ORIGINAL generation', async function () {
         // MariaDB evaluates ODKU assignments left to right and later expressions read the
-        // ALREADY-UPDATED value (the #3211 ordering trap). push_generation is both a gate
+        // ALREADY-UPDATED value (the ODKU ordering trap). push_generation is both a gate
         // input and an assignment target, so lifting it first would make every following
         // column compare the incoming generation against itself and the gate would never
         // refuse anything.
@@ -882,7 +882,7 @@ describe('HubDbSync _applyRow cross_chain_matches convergence upgrade @regressio
     //     (StateAnchorPublisher._backfillBatch) and re-broadcast. A plain INSERT IGNORE
     //     would no-op and leave anchor_txid NULL on streamed mirrors while a fresh REST
     //     bootstrap serves the stamp (divergent mirrors). First-stamp-wins COALESCE.
-    //  2. RETRACT -> REVIVE (#3211): a source-chain reorg retracts the crossing (mirrored
+    //  2. RETRACT -> REVIVE: a source-chain reorg retracts the crossing (mirrored
     //     as a DELETE); the same crossing re-forms at the same snapshot_block, so
     //     _deriveMatchId yields the identical match_id and the hub revives the row with a
     //     NEW effective_time / finalizing_view / validator_signatures. A mirror that missed
@@ -1256,12 +1256,12 @@ describe('HubDbSync bootstrap fail-closed on partial drain / holes @regression @
 });
 
 // ---------------------------------------------------------------------------
-// #2422: the WS subscription opens BEFORE the REST bootstrap and
+// The WS subscription opens BEFORE the REST bootstrap and
 // price_snapshots deliberately drains LAST behind a multi-minute pull, so a
-// freshly-finalized round arriving on the socket mid-drain used to apply
-// immediately; _refreshPriceSyncHeight then adopted its MAX(reference_block)
+// freshly-finalized round arriving on the socket mid-drain would apply
+// immediately; _refreshPriceSyncHeight would then adopt its MAX(reference_block)
 // while earlier rounds (lower ids, only deliverable via the still-draining
-// bootstrap) were absent locally, and the height barrier's case-1 opened over
+// bootstrap) are absent locally, and the height barrier's case-1 would open over
 // a HOLED mirror: a per-operator divergent native-fee price read. Live price
 // events must BUFFER until the price bootstrap drains, keeping the local
 // mirror a CONTIGUOUS prefix of the hub's table, while the reconnect
@@ -1798,7 +1798,7 @@ describe('HubDbSync.ensureTables @regression @tier3', function () {
 });
 
 // Time-keyed price barrier. It runs on every chain and is NOT conditioned on the
-// NATIVE_FEE_PRICE_TIME_GATE flag-day; H-3 named the fee-query half of that work.
+// NATIVE_FEE_PRICE_TIME_GATE flag-day, which covers only the fee-query half of that work.
 // Non-reference chains' heights are not comparable to the rounds' BTC
 // reference_block anchor, so catch-up is judged by the rounds' consensus
 // timestamps (mirror MAX(block_timestamp)) or the hub stream watermark.
@@ -1869,9 +1869,9 @@ describe('HubDbSync time-keyed price barrier (H-3) @regression @tier3', function
     });
 });
 
-// Heartbeat-timeout watchdog (review finding 0af6d951): reconnect used to trigger
-// ONLY on the socket's 'close'/'error' events, so a half-open TCP connection (no
-// frames, no close/error) froze the mirror indefinitely. The watchdog measures
+// Heartbeat-timeout watchdog: a reconnect that triggers
+// ONLY on the socket's 'close'/'error' events lets a half-open TCP connection (no
+// frames, no close/error) freeze the mirror indefinitely. The watchdog measures
 // time-since-last-watermark and terminates a stalled socket so the existing
 // close-handler reconnect path self-heals.
 describe('HubDbSync heartbeat-timeout watchdog @regression @tier2', function () {

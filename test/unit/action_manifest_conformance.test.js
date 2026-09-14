@@ -35,7 +35,7 @@ function manifestSlice(flag) {
 // processAction also compares the action name outside the switch (the ORDER_MATCH /
 // SWAP_MATCH fee-quote verdict capture), so the looser pattern credited both names
 // whether or not their real handlers were still wired: deleting either dispatch left
-// this whole file green (AML #7690).
+// this whole file green.
 // Built per call so no lastIndex state is ever shared between the cases below.
 function dispatchRe() { return /if\s*\(\s*action\s*==\s*'([A-Z_]+)'\s*\)\s*await\s+this\.[A-Za-z0-9_]+\.parse\s*\(/g; }
 function localIndexerSet() {
@@ -57,9 +57,9 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
             '. Edit xchain-documentation/protocol/action-manifest.json + re-vendor, or wire src/actions.js.');
     });
 
-    // #2721: the manifest's `aliases` map is expanded to canonical names before any gate
+    // The manifest's `aliases` map is expanded to canonical names before any gate
     // (indexer ACTION_ALIASES module constant in src/actions/index.js, ~line 62; the constructor
-    // copies it into this.actionAliases via Object.assign, #3133/#3189). It was copied into
+    // copies it into this.actionAliases via Object.assign). It was copied into
     // the indexer with no conformance guard: a sixth alias added on only one side decodes on
     // one and coerces to UNKNOWN on the other (the same silent-drop / ledger-fork class the
     // dispatch guard above prevents, reached through the alias door). Bind the single
@@ -90,7 +90,7 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
         });
     });
 
-    // #2694: bind the module-private FEE_QUOTE_DENYLIST / FEE_QUOTE_EXEMPT sets to the dispatch
+    // Bind the module-private FEE_QUOTE_DENYLIST / FEE_QUOTE_EXEMPT sets to the dispatch
     // table via the exported classifier, so a name added to either set (or removed from dispatch)
     // cannot drift silently. Reuses localIndexerSet() as the dispatch-scraper.
     describe('fee-quote classification conformance @regression', function () {
@@ -98,7 +98,7 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
         const denied  = Actions.getFeeQuoteDenylist();
         const exempt  = Actions.getFeeQuoteExempt();
 
-        // #4267: the old (a) asserted only that the classifier returned one of
+        // A case (a) asserting only that the classifier returned one of
         // denied/exempt/quotable, which classifyFeeQuoteAction can never fail to do - a
         // tautology that passed for a dispatched action nobody classified. The sibling cases
         // do not close it either: (d)/(e) pin the DENIED and STATIC sets exactly, but EXEMPT is

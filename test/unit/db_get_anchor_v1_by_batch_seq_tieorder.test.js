@@ -96,7 +96,7 @@ describe('Database.getAnchorV1ByBatchSeq() head-selection determinism @regressio
         let captured = null;
         sinon.stub(db, 'doQuery').callsFake(async (sql) => { captured = sql; return []; });
         await db.getAnchorV1ByBatchSeq(42);
-        // The alias is optional in the pattern only because #3075 joined actions in (both
+        // The alias is optional in the pattern only because the query joins actions in (both
         // tables have an action_index column, so the ORDER BY has to qualify it now).
         assert.match(captured, /ORDER BY\s+(?:[A-Za-z0-9_]+\.)?action_index\s+ASC/i,
             'head selection must ORDER BY action_index ASC (canonical/earliest head)');
@@ -105,7 +105,7 @@ describe('Database.getAnchorV1ByBatchSeq() head-selection determinism @regressio
         assert.doesNotMatch(orderClause(captured), /\bid\b/i);
     });
 
-    // #3075: the head row must carry its AUTHOR, because anchor.js binds every v2
+    // The head row must carry its AUTHOR, because anchor.js binds every v2
     // continuation chunk to it. The address is resolved through actions.source_id
     // (authoritative for auth) - anchor_actions has no source column of its own, and its
     // `publisher` column is the v4/v5/v6 elected-PUBLISHER pubkey, a different thing.

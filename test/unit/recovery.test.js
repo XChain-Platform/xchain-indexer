@@ -38,7 +38,7 @@ const { makeKeypair, signHex, buildBatch, rawMatch, rawCall, SNAPSHOT_BLOCK } = 
 const util = new Utility();
 
 // The address every fixture anchor is authored by, i.e. the archive head's SOURCE
-// (#3075). A chunk is only counted when it shares the canonical head's author, so
+// A chunk is only counted when it shares the canonical head's author, so
 // fixtures that omit `source` on either side are treated as this one and behave exactly
 // as they did before the authorship filter existed.
 const AUTHOR   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
@@ -55,7 +55,7 @@ const ARMED_DOGE_BLOCK = 500;
 // opts.noTx: expose ONLY doQuery, modelling a raw query handle with no transaction API
 // (recovery must still rebuild against one; see the back-compat case below). Otherwise the
 // stub implements begin/commit/rollback with snapshot semantics, so the per-batch
-// transaction (#3213) is exercised by every test in this file.
+// transaction is exercised by every test in this file.
 function memDb(v1s, v2s, opts) {
     opts = opts || {};
     let matches = [], snapshots = [], calls = [];
@@ -94,11 +94,11 @@ function memDb(v1s, v2s, opts) {
                 return head ? [{ action_index: head.action_index, block_index_doge: head.block_index_doge }] : [];
             }
             // The chunk query joins index_statuses and drops rejected rows
-            // (status LIKE 'invalid:%'), keeping 'valid' and 'orphan' (#2269), and since
-            // #3075 also drops every chunk not authored by the batch's CANONICAL archive
+            // (status LIKE 'invalid:%'), keeping 'valid' and 'orphan', and
+            // also drops every chunk not authored by the batch's CANONICAL archive
             // head (earliest v1/v6 row by action_index, status-agnostic). Model both
             // filters here; recovery's own JS does the per-index dedupe. Fixture rows
-            // default to AUTHOR on both sides, so pre-#3075 fixtures are unaffected.
+            // default to AUTHOR on both sides, so fixtures older than the authorship filter are unaffected.
             // Whitespace-normalized: the query is no longer a local one-liner but the
             // shared ARCHIVE_CHUNK_SET_SQL constant, which is indented across lines.
             // added a second shape with the SAME select list: the author is a bound
@@ -131,7 +131,7 @@ function memDb(v1s, v2s, opts) {
                 return matches.filter(r => r.match_id === params[0]).map(r => ({ match_id: r.match_id }));
             if (sql.startsWith('UPDATE cross_chain_matches SET status')) {
                 if (sql.includes('effective_time')) {
-                    // Revive content upgrade (#3208). params = [status, effective_time,
+                    // Revive content upgrade. params = [status, effective_time,
                     // finalizing_view, validator_signatures, anchorTxid, match_id].
                     for (let r of matches) if (r.match_id === params[5]) {
                         r.status               = params[0];
@@ -192,7 +192,7 @@ function memDb(v1s, v2s, opts) {
     };
     if (opts.noTx) return { matches, snapshots, calls, doQuery: db.doQuery };
     // Snapshot/restore transaction semantics: enough to prove a rolled-back batch leaves
-    // NOTHING behind, which is the whole point of the per-batch transaction (#3213).
+    // NOTHING behind, which is the whole point of the per-batch transaction.
     db.txDepth = 0;
     db.commits = 0;
     db.rollbacks = 0;
@@ -523,7 +523,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         assert.strictEqual(db.matches[0].match_id, 'm3');
     });
 
-    // ── #3075: the case parse-time authorship cannot judge. A junk chunk broadcast
+    // ── The case parse-time authorship cannot judge. A junk chunk broadcast
     //    BEFORE its head has no parent to authenticate against, so it is stored 'orphan'
     //    (a status that must stay usable - a legitimate early chunk carries real archive
     //    bytes). Unfiltered, that row wins the lowest-action_index dedupe for its slot,
@@ -1115,8 +1115,8 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             let report = await new AnchorRecovery(db, quiet).run();
             assert.strictEqual(report.verified, 0);
             assert.ok(report.failed[0].reason.includes('no BTC indexer DB handle'));
-            // #3213: the guard is hoisted ahead of every write, so the batch leaves nothing
-            // behind. It used to fire only after the match rows had already been committed.
+            // The guard is hoisted ahead of every write, so the batch leaves nothing
+            // behind, rather than firing only after the match rows are already committed.
             assert.strictEqual(db.matches.length, 0, 'a batch that cannot restore its rewards writes nothing');
             assert.strictEqual(db.snapshots.length, 0);
             assert.strictEqual(report.matches, 0, 'the report never counts rows the batch did not land');

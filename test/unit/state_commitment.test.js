@@ -212,7 +212,7 @@ function makeRootsMockDb({ priorRows, balances }){
         }
         return [];
     };
-    // Both readers: computeAndStoreRoots reads strictly (M-17), and a stub
+    // Both readers: computeAndStoreRoots reads strictly, and a stub
     // carrying only doQuery would fail with "not a function" rather than
     // exercising the fallback this suite is about.
     const db = {

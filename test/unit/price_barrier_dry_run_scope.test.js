@@ -21,7 +21,7 @@
  * context existed at all, under a comment asserting that only the block loop
  * installs one. That was false. `Actions._dryRunAction` installs a context too,
  * and for a good reason of its own - it holds the shared transaction and wants
- * the same M-16 zombie-write fence a block gets - so every public /feequote
+ * the same zombie-write fence a block gets - so every public /feequote
  * whose dry run read the price mirror during a barrier-skipped block answered
  * `handler threw: ... PRICE_BARRIER_DEFERRED`. Measured live on RDOGE regtest
  * 2026-09-01, where it killed three consecutive SWEEP drives while the identical
@@ -35,7 +35,7 @@
  * The fix splits the two context kinds (`runInTxEpoch` = consensus,
  * `runInDryRunEpoch` = fenced but not consensus) and keys the barrier on the
  * flag. Cases 5 and 6 are the other half of the claim: the split must not have
- * weakened M-16, which still fences a stale epoch in BOTH kinds of context.
+ * weakened the watchdog fence, which still fences a stale epoch in BOTH kinds of context.
  *
  * These exercise the real methods against the real module-level AsyncLocalStorage
  * via the prototype, with a plain object as `this`. No pool is constructed and

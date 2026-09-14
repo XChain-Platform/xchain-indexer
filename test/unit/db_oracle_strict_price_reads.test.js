@@ -22,7 +22,7 @@
  * result becomes an absent `prices` map and a Number.MAX_SAFE_INTEGER
  * `snapshotAge`, both of which the VM hashes into block state: one node's DB
  * hiccup forks it from the fleet. getLatestPrice was already converted to the
- * throwing helper for this reason (M-17); these tests pin the rest of the class.
+ * throwing helper for this reason; these tests pin the rest of the class.
  *
  * The negative control is the point of the file: with doQueryStrict swapped back
  * to doQuery in any one of these methods, that method resolves to empty data and

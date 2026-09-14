@@ -29,7 +29,7 @@
  * they probe the PARSE/RESOLVE layer only. DB-coercion and real-collation
  * behaviour for the float/overflow cases is a separate VM-integration leg (Cat 1/6).
  *
- * The canonicalization + existence fix (#4900/#4901/#4902) is now APPLIED:
+ * The canonicalization + existence fix is now APPLIED:
  * getAddressId / getTickerId accept ONLY a canonical `^[1-9][0-9]*` that
  * resolves to an existing block-stamped row, mirroring resolveAddressRef.
  * These tests are the regression guard for that fix (a non-canonical or

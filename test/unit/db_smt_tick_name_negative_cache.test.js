@@ -98,7 +98,7 @@ describe('_smtTickName: an absence is never cached @regression', function(){
     });
 
     it('reads STRICTLY, so a DB fault throws instead of masquerading as "no such ticker"', async function(){
-        // M-17: through doQuery a non-transactional fault returns [], which this
+        // Through doQuery a non-transactional fault returns [], which this
         // function cannot tell apart from a genuine absence. Combined with the
         // cache that was a permanent silent omission; alone it is still a dropped
         // touch for this block.

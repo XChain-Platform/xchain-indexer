@@ -138,7 +138,7 @@ describe('anchor_reward_derive (BTC-side derivation) @regression @tier2', functi
             assert.ok(db.reconcileAnchorRewardWinner.calledOnceWith(7, 'anchor_BTC', 200, null, 0));
         });
 
-        // #4172, operator ruling (a). snapshot_block is the height the XANCPUB signing set was
+        // Maturity rule: snapshot_block is the height the XANCPUB signing set was
         // resolved at, and it is already in the past when the row is written, so maturing on it
         // let two nodes with different mirror contents derive the same reward at different
         // heights. Maturity is now the fleet-agreed watermark, and the fetch must ask for it.
@@ -349,7 +349,7 @@ describe('anchor_reward_derive (BTC-side derivation) @regression @tier2', functi
             assert.ok(db.createValidatorReward.notCalled);
         });
 
-        // The mined-anchor re-proof (AML #4171). The mirror is transport: the hub that wrote
+        // The mined-anchor re-proof. The mirror is transport: the hub that wrote
         // the row is the party the reward pays, so its claim that the anchor was mined is
         // re-checked here against DOGE before any money row exists.
         describe('DOGE mined-anchor re-proof', function () {

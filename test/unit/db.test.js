@@ -661,7 +661,7 @@ describe('Database reorg identity detection @regression @tier1', function () {
             { id: 6, block_index: 200 },
             { id: 7, block_index: 150 },
         ]);
-        // The main select must filter by id > afterId, not return only the latest. (#2735 adds a
+        // The main select must filter by id > afterId, not return only the latest. (The reorg witness adds a
         // preceding witness-the-cursor query, so locate the id>? select rather than assuming order.)
         const boundedCall = db.doQueryStrict.getCalls().find(c => /id > \?/.test(c.args[0]));
         assert.ok(boundedCall, 'expected an id > ? select');
@@ -1052,7 +1052,7 @@ describe('Database.getRawBlockTime() memoization @regression @tier1', function (
 
     beforeEach(function () {
         db = {
-            // getRawBlockTime reads via doQueryStrict (throw-on-fault, finding #898) so a
+            // getRawBlockTime reads via doQueryStrict (throw-on-fault) so a
             // transient decoder-DB fault propagates to the fail-loud protocol-changes catch
             // instead of collapsing to the `false` sentinel and silently disabling gates.
             doQueryStrict: sinon.stub().resolves([]),

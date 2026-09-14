@@ -50,14 +50,14 @@ const SQL_DIR = path.join(__dirname, '..', '..', 'src', 'sql');
 const MIG_DIR = path.join(SQL_DIR, 'migrations');
 const INDEX_BASELINE = path.join(__dirname, '..', 'fixtures', 'schema-index-baseline.json');
 
-// #5404: the immutable anchor the re-freeze guard measures against, plus the sha256 that
+// The immutable anchor the re-freeze guard measures against, plus the sha256 that
 // makes editing it a deliberate act. See the re-freeze case at the bottom of this file.
 const ORIGIN_INDEX_BASELINE        = path.join(__dirname, '..', 'fixtures', 'schema-index-baseline-origin.json');
 const ORIGIN_INDEX_BASELINE_SHA256 = 'c5da83b9fb1d9aab4d2e370b2e975022f1bbabecc3e732fe2714e4ca48d720bf';
 
 // Tables whose CREATE TABLE lives in a dated migration are ledger-covered by that
 // statement, indexes included, so they are outside the inverse direction entirely
-// (same carve-out the column baseline states, #3164). SQL line comments are stripped
+// (same carve-out the column baseline states). SQL line comments are stripped
 // first: the migrations explain themselves in prose, and an unstripped scan reads
 // words like "IF" or "is" out of a sentence as table names.
 function stripSqlComments(raw){
@@ -100,7 +100,7 @@ function indexKind(qualifier){
 
 // table -> Map(lowercased index name -> {columns, unique, fulltext}) declared in the
 // canonical definitions. A Map, not a Set, so the name-only checks below keep working while
-// the shape comparison gets the columns and the UNIQUE flag the old Set threw away (#3529).
+// the shape comparison gets the columns and the UNIQUE flag the old Set threw away.
 function collectDeclaredIndexes(){
     const declared = {};
     const add = (table, index, qualifier, columns) => {
@@ -190,7 +190,7 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
             orphans.map(o => `  ${o.table}.${o.index}  <- ${o.file}`).join('\n'));
     });
 
-    // #3529: name equality is not shape equality. A migration `ADD INDEX foo (a, b)` and a
+    // Name equality is not shape equality. A migration `ADD INDEX foo (a, b)` and a
     // definition `KEY foo (a, c)`, or a `CREATE UNIQUE INDEX foo` against a plain `KEY foo`,
     // both satisfy the name-only check above while leaving a fresh install and a
     // migration-replayed install carrying structurally different indexes under one name. The
@@ -228,7 +228,7 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
             'in src/sql/<table>.sql and the dated migration agree:\n' + mismatches.join('\n'));
     });
 
-    // #3386: the inverse direction the column-parity sibling already closes (#2457).
+    // The inverse direction the column-parity sibling already closes.
     // An index that exists ONLY on the definition path is invisible to a DB converged by
     // replaying migrations alone (an operator-managed or rebuilt replica). It bites hardest
     // for an inline KEY / UNIQUE KEY added to a CREATE TABLE after the table exists:
@@ -266,7 +266,7 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
             unledgered.join('\n'));
     });
 
-    // #4076: the seam BETWEEN the two carve-outs above. The inverse guard exempts a
+    // The seam BETWEEN the two carve-outs above. The inverse guard exempts a
     // ledger-created table because its CREATE TABLE is the ledger record, and the sibling
     // column-parity case compares that CREATE TABLE body byte-for-byte, so an inline
     // `KEY` on such a table really is covered. A STANDALONE `CREATE INDEX ... ON` is not:
@@ -324,13 +324,13 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
             'from test/fixtures/schema-index-baseline.json:\n' + stale.join('\n'));
     });
 
-    // #4435: the index twin of the column-shape guard. The inverse guard above exempts a
+    // The index twin of the column-shape guard. The inverse guard above exempts a
     // pre-ledger index by NAME, and the baseline stored nothing but names, so re-pointing a
     // baselined index at different columns, changing its (len) prefix or its column ORDER, or
     // promoting a plain KEY to UNIQUE all stayed green with no dated migration. The runtime is
     // no backstop: reconcileTableIndexes matches by COLUMN SET (so it cannot see a prefix or
     // order change) and for an inline KEY it is never consulted at all, since parseExpectedIndexes
-    // reads only standalone CREATE INDEX. The shape case above (#3529) covers only indexes a
+    // reads only standalone CREATE INDEX. The shape case above covers only indexes a
     // migration ALSO declares; a baselined index has no migration by definition, so nothing
     // watched it. The baseline now freezes each one's normalized columns + UNIQUE flag.
     it('a pre-ledger baselined index has not changed shape (columns, prefix, uniqueness) @regression', function(){
@@ -362,7 +362,7 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
             'test/fixtures/schema-index-baseline.json in the SAME commit:\n' + drifted.join('\n'));
     });
 
-    // #5404: the twin of the column suite's re-freeze guard, for the same reason. The case
+    // The twin of the column suite's re-freeze guard, for the same reason. The case
     // above fires when baseline != definition and its message mandates two things - a dated
     // migration recreating the index in its new shape AND a re-freeze of this fixture in the
     // same commit - but only the re-freeze is machine-checked. Doing the re-freeze alone
@@ -372,9 +372,9 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
     // touches an inline KEY at all, so nothing heals it later either.
     //
     // test/fixtures/schema-index-baseline-origin.json is the anchor, sha256-pinned above and
-    // seeded from the #4435 landing (01f321c1) rather than from today's baseline - an anchor
+    // seeded from the shape-guard landing (01f321c1) rather than from today's baseline - an anchor
     // copied from today would be vacuous, since nothing would differ from it. Seeded from
-    // #4435 it already carries the destroys.action_index UNIQUE -> non-unique re-freeze, which
+    // that landing it already carries the destroys.action_index UNIQUE -> non-unique re-freeze, which
     // this case resolves through the real 2026-08-15-destroys-drop-unique-action-index.sql,
     // so the guard is exercised on live data today rather than on some future commit.
     //

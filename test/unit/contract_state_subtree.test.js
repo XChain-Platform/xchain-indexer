@@ -70,7 +70,7 @@ class FakeDb {
         this.nodes  = new Map();   // state_tree_nodes
         this.nextId = 1;
         this.stateQueries = 0;     // every contract_state read, for the inertness count
-        // M-17: which reader each SQL string arrived through. The derivation must
+        // Which reader each SQL string arrived through. The derivation must
         // use doQueryStrict for ALL of its reads, because doQuery collapses a
         // non-transactional error into [] and every [] here is a meaningful (and
         // wrong) answer rather than an error signal.
@@ -709,7 +709,7 @@ describe('contract_state_root: arming boundary and reorg @regression', function(
 });
 
 // ---------------------------------------------------------------------------
-// M-17: the derivation reads STRICTLY, so a DB fault halts instead of forking.
+// The derivation reads STRICTLY, so a DB fault halts instead of forking.
 //
 // doQuery collapses a NON-transactional query error into [], and an empty
 // result is a meaningful answer at every read here, not an error signal. These

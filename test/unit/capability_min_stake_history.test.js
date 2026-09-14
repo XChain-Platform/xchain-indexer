@@ -104,7 +104,7 @@ describe('capability MIN_STAKE as-of-block reconstruction @regression @tier2', f
         it('an override wins over the frozen table, and only an OPERATOR may supply one', function () {
             // db.js honours a caller-supplied threshold verbatim for the same reason: local
             // config drifts between independently-operated indexers. What must never reach it
-            // is anything ARCHIVE-derived - that was the #4269 forge.
+            // is anything ARCHIVE-derived, which would let an archive forge the threshold.
             let h = { cross_chain: [{ activation_block: 0, value: '250' }] };
             assert.strictEqual(cmsh.minStakeAt('cross_chain', 10, 'regtest', '1', h), '250');
             assert.strictEqual(cmsh.minStakeAt('cross_chain', 10, 'regtest', '1'), '1');

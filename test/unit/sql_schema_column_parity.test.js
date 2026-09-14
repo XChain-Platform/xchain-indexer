@@ -51,7 +51,7 @@ const { loadPinnedOriginFixture } = require('../helpers/pinnedOriginFixture');
 const SQL_DIR = path.join(__dirname, '..', '..', 'src', 'sql');
 const MIG_DIR = path.join(SQL_DIR, 'migrations');
 
-// #5404: the immutable anchor the re-freeze guard measures against, plus the sha256 that
+// The immutable anchor the re-freeze guard measures against, plus the sha256 that
 // makes editing it a deliberate act. See the re-freeze case at the bottom of this file.
 const ORIGIN_BASELINE        = path.join(__dirname, '..', 'fixtures', 'schema-baseline-origin.json');
 const ORIGIN_BASELINE_SHA256 = 'b9f13cbbf4d6c8c746a1ba15fb56eb20934b46d269d3194370c3852839515c45';
@@ -118,7 +118,7 @@ function collectMigrationColumns() {
 // exactly like a migration-added column: a replica converged by replaying migrations alone
 // DOES gain it. Without this parse the guard below saw its columns as definition-only
 // orphans, and the only way to quiet it was to park the table in the PRE-LEDGER baseline -
-// a false provenance claim that then hid every later drift on that table (#3164).
+// a false provenance claim that then hid every later drift on that table.
 // Uses the SAME parser as the definitions (parseExpectedColumns handles the migration's
 // `IF NOT EXISTS`), so the two sides are compared through one code path.
 function collectMigrationCreatedTables() {
@@ -429,7 +429,7 @@ describe('SQL schema column parity (definition path vs ledger path) @regression'
             misplaced.map(m => `  ${m.table}.${m.name} (${m.file}): want ${m.want}, got ${m.got}`).join('\n'));
     });
 
-    // #2457: the three cases above all run ledger->definition (every migration-added
+    // The three cases above all run ledger->definition (every migration-added
     // column is checked against the definition). This closes the INVERSE direction:
     // a column added to a definition file with NO dated migration is invisible to a
     // DB converged by replaying migrations alone (operator-managed / rebuilt replica),
@@ -444,7 +444,7 @@ describe('SQL schema column parity (definition path vs ledger path) @regression'
         // Columns any dated migration ADDs, as `table.col` (reuses the proven parser).
         const migrated = new Set(collectMigrationColumns().map(c => (c.table + '.' + c.name).toLowerCase()));
         // Plus every column of a table a dated migration CREATEs outright: those arrive on
-        // the ledger path through the CREATE TABLE, not an ADD COLUMN (#3164).
+        // the ledger path through the CREATE TABLE, not an ADD COLUMN.
         for (const t of collectMigrationCreatedTables())
             for (const c of t.columns) migrated.add((t.table + '.' + c.name).toLowerCase());
 
@@ -467,10 +467,10 @@ describe('SQL schema column parity (definition path vs ledger path) @regression'
             'test/fixtures/schema-baseline.json deliberately:\n  ' + orphans.join('\n  '));
     });
 
-    // #4435: the guard above exempts a pre-ledger column by NAME alone, and the baseline used
-    // to store nothing but names. So a definition-only SHAPE change to a baselined column -
+    // The guard above exempts a pre-ledger column by NAME alone, and a baseline that
+    // stores nothing but names lets a definition-only SHAPE change to a baselined column -
     // widening `balances.amount VARCHAR(250)`, flipping its nullability or default, or moving
-    // it among its pre-ledger siblings - stayed green with no dated migration behind it. That
+    // it among its pre-ledger siblings - stay green with no dated migration behind it. That
     // is not a theoretical hole: the boot-time drift reconciler (`alterTableForDrift` in
     // src/db.js) adds MISSING columns but never retypes an existing one, so an aged DB keeps
     // the old shape forever while a fresh install gets the new one, and the two schema paths
@@ -524,14 +524,14 @@ describe('SQL schema column parity (definition path vs ledger path) @regression'
             'the same commit:\n' + reordered.join('\n'));
     });
 
-    // #5404: the guard above enforces only HALF of the remedy its own failure message
+    // The guard above enforces only HALF of the remedy its own failure message
     // mandates. It fires when baseline != definition, and the mandated fix is "ship a dated
     // migration with the matching MODIFY, AND re-freeze this fixture in the SAME commit".
     // Only the re-freeze is machine-checked. Doing the re-freeze ALONE restores
     // baseline == definition and turns the guard green with no migration behind it, so every
     // aged DB and every replay-only replica keeps the old column shape forever
     // (alterTableForDrift adds a MISSING column but never retypes an existing one) - the exact
-    // divergence #4435 closed, one `git add` away.
+    // divergence the shape guard closed, one `git add` away.
     //
     // Enforcing the other half needs an ANCHOR: "this entry was re-frozen" is not derivable
     // from a fixture that has just been rewritten, and nothing else in the tree remembers the
@@ -541,10 +541,10 @@ describe('SQL schema column parity (definition path vs ledger path) @regression'
     // condition the last-MODIFY-wins case asserts, read from the other end: there a migration
     // must match the definition, here a moved definition must have a migration.
     //
-    // The anchor is seeded from the #4435 landing (01f321c1), NOT from today's baseline, and
+    // The anchor is seeded from the shape-guard landing (01f321c1), NOT from today's baseline, and
     // the difference is the whole guard. An anchor copied from today is vacuous: nothing
     // differs from it, so this case checks nothing and would first do work on some future
-    // commit that nobody ever watched it fail on. Seeded from #4435 it already carries
+    // commit that nobody ever watched it fail on. Seeded from that landing it already carries
     // sixteen divergences - the fifteen utf8mb4 column re-freezes and destroys.action_index
     // on the index side - so both shipped re-freezes are resolved through their real
     // migrations by this case today, and the sanity test below pins that.
@@ -596,8 +596,8 @@ describe('SQL schema column parity (definition path vs ledger path) @regression'
             'instead, or list it under known_unledgered while its migration is owed:\n' + minted.join('\n'));
     });
 
-    // #5404, second half: the case above closes the SHAPE bypass, this one closes the ORDER
-    // bypass in the same guard. The #4435 case asserts baseline order == definition order, so
+    // Second half of the re-freeze guard: the case above closes the SHAPE bypass, this one closes the ORDER
+    // bypass in the same guard. The shape case asserts baseline order == definition order, so
     // reordering the pre-ledger columns of a table AND re-freezing the fixture in one commit
     // is green, while an aged DB keeps the original order and the two paths stop producing a
     // byte-identical SHOW CREATE TABLE. Anchoring the order kills that. No migration escape
@@ -666,7 +666,7 @@ describe('SQL schema column parity (definition path vs ledger path) @regression'
             'the anchor moved rather than the column.');
     });
 
-    // #3164: the guard above had no notion of a migration-created TABLE. Its columns are
+    // The guard above had no notion of a migration-created TABLE. Its columns are
     // neither pre-ledger nor ADD COLUMN-ed, so the only way to quiet the definition-path
     // check was to list the table in the PRE-LEDGER baseline - which is false (the table
     // does not predate the ledger; a migration creates it) and, worse, permanently exempts

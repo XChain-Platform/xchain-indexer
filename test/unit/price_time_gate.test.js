@@ -9,9 +9,9 @@
 // contact legal@dankest.llc.
 
 /*
- * H-3 / NATIVE_FEE_PRICE_TIME_GATE + M-17 regressions.
+ * NATIVE_FEE_PRICE_TIME_GATE and strict price-read regressions.
  *
- * H-3: price rounds are anchored to BTC heights, so getLatestPrice's
+ * Time gate: price rounds are anchored to BTC heights, so getLatestPrice's
  * `reference_block <= blockIndex` gate is vacuous against LTC/DOGE heights;
  * the query returned whatever globally-latest round the local mirror held
  * (mirror lag forked the fleet; a from-genesis replay read today's newest
@@ -19,7 +19,7 @@
  * chains select by the round's consensus timestamp and the block loop gates
  * on the time-keyed price barrier.
  *
- * M-17: the price read is a consensus input served by the hub-DB mirror
+ * Strict read: the price read is a consensus input served by the hub-DB mirror
  * OUTSIDE the block transaction, where doQuery swallowed query errors into []
  * ("no price" → fee fails closed on this node only → fork). getLatestPrice
  * now reads via doQueryStrict, which always throws, so block processing

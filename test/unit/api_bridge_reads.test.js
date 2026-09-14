@@ -10,7 +10,7 @@
  *
  **********************************************************************
  *
- * Lane L15, base bridge spec row 7 (the base bridge spec): the read
+ * Bridge reads (the base bridge spec): the read
  * handlers getpendingbridgetransfers, getbridgetransfer, getbridgebalances and
  * getbridgeescrowproof, and the db.js reads behind them.
  *

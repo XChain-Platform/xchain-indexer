@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/recovery_driver_tieorder.test.js
  *
- * CONSENSUS REGRESSION GUARD for AnchorRecovery.run() replay determinism (#2695).
+ * CONSENSUS REGRESSION GUARD for AnchorRecovery.run() replay determinism.
  *
  * The rebuild driver query (recovery.js ~106-110) selects every valid/unverified archive
  * head and replays them in query order. The rebuild is order-dependent: later batches

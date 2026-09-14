@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/db_watchdog_fence.test.js
  *
- * Watchdog-timeout transaction fence (M-16).
+ * Watchdog-timeout transaction fence.
  *
  * The block loop wraps each block in util.withTimeout(blockProcessing, ...). On a
  * timeout the outer catch rolls back and moves on, but the abandoned block promise

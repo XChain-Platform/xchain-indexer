@@ -75,7 +75,7 @@ const splitStatements = (raw) => Database.prototype.splitSqlStatements.call(
  * trips the runner's dated-frontier guard on the same operator path.
  *
  * Measured basis for accepting the residual exposure, taken on the test venue during the
- * review round that recorded this exemption (#5807, 2026-08-25): at MariaDB 10.11.14 with
+ * recording of this exemption (2026-08-25): at MariaDB 10.11.14 with
  * innodb_default_row_format=dynamic the indexer schema carries ZERO non-Dynamic InnoDB
  * tables, so the boot block is not live on anything built by MariaDB >= 10.2. What is left
  * is a third-party operator running the AGPL indexer against a database whose `files` table

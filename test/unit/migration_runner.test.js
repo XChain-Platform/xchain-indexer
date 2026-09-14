@@ -659,7 +659,7 @@ describe('Database._destructiveAutoStatement() @regression @tier1', function () 
 
     it('flags UPDATE bypasses that smuggle past the id-repair carve-out', function () {
         // The old carve-out regex was unanchored and paren-greedy; these both slipped
-        // through and rewrote every row. They must now be flagged (#1861).
+        // through and rewrote every row. They must now be flagged.
         // (a) trailing clause after WHERE id = 0
         assert.ok(destructiveOf(['UPDATE balances SET id = (SELECT 1) WHERE id = 0 OR 1=1']));
         // (b) a second, data-destroying SET assignment riding inside the id-repair shape
@@ -1346,7 +1346,7 @@ describe('runMigrations() backdated-migration guard @regression @tier1', functio
     });
 });
 
-// Per-file scoping (--file / opts.only), ported from the decoder's runner (#3874).
+// Per-file scoping (--file / opts.only), ported from the decoder's runner.
 // A fleet rollout of ONE pending manual migration must not drag in the other ten:
 // three of them are destructive (drop-legacy-escrows-column, drop-orphaned-contract-
 // balances, markets-dedup-unique-pair). Driven against the REAL migrations dir - the
@@ -1356,7 +1356,7 @@ describe('runMigrations() --file / opts.only scoping @regression @tier1', functi
     const TARGET = '2026-07-24-pubkeys-widen-uncompressed.sql';
 
     // Fake conn recording ledger INSERTs and executed migration-body statements.
-    // `pubkeyLen` answers the post-run width assertion (#3875).
+    // `pubkeyLen` answers the post-run width assertion.
     function makeDb(ledgerRows, pubkeyLen = 130, preRunLen = null) {
         const applied  = [];
         const executed = [];
@@ -1462,7 +1462,7 @@ describe('runMigrations() --file / opts.only scoping @regression @tier1', functi
     });
 });
 
-// Post-run schema contract (#3875). 2026-07-24-pubkeys-widen-uncompressed.sql is
+// Post-run schema contract. 2026-07-24-pubkeys-widen-uncompressed.sql is
 // mode=manual, so alterTableForDrift cannot heal it (that reconciler only ADDS
 // columns and RELAXES nullability) and a scoped --file run can leave a fleet
 // half-migrated with no operator signal. runMigrations asserts the width on every

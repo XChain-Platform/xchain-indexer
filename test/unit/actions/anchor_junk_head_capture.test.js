@@ -14,7 +14,7 @@
 // status-agnostic by design (a status filter would fork mirrored vs unmirrored
 // nodes, which is worse), so a permissionless ANCHOR whose signatures do not verify
 // could be that earliest row. It then governed BOTH consensus-visible verdicts for
-// the batch: the TOTAL_CHUNKS geometry gate, and - since P5/#3075 - the
+// the batch: the TOTAL_CHUNKS geometry gate, and the
 // authorship rule, whose effect was that the real publisher's own chunks were
 // filtered out and the archive never reassembled.
 //
@@ -154,7 +154,7 @@ describe('ANCHOR archive batch capture by a junk head @regression @tier1', funct
     });
 
     it('a junk head\'s bogus TOTAL_CHUNKS no longer invalidates the legitimate chunks', async function () {
-        // The half that PREDATES #3075: the junk head declared 99 chunks, so every
+        // The half that PREDATES the authorship rule: the junk head declared 99 chunks, so every
         // legitimate chunk of the 3-chunk batch failed the geometry gate.
         seedJunkHeadAheadOfTheRealOne(3);
         for (let i = 1; i <= 2; i++) {

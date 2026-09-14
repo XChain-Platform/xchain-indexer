@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/db_contract_delegation_materialize.test.js
  *
- * CONSENSUS REGRESSION GUARD for DELEGATE v1 signing-key rotation (#4366).
+ * CONSENSUS REGRESSION GUARD for DELEGATE v1 signing-key rotation.
  *
  * DELEGATE v1 wrote contract_delegations and stopped there, while all three contract-stake
  * lookup surfaces read contract_stakes.signing_pubkey_id: getContractStakeDataForVM (the VM

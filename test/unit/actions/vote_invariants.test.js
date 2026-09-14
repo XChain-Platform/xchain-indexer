@@ -14,7 +14,7 @@
  * test/unit/actions/vote_invariants.test.js
  *
  * Regression coverage for the four VOTE governance invariants that had zero
- * tests (review finding #149): escrow conservation in _settleDeposit
+ * tests: escrow conservation in _settleDeposit
  * (including idempotency) and binding-callback firing/metering. Delegation
  * precedence and quadratic/dust-floor weighting are covered separately in
  * test/unit/votes_tally_invariants.test.js.

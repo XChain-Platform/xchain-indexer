@@ -14,7 +14,7 @@
  * test/unit/votes_tally_invariants.test.js
  *
  * Regression coverage for two VOTE governance invariants that had zero
- * tests (review finding #149): delegation-vs-direct precedence and
+ * tests: delegation-vs-direct precedence and
  * quadratic weighting / the dust-floor participation gate, both in
  * db.getPollTally. Modeled on the getPollTally stub harness in
  * votes_append_only.test.js.

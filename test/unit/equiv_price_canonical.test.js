@@ -13,7 +13,7 @@
 // the hub OracleConsensus / PriceAggregator builders. They MUST produce byte-identical
 // bytes. XORACLE has no view change (VIEW=0); the gate keys on the round's BTC block
 // HEIGHT (carried in the signed content AND the on-chain wire), so the hub + every
-// indexer flip on the identical anchor every other engine uses (#4232).
+// indexer flip on the identical anchor every other engine uses.
 const assert = require('assert');
 const eq = require('../../src/equivocation_header.js');
 const ed = require('../../src/consensus/ed25519.js');
@@ -54,7 +54,7 @@ describe('EQUIV price canonical (WI-2 bump 2)', function () {
 
     it('the EQUIV header gates on the BTC height, NOT the round counter (#4232)', function () {
         // round counter is huge (above mainnet activation) but the height is below it:
-        // the header MUST stay OFF (gates on height). This is the exact #4232 fork the
+        // the header MUST stay OFF (gates on height). This is the exact fork the
         // fix forecloses (round-gated oracle would wrongly wrap here).
         const canon = ed.buildPriceV0Payload(1000000000, 1234, PAIRS, 'mainnet', 5);
         assert.strictEqual(canon, rawAt(1000000000, 5));

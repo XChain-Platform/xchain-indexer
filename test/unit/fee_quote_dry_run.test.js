@@ -45,7 +45,7 @@ function makeCtx({ status = 'valid', actionIndex = 55, feeAmount = '1.00000000',
             getBlockTime:        async () => 1000,
             beginTransaction:    async () => { calls.begin++; calls.order.push('begin'); },
             rollbackTransaction: async () => { calls.rollback++; calls.order.push('rollback'); },
-            // Watchdog-fence surface (M-16): the dry-run reads the epoch after
+            // Watchdog-fence surface: the dry-run reads the epoch after
             // beginTransaction and runs processTransaction under it. The stub
             // mirrors the real Database contract (fixed epoch, pass-through run).
             // BOTH fence entry points are stubbed. _dryRunAction runs under

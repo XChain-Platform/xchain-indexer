@@ -11,7 +11,7 @@
  **********************************************************************
  * test/unit/anchor_proof_client.test.js
  *
- * DOGE anchor visibility for the BTC-side reward derivation (AML #4171).
+ * DOGE anchor visibility for the BTC-side reward derivation.
  *
  * The reward this proof guards is COLLECT-spendable and is minted on BTC from a
  * hub-mirrored row, so the binding rule matters twice over: it must accept ONLY an anchor

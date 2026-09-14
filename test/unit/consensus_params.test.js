@@ -369,8 +369,8 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
         // deploy cycles, so a one-sided edit (or a stale bundled-VM dep mid-upgrade)
         // ships a fleet that forks at the flag-day with no other CI failure. Assert
         // byte-identity here. Gates: ASYNC_SURFACE (banned-async enforcement),
-        // BINARY_ALLOC (binary allocation), STATE_KEY_NUL (H-5, rejects NUL-byte state
-        // keys that would wedge the block merkle root), METERING_EVAL_ORDER (L-3,
+        // BINARY_ALLOC (binary allocation), STATE_KEY_NUL (rejects NUL-byte state
+        // keys that would wedge the block merkle root), METERING_EVAL_ORDER (
         // JS-spec-correct compound string-append evaluation order), STATE_KEY_TYPE
         // (state-key type coercion boundary), CALL_SPREAD_METER (cross-call spread
         // metering). Every gate the VM exports at this coordinated flag-day must be listed
@@ -399,7 +399,7 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
     });
 
     it('the indexer NATIVE_FEE_PRICE_TIME_GATE flag-day matches the coordinated 2.0.0 timestamp', function(){
-        // H-3: deterministic (time-gated) price_snapshots selection for native-coin fee
+        // Deterministic (time-gated) price_snapshots selection for native-coin fee
         // validation on non-reference chains flips at this flag-day. It is an indexer-internal
         // consensus gate whose sole consumer is utility.getFeeOraclePrices (the block loop's
         // time-keyed price barrier is unconditional and NOT a consumer), pinned to the same
@@ -411,7 +411,7 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
     });
 
     it('the DISPENSE_CANCELLING_MATCH_ACTIVATION flag-day stays in lockstep with the 2.0.0 flag-day (VM_BANNED_ASYNC_MAINNET_TIME)', function(){
-        // #2464: db.findMatchingDispensers flips its cancelling-dispenser correlation at this
+        // db.findMatchingDispensers flips its cancelling-dispenser correlation at this
         // mainnet time. The module documents it as part of the coordinated 2.0.0 cohort (same
         // canonical timestamp as VM_BANNED_ASYNC_MAINNET_TIME / NATIVE_FEE_PRICE_TIME_GATE), but
         // it re-declares the literal standalone. Every other cohort member has a lockstep

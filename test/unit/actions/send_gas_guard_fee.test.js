@@ -10,10 +10,10 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 
-// Regression coverage for uuid:e1deb0d9 - SEND double-counting a controller-bound GAS
+// Regression coverage for SEND double-counting a controller-bound GAS
 // token balance. When the sent tick IS the gas tick, `balances` (all ticks) and
-// `gasBalances` (GAS only) used to be two independent in-memory snapshots of the exact
-// same underlying balance: the send-amount check/debit ran against `balances` while the
+// `gasBalances` (GAS only) can be two independent in-memory snapshots of the exact
+// same underlying balance: if the send-amount check/debit ran against `balances` while the
 // controller-guard fee reservation/debit ran against `gasBalances`, so a single GAS
 // balance could pass both checks independently and be debited AMOUNT + guardFee, driving
 // the ledger negative. The fix (src/actions/send.js) reserves/debits the guard fee against

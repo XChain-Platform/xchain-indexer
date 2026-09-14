@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/db_get_max_anchor_checkpoint_seq_versions.test.js
  *
- * CONSENSUS REGRESSION GUARD for the ANCHOR replay-guard watermark (finding #2239).
+ * CONSENSUS REGRESSION GUARD for the ANCHOR replay-guard watermark.
  *
  * getMaxAnchorCheckpointSeq() once hardcoded `a.version IN (0, 1, 3)`, omitting
  * the checkpoint-bearing v4/v5 anchors. Post-ANCHOR_REWARD flag-day the live
@@ -58,7 +58,7 @@ describe('getMaxAnchorCheckpointSeq() version filter (#2239)', function () {
         assert.strictEqual(seq, 42);
 
         const [query, params] = stub.firstCall.args;
-        // No hand-copied version literal in the SQL (the #2239 drift mechanism).
+        // No hand-copied version literal in the SQL (the drift mechanism).
         assert.ok(!/version\s+IN\s*\(\s*\d/i.test(query),
                   'version filter must be parameterized, not a hardcoded literal');
         // Bound params carry exactly the shared checkpoint-bearing set.

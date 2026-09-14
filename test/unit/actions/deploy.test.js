@@ -529,7 +529,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             assert.ok(String(data['STATUS']).includes('COOLDOWN_BLOCKS'));
         });
 
-        // #2254: isNumeric alone accepted fractional strings, storing a fractional
+        // isNumeric alone accepted fractional strings, storing a fractional
         // cooldown_blocks against the documented unsigned-int bound. The integer
         // gate is consensus-gated (COOLDOWN_BLOCKS_INTEGER, contract-era flag-day)
         // so a from-genesis replay reproduces any historic fractional accept.

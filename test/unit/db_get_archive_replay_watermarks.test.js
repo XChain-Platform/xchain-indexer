@@ -28,7 +28,7 @@
  *      then either reject a legitimate post-rebase archive or admit a replay.
  *   2. The version filter is parameterized from the shared ARCHIVE_HEAD_VERSIONS
  *      constant, never a hand-copied `IN (1, 6)`. That literal is exactly how
- *      #2239 froze the sibling checkpoint watermark by omitting v4/v5.
+ *      the sibling checkpoint watermark froze by omitting v4/v5.
  */
 
 'use strict';

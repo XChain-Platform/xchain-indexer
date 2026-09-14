@@ -93,7 +93,7 @@ describe('Rollback @regression @tier3', function () {
 
     it('restores signing keys an orphaned DELEGATE v1 materialization rewrote, before the deletes', async function () {
         // materializeContractDelegations rewrites contract_stakes.signing_pubkey_id IN PLACE on
-        // surviving rows (#4366). The generic delete drops the orphaned journal rows but cannot
+        // surviving rows. The generic delete drops the orphaned journal rows but cannot
         // revert the UPDATE, so the reorg must copy prev_signing_pubkey_id back or this node
         // hands contracts a different staker set than a from-genesis replay does.
         indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]); // firstActionIndex
@@ -825,7 +825,7 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(!attestationResetUpdate(), 'no reset UPDATE expected when the rolled-back range is empty');
     });
 
-    // ─── Ownership-escrow RE-DERIVE (reorg correctness, TP-03 #4017) ───
+    // ─── Ownership-escrow RE-DERIVE (reorg correctness) ───
     //
     // tokens.escrow_action_index (the ownership gate) is an in-place projection:
     // a GIVE_OWNERSHIP offer stamps it with the offer's action_index; a release

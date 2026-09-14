@@ -171,7 +171,7 @@ describe('getStakeSourceByPubkey()', function () {
         assert.deepStrictEqual(r, { error: 'failed to resolve stake source' });
     });
 
-    // H2 residual: a federation read landing mid-block must resolve on an
+    // Federation read isolation: a read landing mid-block must resolve on an
     // independent pooled connection and NEVER on the block's open transaction
     // connection. Drives getStakeSourceByPubkey against a real Database whose
     // transactionConnection is set (simulating mid-block) and asserts every query

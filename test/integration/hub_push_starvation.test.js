@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * HubPushQueue starvation regression (review finding 01178748).
+ * HubPushQueue starvation regression.
  *
  * getPendingHubPushes used to fetch the oldest `limit` pending rows with no
  * due-time predicate, applying exponential backoff ONLY afterward in JS
