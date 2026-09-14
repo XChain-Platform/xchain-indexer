@@ -107,7 +107,9 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
             assert.strictEqual(c.judge([sect], expectation({ rewardType: 'anchor_bundle', roundReference: 900 })),
                 'verified', 'a bundle section proves the one bundle reward whichever chain it names');
         });
+    });
 
+    describe('_judge: binding an on-chain anchor to the reward tuple', function () {
         // The per-chain family retired with its wires. reward_type is inside the XANCPUB
         // canonical the caller re-verifies, so every node reads the same retired name off the
         // same signed bytes and reaches the same permanent verdict. Falling back to a family
@@ -161,7 +163,9 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
                                  'invalid: VERSION (unknown)'])
                 assert.strictEqual(c.judge([anchor({ status })], expectation()), 'rejected', status);
         });
+    });
 
+    describe('_judge: binding an on-chain anchor to the reward tuple', function () {
         // Depth is the one failure that self-heals, so it must never be terminal: the anchor
         // WILL bury. Treating it as a reject would forfeit a legitimate reward permanently.
         it('returns unknown for a tuple-matching anchor that is not yet buried deep enough', function () {
@@ -218,7 +222,9 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
             const a = anchor({ version: 6, status: 'invalid: VERSION (unknown)' });
             assert.strictEqual(client().judge([a], expectation()), 'rejected');
         });
+    });
 
+    describe('_judge: binding an on-chain anchor to the reward tuple', function () {
         it('picks the matching anchor when a transaction carries several', function () {
             const rows = [anchor({ version: 2, publisher: null }), anchor()];
             assert.strictEqual(client().judge(rows, expectation()), 'verified');
@@ -284,13 +290,19 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
             c.fetch = async () => null;
             assert.strictEqual(await c.proveMined(expectation()), 'unknown');
         });
+    });
 
+    describe('proveMined guards', function () {
         it('treats "no such transaction" as unknown: the DOGE indexer may simply be behind', async function () {
             const c = client();
             c.fetch = async () => ({ exists: false, anchors: [] });
             assert.strictEqual(await c.proveMined(expectation()), 'unknown');
         });
     });
+
+    // A sibling attested anchor that is NOT this tuple's: on its own it makes judge
+    // return the permanent 'rejected'.
+    function sibling() { return anchor({ match_batch_seq: 999 }); }
 
     // getanchorconfirmations bounds its answer. Before the walk below, a window cut off
     // BEFORE the matching anchor looked identical on the wire to a complete non-matching
@@ -302,10 +314,6 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
     // returns on every retry. So the window is removed instead, and judge is handed the
     // complete set it always assumed it had.
     describe('proveMined walks every page before judging', function () {
-        // A sibling attested anchor that is NOT this tuple's: on its own it makes judge
-        // return the permanent 'rejected'.
-        function sibling() { return anchor({ match_batch_seq: 999 }); }
-
         it('follows the cursor and finds a match that fell past the first page', async function () {
             const c = client();
             const seen = [];
@@ -359,7 +367,9 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
             assert.strictEqual(await stuck.proveMined(expectation()), 'unknown',
                 'a cursor that never advances would loop forever; it is a half-spoken protocol, not a set');
         });
+    });
 
+    describe('proveMined walks every page before judging', function () {
         it('bounds the walk and refuses rather than judging what it managed to collect', async function () {
             const c = client();
             let calls = 0;
@@ -385,6 +395,38 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
         });
     });
 
+    const SNAP = 150208;
+
+    // One section row of a three-chain bundle, in the shape the DOGE indexer serves.
+    function section(overrides) {
+        return Object.assign({
+            status: 'valid', version: 0,
+            checkpoint_chain: 'BTC', checkpoint_network: 'regtest',
+            block_index: 150208, checkpoint_seq: SNAP, snapshot_block: SNAP,
+            publisher: 'aa'.repeat(32), match_batch_seq: null,
+            block_index_doge: 100, confirmations: 60
+        }, overrides || {});
+    }
+
+    // The three sections of one bundle, exactly as the live anchor carries them.
+    function bundle(overrides) {
+        return [section(Object.assign({ checkpoint_chain: 'BTC'  }, overrides || {})),
+                section(Object.assign({ checkpoint_chain: 'DOGE' }, overrides || {})),
+                section(Object.assign({ checkpoint_chain: 'LTC'  }, overrides || {}))];
+    }
+
+    // The one reward the bundle earns. round_reference IS the snapshot block.
+    function bundleReward(overrides) {
+        return expectation(Object.assign({
+            rewardType: 'anchor_bundle', roundReference: SNAP, snapshotBlock: SNAP
+        }, overrides || {}));
+    }
+
+    // The reward's own bundle, with the row identity a current DOGE indexer serves.
+    function ownBundle() {
+        return bundle().map((s, i) => Object.assign(s, { action_index: 41, section_index: i }));
+    }
+
     // The v0 checkpoint bundle: ONE anchor action carrying every checkpointed chain as a
     // section under one action_index, one publisher tail, and exactly ONE reward of type
     // 'anchor_bundle' keyed on the bundle's SNAPSHOT_BLOCK. So the reward is bound to the
@@ -395,33 +437,6 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
     // bundle transaction with N version-0 entries sharing publisher, network and status, each
     // carrying its own chain, block_index, checkpoint_seq and snapshot_block.
     describe('_judge: the v0 bundle leg', function () {
-        const SNAP = 150208;
-
-        // One section row of a three-chain bundle, in the shape the DOGE indexer serves.
-        function section(overrides) {
-            return Object.assign({
-                status: 'valid', version: 0,
-                checkpoint_chain: 'BTC', checkpoint_network: 'regtest',
-                block_index: 150208, checkpoint_seq: SNAP, snapshot_block: SNAP,
-                publisher: 'aa'.repeat(32), match_batch_seq: null,
-                block_index_doge: 100, confirmations: 60
-            }, overrides || {});
-        }
-
-        // The three sections of one bundle, exactly as the live anchor carries them.
-        function bundle(overrides) {
-            return [section(Object.assign({ checkpoint_chain: 'BTC'  }, overrides || {})),
-                    section(Object.assign({ checkpoint_chain: 'DOGE' }, overrides || {})),
-                    section(Object.assign({ checkpoint_chain: 'LTC'  }, overrides || {}))];
-        }
-
-        // The one reward the bundle earns. round_reference IS the snapshot block.
-        function bundleReward(overrides) {
-            return expectation(Object.assign({
-                rewardType: 'anchor_bundle', roundReference: SNAP, snapshotBlock: SNAP
-            }, overrides || {}));
-        }
-
         it('verifies a buried v0 bundle against its one anchor_bundle reward', function () {
             assert.strictEqual(client().judge(bundle(), bundleReward()), 'verified');
         });
@@ -476,7 +491,9 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
         it('refuses a v0 bundle anchored for a different network', function () {
             assert.strictEqual(client().judge(bundle({ checkpoint_network: 'testnet' }), bundleReward()), 'rejected');
         });
+    });
 
+    describe('_judge: the v0 bundle leg', function () {
         // Depth is the one failure that self-heals, so a matching but shallow bundle defers.
         it('returns unknown for a matching bundle that is not yet buried deep enough', function () {
             assert.strictEqual(client().judge(bundle({ confirmations: 59 }), bundleReward()), 'unknown');
@@ -532,7 +549,9 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
             assert.strictEqual(client().judge(rows, bundleReward({ roundReference: 12, snapshotBlock: 12 })),
                                'rejected');
         });
+    });
 
+    describe('_judge: the v0 bundle leg', function () {
         // The bundle stamps ONE status across its section rows, and a node holding no mirrored
         // oracle_publish snapshot for any section stamps the whole bundle 'unverified'. So the
         // section-quorum verdict divides the fleet exactly as the per-chain spelling does, and
@@ -564,7 +583,9 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
             assert.strictEqual(await c.proveMined(bundleReward()), 'verified');
             assert.strictEqual(calls, 1);
         });
+    });
 
+    describe('_judge: the v0 bundle leg', function () {
         // A DOGE transaction is not limited to one anchor action: BATCH gives each command its
         // own action_index, so anyone can ride a second ANCHOR on the transaction that carries
         // the hub's, and even a bundle too malformed to yield a section still writes a row
@@ -573,10 +594,6 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
         // section equalled it and judge fell through to a permanent, memoized 'rejected':
         // a legitimate COLLECT-spendable reward destroyed by a third-party write.
         describe('an unrelated anchor on the same transaction cannot suppress the reward', function () {
-            // The reward's own bundle, with the row identity a current DOGE indexer serves.
-            function ownBundle() {
-                return bundle().map((s, i) => Object.assign(s, { action_index: 41, section_index: i }));
-            }
             // Someone else's bundle on the same transaction, at a HIGHER snapshot block.
             function sibling(overrides) {
                 return section(Object.assign({
@@ -624,7 +641,11 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
                         JSON.stringify(bad));
                 }
             });
+        });
+    });
 
+    describe('_judge: the v0 bundle leg', function () {
+        describe('an unrelated anchor on the same transaction cannot suppress the reward', function () {
             // The header binding itself must not loosen: a LAGGING section of the reward's OWN
             // bundle still rides at its own older block and still cannot prove a reward there.
             it('still refuses a lagging section of its own bundle as proof at that older block', function () {

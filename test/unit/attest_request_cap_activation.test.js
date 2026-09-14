@@ -26,7 +26,6 @@ const assert = require('assert');
 const arc    = require('../../src/attest_request_cap_activation.js');
 
 describe('ATTEST per-block admission caps (spec §11.1) @regression', function () {
-
     describe('isAttestRequestCapActive', function () {
 
         it('is ARMED at genesis on mainnet by the 2026-09-09 ruling', function () {
@@ -75,7 +74,9 @@ describe('ATTEST per-block admission caps (spec §11.1) @regression', function (
             assert.strictEqual(at(501), true);
         });
     });
+});
 
+describe('ATTEST per-block admission caps (spec §11.1) @regression', function () {
     describe('ATTEST_REQUEST_CAPS', function () {
 
         it('pins the consensus cap values', function () {

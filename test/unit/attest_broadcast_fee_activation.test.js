@@ -64,7 +64,6 @@ describe('ATTEST broadcast-fee activation (spec §11) @regression', function () 
     });
 
     describe('broadcastFeeCapNative', function () {
-
         it('returns the shipped per-provider allowance for a known provider', function () {
             assert.strictEqual(abf.broadcastFeeCapNative('http_get', { provider_id: 'http_get' }), '0.00010000');
             assert.strictEqual(abf.broadcastFeeCapNative('llm', { provider_id: 'llm' }), '0.00010000');
@@ -122,7 +121,9 @@ describe('ATTEST broadcast-fee activation (spec §11) @regression', function () 
                 abf.broadcastFeeCapNative('http_get', { broadcast_fee_cap_native: '0.000012345678' }),
                 '0.00001234');
         });
+    });
 
+    describe('broadcastFeeCapNative', function () {
         it('clamps on an EXACT compare against HARD_MAX, not a float near-miss', function () {
             // Number('0.0009999999999999999') lands below the double nearest 0.001, so the old
             // path skipped the clamp and then toFixed(8) rounded the value back UP to the

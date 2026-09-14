@@ -140,9 +140,7 @@ function settled(calls){
 }
 
 describe('batched COINPAY resolves its own payment output @regression @tier1', function () {
-
     describe('N payments to N payees settle N obligations', function () {
-
         it('two sellers, each paid their own output, BOTH settle', async function () {
             let { coinpay, calls } = makeCoinpay();
             let data = batchRow({ BATCH_VALUE_LEDGER: seedLedger() });
@@ -187,7 +185,11 @@ describe('batched COINPAY resolves its own payment output @regression @tier1', f
             assert.strictEqual(data['BATCH_VALUE_LEDGER'].coinAmountConsumed, '5.00000000');
             assert.strictEqual(data['BATCH_VALUE_LEDGER'].coinPayeeConsumed[PAYEE_B], '3.00000000');
         });
+    });
+});
 
+describe('batched COINPAY resolves its own payment output @regression @tier1', function () {
+    describe('N payments to N payees settle N obligations', function () {
         it('the settled record is filed against the output that actually paid', async function () {
             let { coinpay, calls } = makeCoinpay();
             let data = batchRow({ BATCH_VALUE_LEDGER: seedLedger() });
@@ -203,7 +205,9 @@ describe('batched COINPAY resolves its own payment output @regression @tier1', f
             assert.strictEqual(calls.created[1].COIN_AMOUNT, '3.00000000');
         });
     });
+});
 
+describe('batched COINPAY resolves its own payment output @regression @tier1', function () {
     describe('the A5 invariant: one payment settles ONE obligation, not N', function () {
 
         it('two obligations to the ROW\'S OWN payee with one payment\'s worth: exactly one settles', async function () {
@@ -262,7 +266,9 @@ describe('batched COINPAY resolves its own payment output @regression @tier1', f
                 'nothing settled, so no cell is created');
         });
     });
+});
 
+describe('batched COINPAY resolves its own payment output @regression @tier1', function () {
     describe('below the flag, the original defect reproduces exactly', function () {
 
         it('with NO ledger only the lowest-vout payee clears, the other is a destination mismatch', async function () {
@@ -289,7 +295,9 @@ describe('batched COINPAY resolves its own payment output @regression @tier1', f
             assert.deepStrictEqual(calls.created[1], calls.created[0], 'no drift on re-entry');
         });
     });
+});
 
+describe('batched COINPAY resolves its own payment output @regression @tier1', function () {
     describe('a non-batched COINPAY is unchanged', function () {
 
         it('each fan-out row settles only the payee ITS output pays', async function () {
@@ -323,7 +331,9 @@ describe('batched COINPAY resolves its own payment output @regression @tier1', f
             assert.strictEqual(data['BATCH_VALUE_LEDGER'].coinAmountConsumed, '5.00000000');
         });
     });
+});
 
+describe('batched COINPAY resolves its own payment output @regression @tier1', function () {
     describe('ledger shape', function () {
 
         // Spec row 30 SPLIT the probe contract this case once pinned: a probe now READS

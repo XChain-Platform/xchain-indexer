@@ -62,8 +62,42 @@ function pcFor(network){
     return { pc: new ProtocolChanges(indexer, '0.2.0'), indexer };
 }
 
-describe('BATCH cost-weighting flag day @regression @tier1', function(){
+// Comfortably over both the flat 250-command cap and the 250 weight budget, so
+// either bound would reject it if either bound ran.
+const OVERSIZED = 300;
 
+function mainnetHandler(blockTime){
+    const indexer = createMockIndexer();
+    indexer.config.NETWORK = 'mainnet';
+    indexer.decoderDb.getBlockTime.resolves(blockTime);
+    indexer.indexerDb.isActionAllowed.resolves(true);
+    indexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
+    const actionsCtx = {
+        config:          indexer.config,
+        util:            indexer.util,
+        mapper:          indexer.mapper,
+        decoderDb:       indexer.decoderDb,
+        indexerDb:       indexer.indexerDb,
+        protocolChanges: new ProtocolChanges(indexer, '0.2.0'),
+        processAction:   sinon.stub().resolves(),
+        actionAliases:   { TRANSFER: 'SEND', ADDR: 'ADDRESS', DROP: 'AIRDROP', CAST: 'BROADCAST', MSG: 'MESSAGE' },
+    };
+    return { handler: new Batch(actionsCtx), indexer, actionsCtx };
+}
+
+function oversizedBatch(blockTime){
+    const sends = new Array(OVERSIZED).fill(
+        'SEND|0|TEST|1|mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM').join(';');
+    return createBaseData({
+        ACTION:     'BATCH',
+        FORMAT:     0,
+        SOURCE:     'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
+        BLOCK_TIME: blockTime,
+        TX_DATA:    'BATCH|0|' + sends,
+    });
+}
+
+describe('BATCH cost-weighting flag day @regression @tier1', function(){
     describe('registration', function(){
 
         it('is a time-keyed 2.0.0 change, genesis-active on testnet and regtest', function(){
@@ -117,7 +151,9 @@ describe('BATCH cost-weighting flag day @regression @tier1', function(){
             }
         });
     });
+});
 
+describe('BATCH cost-weighting flag day @regression @tier1', function(){
     describe('ordering against BATCH_ISSUANCE_LIMITS', function(){
 
         // The dependency is real code, not bookkeeping, and it runs in both directions:
@@ -169,9 +205,10 @@ describe('BATCH cost-weighting flag day @regression @tier1', function(){
             });
         }
     });
+});
 
+describe('BATCH cost-weighting flag day @regression @tier1', function(){
     describe('mainnet: the ordering the genesis arm inverts, driven through batch.js', function(){
-
         // On mainnet this gate is registered at 0 while BATCH_ISSUANCE_LIMITS is at
         // 2026-08-16 and BATCH_SUBACTION_NORMALIZATION at 2026-08-07, so the numeric
         // ordering the two blocks above assert is inverted here BY DESIGN. What makes
@@ -187,41 +224,6 @@ describe('BATCH cost-weighting flag day @regression @tier1', function(){
 
         // Inside the window: above normalization, below the issuance limits.
         const IN_WINDOW = 1786060800 + 1;
-
-        // Comfortably over both the flat 250-command cap and the 250 weight budget, so
-        // either bound would reject it if either bound ran.
-        const OVERSIZED = 300;
-
-        function mainnetHandler(blockTime){
-            const indexer = createMockIndexer();
-            indexer.config.NETWORK = 'mainnet';
-            indexer.decoderDb.getBlockTime.resolves(blockTime);
-            indexer.indexerDb.isActionAllowed.resolves(true);
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
-            const actionsCtx = {
-                config:          indexer.config,
-                util:            indexer.util,
-                mapper:          indexer.mapper,
-                decoderDb:       indexer.decoderDb,
-                indexerDb:       indexer.indexerDb,
-                protocolChanges: new ProtocolChanges(indexer, '0.2.0'),
-                processAction:   sinon.stub().resolves(),
-                actionAliases:   { TRANSFER: 'SEND', ADDR: 'ADDRESS', DROP: 'AIRDROP', CAST: 'BROADCAST', MSG: 'MESSAGE' },
-            };
-            return { handler: new Batch(actionsCtx), indexer, actionsCtx };
-        }
-
-        function oversizedBatch(blockTime){
-            const sends = new Array(OVERSIZED).fill(
-                'SEND|0|TEST|1|mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM').join(';');
-            return createBaseData({
-                ACTION:     'BATCH',
-                FORMAT:     0,
-                SOURCE:     'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
-                BLOCK_TIME: blockTime,
-                TX_DATA:    'BATCH|0|' + sends,
-            });
-        }
 
         afterEach(function(){ sinon.restore(); });
 
@@ -245,6 +247,12 @@ describe('BATCH cost-weighting flag day @regression @tier1', function(){
             assert.strictEqual(data['STATUS'], 'valid',
                 'the weight budget ran without BATCH_ISSUANCE_LIMITS; it is no longer nested under it');
         });
+    });
+});
+
+describe('BATCH cost-weighting flag day @regression @tier1', function(){
+    describe('mainnet: the ordering the genesis arm inverts, driven through batch.js', function(){
+        afterEach(function(){ sinon.restore(); });
 
         it('the same batch above BATCH_ISSUANCE_LIMITS is rejected, so the budget does bind', async function(){
             // The negative control for the case above: once the issuance gate is on, the

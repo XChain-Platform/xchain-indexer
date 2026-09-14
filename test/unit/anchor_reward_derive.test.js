@@ -404,7 +404,9 @@ describe('anchor_reward_derive (BTC-side derivation) @regression @tier2', functi
                     'anchor-reward mint depth and coins/DOGE.js confirmations have drifted; ' +
                     'moving either is a flag-day change that must move both');
             });
+        });
 
+        describe('DOGE mined-anchor re-proof', function () {
             it('DEFERS the block (throws) when the anchor cannot be proven either way', async function () {
                 const keys = [makeKey()];
                 const db   = stubDb(keys, [makeRow(keys)]);

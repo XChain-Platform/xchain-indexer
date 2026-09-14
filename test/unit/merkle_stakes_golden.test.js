@@ -32,7 +32,6 @@ const assert = require('assert');
 const m = require('../../src/consensus/merkle.js');
 
 describe('merkle stakes-root + block-leaf golden vectors (#4751) @regression @tier1', function () {
-
     describe('stakes-root value leaves', function () {
         it('stakeMemberLeaf(source, weight) is pinned', function () {
             assert.strictEqual(
@@ -62,7 +61,9 @@ describe('merkle stakes-root + block-leaf golden vectors (#4751) @regression @ti
                 '1.000000000000000000');
         });
     });
+});
 
+describe('merkle stakes-root + block-leaf golden vectors (#4751) @regression @tier1', function () {
     describe('blockMerkleLeaves cross-kind ordering (consensus-critical, leaf index defines proof position)', function () {
         it('emits ledger (credit, debit, escrow) -> actions -> contract sub-tables in the frozen order', function () {
             const rows = {

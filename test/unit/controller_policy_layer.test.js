@@ -34,7 +34,6 @@ const Address = require('../../src/actions/address.js');
 const STUB = { config: {}, decoderDb: null, indexerDb: null, util: null, mapper: null };
 
 describe('Programmable policy layer : Phase A binding wire contract @regression', function () {
-
     const issue   = new Issue(STUB);
     const address = new Address(STUB);
 
@@ -87,7 +86,9 @@ describe('Programmable policy layer : Phase A binding wire contract @regression'
             }
         });
     });
+});
 
+describe('Programmable policy layer : Phase A binding wire contract @regression', function () {
     describe('config : action-class taxonomy + field classifications', function () {
         let config;
         before(function () {

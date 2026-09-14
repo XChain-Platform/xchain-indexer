@@ -69,8 +69,57 @@ function configFor(coin){
     return cfg;
 }
 
-describe('base AT9: the XCHAIN row appearing off BTC moves no verdict @regression @tier1', function(){
+// SEND is the one witnessed action whose whole verdict is reachable in a unit test:
+// it charges no protocol fee, so no native-fee refusal masks the guard branch
+// the way it would on ORDER and DISPENSER off BTC (both validate the fee before
+// running the guard). Those two are witnessed at the chokepoint above and on the
+// regtest rail.
+function buildHandler(coin, gasRowExists){
+    const cfg     = configFor(coin);
+    const indexer = createMockIndexer();
+    const util    = new Utility(cfg);
+    const db      = indexer.indexerDb;
 
+    db.config = cfg;
+    db.isActionAllowed.resolves(true);
+    db.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+    db.findMatchingDispensers.resolves([]);
+    db.findDispenserSends.resolves([]);
+    // A `transfer`-class controller on the sent token, so the guard actually runs.
+    db.getEffectiveTokenControllerForGuard.resolves({ contract_index: 7 });
+    db.getTickerId.resolves(1);
+
+    const sendToken = createTokenInfo({ TICK: 'TOK', TICK_ID: 1, DECIMALS: 0, SUPPLY: '1000' });
+    const gasToken  = createTokenInfo({ TICK: cfg['GAS'], TICK_ID: GAS_TICK_ID, DECIMALS: 8 });
+    db.getTokenInfo
+        .withArgs('TOK', sinon.match.any, sinon.match.any).resolves(sendToken)
+        // BEFORE the bridge settles on this chain the GAS row does not exist, so the
+        // read returns null; AFTER it, a real row. Nothing else differs.
+        .withArgs(cfg['GAS'], sinon.match.any, sinon.match.any).resolves(gasRowExists ? gasToken : null);
+    // The source holds 100 TOK and no XCHAIN at all.
+    db.getAddressBalances.resolves({ 1: '100' });
+
+    const actionsCtx = {
+        config:          cfg,
+        util:            util,
+        mapper:          indexer.mapper,
+        decoderDb:       indexer.decoderDb,
+        indexerDb:       db,
+        protocolChanges: { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) },
+        actionExecute:   { runControllerGuard: sinon.stub().resolves({ allow: true, gasBilled: 100000, payoutLegs: null }) },
+        processAction:   sinon.stub().resolves(),
+    };
+    return new Send(actionsCtx);
+}
+
+async function verdict(coin, gasRowExists){
+    const handler = buildHandler(coin, gasRowExists);
+    const data    = createBaseData({ ACTION: 'SEND', FORMAT: 0, SOURCE: SOURCE, COIN: coin });
+    await handler.parse(['0', 'TOK', '10', DESTINATION, ''], data, null);
+    return data.STATUS;
+}
+
+describe('base AT9: the XCHAIN row appearing off BTC moves no verdict @regression @tier1', function(){
     describe('the shared controller-guard chokepoint, for all three AT9 action classes', function(){
 
         // maybeRunControllerGuard with a controller bound, the guard allowing, and the
@@ -129,59 +178,10 @@ describe('base AT9: the XCHAIN row appearing off BTC moves no verdict @regressio
         }
 
     });
+});
 
+describe('base AT9: the XCHAIN row appearing off BTC moves no verdict @regression @tier1', function(){
     describe('the real SEND handler on DOGE regtest', function(){
-
-        // SEND is the one witnessed action whose whole verdict is reachable in a unit test:
-        // it charges no protocol fee, so no native-fee refusal masks the guard branch
-        // the way it would on ORDER and DISPENSER off BTC (both validate the fee before
-        // running the guard). Those two are witnessed at the chokepoint above and on the
-        // regtest rail.
-        function buildHandler(coin, gasRowExists){
-            const cfg     = configFor(coin);
-            const indexer = createMockIndexer();
-            const util    = new Utility(cfg);
-            const db      = indexer.indexerDb;
-
-            db.config = cfg;
-            db.isActionAllowed.resolves(true);
-            db.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            db.findMatchingDispensers.resolves([]);
-            db.findDispenserSends.resolves([]);
-            // A `transfer`-class controller on the sent token, so the guard actually runs.
-            db.getEffectiveTokenControllerForGuard.resolves({ contract_index: 7 });
-            db.getTickerId.resolves(1);
-
-            const sendToken = createTokenInfo({ TICK: 'TOK', TICK_ID: 1, DECIMALS: 0, SUPPLY: '1000' });
-            const gasToken  = createTokenInfo({ TICK: cfg['GAS'], TICK_ID: GAS_TICK_ID, DECIMALS: 8 });
-            db.getTokenInfo
-                .withArgs('TOK', sinon.match.any, sinon.match.any).resolves(sendToken)
-                // BEFORE the bridge settles on this chain the GAS row does not exist, so the
-                // read returns null; AFTER it, a real row. Nothing else differs.
-                .withArgs(cfg['GAS'], sinon.match.any, sinon.match.any).resolves(gasRowExists ? gasToken : null);
-            // The source holds 100 TOK and no XCHAIN at all.
-            db.getAddressBalances.resolves({ 1: '100' });
-
-            const actionsCtx = {
-                config:          cfg,
-                util:            util,
-                mapper:          indexer.mapper,
-                decoderDb:       indexer.decoderDb,
-                indexerDb:       db,
-                protocolChanges: { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) },
-                actionExecute:   { runControllerGuard: sinon.stub().resolves({ allow: true, gasBilled: 100000, payoutLegs: null }) },
-                processAction:   sinon.stub().resolves(),
-            };
-            return new Send(actionsCtx);
-        }
-
-        async function verdict(coin, gasRowExists){
-            const handler = buildHandler(coin, gasRowExists);
-            const data    = createBaseData({ ACTION: 'SEND', FORMAT: 0, SOURCE: SOURCE, COIN: coin });
-            await handler.parse(['0', 'TOK', '10', DESTINATION, ''], data, null);
-            return data.STATUS;
-        }
-
         afterEach(function(){ sinon.restore(); });
 
         it('DOGE: a controller-guarded SEND from a source with no XCHAIN keeps its verdict across the row', async function(){
@@ -190,6 +190,12 @@ describe('base AT9: the XCHAIN row appearing off BTC moves no verdict @regressio
             assert.strictEqual(after, before, 'SEND verdict moved when the XCHAIN row appeared on DOGE');
             assert.strictEqual(before, 'valid', 'and it is the pre-bridge verdict, not a shared refusal');
         });
+    });
+});
+
+describe('base AT9: the XCHAIN row appearing off BTC moves no verdict @regression @tier1', function(){
+    describe('the real SEND handler on DOGE regtest', function(){
+        afterEach(function(){ sinon.restore(); });
 
         it('LTC: same, on the other non-BTC chain', async function(){
             const before = await verdict('LTC', false);

@@ -29,58 +29,57 @@ const sinon  = require('sinon');
 const { createMockIndexer } = require('../fixtures/mocks');
 const Execute = require('../../src/actions/execute/index.js');
 
+// A valid regtest (BTC) P2PKH address so isCryptoAddress() accepts the leg.
+const ADDR = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+
+function buildHandler(vmResult, manifest = null) {
+    const indexer = createMockIndexer();
+    const db = indexer.indexerDb;
+    // The stored source of a contract that deployed at/after CONTRACT_META_REQUIRED
+    // always carries `meta`, so the fixture does too. The EXECUTE path
+    // never re-evaluates meta (the verdict lives in actions/deploy.js alone), so this
+    // is fixture realism, not a behaviour this suite asserts.
+    db.getContract               = sinon.stub().resolves({ code: "module.exports={meta:{name:'Guard',description:'Controller guard fixture.',version:'1.0.0'},guard:function(){}};", status_id: 7 });
+    // Phase E: per-contract manifest (null = no declared manifest → unrestricted, global cap).
+    db.getContractPermissions    = sinon.stub().resolves(manifest);
+    db.getStatusString           = sinon.stub().resolves('valid');
+    db.getContractState          = sinon.stub().resolves({});
+    db.getOracleDataForVM        = sinon.stub().resolves({});
+    db.getCrossChainDataForVM    = sinon.stub().resolves({});
+    db.getPollResultsForVM       = sinon.stub().resolves({ polls: {} });
+    db.getContractStakeDataForVM = sinon.stub().resolves({});
+    // Present in the current working tree (getBalance support); harmless if absent.
+    db.buildVmBalancesAndTokenInfo = sinon.stub().resolves({ balances: {}, tokenInfo: {} });
+    db.createSavepoint           = sinon.stub().resolves('sp');
+    db.releaseSavepoint          = sinon.stub().resolves();
+    db.rollbackToSavepoint       = sinon.stub().resolves();
+    db.createContractState       = sinon.stub().resolves();
+    db.createContractEmission    = sinon.stub().resolves();
+    // The guard writes a parent contract_executions row so its emissions resolve through the
+    // contract_hash INNER JOIN; doQuery backs the per-action emission-position offset.
+    db.createContractExecution   = sinon.stub().resolves();
+    db.doQuery                   = sinon.stub().resolves([{ cnt: 0 }]);
+    db.countContractEmissionsForExecution =
+        require('../../src/db/contracts').countContractEmissionsForExecution.bind(db);
+    indexer.vm    = { execute: sinon.stub().resolves(vmResult) };
+    indexer.hubDb = null;
+    return new Execute(indexer);
+}
+
+const opts = () => ({
+    actionType: 'ORDER_CREATE', controllerIndex: 5, tick: 'TOK',
+    from: ADDR, to: '', amount: '100', price: '100', proceedsTick: 'PAY',
+    hostData: { ACTION_INDEX: 10, BLOCK_INDEX: 100, BLOCK_TIME: 1700000000,
+                SOURCE: ADDR, TX_HASH: 'aa', TX_INDEX: 1, TX_VOUT: 0 },
+    callDepth: 0, seq: 0,
+});
+
+const vmOk = (returnValue) => ({
+    success: true, error: null, gasUsed: 100, returnValue,
+    stateChanges: [], stateDeletes: [], emittedActions: [], logs: [],
+});
+
 describe('runControllerGuard: guard returnValue parsing (royalty payoutLegs) @regression @tier1', function () {
-
-    // A valid regtest (BTC) P2PKH address so isCryptoAddress() accepts the leg.
-    const ADDR = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
-
-    function buildHandler(vmResult, manifest = null) {
-        const indexer = createMockIndexer();
-        const db = indexer.indexerDb;
-        // The stored source of a contract that deployed at/after CONTRACT_META_REQUIRED
-        // always carries `meta`, so the fixture does too. The EXECUTE path
-        // never re-evaluates meta (the verdict lives in actions/deploy.js alone), so this
-        // is fixture realism, not a behaviour this suite asserts.
-        db.getContract               = sinon.stub().resolves({ code: "module.exports={meta:{name:'Guard',description:'Controller guard fixture.',version:'1.0.0'},guard:function(){}};", status_id: 7 });
-        // Phase E: per-contract manifest (null = no declared manifest → unrestricted, global cap).
-        db.getContractPermissions    = sinon.stub().resolves(manifest);
-        db.getStatusString           = sinon.stub().resolves('valid');
-        db.getContractState          = sinon.stub().resolves({});
-        db.getOracleDataForVM        = sinon.stub().resolves({});
-        db.getCrossChainDataForVM    = sinon.stub().resolves({});
-        db.getPollResultsForVM       = sinon.stub().resolves({ polls: {} });
-        db.getContractStakeDataForVM = sinon.stub().resolves({});
-        // Present in the current working tree (getBalance support); harmless if absent.
-        db.buildVmBalancesAndTokenInfo = sinon.stub().resolves({ balances: {}, tokenInfo: {} });
-        db.createSavepoint           = sinon.stub().resolves('sp');
-        db.releaseSavepoint          = sinon.stub().resolves();
-        db.rollbackToSavepoint       = sinon.stub().resolves();
-        db.createContractState       = sinon.stub().resolves();
-        db.createContractEmission    = sinon.stub().resolves();
-        // The guard writes a parent contract_executions row so its emissions resolve through the
-        // contract_hash INNER JOIN; doQuery backs the per-action emission-position offset.
-        db.createContractExecution   = sinon.stub().resolves();
-        db.doQuery                   = sinon.stub().resolves([{ cnt: 0 }]);
-        db.countContractEmissionsForExecution =
-            require('../../src/db/contracts').countContractEmissionsForExecution.bind(db);
-        indexer.vm    = { execute: sinon.stub().resolves(vmResult) };
-        indexer.hubDb = null;
-        return new Execute(indexer);
-    }
-
-    const opts = () => ({
-        actionType: 'ORDER_CREATE', controllerIndex: 5, tick: 'TOK',
-        from: ADDR, to: '', amount: '100', price: '100', proceedsTick: 'PAY',
-        hostData: { ACTION_INDEX: 10, BLOCK_INDEX: 100, BLOCK_TIME: 1700000000,
-                    SOURCE: ADDR, TX_HASH: 'aa', TX_INDEX: 1, TX_VOUT: 0 },
-        callDepth: 0, seq: 0,
-    });
-
-    const vmOk = (returnValue) => ({
-        success: true, error: null, gasUsed: 100, returnValue,
-        stateChanges: [], stateDeletes: [], emittedActions: [], logs: [],
-    });
-
     it('parses payoutLegs from a JSON-STRING returnValue (the real VM shape)', async function () {
         // This is exactly what vm.execute() emits: a serialized string, NOT an object.
         const handler = buildHandler(vmOk(JSON.stringify({ payoutLegs: [{ to: ADDR, bps: 250 }, { to: ADDR, bps: 100 }] })));
@@ -135,7 +134,9 @@ describe('runControllerGuard: guard returnValue parsing (royalty payoutLegs) @re
         assert.strictEqual(res.allow, true, 'within the tighter cap is allowed');
         assert.deepStrictEqual(res.payoutLegs, [{ to: ADDR, bps: 250 }]);
     });
+});
 
+describe('runControllerGuard: guard returnValue parsing (royalty payoutLegs) @regression @tier1', function () {
     it('a per-contract maxTakeBps cannot RELAX the global cap', async function () {
         // Manifest declares 10000 but Σbps = 11000 still exceeds the global 10000; the
         // effective cap is min(global, per-contract), never the looser of the two.

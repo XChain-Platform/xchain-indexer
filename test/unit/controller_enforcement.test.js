@@ -53,8 +53,12 @@ function mkActions(guardResult, calls, guardEnabled){
     };
 }
 
-describe('Programmable policy layer : Phase B enforcement @regression', function () {
+const guardOpts = (data) => ({
+    actionType: 'SEND', tick: 'AAA', from: 'addr1', to: 'addr2', amount: '10',
+    data, gasInfo: null, gasBalances: []
+});
 
+describe('Programmable policy layer : Phase B enforcement @regression', function () {
     describe('controllerActionClass : static action→class map', function () {
         it('SEND → transfer', function () {
             assert.strictEqual(util.controllerActionClass('SEND'), 'transfer');
@@ -85,7 +89,9 @@ describe('Programmable policy layer : Phase B enforcement @regression', function
                 assert.strictEqual(util.controllerActionClass(a), null);
         });
     });
+});
 
+describe('Programmable policy layer : Phase B enforcement @regression', function () {
     describe('maybeRunAddressControllerGuard : recipient/account-side', function () {
         function mkAddrDb(effective){
             return {
@@ -132,7 +138,9 @@ describe('Programmable policy layer : Phase B enforcement @regression', function
             assert.strictEqual(util.bcgt(res.guardFee, '0'), true);
         });
     });
+});
 
+describe('Programmable policy layer : Phase B enforcement @regression', function () {
     describe('maybeRunControllerGuard : control flow', function () {
         it('no controller bound → skip (no error/fee, guard never runs)', async function () {
             const calls = [];
@@ -188,7 +196,11 @@ describe('Programmable policy layer : Phase B enforcement @regression', function
             assert.strictEqual(res.error, 'insufficient funds (guard gas)');
             assert.strictEqual(calls.length, 0);
         });
+    });
+});
 
+describe('Programmable policy layer : Phase B enforcement @regression', function () {
+    describe('maybeRunControllerGuard : control flow', function () {
         it('no guard-of-guard: a controller emitting its OWN token is not re-guarded', async function () {
             const calls = [];
             const data = Object.assign({}, BASE, { IS_GUARD_EMISSION: true, EMITTER: 9 }); // emitter == controller
@@ -240,7 +252,11 @@ describe('Programmable policy layer : Phase B enforcement @regression', function
             );
             assert.ok(data._GUARDED_TICKS && data._GUARDED_TICKS['AAA'] === true);
         });
+    });
+});
 
+describe('Programmable policy layer : Phase B enforcement @regression', function () {
+    describe('maybeRunControllerGuard : control flow', function () {
         // MINT and STAKE route to their own classes, and their handlers call
         // the guard: mint.js / stake.js v3 invoke maybeRunControllerGuard, so a `mint`/`stake`
         // (or `all`-fallback) binding gates supply creation / contract staking. Pin that the helper
@@ -278,7 +294,9 @@ describe('Programmable policy layer : Phase B enforcement @regression', function
             });
         }
     });
+});
 
+describe('Programmable policy layer : Phase B enforcement @regression', function () {
     // The SOURCE-outbound self-gate calls maybeRunAddressControllerGuard with the SENDER's
     // own address as the subject (symmetric `transfer` binding : same call, address = SOURCE). Pin
     // that the helper gates an outbound move by the source account's own controller.
@@ -317,7 +335,9 @@ describe('Programmable policy layer : Phase B enforcement @regression', function
             assert.strictEqual(util.bcgt(res.guardFee, '0'), true);
         });
     });
+});
 
+describe('Programmable policy layer : Phase B enforcement @regression', function () {
     // ─── CONTROLLER_GUARD activation gate (consensus) ────────────────────────
     // The guard is a NEW acceptance + ledger rule: a node version that runs it and one that
     // does not settle the SAME guarded action differently (allow/deny + payout_legs vs plain),
@@ -372,7 +392,9 @@ describe('Programmable policy layer : Phase B enforcement @regression', function
             assert.deepStrictEqual(res.payoutLegs, [{ to: 'royaltyAddr', bps: 500 }]);
         });
     });
+});
 
+describe('Programmable policy layer : Phase B enforcement @regression', function () {
     // ─── feequote GUARD_INERT : the public dry-run must never enter the controller VM ─────
     // computeFeeQuote runs the REAL handler under a forced rollback while holding the block-loop
     // tx mutex; without this a controlled SEND/ORDER/... quoted on the unauthenticated `feequote`
@@ -383,11 +405,6 @@ describe('Programmable policy layer : Phase B enforcement @regression', function
     // real guarded action (block processing / feequotedryrun), and it never turns the below-flag-day
     // no-op into a spurious DENY.
     describe('feequote GUARD_INERT : public dry-run must not enter the controller VM', function () {
-        const guardOpts = (data) => ({
-            actionType: 'SEND', tick: 'AAA', from: 'addr1', to: 'addr2', amount: '10',
-            data, gasInfo: null, gasBalances: []
-        });
-
         it('GUARD_INERT + at/above activation → refuses with the sentinel, guard VM never runs', async function () {
             const calls = [];
             const res = await util.maybeRunControllerGuard(
@@ -430,7 +447,11 @@ describe('Programmable policy layer : Phase B enforcement @regression', function
             assert.strictEqual(res.error, null);
             assert.strictEqual(calls.length, 1, 'a real guarded action must still run its controller VM');
         });
+    });
+});
 
+describe('Programmable policy layer : Phase B enforcement @regression', function () {
+    describe('feequote GUARD_INERT : public dry-run must not enter the controller VM', function () {
         it('GUARD_INERT below the CONTROLLER_GUARD flag-day stays a strict no-op (gate wins, no sentinel)', async function () {
             const calls = [];
             const res = await util.maybeRunControllerGuard(

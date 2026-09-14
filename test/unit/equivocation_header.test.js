@@ -31,7 +31,6 @@ const eq     = require('../../src/equivocation_header.js');
 const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 describe('equivocation_header (indexer)', function () {
-
     describe('isEquivHeaderActive', function () {
         it('regtest activates at genesis (block 0)', function () {
             assert.strictEqual(eq.isEquivHeaderActive(0, 'regtest'), true);
@@ -63,7 +62,9 @@ describe('equivocation_header (indexer)', function () {
             assert.notStrictEqual(eq.equivKey('XDEX', 'mid', 0), eq.equivKey('XDEX', 'mid', 1));
         });
     });
+});
 
+describe('equivocation_header (indexer)', function () {
     describe('cross-service activation parity', function () {
         // These cross-service checks resolve the canonical/sibling sources by
         // monorepo-relative path, so they only run in the monorepo (or aggregator)

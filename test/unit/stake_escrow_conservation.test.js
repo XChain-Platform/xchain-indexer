@@ -46,24 +46,34 @@ const fs     = require('fs');
 
 const SRC = path.resolve(__dirname, '../../src');
 
+// Read the shipped sources. These are ledger-shape invariants spread across three
+// files that must agree with each other; a stub-driven unit test of any one of them
+// in isolation would pass while the trio disagreed.
+// The STAKE handler is an entry plus parts: stake.js keeps the class, the capability
+// path lives in stake/capability_stake.js and the contract path in
+// stake/contract_stake.js. Reading the entry alone would find neither ledger block,
+// so the entry and every part are read as one text, parts in name order, which puts
+// the capability block first and the contract block last.
+const STAKE_PARTS = path.join(SRC, 'actions', 'stake');
+const stakeSrc   = [path.join(SRC, 'actions/stake.js')]
+    .concat(fs.readdirSync(STAKE_PARTS).filter(f => f.endsWith('.js')).sort()
+        .map(f => path.join(STAKE_PARTS, f)))
+    .map(f => fs.readFileSync(f, 'utf8')).join('\n');
+const utilSrc    = fs.readFileSync(path.join(SRC, 'utility.js'), 'utf8');
+const journalSrc = fs.readFileSync(path.join(SRC, 'consensus', 'escrowJournalWriter.js'), 'utf8');
+
+// Each release loop is anchored on its OWN credit call. An earlier version anchored on
+// `sweep.contractRows`, which also matches the outer if() guarding BOTH loops, so the
+// slice spanned the capability loop too and the tests answered about the wrong code.
+const loopAround = needle => {
+    const i = utilSrc.indexOf(needle);
+    assert.ok(i > 0, 'release loop moved or was renamed: ' + needle);
+    // Wide enough to contain the whole loop body: an earlier 700-char window cut the
+    // release call off mid-argument, so the test failed on its own truncation.
+    return utilSrc.slice(i - 400, i + 1400);
+};
+
 describe('a contract stake locks tokens rather than destroying them', function(){
-
-    // Read the shipped sources. These are ledger-shape invariants spread across three
-    // files that must agree with each other; a stub-driven unit test of any one of them
-    // in isolation would pass while the trio disagreed.
-    // The STAKE handler is an entry plus parts: stake.js keeps the class, the capability
-    // path lives in stake/capability_stake.js and the contract path in
-    // stake/contract_stake.js. Reading the entry alone would find neither ledger block,
-    // so the entry and every part are read as one text, parts in name order, which puts
-    // the capability block first and the contract block last.
-    const STAKE_PARTS = path.join(SRC, 'actions', 'stake');
-    const stakeSrc   = [path.join(SRC, 'actions/stake.js')]
-        .concat(fs.readdirSync(STAKE_PARTS).filter(f => f.endsWith('.js')).sort()
-            .map(f => path.join(STAKE_PARTS, f)))
-        .map(f => fs.readFileSync(f, 'utf8')).join('\n');
-    const utilSrc    = fs.readFileSync(path.join(SRC, 'utility.js'), 'utf8');
-    const journalSrc = fs.readFileSync(path.join(SRC, 'consensus', 'escrowJournalWriter.js'), 'utf8');
-
     // The contract-stake handler's ledger block: from its `let credits` through the
     // processTransactionLedgerChanges call that consumes it, and on through the end of
     // planContractStakeLedger, the helper that call site hands the debit and escrow
@@ -101,17 +111,6 @@ describe('a contract stake locks tokens rather than destroying them', function()
             'the guard fee is escrowed, but it is burned - supply must fall for it');
     });
 
-    // Each release loop is anchored on its OWN credit call. An earlier version anchored on
-    // `sweep.contractRows`, which also matches the outer if() guarding BOTH loops, so the
-    // slice spanned the capability loop too and the tests answered about the wrong code.
-    const loopAround = needle => {
-        const i = utilSrc.indexOf(needle);
-        assert.ok(i > 0, 'release loop moved or was renamed: ' + needle);
-        // Wide enough to contain the whole loop body: an earlier 700-char window cut the
-        // release call off mid-argument, so the test failed on its own truncation.
-        return utilSrc.slice(i - 400, i + 1400);
-    };
-
     it('releases the escrow at cooldown maturity instead of minting the tokens back', function(){
         const loop = loopAround("createCredit(creditIndex, row.tick");
         assert.ok(/createCredit\(creditIndex, row\.tick/.test(loop),
@@ -130,7 +129,9 @@ describe('a contract stake locks tokens rather than destroying them', function()
         assert.ok(/'STAKE'/.test(set),  'STAKE writes escrow rows but has no attribution rule');
         assert.ok(/'UNSTAKE'/.test(set), 'the UNSTAKE v2 release writes escrow rows but has no attribution rule');
     });
+});
 
+describe('a contract stake locks tokens rather than destroying them', function(){
     it('applies the same rule to a CAPABILITY bond, which is locked too', function(){
         // These were briefly asymmetric while only the contract half was fixed. The operator
         // decided to roll testnet back and reparse forward, which removed the only reason to
@@ -189,7 +190,9 @@ describe('a contract stake locks tokens rather than destroying them', function()
         assert.ok(fn.indexOf('createEscrow(') < fn.indexOf('createCredit('),
             'the release must be written alongside the redirect, not somewhere else');
     });
+});
 
+describe('a contract stake locks tokens rather than destroying them', function(){
     it('classifies both slash sites in the escrow journal, or the writer halts on them', function(){
         const i = journalSrc.indexOf('const SELF_ATTRIBUTING');
         const set = journalSrc.slice(i, journalSrc.indexOf(']);', i));

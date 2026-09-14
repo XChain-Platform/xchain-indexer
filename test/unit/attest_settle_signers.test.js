@@ -45,58 +45,58 @@ const FEE_PAYER = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 // flip, which is the only combination that can prove the legacy split survives.
 const TESTNET_BELOW_ZC = 151400;
 
+let indexer, handler;
+
+function makeRequest(overrides = {}) {
+    return {
+        request_id:     REQ_ID,
+        provider_id:    'http_get',
+        request_status: 'pending',
+        block_index:    100,     // regtest: zero-conf is armed at 0, so this is above it
+        deadline_block: 200,
+        redundancy:     4,
+        action_index:   42,
+        fee_amount:     '6.00000000',
+        fee_payer:      FEE_PAYER,
+        contract_index: 5,
+        ...overrides,
+    };
+}
+
+// The settling action: a v1 response row carrying the federation signatures the
+// chain path and the mirror applier both inline before the settle runs.
+function settleData(signatures, overrides = {}) {
+    return createBaseData({
+        ACTION: 'ATTEST', FORMAT: 1, BLOCK_INDEX: 105, ACTION_INDEX: 60,
+        BLOCK_TIME: 1700000000,
+        VALIDATOR_SIGNATURES: signatures,
+        ...overrides,
+    });
+}
+
+function feeRewards() {
+    return indexer.indexerDb.createValidatorReward.getCalls()
+        .filter(c => c.args[2] === 'attest_fee')
+        .map(c => ({ pubkey: c.args[0], amount: String(c.args[3]) }));
+}
+
+function buildHandler(configOverrides = {}) {
+    handler = new Attest({
+        config:        { ...indexer.config, ...configOverrides },
+        util:          indexer.util,
+        mapper:        indexer.mapper,
+        decoderDb:     indexer.decoderDb,
+        indexerDb:     indexer.indexerDb,
+        actionExecute: { parse: sinon.stub().resolves() },
+        protocolChanges: {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        },
+    });
+    return handler;
+}
+
 describe('ATTEST fee settle: pay the verified signers above the zero-conf height @regression @tier3', function () {
-    let indexer, handler;
-
-    function makeRequest(overrides = {}) {
-        return {
-            request_id:     REQ_ID,
-            provider_id:    'http_get',
-            request_status: 'pending',
-            block_index:    100,     // regtest: zero-conf is armed at 0, so this is above it
-            deadline_block: 200,
-            redundancy:     4,
-            action_index:   42,
-            fee_amount:     '6.00000000',
-            fee_payer:      FEE_PAYER,
-            contract_index: 5,
-            ...overrides,
-        };
-    }
-
-    // The settling action: a v1 response row carrying the federation signatures the
-    // chain path and the mirror applier both inline before the settle runs.
-    function settleData(signatures, overrides = {}) {
-        return createBaseData({
-            ACTION: 'ATTEST', FORMAT: 1, BLOCK_INDEX: 105, ACTION_INDEX: 60,
-            BLOCK_TIME: 1700000000,
-            VALIDATOR_SIGNATURES: signatures,
-            ...overrides,
-        });
-    }
-
-    function feeRewards() {
-        return indexer.indexerDb.createValidatorReward.getCalls()
-            .filter(c => c.args[2] === 'attest_fee')
-            .map(c => ({ pubkey: c.args[0], amount: String(c.args[3]) }));
-    }
-
-    function buildHandler(configOverrides = {}) {
-        handler = new Attest({
-            config:        { ...indexer.config, ...configOverrides },
-            util:          indexer.util,
-            mapper:        indexer.mapper,
-            decoderDb:     indexer.decoderDb,
-            indexerDb:     indexer.indexerDb,
-            actionExecute: { parse: sinon.stub().resolves() },
-            protocolChanges: {
-                isDefined: sinon.stub().returns(true),
-                isEnabled: sinon.stub().resolves(true),
-            },
-        });
-        return handler;
-    }
-
     beforeEach(function () {
         indexer = createMockIndexer();
         indexer.indexerDb.createValidatorReward     = sinon.stub().resolves(true);
@@ -153,6 +153,30 @@ describe('ATTEST fee settle: pay the verified signers above the zero-conf height
             'one share per distinct key, lower-cased like the responsible set');
         assert.ok(rewards.every(r => r.amount === '3'), 'the escrow splits two ways, not three');
     });
+});
+
+describe('ATTEST fee settle: pay the verified signers above the zero-conf height @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        indexer.indexerDb.createValidatorReward     = sinon.stub().resolves(true);
+        indexer.indexerDb.getTokenDecimalPrecision  = sinon.stub().resolves(8);
+        indexer.indexerDb.getTickerId               = sinon.stub().resolves(1);
+        // Four capability validators and redundancy 4, so the recomputed responsible
+        // set has one member more than the three signers: the headroom seat this row
+        // exists to stop paying.
+        indexer.indexerDb.getValidatorsByCapability = sinon.stub().resolves([
+            { pubkey: PUBKEY_A }, { pubkey: PUBKEY_B }, { pubkey: PUBKEY_C }, { pubkey: PUBKEY_D },
+        ]);
+        indexer.util.resetLists();
+        // Legacy count-based responsible set: the weighted path needs a stake snapshot
+        // and a provider floor, neither of which this row touches.
+        sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+        buildHandler();
+    });
+
+    afterEach(function () {
+        sinon.restore();
+    });
 
     it('below the height (testnet, request above the mirror height): all four responsible members are paid', async function () {
         assert.strictEqual(zc.isZeroConfActive(TESTNET_BELOW_ZC, 'testnet'), false,
@@ -175,6 +199,30 @@ describe('ATTEST fee settle: pay the verified signers above the zero-conf height
         assert.deepStrictEqual(rewards.map(r => r.pubkey).slice().sort(),
             [PUBKEY_A, PUBKEY_B, PUBKEY_C, PUBKEY_D]);
         assert.ok(rewards.every(r => r.amount === '1.5'), '6 split four ways');
+    });
+});
+
+describe('ATTEST fee settle: pay the verified signers above the zero-conf height @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        indexer.indexerDb.createValidatorReward     = sinon.stub().resolves(true);
+        indexer.indexerDb.getTokenDecimalPrecision  = sinon.stub().resolves(8);
+        indexer.indexerDb.getTickerId               = sinon.stub().resolves(1);
+        // Four capability validators and redundancy 4, so the recomputed responsible
+        // set has one member more than the three signers: the headroom seat this row
+        // exists to stop paying.
+        indexer.indexerDb.getValidatorsByCapability = sinon.stub().resolves([
+            { pubkey: PUBKEY_A }, { pubkey: PUBKEY_B }, { pubkey: PUBKEY_C }, { pubkey: PUBKEY_D },
+        ]);
+        indexer.util.resetLists();
+        // Legacy count-based responsible set: the weighted path needs a stake snapshot
+        // and a provider floor, neither of which this row touches.
+        sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+        buildHandler();
+    });
+
+    afterEach(function () {
+        sinon.restore();
     });
 
     it('above the height with no signature column: the recomputed set is paid and the settle warns, naming the request', async function () {
@@ -202,6 +250,30 @@ describe('ATTEST fee settle: pay the verified signers above the zero-conf height
         sinon.stub(console, 'warn');
         await handler.settleRequestFee(makeRequest(), settleData('[]'), 'fulfilled');
         assert.strictEqual(feeRewards().length, 4);
+    });
+});
+
+describe('ATTEST fee settle: pay the verified signers above the zero-conf height @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        indexer.indexerDb.createValidatorReward     = sinon.stub().resolves(true);
+        indexer.indexerDb.getTokenDecimalPrecision  = sinon.stub().resolves(8);
+        indexer.indexerDb.getTickerId               = sinon.stub().resolves(1);
+        // Four capability validators and redundancy 4, so the recomputed responsible
+        // set has one member more than the three signers: the headroom seat this row
+        // exists to stop paying.
+        indexer.indexerDb.getValidatorsByCapability = sinon.stub().resolves([
+            { pubkey: PUBKEY_A }, { pubkey: PUBKEY_B }, { pubkey: PUBKEY_C }, { pubkey: PUBKEY_D },
+        ]);
+        indexer.util.resetLists();
+        // Legacy count-based responsible set: the weighted path needs a stake snapshot
+        // and a provider floor, neither of which this row touches.
+        sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+        buildHandler();
+    });
+
+    afterEach(function () {
+        sinon.restore();
     });
 
     for (const status of ['errored', 'expired']) {

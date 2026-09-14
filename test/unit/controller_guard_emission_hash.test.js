@@ -37,58 +37,57 @@ const sinon  = require('sinon');
 const { createMockIndexer } = require('../fixtures/mocks');
 const Execute = require('../../src/actions/execute/index.js');
 
+const ADDR = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+
+// priorEmissionCount = what `SELECT COUNT(*) FROM contract_emissions WHERE execution_index=?`
+// returns for this action (emissions an EARLIER guard on the same action already wrote).
+function buildHandler(emittedActions, priorEmissionCount = 0) {
+    const indexer = createMockIndexer();
+    const db = indexer.indexerDb;
+    db.getContract               = sinon.stub().resolves({ code: 'module.exports={guard:function(){}};', status_id: 7 });
+    db.getContractPermissions    = sinon.stub().resolves(null);
+    db.getStatusString           = sinon.stub().resolves('valid');
+    db.getContractState          = sinon.stub().resolves({});
+    db.getOracleDataForVM        = sinon.stub().resolves({});
+    db.getCrossChainDataForVM    = sinon.stub().resolves({});
+    db.getPollResultsForVM       = sinon.stub().resolves({ polls: {} });
+    db.getContractStakeDataForVM = sinon.stub().resolves({});
+    db.buildVmBalancesAndTokenInfo = sinon.stub().resolves({ balances: {}, tokenInfo: {} });
+    db.createSavepoint           = sinon.stub().resolves('sp');
+    db.releaseSavepoint          = sinon.stub().resolves();
+    db.rollbackToSavepoint       = sinon.stub().resolves();
+    db.createContractState       = sinon.stub().resolves();
+    db.createContractExecution   = sinon.stub().resolves();
+    db.createContractEmission    = sinon.stub().resolves();
+    // The per-action emission counter that backs the position offset. The db method is
+    // the real one over a stubbed doQuery, so it still has to issue a COUNT over
+    // contract_emissions keyed on execution_index to see the prior guard's rows.
+    db.doQuery                   = sinon.stub().resolves([{ cnt: priorEmissionCount }]);
+    db.countContractEmissionsForExecution =
+        require('../../src/db/contracts').countContractEmissionsForExecution.bind(db);
+    indexer.vm    = { execute: sinon.stub().resolves({
+        success: true, error: null, gasUsed: 100, returnValue: JSON.stringify({}),
+        stateChanges: [], stateDeletes: [], emittedActions, logs: [],
+    }) };
+    indexer.hubDb = null;
+    const handler = new Execute(indexer);
+    // Isolate runControllerGuard's bookkeeping from the full emission router: assign each
+    // emission a result action_index exactly as the real processEmission would.
+    handler.processEmission = sinon.stub().callsFake(async (emission) => {
+        emission.resultActionIndex = 5000 + (emission.__seq || 0);
+    });
+    return { handler, db };
+}
+
+const opts = (over = {}) => Object.assign({
+    actionType: 'SEND', controllerIndex: 5, tick: 'TOK',
+    from: ADDR, to: ADDR, amount: '100', price: '', proceedsTick: '',
+    hostData: { ACTION_INDEX: 10, BLOCK_INDEX: 100, BLOCK_TIME: 1700000000,
+                SOURCE: ADDR, TX_HASH: 'aa', TX_INDEX: 1, TX_VOUT: 0 },
+    callDepth: 0, seq: 0,
+}, over);
+
 describe('runControllerGuard: guard emissions enter contract_hash @regression @tier1', function () {
-
-    const ADDR = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
-
-    // priorEmissionCount = what `SELECT COUNT(*) FROM contract_emissions WHERE execution_index=?`
-    // returns for this action (emissions an EARLIER guard on the same action already wrote).
-    function buildHandler(emittedActions, priorEmissionCount = 0) {
-        const indexer = createMockIndexer();
-        const db = indexer.indexerDb;
-        db.getContract               = sinon.stub().resolves({ code: 'module.exports={guard:function(){}};', status_id: 7 });
-        db.getContractPermissions    = sinon.stub().resolves(null);
-        db.getStatusString           = sinon.stub().resolves('valid');
-        db.getContractState          = sinon.stub().resolves({});
-        db.getOracleDataForVM        = sinon.stub().resolves({});
-        db.getCrossChainDataForVM    = sinon.stub().resolves({});
-        db.getPollResultsForVM       = sinon.stub().resolves({ polls: {} });
-        db.getContractStakeDataForVM = sinon.stub().resolves({});
-        db.buildVmBalancesAndTokenInfo = sinon.stub().resolves({ balances: {}, tokenInfo: {} });
-        db.createSavepoint           = sinon.stub().resolves('sp');
-        db.releaseSavepoint          = sinon.stub().resolves();
-        db.rollbackToSavepoint       = sinon.stub().resolves();
-        db.createContractState       = sinon.stub().resolves();
-        db.createContractExecution   = sinon.stub().resolves();
-        db.createContractEmission    = sinon.stub().resolves();
-        // The per-action emission counter that backs the position offset. The db method is
-        // the real one over a stubbed doQuery, so it still has to issue a COUNT over
-        // contract_emissions keyed on execution_index to see the prior guard's rows.
-        db.doQuery                   = sinon.stub().resolves([{ cnt: priorEmissionCount }]);
-        db.countContractEmissionsForExecution =
-            require('../../src/db/contracts').countContractEmissionsForExecution.bind(db);
-        indexer.vm    = { execute: sinon.stub().resolves({
-            success: true, error: null, gasUsed: 100, returnValue: JSON.stringify({}),
-            stateChanges: [], stateDeletes: [], emittedActions, logs: [],
-        }) };
-        indexer.hubDb = null;
-        const handler = new Execute(indexer);
-        // Isolate runControllerGuard's bookkeeping from the full emission router: assign each
-        // emission a result action_index exactly as the real processEmission would.
-        handler.processEmission = sinon.stub().callsFake(async (emission) => {
-            emission.resultActionIndex = 5000 + (emission.__seq || 0);
-        });
-        return { handler, db };
-    }
-
-    const opts = (over = {}) => Object.assign({
-        actionType: 'SEND', controllerIndex: 5, tick: 'TOK',
-        from: ADDR, to: ADDR, amount: '100', price: '', proceedsTick: '',
-        hostData: { ACTION_INDEX: 10, BLOCK_INDEX: 100, BLOCK_TIME: 1700000000,
-                    SOURCE: ADDR, TX_HASH: 'aa', TX_INDEX: 1, TX_VOUT: 0 },
-        callDepth: 0, seq: 0,
-    }, over);
-
     it('writes a contract_executions parent row keyed to the native action_index (so the contract_hash INNER JOIN resolves the emissions)', async function () {
         const { handler, db } = buildHandler([{ action: 'SEND', __seq: 0 }]);
         const res = await handler.runControllerGuard(opts());
@@ -144,7 +143,9 @@ describe('runControllerGuard: guard emissions enter contract_hash @regression @t
         assert.strictEqual(db.rollbackToSavepoint.callCount, 1,
             'the savepoint (covering the parent execution row + emissions) must roll back');
     });
+});
 
+describe('runControllerGuard: guard emissions enter contract_hash @regression @tier1', function () {
     it('gives each guard invocation a unique savepoint name even when (action, controller, seq) collide (duplicate-savepoint safety)', async function () {
         // Up to three guards run on one SEND leg sharing the leg's seq, and two can
         // share a controller index (token-controller == address-controller, or a

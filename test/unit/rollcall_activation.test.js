@@ -83,7 +83,6 @@ function loadHub(){
 describe('rollcall_activation', function () {
 
     describe('the eight consensus values', function () {
-
         it('agrees with the canonical documentation copy', function () {
             let canon;
             // Judged before the require: absent or a lane symlink into a live main checkout.
@@ -141,7 +140,9 @@ describe('rollcall_activation', function () {
         it('the streak lookback is exactly 2K', function () {
             assert.strictEqual(act.ROLLCALL_STREAK_LOOKBACK, 2 * act.ROLLCALL_EVICT_MISSES);
         });
+    });
 
+    describe('the eight consensus values', function () {
         it('the proof delay is at least 1 on every network', function () {
             // block_time for a block is written AFTER that block's own processing, so the
             // window endpoint must be a strictly earlier block than the close.
@@ -171,7 +172,6 @@ describe('rollcall_activation', function () {
     // The 2026-09-01 ruling scopes the no-tunable-input rule to
     // shared-ledger networks and gives regtest a documented arming height.
     describe('the regtest arming opt-in', function () {
-
         it('REGTEST SHIPS INERT: an unset environment arms nothing', function () {
             const m = loadWithEnv(undefined);
             assert.strictEqual(m.ROLLCALL_ACTIVATION.regtest, null,
@@ -225,7 +225,9 @@ describe('rollcall_activation', function () {
             assert.strictEqual(m.rollcallEpochClosingAt(C, 'regtest'), 30,
                 'the close block must resolve back to its epoch once the venue is armed');
         });
+    });
 
+    describe('the regtest arming opt-in', function () {
         it('an arming height above genesis leaves the epochs below it inert', function () {
             const m = loadWithEnv('60');
             assert.strictEqual(m.isRollcallActive(30, 'regtest'), false);

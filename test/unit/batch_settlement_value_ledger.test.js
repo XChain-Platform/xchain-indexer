@@ -116,7 +116,6 @@ function coinpayData(extra){
 }
 
 describe('batch settlement value ledger: COINPAY @regression @tier1', function () {
-
     it('with NO ledger settles every time, byte-identically, and invents nothing', async function () {
         let { coinpay, calls } = makeCoinpay();
         let data = coinpayData();
@@ -163,7 +162,9 @@ describe('batch settlement value ledger: COINPAY @regression @tier1', function (
         // The other rows' fields are untouched by this handler.
         assert.strictEqual(data['BATCH_VALUE_LEDGER'].nativeFeeConsumed, '0');
     });
+});
 
+describe('batch settlement value ledger: COINPAY @regression @tier1', function () {
     it('a FEE_PROBE dry run settles and consumes nothing from the pool', async function () {
         let { coinpay, calls } = makeCoinpay();
         let data = coinpayData({ BATCH_VALUE_LEDGER: seedLedger(), FEE_PROBE: true });
@@ -272,8 +273,17 @@ function statuses(calls){
     return calls.created.map(d => d['STATUS']);
 }
 
-describe('batch settlement value ledger: DISPENSE @regression @tier1', function () {
+// Mode B (user oracle): the oracle prices one TOKEN at 1.00 USD, the validator
+// prices the coin at 100 USD, and a fill hands out GIVE_AMOUNT (10) tokens, so a
+// fill again costs 0.1 coin.
+const FIAT_ORACLE = {
+    dispenser: dispenserRow({ FIAT: 'USD', FIAT_AMOUNT: null, GET_AMOUNT: '0',
+                              ORACLE_ADDRESS: 'oracleAddress1111111111' }),
+    oraclePrices: [{ price: '1.00000000', effectiveAt: 990 }],
+    snapshots:    [{ price: '100.00000000', timestamp: 990 }]
+};
 
+describe('batch settlement value ledger: DISPENSE @regression @tier1', function () {
     it('with NO ledger buys the full multiplier every time, byte-identically', async function () {
         // A dispenser with capacity to spare, so nothing but the ledger could limit it.
         let { dispense, calls } = makeDispense({ dispenser: dispenserRow({ GIVE_REMAINING: '1000' }) });
@@ -330,7 +340,9 @@ describe('batch settlement value ledger: DISPENSE @regression @tier1', function 
         assert.strictEqual(data['BATCH_VALUE_LEDGER'].coinAmountConsumed, '0',
             'a read-only surface must never mutate consensus state');
     });
+});
 
+describe('batch settlement value ledger: DISPENSE @regression @tier1', function () {
     it('the tally holds a decimal STRING at 8dp, never a JS number', async function () {
         let { dispense } = makeDispense();
         let data = dispenseData({ BATCH_VALUE_LEDGER: seedLedger() });
@@ -342,24 +354,15 @@ describe('batch settlement value ledger: DISPENSE @regression @tier1', function 
         assert.ok(/^\d+\.\d{8}$/.test(consumed), 'tally must be plain 8dp decimal text, got ' + consumed);
         assert.strictEqual(consumed, '1.00000000');
     });
+});
 
+describe('batch settlement value ledger: DISPENSE @regression @tier1', function () {
     describe('FIAT pricing paths (they read the same payment)', function () {
-
         // v0 FIAT (no oracle): 10.00 USD a fill against a BTC/USD snapshot of 100,
         // so one fill costs 0.1 coin. GIVE_REMAINING caps each sub-command at one fill.
         const FIAT_V0 = {
             dispenser: dispenserRow({ FIAT: 'USD', FIAT_AMOUNT: '10.00', GET_AMOUNT: '0' }),
             snapshots: [{ price: '100.00000000', timestamp: 990 }]
-        };
-
-        // Mode B (user oracle): the oracle prices one TOKEN at 1.00 USD, the validator
-        // prices the coin at 100 USD, and a fill hands out GIVE_AMOUNT (10) tokens, so a
-        // fill again costs 0.1 coin.
-        const FIAT_ORACLE = {
-            dispenser: dispenserRow({ FIAT: 'USD', FIAT_AMOUNT: null, GET_AMOUNT: '0',
-                                      ORACLE_ADDRESS: 'oracleAddress1111111111' }),
-            oraclePrices: [{ price: '1.00000000', effectiveAt: 990 }],
-            snapshots:    [{ price: '100.00000000', timestamp: 990 }]
         };
 
         it('v0 FIAT: THREE fills\' worth feeds three sub-commands, a fourth finds no affordable price', async function () {
@@ -404,7 +407,11 @@ describe('batch settlement value ledger: DISPENSE @regression @tier1', function 
             assert.strictEqual(statuses(calls)[3], 'invalid: no matching oracle price');
             assert.strictEqual(data['BATCH_VALUE_LEDGER'].coinAmountConsumed, '0.30000000');
         });
+    });
+});
 
+describe('batch settlement value ledger: DISPENSE @regression @tier1', function () {
+    describe('FIAT pricing paths (they read the same payment)', function () {
         it('oracle FIAT: ONE fill\'s worth feeds exactly one sub-command', async function () {
             let { dispense, calls } = makeDispense(FIAT_ORACLE);
             let data = dispenseData({ COIN_AMOUNT: '0.10000000', BATCH_VALUE_LEDGER: seedLedger() });
@@ -458,7 +465,6 @@ function outputsFor(pairs){
 }
 
 describe('batch settlement value ledger: oracle fees @regression @tier1', function () {
-
     it('with NO ledger accepts the same output every time, byte-identically', async function () {
         let util = makeUtil(), db = oracleDb();
         let data = oracleData(outputsFor([[ORACLE_A, ORACLE_FEE]]));
@@ -516,7 +522,9 @@ describe('batch settlement value ledger: oracle fees @regression @tier1', functi
         assert.strictEqual(data['BATCH_VALUE_LEDGER'].oracleFeeConsumed[ORACLE_A], '0.30000000',
             'a refused open consumes nothing');
     });
+});
 
+describe('batch settlement value ledger: oracle fees @regression @tier1', function () {
     it('the 0.95x tolerance does not compound: paying exactly the minimum buys ONE open', async function () {
         let util = makeUtil(), db = oracleDb();
         let data = oracleData(outputsFor([[ORACLE_A, ORACLE_FEE_MIN]]), { BATCH_VALUE_LEDGER: seedLedger() });
@@ -566,7 +574,9 @@ describe('batch settlement value ledger: oracle fees @regression @tier1', functi
                 'the public quote path must never mutate consensus state');
         }
     });
+});
 
+describe('batch settlement value ledger: oracle fees @regression @tier1', function () {
     it('a below-dust fee (no output read) consumes nothing', async function () {
         let util = makeUtil(), db = oracleDb('0');   // zero fee fraction: nothing owed
         let data = oracleData(undefined, { BATCH_VALUE_LEDGER: seedLedger() });

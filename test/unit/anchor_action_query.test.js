@@ -139,7 +139,9 @@ describe('anchor-action-query: buildAnchorActionResponse()', function () {
         assert.strictEqual(v3.state_root, 'e'.repeat(64));
         assert.strictEqual(v3.block_merkle_root, 'f'.repeat(64));
     });
+});
 
+describe('anchor-action-query: buildAnchorActionResponse()', function () {
     // ── state_root_version / block_merkle_version (item 2750) ────────────────
     // ANCHOR_ACTIONS_SQL selects a.state_root_version and a.block_merkle_version
     // alongside the roots; the response must carry both version discriminators,
@@ -279,6 +281,9 @@ describe('anchor-action-query: selectAnchorRow()', function () {
     });
 });
 
+const SECTION_TXID = '7'.repeat(64);   // the bundle section's transaction
+const ARCHIVE_TXID = '6'.repeat(64);   // the archive head's, a different transaction
+
 // ── A v0 section and a v1 archive head sharing ONE checkpoint key ───────────────
 //
 // The archive leg wraps the same checkpoint the bundle section anchors, so both rows
@@ -290,9 +295,6 @@ describe('anchor-action-query: selectAnchorRow()', function () {
 // The hub's own adopt path filters on the bundle version and never saw it; every unfiltered
 // reader (the SDK, the e2e harnesses, third parties) did.
 describe('anchor-action-query: section vs co-located archive head', function () {
-    const SECTION_TXID = '7'.repeat(64);   // the bundle section's transaction
-    const ARCHIVE_TXID = '6'.repeat(64);   // the archive head's, a different transaction
-
     // The venue's own key and action indexes, in the pure action_index DESC order the
     // read used before the family term, which is what makes the archive head win.
     function colocated() {
@@ -350,7 +352,9 @@ describe('anchor-action-query: section vs co-located archive head', function () 
         assert.strictEqual(Number(row.version), 1);
         assert.strictEqual(row.action_index, 1305);
     });
+});
 
+describe('anchor-action-query: section vs co-located archive head', function () {
     it('keeps newest-wins WITHIN the section family (a reorg-replayed re-anchor supersedes)', function () {
         let rows = [
             anchorRow({ action_index: 1310, version: 1, checkpoint_seq: 11243, txid: ARCHIVE_TXID }),
@@ -446,6 +450,19 @@ describe('anchor-action-query: ANCHOR_ACTIONS_SQL', function () {
     });
 });
 
+const { ANCHOR_BY_TXID_SQL, ANCHOR_BY_TXID_AFTER_SQL, ANCHOR_ROW_LIMIT,
+        validateAnchorConfirmationsParams,
+        buildAnchorConfirmationsResponse } = require('../../src/actions/anchor/anchor_action_query');
+
+function txidRow(overrides) {
+    return Object.assign({
+        action_index: 9, section_index: 0, version: 0, chain: 'BTC', network: 'regtest',
+        block_index: 850000,
+        checkpoint_seq: 7, snapshot_block: 950000, publisher: 'AA'.repeat(32),
+        match_batch_seq: null, block_index_doge: 100, status: 'valid'
+    }, overrides || {});
+}
+
 // ── getanchorconfirmations: DOGE anchor visibility for the BTC indexer ──────────
 //
 // The read the BTC side uses to re-prove that the anchor it is about to pay for was
@@ -455,19 +472,6 @@ describe('anchor-action-query: ANCHOR_ACTIONS_SQL', function () {
 // exists at all - collapsing any of those into a bare boolean loses the caller's ability to
 // tell a forge from a lagging DOGE indexer.
 describe('anchor-action-query: getanchorconfirmations', function () {
-    const { ANCHOR_BY_TXID_SQL, ANCHOR_BY_TXID_AFTER_SQL, ANCHOR_ROW_LIMIT,
-            validateAnchorConfirmationsParams,
-            buildAnchorConfirmationsResponse } = require('../../src/actions/anchor/anchor_action_query');
-
-    function txidRow(overrides) {
-        return Object.assign({
-            action_index: 9, section_index: 0, version: 0, chain: 'BTC', network: 'regtest',
-            block_index: 850000,
-            checkpoint_seq: 7, snapshot_block: 950000, publisher: 'AA'.repeat(32),
-            match_batch_seq: null, block_index_doge: 100, status: 'valid'
-        }, overrides || {});
-    }
-
     describe('validateAnchorConfirmationsParams', function () {
         it('accepts a 64-hex txid and lowercases it', function () {
             let v = validateAnchorConfirmationsParams({ txid: 'A'.repeat(64) });
@@ -480,7 +484,9 @@ describe('anchor-action-query: getanchorconfirmations', function () {
                 assert.strictEqual(validateAnchorConfirmationsParams({ txid: bad }).ok, false);
         });
     });
+});
 
+describe('anchor-action-query: getanchorconfirmations', function () {
     describe('buildAnchorConfirmationsResponse', function () {
         it('reports depth as DOGE-relative burial of the block the tx landed in', function () {
             let r = buildAnchorConfirmationsResponse(CONFIG, 200, [txidRow()]);
@@ -536,7 +542,11 @@ describe('anchor-action-query: getanchorconfirmations', function () {
             assert.strictEqual(r.next_after_action_index, 100 + ANCHOR_ROW_LIMIT - 1,
                 'the cursor must be the LAST RETURNED action_index, so the next page neither skips nor repeats');
         });
+    });
+});
 
+describe('anchor-action-query: getanchorconfirmations', function () {
+    describe('buildAnchorConfirmationsResponse', function () {
         it('reports a short window as complete, with no cursor', function () {
             let r = buildAnchorConfirmationsResponse(CONFIG, 200, [txidRow(), txidRow({ action_index: 10 })]);
             assert.strictEqual(r.truncated, false);
@@ -590,7 +600,11 @@ describe('anchor-action-query: getanchorconfirmations', function () {
             assert.strictEqual(new Set(walked).size, walked.length, 'no row may repeat across pages');
             assert.strictEqual(walked.length, ANCHOR_ROW_LIMIT + 1, 'no row may be lost across pages');
         });
+    });
+});
 
+describe('anchor-action-query: getanchorconfirmations', function () {
+    describe('buildAnchorConfirmationsResponse', function () {
         // Trimming to an action boundary must never produce an empty page: its cursor would
         // not advance and the walk would never terminate. Unreachable while a bundle carries
         // at most one section per allowed chain, so it is a loud guard, not a code path.
@@ -620,7 +634,9 @@ describe('anchor-action-query: getanchorconfirmations', function () {
             assert.deepStrictEqual(r.anchors.map(a => a.section_index), [0, 1, 0]);
         });
     });
+});
 
+describe('anchor-action-query: getanchorconfirmations', function () {
     describe('ANCHOR_BY_TXID_SQL', function () {
         it('keys on the transaction hash and joins through to anchor_actions', function () {
             assert.match(ANCHOR_BY_TXID_SQL, /FROM index_transactions it/);

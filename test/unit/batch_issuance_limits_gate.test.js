@@ -79,9 +79,7 @@ function pcFor(network){
 }
 
 describe('BATCH issuance-limits flag day @regression @tier1', function(){
-
     describe('registration', function(){
-
         it('is a time-keyed 2.0.0 change, genesis-active on testnet and regtest', function(){
             const change = pcFor('regtest').pc.changes[GATE];
             assert.ok(change, GATE + ' must be registered');
@@ -135,7 +133,11 @@ describe('BATCH issuance-limits flag day @regression @tier1', function(){
             indexer.decoderDb.getBlockTime.resolves(ARMED_INSTANT - 1);
             assert.strictEqual(await pc.isEnabled(GATE, 1000000), false);
         });
+    });
+});
 
+describe('BATCH issuance-limits flag day @regression @tier1', function(){
+    describe('registration', function(){
         it('mainnet: live AT and ABOVE the instant', async function(){
             for(const t of [ARMED_INSTANT, ARMED_INSTANT + 1, YEAR_2100]){
                 const { pc, indexer } = pcFor('mainnet');
@@ -168,7 +170,9 @@ describe('BATCH issuance-limits flag day @regression @tier1', function(){
             });
         }
     });
+});
 
+describe('BATCH issuance-limits flag day @regression @tier1', function(){
     describe('ordering against FIX_OUTPUT_FANOUT', function(){
 
         // A batched COINPAY is a DATA-BEARING transaction carrying SEVERAL payment
@@ -204,7 +208,9 @@ describe('BATCH issuance-limits flag day @regression @tier1', function(){
             });
         }
     });
+});
 
+describe('BATCH issuance-limits flag day @regression @tier1', function(){
     describe('equality with the decoder BATCH_SUBCOMMAND_OUTPUT_CAPTURE_ACTIVATION', function(){
 
         // The canonical map (xchain-documentation/protocol/constants.js) states the

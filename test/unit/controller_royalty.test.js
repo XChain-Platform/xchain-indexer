@@ -46,7 +46,6 @@ function sumAmounts(credits, dec) {
 }
 
 describe('Programmable policy layer: Phase D royalty/fee split @regression', function () {
-
     it('no legs → a single full-proceeds credit to the seller', function () {
         const out = util.applyProceedsSplit('TOK', '1000', 'seller', null, 8, 10000);
         assert.deepStrictEqual(out, [['TOK', '1000', 'seller']]);
@@ -104,7 +103,9 @@ describe('Programmable policy layer: Phase D royalty/fee split @regression', fun
         const out  = util.applyProceedsSplit('TOK', '1000', 'seller', legs, 0, 4000); // cap 4000
         assert.deepStrictEqual(out, [['TOK', '1000', 'seller']]);
     });
+});
 
+describe('Programmable policy layer: Phase D royalty/fee split @regression', function () {
     it('total bps over 100% → NO split even if cap arg is loose', function () {
         const legs = [{ to: 'a', bps: 9000 }, { to: 'b', bps: 2000 }]; // 11000 total
         const out  = util.applyProceedsSplit('TOK', '1000', 'seller', legs, 0, 10000);

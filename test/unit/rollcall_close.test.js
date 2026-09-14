@@ -318,16 +318,15 @@ describe('ROLLCALL epoch close (§3.4)', function(){
         });
     });
 
+    // A rolled lookback window, newest first, each epoch pinning the given sources.
+    function lookback(epochs){
+        return epochs.map((e) => ({
+            epoch_height: e.h,
+            responsible_set_json: e.pinned === null ? null : JSON.stringify(e.pinned)
+        }));
+    }
+
     describe('the K-streak', function(){
-
-        // A rolled lookback window, newest first, each epoch pinning the given sources.
-        function lookback(epochs){
-            return epochs.map((e) => ({
-                epoch_height: e.h,
-                responsible_set_json: e.pinned === null ? null : JSON.stringify(e.pinned)
-            }));
-        }
-
         it('does not evict on a first absence', async function(){
             let fed = federation(4);
             let db  = dbFor(fed);
@@ -385,7 +384,9 @@ describe('ROLLCALL epoch close (§3.4)', function(){
             assert.strictEqual(db.writes.absences[0].evicted, true,
                 'a skipped epoch must not end the streak');
         });
+    });
 
+    describe('the K-streak', function(){
         it('stops the walk on an unreadable pin rather than skipping it', async function(){
             // A null/unparseable pin means membership cannot be judged at that epoch.
             // Skipping it would silently treat the source as not-in-R and let the streak
@@ -409,7 +410,6 @@ describe('ROLLCALL epoch close (§3.4)', function(){
     });
 
     describe('the eviction effect', function(){
-
         async function evictOne(){
             let fed = federation(4);
             let db  = dbFor(fed);
@@ -464,7 +464,9 @@ describe('ROLLCALL epoch close (§3.4)', function(){
             assert.deepStrictEqual(db.writes.delegationStamps,
                 [{ src: 'src3', blk: CLOSE + CONFIG.STAKING.ACTIVATION_DELAY_BLOCKS }]);
         });
+    });
 
+    describe('the eviction effect', function(){
         it('is a no-op when a real UNSTAKE already swept the source', async function(){
             let fed = federation(4);
             let db  = dbFor(fed);
@@ -543,19 +545,43 @@ describe('ROLLCALL epoch close (§3.4)', function(){
         });
     });
 
+    // The close sorts the source set once, and that one order is load-bearing three
+    // ways: it is the pinned responsible_set_json, it fixes the absence row order,
+    // and it fixes the sequence evictSource mints action_index values in.
+    //
+    // The fixture has to disagree with a bare .sort(): U+FFFD is one 0xFFFD code
+    // unit but EF BF BD in UTF-8, and U+10000 is the surrogate pair D800 DC00 but
+    // F0 90 80 80. An all-ASCII fixture cannot fail, which is why these two are here.
+    const SRC_FFFD   = 'src-�';
+    const SRC_10000  = 'src-\u{10000}';
+    const BYTE_ORDER = [SRC_FFFD, SRC_10000, 'src0', 'src1', 'src2'];
+
+    // Three ASCII sources carry the quorum; the two fixture sources are absent for K
+    // epochs, so both are evicted in the same close and their sweep order shows.
+    async function closeWithBothAbsent(){
+        let present = federation(3);
+        let a = identity(), b = identity();
+        let fed = {
+            ids: present.ids.concat([a, b]),
+            responsible: present.responsible.concat([
+                { pubkey: a.pubkey, source: SRC_10000, weight: '1.00000000' },
+                { pubkey: b.pubkey, source: SRC_FFFD,  weight: '1.00000000' }
+            ])
+        };
+        let db = dbFor(fed);
+        db.rolledEpochs = [
+            { epoch_height: EPOCH,      responsible_set_json: JSON.stringify(BYTE_ORDER) },
+            { epoch_height: EPOCH - 30, responsible_set_json: JSON.stringify(BYTE_ORDER) }
+        ];
+        db.absencesBySource[SRC_10000] = [EPOCH - 30];
+        db.absencesBySource[SRC_FFFD]  = [EPOCH - 30];
+        db.sweepable[SRC_10000] = [{ signing_pubkey: a.pubkey, amount: '1.00000000' }];
+        db.sweepable[SRC_FFFD]  = [{ signing_pubkey: b.pubkey, amount: '1.00000000' }];
+        await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(answerWith(fed, [0, 1, 2])), UTIL);
+        return db;
+    }
+
     describe('source ordering is UTF-8 byte order, the house consensus comparator', function(){
-
-        // The close sorts the source set once, and that one order is load-bearing three
-        // ways: it is the pinned responsible_set_json, it fixes the absence row order,
-        // and it fixes the sequence evictSource mints action_index values in.
-        //
-        // The fixture has to disagree with a bare .sort(): U+FFFD is one 0xFFFD code
-        // unit but EF BF BD in UTF-8, and U+10000 is the surrogate pair D800 DC00 but
-        // F0 90 80 80. An all-ASCII fixture cannot fail, which is why these two are here.
-        const SRC_FFFD   = 'src-�';
-        const SRC_10000  = 'src-\u{10000}';
-        const BYTE_ORDER = [SRC_FFFD, SRC_10000, 'src0', 'src1', 'src2'];
-
         it('has a fixture that actually separates the two orders', function(){
             // Without this, every assertion below would pass under the bare .sort() too.
             assert.deepStrictEqual([SRC_FFFD, SRC_10000].sort(), [SRC_10000, SRC_FFFD],
@@ -564,31 +590,6 @@ describe('ROLLCALL epoch close (§3.4)', function(){
                 (a, b) => Buffer.compare(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8')));
             assert.deepStrictEqual(bytes, [SRC_FFFD, SRC_10000], 'UTF-8 byte order puts U+FFFD first');
         });
-
-        // Three ASCII sources carry the quorum; the two fixture sources are absent for K
-        // epochs, so both are evicted in the same close and their sweep order shows.
-        async function closeWithBothAbsent(){
-            let present = federation(3);
-            let a = identity(), b = identity();
-            let fed = {
-                ids: present.ids.concat([a, b]),
-                responsible: present.responsible.concat([
-                    { pubkey: a.pubkey, source: SRC_10000, weight: '1.00000000' },
-                    { pubkey: b.pubkey, source: SRC_FFFD,  weight: '1.00000000' }
-                ])
-            };
-            let db = dbFor(fed);
-            db.rolledEpochs = [
-                { epoch_height: EPOCH,      responsible_set_json: JSON.stringify(BYTE_ORDER) },
-                { epoch_height: EPOCH - 30, responsible_set_json: JSON.stringify(BYTE_ORDER) }
-            ];
-            db.absencesBySource[SRC_10000] = [EPOCH - 30];
-            db.absencesBySource[SRC_FFFD]  = [EPOCH - 30];
-            db.sweepable[SRC_10000] = [{ signing_pubkey: a.pubkey, amount: '1.00000000' }];
-            db.sweepable[SRC_FFFD]  = [{ signing_pubkey: b.pubkey, amount: '1.00000000' }];
-            await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(answerWith(fed, [0, 1, 2])), UTIL);
-            return db;
-        }
 
         it('pins responsible_set_json in byte order', async function(){
             let db = await closeWithBothAbsent();
@@ -600,7 +601,9 @@ describe('ROLLCALL epoch close (§3.4)', function(){
             let db = await closeWithBothAbsent();
             assert.deepStrictEqual(db.writes.absences.map((r) => r.source), [SRC_FFFD, SRC_10000]);
         });
+    });
 
+    describe('source ordering is UTF-8 byte order, the house consensus comparator', function(){
         it('evicts in byte order, so the minted action_index sequence is the same on every node', async function(){
             let db = await closeWithBothAbsent();
             assert.deepStrictEqual(db.sweepCalls.map((c) => c.src), [SRC_FFFD, SRC_10000]);

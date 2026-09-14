@@ -56,7 +56,6 @@ const V = [
 describe('stake_weighted_quorum (indexer)', function () {
 
     describe('meetsStakeThreshold', function () {
-
         it('returns false for an empty signer set', function () {
             assert.strictEqual(swq.meetsStakeThreshold(V, []), false);
         });
@@ -110,7 +109,9 @@ describe('stake_weighted_quorum (indexer)', function () {
         it('ignores signers not present in the snapshot', function () {
             assert.strictEqual(swq.meetsStakeThreshold(V, ['zzz']), false);
         });
+    });
 
+    describe('meetsStakeThreshold', function () {
         it('a single source IS the whole snapshot: finalizes on its own signature', function () {
             const one = [{ pubkey: 'x', source: 'X', weight: '5000' }];
             assert.strictEqual(swq.meetsStakeThreshold(one, ['x']), true);        // 3·5000 > 2·5000

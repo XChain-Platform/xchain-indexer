@@ -44,7 +44,6 @@ const REQ_S1      = 150780;
 const DEADLINE_S1 = 150790;
 
 describe('attest_responsible_widening (indexer copy)', function () {
-
     // Derived from the map rather than naming networks, so pinning a height cannot
     // leave this asserting something that is no longer true. It caught exactly that:
     // the first cut hardcoded testnet as unratified and went stale the moment the
@@ -97,7 +96,9 @@ describe('attest_responsible_widening (indexer copy)', function () {
         assert.strictEqual(wid.widenSlots(0, 0, 30, 'mainnet'), 0, 'the first segment is the unwidened set');
         assert.strictEqual(wid.widenSlots(15, 0, 30, 'mainnet'), 1, 'the ladder must run on a genesis-armed mainnet');
     });
+});
 
+describe('attest_responsible_widening (indexer copy)', function () {
     it('gates an armed network on the REQUEST block, not the response block', function () {
         const armed = Object.entries(wid.ATTEST_RESPONSIBLE_WIDENING_ACTIVATION)
             .filter(([, h]) => typeof h === 'number');

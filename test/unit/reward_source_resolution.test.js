@@ -141,6 +141,10 @@ describe('reward writers resolve source strictly (recovery byte-identity)', func
         assert.ok(insertCall, 'expected an INSERT into full_node_verifications');
         assert.strictEqual(insertCall.args[1][5], 77);
     });
+});
+
+describe('reward writers resolve source strictly (recovery byte-identity)', function () {
+    afterEach(function () { sinon.restore(); });
 
     it('createNodeProofVerification resolves the source at setBlock, falling back to blockIndex', async function () {
         // The NODEPROOF handler passes the buried height the producing hub locked its

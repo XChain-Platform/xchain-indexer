@@ -142,7 +142,6 @@ describe('ATTEST applier fall-through above the zero-conf height @regression @ti
     // ------------------------------------------------------------------ the selector
 
     describe('selector candidate list (utility.selectApplicableAttestationResponses)', function () {
-
         it('carries every eligible row for one request, sorted, as ONE item', function () {
             // Three rows for one request, inserted in an order that disagrees with both
             // sort keys, so nothing but the sort can produce the expected sequence.
@@ -196,7 +195,9 @@ describe('ATTEST applier fall-through above the zero-conf height @regression @ti
                 ['d'.repeat(64), 'e'.repeat(64)]);
             assert.deepStrictEqual(applied[1].candidates.map(c => c.response_hash), ['c'.repeat(64)]);
         });
+    });
 
+    describe('selector candidate list (utility.selectApplicableAttestationResponses)', function () {
         it('BELOW the height returns the old single-choice item with no candidates key', function () {
             assert.strictEqual(arm.isResponseMirrorActive(T_REQ_BLOCK, 'testnet'), true,
                 'fixture assumption: the mirror is armed on testnet at this block');
@@ -219,19 +220,18 @@ describe('ATTEST applier fall-through above the zero-conf height @regression @ti
         });
     });
 
+    // Three candidates for one request, hashes chosen so the sort order is a<b<c.
+    function threeCandidates() {
+        return [
+            mirrorRow({ response_hash: 'c'.repeat(64) }),
+            mirrorRow({ response_hash: 'a'.repeat(64) }),
+            mirrorRow({ response_hash: 'b'.repeat(64) }),
+        ];
+    }
+
     // ---------------------------------------------------------------- the applier pass
 
     describe('the pass tries candidates in order (utility.processAttestationResponses)', function () {
-
-        // Three candidates for one request, hashes chosen so the sort order is a<b<c.
-        function threeCandidates() {
-            return [
-                mirrorRow({ response_hash: 'c'.repeat(64) }),
-                mirrorRow({ response_hash: 'a'.repeat(64) }),
-                mirrorRow({ response_hash: 'b'.repeat(64) }),
-            ];
-        }
-
         it('stops at the first candidate that binds and never dispatches again for that request', async function () {
             const spy = applierSpy(['b'.repeat(64)]);   // the SECOND candidate binds
             const db  = fakeDb('regtest', [requestRow()], threeCandidates());
@@ -276,7 +276,9 @@ describe('ATTEST applier fall-through above the zero-conf height @regression @ti
                 assert.strictEqual(s.data['BLOCK_INDEX'], BLOCK);
             }
         });
+    });
 
+    describe('the pass tries candidates in order (utility.processAttestationResponses)', function () {
         it('tries EVERY candidate when none binds, and the request is selected again unchanged next block', async function () {
             const spy = applierSpy([]);                 // every row inert
             const rows = threeCandidates();

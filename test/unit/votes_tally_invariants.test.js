@@ -58,11 +58,9 @@ function basePoll(overrides = {}) {
 }
 
 describe('VOTE tally invariants (delegation precedence + quadratic/dust floor) @regression @tier1', function () {
-
     afterEach(() => sinon.restore());
 
     describe('delegation-vs-direct precedence', function () {
-
         it('an idle delegator (did not vote) lends full weight to a delegate who did vote', async function () {
             const db = makeDb();
             sinon.stub(db, 'getPoll').resolves(basePoll());
@@ -103,7 +101,13 @@ describe('VOTE tally invariants (delegation precedence + quadratic/dust floor) @
                 'bob only gets his own balance; alice voting directly must not also flow to bob');
             assert.strictEqual(tally.options[1].weight, '10', 'alice\'s direct vote counts at her own balance');
         });
+    });
+});
 
+describe('VOTE tally invariants (delegation precedence + quadratic/dust floor) @regression @tier1', function () {
+    afterEach(() => sinon.restore());
+
+    describe('delegation-vs-direct precedence', function () {
         it('a delegator who no longer holds the token at close contributes no delegated weight', async function () {
             const db = makeDb();
             sinon.stub(db, 'getPoll').resolves(basePoll());
@@ -122,6 +126,10 @@ describe('VOTE tally invariants (delegation precedence + quadratic/dust floor) @
                 'a delegator who no longer holds TICK at close must not inflate the delegate\'s weight');
         });
     });
+});
+
+describe('VOTE tally invariants (delegation precedence + quadratic/dust floor) @regression @tier1', function () {
+    afterEach(() => sinon.restore());
 
     describe('quadratic weighting / dust-floor participation gate', function () {
 

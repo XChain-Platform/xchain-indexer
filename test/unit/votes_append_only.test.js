@@ -53,7 +53,6 @@ function makeDb() {
 }
 
 describe('votes append-only (reorg safety) @regression @tier1', function () {
-
     afterEach(() => sinon.restore());
 
     it('createBallot never deletes prior rows and inserts one row per selection', async function () {
@@ -111,6 +110,10 @@ describe('votes append-only (reorg safety) @regression @tier1', function () {
         assert.strictEqual(tally.options[1].weight, '10', 'alice\'s latest ballot, superseded set excluded by the query');
         assert.strictEqual(tally.winning_option, 1);
     });
+});
+
+describe('votes append-only (reorg safety) @regression @tier1', function () {
+    afterEach(() => sinon.restore());
 
     it('schema + migration pin the widened unique key (append-only enforcement)', function () {
         const schema = fs.readFileSync(path.resolve(__dirname, '../../src/sql/votes.sql'), 'utf8');

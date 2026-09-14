@@ -43,7 +43,6 @@ const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js'
 const TWIN_REF = /xchain-\S+\/src\/anchor_reward_activation\.js/;
 
 describe('anchor_reward_activation twin parity @regression @tier1', function () {
-
     it('indexer exports the frozen reward amount and armed BTC mainnet height', function () {
         assert.strictEqual(indexer.ANCHOR_REWARD_AMOUNT, '10.00000000');
         assert.strictEqual(indexer.ANCHOR_REWARD_ACTIVATION.mainnet, 961000);
@@ -93,7 +92,9 @@ describe('anchor_reward_activation twin parity @regression @tier1', function () 
         assert.strictEqual(indexer.isAnchorRewardActive(5, 'bogusnet'), false);
         assert.strictEqual(indexer.isAnchorRewardActive('not-a-number', 'mainnet'), false);
     });
+});
 
+describe('anchor_reward_activation twin parity @regression @tier1', function () {
     // Cross-service parity: resolved by monorepo-relative path, so this only runs in the
     // monorepo/aggregator checkout; standalone single-repo CI skips (unless a required-
     // sibling job sets XCHAIN_REQUIRE_SIBLINGS=1, where a missing sibling hard-fails).

@@ -56,7 +56,6 @@ function row(over) {
 }
 
 describe('XANCPUB reward canonical: derive copy vs the frozen wire format @regression @tier1', function () {
-
     // regtest EQUIV_HEADER_ACTIVATION is 0, so snapshot_block 100 is header-bearing;
     // mainnet is 961000, so snapshot_block 1000 is header-less. Asserted rather than
     // assumed, so a flag-day re-pin cannot quietly turn these four cases into two.
@@ -107,7 +106,9 @@ describe('XANCPUB reward canonical: derive copy vs the frozen wire format @regre
             PUBLISHER + '|10.00000000',
             'bundle XANCPUB canonical drifted from the frozen wire format');
     });
+});
 
+describe('XANCPUB reward canonical: derive copy vs the frozen wire format @regression @tier1', function () {
     it('pre-flag-day bundle: the bare bundle XANCPUB string', function () {
         assert.strictEqual(
             derive.rewardCanonical(row({ reward_type: 'anchor_bundle', round_reference: 1000,
@@ -155,7 +156,9 @@ describe('XANCPUB reward canonical: derive copy vs the frozen wire format @regre
         assert.notStrictEqual(roundIdOf(perChain), roundIdOf(archive),
             'archive round id must not collide with the per-chain XANCPUB round id');
     });
+});
 
+describe('XANCPUB reward canonical: derive copy vs the frozen wire format @regression @tier1', function () {
     // Load-bearing: the mirror copy in src/consensus/anchor_reward_derive.js takes the chain
     // VERBATIM out of reward_type (`String(row.reward_type).slice('anchor_'.length)`),
     // while Anchor.prototype.rewardCanonical in src/actions/anchor.js upper-cases

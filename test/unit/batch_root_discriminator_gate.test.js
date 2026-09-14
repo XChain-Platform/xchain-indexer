@@ -66,7 +66,6 @@ function pcFor(network){
 }
 
 describe('BATCH per-subcommand root discriminator flag day @regression @tier1', function(){
-
     describe('registration', function(){
 
         it('is named on ONE gate constant the call sites share', function(){
@@ -117,7 +116,9 @@ describe('BATCH per-subcommand root discriminator flag day @regression @tier1', 
             }
         });
     });
+});
 
+describe('BATCH per-subcommand root discriminator flag day @regression @tier1', function(){
     describe('the discriminator form on each side of the gate', function(){
 
         it('gate OFF: the bare TX_VOUT, unchanged for a BATCH subcommand too', function(){
@@ -164,7 +165,9 @@ describe('BATCH per-subcommand root discriminator flag day @regression @tier1', 
             assert.strictEqual(rootDiscriminator(null, 2, true), '0.2');
         });
     });
+});
 
+describe('BATCH per-subcommand root discriminator flag day @regression @tier1', function(){
     describe('resolveRootDiscriminator (the form every call site uses)', function(){
 
         afterEach(() => sinon.restore());

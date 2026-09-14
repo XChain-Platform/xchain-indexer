@@ -115,7 +115,6 @@ async function runBatch({ count, feeValue, flagOn }){
 }
 
 describe('BATCH value-ledger seam @regression @tier1', function(){
-
     describe('flag ON: the ledger survives the per-command field clear', function(){
 
         it('one command\'s worth of fee validates exactly ONE of three sub-commands', async function(){
@@ -157,7 +156,9 @@ describe('BATCH value-ledger seam @regression @tier1', function(){
             assert.strictEqual(data['BATCH_VALUE_LEDGER'].nativeFeeConsumed, '0.03000000');
         });
     });
+});
 
+describe('BATCH value-ledger seam @regression @tier1', function(){
     describe('flag OFF: the original defect must replay byte-identically', function(){
 
         it('seeds no ledger at all', async function(){

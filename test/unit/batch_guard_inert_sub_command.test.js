@@ -69,8 +69,20 @@ function mkAddressDb(effective){
     };
 }
 
-describe('BATCH pre-flight : a guard-inert sub-command is UNJUDGED, not invalid @regression @tier1', function () {
+let indexer, actionsCtx, handler;
 
+// The verdict the SEND handler records when its bound controller's guard cannot run on
+// the public probe (send.js: error = 'invalid: ' + result.error).
+const INERT = 'invalid: FEE_QUOTE_CONTROLLER_UNSUPPORTED (contract 9 controls transfer for address '
+            + SOURCE + ')';
+
+const WIRE = 'BATCH|0|SEND|0|CTRL|10|' + DEST + ';SEND|0|TEST|5|' + DEST;
+
+function probeData(){
+    return createBaseData({ ACTION: 'BATCH', FORMAT: 0, SOURCE, TX_DATA: WIRE, FEE_PROBE: true });
+}
+
+describe('BATCH pre-flight : a guard-inert sub-command is UNJUDGED, not invalid @regression @tier1', function () {
     const util = new Utility();
 
     describe('the sentinel names the controller that caused it', function () {
@@ -110,15 +122,10 @@ describe('BATCH pre-flight : a guard-inert sub-command is UNJUDGED, not invalid 
             assert.strictEqual(util.isGuardInertError(''), false);
         });
     });
+});
 
+describe('BATCH pre-flight : a guard-inert sub-command is UNJUDGED, not invalid @regression @tier1', function () {
     describe('batch.js probe collector', function () {
-        let indexer, actionsCtx, handler;
-
-        // The verdict the SEND handler records when its bound controller's guard cannot run on
-        // the public probe (send.js: error = 'invalid: ' + result.error).
-        const INERT = 'invalid: FEE_QUOTE_CONTROLLER_UNSUPPORTED (contract 9 controls transfer for address '
-                    + SOURCE + ')';
-
         beforeEach(function () {
             indexer    = createMockIndexer();
             actionsCtx = {
@@ -143,12 +150,6 @@ describe('BATCH pre-flight : a guard-inert sub-command is UNJUDGED, not invalid 
         });
 
         afterEach(function () { sinon.restore(); });
-
-        const WIRE = 'BATCH|0|SEND|0|CTRL|10|' + DEST + ';SEND|0|TEST|5|' + DEST;
-
-        function probeData(){
-            return createBaseData({ ACTION: 'BATCH', FORMAT: 0, SOURCE, TX_DATA: WIRE, FEE_PROBE: true });
-        }
 
         it('reports the guard-inert sub-command as UNJUDGED, never as a rejection', async function () {
             const data = probeData();
@@ -178,6 +179,35 @@ describe('BATCH pre-flight : a guard-inert sub-command is UNJUDGED, not invalid 
                 data['PROBE_SUB_VERDICTS'][1],
                 { position: 1, action: 'SEND', status: 'valid', refused: null });
         });
+    });
+});
+
+describe('BATCH pre-flight : a guard-inert sub-command is UNJUDGED, not invalid @regression @tier1', function () {
+    describe('batch.js probe collector', function () {
+        beforeEach(function () {
+            indexer    = createMockIndexer();
+            actionsCtx = {
+                config:          indexer.config,
+                util:            indexer.util,
+                mapper:          indexer.mapper,
+                decoderDb:       indexer.decoderDb,
+                indexerDb:       indexer.indexerDb,
+                protocolChanges: { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) },
+                isBatchProbeForbiddenSubAction: Actions.isBatchProbeForbiddenSubAction,
+                actionAliases:   { TRANSFER: 'SEND', ADDR: 'ADDRESS', DROP: 'AIRDROP', CAST: 'BROADCAST', MSG: 'MESSAGE' },
+                // The first SEND is controller-bound and comes back guard-inert; the second is an
+                // ordinary send that really was judged.
+                processAction:   sinon.stub().callsFake(async (action, params, data) => {
+                    data['STATUS'] = (params[1] === 'CTRL') ? INERT : 'valid';
+                })
+            };
+            handler = new Batch(actionsCtx);
+            indexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
+            indexer.indexerDb.isActionAllowed.resolves(true);
+            indexer.util.resetLists();
+        });
+
+        afterEach(function () { sinon.restore(); });
 
         it('a genuinely invalid sub-command is still reported invalid', async function () {
             actionsCtx.processAction = sinon.stub().callsFake(async (action, params, data) => {
@@ -201,7 +231,9 @@ describe('BATCH pre-flight : a guard-inert sub-command is UNJUDGED, not invalid 
             assert.strictEqual(data['STATUS'], 'valid');
         });
     });
+});
 
+describe('BATCH pre-flight : a guard-inert sub-command is UNJUDGED, not invalid @regression @tier1', function () {
     describe('computeFeeQuote / computePreflight name the controller too', function () {
 
         function makeCtx(dryRun){

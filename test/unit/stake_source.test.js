@@ -58,7 +58,6 @@ function makeIndexer({ pubkeyId = 7, validId = 1, doQuery } = {}) {
 }
 
 describe('getStakeSourceByPubkey()', function () {
-
     afterEach(function () { sinon.restore(); });
 
     // --- input validation -------------------------------------------------
@@ -116,6 +115,10 @@ describe('getStakeSourceByPubkey()', function () {
         assert.deepStrictEqual(r, { source: null });
         assert.strictEqual(db.doQuery.callCount, 0);
     });
+});
+
+describe('getStakeSourceByPubkey()', function () {
+    afterEach(function () { sinon.restore(); });
 
     it('resolves a stake source without consulting delegations', async function () {
         const doQuery = sinon.stub().resolves([{ source: 'stakeAddr' }]);
@@ -170,6 +173,10 @@ describe('getStakeSourceByPubkey()', function () {
         const r = await getStakeSourceByPubkey(indexer, { pubkey: PUB, block_index: 100 });
         assert.deepStrictEqual(r, { error: 'failed to resolve stake source' });
     });
+});
+
+describe('getStakeSourceByPubkey()', function () {
+    afterEach(function () { sinon.restore(); });
 
     // Federation read isolation: a read landing mid-block must resolve on an
     // independent pooled connection and NEVER on the block's open transaction

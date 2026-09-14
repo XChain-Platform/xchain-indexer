@@ -177,7 +177,6 @@ function migrationModifies() {
 }
 
 describe('the ATTEST response mirror holds every body the on-chain path holds @regression', function () {
-
     afterEach(() => sinon.restore());
 
     it('sanity: the fixture character really is 4 bytes and the twin columns are utf8mb4', function () {
@@ -233,6 +232,10 @@ describe('the ATTEST response mirror holds every body the on-chain path holds @r
             'retypes an existing one:\n' + missing.join('\n'));
         assert.deepStrictEqual(misfiled, [], 'Migration / definition disagreement:\n' + misfiled.join('\n'));
     });
+});
+
+describe('the ATTEST response mirror holds every body the on-chain path holds @regression', function () {
+    afterEach(() => sinon.restore());
 
     // INGEST: the real applier, against the strict-server stub.
     describe('_applyRow survives a 4-byte character', function () {

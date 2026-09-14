@@ -27,7 +27,6 @@ const BASE = {
 };
 
 describe('attest_response_canonical', function () {
-
     it('reproduces the legacy five-field concatenation byte for byte when no effective time is given', function () {
         const meta = 'status=200';
         const expected = BASE.requestId + BASE.providerId + BASE.responseHash + BASE.status + meta;
@@ -80,7 +79,9 @@ describe('attest_response_canonical', function () {
                 'accepted ' + JSON.stringify(bad));
         }
     });
+});
 
+describe('attest_response_canonical', function () {
     it('accepts both the number and the string spelling of the same canonical integer, identically', function () {
         assert.strictEqual(
             can.buildResponseCanonicalRaw(Object.assign({}, BASE, { meta: '', effectiveTime: 0 })),

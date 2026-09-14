@@ -104,7 +104,6 @@ describe('rollcall_gates_filter: the rules-aware attestation capability filter @
     });
 
     describe('the subset rule', function () {
-
         it('keeps a validator whose rolled list is exactly the active set', async function () {
             const db  = dbDouble(epochRow(960, 990, [[PK_A, NEEDED.slice()]]));
             const out = await armed.filterByRolledGates({
@@ -161,7 +160,9 @@ describe('rollcall_gates_filter: the rules-aware attestation capability filter @
                 db, validators: [{ pubkey: PK_A.toUpperCase() }], requestBlock: H, network: 'regtest' });
             assert.deepStrictEqual(out, [], 'an upper-cased key must still find its row');
         });
+    });
 
+    describe('the subset rule', function () {
         it('preserves input ORDER and the full row objects of the survivors', async function () {
             const db = dbDouble(epochRow(960, 990, [
                 [PK_A, NEEDED.slice()],
@@ -332,11 +333,24 @@ const deriveReqId = (txHash, rootActionIndex, emitterPath, contractIndex, positi
         .update(String(txHash) + ':' + String(rootActionIndex) + ':' + String(emitterPath) + ':' + String(contractIndex) + ':' + String(position))
         .digest('hex');
 
+let indexer, handler;
+
+const KEYS = [PK_A, PK_B, PK_C];
+
+function v0Data(){
+    return createBaseData({
+        ACTION: 'ATTEST', FORMAT: 0, IS_EMISSION: true, EMITTER: 5, EMITTER_POSITION: 0,
+        EMITTER_PATH: '0', ROOT_ACTION_INDEX: 100, BLOCK_INDEX: 100,
+    });
+}
+function v0Params(reqId, redundancy){
+    return ['0', reqId, 'http_get', 'q', 'onResult', '[]', String(redundancy), '50'];
+}
+function reqIdFor(data){
+    return deriveReqId(data['TX_HASH'], data['ROOT_ACTION_INDEX'], data['EMITTER_PATH'], data['EMITTER'], data['EMITTER_POSITION']);
+}
+
 describe('ATTEST v0 admission: the rules-aware REDUNDANCY literal @regression @tier2', function () {
-    let indexer, handler;
-
-    const KEYS = [PK_A, PK_B, PK_C];
-
     beforeEach(function () {
         indexer = createMockIndexer();
         const db = indexer.indexerDb;
@@ -363,19 +377,6 @@ describe('ATTEST v0 admission: the rules-aware REDUNDANCY literal @regression @t
     });
 
     afterEach(function () { sinon.restore(); });
-
-    function v0Data(){
-        return createBaseData({
-            ACTION: 'ATTEST', FORMAT: 0, IS_EMISSION: true, EMITTER: 5, EMITTER_POSITION: 0,
-            EMITTER_PATH: '0', ROOT_ACTION_INDEX: 100, BLOCK_INDEX: 100,
-        });
-    }
-    function v0Params(reqId, redundancy){
-        return ['0', reqId, 'http_get', 'q', 'onResult', '[]', String(redundancy), '50'];
-    }
-    function reqIdFor(data){
-        return deriveReqId(data['TX_HASH'], data['ROOT_ACTION_INDEX'], data['EMITTER_PATH'], data['EMITTER'], data['EMITTER_POSITION']);
-    }
 
     it('fires the RULES-AWARE literal when the filter dropped a key', async function () {
         sinon.stub(rgf, 'filterByRolledGates').callsFake(async ({ validators, stats }) => {
@@ -405,6 +406,35 @@ describe('ATTEST v0 admission: the rules-aware REDUNDANCY literal @regression @t
         assert.strictEqual(data['STATUS'],
             'invalid: REDUNDANCY (responsible set 1 < 3 at request block)');
     });
+});
+
+describe('ATTEST v0 admission: the rules-aware REDUNDANCY literal @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        const db = indexer.indexerDb;
+        db.getContract                     = sinon.stub().resolves({ contract_index: 5 });
+        db.createAttestationRequest        = sinon.stub().resolves();
+        db.getAttestationAdmissionCounts   = sinon.stub().resolves({ total: 0, byContract: 0 });
+        db.getAttestationRequestById       = sinon.stub().resolves(null);
+        db.hasCapability                   = sinon.stub().resolves(true);
+        db.getValidatorsByCapability       = sinon.stub().resolves(KEYS.map(k => ({ pubkey: k })));
+        db.getStakeWeightsByCapability     = sinon.stub().resolves([]);
+
+        handler = new Attest({
+            config: indexer.config, util: indexer.util, mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb, indexerDb: db,
+            actionExecute: { parse: sinon.stub().resolves() },
+            protocolChanges: { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) },
+        });
+        indexer.util.resetLists();
+        sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+        sinon.stub(attestBcastFee, 'isAttestBroadcastFeeActive').returns(false);
+        sinon.stub(arm, 'isResponseMirrorActive').returns(false);
+        // The gate this row's literal lives behind.
+        sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(true);
+    });
+
+    afterEach(function () { sinon.restore(); });
 
     it('a filter that dropped somebody but left the set servable does NOT reject', async function () {
         // Four capable keys, one dropped by the rules filter, redundancy 3: still
@@ -425,6 +455,35 @@ describe('ATTEST v0 admission: the rules-aware REDUNDANCY literal @regression @t
             'the pinned set is the FILTERED set, and admission reuses that one computation');
         assert.strictEqual(pinned.indexOf(PK_D), -1, 'the key the filter removed cannot be pinned');
     });
+});
+
+describe('ATTEST v0 admission: the rules-aware REDUNDANCY literal @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        const db = indexer.indexerDb;
+        db.getContract                     = sinon.stub().resolves({ contract_index: 5 });
+        db.createAttestationRequest        = sinon.stub().resolves();
+        db.getAttestationAdmissionCounts   = sinon.stub().resolves({ total: 0, byContract: 0 });
+        db.getAttestationRequestById       = sinon.stub().resolves(null);
+        db.hasCapability                   = sinon.stub().resolves(true);
+        db.getValidatorsByCapability       = sinon.stub().resolves(KEYS.map(k => ({ pubkey: k })));
+        db.getStakeWeightsByCapability     = sinon.stub().resolves([]);
+
+        handler = new Attest({
+            config: indexer.config, util: indexer.util, mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb, indexerDb: db,
+            actionExecute: { parse: sinon.stub().resolves() },
+            protocolChanges: { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) },
+        });
+        indexer.util.resetLists();
+        sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+        sinon.stub(attestBcastFee, 'isAttestBroadcastFeeActive').returns(false);
+        sinon.stub(arm, 'isResponseMirrorActive').returns(false);
+        // The gate this row's literal lives behind.
+        sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(true);
+    });
+
+    afterEach(function () { sinon.restore(); });
 
     it('the filter is applied on the capability snapshot at the request block, once', async function () {
         const spy = sinon.stub(rgf, 'filterByRolledGates').callsFake(async ({ validators }) => validators);

@@ -108,7 +108,6 @@ describe('BATCH sub-command pre-flight (spec row 46) @regression @tier1', functi
     });
 
     describe('computePreflight wire pre-scan', function () {
-
         it('pre-flights a batch of ordinary sub-commands and runs the engine as a probe', async function () {
             let { ctx, calls } = makeCtx();
             let r = await ctx.computePreflight({
@@ -166,7 +165,9 @@ describe('BATCH sub-command pre-flight (spec row 46) @regression @tier1', functi
             assert.strictEqual(r.deniedSubAction, 'BATCH');
             assert.strictEqual(calls.dryRuns, 0);
         });
+    });
 
+    describe('computePreflight wire pre-scan', function () {
         it('leaves the OTHER denylisted actions flatly refused at top level', async function () {
             for(const a of ['DEPLOY', 'EXECUTE', 'XEXEC']){
                 let { ctx, calls } = makeCtx();
@@ -310,13 +311,23 @@ describe('BATCH sub-command pre-flight (spec row 46) @regression @tier1', functi
         });
     });
 
-    describe('probe-local oracle fee disclosure', function () {
-        let indexer, actionsCtx, dispenser;
-        const OWNER_ADDR  = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
-        const ORACLE_ADDR = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
-        const BLOCK_TIME  = 1700000000;
-        const EXPIRATION  = BLOCK_TIME + 86400 * 30;
+    let indexer, actionsCtx, dispenser;
+    const OWNER_ADDR  = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+    const ORACLE_ADDR = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
+    const BLOCK_TIME  = 1700000000;
+    const EXPIRATION  = BLOCK_TIME + 86400 * 30;
 
+    const modeBParams = () => String(
+        `0|BTC|JDOG|1||1000|BTC||0|${OWNER_ADDR}|USD||${ORACLE_ADDR}|${EXPIRATION}|||Mode B`).split('|');
+
+    function probeData(shared){
+        let d = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+        d['FEE_PROBE'] = true;
+        if(shared) d['PROBE_ORACLE_FEES'] = shared;
+        return d;
+    }
+
+    describe('probe-local oracle fee disclosure', function () {
         beforeEach(function () {
             indexer    = createMockIndexer();
             actionsCtx = {
@@ -345,16 +356,6 @@ describe('BATCH sub-command pre-flight (spec row 46) @regression @tier1', functi
 
         afterEach(function () { sinon.restore(); });
 
-        const modeBParams = () => String(
-            `0|BTC|JDOG|1||1000|BTC||0|${OWNER_ADDR}|USD||${ORACLE_ADDR}|${EXPIRATION}|||Mode B`).split('|');
-
-        function probeData(shared){
-            let d = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
-            d['FEE_PROBE'] = true;
-            if(shared) d['PROBE_ORACLE_FEES'] = shared;
-            return d;
-        }
-
         it('a probe records the fee owed even with no oracle output to read', async function () {
             const data = probeData();          // no TX_OUTPUTS: a probe has no transaction
             await dispenser.parse(modeBParams(), data, false);
@@ -379,6 +380,36 @@ describe('BATCH sub-command pre-flight (spec row 46) @regression @tier1', functi
             assert.strictEqual(two, indexer.util.bcformat(indexer.util.bcmul(one, '2', 8), 8),
                 'two DISPENSERs on one oracle must owe twice one fee');
         });
+    });
+
+    describe('probe-local oracle fee disclosure', function () {
+        beforeEach(function () {
+            indexer    = createMockIndexer();
+            actionsCtx = {
+                config:          indexer.config,
+                util:            indexer.util,
+                mapper:          indexer.mapper,
+                decoderDb:       indexer.decoderDb,
+                indexerDb:       indexer.indexerDb,
+                protocolChanges: { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) },
+                isBatchProbeForbiddenSubAction: Actions.isBatchProbeForbiddenSubAction,
+                processAction:   sinon.stub().resolves()
+            };
+            dispenser = new Dispenser(actionsCtx);
+
+            indexer.indexerDb.getTokenInfo.withArgs('JDOG', sinon.match.any, sinon.match.any)
+                .resolves(createTokenInfo({ TICK: 'JDOG', TICK_ID: 10, DECIMALS: 0, ALLOW_LIST: null, BLOCK_LIST: null }));
+            for(const empty of ['', null, undefined])
+                indexer.indexerDb.getTokenInfo.withArgs(empty, sinon.match.any, sinon.match.any).resolves(null);
+            indexer.indexerDb.getAddressBalances.resolves({ 10: '1000' });
+            indexer.indexerDb.isActionAllowed.resolves(true);
+            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+            indexer.indexerDb.getTickerId.resolves(99);
+            indexer.indexerDb.getOraclePrice = sinon.stub().resolves({ value: '0.05', fee: '0.01' });
+            indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000' }]);
+        });
+
+        afterEach(function () { sinon.restore(); });
 
         it('records nothing when no fee is owed (belowDust / zero fee)', async function () {
             indexer.indexerDb.getOraclePrice = sinon.stub().resolves({ value: '0.05', fee: '0' });

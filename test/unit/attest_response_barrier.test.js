@@ -39,7 +39,6 @@ function makeSync() {
 // fee. Missing the row is a permanent fork, not a lag, so the barrier is pure
 // stream watermark and fails closed in every ambiguous case.
 describe('HubDbSync attestation-response barrier @regression @tier1', function () {
-
     it('is NOT satisfied one second below blockTime + grace', function () {
         const { sync } = makeSync();
         sync.streamWatermark = 1000 + sync.attestResponseWatermarkGraceS - 1;
@@ -93,7 +92,9 @@ describe('HubDbSync attestation-response barrier @regression @tier1', function (
         sync.advanceWatermark(1000 + sync.attestResponseWatermarkGraceS - 1);
         assert.strictEqual(sync._attestResponseWaiters.length, 1, 'a short advance must not release the block');
     });
+});
 
+describe('HubDbSync attestation-response barrier @regression @tier1', function () {
     it('rejects on timeout when the watermark never moves, so the caller DEFERS', async function () {
         const { sync } = makeSync();
         sync.streamWatermark = 0;
@@ -150,16 +151,8 @@ describe('HubDbSync attestation-response barrier @regression @tier1', function (
     });
 });
 
-// ── The block-loop defer site ──────────────────────────────────────────────────
-//
-// The gate is one `if` inside a ~700-line block loop that cannot be stood up in a
-// unit test. Rather than assert on source text (which cannot tell a live gate from
-// a commented one), lift the real guarded region out of the file and EXECUTE it
-// against a fake indexer. Deleting the coin gate, renaming the reason or borrowing
-// another barrier's grace all change what these assertions observe.
-describe('attest_response_sync_barrier defer site @regression @tier1', function () {
-    const INDEXER_SRC = fs.readFileSync(
-        path.resolve(__dirname, '../../src/XChainIndexer.js'), 'utf8');
+const INDEXER_SRC = fs.readFileSync(
+    path.resolve(__dirname, '../../src/XChainIndexer.js'), 'utf8');
 
     // Lift the whole `if(...){ ... }` that contains the barrier's stall reason: walk back
     // to the nearest preceding `if(` and brace-match forward from it.
@@ -178,53 +171,62 @@ describe('attest_response_sync_barrier defer site @regression @tier1', function 
         return INDEXER_SRC.slice(ifStart, end);
     }
 
-    // Run the lifted block with `this` bound to a fake indexer. The trailing `break` in
-    // the catch needs an enclosing loop, so the block is wrapped in a one-pass for.
-    function runBarrier(fakeIndexer, blockTime, blockToParse) {
-        const body = 'return (async function(blockTime, blockToParse){ for(;;){ ' +
-                     extractBarrierBlock() + ' break; } }).call(this, blockTime, blockToParse);';
-        // eslint-disable-next-line no-new-func
-        const fn = new Function('blockTime', 'blockToParse', 'getLogger', body);
-        return fn.call(fakeIndexer, blockTime, blockToParse, getLogger);
-    }
+// Run the lifted block with `this` bound to a fake indexer. The trailing `break` in
+// the catch needs an enclosing loop, so the block is wrapped in a one-pass for.
+function runBarrier(fakeIndexer, blockTime, blockToParse) {
+    const body = 'return (async function(blockTime, blockToParse){ for(;;){ ' +
+                 extractBarrierBlock() + ' break; } }).call(this, blockTime, blockToParse);';
+    // eslint-disable-next-line no-new-func
+    const fn = new Function('blockTime', 'blockToParse', 'getLogger', body);
+    return fn.call(fakeIndexer, blockTime, blockToParse, getLogger);
+}
 
-    function makeIndexer(coin, barrierResult) {
-        const calls = [];
-        return {
-            calls,
-            config: { COIN: coin },
-            priceSyncTimeoutMs: 4321,
-            stallReason: null,
-            stallClearsAt: null,
-            clearsAtField: null,
-            hubDbSync: {
-                attestResponseWatermarkGraceS: 120,
-                waitForAttestationResponseSync(blockTime, timeoutMs) {
-                    calls.push({ blockTime, timeoutMs });
-                    return barrierResult === 'reject'
-                        ? Promise.reject(new Error('barrier timed out'))
-                        : Promise.resolve(1);
-                }
-            },
-            barrierClearsAt(blockTime, graceField) {
-                this.clearsAtField = graceField;
-                const g = Number(this.hubDbSync[graceField]);
-                return (blockTime + (Number.isFinite(g) ? g : 0)) * 1000;
-            },
-            // The fake defines only the clock-keyed clearsAt, so it also has to
-            // answer the height-aware wrapper the barrier now calls. Inert here:
-            // this fake never arms, so the wrapper always defers to the clock form
-            // it was written against.
-            mirrorAdmissionActiveAt() { return false; },
-            barrierClearsAtHeightAware(blockTime, graceField, height) {
-                return this.mirrorAdmissionActiveAt(height)
-                    ? null
-                    : this.barrierClearsAt(blockTime, graceField);
+function makeIndexer(coin, barrierResult) {
+    const calls = [];
+    return {
+        calls,
+        config: { COIN: coin },
+        priceSyncTimeoutMs: 4321,
+        stallReason: null,
+        stallClearsAt: null,
+        clearsAtField: null,
+        hubDbSync: {
+            attestResponseWatermarkGraceS: 120,
+            waitForAttestationResponseSync(blockTime, timeoutMs) {
+                calls.push({ blockTime, timeoutMs });
+                return barrierResult === 'reject'
+                    ? Promise.reject(new Error('barrier timed out'))
+                    : Promise.resolve(1);
             }
-        };
-    }
+        },
+        barrierClearsAt(blockTime, graceField) {
+            this.clearsAtField = graceField;
+            const g = Number(this.hubDbSync[graceField]);
+            return (blockTime + (Number.isFinite(g) ? g : 0)) * 1000;
+        },
+        // The fake defines only the clock-keyed clearsAt, so it also has to
+        // answer the height-aware wrapper the barrier now calls. Inert here:
+        // this fake never arms, so the wrapper always defers to the clock form
+        // it was written against.
+        mirrorAdmissionActiveAt() { return false; },
+        barrierClearsAtHeightAware(blockTime, graceField, height) {
+            return this.mirrorAdmissionActiveAt(height)
+                ? null
+                : this.barrierClearsAt(blockTime, graceField);
+        }
+    };
+}
 
-    let warn;
+let warn;
+
+// ── The block-loop defer site ──────────────────────────────────────────────────
+//
+// The gate is one `if` inside a ~700-line block loop that cannot be stood up in a
+// unit test. Rather than assert on source text (which cannot tell a live gate from
+// a commented one), lift the real guarded region out of the file and EXECUTE it
+// against a fake indexer. Deleting the coin gate, renaming the reason or borrowing
+// another barrier's grace all change what these assertions observe.
+describe('attest_response_sync_barrier defer site @regression @tier1', function () {
     beforeEach(function () { warn = sinon.stub(console, 'warn'); });
     afterEach(function () { warn.restore(); });
 
@@ -234,6 +236,11 @@ describe('attest_response_sync_barrier defer site @regression @tier1', function 
         assert.deepStrictEqual(ix.calls, [{ blockTime: 1700000000, timeoutMs: 4321 }]);
         assert.strictEqual(ix.stallReason, null, 'a satisfied barrier does not stall the loop');
     });
+});
+
+describe('attest_response_sync_barrier defer site @regression @tier1', function () {
+    beforeEach(function () { warn = sinon.stub(console, 'warn'); });
+    afterEach(function () { warn.restore(); });
 
     // The off-BTC half: no attestation stake or request exists off BTC, so arming the
     // barrier there would wedge two live chains on a mirror they never read.
