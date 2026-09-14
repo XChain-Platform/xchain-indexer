@@ -51,6 +51,7 @@
 const assert  = require('assert');
 const fs      = require('fs');
 const path    = require('path');
+const { concatSrcTreeFiles } = require('../helpers/src_tree_files');
 
 // Sibling resolution + hard-fail policy: same conventions as the reciprocal
 // twin guard in rollback_coverage.test.js. Skip when the sibling checkout is
@@ -138,7 +139,7 @@ function indexerFile(rel){ return path.join(INDEXER_ROOT, rel); }
 function indexerSource(rel){
     const full = indexerFile(rel);
     if(!fs.statSync(full).isDirectory()) return fs.readFileSync(full, 'utf8');
-    return fs.readdirSync(full).sort().map(f => fs.readFileSync(path.join(full, f), 'utf8')).join('\n');
+    return concatSrcTreeFiles(full);
 }
 
 describe('consensus block-hash conformance twins (static drift-lock) @regression', function(){

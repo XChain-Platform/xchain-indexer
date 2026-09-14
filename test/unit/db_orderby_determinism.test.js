@@ -49,13 +49,14 @@
 const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
+const { concatSrcTreeFiles } = require('../helpers/src_tree_files');
 
 const DB_DIR = path.join(__dirname, '..', '..', 'src', 'db');
 
 // The Database class is a directory of per-family mixins, so the ORDER BY scan
 // concatenates every file in a fixed order instead of reading one path.
 function dbSource(){
-    return fs.readdirSync(DB_DIR).sort().map(f => fs.readFileSync(path.join(DB_DIR, f), 'utf8')).join('\n');
+    return concatSrcTreeFiles(DB_DIR);
 }
 
 // Columns that (as an ORDER BY term, in the context they appear in db.js) impose or

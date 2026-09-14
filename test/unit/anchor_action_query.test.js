@@ -24,11 +24,12 @@
 const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
+const { concatSrcTreeFiles } = require('../helpers/src_tree_files');
 // The Database class is a directory of per-family mixins under src/db/, so a source
 // scan over it concatenates every file in a fixed order instead of reading one path.
 function dbSource(){
     const dir = path.join(__dirname, '..', '..', 'src', 'db');
-    return fs.readdirSync(dir).sort().map(f => fs.readFileSync(path.join(dir, f), 'utf8')).join('\n');
+    return concatSrcTreeFiles(dir);
 }
 
 const { CHECKPOINT_VERSIONS, CHECKPOINT_SECTION_VERSIONS, ANCHOR_ACTIONS_SQL,

@@ -36,6 +36,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
+const { concatSrcTreeFiles } = require('../helpers/src_tree_files');
 
 const lifecycle = require('../../src/hub/table_lifecycle.js');
 const stateHash = require('../../src/stateHash.js');
@@ -46,7 +47,7 @@ const read = (rel) => fs.readFileSync(path.join(__dirname, '../..', rel), 'utf8'
 // concatenates every file in a fixed order instead of reading one path.
 const readDb = () => {
     const dir = path.join(__dirname, '../..', 'src', 'db');
-    return fs.readdirSync(dir).sort().map(f => fs.readFileSync(path.join(dir, f), 'utf8')).join('\n');
+    return concatSrcTreeFiles(dir);
 };
 
 describe('Hash coverage guard @regression', function () {
