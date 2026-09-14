@@ -23,6 +23,9 @@ const path    = require('path');
 // Module-level state and pure helpers that the split keeps in one place, so the class
 // and every mixin read the same instance of each.
 const { requireStakeWeight } = require('./shared.js');
+// The capabilities mixin is cut into parts by behaviour under capabilities/; this entry merges them
+// back into the one method set db/index.js installs, at the position those methods held here.
+const effectiveStake = require('./capabilities/effective_stake.js');
 
 module.exports = {
 
@@ -87,110 +90,7 @@ module.exports = {
         return (rows && rows.length > 0) ? rows[0].source_id : null;
     },
 
-    // Effective-set / capability view of a pubkey's stake, mirroring _effectiveCapabilitySetSql.
-    // Returns { source_id, signing_pubkey_id, signing_pubkey, amount, activation_block, ... } or null.
-    //
-    // READ-ONLY (federation self-qualification). Used by the getownstake RPC so a hub whose only
-    // stake authority comes via DELEGATE still sees itself as qualified, matching the federation's
-    // view. NOT a consensus block-processing primitive: do NOT call this from STAKE/UNSTAKE/DELEGATE
-    // handlers (use getActiveStakeByPubkey for stake-ownership there).
-    //   Path 1: direct stake key, excluding DELEGATE v2 revocations active at blk.
-    //   Path 2: delegated-only key, resolving to the delegating source's aggregate active stake.
-    async getEffectiveStakeByPubkey(pubkey, blockIndex){
-        let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
-        if(pubkey_id === null)
-            return null;
-        let valid_id = await this.getStatusId('valid');
-        let blk = (blockIndex !== undefined && blockIndex !== null) ? blockIndex : null;
-
-        // Path 1: direct stake key, excluding any revocations active at blk.
-        // Mirrors the stake-key branch of hasCapability (stake_key_revocations NOT-EXISTS).
-        let q1 = `SELECT
-                        MIN(s.source_id)                       AS source_id,
-                        s.signing_pubkey_id                    AS signing_pubkey_id,
-                        SUM(CAST(s.amount AS DECIMAL(30,8)))   AS amount,
-                        MIN(s.activation_block)                AS activation_block,
-                        MIN(s.block_index)                     AS block_index,
-                        MIN(s.status_id)                       AS status_id,
-                        ip.pubkey                              AS signing_pubkey
-                     FROM stakes s
-                         LEFT JOIN index_pubkeys ip ON (ip.id = s.signing_pubkey_id)
-                     WHERE s.signing_pubkey_id=? AND s.status_id=?
-                       AND NOT EXISTS (
-                           SELECT 1 FROM stake_key_revocations r
-                           WHERE r.source_id = s.source_id
-                             AND r.signing_pubkey_id = s.signing_pubkey_id
-                             AND r.status_id = ?
-                             AND r.deactivation_block <= ?
-                             AND r.action_index > s.action_index)
-                       AND NOT EXISTS (
-                           SELECT 1 FROM capability_slash_events cse
-                           WHERE cse.signing_pubkey_id = s.signing_pubkey_id
-                             AND cse.block_index <= ?)`;
-        let a1 = [pubkey_id, valid_id, valid_id, blk !== null ? blk : 0, blk !== null ? blk : 0];
-        if(blk !== null){
-            q1 += ' AND s.activation_block <= ? AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)';
-            a1.push(blk, blk);
-        }
-        q1 += ' GROUP BY s.signing_pubkey_id, ip.pubkey LIMIT 1';
-        let results = await this.doQuery(q1, a1);
-        if(results.length > 0){
-            let row = results[0];
-            return {
-                source_id:         row.source_id,
-                signing_pubkey_id: row.signing_pubkey_id,
-                signing_pubkey:    row.signing_pubkey,
-                amount:            (row.amount === null || row.amount === undefined) ? '0' : String(row.amount),
-                activation_block:  row.activation_block,
-                block_index:       row.block_index,
-                status_id:         row.status_id
-            };
-        }
-
-        // Path 2: delegated key. If this pubkey has an active delegation row, return the
-        // delegating source's aggregate active stake (mirrors the delegated-key branch of
-        // hasCapability). The returned amount is the source's total so the hub self-qualifies
-        // when delegation-only; source_id/activation_block are from the delegation row.
-        let q2 = `SELECT d.source_id AS source_id,
-                         d.signing_pubkey_id AS signing_pubkey_id,
-                         ip.pubkey AS signing_pubkey,
-                         d.activation_block AS activation_block,
-                         d.block_index AS block_index,
-                         d.status_id AS status_id,
-                         SUM(CAST(s2.amount AS DECIMAL(30,8))) AS amount
-                  FROM delegations d
-                  JOIN stakes s2 ON s2.source_id = d.source_id
-                  LEFT JOIN index_pubkeys ip ON ip.id = d.signing_pubkey_id
-                  WHERE d.signing_pubkey_id = ?
-                    AND d.status_id = ?
-                    AND s2.status_id = ?
-                    AND NOT EXISTS (
-                        SELECT 1 FROM capability_slash_events cse
-                        WHERE cse.signing_pubkey_id = d.signing_pubkey_id
-                          AND cse.block_index <= ?)`;
-        let a2 = [pubkey_id, valid_id, valid_id, blk !== null ? blk : 0];
-        if(blk !== null){
-            q2 += ' AND d.activation_block <= ? AND (d.deactivation_block IS NULL OR d.deactivation_block > ?)';
-            q2 += ' AND s2.activation_block <= ? AND (s2.deactivation_block IS NULL OR s2.deactivation_block > ?)';
-            a2.push(blk, blk, blk, blk);
-        }
-        q2 += ' GROUP BY d.source_id, d.signing_pubkey_id LIMIT 1';
-        let drows = await this.doQuery(q2, a2);
-        if(drows.length > 0 && drows[0].amount !== null){
-            let row = drows[0];
-            return {
-                source_id:         row.source_id,
-                signing_pubkey_id: row.signing_pubkey_id,
-                signing_pubkey:    row.signing_pubkey,
-                amount:            String(row.amount),
-                activation_block:  row.activation_block,
-                block_index:       row.block_index,
-                status_id:         row.status_id
-            };
-        }
-
-        return null;
-    },
+    ...effectiveStake,
 
     // Read the hub-mirrored SOURCE-KEYED weights for a capability at a snapshot block
     // (non-BTC chains). Carries `source` so the verifier can dedupe by staking address.
