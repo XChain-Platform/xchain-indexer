@@ -44,6 +44,13 @@ const TESTNET4 = [
     1787687902, 1787689103, 1787690304, 1787691505, 1787692706, 1787693907
 ];
 
+function rows() {
+    return [
+        { tx_index: 1, block_time: 1787693907, data: 'a' },
+        { tx_index: 2, block_time: 1787693907, data: 'b' }
+    ];
+}
+
 describe('protocol_time', () => {
 
     describe('#medianTimePast', () => {
@@ -77,7 +84,9 @@ describe('protocol_time', () => {
             assert.strictEqual(medianTimePast([100, NaN, 200, null, 300]), 200);
         });
     });
+});
 
+describe('protocol_time', () => {
     // The whole point of the change, asserted against the chain that motivated it.
     describe('median-time-past on real testnet4 data', () => {
         it('confirms the 1201s minimum-difficulty spacing the fixture depends on', () => {
@@ -106,7 +115,9 @@ describe('protocol_time', () => {
             assert.ok(resolved < now, 'protocol time must not be in the future');
         });
     });
+});
 
+describe('protocol_time', () => {
     describe('#isProtocolTimeMtpActive', () => {
         // testnet only. regtest is deliberately excluded: its block times come from
         // the harness clock (setmocktime), so a median over them is not the
@@ -126,7 +137,9 @@ describe('protocol_time', () => {
             assert.strictEqual(PROTOCOL_TIME_MTP_NETWORKS.mainnet, false);
         });
     });
+});
 
+describe('protocol_time', () => {
     describe('#protocolTime', () => {
         it('returns the raw stamp untouched on an unswitched network', () => {
             assert.strictEqual(protocolTime('mainnet', 1787693907, TESTNET4.slice(0, 11)), 1787693907);
@@ -161,7 +174,9 @@ describe('protocol_time', () => {
             assert.strictEqual(MEDIAN_TIME_SPAN, 11);
         });
     });
+});
 
+describe('protocol_time', () => {
     // Regression guard for the defect that made the first cut of this change a FORK
     // rather than a fix. The mirror barriers were moved to protocol time while the
     // transaction rows still carried the decoder's raw stamp, so actions.js lifted
@@ -169,11 +184,6 @@ describe('protocol_time', () => {
     // kept scanning a window that was still growing. Barriers early + reads late is
     // the one combination that diverges nodes; these pin the half that closes it.
     describe('#stampProtocolTime', () => {
-        const rows = () => ([
-            { tx_index: 1, block_time: 1787693907, data: 'a' },
-            { tx_index: 2, block_time: 1787693907, data: 'b' }
-        ]);
-
         it('replaces the decoder raw stamp on every row so the action path reads protocol time', () => {
             const txs = rows();
             const resolved = protocolTime('testnet', 1787693907, TESTNET4.slice(0, 11));
@@ -222,13 +232,17 @@ describe('protocol_time', () => {
             assert.strictEqual(txs[0].block_time, 1787693907);
         });
     });
+});
 
+describe('protocol_time', () => {
     describe('span constant', () => {
         it('is Bitcoin\'s 11', () => {
             assert.strictEqual(MEDIAN_TIME_SPAN, 11);
         });
     });
+});
 
+describe('protocol_time', () => {
     // A source-static ratchet, in the same spirit as the ORDER BY determinism guard.
     //
     // Testing stampProtocolTime in isolation proves the helper works and proves
