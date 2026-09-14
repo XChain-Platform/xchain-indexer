@@ -36,6 +36,12 @@ const path   = require('path');
 
 const REPAIR_FILE   = path.join(__dirname, '..', '..', 'scripts', 'repair-validator-stats.js');
 const ROLLBACK_FILE = path.join(__dirname, '..', '..', 'src', 'rollback.js');
+let repairSrc, rollbackSrc;
+
+function loadSources(){
+    repairSrc   = fs.readFileSync(REPAIR_FILE,   'utf8');
+    rollbackSrc = fs.readFileSync(ROLLBACK_FILE, 'utf8');
+}
 
 // Extract the SQL string for the expired-requests query from a source file.
 // Both files assign the result to a variable named expiredReqs via doQuery / db.doQuery.
@@ -93,14 +99,17 @@ function extractPredicateTokens(normSql){
     return tokens;
 }
 
+function expiredRequestTokenPair(repairSrc, rollbackSrc){
+    const repairSql   = normaliseSql(extractExpiredReqsSql(repairSrc));
+    const rollbackSql = normaliseSql(extractExpiredReqsSql(rollbackSrc));
+    return {
+        repairTokens: extractPredicateTokens(repairSql),
+        rollbackTokens: extractPredicateTokens(rollbackSql),
+    };
+}
+
 describe('repair-validator-stats drift guard @regression', function(){
-
-    let repairSrc, rollbackSrc;
-
-    before(function(){
-        repairSrc   = fs.readFileSync(REPAIR_FILE,   'utf8');
-        rollbackSrc = fs.readFileSync(ROLLBACK_FILE, 'utf8');
-    });
+    before(loadSources);
 
     it('both files define an expiredReqs SQL query (sanity check)', function(){
         assert.ok(repairSrc.includes('expiredReqs'),
@@ -110,11 +119,7 @@ describe('repair-validator-stats drift guard @regression', function(){
     });
 
     it('expired-request predicate structure matches between repair script and rollback recompute', function(){
-        const repairSql   = normaliseSql(extractExpiredReqsSql(repairSrc));
-        const rollbackSql = normaliseSql(extractExpiredReqsSql(rollbackSrc));
-
-        const repairTokens   = extractPredicateTokens(repairSql);
-        const rollbackTokens = extractPredicateTokens(rollbackSql);
+        const { repairTokens, rollbackTokens } = expiredRequestTokenPair(repairSrc, rollbackSrc);
 
         // Every predicate present in the rollback must also be present in the repair
         // script (and vice versa). A missing token means one has grown a new filter
@@ -140,7 +145,10 @@ describe('repair-validator-stats drift guard @regression', function(){
             );
         }
     });
+});
 
+describe('repair-validator-stats drift guard @regression', function(){
+    before(loadSources);
     it('fulfilled-count query structure is consistent across both files', function(){
         // The fulfilled_count aggregation (ok responses with validator_signatures)
         // uses the same filter in both files. Check the key columns appear in the

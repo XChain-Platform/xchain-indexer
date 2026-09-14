@@ -59,8 +59,7 @@ function makeServer(order){
     };
 }
 
-describe('graceful shutdown', function(){
-
+function registerCreateShutdownCompletionTests(){
     describe('createShutdown', function(){
         it('runs the drain and exits zero when it completes', async function(){
             const codes = [];
@@ -113,7 +112,9 @@ describe('graceful shutdown', function(){
             assert.deepStrictEqual(codes, [1]);
         });
     });
+}
 
+function registerCreateShutdownFailureTests(){
     describe('createShutdown', function(){
         it('exits non-zero when the drain throws, and only once', async function(){
             const codes = [];
@@ -156,7 +157,9 @@ describe('graceful shutdown', function(){
             } finally { clock.restore(); }
         });
     });
+}
 
+function registerTimeoutTests(){
     describe('resolveTimeoutMs', function(){
         it('prefers an explicit budget, then the env var, then the default', function(){
             assert.strictEqual(resolveTimeoutMs(1234, {}), 1234);
@@ -170,7 +173,9 @@ describe('graceful shutdown', function(){
                 'a budget at or above the grace period ends in the daemon\'s SIGKILL, which is what this replaces');
         });
     });
+}
 
+function registerCloseServerTests(){
     describe('closeServer', function(){
         it('resolves once, and drops idle keep-alive sockets that would hold close() open', async function(){
             const order = [];
@@ -185,7 +190,9 @@ describe('graceful shutdown', function(){
             await closeServer({});
         });
     });
+}
 
+function registerIndexerDrainOrderingTests(){
     describe('createIndexerDrain', function(){
         it('flips health, stops the indexer, drains the server and loop, then closes pools', async function(){
             const order   = [];
@@ -219,7 +226,6 @@ describe('graceful shutdown', function(){
             }
             assert.ok(indexer.indexerDb.closed && indexer.decoderDb.closed && indexer.hubDb.closed);
         });
-
         it('waits for the block loop to break before closing pools', async function(){
             const order   = [];
             const indexer = makeIndexer(order);
@@ -245,7 +251,9 @@ describe('graceful shutdown', function(){
             assert.strictEqual(indexer.indexerDb.closed, true);
         });
     });
+}
 
+function registerIndexerDrainFailureTests(){
     describe('createIndexerDrain', function(){
         // start() is already .catch()'d at the call site, where a fatal error exits 1.
         // A rejection reaching the drain is that same handled error and must not turn a
@@ -268,4 +276,13 @@ describe('graceful shutdown', function(){
             await drain();
         });
     });
+}
+
+describe('graceful shutdown', function(){
+    registerCreateShutdownCompletionTests();
+    registerCreateShutdownFailureTests();
+    registerTimeoutTests();
+    registerCloseServerTests();
+    registerIndexerDrainOrderingTests();
+    registerIndexerDrainFailureTests();
 });

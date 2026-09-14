@@ -29,25 +29,18 @@ function makeFetch(body, opts){
     });
 }
 
-describe('UtxoTracker', function(){
+let origFetch;
 
-    let origFetch;
+// Capture whatever global.fetch is before each test
+function captureFetch(){ origFetch = global.fetch; }
 
-    beforeEach(function(){
-        // Capture whatever global.fetch is before each test
-        origFetch = global.fetch;
-    });
-
-    afterEach(function(){
-        // Always restore
-        global.fetch = origFetch;
-        sinon.restore();
-    });
+// Always restore
+function restoreFetch(){ global.fetch = origFetch; sinon.restore(); }
 
     // -----------------------------------------------------------------------
     // constructor
     // -----------------------------------------------------------------------
-    describe('constructor', function(){
+function registerConstructorTests(){ describe('constructor', function(){
         it('marks enabled=true and builds endpoint when url+port provided', function(){
             let t = new UtxoTracker('localhost', 3005);
             assert.strictEqual(t.enabled, true);
@@ -83,12 +76,12 @@ describe('UtxoTracker', function(){
             let t = new UtxoTracker('localhost', '');
             assert.strictEqual(t.enabled, false);
         });
-    });
+    }); }
 
     // -----------------------------------------------------------------------
     // call
     // -----------------------------------------------------------------------
-    describe('_call()', function(){
+function registerCallTestsOne(){ describe('_call()', function(){
         it('throws when not enabled', async function(){
             let t = new UtxoTracker();
             await assert.rejects(
@@ -143,9 +136,9 @@ describe('UtxoTracker', function(){
                 /UTXO tracker RPC error/
             );
         });
-    });
+    }); }
 
-    describe('_call()', function(){
+function registerCallTestsTwo(){ describe('_call()', function(){
         it('propagates fetch network error (fetch rejects)', async function(){
             let t = new UtxoTracker('localhost', 3005);
             global.fetch = sinon.stub().rejects(new Error('ECONNREFUSED'));
@@ -171,12 +164,12 @@ describe('UtxoTracker', function(){
             let r = await t.call('get_first_seen', { address: 'x' });
             assert.strictEqual(r, null);
         });
-    });
+    }); }
 
     // -----------------------------------------------------------------------
     // getFirstSeen
     // -----------------------------------------------------------------------
-    describe('getFirstSeen()', function(){
+function registerFirstSeenFallbackTests(){ describe('getFirstSeen()', function(){
         it('returns { height: N } when RPC returns an object with a numeric height', async function(){
             let t = new UtxoTracker('localhost', 3005);
             global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: { height: 750000 } });
@@ -216,7 +209,9 @@ describe('UtxoTracker', function(){
             let r = await t.getFirstSeen('1A1zP1...');
             assert.strictEqual(r, null);
         });
+    }); }
 
+function registerFirstSeenRequestTests(){ describe('getFirstSeen()', function(){
         it('passes the address correctly to _call', async function(){
             let t = new UtxoTracker('localhost', 3005);
             let stub = makeFetch({ jsonrpc: '2.0', id: 1, result: { height: 1 } });
@@ -245,13 +240,14 @@ describe('UtxoTracker', function(){
             let r = await t.getFirstSeen('genesis');
             assert.deepStrictEqual(r, { height: 0 });
         });
+    }); }
 
-        // At/after the oracle-shape flag-day the fail-open null above becomes a
-        // throw, so a malformed-but-successful tracker reply denies the fresh-address
-        // exception instead of granting it. The caller passes the verdict in because
-        // the gate is keyed on the processing chain's block_index and this client has
-        // no block context (src/dispenser_freshness_shape_activation.js).
-        describe('strictShape (oracle-shape flag-day active)', function(){
+// At/after the oracle-shape flag-day the fail-open null above becomes a
+// throw, so a malformed-but-successful tracker reply denies the fresh-address
+// exception instead of granting it. The caller passes the verdict in because
+// the gate is keyed on the processing chain's block_index and this client has
+// no block context (src/dispenser_freshness_shape_activation.js).
+function registerStrictShapeTests(){ describe('strictShape (oracle-shape flag-day active)', function(){
             it('throws when result.height is not a number (string)', async function(){
                 let t = new UtxoTracker('localhost', 3005);
                 global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: { height: '100' } });
@@ -306,13 +302,14 @@ describe('UtxoTracker', function(){
                 assert.strictEqual(body.method, 'get_first_seen');
                 assert.deepStrictEqual(body.params, { address: 'bc1qtest' });
             });
-        });
-    });
+        }); }
+
+function registerFirstSeenStrictShapeTests(){ describe('getFirstSeen()', function(){ registerStrictShapeTests(); }); }
 
     // Freshness-aware sibling. It exists so a null first-seen from a lagging or
     // halted tracker is distinguishable from an address that never appeared; the
     // dispenser freshness verdict itself stays on the frozen getFirstSeen.
-    describe('getFirstSeenStatus()', function(){
+function registerFirstSeenStatusTestsOne(){ describe('getFirstSeenStatus()', function(){
         it('calls get_first_seen_status and returns both halves', async function(){
             let t = new UtxoTracker('localhost', 3005);
             let stub = makeFetch({ jsonrpc: '2.0', id: 1, result: {
@@ -365,9 +362,9 @@ describe('UtxoTracker', function(){
             let r = await t.getFirstSeenStatus('bc1qtest');
             assert.strictEqual(r.firstSeen, null);
         });
-    });
+    }); }
 
-    describe('getFirstSeenStatus()', function(){
+function registerFirstSeenStatusTestsTwo(){ describe('getFirstSeenStatus()', function(){
         it('reports sync as null when the tracker answered without one', async function(){
             let t = new UtxoTracker('localhost', 3005);
             global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: { first_seen: { height: 7 } } });
@@ -384,5 +381,11 @@ describe('UtxoTracker', function(){
 
             await assert.rejects(() => t.getFirstSeenStatus('bc1qtest'), /-32601/);
         });
-    });
+    }); }
+
+describe('UtxoTracker', function(){
+    beforeEach(captureFetch); afterEach(restoreFetch);
+    registerConstructorTests(); registerCallTestsOne(); registerCallTestsTwo();
+    registerFirstSeenFallbackTests(); registerFirstSeenRequestTests(); registerFirstSeenStrictShapeTests();
+    registerFirstSeenStatusTestsOne(); registerFirstSeenStatusTestsTwo();
 });

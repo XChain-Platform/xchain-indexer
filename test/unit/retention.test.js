@@ -32,10 +32,8 @@ const B = 'b'.repeat(64);   // shared child: under BOTH the new and the old root
 const C = 'c'.repeat(64);   // old (prunable) root's balances_root
 const D = 'd'.repeat(64);   // child reachable ONLY from the old root
 
-// In-memory double answering only the queries retention.js issues. Mutates rows
-// on DELETE so a phase-1 prune is visible to the phase-2 mark that follows.
-function makeDb(){
-    const db = {
+function makeDbRows(){
+    return {
         chain: 'BTC',
         network: 'regtest',
         roots: [
@@ -50,54 +48,62 @@ function makeDb(){
         ],
         calls: []
     };
+}
+
+async function runDbQuery(db, sql, args){
+    db.calls.push(sql);
+    if(sql.includes('MAX(block_index)')){
+        const vals = db.roots.map(r => r.block_index);
+        return [{ tip: vals.length ? Math.max.apply(null, vals) : null }];
+    }
+    if(sql.includes('COUNT(*)') && sql.includes('state_tree_roots')){
+        const cutoff = args[2];
+        return [{ c: db.roots.filter(r => r.block_index <= cutoff).length }];
+    }
+    // Phase 2's pre-flight cap check counts before it loads.
+    if(sql.includes('COUNT(*)') && sql.includes('state_tree_nodes'))
+        return [{ c: db.nodes.length }];
+    if(sql.startsWith('DELETE FROM state_tree_roots')){
+        const cutoff = args[2];
+        const before = db.roots.length;
+        db.roots = db.roots.filter(r => r.block_index > cutoff);
+        return { affectedRows: before - db.roots.length };
+    }
+    if(sql.startsWith('SELECT node_hash')){
+        return db.nodes.map(n => ({ node_hash: n.node_hash, left_hash: n.left_hash, right_hash: n.right_hash }));
+    }
+    if(sql.includes('UNION')){
+        // Union exactly the columns the SQL actually names, so a sub-root
+        // column missing from the real query is missing here too. A fake that
+        // hardcodes balances+stakes would mark a node reachable that the
+        // production query never reaches, and phase 2 would delete it in
+        // production while the test stayed green.
+        const set = new Set();
+        const cols = ['balances_root', 'stakes_root', 'contract_state_root'].filter(c => sql.includes(c));
+        for(const r of db.roots)
+            for(const c of cols)
+                if(r[c] != null) set.add(r[c]);
+        return Array.from(set).map(r => ({ r }));
+    }
+    if(sql.startsWith('DELETE FROM state_tree_nodes')){
+        const before = db.nodes.length;
+        const kill = new Set(args);
+        db.nodes = db.nodes.filter(n => !kill.has(n.node_hash));
+        return { affectedRows: before - db.nodes.length };
+    }
+    throw new Error('unexpected query: ' + sql);
+}
+
+// In-memory double answering only the queries retention.js issues. Mutates rows
+// on DELETE so a phase-1 prune is visible to the phase-2 mark that follows.
+function makeDb(){
+    const db = makeDbRows();
     // The sweep reaches the store through the db/state_tree mixin, and that mixin runs
     // every statement on poolQuery rather than doQuery, so THIS is the method the double
     // has to answer. Binding the real mixin methods over it keeps the fake honest: the SQL
     // matched below is the SQL that ships, and a mixin that reached for doQuery instead
     // (and so joined the block's open transaction) would find nothing here and throw.
-    db.poolQuery = async (sql, args) => {
-        db.calls.push(sql);
-        if(sql.includes('MAX(block_index)')){
-            const vals = db.roots.map(r => r.block_index);
-            return [{ tip: vals.length ? Math.max.apply(null, vals) : null }];
-        }
-        if(sql.includes('COUNT(*)') && sql.includes('state_tree_roots')){
-            const cutoff = args[2];
-            return [{ c: db.roots.filter(r => r.block_index <= cutoff).length }];
-        }
-        // Phase 2's pre-flight cap check counts before it loads.
-        if(sql.includes('COUNT(*)') && sql.includes('state_tree_nodes'))
-            return [{ c: db.nodes.length }];
-        if(sql.startsWith('DELETE FROM state_tree_roots')){
-            const cutoff = args[2];
-            const before = db.roots.length;
-            db.roots = db.roots.filter(r => r.block_index > cutoff);
-            return { affectedRows: before - db.roots.length };
-        }
-        if(sql.startsWith('SELECT node_hash')){
-            return db.nodes.map(n => ({ node_hash: n.node_hash, left_hash: n.left_hash, right_hash: n.right_hash }));
-        }
-        if(sql.includes('UNION')){
-            // Union exactly the columns the SQL actually names, so a sub-root
-            // column missing from the real query is missing here too. A fake that
-            // hardcodes balances+stakes would mark a node reachable that the
-            // production query never reaches, and phase 2 would delete it in
-            // production while the test stayed green.
-            const set = new Set();
-            const cols = ['balances_root', 'stakes_root', 'contract_state_root'].filter(c => sql.includes(c));
-            for(const r of db.roots)
-                for(const c of cols)
-                    if(r[c] != null) set.add(r[c]);
-            return Array.from(set).map(r => ({ r }));
-        }
-        if(sql.startsWith('DELETE FROM state_tree_nodes')){
-            const before = db.nodes.length;
-            const kill = new Set(args);
-            db.nodes = db.nodes.filter(n => !kill.has(n.node_hash));
-            return { affectedRows: before - db.nodes.length };
-        }
-        throw new Error('unexpected query: ' + sql);
-    };
+    db.poolQuery = (sql, args) => runDbQuery(db, sql, args);
     for(const m of Reflect.ownKeys(stateTreeMixin))
         db[m] = stateTreeMixin[m].bind(db);
     return db;
