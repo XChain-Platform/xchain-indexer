@@ -59,23 +59,34 @@ describe('Smoke: handler instantiation and basic action processing', function ()
         sinon.restore();
     });
 
-    it('SM-10: Actions constructor instantiates all handlers', function () {
+    it('SM-10: Actions constructor instantiates all handlers', async function () {
         const indexer = createMockIndexer();
         const indexerObj = makeIndexerForActions(indexer);
         const actionsInstance = new Actions(indexerObj);
 
-        // Verify key handlers exist
-        assert.ok(actionsInstance.actionIssue,      'Issue handler loaded');
-        assert.ok(actionsInstance.actionSend,       'Send handler loaded');
-        assert.ok(actionsInstance.actionMint,       'Mint handler loaded');
-        assert.ok(actionsInstance.actionOrder,      'Order handler loaded');
-        assert.ok(actionsInstance.actionDispenser,  'Dispenser handler loaded');
-        assert.ok(actionsInstance.actionBatch,      'Batch handler loaded');
-        assert.ok(actionsInstance.actionSleep,      'Sleep handler loaded');
-        assert.ok(actionsInstance.actionSweep,      'Sweep handler loaded');
-        assert.ok(actionsInstance.actionDestroy,    'Destroy handler loaded');
-        assert.ok(actionsInstance.actionAirdrop,    'Airdrop handler loaded');
-        assert.ok(actionsInstance.actionUnknown,    'Unknown handler loaded');
+        try {
+            // Verify key handlers exist
+            assert.ok(actionsInstance.actionIssue,      'Issue handler loaded');
+            assert.ok(actionsInstance.actionSend,       'Send handler loaded');
+            assert.ok(actionsInstance.actionMint,       'Mint handler loaded');
+            assert.ok(actionsInstance.actionOrder,      'Order handler loaded');
+            assert.ok(actionsInstance.actionDispenser,  'Dispenser handler loaded');
+            assert.ok(actionsInstance.actionBatch,      'Batch handler loaded');
+            assert.ok(actionsInstance.actionSleep,      'Sleep handler loaded');
+            assert.ok(actionsInstance.actionSweep,      'Sweep handler loaded');
+            assert.ok(actionsInstance.actionDestroy,    'Destroy handler loaded');
+            assert.ok(actionsInstance.actionAirdrop,    'Airdrop handler loaded');
+            assert.ok(actionsInstance.actionUnknown,    'Unknown handler loaded');
+        } finally {
+            // The Actions constructor builds XChainVM with execution:'subprocess',
+            // which forks a persistent worker process for contract-execution crash
+            // isolation (xchain-vm/src/process-executor.js). Nothing else in this
+            // suite ever calls vm.shutdown(), so the fork outlives every test and
+            // the mocha process never exits on its own. shutdown() is xchain-vm's
+            // own documented teardown hook ("call from long-lived hosts on shutdown
+            // and from tests").
+            await actionsInstance.vm.shutdown();
+        }
     });
 
     it('SM-11: Basic ISSUE processes validly', async function () {
@@ -87,7 +98,12 @@ describe('Smoke: handler instantiation and basic action processing', function ()
         indexer.indexerDb.getTokenInfo.resolves(null);
         indexer.indexerDb.isActionAllowed.resolves(true);
         indexer.indexerDb.isDistributed.resolves(false);
-        indexer.indexerDb.getAddressBalances.resolves({});
+        // ISSUANCE_FEE / UNIFIED_FEES are both active by default (makeActionsCtx's
+        // protocolChanges.isEnabled stubs resolve true), so issue.js charges a
+        // non-zero XCHAIN issuance fee (GAS_SCHEDULE.ISSUE * GAS_PRICE, TICK_ID
+        // resolved via getTickerId below) that it debits from the sender's balance.
+        // Fund TICK_ID 1 (the stubbed GAS ticker id) so the fee check passes.
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
         indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
         indexer.indexerDb.getTokenSupply.resolves('0');
         // getTickerId must resolve for createFeesObject (util.createFeesObject calls indexerDb.getTickerId)
