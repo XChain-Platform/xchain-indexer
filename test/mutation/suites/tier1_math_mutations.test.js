@@ -42,7 +42,6 @@ describe('Mutation: Tier 1: Math Functions @tier1', function () {
     // ── AOR: Arithmetic Operator Replacement ─────────────────────────────
 
     describe('AOR: Arithmetic Operator Replacement', function () {
-
         it('AOR-001: bcadd with add→subtract is detected', function () {
             operators.AOR.addToSub(util);
             const result = util.bcformat(util.bcadd('10', '5', 0), 0);
@@ -98,7 +97,9 @@ describe('Mutation: Tier 1: Math Functions @tier1', function () {
             });
             assert.notStrictEqual(result, '2', 'AOR-004 survived');
         });
+    });
 
+    describe('AOR: Arithmetic Operator Replacement', function () {
         it('AOR-005: bcadd with decimals: mutation changes decimal result', function () {
             operators.AOR.addToSub(util);
             const result = util.bcformat(util.bcadd('1.50', '0.25', 2), 2);
@@ -133,7 +134,6 @@ describe('Mutation: Tier 1: Math Functions @tier1', function () {
     // ── ROR: Relational Operator Replacement ─────────────────────────────
 
     describe('ROR: Relational Operator Replacement', function () {
-
         it('ROR-001: bcgt with > → < is detected', function () {
             operators.ROR.gtToLt(util);
             // 10 > 5 should be true, mutant returns 10 < 5 = false
@@ -189,7 +189,9 @@ describe('Mutation: Tier 1: Math Functions @tier1', function () {
             });
             assert.notStrictEqual(result, true, 'ROR-004 survived');
         });
+    });
 
+    describe('ROR: Relational Operator Replacement', function () {
         it('ROR-005: bcgt with > → >= at boundary (equal values)', function () {
             operators.ROR.gtToGte(util);
             // 5 > 5 should be false, mutant returns 5 >= 5 = true
@@ -313,7 +315,6 @@ describe('Mutation: Tier 1: Math Functions @tier1', function () {
     // ── PRM: Parameter Reorder Mutation ──────────────────────────────────
 
     describe('PRM: Parameter Reorder', function () {
-
         it('PRM-001: bcsub(a,b) → bcsub(b,a) is detected', function () {
             operators.PRM.bcsubSwapArgs(util);
             // 10 - 3 = 7, mutant: 3 - 10 = -7
@@ -357,7 +358,9 @@ describe('Mutation: Tier 1: Math Functions @tier1', function () {
             });
             // Expected to survive: equivalent mutant
         });
+    });
 
+    describe('PRM: Parameter Reorder', function () {
         it('PRM-004: bcdiv with decimal precision detects swap', function () {
             operators.PRM.bcdivSwapArgs(util);
             // 100 / 3 = 33.33, mutant: 3 / 100 = 0.03
@@ -378,7 +381,6 @@ describe('Mutation: Tier 1: Math Functions @tier1', function () {
     // ── EMR: Empty Return Mutation ───────────────────────────────────────
 
     describe('EMR: Empty Return Mutation', function () {
-
         it('EMR-001: bcadd returns null: detected by format failure', function () {
             operators.EMR.bcaddNull(util);
             const result = util.bcadd('10', '5', 0);
@@ -424,7 +426,9 @@ describe('Mutation: Tier 1: Math Functions @tier1', function () {
             });
             assert.ok(detected, 'EMR-003 survived');
         });
+    });
 
+    describe('EMR: Empty Return Mutation', function () {
         it('EMR-004: hasBalance returns null (falsy): always denies', function () {
             operators.EMR.hasBalanceNull(util);
             const result = util.hasBalance({ 1: '1000' }, 1, '100');
@@ -478,7 +482,6 @@ describe('Mutation: Tier 1: Math Functions @tier1', function () {
     // ── AOR-Compound: Chained operations ─────────────────────────────────
 
     describe('AOR-Compound: Chained Operations', function () {
-
         it('AOR-007: debitBalances with bcsub→bcadd gives wrong balance', function () {
             operators.AOR.subToAdd(util);
             const balances = { 1: '1000' };
@@ -529,7 +532,9 @@ describe('Mutation: Tier 1: Math Functions @tier1', function () {
             });
             assert.notStrictEqual(result, '50', 'AOR-009 survived');
         });
+    });
 
+    describe('AOR-Compound: Chained Operations', function () {
         it('AOR-010: bcadd with negative numbers shows mutation', function () {
             operators.AOR.addToSub(util);
             // -5 + 10 = 5, mutant: -5 - 10 = -15
@@ -549,7 +554,6 @@ describe('Mutation: Tier 1: Math Functions @tier1', function () {
     // ── Misc: bcformat precision, bcnum specials ─────────────────────────
 
     describe('Misc: Format and Conversion', function () {
-
         it('MISC-001: bcformat with wrong precision detected', function () {
             // Simulate precision mutation: use 0 decimals instead of 2
             sinon.stub(util, 'bcformat').callsFake(function (num, decimals) {
@@ -607,7 +611,9 @@ describe('Mutation: Tier 1: Math Functions @tier1', function () {
             });
             // Expected: equivalent mutant for valid inputs
         });
+    });
 
+    describe('Misc: Format and Conversion', function () {
         it('MISC-004: bcformat null handling: isNull negation breaks fallback', function () {
             // Mutate: bcformat treats null decimals as non-null
             sinon.stub(util, 'bcformat').callsFake(function (num, decimals) {

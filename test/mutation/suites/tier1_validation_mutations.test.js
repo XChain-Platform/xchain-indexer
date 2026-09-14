@@ -38,7 +38,6 @@ describe('Mutation: Tier 1 - Validation Functions @tier1', function () {
     // ── UOI: Unary Operator Insertion/Deletion ───────────────────────────
 
     describe('UOI: Unary Operator Negation', function () {
-
         it('UOI-001: isNull negated (null appears non-null)', function () {
             operators.UOI.negateIsNull(util);
             const result = util.isNull(null);
@@ -90,7 +89,9 @@ describe('Mutation: Tier 1 - Validation Functions @tier1', function () {
             });
             assert.notStrictEqual(result, true, 'UOI-004 survived');
         });
+    });
 
+    describe('UOI: Unary Operator Negation', function () {
         it('UOI-005: hasBalance negated (sufficient balance denied)', function () {
             operators.UOI.negateHasBalance(util);
             const result = util.hasBalance({ 1: '1000' }, 1, '100');
@@ -121,7 +122,6 @@ describe('Mutation: Tier 1 - Validation Functions @tier1', function () {
     // ── BCR: Boundary Condition Replacement ──────────────────────────────
 
     describe('BCR: Boundary Conditions in Validation', function () {
-
         it('BCR-010: isCryptoAddress checksum verification removed (garbage accepted)', function () {
             operators.BCR.cryptoAddrNoChecksum(util);
             // Base58 charset, address length, but no valid checksum
@@ -166,7 +166,9 @@ describe('Mutation: Tier 1 - Validation Functions @tier1', function () {
             });
             assert.notStrictEqual(result, true, 'BCR-012 survived');
         });
+    });
 
+    describe('BCR: Boundary Conditions in Validation', function () {
         it('BCR-013: isValidFiatFormat sats.length > → >= (off-by-one)', function () {
             operators.BCR.fiatFormatGte(util);
             // 2 decimals allowed, amount '1.55' has 2 decimal digits
@@ -334,7 +336,6 @@ describe('Mutation: Tier 1 - Validation Functions @tier1', function () {
     // ── SDL: Statement Deletion ──────────────────────────────────────────
 
     describe('SDL: Statement Deletion in Validation', function () {
-
         it('SDL-010: isValidAmountFormat negative check removed', function () {
             // Simulate removing: if(String(amount).startsWith('-')) return false;
             sinon.stub(util, 'isValidAmountFormat').callsFake(function (decimals, amount) {
@@ -386,7 +387,9 @@ describe('Mutation: Tier 1 - Validation Functions @tier1', function () {
             });
             // May survive if isNumeric catches it
         });
+    });
 
+    describe('SDL: Statement Deletion in Validation', function () {
         it('SDL-012: isCryptoAddress with both length ranges deleted (always false)', function () {
             sinon.stub(util, 'isCryptoAddress').returns(false);
             const result = util.isCryptoAddress('mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs');

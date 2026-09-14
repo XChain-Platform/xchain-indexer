@@ -97,7 +97,6 @@ describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
     // ── AOR: Arithmetic in getTokenSupply ────────────────────────────────
 
     describe('AOR: getTokenSupply Formula', function () {
-
         it('AOR-200: bcsub→bcadd in supply formula (credits+debits)', async function () {
             const { ctx, getTokenSupply, util } = createSupplyTestContext('1000', '300', '50');
             // Mutate: bcsub → bcadd
@@ -141,7 +140,9 @@ describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
             });
             assert.notStrictEqual(formatted, '750', 'AOR-201 survived');
         });
+    });
 
+    describe('AOR: getTokenSupply Formula', function () {
         it('AOR-202: supply formula with zero debits; bcsub mutation still detected', async function () {
             const { ctx, getTokenSupply, util } = createSupplyTestContext('500', '0', '100');
             operators.AOR.subToAdd(util);
@@ -309,7 +310,6 @@ describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
     // ── EMR: Empty Return Mutations ──────────────────────────────────────
 
     describe('EMR: Empty Return in Supply', function () {
-
         it('EMR-200: getTokenSupply with null credits returns 0-based supply', async function () {
             const { ctx, getTokenSupply, util } = createSupplyTestContext(null, '300', '50');
 
@@ -359,7 +359,9 @@ describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
             });
             assert.strictEqual(formatted, '85.25', 'EMR-202: decimal supply should be 85.25');
         });
+    });
 
+    describe('EMR: Empty Return in Supply', function () {
         it('EMR-203: createLedgerChangeRecord converts BigNumber to string', async function () {
             const { createLedgerChangeRecord, queries } = createLedgerTestContext();
             const bigNum = mathjs.bignumber('12345.678');
@@ -446,7 +448,6 @@ describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
     // ── BCR: Boundary in SQL filters ─────────────────────────────────────
 
     describe('BCR: SQL Filter Boundary Operators', function () {
-
         it('BCR-200: block_index uses <= (not <)', async function () {
             const config = getTestConfig();
             const util = new Utility();
@@ -475,7 +476,9 @@ describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
             });
             assert.ok(usesLte, 'BCR-200: should use <= for block_index');
         });
+    });
 
+    describe('BCR: SQL Filter Boundary Operators', function () {
         it('BCR-201: action_index uses < (not <=)', async function () {
             const config = getTestConfig();
             const util = new Utility();

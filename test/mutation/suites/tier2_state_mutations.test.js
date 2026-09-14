@@ -39,7 +39,6 @@ describe('Mutation : Tier 2: State Management @tier2', function () {
     // ── SDL: Statement Deletion in consolidateLedgerRecords ──────────────
 
     describe('SDL: consolidateLedgerRecords', function () {
-
         it('SDL-400: bcadd removed : only last amount kept (no consolidation)', function () {
             // Mutant: skips bcadd, always overwrites with latest amount
             sinon.stub(util, 'consolidateLedgerRecords').callsFake(function (records) {
@@ -77,7 +76,9 @@ describe('Mutation : Tier 2: State Management @tier2', function () {
             });
             assert.ok(mutated, 'SDL-400 survived');
         });
+    });
 
+    describe('SDL: consolidateLedgerRecords', function () {
         it('SDL-401: single record : no consolidation needed (equivalent)', function () {
             // With a single record, bcadd is never called : equivalent mutant
             sinon.stub(util, 'consolidateLedgerRecords').callsFake(function (records) {
@@ -113,7 +114,6 @@ describe('Mutation : Tier 2: State Management @tier2', function () {
     // ── ACR: Array/Collection in consolidateLedgerRecords ────────────────
 
     describe('ACR: Array Index Mutations', function () {
-
         it('ACR-200: destructuring swap [amount, tick, address] instead of [tick, amount, address]', function () {
             operators.ACR.consolidateSwapTickAmount(util);
 
@@ -161,7 +161,9 @@ describe('Mutation : Tier 2: State Management @tier2', function () {
             });
             assert.ok(tickIsWrong, 'ACR-201 survived');
         });
+    });
 
+    describe('ACR: Array Index Mutations', function () {
         it('ACR-202: different ticks consolidated correctly (not swapped)', function () {
             const records = [
                 ['TICK_A', '100', 'addr1'],

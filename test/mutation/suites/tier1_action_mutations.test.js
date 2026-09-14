@@ -70,7 +70,6 @@ describe('Mutation : Tier 1: Send Handler @tier1', function () {
     // ── SDL: Statement Deletion in Send.parse() ──────────────────────────
 
     describe('SDL: Statement Deletion : Send validation guards', function () {
-
         it('SDL-100: TICK existence check deleted : unknown TICK gets valid', async function () {
             // Make TICK unknown
             indexer.indexerDb.getTokenInfo.resolves(null);
@@ -113,7 +112,9 @@ describe('Mutation : Tier 1: Send Handler @tier1', function () {
             });
             assert.strictEqual(data.STATUS, 'valid', 'SDL-101: negative amount should pass with mutation');
         });
+    });
 
+    describe('SDL: Statement Deletion : Send validation guards', function () {
         it('SDL-102: DESTINATION format check deleted : invalid address gets valid', async function () {
             operators.SDL.skipAddressFormat(indexer.util);
 
@@ -152,7 +153,9 @@ describe('Mutation : Tier 1: Send Handler @tier1', function () {
             });
             assert.strictEqual(data.STATUS, 'valid', 'SDL-103: sleeping source should pass with mutation');
         });
+    });
 
+    describe('SDL: Statement Deletion : Send validation guards', function () {
         it('SDL-104: Balance check deleted : zero balance gets valid', async function () {
             operators.SDL.skipBalanceCheck(indexer.util);
             indexer.indexerDb.getAddressBalances.resolves(makeBalances(1, 0)); // Zero balance
@@ -207,7 +210,9 @@ describe('Mutation : Tier 1: Send Handler @tier1', function () {
             });
             assert.notStrictEqual(originalStatus, 'valid', 'SDL-106: semicolon memo should be rejected');
         });
+    });
 
+    describe('SDL: Statement Deletion : Send validation guards', function () {
         it('SDL-107: REQUIRE_MEMO check : missing required memo detected', async function () {
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 1 });
 
@@ -231,7 +236,6 @@ describe('Mutation : Tier 1: Send Handler @tier1', function () {
     // ── UOI/SVR: Value mutations in Send ─────────────────────────────────
 
     describe('UOI/SVR: Value Mutations : Send', function () {
-
         it('UOI-100: hasBalance negated : sufficient balance denied', async function () {
             operators.UOI.negateHasBalance(indexer.util);
 
@@ -288,7 +292,9 @@ describe('Mutation : Tier 1: Send Handler @tier1', function () {
             });
             assert.notStrictEqual(data.STATUS, 'valid', 'UOI-102 survived');
         });
+    });
 
+    describe('UOI/SVR: Value Mutations : Send', function () {
         it('SVR-100: isActionAllowed always true : bypasses all auth checks', async function () {
             // With isActionAllowed always true, sleeping/blocked sources pass
             // Verify the happy path still works (this ensures the stub is applied)
@@ -376,7 +382,6 @@ describe('Mutation : Tier 1: Send Handler @tier1', function () {
     // ── LCR: Logical Connector mutations ─────────────────────────────────
 
     describe('LCR: Logical Connector Mutations : Send', function () {
-
         it('LCR-100: isValidAmountFormat bypassed : bad format passes', async function () {
             operators.LCR.amountFormatBypass(indexer.util);
             // Use '-100' (negative) instead of 'abc' to avoid mathjs parse error
@@ -415,7 +420,9 @@ describe('Mutation : Tier 1: Send Handler @tier1', function () {
             });
             assert.strictEqual(data.STATUS, 'valid', 'LCR-101: mutation should let bad address through');
         });
+    });
 
+    describe('LCR: Logical Connector Mutations : Send', function () {
         it('LCR-102: hasBalance bypassed : insufficient funds passes', async function () {
             operators.LCR.balanceBypass(indexer.util);
             indexer.indexerDb.getAddressBalances.resolves(makeBalances(1, 0));
@@ -491,7 +498,6 @@ describe('Mutation : Tier 1: Destroy Handler @tier1', function () {
     });
 
     describe('SDL: Statement Deletion : Destroy', function () {
-
         it('SDL-200: TICK existence check deleted : unknown TICK gets valid', async function () {
             indexer.indexerDb.getTokenInfo.resolves(makeToken());
 
@@ -548,7 +554,9 @@ describe('Mutation : Tier 1: Destroy Handler @tier1', function () {
             });
             assert.strictEqual(data.STATUS, 'valid');
         });
+    });
 
+    describe('SDL: Statement Deletion : Destroy', function () {
         it('SDL-203: SOURCE sleeping check in destroy', async function () {
             // Set specific call to return false for sleeping check
             indexer.indexerDb.isActionAllowed.callsFake(async (source, tick, blockIndex) => {
@@ -620,7 +628,6 @@ describe('Mutation : Tier 1: Issue Handler @tier1', function () {
     });
 
     describe('SDL: Statement Deletion : Issue', function () {
-
         it('SDL-300: TICK null check : empty TICK detected', async function () {
             const params = ['0', '', '1000', '0', '', '0', '0', '0', '0', '0', '0', '0'];
             const data = createBaseData({ ACTION: 'ISSUE', FORMAT: 0, SOURCE, TICK: '' });
@@ -671,7 +678,9 @@ describe('Mutation : Tier 1: Issue Handler @tier1', function () {
             });
             assert.notStrictEqual(data.STATUS, 'valid');
         });
+    });
 
+    describe('SDL: Statement Deletion : Issue', function () {
         it('SDL-303: TICK semicolon check : semicolon in TICK detected', async function () {
             const params = ['0', 'TEST;BAD', '1000', '0', '', '0', '0', '0', '0', '0', '0', '0'];
             const data = createBaseData({ ACTION: 'ISSUE', FORMAT: 0, SOURCE, TICK: 'TEST;BAD' });
@@ -722,7 +731,9 @@ describe('Mutation : Tier 1: Issue Handler @tier1', function () {
             });
             assert.notStrictEqual(data.STATUS, 'valid');
         });
+    });
 
+    describe('SDL: Statement Deletion : Issue', function () {
         it('SDL-306: SOURCE sleeping check in Issue', async function () {
             indexer.indexerDb.isActionAllowed.callsFake(async (source, tick, blockIndex) => {
                 if (source !== null && tick === null) return false;
